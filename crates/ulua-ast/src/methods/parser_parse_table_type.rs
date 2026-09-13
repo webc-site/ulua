@@ -1,7 +1,5 @@
 use core::ptr::null_mut;
 
-use ulua_common::FFlag::DesugaredArrayTypeReferenceIsEmpty;
-
 use crate::{
   enums::{
     ast_table_access::AstTableAccess,
@@ -108,15 +106,7 @@ impl Parser {
           let r#type = self.parse_type_bool(false);
 
           // since AstName contains a char*, it can't contain null
-          let mut contains_null = false;
-          if let Some(ref c) = chars {
-            for &ch in c.as_slice() {
-              if ch == 0 {
-                contains_null = true;
-                break;
-              }
-            }
-          }
+          let contains_null = chars.as_ref().is_some_and(|c| c.as_slice().contains(&0));
 
           if let (Some(chars_unwrapped), false) = (chars, contains_null) {
             props.push_back(AstTableProp {
@@ -211,50 +201,28 @@ impl Parser {
         let r#type = self.parse_type_bool(false);
         is_array = true;
 
-        if DesugaredArrayTypeReferenceIsEmpty.get() {
-          let null_type_location = Location::with_length(start.begin, 0);
-          let index = unsafe {
-            (*self.allocator).alloc(AstTypeReference::new(
-              null_type_location,
-              None,
-              self.name_number,
-              None,
-              null_type_location,
-              false,
-              AstArray::default(),
-            ))
-          } as *mut AstType;
-          indexer = unsafe {
-            (*self.allocator).alloc(AstTableIndexer {
-              index_type: index,
-              result_type: r#type,
-              location: (*r#type).base.location,
-              access,
-              access_location,
-            })
-          };
-        } else {
-          let index = unsafe {
-            (*self.allocator).alloc(AstTypeReference::new(
-              (*r#type).base.location,
-              None,
-              self.name_number,
-              None,
-              (*r#type).base.location,
-              false,
-              AstArray::default(),
-            ))
-          } as *mut AstType;
-          indexer = unsafe {
-            (*self.allocator).alloc(AstTableIndexer {
-              index_type: index,
-              result_type: r#type,
-              location: (*r#type).base.location,
-              access,
-              access_location,
-            })
-          };
-        }
+        // array-like table type: {T} desugars into {[number]: T}（cpp 无 flag，无条件）
+        let null_type_location = Location::with_length(start.begin, 0);
+        let index = unsafe {
+          (*self.allocator).alloc(AstTypeReference::new(
+            null_type_location,
+            None,
+            self.name_number,
+            None,
+            null_type_location,
+            false,
+            AstArray::default(),
+          ))
+        } as *mut AstType;
+        indexer = unsafe {
+          (*self.allocator).alloc(AstTableIndexer {
+            index_type: index,
+            result_type: r#type,
+            location: (*r#type).base.location,
+            access,
+            access_location,
+          })
+        };
 
         break;
       } else {

@@ -1,5 +1,3 @@
-use ulua_common::FFlag::LuauCstExprGroup;
-
 use crate::{
   enums::type_lexer::Type,
   records::{
@@ -37,7 +35,7 @@ impl Parser {
       let expr_group =
         unsafe { (*self.allocator).alloc(AstExprGroup::new(Location::new(start, end), expr)) };
 
-      if LuauCstExprGroup.get() && self.options.store_cst_data {
+      if self.options.store_cst_data {
         let close_pos = if close_paren_found {
           self.lexer.previous_location().begin
         } else {

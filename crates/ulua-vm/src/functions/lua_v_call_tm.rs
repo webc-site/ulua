@@ -49,8 +49,6 @@ pub unsafe fn lua_v_call_tm(l: *mut lua_State, nparams: i32, res: i32) {
     }
 
     LUAU_ASSERT!(ttisfunction!((*ci).func));
-    LUAU_ASSERT!(!(clvalue!((*ci).func)).is_null());
-    LUAU_ASSERT!(!(clvalue!((*ci).func)).is_null());
     LUAU_ASSERT!((*clvalue!((*ci).func)).is_c != 0);
 
     (*l).base = fun.add(1);

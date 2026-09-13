@@ -10,7 +10,7 @@ use core::{
   str::from_utf8_unchecked,
 };
 
-use ulua_common::{FFlag::LuauCstTypeGroup, macros::luau_assert::LUAU_ASSERT};
+use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   enums::ast_table_access::AstTableAccess,
@@ -488,14 +488,10 @@ impl<'a> Printer<'a> {
       self.writer.symbol("(");
       self.visualize_type_annotation(unsafe { &mut *a.type_ });
 
-      if LuauCstTypeGroup.get() {
-        let cst_node = self.lookup_cst_node::<CstTypeGroup>(a as *mut AstTypeGroup as *mut AstNode);
-        if !cst_node.is_null() {
-          self.maybe_advance_and_write(unsafe { &(*cst_node).close_position }, ")", false);
-        } else {
-          self.advance_before(type_annotation.base.location.end, 1);
-          self.writer.symbol(")");
-        }
+      // cpp 无 LuauCstTypeGroup flag：无条件查 CstTypeGroup
+      let cst_node = self.lookup_cst_node::<CstTypeGroup>(a as *mut AstTypeGroup as *mut AstNode);
+      if !cst_node.is_null() {
+        self.maybe_advance_and_write(unsafe { &(*cst_node).close_position }, ")", false);
       } else {
         self.advance_before(type_annotation.base.location.end, 1);
         self.writer.symbol(")");

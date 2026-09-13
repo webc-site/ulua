@@ -39,6 +39,7 @@ pub unsafe fn lua_registeruserdatadirectfieldget(
     l_setbit!((*ts).hdr.marked, FIXEDBIT);
 
     let slot: *mut TValue = lua_h_setstr(l, (*g).udatadirectfields[tag as usize], ts);
-    setpvalue!(slot, fn_.unwrap() as *mut c_void, 0);
+    // cpp release 对空 fn 存 nullptr；unwrap_or 消除 panic 路径且行为一致
+    setpvalue!(slot, fn_.unwrap_or(null_mut()) as *mut c_void, 0);
   }
 }

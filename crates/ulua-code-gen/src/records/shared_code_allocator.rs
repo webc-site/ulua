@@ -121,29 +121,10 @@ impl SharedCodeAllocator {
     }
   }
 
-  pub fn operator_assign_copy(&mut self, _other: &SharedCodeAllocator) -> &mut SharedCodeAllocator {
-    unreachable!("Deleted operator=");
-  }
-
-  pub fn operator_assign_move(
-    &mut self,
-    _other: &mut SharedCodeAllocator,
-  ) -> &mut SharedCodeAllocator {
-    unreachable!("Deleted operator=");
-  }
-
-  pub fn shared_code_allocator_move(&mut self) {
-    unreachable!("Deleted constructor");
-  }
-
   pub fn shared_code_allocator_code_allocator(&mut self, code_allocator: *mut CodeAllocator) {
     self.identified_modules.clear();
     self.anonymous_module_count = AtomicUsize::new(0);
     self.code_allocator = code_allocator;
-  }
-
-  pub fn shared_code_allocator_copy(&mut self) {
-    unreachable!("Deleted constructor");
   }
 
   pub fn try_get_native_module(&self, module_id: &ModuleId) -> NativeModuleRef {

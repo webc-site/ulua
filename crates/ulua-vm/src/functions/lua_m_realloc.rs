@@ -26,6 +26,9 @@ pub(crate) unsafe fn lua_m_realloc_(
     let g = (*l).global;
     LUAU_ASSERT!((osize == 0) == (block.is_null()));
 
+    // frealloc 由 lstate 创建期保证非空（cpp: lua_assert(g->frealloc)）
+    let frealloc = (*g).frealloc.expect("frealloc is null");
+
     let nclass = sizeclass!(nsize) as i32;
     let oclass = sizeclass!(osize) as i32;
     let result: *mut u8;
@@ -35,7 +38,7 @@ pub(crate) unsafe fn lua_m_realloc_(
       result = if nclass >= 0 {
         newblock(l, nclass)
       } else {
-        ((*g).frealloc.expect("frealloc is null"))((*g).ud, null_mut(), 0, nsize)
+        frealloc((*g).ud, null_mut(), 0, nsize)
       };
 
       if result.is_null() && nsize > 0 {
@@ -51,10 +54,10 @@ pub(crate) unsafe fn lua_m_realloc_(
       if oclass >= 0 {
         freeblock(l, oclass, block);
       } else {
-        ((*g).frealloc.expect("frealloc is null"))((*g).ud, block, osize, 0);
+        frealloc((*g).ud, block, osize, 0);
       }
     } else {
-      result = ((*g).frealloc.expect("frealloc is null"))((*g).ud, block, osize, nsize);
+      result = frealloc((*g).ud, block, osize, nsize);
       if result.is_null() && nsize > 0 {
         lua_d_throw(l, LuaStatus::ErrMem as i32);
       }
@@ -62,9 +65,9 @@ pub(crate) unsafe fn lua_m_realloc_(
 
     LUAU_ASSERT!((nsize == 0) == (result.is_null()));
     (*g).totalbytes = (*g).totalbytes.wrapping_sub(osize).wrapping_add(nsize);
-    (*g).memcatbytes[memcat as usize] = (*g).memcatbytes[memcat as usize]
-      .wrapping_add(nsize)
-      .wrapping_sub(osize);
+    let memcat_bytes = &mut (*g).memcatbytes;
+    memcat_bytes[memcat as usize] =
+      memcat_bytes[memcat as usize].wrapping_add(nsize).wrapping_sub(osize);
 
     if LUAU_UNLIKELY!((*g).cb.onallocate.is_some()) {
       ((*g).cb.onallocate.unwrap_unchecked())(l, osize, nsize);

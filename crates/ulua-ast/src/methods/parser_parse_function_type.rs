@@ -14,8 +14,6 @@ impl Parser {
     allow_pack: bool,
     attributes: &AstArray<*mut AstAttr>,
   ) -> AstTypeOrPack {
-    use ulua_common::FFlag;
-
     use crate::records::{
       ast_node::AstNode, ast_type::AstType, ast_type_function::AstTypeFunction,
       ast_type_group::AstTypeGroup, ast_type_list::AstTypeList, ast_type_pack::AstTypePack,
@@ -141,7 +139,7 @@ impl Parser {
             params[0],
           ))
         };
-        if FFlag::LuauCstTypeGroup.get() && self.options.store_cst_data {
+        if self.options.store_cst_data {
           let close_pos = if close_args_found {
             close_args_location.begin
           } else {

@@ -27,8 +27,6 @@ use crate::{
 
 impl Parser {
   pub fn parse_table_constructor(&mut self) -> *mut AstExpr {
-    use ulua_common::FFlag;
-
     use crate::records::{
       ast_array::AstArray, lexeme::Type, location::Location, match_lexeme::MatchLexeme,
       position::Position, temp_vector::TempVector,
@@ -42,13 +40,7 @@ impl Parser {
     let match_brace = MatchLexeme::new(self.lexer.current());
     self.expect_and_consume_char('{', "table literal");
 
-    let mut last_element_indent_deprecated = 0u32;
-
     while self.lexer.current().r#type != Type(b'}' as i32) {
-      if !FFlag::LuauTableEntriesDontNeedToMatchIndent.get() {
-        last_element_indent_deprecated = self.lexer.current().location.begin.column;
-      }
-
       if self.lexer.current().r#type == Type(b'[' as i32) {
         let indexer_open_position = self.lexer.current().location.begin;
         let match_location_bracket = MatchLexeme::new(self.lexer.current());
@@ -186,10 +178,7 @@ impl Parser {
       let current_type = self.lexer.current().r#type;
       if current_type == Type(b',' as i32) || current_type == Type(b';' as i32) {
         self.next_lexeme();
-      } else if (current_type == Type(b'[' as i32) || current_type == Type::NAME)
-        && (FFlag::LuauTableEntriesDontNeedToMatchIndent.get()
-          || self.lexer.current().location.begin.column == last_element_indent_deprecated)
-      {
+      } else if current_type == Type(b'[' as i32) || current_type == Type::NAME {
         self.report(
           self.lexer.current().location,
           format_args!("Expected ',' after table constructor element"),

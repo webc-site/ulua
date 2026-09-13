@@ -1,7 +1,5 @@
 use core::ptr::null_mut;
 
-use ulua_common::FFlag;
-
 use crate::{
   functions::{is_type_follow::is_type_follow, should_parse_type_pack::should_parse_type_pack},
   records::{
@@ -60,47 +58,37 @@ impl Parser {
               let parenthesized_type =
                 unsafe { *(*explicit_type_pack).type_list.types.data.add(0) };
 
-              if FFlag::LuauCstTypeGroup.get() && self.options.store_cst_data {
-                let type_group = unsafe {
-                  (*self.allocator).alloc(AstTypeGroup::new(
-                    (*parenthesized_type).base.location,
-                    parenthesized_type,
-                  ))
-                };
+              // cpp 无 LuauCstTypeGroup flag：AstTypeGroup 无条件创建，
+              // CstTypeGroup 仅受 storeCstData 门控
+              let type_group = unsafe {
+                (*self.allocator).alloc(AstTypeGroup::new(
+                  (*parenthesized_type).base.location,
+                  parenthesized_type,
+                ))
+              };
 
-                if let Some(cst_node) = self
+              if self.options.store_cst_data
+                && let Some(cst_node) = self
                   .cst_node_map
                   .find(&(explicit_type_pack as *mut AstNode))
-                  && !cst_node.is_null()
-                {
-                  let cst_explicit_type_pack =
-                    unsafe { cst_node_as::<CstTypePackExplicit>(*cst_node) };
-                  if !cst_explicit_type_pack.is_null() {
-                    let close_pos = unsafe { (*cst_explicit_type_pack).close_parentheses_position };
-                    let cst_node_group =
-                      unsafe { (*self.allocator).alloc(CstTypeGroup::new(close_pos)) };
-                    self
-                      .cst_node_map
-                      .try_insert(type_group as *mut AstNode, cst_node_group as *mut CstNode);
-                  }
+                && !cst_node.is_null()
+              {
+                let cst_explicit_type_pack =
+                  unsafe { cst_node_as::<CstTypePackExplicit>(*cst_node) };
+                if !cst_explicit_type_pack.is_null() {
+                  let close_pos = unsafe { (*cst_explicit_type_pack).close_parentheses_position };
+                  let cst_node_group =
+                    unsafe { (*self.allocator).alloc(CstTypeGroup::new(close_pos)) };
+                  self
+                    .cst_node_map
+                    .try_insert(type_group as *mut AstNode, cst_node_group as *mut CstNode);
                 }
-
-                parameters.push(AstTypeOrPack {
-                  r#type: self.parse_type_suffix(type_group as *mut AstType, &begin_loc),
-                  type_pack: null_mut(),
-                });
-              } else {
-                let type_group = unsafe {
-                  (*self.allocator).alloc(AstTypeGroup::new(
-                    (*parenthesized_type).base.location,
-                    parenthesized_type,
-                  ))
-                };
-                parameters.push(AstTypeOrPack {
-                  r#type: self.parse_type_suffix(type_group as *mut AstType, &begin_loc),
-                  type_pack: null_mut(),
-                });
               }
+
+              parameters.push(AstTypeOrPack {
+                r#type: self.parse_type_suffix(type_group as *mut AstType, &begin_loc),
+                type_pack: null_mut(),
+              });
             } else {
               parameters.push(AstTypeOrPack {
                 r#type: null_mut(),

@@ -29,9 +29,8 @@ pub(crate) unsafe fn lua_l_addvalueany(b: *mut LuaLStrbuf, idx: c_int) {
     let l = (*b).l;
 
     match lua_type(l, idx) {
-      x if x == LuaType::None as c_int => {
-        panic!("expected value");
-      }
+      // cpp release 构建 LUAU_ASSERT 编译掉后 break 直落：不追加任何内容
+      x if x == LuaType::None as c_int => {}
       x if x == LuaType::Nil as c_int => {
         lua_l_addlstring(b, c"nil".as_ptr(), 3);
       }
