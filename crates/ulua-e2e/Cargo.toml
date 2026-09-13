@@ -1,0 +1,31 @@
+[package]
+name = "ulua-e2e"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "End-to-end / integration test suite for ulua: exercises the CLI binaries and library API as a shipping product."
+publish = false
+
+# No library or binaries — this crate exists purely for its `tests/` integration suite.
+[lib]
+path = "src/lib.rs"
+
+[dev-dependencies]
+ulua = { path = "../ulua", version = "0.1.1" }
+ulua-common = { path = "../ulua-common", version = "0.1.1" }
+assert_cmd = "2"
+predicates = "3"
+tempfile = "3"
+serde_json = "1"
+
+# Pull in the CLI crates so cargo exposes their binaries to assert_cmd's
+# `cargo_bin(..)` lookup (CARGO_BIN_EXE_* / target-dir discovery) deterministically.
+ulua-repl-cli = { path = "../ulua-repl-cli", version = "0.1.1" }
+ulua-analyze-cli = { path = "../ulua-analyze-cli", version = "0.1.1" }
+ulua-ast-cli = { path = "../ulua-ast-cli", version = "0.1.1" }
+ulua-compile-cli = { path = "../ulua-compile-cli", version = "0.1.1" }
+ulua-bytecode-cli = { path = "../ulua-bytecode-cli", version = "0.1.1" }
+ulua-reduce-cli = { path = "../ulua-reduce-cli", version = "0.1.1" }
+

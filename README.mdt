@@ -1,0 +1,16 @@
+<a href="https://github.com/webc-site/ulua/blob/main/README.md#en"><img src="https://cdn.jsdmirror.com/gh/webc-site/svg/i18n/en.svg" height="28"></a>
+<a href="https://github.com/webc-site/ulua/blob/main/README.md#zh"><img src="https://cdn.jsdmirror.com/gh/webc-site/svg/i18n/zh.svg" height="28"></a>
+
+<a href="https://crates.io/crates/ulua"><img src="https://img.shields.io/crates/v/ulua.svg" height="28"></a>
+
+---
+
+<a id="en"></a>
+
+<+ ./readme/en.md >
+
+---
+
+<a name="zh"></a>
+
+<+ ./readme/zh.md >

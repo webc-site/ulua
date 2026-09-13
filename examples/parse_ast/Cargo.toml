@@ -1,0 +1,9 @@
+[package]
+name = "ulua-example-parse-ast"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies.ulua]
+path = "../../crates/ulua"
+version = "0.1.1"

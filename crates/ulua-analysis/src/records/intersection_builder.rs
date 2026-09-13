@@ -1,0 +1,9 @@
+use crate::records::{builtin_types::BuiltinTypes, type_arena::TypeArena, type_ids::TypeIds};
+
+#[derive(Debug, Clone)]
+pub struct IntersectionBuilder {
+  pub(crate) arena: *mut TypeArena,
+  pub(crate) builtin_types: *mut BuiltinTypes,
+  pub(crate) parts: TypeIds,
+  pub(crate) is_bottom: bool,
+}

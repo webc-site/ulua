@@ -1,0 +1,62 @@
+[package]
+name = "ulua"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description.workspace = true
+keywords.workspace = true
+categories.workspace = true
+
+# The installable `ulua` binary (`cargo install ulua`) is the script runner /
+# REPL, whose implementation lives in ulua-repl-cli's lib. It is optional and
+# only pulled in by the `cli` feature so library-only users
+# (`default-features = false`) don't compile the CLI stack (rustyline, etc.).
+[[bin]]
+name = "ulua"
+path = "src/bin/ulua.rs"
+required-features = ["cli"]
+
+[dependencies]
+ulua-common = { path = "../ulua-common", version = "0.1.1" }
+ulua-ast = { path = "../ulua-ast", version = "0.1.1" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.1" }
+ulua-compiler = { path = "../ulua-compiler", version = "0.1.1" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.1" }
+ulua-analysis = { path = "../ulua-analysis", version = "0.1.1" }
+ulua-config = { path = "../ulua-config", version = "0.1.1" }
+ulua-require = { path = "../ulua-require", version = "0.1.1" }
+ulua-rt = { path = "../ulua-rt", version = "0.1.1" }
+ulua-checked-macros = { path = "../ulua-checked-macros", version = "0.1.1", optional = true }
+ulua-repl-cli = { path = "../ulua-repl-cli", version = "0.1.1", optional = true }
+
+[features]
+# Batteries-included: the umbrella ships the static type checker AND the installable
+# `ulua` CLI on by default, so `ulua::check` works out of the box and
+# `cargo install ulua` produces the `ulua` script-runner/REPL with no extra flags.
+# Library-only users who want a minimal build opt out with
+# `default-features = false` (optionally re-adding `typecheck`).
+default = ["typecheck", "cli"]
+# The installable command-line binary (script runner / REPL). Pulls ulua-repl-cli.
+cli = ["dep:ulua-repl-cli", "ulua-repl-cli/cli"]
+# Mirror ulua-rt's opt-in flags so `ulua = { features = ["serde"] }` works the
+# same as depending on ulua-rt directly. `async` and `send` compose (see
+# ulua-rt's `send` feature note).
+async = ["ulua-rt/async"]
+serde = ["ulua-rt/serde"]
+send = ["ulua-rt/send"]
+macros = ["ulua-rt/macros"]
+# Compile-time checked Luau source macros (`ulua!` / `ulua_file!`). Kept
+# separate from `macros`, which forwards only the ulua-rt derive macro surface.
+checked-macros = ["typecheck", "dep:ulua-checked-macros"]
+# The static type checker (forwards to ulua-rt's `typecheck`). On by default via
+# `default`; named here so `default-features = false` users can opt back in.
+typecheck = ["ulua-rt/typecheck"]
+
+# Document the async-side superset (serde + async + macros) on docs.rs. (`send`
+# is omitted only because the rendered docs read the same with or without it.)
+[package.metadata.docs.rs]
+features = ["serde", "async", "macros"]
+rustdoc-args = ["--cfg", "docsrs"]
+

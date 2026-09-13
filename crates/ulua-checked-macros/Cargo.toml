@@ -1,0 +1,20 @@
+[package]
+name = "ulua-checked-macros"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Compile-time checked Luau source macros for ulua."
+keywords = ["luau", "lua", "macro", "typechecker"]
+categories = ["compilers", "development-tools::procedural-macro-helpers"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+ulua-rt = { path = "../ulua-rt", version = "0.1.1", features = ["typecheck"] }
+proc-macro2 = "1.0"
+quote = "1.0"
+syn = { version = "3.0", features = ["full"] }
+

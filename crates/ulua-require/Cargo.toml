@@ -1,0 +1,30 @@
+[package]
+name = "ulua-require"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Require-by-string module resolution for Luau (Rust)."
+keywords = ["luau", "lua", "require", "modules", "resolver"]
+categories = ["development-tools"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+ulua-ast = { path = "../ulua-ast", version = "0.1.1" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.1" }
+ulua-common = { path = "../ulua-common", version = "0.1.1" }
+ulua-compiler = { path = "../ulua-compiler", version = "0.1.1" }
+ulua-config = { path = "../ulua-config", version = "0.1.1" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.1" }
+
+[features]
+default = ["std"]
+std = []
+native = ["std"]
+cli = ["native"]
+native-codegen = ["native"]
+wasm = []
+

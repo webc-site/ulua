@@ -1,0 +1,185 @@
+# AFL fuzz crate — a Rust port of Luau's `fuzz/` suite, driven by AFL (afl.rs).
+# Detached from the parent workspace (own `[workspace]`) and never published, so
+# the AFL toolchain it can use does not touch the normal build.
+#
+# Two build modes:
+#   * default (`afl-runtime`)        — links the AFL fork-server runtime; built
+#                                       and driven via `cargo afl build` /
+#                                       `cargo afl fuzz` (real-time TUI). See
+#                                       `scripts/run_afl.sh` / `make fuzz-typeck`.
+#   * `--no-default-features`        — a STANDALONE binary needing NO AFL /
+#                                       nightly / sanitizer toolchain. Replays
+#                                       corpus/crash files passed as args, reads
+#                                       one input from stdin (ULUA_FUZZ_STDIN=1),
+#                                       or generates ULUA_FUZZ_ITERS pseudo-random
+#                                       inputs from ULUA_FUZZ_SEED — for smoke
+#                                       fuzzing in plain `cargo` / CI.
+[package]
+name = "ulua-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[dependencies]
+arbitrary = { version = "1", features = ["derive"] }
+afl = { version = "0.18", optional = true }
+# `serde` feature: the `serde_roundtrip` target exercises ulua-rt's serde bridge
+# (to_value / from_value). Always on — additive, so the other targets are
+# unaffected; keeping it unconditional means `--no-default-features` builds
+# (CI/wasm) still get it without a second feature flag.
+ulua-rt = { path = "../crates/ulua-rt", features = ["typecheck", "serde"] }
+ulua-ast = { path = "../crates/ulua-ast" }
+# For `install_afl_panic_hook`: detect the compiler's intentional `CompileError`
+# throw (panic_any, caught by compile()) so AFL doesn't treat it as a crash.
+ulua-compiler = { path = "../crates/ulua-compiler" }
+# For the `serde_roundtrip` target's value model (`#[derive(Serialize,
+# Deserialize)]`).
+serde = { version = "1", features = ["derive"] }
+
+[features]
+# `afl-runtime` (default) links the AFL fork-server runtime via `cargo afl build`
+# / `cargo afl fuzz`. Build with `--no-default-features` for the standalone,
+# toolchain-free binary described above.
+default = ["afl-runtime"]
+afl-runtime = ["dep:afl"]
+
+# Detach from the parent workspace so the AFL instrumentation is scoped here only.
+[workspace]
+
+[profile.release]
+debug = 1
+# Fuzz in optimized builds for throughput, but keep the assertion layer ON:
+# ulua's `LUAU_ASSERT`s (and Rust's overflow/bounds checks) are gated on
+# `debug_assertions`, and they catch corruption a bare crash check would miss
+# (they surfaced the `number` base-contract bug). Plain `--release` would be fast
+# but blind; this profile is fast AND checked.
+debug-assertions = true
+overflow-checks = true
+
+[[bin]]
+name = "compile"
+path = "fuzz_targets/compile.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "run"
+path = "fuzz_targets/run.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "typeck"
+path = "fuzz_targets/typeck.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "number"
+path = "fuzz_targets/number.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "structured"
+path = "fuzz_targets/structured.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "typeck_defs"
+path = "fuzz_targets/typeck_defs.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "typeck_typed"
+path = "fuzz_targets/typeck_typed.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "determinism"
+path = "fuzz_targets/determinism.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "roundtrip"
+path = "fuzz_targets/roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "splice"
+path = "fuzz_targets/splice.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "optdiff"
+path = "fuzz_targets/optdiff.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "metamorphic"
+path = "fuzz_targets/metamorphic.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "spans"
+path = "fuzz_targets/spans.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "api"
+path = "fuzz_targets/api.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "gcstress"
+path = "fuzz_targets/gcstress.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "host"
+path = "fuzz_targets/host.rs"
+test = false
+doc = false
+bench = false
+
+[[bin]]
+name = "serde_roundtrip"
+path = "fuzz_targets/serde_roundtrip.rs"
+test = false
+doc = false
+bench = false
+
+# Plain tool (no AFL harness): distills a seed corpus from the generators.
+[[bin]]
+name = "gen_corpus"
+path = "fuzz_targets/gen_corpus.rs"
+test = false
+doc = false
+bench = false
+

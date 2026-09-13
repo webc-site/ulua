@@ -1,0 +1,49 @@
+// Port of Luau's `kFuzzVM` path: compile arbitrary source and, if it compiles,
+// run it on the VM. Execution is bounded by an interrupt step-limit so a
+// generated infinite loop can't hang the fuzzer. The VM must never panic/crash
+// — only return `Ok`/`Err`.
+
+use std::cell::Cell;
+use std::rc::Rc;
+
+#[cfg(feature = "afl-runtime")]
+use afl::fuzz_nohook;
+
+#[cfg(not(feature = "afl-runtime"))]
+include!("standalone.rs");
+
+use ulua_rt::{Lua, Result, VmState};
+
+fn exercise_input(data: &[u8]) {
+    let Ok(src) = std::str::from_utf8(data) else {
+        return;
+    };
+    let lua = Lua::new();
+    let steps = Rc::new(Cell::new(0u64));
+    let counter = steps.clone();
+    let step_limit = ulua_fuzz::vm_step_limit();
+    lua.set_interrupt(move |_| -> Result<VmState> {
+        let c = counter.get() + 1;
+        counter.set(c);
+        if c > step_limit {
+            Err(ulua_rt::Error::runtime("fuzz: step limit"))
+        } else {
+            Ok(VmState::Continue)
+        }
+    });
+    if let Ok(f) = lua.load(src).set_name("fuzz").into_function() {
+        let _ = f.call::<()>(());
+    }
+}
+
+fn main() {
+    #[cfg(feature = "afl-runtime")]
+    {
+        ulua_fuzz::install_afl_panic_hook();
+        fuzz_nohook!(|data: &[u8]| {
+            exercise_input(data);
+        });
+    }
+    #[cfg(not(feature = "afl-runtime"))]
+    standalone_main(exercise_input);
+}

@@ -1,0 +1,12 @@
+use ulua_ast::records::ast_type_intersection::AstTypeIntersection;
+
+use crate::records::ast_json_encoder::AstJsonEncoder;
+
+impl AstJsonEncoder {
+  /// # Safety
+  /// 调用方须保证 `node` 等裸指针参数有效，且满足 C++ 原实现的调用契约。
+  pub(crate) fn visit_ast_type_intersection(&mut self, node: *mut AstTypeIntersection) -> bool {
+    unsafe { self.write_ast_type_intersection(node) };
+    false
+  }
+}

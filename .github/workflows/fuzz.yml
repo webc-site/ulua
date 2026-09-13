@@ -1,0 +1,66 @@
+# Long-soak fuzzing — the standalone (toolchain-free) mode of the AFL fuzz crate.
+#
+# This is deliberately separate from `ci.yml` and is NEVER a PR gate. Each target
+# is built with `--no-default-features` (NO AFL / nightly / sanitizer toolchain)
+# and run over a large batch of pseudo-random inputs. The seed is derived from
+# the run id, so every scheduled run explores a different slice of the input
+# space. A panic / assertion break exits non-zero and prints a reproducible hex
+# dump of the offending input into the job log. A failure here is a notification
+# to investigate — it does not block development.
+#
+# (Coverage-guided fuzzing with AFL's live TUI is a *local* workflow — see
+# `make fuzz-typeck` / `fuzz/README.md`. AFL needs its fork-server runtime, an
+# instrumented build, and kernel core_pattern tuning, none of which belong in a
+# hands-off scheduled job; the deterministic standalone mode is the CI surface.)
+name: Fuzz (long soak)
+
+on:
+  schedule:
+    # 03:17 UTC nightly (odd minute to avoid the top-of-hour stampede).
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+    inputs:
+      iters_per_target:
+        description: "Pseudo-random inputs per target"
+        required: false
+        default: "50000"
+
+concurrency:
+  # Never run two soaks at once; a newer one supersedes an in-flight one.
+  group: fuzz-soak
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  soak:
+    name: soak ${{ matrix.target }}
+    runs-on: ubuntu-latest
+    # Per-target ceiling; each matrix target is its own job.
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        target: [compile, run, typeck, typeck_defs, number, structured, determinism, api, gcstress, host, serde_roundtrip]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache cargo + fuzz build
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: "fuzz"
+      - name: Build standalone target
+        working-directory: fuzz
+        run: cargo build --no-default-features --bin ${{ matrix.target }}
+      - name: Soak
+        working-directory: fuzz
+        env:
+          # Different seed each run so coverage of the input space compounds over
+          # scheduled runs; iteration count is overridable on manual dispatch.
+          ULUA_FUZZ_SEED: ${{ github.run_id }}
+          ULUA_FUZZ_ITERS: ${{ github.event.inputs.iters_per_target || '50000' }}
+        run: |
+          echo "Soaking '${{ matrix.target }}' for ${ULUA_FUZZ_ITERS} inputs (seed ${ULUA_FUZZ_SEED})"
+          ./target/debug/${{ matrix.target }}

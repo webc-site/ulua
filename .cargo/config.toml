@@ -1,0 +1,38 @@
+# The type checker and type simplifier are deeply recursive. 64 MiB of thread
+# stack clears the deep-type / simplify / unify recursion that overflows the
+# default on larger (x86_64) stack frames. nextest reads this `[env]` and applies
+# it to the test processes, so it governs both local and CI test runs.
+[env]
+RUST_MIN_STACK = "67108864"
+
+# ulua-web (wasm32-unknown-unknown) declares two C-variadic libc functions —
+# `snprintf` and `strftime` — that are intentionally supplied by the JS host at
+# runtime (see website/env.js + the index.html import map), not at link time.
+# Tell the wasm linker to leave them as undefined imports instead of erroring.
+[target.wasm32-unknown-unknown]
+rustflags = ["-C", "link-arg=--allow-undefined"]
+
+# On Windows/MSVC, `/STACK:` raises the Windows main-thread stack reserve from
+# the 1 MB MSVC default
+# to 64 MiB. The type checker/simplifier are deeply recursive; `RUST_MIN_STACK`
+# (above) only governs std-spawned threads, but nextest runs each test on the
+# process *main* thread, whose stack is fixed by this PE header value — so without
+# it ~all type-checking tests overflowed the 1 MB stack and died with 0xC0000005
+# on Windows (Linux/macOS were unaffected: their main-thread stacks are 8 MB and
+# grow, and RUST_MIN_STACK covers spawned threads). Upstream luau does the same
+# with `/STACK:2097152` on its MSVC CLI/test targets; we use 64 MiB to match
+# RUST_MIN_STACK because the Rust port's frames are larger.
+[target.'cfg(target_env = "msvc")']
+rustflags = [
+    "-C",
+    "link-arg=/STACK:67108864",
+]
+
+# The GNU Windows toolchain (x86_64-pc-windows-gnu) ignores the MSVC `/STACK:`
+# syntax above, so a gnu-built binary keeps the small default PE stack reserve and
+# overflows (STATUS_STACK_OVERFLOW, 0xC00000FD) on the same deep recursion that the
+# MSVC build survives. Raise the reserve to 64 MiB via the GNU linker's `--stack`
+# flag so `cargo install` on a gnu toolchain matches MSVC behaviour. Scoped to
+# `windows + gnu` so it never touches the (also-gnu) Linux target.
+[target.'cfg(all(windows, target_env = "gnu"))']
+rustflags = ["-C", "link-arg=-Wl,--stack,67108864"]

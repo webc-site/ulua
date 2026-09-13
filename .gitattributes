@@ -1,0 +1,19 @@
+# Normalize all text to LF on checkout, on every platform (Windows included).
+# ulua has line-ending-sensitive tests — the lexer's newline handling and the
+# byte-exact bytecode differential over `.luau` fixtures both compare exact
+# bytes — so a CRLF checkout on Windows would spuriously fail them. Forcing LF
+# keeps the suite identical across Linux / macOS / Windows.
+* text=auto eol=lf
+
+# Binary assets — never touch.
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.wasm  binary
+
+# Test fixtures with exact line endings (e.g. CRLF edge cases in lexer test)
+crates/ulua-ast/src/testdata/* -text

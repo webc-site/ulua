@@ -1,0 +1,16 @@
+use crate::{
+  functions::vm_reg_op::vm_reg_op,
+  records::{const_prop_state::ConstPropState, ir_op::IrOp, register_info::RegisterInfo},
+};
+impl ConstPropState {
+  pub fn invalidate_value(&mut self, reg_op: IrOp) {
+    let reg_index = vm_reg_op(reg_op);
+    if reg_index > self.max_reg {
+      self.max_reg = reg_index;
+    }
+    let reg_ptr: *mut RegisterInfo = &mut self.regs[reg_index as usize];
+    unsafe {
+      self.invalidate_register_info_bool_bool(&mut *reg_ptr, false, true);
+    }
+  }
+}
