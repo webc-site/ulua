@@ -1,0 +1,14 @@
+use ulua_common::macros::luau_assert::LUAU_ASSERT;
+
+use crate::{
+  enums::bc_imm_kind::BcImmKind,
+  records::{bc_imm::BcImm, bc_inst::BcInst, bytecode_graph_serializer::BytecodeGraphSerializer},
+};
+
+impl<'a> BytecodeGraphSerializer<'a> {
+  pub fn get_imm_bool(&mut self, insn: &mut BcInst, index: u8) -> bool {
+    let imm: &mut BcImm = self.get_imm(insn, index);
+    LUAU_ASSERT!(imm.kind == BcImmKind::Boolean);
+    unsafe { imm.value.value_boolean }
+  }
+}

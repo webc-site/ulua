@@ -1,0 +1,21 @@
+# Standalone crate (its own [workspace]) so it is never pulled into the ulua
+# workspace build or `cargo publish`. Build with: cargo build --release
+[package]
+name = "tsuki-run"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "tsuki-run"
+path = "src/main.rs"
+
+[dependencies]
+tsuki = "0.4.8"
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[workspace]
+

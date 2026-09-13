@@ -1,0 +1,28 @@
+[package]
+name = "ulua-vm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "The Luau register virtual machine and standard library (Rust)."
+keywords = ["luau", "lua", "vm", "interpreter", "bytecode"]
+categories = ["compilers", "emulators"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+ulua-common = { path = "../ulua-common", version = "0.1.1" }
+
+[features]
+default = ["std"]
+std = []
+native = ["std"]
+cli = ["native"]
+native-codegen = ["native"]
+wasm = []
+luai_gcmetrics = []
+hard_mem_tests = []
+internal_stub_resolution = []
+

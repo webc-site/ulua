@@ -1,0 +1,61 @@
+[workspace]
+resolver = "3"
+members = [
+
+    "crates/ulua",
+    "crates/ulua-analysis",
+    "crates/ulua-analyze-cli",
+    "crates/ulua-ast",
+    "crates/ulua-ast-cli",
+    "crates/ulua-bytecode",
+    "crates/ulua-bytecode-cli",
+    "crates/ulua-cli-lib",
+    "crates/ulua-cli-test",
+    "crates/ulua-code-gen",
+    "crates/ulua-common",
+    "crates/ulua-compile-cli",
+    "crates/ulua-compiler",
+    "crates/ulua-config",
+    "crates/ulua-conformance",
+    "crates/ulua-e2e",
+    "crates/ulua-reduce-cli",
+    "crates/ulua-repl-cli",
+    "crates/ulua-require",
+    "crates/ulua-rt",
+    "crates/ulua-checked-macros",
+    "crates/ulua-rt-derive",
+    "crates/ulua-unit-test",
+    "crates/ulua-vm",
+    "crates/ulua-web",
+    "examples/*",
+]
+# The cargo-fuzz crate is its own (nightly/libfuzzer) workspace — keep it out of
+# the main one so normal `cargo build`/CI never pulls the fuzz toolchain.
+exclude = ["fuzz"]
+
+[profile.release]
+lto = "fat"
+codegen-units = 1
+
+[workspace.package]
+version = "0.1.1"
+edition = "2024"
+license = "MIT"
+authors = ["x-at-01 <x-at-01@googlegroups.com>"]
+repository = "https://github.com/webc-site/ulua"
+description = "Pure Rust Luau compiler, register VM, and type checker"
+keywords = ["luau", "lua", "compiler", "vm", "typechecker"]
+categories = ["compilers", "emulators", "parser-implementations", "development-tools", "wasm"]
+
+[workspace.metadata.cargo-machete]
+ignored = [
+    "wasm-bindgen",
+    "ulua-analysis",
+    "ulua-ast",
+    "ulua-bytecode",
+    "ulua-compiler",
+    "ulua-config",
+    "ulua-vm",
+]
+
+

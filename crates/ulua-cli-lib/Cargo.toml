@@ -1,0 +1,38 @@
+[package]
+name = "ulua-cli-lib"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Shared command-line helpers used by the ulua tool crates."
+keywords = ["luau", "lua", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+ulua-ast = { path = "../ulua-ast", version = "0.1.1" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.1" }
+ulua-common = { path = "../ulua-common", version = "0.1.1" }
+ulua-compiler = { path = "../ulua-compiler", version = "0.1.1" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.1" }
+
+[features]
+default = ["std"]
+std = []
+native = ["std"]
+cli = ["native"]
+native-codegen = ["native"]
+wasm = []
+
+# The Windows file-utils helpers (is_file / traverse_directory_rec) call raw
+# Win32 wide-char filesystem APIs. Use windows-sys (raw Win32), matching the rest
+# of the workspace — the crate was referenced but never declared as a dependency.
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+] }
+

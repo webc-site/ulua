@@ -1,0 +1,28 @@
+[package]
+name = "ulua-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "`.uluac` configuration handling for Luau (Rust)."
+keywords = ["luau", "lua", "config", "configuration"]
+categories = ["config", "parsing"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+ulua-ast = { path = "../ulua-ast", version = "0.1.1" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.1" }
+ulua-common = { path = "../ulua-common", version = "0.1.1" }
+ulua-compiler = { path = "../ulua-compiler", version = "0.1.1" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.1" }
+
+[features]
+default = ["std"]
+std = []
+native = ["std"]
+cli = ["native"]
+native-codegen = ["native"]
+

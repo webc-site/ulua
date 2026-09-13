@@ -1,0 +1,13 @@
+pub mod analyze_file;
+pub mod assertion_handler;
+pub mod copts;
+pub mod display_help;
+pub mod escape_filename;
+pub mod main;
+pub mod parse_args;
+pub mod report;
+pub mod report_error_bytecode;
+pub mod report_error_bytecode_alt_b;
+pub mod serialize_function_summary;
+pub mod serialize_script_summary;
+pub mod serialize_summaries;

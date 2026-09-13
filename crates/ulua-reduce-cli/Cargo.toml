@@ -1,0 +1,34 @@
+[package]
+name = "ulua-reduce-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Command-line Luau test-case reducer (Rust)."
+keywords = ["luau", "lua", "reduce", "minimizer", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[lib]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "ulua-reduce"
+path = "src/main.rs"
+
+[dependencies]
+ulua-ast = { path = "../ulua-ast", version = "0.1.1" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.1" }
+ulua-cli-lib = { path = "../ulua-cli-lib", version = "0.1.1" }
+ulua-common = { path = "../ulua-common", version = "0.1.1" }
+ulua-compiler = { path = "../ulua-compiler", version = "0.1.1" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.1" }
+
+[features]
+default = ["std"]
+std = []
+native = ["std"]
+cli = ["native"]
+native-codegen = ["native"]
+wasm = []
+
