@@ -6,4 +6,4 @@ publish = false
 
 [dependencies.ulua]
 path = "../../crates/ulua"
-version = "0.1.1"
+version = "0.1.2"

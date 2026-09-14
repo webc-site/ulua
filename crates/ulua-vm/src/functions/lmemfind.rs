@@ -1,5 +1,7 @@
 use core::{ffi::c_char, ptr::null, slice::from_raw_parts};
 
+use memchr::memmem;
+
 /// 在 `s1[..l1]` 中查找子串 `s2[..l2]` 的首次出现位置。
 ///
 /// 用 `memchr::memmem::find`（Two-Way + SIMD）统一全平台实现。
@@ -25,6 +27,6 @@ pub(crate) unsafe fn lmemfind(
     let haystack = from_raw_parts(s1.cast::<u8>(), l1);
     let needle = from_raw_parts(s2.cast::<u8>(), l2);
 
-    memchr::memmem::find(haystack, needle).map_or(null(), |i| s1.add(i))
+    memmem::find(haystack, needle).map_or(null(), |i| s1.add(i))
   }
 }

@@ -13,9 +13,9 @@ categories = ["compilers"]
 crate-type = ["rlib"]
 
 [dependencies]
-ulua-ast = { path = "../ulua-ast", version = "0.1.1" }
-ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.1" }
-ulua-common = { path = "../ulua-common", version = "0.1.1" }
+ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.2" }
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
 
 [features]
 default = ["std"]

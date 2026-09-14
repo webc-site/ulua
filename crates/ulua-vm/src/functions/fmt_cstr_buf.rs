@@ -1,6 +1,7 @@
 use core::{
   ffi::{CStr, c_char},
   fmt::{self, Write},
+  slice::from_raw_parts_mut,
 };
 
 /// 可写入 `&mut [c_char]` 的 fmt::Write 适配器，自动 NUL 结尾截断。
@@ -14,7 +15,7 @@ struct CCharBuf<'a> {
 impl<'a> CCharBuf<'a> {
   fn new(buf: &'a mut [c_char]) -> Self {
     // c_char 和 u8 大小相同，安全转换
-    let buf = unsafe { core::slice::from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), buf.len()) };
+    let buf = unsafe { from_raw_parts_mut(buf.as_mut_ptr().cast::<u8>(), buf.len()) };
     Self { buf, pos: 0 }
   }
 }

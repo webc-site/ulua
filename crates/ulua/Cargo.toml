@@ -19,17 +19,17 @@ path = "src/bin/ulua.rs"
 required-features = ["cli"]
 
 [dependencies]
-ulua-common = { path = "../ulua-common", version = "0.1.1" }
-ulua-ast = { path = "../ulua-ast", version = "0.1.1" }
-ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.1" }
-ulua-compiler = { path = "../ulua-compiler", version = "0.1.1" }
-ulua-vm = { path = "../ulua-vm", version = "0.1.1" }
-ulua-analysis = { path = "../ulua-analysis", version = "0.1.1" }
-ulua-config = { path = "../ulua-config", version = "0.1.1" }
-ulua-require = { path = "../ulua-require", version = "0.1.1" }
-ulua-rt = { path = "../ulua-rt", version = "0.1.1" }
-ulua-checked-macros = { path = "../ulua-checked-macros", version = "0.1.1", optional = true }
-ulua-repl-cli = { path = "../ulua-repl-cli", version = "0.1.1", optional = true }
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
+ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.2" }
+ulua-compiler = { path = "../ulua-compiler", version = "0.1.2" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
+ulua-analysis = { path = "../ulua-analysis", version = "0.1.2" }
+ulua-config = { path = "../ulua-config", version = "0.1.2" }
+ulua-require = { path = "../ulua-require", version = "0.1.2" }
+ulua-rt = { path = "../ulua-rt", version = "0.1.2" }
+ulua-checked-macros = { path = "../ulua-checked-macros", version = "0.1.2", optional = true }
+ulua-repl-cli = { path = "../ulua-repl-cli", version = "0.1.2", optional = true }
 
 [features]
 # Batteries-included: the umbrella ships the static type checker AND the installable

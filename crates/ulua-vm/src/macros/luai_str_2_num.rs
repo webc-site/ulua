@@ -1,5 +1,7 @@
 use core::ffi::{CStr, c_char};
 
+use ulua_common::strtod_shim::parse_c_double;
+
 #[macro_export]
 macro_rules! luai_str2num {
   ($s:expr, $p:expr) => {
@@ -22,7 +24,7 @@ pub unsafe fn rust_strtod(s: *const c_char, endptr: *mut *mut c_char) -> f64 {
       return 0.0;
     }
     let bytes = CStr::from_ptr(s).to_bytes();
-    let (val, consumed) = ulua_common::strtod_shim::parse_c_double(bytes);
+    let (val, consumed) = parse_c_double(bytes);
     if !endptr.is_null() {
       *endptr = (s as *mut c_char).add(consumed);
     }

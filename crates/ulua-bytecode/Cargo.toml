@@ -14,7 +14,7 @@ crate-type = ["rlib"]
 
 [dependencies]
 memchr = { version = "2.8", default-features = false, features = ["alloc"] }
-ulua-common = { path = "../ulua-common", version = "0.1.1" }
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
 
 [features]
 default = ["std"]

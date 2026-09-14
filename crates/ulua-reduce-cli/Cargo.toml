@@ -17,12 +17,12 @@ name = "ulua-reduce"
 path = "src/main.rs"
 
 [dependencies]
-ulua-ast = { path = "../ulua-ast", version = "0.1.1" }
-ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.1" }
-ulua-cli-lib = { path = "../ulua-cli-lib", version = "0.1.1" }
-ulua-common = { path = "../ulua-common", version = "0.1.1" }
-ulua-compiler = { path = "../ulua-compiler", version = "0.1.1" }
-ulua-vm = { path = "../ulua-vm", version = "0.1.1" }
+ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.2" }
+ulua-cli-lib = { path = "../ulua-cli-lib", version = "0.1.2" }
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
+ulua-compiler = { path = "../ulua-compiler", version = "0.1.2" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
 
 [features]
 default = ["std"]

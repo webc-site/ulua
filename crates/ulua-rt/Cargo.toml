@@ -48,23 +48,23 @@ typecheck = ["dep:ulua-analysis", "dep:ulua-config"]
 send = []
 
 [dependencies]
-ulua-common = { path = "../ulua-common", version = "0.1.1" }
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
 # Optional: only pulled in by the `macros` feature. Provides the
 # `#[derive(UserData)]` / `#[derive(FromLua)]` proc-macros, re-exported below.
-ulua-rt-derive = { path = "../ulua-rt-derive", version = "0.1.1", optional = true }
-ulua-compiler = { path = "../ulua-compiler", version = "0.1.1" }
-ulua-vm = { path = "../ulua-vm", version = "0.1.1" }
+ulua-rt-derive = { path = "../ulua-rt-derive", version = "0.1.2", optional = true }
+ulua-compiler = { path = "../ulua-compiler", version = "0.1.2" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
 # Needed by `Chunk` to drive the compiler with default parse/encode options,
 # mirroring the umbrella `ulua` crate's `compile` helper.
-ulua-ast = { path = "../ulua-ast", version = "0.1.1" }
-ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.1" }
+ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.2" }
 # Optional: only pulled in by the `typecheck` feature. Provides Luau's static
 # type checker (the `Frontend` + builtins) used by `Lua::check` / `Chunk::check`
 # and the free `check` / `check_with_definitions` helpers.
-ulua-analysis = { path = "../ulua-analysis", version = "0.1.1", optional = true }
+ulua-analysis = { path = "../ulua-analysis", version = "0.1.2", optional = true }
 # Optional: only pulled in by the `typecheck` feature. Provides the `Config`
 # the type-checker's config resolver returns.
-ulua-config = { path = "../ulua-config", version = "0.1.1", optional = true }
+ulua-config = { path = "../ulua-config", version = "0.1.2", optional = true }
 
 # Optional: only pulled in by the `serde` feature. We implement the
 # Serializer/Deserializer directly over ulua-rt's `Value`/`Table`, so plain

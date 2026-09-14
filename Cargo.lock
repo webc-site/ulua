@@ -516,7 +516,7 @@ dependencies = [
 
 [[package]]
 name = "ulua"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-analysis",
  "ulua-ast",
@@ -533,7 +533,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-analysis"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-ast",
  "ulua-bytecode",
@@ -546,7 +546,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-analyze-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-analysis",
  "ulua-ast",
@@ -561,14 +561,14 @@ dependencies = [
 
 [[package]]
 name = "ulua-ast"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-common",
 ]
 
 [[package]]
 name = "ulua-ast-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-analysis",
  "ulua-ast",
@@ -581,7 +581,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-bytecode"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "memchr",
  "ulua-common",
@@ -589,7 +589,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-bytecode-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-ast",
  "ulua-bytecode",
@@ -601,7 +601,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-checked-macros"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -611,7 +611,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-cli-lib"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-ast",
  "ulua-bytecode",
@@ -623,7 +623,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-cli-test"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-ast",
  "ulua-bytecode",
@@ -638,7 +638,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-code-gen"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-common",
  "ulua-vm",
@@ -647,7 +647,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-common"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "fast-float2",
  "libc",
@@ -656,7 +656,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-compile-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-ast",
  "ulua-bytecode",
@@ -669,7 +669,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-compiler"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-ast",
  "ulua-bytecode",
@@ -678,7 +678,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-config"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-ast",
  "ulua-bytecode",
@@ -689,7 +689,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-conformance"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-analysis",
  "ulua-ast",
@@ -703,7 +703,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-e2e"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "assert_cmd",
  "predicates",
@@ -763,7 +763,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-reduce-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-ast",
  "ulua-bytecode",
@@ -775,7 +775,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-repl-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "rustyline",
  "ulua-ast",
@@ -791,7 +791,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-require"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-ast",
  "ulua-bytecode",
@@ -803,7 +803,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-rt"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "bstr",
  "futures-util",
@@ -822,7 +822,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-rt-derive"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -831,7 +831,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-unit-test"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "ulua-analysis",
  "ulua-ast",
@@ -845,7 +845,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-vm"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "memchr",
  "ulua-common",
@@ -853,7 +853,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-web"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "console_error_panic_hook",
  "ulua-analysis",

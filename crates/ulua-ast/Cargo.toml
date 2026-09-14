@@ -13,7 +13,7 @@ categories = ["parser-implementations", "parsing"]
 crate-type = ["rlib"]
 
 [dependencies]
-ulua-common = { path = "../ulua-common", version = "0.1.1" }
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
 
 [features]
 default = ["std"]
