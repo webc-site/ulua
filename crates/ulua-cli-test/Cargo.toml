@@ -1,0 +1,28 @@
+[package]
+name = "ulua-cli-test"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+ulua-ast = { path = "../ulua-ast", version = "0.1.1" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.1" }
+ulua-cli-lib = { path = "../ulua-cli-lib", version = "0.1.1" }
+ulua-code-gen = { path = "../ulua-code-gen", version = "0.1.1" }
+ulua-common = { path = "../ulua-common", version = "0.1.1" }
+ulua-compiler = { path = "../ulua-compiler", version = "0.1.1" }
+ulua-config = { path = "../ulua-config", version = "0.1.1" }
+ulua-require = { path = "../ulua-require", version = "0.1.1" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.1" }
+
+[features]
+default = ["std"]
+std = []
+native = ["std"]
+cli = ["native"]
+native-codegen = ["native"]
+wasm = []
+
