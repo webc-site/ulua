@@ -1,0 +1,68 @@
+# === Rust & Cargo ===
+/cpp/
+target/
+target*/
+*.rlib
+*.dylib
+*.so
+*.dll
+*.pdb
+*.dSYM/
+*.profraw
+*.profdata
+**/*.rs.bk
+
+# === C / C++ / CMake ===
+*.o
+*.obj
+*.a
+compile_commands.json
+.clangd/
+cmake-build-*/
+
+# === Web / Node / Frontend ===
+node_modules/
+dist/
+website/dist/
+website/pkg/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+playwright-report/
+test-results/
+.playwright-mcp/
+
+# === CLI / Runtime / Logs ===
+/sh
+err.log
+*.log
+profile.out
+bytecode-summary.json
+trace.json
+
+# === Fuzzing ===
+fuzz/corpus-cmin/
+fuzz/.afl-showmap-temp-*
+
+# === OS & Editors ===
+.DS_Store
+._*
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# === Local AI & Index Tools ===
+.codegraph/
+
+# === Crash & Debug ===
+core
+*.core
+
+# === Launch / marketing prep notes — kept local, never in the public repo ===
+posts/
+post.md
+research/*.md
+.codegraph/

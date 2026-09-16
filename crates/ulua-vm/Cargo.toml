@@ -1,0 +1,32 @@
+[package]
+name = "ulua-vm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "The Luau register virtual machine and standard library (Rust)."
+keywords = ["luau", "lua", "vm", "interpreter", "bytecode"]
+categories = ["compilers", "emulators"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+itoa = { version = "1.0.18", default-features = false }
+memchr = { version = "2.8.3", default-features = false, features = ["alloc"] }
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
+
+[features]
+default = ["std"]
+std = []
+native = ["std"]
+cli = ["native"]
+native-codegen = ["native"]
+wasm = []
+luai_gcmetrics = []
+hard_mem_tests = []
+internal_stub_resolution = []
+# 层1 C ABI 导出门控：仅在以 cdylib/静态库形式消费 ulua_* 符号时开启
+capi = []
+
