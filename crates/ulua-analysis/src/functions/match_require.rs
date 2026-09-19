@@ -25,6 +25,6 @@ pub fn match_require(call: &AstExprCall) -> Option<*mut AstExpr> {
     return None;
   }
 
-  // SAFETY: 前置检查 args.len() == 1，首元素必存在。
-  Some(unsafe { *call.args.begin() })
+  // 前置 args.len() == 1 已保证有元素；切片首元素即 cpp `*args.begin()`
+  call.args.as_slice().first().copied()
 }

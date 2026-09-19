@@ -5,7 +5,6 @@ pub mod allocator_allocator_allocator_alt_b;
 pub mod allocator_allocator_allocator_alt_c;
 pub mod allocator_operator_assign;
 pub mod arg_name_inserter_operator_call;
-pub mod ast_array_begin;
 pub mod ast_attr_ast_attr_ast_alt_b;
 pub mod ast_attr_deprecated_info;
 pub mod ast_attr_visit;
