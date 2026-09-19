@@ -82,7 +82,6 @@ fn eq_same_pointer_is_true_without_content_read() {
   let buf = b"shared".to_vec();
   let a = StringRef::from_slice(&buf);
   let b = StringRef::from_slice(&buf);
-  assert!(a.operator_eq(&b));
   assert_eq!(a, b);
 }
 
@@ -93,7 +92,6 @@ fn eq_different_pointers_zero_length() {
   let a = StringRef::new(buf_a.as_ptr() as *const _, 0);
   let b = StringRef::new(buf_b.as_ptr() as *const _, 0);
   assert_ne!(a.as_bytes().as_ptr(), b.as_bytes().as_ptr());
-  assert!(a.operator_eq(&b));
   assert_eq!(a, b);
 }
 

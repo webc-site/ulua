@@ -40,8 +40,6 @@ pub mod bc_inst_helper_slice_inputs;
 pub mod bc_op_bc_op_bytecode_graph;
 pub mod bc_op_bc_op_bytecode_graph_alt_b;
 pub mod bc_op_hash_operator_call;
-pub mod bc_op_operator_eq;
-pub mod bc_op_operator_ne;
 pub mod bc_ref_operator_deref_bytecode_graph_alt_b;
 pub mod bc_vm_const_bc_vm_const;
 pub mod bytecode_builder_add_child_function;
