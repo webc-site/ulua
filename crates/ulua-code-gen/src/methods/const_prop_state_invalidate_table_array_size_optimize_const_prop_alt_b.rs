@@ -8,6 +8,6 @@ use crate::{
 impl ConstPropState {
   pub fn invalidate_table_array_size_register_info(&mut self, reg: &mut RegisterInfo) {
     CODEGEN_ASSERT!(!LuauCodegenExtraTableOpts.get());
-    reg.known_table_array_size_deprecated = -1;
+    reg.known_table_array_size = -1;
   }
 }

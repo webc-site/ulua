@@ -20,9 +20,7 @@ impl ConstPropState {
       reg.value = IrOp::default();
 
       if !LuauCodegenExtraTableOpts.get() {
-        reg.known_not_readonly_deprecated = false;
-        reg.known_no_metatable_deprecated = false;
-        reg.known_table_array_size_deprecated = -1;
+        reg.known_table_array_size = -1;
       }
     }
 
