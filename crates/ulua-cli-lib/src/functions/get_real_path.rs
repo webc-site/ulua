@@ -41,7 +41,8 @@ pub fn get_real_path(module_path: &str) -> ResolvedRealPath {
   // 即整串（不是空串）。debug 下上面的断言先炸，release 下无斜杠输入走此分支。
   let last_component = match last_slash {
     Some(idx) => &module_path[idx + 1..],
-    None => module_path.as_str(),
+    // `module_path` 本就是 `&str`，直接分支同型返回（str::as_str 仍是不稳定特性）
+    None => module_path,
   };
 
   // 常规模块后缀（`init` 末段交给下方目录分支）
