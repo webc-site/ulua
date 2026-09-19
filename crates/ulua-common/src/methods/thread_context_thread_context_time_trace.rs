@@ -27,9 +27,10 @@ impl ThreadContext {
         data: Vec::new(),
       };
 
-      // `createThread(*globalContext, this)` — the singleton context guards
-      // its own mutable state behind a Mutex, so a shared `&` suffices.
-      result.thread_id = create_thread(&global_context, &mut result as *mut ThreadContext);
+      // `createThread(*globalContext, this)` — 注册身份是返回的 `thread_id`
+      // （指针在按值返回后不稳定，见 `create_thread` 的偏差说明）；单例
+      // 上下文自身以 Mutex 保护，共享 `&` 即可。
+      result.thread_id = create_thread(&global_context);
 
       result
     }

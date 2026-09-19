@@ -8,9 +8,9 @@ use ulua_ast::records::{
 };
 
 use crate::{
-  enums::{table_constant_kind::TableConstantKind, type_constant_folding::Type},
+  enums::table_constant_kind::TableConstantKind,
   functions::unwrap_expr_of_type::unwrap_expr_of_type,
-  records::compiler::Compiler,
+  records::{compiler::Compiler, constant::Constant},
 };
 
 impl Compiler {
@@ -56,16 +56,14 @@ impl Compiler {
       for item in (*table).items.as_slice() {
         if item.kind == ItemKind::Record || item.kind == ItemKind::General {
           match self.constants.find(&item.key) {
-            Some(key_constant) => {
-              if key_constant.r#type == Type::String && key_constant.string_length != 0 {
-                let arr = key_constant.get_string();
-                let key_name = (*self.names).get_or_add(arr.data, arr.size);
+            Some(Constant::Str(s)) if s.len != 0 => {
+              let key_name = (*self.names).get_or_add(s.ptr.cast_mut(), s.len as usize);
 
-                if key_name == (*expr).index {
-                  match_value = item.value;
-                }
+              if key_name == (*expr).index {
+                match_value = item.value;
               }
             }
+            Some(_) => {}
             None => match_value = null_mut(),
           }
         }

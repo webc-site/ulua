@@ -69,6 +69,27 @@ pub struct Parser {
 }
 
 impl Parser {
+  /// 建 ast→cst 映射：仅在 `store_cst_data` 时分配 CST 节点并插入。cpp 各
+  /// 解析点 `if (options.storeCstData) { alloc<CstX>(...); cstNodeMap[n]=c; }`
+  /// 的统一收口——调用点不再重复选项判空、指针强转与 unsafe（闭包内拿
+  /// `&mut Allocator`，构造 CST 全程安全代码）。
+  pub(crate) fn attach_cst<A, C>(
+    &mut self,
+    ast_node: *mut A,
+    make_cst: impl FnOnce(&mut Allocator) -> *mut C,
+  ) where
+    C: CstNodeClass,
+  {
+    if !self.options.store_cst_data {
+      return;
+    }
+    // SAFETY: allocator 由 Parser 独占持有（Box 固定地址），self 为 &mut 借用。
+    let cst_node = make_cst(unsafe { &mut *self.allocator });
+    self
+      .cst_node_map
+      .try_insert(ast_node as *mut AstNode, cst_node as *mut CstNode);
+  }
+
   /// 查 ast→cst 映射并下转为 `T` 的可变形态（Printer::lookup_cst_node 的
   /// parser 对应）。unsafe 收口于此：映射值指向 arena 中存活的 CST 节点，
   /// `cst_node_as` 经 class_index 命中后 repr(C) 布局保证下转有效。

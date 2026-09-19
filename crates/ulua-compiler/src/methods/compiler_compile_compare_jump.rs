@@ -3,12 +3,10 @@ use core::mem::swap;
 use ulua_ast::records::ast_expr_binary::{AstExprBinary, AstExprBinaryOp};
 use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_assert::LUAU_ASSERT};
 
-use crate::{
-  enums::type_constant_folding::Type,
-  records::{
-    compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
-    compiler::{Compiler, K_GETIMPORT_FLAG},
-  },
+use crate::records::{
+  compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
+  compiler::{Compiler, K_GETIMPORT_FLAG},
+  constant::Constant,
 };
 
 impl Compiler {
@@ -40,13 +38,13 @@ impl Compiler {
 
       if is_eq && operand_is_constant {
         let cv = self.get_constant(right);
-        LUAU_ASSERT!(cv.r#type != Type::Unknown);
+        LUAU_ASSERT!(!cv.is_unknown());
 
-        let (opc, cid_val) = match cv.r#type {
-          Type::Nil => (LuauOpcode::LOP_JUMPXEQKNIL, 0),
-          Type::Boolean => (LuauOpcode::LOP_JUMPXEQKB, cv.data.value_boolean as i32),
-          Type::Number => (LuauOpcode::LOP_JUMPXEQKN, self.get_constant_index(right)),
-          Type::String => (LuauOpcode::LOP_JUMPXEQKS, self.get_constant_index(right)),
+        let (opc, cid_val) = match cv {
+          Constant::Nil => (LuauOpcode::LOP_JUMPXEQKNIL, 0),
+          Constant::Boolean(b) => (LuauOpcode::LOP_JUMPXEQKB, b as i32),
+          Constant::Number(_) => (LuauOpcode::LOP_JUMPXEQKN, self.get_constant_index(right)),
+          Constant::Str(_) => (LuauOpcode::LOP_JUMPXEQKS, self.get_constant_index(right)),
           _ => {
             LUAU_ASSERT!(false);
             (LuauOpcode::LOP_NOP, 0)

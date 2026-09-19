@@ -1,11 +1,10 @@
 use ulua_ast::records::{ast_node::AstNode, ast_stat_for::AstStatFor};
 
 use crate::{
-  enums::type_constant_folding::Type,
   functions::{
     cnum::cnum, compute_cost::compute_cost, cost_model::model_cost, get_trip_count::get_trip_count,
   },
-  records::compiler::Compiler,
+  records::{compiler::Compiler, constant::Constant},
 };
 
 /// 利润百分比换算基数（C++ `profit = maxBoost * 100 / cost`）
@@ -32,17 +31,15 @@ impl Compiler {
       one
     };
 
-    let trip_count =
-      if fromc.r#type == Type::Number && toc.r#type == Type::Number && stepc.r#type == Type::Number
-      {
-        get_trip_count(
-          unsafe { fromc.data.value_number },
-          unsafe { toc.data.value_number },
-          unsafe { stepc.data.value_number },
-        )
-      } else {
-        -1
-      };
+    // 三者均为 Number 常量时才可折叠；同时缓存数值供展开编译复用
+    let mut nums = (0.0, 0.0, 0.0);
+    let trip_count = match (&fromc, &toc, &stepc) {
+      (Constant::Number(f), Constant::Number(t), Constant::Number(s)) => {
+        nums = (*f, *t, *s);
+        get_trip_count(*f, *t, *s)
+      }
+      _ => -1,
+    };
 
     if trip_count < 0 {
       unsafe {
@@ -117,12 +114,7 @@ impl Compiler {
     }
 
     unsafe {
-      self.compile_unrolled_for(
-        stat,
-        trip_count,
-        fromc.data.value_number,
-        stepc.data.value_number,
-      );
+      self.compile_unrolled_for(stat, trip_count, nums.0, nums.2);
     };
     true
   }

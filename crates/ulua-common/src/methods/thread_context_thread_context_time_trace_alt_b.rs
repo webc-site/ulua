@@ -8,10 +8,8 @@ impl Drop for ThreadContext {
       self.flush_events();
     }
 
-    // `releaseThread(*globalContext, this)` — the singleton guards its own
-    // mutable state behind a Mutex, so a shared `&` suffices. Clone the Arc
-    // first so we can also pass `self` as the thread pointer.
-    let global_context = self.global_context.clone();
-    release_thread(&global_context, self as *mut ThreadContext);
+    // `releaseThread(*globalContext, this)` — 单例上下文自身以 Mutex 保护，
+    // 共享 `&` 即可；按 `thread_id` 注销，无需克隆 Arc 或取自身指针。
+    release_thread(&self.global_context, self);
   }
 }
