@@ -1,11 +1,13 @@
 use alloc::string::String;
 use core::ffi::CStr;
 
-use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_insn_op::luau_insn_op};
+use ulua_common::{
+  enums::luau_opcode::LuauOpcode, functions::get_op_length::get_op_length,
+  macros::luau_insn_op::luau_insn_op,
+};
 use ulua_vm::{macros::getstr::getstr, records::proto::Proto};
 
 use crate::{
-  functions::get_op_length::get_op_length,
   records::function_bytecode_summary::FunctionBytecodeSummary,
   type_aliases::instruction_ir_builder::Instruction,
 };

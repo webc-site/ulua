@@ -2,6 +2,10 @@ use alloc::{string::String, vec::Vec};
 
 use crate::records::patch::Patch;
 
+/// A64 `add/ldr/str` 等指令的无符号立即数上界（12 位）。
+/// 对应 cpp/CodeGen/include/Luau/AssemblyBuilderA64.h `static constexpr size_t kMaxImmediate = (1 << 12) - 1;`
+pub(crate) const K_MAX_IMMEDIATE: usize = (1 << 12) - 1;
+
 #[derive(Debug, Clone)]
 #[repr(C)]
 pub struct AssemblyBuilderA64 {

@@ -18,14 +18,13 @@ end
     let args1 = [false];
     let args2 = [true];
 
-    assert_eq!(4, unsafe { compute_cost(model, args1.as_ptr(), 1) });
-    assert_eq!(2, unsafe { compute_cost(model, args2.as_ptr(), 1) });
+    assert_eq!(4, compute_cost(model, &args1));
+    assert_eq!(2, compute_cost(model, &args2));
   }
 }
 
 mod cost_model_cost_overflow {
   //! Source: `tests/CostModel.test.cpp`
-  use core::ptr::null;
 
   #[test]
   fn cost_model_cost_overflow() {
@@ -39,7 +38,7 @@ end
 "#;
     let model = model_function(source);
 
-    assert_eq!(127, unsafe { compute_cost(model, null(), 0) });
+    assert_eq!(127, compute_cost(model, &[]));
   }
 }
 
@@ -61,8 +60,8 @@ end
     let args1 = [false, false, false];
     let args2 = [false, true, false];
 
-    assert_eq!(5, unsafe { compute_cost(model, args1.as_ptr(), 3) });
-    assert_eq!(2, unsafe { compute_cost(model, args2.as_ptr(), 3) });
+    assert_eq!(5, compute_cost(model, &args1));
+    assert_eq!(2, compute_cost(model, &args2));
   }
 }
 
@@ -84,8 +83,8 @@ end
     let args1 = [false];
     let args2 = [true];
 
-    assert_eq!(6, unsafe { compute_cost(model, args1.as_ptr(), 1) });
-    assert_eq!(5, unsafe { compute_cost(model, args2.as_ptr(), 1) });
+    assert_eq!(6, compute_cost(model, &args1));
+    assert_eq!(5, compute_cost(model, &args2));
   }
 }
 
@@ -107,8 +106,8 @@ end
     let args1 = [false];
     let args2 = [true];
 
-    assert_eq!(6, unsafe { compute_cost(model, args1.as_ptr(), 1) });
-    assert_eq!(6, unsafe { compute_cost(model, args2.as_ptr(), 1) });
+    assert_eq!(6, compute_cost(model, &args1));
+    assert_eq!(6, compute_cost(model, &args2));
   }
 }
 
@@ -130,8 +129,8 @@ end
     let args1 = [false];
     let args2 = [true];
 
-    assert_eq!(3, unsafe { compute_cost(model, args1.as_ptr(), 1) });
-    assert_eq!(3, unsafe { compute_cost(model, args2.as_ptr(), 1) });
+    assert_eq!(3, compute_cost(model, &args1));
+    assert_eq!(3, compute_cost(model, &args2));
   }
 }
 
@@ -155,8 +154,8 @@ end
     let args1 = [false];
     let args2 = [true];
 
-    assert_eq!(6, unsafe { compute_cost(model, args1.as_ptr(), 1) });
-    assert_eq!(6, unsafe { compute_cost(model, args2.as_ptr(), 1) });
+    assert_eq!(6, compute_cost(model, &args1));
+    assert_eq!(6, compute_cost(model, &args2));
   }
 }
 
@@ -182,8 +181,8 @@ end
     let args1 = [false];
     let args2 = [true];
 
-    assert_eq!(8, unsafe { compute_cost(model, args1.as_ptr(), 1) });
-    assert_eq!(7, unsafe { compute_cost(model, args2.as_ptr(), 1) });
+    assert_eq!(8, compute_cost(model, &args1));
+    assert_eq!(7, compute_cost(model, &args2));
   }
 }
 
@@ -207,8 +206,8 @@ end
     let args1 = [false];
     let args2 = [true];
 
-    assert_eq!(3, unsafe { compute_cost(model, args1.as_ptr(), 1) });
-    assert_eq!(2, unsafe { compute_cost(model, args2.as_ptr(), 1) });
+    assert_eq!(3, compute_cost(model, &args1));
+    assert_eq!(2, compute_cost(model, &args2));
   }
 }
 
@@ -231,8 +230,8 @@ end
     let args1 = [false];
     let args2 = [true];
 
-    assert_eq!(3, unsafe { compute_cost(model, args1.as_ptr(), 1) });
-    assert_eq!(0, unsafe { compute_cost(model, args2.as_ptr(), 1) });
+    assert_eq!(3, compute_cost(model, &args1));
+    assert_eq!(0, compute_cost(model, &args2));
   }
 }
 
@@ -256,14 +255,13 @@ end
     let args1 = [false];
     let args2 = [true];
 
-    assert_eq!(7, unsafe { compute_cost(model, args1.as_ptr(), 1) });
-    assert_eq!(6, unsafe { compute_cost(model, args2.as_ptr(), 1) });
+    assert_eq!(7, compute_cost(model, &args1));
+    assert_eq!(6, compute_cost(model, &args2));
   }
 }
 
 mod cost_model_tables_functions {
   //! Source: `tests/CostModel.test.cpp`
-  use core::ptr::null;
 
   #[test]
   fn cost_model_tables_functions() {
@@ -277,13 +275,12 @@ end
 "#;
     let model = model_function(source);
 
-    assert_eq!(22, unsafe { compute_cost(model, null(), 0) });
+    assert_eq!(22, compute_cost(model, &[]));
   }
 }
 
 mod cost_model_var_args {
   //! Source: `tests/CostModel.test.cpp`
-  use core::ptr::null;
 
   #[test]
   fn cost_model_var_args() {
@@ -297,6 +294,6 @@ end
 "#;
     let model = model_function(source);
 
-    assert_eq!(8, unsafe { compute_cost(model, null(), 0) });
+    assert_eq!(8, compute_cost(model, &[]));
   }
 }

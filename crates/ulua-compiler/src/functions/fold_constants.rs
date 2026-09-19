@@ -1,5 +1,3 @@
-use core::ptr::null_mut;
-
 use ulua_ast::{
   records::{
     ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_local::AstLocal,
@@ -7,20 +5,13 @@ use ulua_ast::{
   },
   visit::ast_node_visit,
 };
-use ulua_common::{
-  fflag::{LuauCompileFoldOptimize, LuauCompilePropagateTableProps2},
-  records::dense_hash_map::DenseHashMap,
-};
+use ulua_common::records::dense_hash_map::DenseHashMap;
 
 use crate::{
-  enums::{
-    table_constant_kind::TableConstantKind,
-    type_constant_folding::Type::{Table, Unknown},
-  },
+  enums::table_constant_kind::TableConstantKind,
   records::{
     constant::Constant,
     constant_visitor::{ConstantVisitor, ConstantVisitorArgs},
-    table_mutation_tracker_deprecated::TableMutationTrackerDeprecated,
     variable::Variable,
   },
   type_aliases::{
@@ -47,24 +38,9 @@ pub struct FoldConstantsArgs<'a> {
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub unsafe fn fold_constants(root: *mut AstNode, args: FoldConstantsArgs<'_>) {
-  let mut constant_tables_deprecated = DenseHashMap::new(null_mut::<AstLocal>());
-
-  if LuauCompilePropagateTableProps2.get() && !LuauCompileFoldOptimize.get() {
-    let mut mutation_tracker = TableMutationTrackerDeprecated {
-      constant_tables: &mut constant_tables_deprecated,
-      variables: args.variables,
-    };
-    unsafe {
-      ast_node_visit(root, &mut mutation_tracker);
-    }
-  }
-
-  let constant_tables_for_visitor = if LuauCompileFoldOptimize.get() {
-    args.table_constants
-  } else {
-    &constant_tables_deprecated
-  };
-
+  // cpp/Compiler/src/ConstantFolding.cpp:1295 `foldConstants` 只跑一遍 ConstantVisitor；
+  // 旧 `LuauCompileFoldOptimize=false` 分支（deprecated tracker 预处理 + 事后把 Table
+  // 常量退回 Unknown）在上游已无对应实现，随之移除。
   let mut visitor = ConstantVisitor::new(ConstantVisitorArgs {
     constants: args.constants,
     variables: args.variables,
@@ -73,26 +49,12 @@ pub unsafe fn fold_constants(root: *mut AstNode, args: FoldConstantsArgs<'_>) {
     fold_library_k: args.fold_library_k,
     library_member_constant_cb: args.library_member_constant_cb,
     string_table: args.string_table,
-    constant_table_locals: constant_tables_for_visitor,
+    constant_table_locals: args.table_constants,
     expr_change_log: args.expr_change_log,
     local_change_log: args.local_change_log,
   });
 
   unsafe {
     ast_node_visit(root, &mut visitor);
-  }
-
-  if LuauCompilePropagateTableProps2.get() && !LuauCompileFoldOptimize.get() {
-    for (_key, constant) in args.constants.iter_mut() {
-      if constant.r#type == Table {
-        constant.r#type = Unknown;
-      }
-    }
-
-    for (_key, constant) in args.locals.iter_mut() {
-      if constant.r#type == Table {
-        constant.r#type = Unknown;
-      }
-    }
   }
 }

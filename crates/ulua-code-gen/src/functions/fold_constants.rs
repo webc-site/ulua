@@ -8,15 +8,20 @@ use crate::enums::ir_condition::IrCondition;
 use crate::{
   enums::{ir_cmd::IrCmd, ir_op_kind::IrOpKind},
   functions::{
-    byteswap::byteswap, compare_ir_utils::compare_f64_f64_ir_condition,
-    compare_ir_utils_alt_b::compare_i32_i32_ir_condition,
-    compare_ir_utils_alt_c::compare_i64_i64_ir_condition, condition_op::condition_op,
-    countlz_bit_utils::countlz_u32, countlz_bit_utils_alt_b::countlz_u64,
-    countrz_bit_utils::countrz_u32, countrz_bit_utils_alt_b::countrz_u64,
-    kill_ir_utils::kill_ir_function_ir_inst_at, lrotate::lrotate,
+    byteswap::byteswap,
+    compare_ir_utils::{compare_f64_f64_ir_condition, compare_int},
+    condition_op::condition_op,
+    countlz_bit_utils::countlz_u32,
+    countlz_bit_utils_alt_b::countlz_u64,
+    countrz_bit_utils::countrz_u32,
+    countrz_bit_utils_alt_b::countrz_u64,
+    kill_ir_utils::kill_ir_function_ir_inst_at,
+    lrotate::lrotate,
     replace_ir_utils::replace_ir_function_ir_op_ir_op_at,
-    replace_ir_utils_alt_b::replace_ir_function_ir_block_u32_ir_inst, rrotate::rrotate,
-    substitute::substitute_at, substitute_with_truncated_uint::substitute_with_truncated_uint_at,
+    replace_ir_utils_alt_b::replace_ir_function_ir_block_u32_ir_inst,
+    rrotate::rrotate,
+    substitute::substitute_at,
+    substitute_with_truncated_uint::substitute_with_truncated_uint_at,
   },
   macros::codegen_assert::CODEGEN_ASSERT,
   records::{
@@ -348,7 +353,7 @@ pub fn fold_constants(
     }
     IrCmd::CmpInt => {
       if is_const(0) && is_const(1) {
-        let res = compare_i32_i32_ir_condition(
+        let res = compare_int(
           function.int_op(read(0)),
           function.int_op(read(1)),
           condition_op(read(2)),
@@ -361,7 +366,7 @@ pub fn fold_constants(
       if is_const(0) && is_const(1) {
         let lhs = function.int64_op(read(0));
         let rhs = function.int64_op(read(1));
-        let res = compare_i64_i64_ir_condition(lhs, rhs, condition_op(read(2)));
+        let res = compare_int(lhs, rhs, condition_op(read(2)));
         let c = build.const_int(if res { 1 } else { 0 });
         substitute_at(function, index, c);
       }
@@ -399,7 +404,7 @@ pub fn fold_constants(
           let tag_b = function.tag_op(read(1));
 
           let same_value = if tag_b == LUA_TBOOLEAN {
-            compare_i32_i32_ir_condition(
+            compare_int(
               function.int_op(read(2)),
               function.int_op(read(3)),
               IrCondition::Equal,
@@ -413,7 +418,7 @@ pub fn fold_constants(
           } else if tag_b == LUA_TINTEGER {
             let lhs = function.int64_op(read(2));
             let rhs = function.int64_op(read(3));
-            compare_i64_i64_ir_condition(lhs, rhs, IrCondition::Equal)
+            compare_int(lhs, rhs, IrCondition::Equal)
           } else {
             CODEGEN_ASSERT!(false, "unsupported type");
             false
@@ -439,7 +444,7 @@ pub fn fold_constants(
           let tag_b = function.tag_op(read(1));
 
           let different_value = if tag_b == LUA_TBOOLEAN {
-            compare_i32_i32_ir_condition(
+            compare_int(
               function.int_op(read(2)),
               function.int_op(read(3)),
               IrCondition::NotEqual,
@@ -453,7 +458,7 @@ pub fn fold_constants(
           } else if tag_b == LUA_TINTEGER {
             let lhs = function.int64_op(read(2));
             let rhs = function.int64_op(read(3));
-            compare_i64_i64_ir_condition(lhs, rhs, IrCondition::NotEqual)
+            compare_int(lhs, rhs, IrCondition::NotEqual)
           } else {
             CODEGEN_ASSERT!(false, "unsupported type");
             false
@@ -485,7 +490,7 @@ pub fn fold_constants(
     }
     IrCmd::JumpCmpInt => {
       if is_const(0) && is_const(1) {
-        let res = compare_i32_i32_ir_condition(
+        let res = compare_int(
           function.int_op(read(0)),
           function.int_op(read(1)),
           condition_op(read(2)),
@@ -500,7 +505,7 @@ pub fn fold_constants(
     }
     IrCmd::JumpCmpInt64 => {
       if is_const(0) && is_const(1) {
-        let res = compare_i64_i64_ir_condition(
+        let res = compare_int(
           function.int64_op(read(0)),
           function.int64_op(read(1)),
           condition_op(read(2)),
@@ -685,7 +690,7 @@ pub fn fold_constants(
     }
     IrCmd::CheckCmpInt => {
       if is_const(0) && is_const(1) {
-        if compare_i32_i32_ir_condition(
+        if compare_int(
           function.int_op(read(0)),
           function.int_op(read(1)),
           condition_op(read(2)),
@@ -808,7 +813,7 @@ pub fn fold_constants(
       if is_const(0) && is_const(1) {
         let lhs = function.int64_op(read(0));
         let rhs = function.int64_op(read(1));
-        if compare_i64_i64_ir_condition(lhs, rhs, condition_op(read(2))) {
+        if compare_int(lhs, rhs, condition_op(read(2))) {
           kill_ir_function_ir_inst_at(function, index);
         } else {
           let r = make_inst(IrCmd::JUMP, &[read(3)]);
