@@ -75,37 +75,40 @@ impl<I: VmConstOps + ?Sized> Sccp<'_, '_, I> {
 
   /// cpp `BcFunction::eraseOp`：从所属块移除指令，并解除其作为消费者的全部反向边。
   fn erase_op(&mut self, op: BcOp) {
-    let (block, old_ops) = {
-      let inst = self.func.inst(op);
-      (
-        inst.operator_deref().block,
-        inst.operator_deref().ops.as_slice().to_vec(),
-      )
-    };
-    for used in old_ops {
-      self.state.erase_use(op, used);
+    // 拆分借用（同 set_ops）：遍历旧 ops 只读 func，erase_use 只写 state
+    let Sccp { func, state, .. } = self;
+    let block = func.inst(op).operator_deref().block;
+    {
+      let inst = func.inst(op);
+      for used in inst.operator_deref().ops.iter().copied() {
+        state.erase_use(op, used);
+      }
     }
-    self.func.block_op(block).ops.retain(|x| *x != op);
+    func.block_op(block).ops.retain(|x| *x != op);
   }
 
   /// cpp `Sccp::rewriteToLoad`：原位改写为载入指令，op 身份不变，既有使用点全部有效。
   fn rewrite_to_load(&mut self, op: BcOp, lattice: Constness) {
-    let old_ops: Vec<BcOp> = self.func.inst(op).operator_deref().ops.as_slice().to_vec();
-    for used in old_ops {
-      self.state.erase_use(op, used);
+    // 拆分借用：先只读遍历旧 ops 解除反向边，再独占可变改写
+    let Sccp { func, state, .. } = self;
+    {
+      let inst = func.inst(op);
+      for used in inst.operator_deref().ops.iter().copied() {
+        state.erase_use(op, used);
+      }
     }
 
     // 调用方 replaceUses 已过滤掉非常量格值，故两个顶/底态分支不可达
     match lattice {
       Constness::VmConstant(const_op) => {
-        let inst = self.func.inst_op(op);
+        let inst = func.inst_op(op);
         inst.op = LuauOpcode::LOP_LOADK;
         inst.ops.clear();
         inst.ops.push_back(const_op);
       }
       Constness::ImmConstant(imm) => {
-        let imm_op = self.func.add_imm_alt_b(imm);
-        let inst = self.func.inst_op(op);
+        let imm_op = func.add_imm_alt_b(imm);
+        let inst = func.inst_op(op);
         inst.op = if imm.kind == BcImmKind::Boolean {
           LuauOpcode::LOP_LOADB
         } else {

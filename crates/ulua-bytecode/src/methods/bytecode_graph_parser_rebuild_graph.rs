@@ -672,9 +672,13 @@ impl<'a> BytecodeGraphParser<'a> {
       }
     }
 
+    // visited/queue 提升为循环外复用（参照 `sccp_visit` 的 scratch 约定）：
+    // 每个 loop 只 clear 不重分配，避免多层循环嵌套时的逐轮堆分配。
+    let mut visited: HashSet<BcOp, BcOpHash> = HashSet::default();
+    let mut queue: Vec<BcOp> = Vec::new();
     for loop_ in &loops {
-      let mut visited: HashSet<BcOp, BcOpHash> = HashSet::default();
-      let mut queue: Vec<BcOp> = Vec::new();
+      visited.clear();
+      queue.clear();
       queue.push(loop_.exit);
       while let Some(cur) = queue.pop() {
         if visited.contains(&cur) {

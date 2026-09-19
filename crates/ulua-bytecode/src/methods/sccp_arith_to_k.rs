@@ -48,19 +48,20 @@ impl<I: VmConstOps + ?Sized> Sccp<'_, '_, I> {
 
   /// cpp `Sccp::setOps`：替换指令操作数，同步 def→use 反向边。
   fn set_ops(&mut self, op: BcOp, new_ops: &[BcOp]) {
-    let old_ops: Vec<BcOp> = self.func.inst(op).operator_deref().ops.as_slice().to_vec();
-    for old in old_ops {
-      self.state.erase_use(op, old);
-    }
+    // 拆分借用：旧 ops 的遍历只读 func，erase_use/record_use 只写 state，
+    // 两字段不相交，无需旧实现的 to_vec 快照
+    let Sccp { func, state, .. } = self;
     {
-      let inst = self.func.inst_op(op);
-      inst.ops.clear();
-      for &new_op in new_ops {
-        inst.ops.push_back(new_op);
+      let inst = func.inst(op);
+      for old in inst.operator_deref().ops.iter().copied() {
+        state.erase_use(op, old);
       }
     }
+    let inst = func.inst_op(op);
+    inst.ops.clear();
+    inst.ops.extend(new_ops.iter().copied());
     for &new_op in new_ops {
-      self.state.record_use(new_op, op);
+      state.record_use(new_op, op);
     }
   }
 
@@ -105,10 +106,19 @@ impl<I: VmConstOps + ?Sized> Sccp<'_, '_, I> {
         continue;
       }
 
-      let block_ops: Vec<BcOp> = self.func.blocks[block_idx].ops.iter().cloned().collect();
+      // 本块的改写会 retain/clear 块的 ops，需先快照；借用 Sccp::scratch
+      // 复用缓冲（同 sccp_visit 约定），避免逐块分配。用下标遍历，
+      // 以免 scratch 的共享借用与 self 的可变借用冲突。
+      self.scratch.ops.clear();
+      self
+        .scratch
+        .ops
+        .extend(self.func.blocks[block_idx].ops.iter().copied());
+
       let mut to_erase: Vec<BcOp> = Vec::new();
 
-      for op in block_ops {
+      for k in 0..self.scratch.ops.len() {
+        let op = self.scratch.ops[k];
         let opcode = self.func.inst(op).operator_deref().op;
         let Some(mut k_opcode) = Self::arith_to_k_opcode(opcode) else {
           continue;
