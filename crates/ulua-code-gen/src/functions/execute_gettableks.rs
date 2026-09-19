@@ -161,7 +161,7 @@ pub unsafe fn execute_gettableks(
         fn_tm = fasttm(
           l,
           uvalue!(rb as *const TValue).metatable,
-          TMS::TmIndex as i32,
+          TMS::TmIndex,
         );
         !fn_tm.is_null()
       }
@@ -194,7 +194,7 @@ pub unsafe fn execute_gettableks(
       fn_tm = fasttm(
         l,
         (*(*l).global).mt[LuaType::Vector as usize],
-        TMS::TmIndex as i32,
+        TMS::TmIndex,
       );
 
       if !fn_tm.is_null() && ttisfunction!(fn_tm) && (*clvalue!(fn_tm)).is_c != 0 {

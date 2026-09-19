@@ -8,7 +8,7 @@ use ulua_common::macros::luau_big_endian::LUAU_BIG_ENDIAN;
 
 use crate::{
   functions::{
-    buffer_errors::buffer_oob_error, buffer_swapbe::buffer_swapbe,
+    buffer_errors::buffer_oob_error, buffer_swapbe::SwapBe,
     lua_l_checkbuffer::lua_l_checkbuffer, lua_l_checkinteger::lua_l_checkinteger,
     lua_l_checkinteger_64::lua_l_checkinteger_64,
   },
@@ -31,7 +31,7 @@ pub(crate) unsafe extern "C-unwind" fn buffer_writelong(l: *mut lua_State) -> c_
     }
 
     let value = if LUAU_BIG_ENDIAN {
-      buffer_swapbe(value)
+      value.swap_be()
     } else {
       value
     };

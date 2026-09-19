@@ -49,7 +49,7 @@ pub unsafe fn execute_forgprep(
         null_mut()
       };
 
-      let fn_iter = fasttm(l, mt, TMS::TmIter as i32);
+      let fn_iter = fasttm(l, mt, TMS::TmIter);
 
       if !fn_iter.is_null() {
         setobj2s!(l, ra.add(1), ra);
@@ -68,7 +68,7 @@ pub unsafe fn execute_forgprep(
           vm_protect_pc(l, pc);
           lua_g_typeerror_l(l, ra as *const TValue, "call");
         }
-      } else if !fasttm(l, mt, TMS::TmCall as i32).is_null() {
+      } else if !fasttm(l, mt, TMS::TmCall).is_null() {
         // table or userdata with __call, will be called during FORGLOOP
       } else if ttistable!(ra) {
         // set up registers for builtin iteration

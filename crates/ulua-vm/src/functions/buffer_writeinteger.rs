@@ -1,6 +1,6 @@
 use core::{
   ffi::{c_char, c_int},
-  mem::{size_of, transmute_copy},
+  mem::size_of,
   ptr::copy_nonoverlapping,
 };
 
@@ -8,7 +8,8 @@ use ulua_common::macros::luau_big_endian::LUAU_BIG_ENDIAN;
 
 use crate::{
   functions::{
-    buffer_errors::buffer_oob_error, buffer_swapbe::buffer_swapbe,
+    buffer_errors::buffer_oob_error,
+    buffer_swapbe::BufferInt,
     lua_l_checkbuffer::lua_l_checkbuffer, lua_l_checkinteger::lua_l_checkinteger,
     lua_l_checkunsigned::lua_l_checkunsigned,
   },
@@ -20,7 +21,7 @@ use crate::{
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub(crate) unsafe fn buffer_writeinteger<T>(l: *mut lua_State) -> c_int
 where
-  T: Copy,
+  T: BufferInt,
 {
   unsafe {
     let mut len: usize = 0;
@@ -32,10 +33,11 @@ where
       buffer_oob_error(l);
     }
 
-    let mut val: T = transmute_copy::<u32, T>(&value);
+    // cpp `T val = T(value)`：数值截断，端序无关
+    let mut val: T = T::from_u32_trunc(value);
 
     if LUAU_BIG_ENDIAN {
-      val = buffer_swapbe(val);
+      val = val.swap_be();
     }
 
     copy_nonoverlapping(

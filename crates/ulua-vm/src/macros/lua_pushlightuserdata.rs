@@ -1,17 +1,16 @@
-use core::{ffi::c_void, mem::transmute};
+use core::ffi::c_void;
 
-use crate::functions::lua_pushlightuserdatatagged::lua_pushlightuserdatatagged;
+use crate::{
+  functions::lua_pushlightuserdatatagged::lua_pushlightuserdatatagged,
+  type_aliases::lua_state::lua_State,
+};
 
+/// cpp `lua.h:519` `#define lua_pushlightuserdata(L, p) lua_pushlightuserdatatagged(L, p, 0)` 对应。
+///
 /// # Safety
 ///
-/// `l` must be a valid pointer to a live `lua_State`.
+/// `l` 必须指向存活的 `lua_State`。
 #[inline(always)]
-pub unsafe fn lua_pushlightuserdata(l: *mut c_void, p: *mut c_void) {
-  unsafe {
-    let func: unsafe fn(*mut c_void, *mut c_void, i32) =
-      transmute(lua_pushlightuserdatatagged as *const c_void);
-    func(l, p, 0);
-  }
+pub unsafe fn lua_pushlightuserdata(l: *mut lua_State, p: *mut c_void) {
+  unsafe { lua_pushlightuserdatatagged(l, p, 0) };
 }
-
-pub use lua_pushlightuserdata as LUA_PUSHLIGHTUSERDATA;

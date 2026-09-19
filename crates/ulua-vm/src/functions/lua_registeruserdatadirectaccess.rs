@@ -28,19 +28,19 @@ pub unsafe fn lua_registeruserdatadirectaccess(
     if !h.is_null() {
       let udatadirect = &mut (*(*l).global).udatadirect[tag as usize];
 
-      let indextm = fasttm(l, h, TMS::TmIndex as c_int);
+      let indextm = fasttm(l, h, TMS::TmIndex);
       if !indextm.is_null() {
         udatadirect.indextm = *indextm;
         udatadirect.index = get;
       }
 
-      let newindextm = fasttm(l, h, TMS::TmNewIndex as c_int);
+      let newindextm = fasttm(l, h, TMS::TmNewIndex);
       if !newindextm.is_null() {
         udatadirect.newindextm = *newindextm;
         udatadirect.newindex = set;
       }
 
-      let namecalltm = fasttm(l, h, TMS::TmNameCall as c_int);
+      let namecalltm = fasttm(l, h, TMS::TmNameCall);
       if !namecalltm.is_null() {
         udatadirect.namecalltm = *namecalltm;
         udatadirect.namecall = namecall;

@@ -1,6 +1,6 @@
 //! Source: `VM/src/lvmutils.cpp:182-240` (hand-ported)
 
-use core::{mem::zeroed, ptr::null};
+use core::ptr::null;
 
 use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT};
 
@@ -31,7 +31,7 @@ pub unsafe fn lua_v_settable(
   val: StkId,
 ) {
   unsafe {
-    let mut temp: TValue = zeroed();
+    let mut temp = TValue::default();
     let mut loop_ = 0;
     while loop_ < MAXTAGLOOP {
       let mut tm: *const TValue = null();
@@ -41,7 +41,7 @@ pub unsafe fn lua_v_settable(
         let oldval = lua_h_get(h, key as *const TValue);
 
         if ttisnil!(oldval) {
-          tm = fasttm(l, (*h).metatable, TMS::TmNewIndex as i32);
+          tm = fasttm(l, (*h).metatable, TMS::TmNewIndex);
         }
 
         if !ttisnil!(oldval) || tm.is_null() {

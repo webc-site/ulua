@@ -22,7 +22,7 @@ pub(crate) unsafe extern "C-unwind" fn f_ccall(l: *mut lua_State, ud: *mut c_voi
     }
 
     lua_pushcclosurek(l, (*c).func, null(), 0, None);
-    lua_pushlightuserdata(l as *mut c_void, (*c).ud);
+    lua_pushlightuserdata(l, (*c).ud);
     lua_d_call(l, (*l).top.sub(2), 0);
   }
 }
