@@ -300,15 +300,18 @@ impl Function {
 
   /// Whether the value on top of the stack (this function, just pushed) is a
   /// Lua closure (vs a C function). Determined via the debug `what` field.
+  ///
+  /// Luau's `lua_getinfo(l, level, what, ar)` takes the stack level as an
+  /// explicit argument: `level = -1` reads the slot the caller already pushed.
+  /// There is **no** Lua 5.1 `">"` convention here — `>` is an unknown option
+  /// (`auxgetinfo` ignores it) and `lua_getinfo` never pops. Only the `f`
+  /// option pushes the closure, and we do not request it, so the stack is left
+  /// exactly as we found it (the caller's function slot stays on top).
   unsafe fn is_lua_closure(&self) -> bool {
     let state = self.reference.state();
     unsafe {
-      // The function is on top of the stack (index -1). Ask lua_getinfo
-      // about it via the ">" level convention: push the function and use
-      // option ">" so it pops the function and reads its info.
-      lua_pushvalue(state, -1);
       let mut ar: LuaDebug = zeroed();
-      let opt = c">s";
+      let opt = c"s";
       let ok = lua_getinfo(state, -1, opt.as_ptr() as *const c_char, &mut ar);
       if ok == 0 {
         return false;
@@ -329,10 +332,13 @@ impl Function {
       self.reference.push();
       let mut ar: LuaDebug = zeroed();
       // Options: n=name, s=source/what/linedefined, a=params/vararg,
-      // u=upvalues. The ">" prefix pops the function from the stack and
-      // reads info about it.
-      let opt = c">nsau";
+      // u=upvalues. Luau's `lua_getinfo` reads the function at level `-1` but
+      // does not pop it (there is no `">"` convention, and only the `f` option
+      // pushes), so the slot we pushed is released here explicitly — otherwise
+      // every `info()` call would leak one stack slot.
+      let opt = c"nsau";
       let ok = lua_getinfo(state, -1, opt.as_ptr() as *const c_char, &mut ar);
+      lua_pop(state, 1);
       if ok == 0 {
         return FunctionInfo::default();
       }
@@ -479,5 +485,50 @@ where
     let f = lua
       .create_function(move |_lua, args: A| func.call(args).map_err(ExternalError::into_lua_err))?;
     Ok(Value::Function(f))
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use crate::{
+    Function,
+    state::Lua,
+    sys::{lua_gettop, lua_settop},
+  };
+
+  /// R3 回归：`info` / `environment` / `set_environment`（含 C 函数路径下的
+  /// `is_lua_closure`）不得净泄漏栈槽。
+  ///
+  /// Luau 的 `lua_getinfo(l, level, what, ar)` 用显式 level 取函数，既不弹栈
+  /// 也不认 Lua 5.1 的 `">"` 选项；按 5.1 写法调用时每次都会留下一槽，反复调用
+  /// 会把栈一路推大（每次 `ensure_stack` 触发 realloc）直至 `lua_error`。
+  #[test]
+  fn debug_info_and_environment_keep_stack_balanced() {
+    let lua = Lua::new();
+    let function: Function = lua
+      .load("local upvalue = 7 return function(x) return x + upvalue end")
+      .eval()
+      .unwrap();
+    let native = lua.create_function(|_, ()| Ok(())).unwrap();
+    let env = lua.create_table();
+
+    let base = unsafe { lua_gettop(lua.state()) };
+    for _ in 0..500 {
+      assert_eq!(function.info().what, "Lua");
+      assert_eq!(native.info().what, "C");
+      assert!(function.environment().is_some());
+      assert!(native.environment().is_none());
+      assert!(function.set_environment(env.clone()).unwrap());
+      assert!(!native.set_environment(env.clone()).unwrap());
+    }
+    assert_eq!(
+      unsafe { lua_gettop(lua.state()) },
+      base,
+      "debug info / environment 泄漏了栈槽"
+    );
+    // 前置 sanity check：泄漏时栈会真的增长，故上面的断言不是空转。
+    unsafe { lua_settop(lua.state(), base + 4) };
+    assert_eq!(unsafe { lua_gettop(lua.state()) }, base + 4);
+    unsafe { lua_settop(lua.state(), base) };
   }
 }
