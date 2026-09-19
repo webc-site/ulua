@@ -75,9 +75,15 @@ pub struct BytecodeBuilder {
 
   // 字符串表存在遍历依赖（`write_string_table`、`get_string_table`、`finalize`
   // 里的容量累加），故保持 FNV 版 `DenseHashDefault`，迭代序与改动前逐一相同。
-  pub(crate) string_table:
-    DenseHashMap<StringRef, u32, DenseHashDefault<StringRef>, DenseEqDefault<StringRef>>,
-  pub(crate) debug_strings: Vec<StringRef>,
+  // 表内只借用不拥有，且 builder 不带寿命参数，故键固定为 `StringRef<'static>`：
+  // 受限借用在进入这里之前必须经 `StringRef::from_slice_static` 显式承认契约。
+  pub(crate) string_table: DenseHashMap<
+    StringRef<'static>,
+    u32,
+    DenseHashDefault<StringRef<'static>>,
+    DenseEqDefault<StringRef<'static>>,
+  >,
+  pub(crate) debug_strings: Vec<StringRef<'static>>,
 
   pub(crate) debug_remarks: Vec<(u32, u32)>,
   pub(crate) debug_remark_buffer: String,
