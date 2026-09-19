@@ -7,7 +7,6 @@ use crate::{
   records::{
     bc_function::{BcFunction, VmConst},
     bc_inst_helper::BcInstHelper,
-    bc_inst_type::BcInstType,
     bc_op::BcOp,
   },
 };
@@ -43,9 +42,6 @@ impl<'a, T> BcCmpProto<'a, T> {
   }
 }
 
-impl<T> BcInstType for BcCmpProto<'_, T> {
-  const OPCODE: i32 = LuauOpcode::LOP_CMPPROTO as i32;
-}
 
 impl<T> BcInstHelperCreate for BcCmpProto<'_, T> {
   const OPCODE: LuauOpcode = LuauOpcode::LOP_CMPPROTO;

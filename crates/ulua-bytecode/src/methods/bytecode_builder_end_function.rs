@@ -1,42 +1,9 @@
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
 use core::mem;
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::records::bytecode_builder::BytecodeBuilder;
-
-pub struct HotComment {
-  pub content: String,
-  pub header: bool,
-}
-
-pub fn has_native_comment_directive(hotcomments: &[HotComment]) -> bool {
-  for hc in hotcomments {
-    if hc.content.is_empty()
-      || hc.content.as_bytes().first() == Some(&b' ')
-      || hc.content.as_bytes().first() == Some(&b'\t')
-    {
-      continue;
-    }
-
-    if hc.header {
-      let bytes = hc.content.as_bytes();
-      let space_pos = memchr::memchr2(b' ', b'\t', bytes);
-
-      let first = if let Some(pos) = space_pos {
-        &hc.content[..pos]
-      } else {
-        &hc.content[..]
-      };
-
-      if first == "native" {
-        return true;
-      }
-    }
-  }
-
-  false
-}
 
 impl BytecodeBuilder {
   /// `cost`：cpp `endFunction(..., uint64_t cost)` 的内联开销模型，LPF_INLINABLE

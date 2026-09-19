@@ -81,6 +81,10 @@ pub fn analyze_file(
   let bytecode = bcb.get_bytecode();
   let global_state = LuaStateGuard(lua_l_newstate());
   let l = global_state.0;
+  if l.is_null() {
+    eprintln!("Error initializing Lua state");
+    return false;
+  }
 
   if unsafe {
     luau_load(

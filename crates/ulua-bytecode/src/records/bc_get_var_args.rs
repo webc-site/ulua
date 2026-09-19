@@ -7,7 +7,6 @@ use crate::{
   records::{
     bc_function::{BcFunction, VmConst},
     bc_inst_helper::BcInstHelper,
-    bc_inst_type::BcInstType,
     bc_op::BcOp,
   },
   type_aliases::reg::Reg,
@@ -39,9 +38,6 @@ impl<'a, T> BcGetVarArgs<'a, T> {
   }
 }
 
-impl<T> BcInstType for BcGetVarArgs<'_, T> {
-  const OPCODE: i32 = LuauOpcode::LOP_GETVARARGS as i32;
-}
 
 impl<T> BcInstHelperCreate for BcGetVarArgs<'_, T> {
   const OPCODE: LuauOpcode = LuauOpcode::LOP_GETVARARGS;

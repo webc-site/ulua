@@ -9,7 +9,6 @@ pub mod bc_get_var_args;
 pub mod bc_imm;
 pub mod bc_inst;
 pub mod bc_inst_helper;
-pub mod bc_inst_type;
 pub mod bc_jump;
 pub mod bc_load_nil;
 pub mod bc_move;

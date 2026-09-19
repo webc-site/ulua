@@ -7,7 +7,6 @@ use crate::{
   records::{
     bc_function::{BcFunction, VmConst},
     bc_inst_helper::BcInstHelper,
-    bc_inst_type::BcInstType,
     bc_op::BcOp,
   },
   type_aliases::reg::Reg,
@@ -19,9 +18,6 @@ pub struct BcLoadNil<'a, T = VmConst> {
   _marker: PhantomData<T>,
 }
 
-impl<T> BcInstType for BcLoadNil<'_, T> {
-  const OPCODE: i32 = LuauOpcode::LOP_LOADNIL as i32;
-}
 
 impl<T> BcInstHelperCreate for BcLoadNil<'_, T> {
   const OPCODE: LuauOpcode = LuauOpcode::LOP_LOADNIL;

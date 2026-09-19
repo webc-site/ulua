@@ -7,7 +7,6 @@ use crate::{
   records::{
     bc_function::{BcFunction, VmConst},
     bc_inst_helper::BcInstHelper,
-    bc_inst_type::BcInstType,
     bc_op::BcOp,
   },
   type_aliases::reg::Reg,
@@ -64,9 +63,6 @@ impl<'a, T> BcGetTableKS<'a, T> {
   }
 }
 
-impl<T> BcInstType for BcGetTableKS<'_, T> {
-  const OPCODE: i32 = LuauOpcode::LOP_GETTABLEKS as i32;
-}
 
 impl<T> BcInstHelperCreate for BcGetTableKS<'_, T> {
   const OPCODE: LuauOpcode = LuauOpcode::LOP_GETTABLEKS;
