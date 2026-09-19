@@ -10,7 +10,9 @@ pub(crate) unsafe extern "C-unwind" fn annotate_instruction(
   fid: i32,
   instpos: i32,
 ) {
-  // SAFETY: annotator_context 由 compile_file 设为存活的 &mut BytecodeBuilder
+  // SAFETY: context 是 compile_file 用 addr_of_mut!(bcb) 一次性取到的
+  // BytecodeBuilder 地址：bcb 在整次 codegen 期间存活（同一栈帧），回调为单线程
+  // 同步调用且回调期内调用方不持有该 place 的 &mut，故无并发写。
   let bcb = unsafe { &*(context as *const BytecodeBuilder) };
   bcb.annotate_instruction(text, fid as u32, instpos as u32);
 }

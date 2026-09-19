@@ -1,3 +1,4 @@
+use core::ptr::addr_of_mut;
 use std::{
   io::{Write, stdout},
   panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
@@ -67,7 +68,11 @@ pub fn compile_file(
       include_cfg_info: IncludeCfgInfo::default(),
       include_reg_flow_info: IncludeRegFlowInfo::default(),
       annotator: Some(annotate_instruction),
-      annotator_context: &mut bcb as *mut BytecodeBuilder as *mut _,
+      // cpp `options.annotatorContext = &bcb`。addr_of_mut! 一次性取地址，不派生
+      // `&mut`：bcb 之后仍被多次可变借用（set_dump_flags/set_dump_source/finalize…），
+      // 若这里用 `&mut bcb as *mut _`，那些借用会作废已存进 options 的指针，
+      // codegen 期 annotate_instruction 再解引用即 Stacked Borrows UB。
+      annotator_context: addr_of_mut!(bcb) as *mut _,
     };
     options.compilation_options.flags = CodeGenFlags::CODE_GEN_COLD_FUNCTIONS as u32;
 
