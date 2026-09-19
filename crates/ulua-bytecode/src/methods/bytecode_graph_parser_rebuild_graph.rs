@@ -358,7 +358,11 @@ impl<'a> BytecodeGraphParser<'a> {
             let long_offset = luau_insn_e(code[(i + 1) as usize]);
             i += get_op_length(LuauOpcode::LOP_JUMP) as u32
               + get_op_length(LuauOpcode::LOP_JUMPX) as u32;
-            let next_insn = code[i as usize];
+            // `is_jump_trampoline` 只保证 pc+1/pc+2 在界内，推进后的 `i` 仍可能越过
+            // 码尾（不可信输入）；受检访问，越界即放弃建图而不是 panic。
+            let Some(&next_insn) = code.get(i as usize) else {
+              return false;
+            };
             let next_op = LuauOpcode::from((luau_insn_op(next_insn) & 0xff) as u8);
             let next_op_length = get_op_length(next_op) as u32;
             let next_aux = if next_op_length > 1 && i + 1 < codesize {
@@ -475,12 +479,20 @@ impl<'a> BytecodeGraphParser<'a> {
           self.add_vm_reg_input(node_op, (luau_insn_a(insn) + 2) as u8);
           let loop_insn_pc = get_jump_target(insn, i);
           self.add_jump_input(node_op, loop_insn_pc);
-          let loop_insn = code[loop_insn_pc as usize];
+          // 跳转目标来自不可信输入：cpp 只在 `LUAU_ASSERT` 里守这一步，release 下
+          // `code[loopInsnPc]` / `code[loopInsnPc + 1]` 就是越界读。这里改成受检访问，
+          // 条件不满足就整体放弃建图（`rebuild_graph` 返回 false），
+          // 原断言降级为 debug 契约保留。
+          let Some(loop_pc) = usize::try_from(loop_insn_pc).ok() else {
+            return false;
+          };
+          let (Some(&loop_insn), Some(&forgloop_insn)) = (code.get(loop_pc), code.get(loop_pc + 1))
+          else {
+            return false;
+          };
           let loop_insn_op = LuauOpcode::from((luau_insn_op(loop_insn) & 0xff) as u8);
-          LUAU_ASSERT!(
-            loop_insn_pc + 1 < codesize as i32 && loop_insn_op == LuauOpcode::LOP_FORGLOOP
-          );
-          let vars = code[(loop_insn_pc + 1) as usize] as i32 & 0xFF;
+          LUAU_ASSERT!(loop_insn_op == LuauOpcode::LOP_FORGLOOP);
+          let vars = forgloop_insn as i32 & 0xFF;
           self.func.regs.insert(node_op, luau_insn_a(insn) as u8);
           for idx in 0..=cmp::max(vars, 2) {
             let proj = self.func.add_proj(node_op, (2 + idx) as u32);
@@ -636,9 +648,17 @@ impl<'a> BytecodeGraphParser<'a> {
 
       if is_loop_jump(op) {
         let target = get_jump_target(insn, i);
-        LUAU_ASSERT!(target >= 0 && self.block_by_pc.contains_key(&(target as u32)));
+        // `rebuildBlocks` 会为每条跳转指令在目标 pc 建块，正常输入必然命中；
+        // 但 target 由不可信字节码算出，cpp 的 `LUAU_ASSERT` 在 release 下是 no-op，
+        // 紧跟的 `unwrap()` 就成了 panic 路径。改为受检查找，查不到即放弃建图。
+        let Some(&entry) = u32::try_from(target)
+          .ok()
+          .and_then(|t| self.block_by_pc.get(&t))
+        else {
+          return false;
+        };
         loops.push(LoopInfo {
-          entry: *self.block_by_pc.get(&(target as u32)).unwrap(),
+          entry,
           exit: self.current_block,
         });
       }
