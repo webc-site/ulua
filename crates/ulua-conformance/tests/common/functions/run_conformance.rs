@@ -55,16 +55,13 @@ use ulua_vm::{
 
 use crate::common::{
   functions::{
-    default_codegen_options::default_codegen_options,
+    c_alloc::c_free, default_codegen_options::default_codegen_options,
     find_conformance_source_dir::find_conformance_source_dir,
     lua_collectgarbage::lua_collectgarbage, lua_loadstring::lua_loadstring,
     lua_silence::lua_silence,
   },
   records::state_ref::StateRef,
 };
-unsafe extern "C" {
-  fn free(ptr: *mut c_void);
-}
 
 /// cpp `tests/main.cpp` 的文件静态量 `verbose`/`codegen`/`optimizeLevel` 由该
 /// 二进制的 argv 解析写入。本端口的 conformance 用例跑在 libtest/nextest 之下，
@@ -262,7 +259,7 @@ pub unsafe fn run_conformance(
       &mut bytecode_size,
     );
     let load_result = luau_load(l, chunkname.as_ptr(), bytecode, bytecode_size, 0);
-    free(bytecode as *mut c_void);
+    c_free(bytecode.cast());
 
     let native_opts = if codegen_options.is_null() {
       default_codegen_options()

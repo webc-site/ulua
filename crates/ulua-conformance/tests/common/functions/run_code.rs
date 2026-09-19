@@ -9,9 +9,8 @@ use ulua_vm::{
   macros::lua_multret::LUA_MULTRET,
   records::lua_state::lua_State,
 };
-unsafe extern "C" {
-  fn free(ptr: *mut c_void);
-}
+
+use crate::common::functions::c_alloc::c_free;
 
 /// # Safety
 /// 调用方须保证满足 C++ 原实现的调用契约。
@@ -26,11 +25,11 @@ pub unsafe fn run_code(l: *mut lua_State, source: &str) -> c_int {
     );
 
     if luau_load(l, c"test".as_ptr(), bytecode, bytecode_size, 0) != 0 {
-      free(bytecode as *mut c_void);
+      c_free(bytecode.cast());
       return -1;
     }
 
-    free(bytecode as *mut c_void);
+    c_free(bytecode.cast());
     lua_pcall(l, 0, LUA_MULTRET, 0)
   }
 }
