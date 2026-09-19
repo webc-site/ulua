@@ -1,7 +1,6 @@
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
   fflag,
-  functions::get_op_length::get_op_length,
   macros::{
     luau_insn_a::luau_insn_a, luau_insn_b::luau_insn_b, luau_insn_c::luau_insn_c,
     luau_insn_op::luau_insn_op,
@@ -14,7 +13,9 @@ use crate::{
     builtin_impl_type::BuiltinImplType, ir_block_kind::IrBlockKind, ir_cmd::IrCmd,
     ir_op_kind::IrOpKind,
   },
-  functions::{translate_builtin::translate_builtin, vm_const_op::vm_const_op},
+  functions::{
+    get_op_length::get_op_length, translate_builtin::translate_builtin, vm_const_op::vm_const_op,
+  },
   macros::codegen_assert::CODEGEN_ASSERT,
   records::{builtin_args::BuiltinArgs, ir_builder::IrBuilder, ir_op::IrOp},
   type_aliases::instruction_ir_builder::Instruction,

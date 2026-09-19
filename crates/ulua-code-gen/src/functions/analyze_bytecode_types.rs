@@ -5,7 +5,6 @@ use ulua_common::{
     luau_builtin_function::LuauBuiltinFunction, luau_bytecode_type::*, luau_opcode::LuauOpcode,
   },
   fflag::LuauCodegenRegTag2,
-  functions::get_op_length::get_op_length,
   macros::{
     luau_insn_a::luau_insn_a, luau_insn_aux_a::luau_insn_aux_a, luau_insn_aux_b::luau_insn_aux_b,
     luau_insn_aux_kv_16::luau_insn_aux_kv16, luau_insn_b::luau_insn_b, luau_insn_c::luau_insn_c,
@@ -21,7 +20,8 @@ use crate::{
   enums::host_metamethod::HostMetamethod,
   functions::{
     apply_builtin_call::apply_builtin_call, get_bytecode_constant_tag::get_bytecode_constant_tag,
-    get_reg_tag::get_reg_tag, is_custom_userdata_bytecode_type::is_custom_userdata_bytecode_type,
+    get_op_length::get_op_length, get_reg_tag::get_reg_tag,
+    is_custom_userdata_bytecode_type::is_custom_userdata_bytecode_type,
     opcode_to_host_metamethod::opcode_to_host_metamethod,
     prepare_reg_type_info_lookups::prepare_reg_type_info_lookups, refine_reg_type::refine_reg_type,
     refine_upvalue_type::refine_upvalue_type,

@@ -10,9 +10,10 @@ use crate::{
   enums::{ir_block_kind::IrBlockKind, ir_cmd::IrCmd},
   functions::has_typed_parameters::has_typed_parameters,
   macros::codegen_assert::CODEGEN_ASSERT,
-  records::{ir_block::K_BLOCK_FLAG_ENTRY_ARG_CHECK, ir_builder::IrBuilder, ir_op::IrOp},
+  records::{ir_builder::IrBuilder, ir_op::IrOp},
 };
 
+const K_BLOCK_FLAG_ENTRY_ARG_CHECK: u8 = 1 << 2;
 const K_VM_EXIT_ENTRY_GUARD_PC: u32 = (1u32 << 28) - 1;
 
 pub fn build_argument_type_checks(build: &mut IrBuilder, entry: IrOp) {

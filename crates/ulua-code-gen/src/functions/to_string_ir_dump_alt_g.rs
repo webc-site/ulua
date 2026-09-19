@@ -14,11 +14,10 @@ use crate::{
     to_string_detailed_ir_dump_alt_b::to_string_detailed as to_string_detailed_block,
     to_string_ir_dump_alt_c::to_string_ir_to_string_context_ir_block_u32 as to_string_block,
   },
-  records::{
-    ir_block::K_BLOCK_FLAG_SAFE_ENV_CHECK, ir_function::IrFunction,
-    ir_to_string_context::IrToStringContext,
-  },
+  records::{ir_function::IrFunction, ir_to_string_context::IrToStringContext},
 };
+
+const K_BLOCK_FLAG_SAFE_ENV_CHECK: u8 = 1 << 0;
 
 pub fn to_string(function: &mut IrFunction, include_use_info: IncludeUseInfo) -> String {
   let mut result = String::new();

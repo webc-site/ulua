@@ -2,12 +2,15 @@ use ulua_ast::{
   records::{ast_expr_table::AstExprTable, ast_local::AstLocal, ast_node::AstNode},
   visit::ast_node_visit,
 };
-use ulua_common::records::dense_hash_map::DenseHashMap;
+use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT, records::dense_hash_map::DenseHashMap};
 
 use crate::{
   enums::table_constant_kind::TableConstantKind,
   functions::unwrap_expr_of_type::unwrap_expr_of_type,
-  records::{table_mutation_tracker::TableMutationTracker, variable::Variable},
+  records::{
+    table_mutation_tracker::TableMutationTracker,
+    table_mutation_tracker_deprecated::TableMutationTrackerDeprecated, variable::Variable,
+  },
 };
 
 /// # Safety
@@ -17,24 +20,33 @@ pub unsafe fn build_table_constant_map(
   variables: &DenseHashMap<*mut AstLocal, Variable>,
   root: *mut AstNode,
 ) {
-  // cpp/Compiler/src/ConstantFolding.cpp:1245 `buildTableConstantMap` 只有 TableMutationTracker
-  // 单一路径（旧 `LuauCompileNewTableMutationTracker` 旗标与 deprecated tracker 上游已删除）。
-  let mut tracker = TableMutationTracker::new(variables);
-  unsafe {
-    ast_node_visit(root, &mut tracker);
-  }
+  LUAU_ASSERT!(
+    fflag::LuauCompileFoldOptimize.get() && fflag::LuauCompilePropagateTableProps2.get()
+  );
 
-  for (local, var) in variables.iter() {
-    if var.written {
-      continue;
+  if fflag::LuauCompileNewTableMutationTracker.get() {
+    let mut tracker = TableMutationTracker::new(variables);
+    unsafe {
+      ast_node_visit(root, &mut tracker);
     }
 
-    if var.init.is_null() || unwrap_expr_of_type::<AstExprTable>(var.init).is_null() {
-      continue;
-    }
+    for (local, var) in variables.iter() {
+      if var.written {
+        continue;
+      }
 
-    if !tracker.escaped.contains(local) {
-      *result.get_or_insert(*local) = TableConstantKind::ConstantTable;
+      if var.init.is_null() || unwrap_expr_of_type::<AstExprTable>(var.init).is_null() {
+        continue;
+      }
+
+      if !tracker.escaped.contains(local) {
+        *result.get_or_insert(*local) = TableConstantKind::ConstantTable;
+      }
+    }
+  } else {
+    let mut mutation_tracker = TableMutationTrackerDeprecated::new(result, variables);
+    unsafe {
+      ast_node_visit(root, &mut mutation_tracker);
     }
   }
 }

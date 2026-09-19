@@ -2,12 +2,14 @@ extern crate alloc;
 
 use alloc::string::String;
 
-use ulua_common::functions::format_g::format_g;
 use ulua_vm::type_aliases::proto::Proto;
 
 use crate::{
   enums::ir_const_kind::IrConstKind,
-  functions::{append::append, append_vm_constant::append_vm_constant, get_tag_name::get_tag_name},
+  functions::{
+    append::append, append_vm_constant::append_vm_constant, format_g::format_g,
+    get_tag_name::get_tag_name,
+  },
   records::ir_const::IrConst,
 };
 

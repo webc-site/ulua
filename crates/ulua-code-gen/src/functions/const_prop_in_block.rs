@@ -7,12 +7,12 @@ use crate::{
     snapshot_fallback_entry_tags::snapshot_fallback_entry_tags,
   },
   records::{
-    const_prop_state::ConstPropState,
-    ir_block::{IrBlock, K_BLOCK_FLAG_SAFE_ENV_CHECK},
-    ir_builder::IrBuilder,
+    const_prop_state::ConstPropState, ir_block::IrBlock, ir_builder::IrBuilder,
     ir_function::IrFunction,
   },
 };
+
+const K_BLOCK_FLAG_SAFE_ENV_CHECK: u8 = 1 << 0;
 
 pub fn const_prop_in_block(build: &mut IrBuilder, block: &mut IrBlock, state: &mut ConstPropState) {
   let function: *mut IrFunction = &mut build.function;

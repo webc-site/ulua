@@ -10,11 +10,13 @@ use crate::{
   },
   macros::codegen_assert::{CODEGEN_ASSERT, unsupported_instruction_form},
   records::{
-    address_a_64::AddressA64, assembly_builder_a_64::K_MAX_IMMEDIATE,
-    ir_lowering_a_64::IrLoweringA64, ir_op::IrOp, register_a_64::RegisterA64,
+    address_a_64::AddressA64, ir_lowering_a_64::IrLoweringA64, ir_op::IrOp,
+    register_a_64::RegisterA64,
   },
   type_aliases::mem::mem,
 };
+
+const K_MAX_IMMEDIATE: usize = 4095;
 
 const fn reg(kind: KindA64, index: u8) -> RegisterA64 {
   RegisterA64 {

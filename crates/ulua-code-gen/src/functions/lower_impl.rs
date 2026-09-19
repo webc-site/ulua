@@ -17,7 +17,7 @@ use crate::{
     assembly_builder_x_64::AssemblyBuilderX64,
     assembly_options::AssemblyOptions,
     bytecode_types::LBC_TYPE_ANY,
-    ir_block::{IrBlock, K_BLOCK_FLAG_SAFE_ENV_CHECK, K_BLOCK_NO_START_PC},
+    ir_block::{IrBlock, K_BLOCK_NO_START_PC},
     ir_function::IrFunction,
     ir_lowering_a_64::IrLoweringA64,
     ir_lowering_x_64::IrLoweringX64,
@@ -26,6 +26,8 @@ use crate::{
     label::Label,
   },
 };
+
+const K_BLOCK_FLAG_SAFE_ENV_CHECK: u8 = 1 << 0;
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。

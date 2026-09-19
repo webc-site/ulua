@@ -1,6 +1,5 @@
 use ulua_common::{
   enums::{luau_bytecode_type::LuauBytecodeType, luau_opcode::LuauOpcode},
-  functions::get_op_length::get_op_length,
   macros::{
     luau_insn_a::luau_insn_a, luau_insn_aux_kv_16::luau_insn_aux_kv16, luau_insn_b::luau_insn_b,
     luau_insn_c::luau_insn_c, luau_insn_op::luau_insn_op,
@@ -14,7 +13,7 @@ use ulua_vm::{
 
 use crate::{
   enums::{ir_block_kind::IrBlockKind, ir_cmd::IrCmd},
-  functions::is_userdata_bytecode_type::is_userdata_bytecode_type,
+  functions::{get_op_length::get_op_length, is_userdata_bytecode_type::is_userdata_bytecode_type},
   macros::codegen_assert::CODEGEN_ASSERT,
   records::ir_builder::IrBuilder,
   type_aliases::instruction_ir_translation::Instruction,

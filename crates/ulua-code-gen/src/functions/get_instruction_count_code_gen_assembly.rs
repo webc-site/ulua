@@ -1,9 +1,8 @@
-use ulua_common::{
-  enums::luau_opcode::LuauOpcode, functions::get_op_length::get_op_length,
-  macros::luau_insn_op::luau_insn_op,
-};
+use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_insn_op::luau_insn_op};
 
-use crate::type_aliases::instruction_ir_builder::Instruction;
+use crate::{
+  functions::get_op_length::get_op_length, type_aliases::instruction_ir_builder::Instruction,
+};
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。

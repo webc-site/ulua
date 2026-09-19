@@ -1,7 +1,4 @@
-use ulua_common::{
-  enums::luau_opcode::LuauOpcode, functions::get_op_length::get_op_length,
-  macros::luau_insn_op::luau_insn_op,
-};
+use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_insn_op::luau_insn_op};
 use ulua_vm::records::proto::Proto;
 
 use crate::{
@@ -9,7 +6,7 @@ use crate::{
   functions::{
     after_inst_for_n_loop::after_inst_for_n_loop, analyze_bytecode_types::analyze_bytecode_types,
     before_inst_for_n_prep::before_inst_for_n_prep,
-    build_argument_type_checks::build_argument_type_checks,
+    build_argument_type_checks::build_argument_type_checks, get_op_length::get_op_length,
     has_typed_parameters::has_typed_parameters, is_block_terminator::is_block_terminator,
     load_bytecode_type_info::load_bytecode_type_info, update_use_counts::update_use_counts,
   },

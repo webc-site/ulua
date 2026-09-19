@@ -1,12 +1,21 @@
+use core::slice::from_raw_parts;
+
 use crate::functions::cost_model::{K_MAX_COST_VARS, K_VAR_DISCOUNT_BITS};
 
 /// 折扣字段掩码：8 位槽低 7 位为有效折扣（0x7f 同时是饱和哨兵值）
 const K_DISCOUNT_MASK: u64 = 0x7f;
 
-/// cpp/Compiler/src/CostModel.cpp `computeCost(model, varsConst, varCount)`（:444）。
-/// `vars_const[i]` 表示第 i 个形参是否为编译期常量（常量可享对应槽位的折扣）。
-/// C++ 侧的 `const bool* + size_t` 在 Rust 收成切片借用：空切片即 `nullptr, 0`。
-pub fn compute_cost(model: u64, vars_const: &[bool]) -> i32 {
+/// # Safety
+/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
+pub unsafe fn compute_cost(model: u64, vars_const: *const bool, var_count: usize) -> i32 {
+  if model & K_DISCOUNT_MASK == K_DISCOUNT_MASK || var_count == 0 {
+    return compute_cost_slice(model, &[]);
+  }
+  let vars_const = unsafe { from_raw_parts(vars_const, var_count.min(K_MAX_COST_VARS)) };
+  compute_cost_slice(model, vars_const)
+}
+
+pub fn compute_cost_slice(model: u64, vars_const: &[bool]) -> i32 {
   let mut cost = (model & K_DISCOUNT_MASK) as i32;
 
   // don't apply discounts to what is likely a saturated sum

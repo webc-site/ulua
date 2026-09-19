@@ -3,7 +3,7 @@ use core::cmp::min;
 use ulua_ast::records::{ast_expr_call::AstExprCall, ast_expr_function::AstExprFunction};
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
-use crate::{functions::compute_cost::compute_cost, records::compiler::Compiler};
+use crate::{functions::compute_cost::compute_cost_slice, records::compiler::Compiler};
 
 /// 成本模型位向量最多覆盖的参数数（C++ `bool varc[8]`）
 const K_MAX_COST_ARGS: usize = 8;
@@ -102,11 +102,11 @@ impl Compiler {
         call_cost_model = self.cost_model_inlined_call(expr, func);
       }
 
-      let inlined_cost = compute_cost(
+      let inlined_cost = compute_cost_slice(
         call_cost_model,
         &varc[..min(func_args_size, K_MAX_COST_ARGS)],
       );
-      let baseline_cost = compute_cost(fi_cost_model, &[]) + K_BASELINE_COST_BONUS;
+      let baseline_cost = compute_cost_slice(fi_cost_model, &[]) + K_BASELINE_COST_BONUS;
       let inline_profit = if inlined_cost == 0 {
         threshold_max_boost
       } else {

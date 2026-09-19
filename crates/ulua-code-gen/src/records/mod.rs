@@ -92,6 +92,7 @@ pub mod set;
 pub mod shared_code_allocator;
 pub mod shared_code_gen_context;
 pub mod spill;
+pub mod stack_item;
 pub mod standalone_code_gen_context;
 pub mod store_location_hint;
 pub mod store_reg_info;

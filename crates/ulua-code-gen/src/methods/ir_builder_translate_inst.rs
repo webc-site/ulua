@@ -1,7 +1,6 @@
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
   fflag::{self, LuauBackedgeHeapCheck},
-  functions::get_op_length::get_op_length,
   macros::{
     luau_insn_a::luau_insn_a, luau_insn_b::luau_insn_b, luau_insn_c::luau_insn_c,
     luau_insn_d::luau_insn_d, luau_insn_op::luau_insn_op,
@@ -12,9 +11,9 @@ use ulua_vm::enums::{lua_type::LuaType, tms::TMS};
 use crate::{
   enums::{ir_cmd::IrCmd, ir_condition::IrCondition},
   functions::{
-    is_direct_compare::is_direct_compare, translate_fast_call_n::translate_fast_call_n,
-    translate_inst_and_x::translate_inst_and_x, translate_inst_binary::translate_inst_binary,
-    translate_inst_binary_k::translate_inst_binary_k,
+    get_op_length::get_op_length, is_direct_compare::is_direct_compare,
+    translate_fast_call_n::translate_fast_call_n, translate_inst_and_x::translate_inst_and_x,
+    translate_inst_binary::translate_inst_binary, translate_inst_binary_k::translate_inst_binary_k,
     translate_inst_binary_rk::translate_inst_binary_rk,
     translate_inst_capture::translate_inst_capture,
     translate_inst_close_upvals::translate_inst_close_upvals,
