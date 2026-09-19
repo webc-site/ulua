@@ -11,12 +11,17 @@
 //! - 表达式：一元（`-`/`not`/`#`）、二元优先级与 `and`/`or`、表构造（record/list/general/分号）
 //! - token 空格策略：`~=` 紧贴、`..`、比较运算符
 //! - 数字字面量：hex（`0xFF`）、下划线分隔（`1_000`）
-//! - 字符串：单引号原文回填
+//! - 字符串：单引号原文回填、fixup 后任意字节逐字节保真
 //! - 带类型注解回环（with_types）
 
 use ulua_ast::{
-  functions::pretty_print_pretty_printer_alt_c::pretty_print_string_view_parse_options_bool_bool,
-  records::parse_options::ParseOptions,
+  functions::{
+    pretty_print_pretty_printer::pretty_print_ast_stat_block_cst_node_map_bytes,
+    pretty_print_pretty_printer_alt_c::pretty_print_string_view_parse_options_bool_bool,
+  },
+  records::{
+    allocator::Allocator, ast_name_table::AstNameTable, parse_options::ParseOptions, parser::Parser,
+  },
 };
 
 /// `prettyPrint(source)` 的 Rust 对应：默认选项、不带类型、不容错。
@@ -127,4 +132,43 @@ fn golden_parse_error_populates_error_fields() {
   assert!(!r.parse_error.is_empty(), "expected a parse error message");
   // 错误定位落在源码内（列 > 0 的行/列）
   assert_eq!(r.error_location.begin.line, 0);
+}
+
+/// 回归：`"\xff\x02"` 经词法器 fixup 产生非法 UTF-8 字节序列。pretty print
+/// 必须逐字节保留（cpp `std::string_view` 语义）：`StringWriter::string` 无
+/// 单引号时选 `'` 引号，`0xFF` 可打印直接透传，`0x02` 控制字符走 `%03u`
+/// 十进制转义 `\002`。对应 cpp PrettyPrinter.cpp StringWriter::string +
+/// Luau::escape。
+#[test]
+fn pretty_print_preserves_arbitrary_bytes_in_string_value() {
+  // Box 钉堆：AstNameTable/Parser 内部存 `*mut Allocator`（捕获宿主地址），
+  // 宿主移动即悬垂（同 pretty_print_string_view_parse_options_bool_bool 先例）。
+  let mut allocator = Box::new(Allocator::new());
+  let mut names = AstNameTable::new(&mut allocator);
+  // 源码文本 `print("\xff\x02")`：`\xff`/`\x02` 是 Lua 转义序列（源 &str
+  // 本身合法 UTF-8），lexer fixup_quoted_bytes 展开后 value = [0xFF, 0x02]。
+  let source = "print(\"\\xff\\x02\")";
+  let parse_result = Parser::parse(
+    source,
+    &mut names,
+    &mut allocator,
+    // store_cst_data = false：无 CST 时走 StringWriter::string 路径。
+    ParseOptions::default(),
+  );
+  assert!(
+    parse_result.errors.is_empty(),
+    "parse failed: {:?}",
+    parse_result.errors.first().map(|e| e.what())
+  );
+
+  // SAFETY: parse 成功后 root 指向 arena 中存活的 AstStatBlock
+  let root = unsafe { &mut *parse_result.root };
+  let bytes = pretty_print_ast_stat_block_cst_node_map_bytes(root, &parse_result.cst_node_map);
+
+  // 逐字节断言（cpp StringWriter::string 语义推演）：
+  // - 引号：value 不含单引号 → 默认 `'`（仅含 `'` 时 cpp 才换 `"`）；
+  // - 0xFF：`>= ' '` 且非特殊符号 → 原样透传（非法 UTF-8 不替换、不丢字节）；
+  // - 0x02：控制字符 → `\` + `%03u` 十进制 `\002`；
+  // - 尾部 3 空格：`advance` 按源码列位补齐列差（cpp 同款 `std::string(col, ' ')`）。
+  assert_eq!(bytes, b"print('\xFF\\002')   ".as_slice());
 }
