@@ -78,7 +78,7 @@ impl OverloadResolver {
       normalizer: unsafe { NonNull::new_unchecked(self.normalizer) },
       type_function_runtime: unsafe { NonNull::new_unchecked(self.type_function_runtime) },
       ice: unsafe { NonNull::new_unchecked(self.ice) },
-      limits: unsafe { NonNull::new_unchecked(&self.limits as *const _ as *mut _) },
+      limits: unsafe { NonNull::new_unchecked(&mut self.limits as *mut _) },
       subtyping: unsafe { NonNull::new_unchecked(&mut self.subtyping as *mut _) },
       solver: null_mut(),
       constraint: null(),
