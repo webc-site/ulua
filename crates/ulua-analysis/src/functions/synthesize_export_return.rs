@@ -51,9 +51,9 @@ pub unsafe fn synthesize_export_return(builtin_types: *mut BuiltinTypes, module:
   let lookup_exported_binding_type = |local: *mut AstLocal| -> TypeId {
     let scope = unsafe { (*module_scope_ptr).find_narrowest_scope_containing((*local).location) };
 
-    if let Some((binding, _scope)) = unsafe { (*scope).lookup_ex_symbol(Symbol::from_local(local)) }
+    if let Some((binding, _scope)) = unsafe { &*scope }.lookup_ex_symbol(Symbol::from_local(local))
     {
-      return unsafe { follow_type_id((*binding).type_id) };
+      return follow_type_id(binding.type_id);
     }
 
     unsafe { (*builtin_types).error_type }
