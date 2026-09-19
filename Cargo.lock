@@ -677,7 +677,6 @@ dependencies = [
  "ulua-compiler",
  "ulua-require",
  "ulua-vm",
- "windows-sys",
 ]
 
 [[package]]

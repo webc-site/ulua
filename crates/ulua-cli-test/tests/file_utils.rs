@@ -11,12 +11,12 @@ use std::{
 #[cfg(unix)]
 use std::{
   fs::{Permissions, create_dir, read_dir, set_permissions},
-  os::unix::fs::PermissionsExt,
+  os::unix::fs::{PermissionsExt, symlink},
 };
 
 use tempfile::TempDir;
 use ulua_cli_lib::functions::{
-  get_source_files::get_source_files_from_slice, normalize_path::normalize_path,
+  get_source_files::get_source_files_from_slice, is_file::is_file, normalize_path::normalize_path,
   traverse_directory::traverse_directory,
 };
 
@@ -140,4 +140,23 @@ fn program_args_stops_source_file_collection() {
       "{flag} 之后应停止收集"
     );
   }
+}
+
+/// `is_file` 的 POSIX 分支（cpp FileUtils.cpp:347-350 `lstat` + `S_IFREG`）：
+/// 只认常规文件；符号链接本身不是常规文件，故为 false。
+/// Windows 分支按上游 `GetFileAttributesW` 语义（存在且非目录）为 true，与此不同。
+#[test]
+#[cfg(unix)]
+fn is_file_uses_lstat_semantics() {
+  let dir = TempDir::new().expect("创建临时目录失败");
+  let target = dir.path().join("real.luau");
+  touch(&target);
+
+  assert!(is_file(&target.to_string_lossy()));
+  assert!(!is_file(&dir.path().join("missing.luau").to_string_lossy()));
+  assert!(!is_file(&dir.path().to_string_lossy()), "目录不是文件");
+
+  let link = dir.path().join("link.luau");
+  symlink(&target, &link).expect("创建符号链接失败");
+  assert!(!is_file(&link.to_string_lossy()), "lstat 只看链接本身");
 }
