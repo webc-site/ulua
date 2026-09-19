@@ -503,7 +503,10 @@ pub fn analyze_bytecode_types(function: &mut IrFunction, host_hooks: &HostIrHook
         | LuauOpcode::LOP_PREPVARARGS
         | LuauOpcode::LOP_GETVARARGS
         | LuauOpcode::LOP_FORGPREP
-        | LuauOpcode::LOP_NEWCLASSMEMBER => {}
+        // cpp BytecodeAnalysis.cpp:1502-1508：这三条免类型分析
+        | LuauOpcode::LOP_NEWCLASS
+        | LuauOpcode::LOP_NEWCLASSMEMBER
+        | LuauOpcode::LOP_FASTPCALL => {}
         _ => CODEGEN_ASSERT!(false),
       }
 

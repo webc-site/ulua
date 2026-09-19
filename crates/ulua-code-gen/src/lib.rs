@@ -25,9 +25,4 @@ pub mod fflag {
     LUAU_CODEGEN_PROPAGATE_FALLBACK_TAGS,
     LuauCodegenPropagateFallbackTags
   );
-  // cpp: CodeGen/src/OptimizeConstProp.cpp 线性路径排除 INVOKE_FASTPCALL 块
-  ulua_common::LUAU_FASTFLAGVARIABLE!(
-    LUAU_CODEGEN_NO_LINEAR_FASTPCALL,
-    LuauCodegenNoLinearFastpcall
-  );
 }

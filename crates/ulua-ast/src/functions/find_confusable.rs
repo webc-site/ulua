@@ -22,6 +22,16 @@ pub fn find_confusable(codepoint: u32) -> Option<&'static str> {
 
 /// Derived from http://www.unicode.org/Public/security/10.0.0/confusables.txt;
 /// sorted by codepoint. Faithful transcription of `kConfusables`.
+const _: () = {
+  // 编译期不变式：上面的 binary_search_by 依赖严格升序（cpp 侧靠生成流程保证）。
+  // 表被单边增删会静默给出错误骨架/漏报，这里用 const assert 把契约钉死，
+  // 严格升序同时排除重复码点导致的 lower_bound 语义差。
+  let mut i = 1;
+  while i < K_CONFUSABLES.len() {
+    assert!(K_CONFUSABLES[i - 1].codepoint < K_CONFUSABLES[i].codepoint);
+    i += 1;
+  }
+};
 const K_CONFUSABLES: &[Confusable] = &[
   Confusable {
     codepoint: 34,

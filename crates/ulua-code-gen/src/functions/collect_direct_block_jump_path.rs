@@ -15,7 +15,8 @@ use crate::{
 /// cpp `includeBlockInLinearPath`：CALL 完成后不会回到线性块，
 /// 因此含 CALL 的块不能并入线性路径克隆。
 /// cpp 另有 `FFlag::LuauCodegenNoLinearFastpcall && INVOKE_FASTPCALL` 检查，
-/// 该指令在 Rust IrCmd 中尚未引入（见 todo.md INVOKE_FASTPCALL 缺口）。
+/// 该指令在本仓 IrCmd 中尚未移植（上游对应 cpp OptimizeConstProp.cpp:3738）；
+/// 移植 InvokeFastpcall 时须一并恢复该旗标（原声明在 round-2 作为零读取死旗标删除）。
 fn include_block_in_linear_path(function: &IrFunction, block: &IrBlock) -> bool {
   let mut index = block.start;
 

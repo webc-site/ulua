@@ -602,7 +602,7 @@ fn mark_dead_stores_in_inst_tail(
   inst: &mut IrInst,
 ) {
   // Pending stores with SSA operands must not be deferred to ExitSync blocks past instructions that can invalidate operand physical location
-  // 注：cpp 的 INVOKE_FASTPCALL 臂在 Rust IrCmd 中尚未引入（见 todo.md 缺口）
+  // 注：cpp 的 INVOKE_FASTPCALL 臂在本仓 IrCmd 中尚未移植，随该指令移植一并补
   match inst.cmd {
     IrCmd::CmpAny
     | IrCmd::DoArith

@@ -1,10 +1,9 @@
 use alloc::ffi::CString;
 use core::cell::RefCell;
 
-/// cpp 默认优化级别 (`globalOptions.optimizationLevel = 1`)
-pub const DEFAULT_OPTIMIZATION_LEVEL: i32 = 1;
-/// cpp 默认调试级别 (`globalOptions.debugLevel = 1`)
-pub const DEFAULT_DEBUG_LEVEL: i32 = 1;
+// 与 ulua-cli-lib 共享同一默认值定义（r1-14 已把 repl/bytecode 侧下沉，
+// compile 侧此前留了一份可独立漂移的副本）。
+use ulua_cli_lib::records::global_options::{DEFAULT_DEBUG_LEVEL, DEFAULT_OPTIMIZATION_LEVEL};
 /// cpp 默认类型信息级别 (`globalOptions.typeInfoLevel = 0`)
 pub const DEFAULT_TYPE_INFO_LEVEL: i32 = 0;
 

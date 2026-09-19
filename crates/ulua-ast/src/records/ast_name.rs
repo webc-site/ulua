@@ -26,7 +26,14 @@ impl PartialOrd for AstName {
 impl Ord for AstName {
   fn cmp(&self, other: &Self) -> Ordering {
     if !self.value.is_null() && !other.value.is_null() {
-      unsafe { CStr::from_ptr(self.value).cmp(CStr::from_ptr(other.value)) }
+      // 内容序为主；Equal 时用指针 tie-break，保证 cmp==Equal ⟺ Eq（指针相等）。
+      // cpp `operator<` 纯 strcmp，配合指针 `operator==` 在跨两张 AstNameTable
+      // 时违反严格弱序契约（BTreeMap 会同内容不同址判同丢键）；Rust 侧必须补
+      // tie-break，属对上游契约缺陷的有意收敛。
+      match unsafe { CStr::from_ptr(self.value).cmp(CStr::from_ptr(other.value)) } {
+        Ordering::Equal => self.value.cmp(&other.value),
+        o => o,
+      }
     } else {
       self.value.cmp(&other.value)
     }

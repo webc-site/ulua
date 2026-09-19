@@ -366,9 +366,18 @@ impl IrBuilder {
           let ra = self.vm_reg(luau_insn_a(*pc) as u8);
           self.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::FallbackForgprep, pcpos, ra, loop_start);
         }
-        LuauOpcode::LOP_NEWCLASSMEMBER => {
+        // cpp IrBuilder.cpp:677-682：NCG 不支持 class，NEWCLASS/NEWCLASSMEMBER
+        // 一律发射 vmExit 退回 VM 执行，否则 release 下静默跳指令=误编译。
+        LuauOpcode::LOP_NEWCLASSMEMBER | LuauOpcode::LOP_NEWCLASS => {
           let exit = self.vm_exit(i as u32);
           self.inst_ir_cmd_ir_op(IrCmd::JUMP, exit);
+        }
+        // cpp IrBuilder.cpp:688-693：本仓无 IrCmd::InvokeFastpcall，等价于上游
+        // LuauCodeGenFastpcall 关闭时的优雅回退（跳到下一块并开新块）。
+        LuauOpcode::LOP_FASTPCALL => {
+          let next = self.block_at_inst((i + get_op_length(op)) as u32);
+          self.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
+          self.begin_block(next);
         }
         LuauOpcode::LOP_CMPPROTO => translate_inst_cmp_proto(self, pc, i),
         _ => CODEGEN_ASSERT!(false),

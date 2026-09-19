@@ -1,4 +1,5 @@
 use alloc::{
+  boxed::Box,
   format,
   rc::Rc,
   string::{String, ToString},
@@ -82,7 +83,7 @@ impl CliConfigResolver {
     // 借用只在单语句内存在：本函数会递归调用自身，长活 `&mut` 会自重叠（UB）。
     if let Some(cached) = unsafe { &*self.config_cache.get() }.get(path) {
       // SAFETY: 单线程契约（见 CliConfigResolver 字段文档），返回的 &Config
-      // 指向缓存节点，与 C++ `return it->second` 同义。
+      // 指向 Box 堆上的值，地址随表 grow 保持稳定，与 C++ `return it->second` 同义。
       return cached;
     }
 
@@ -174,7 +175,9 @@ impl CliConfigResolver {
 
     // return configCache[path] = result;
     let cache = unsafe { &mut *self.config_cache.get() };
-    cache.insert(path.to_string(), result);
-    &cache[path]
+    
+    (cache
+      .entry(path.to_string())
+      .or_insert_with(move || Box::new(result))) as _
   }
 }

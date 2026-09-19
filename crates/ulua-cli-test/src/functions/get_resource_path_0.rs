@@ -1,10 +1,13 @@
+use alloc::string::String;
+use core::ffi::{c_uchar, c_void};
+
 const PATH_MAX: usize = 1024;
 
-type CFBundleRef = *const core::ffi::c_void;
+type CFBundleRef = *const c_void;
 
-type CFURLRef = *const core::ffi::c_void;
+type CFURLRef = *const c_void;
 
-type Boolean = core::ffi::c_uchar;
+type Boolean = c_uchar;
 
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
@@ -16,10 +19,10 @@ unsafe extern "C" {
     buffer: *mut u8,
     max_buf_len: isize,
   ) -> Boolean;
-  fn CFRelease(cf: *const core::ffi::c_void);
+  fn CFRelease(cf: *const c_void);
 }
 
-pub fn get_resource_path_0() -> Option<alloc::string::String> {
+pub fn get_resource_path_0() -> Option<String> {
   unsafe {
     let main_bundle = CFBundleGetMainBundle();
     if main_bundle.is_null() {
@@ -47,7 +50,7 @@ pub fn get_resource_path_0() -> Option<alloc::string::String> {
     CFRelease(main_bundle_url);
 
     let len = path_buffer.iter().position(|&c| c == 0).unwrap_or(PATH_MAX);
-    let s = alloc::string::String::from_utf8(path_buffer[..len].to_vec()).ok()?;
+    let s = String::from_utf8(path_buffer[..len].to_vec()).ok()?;
     Some(s)
   }
 }

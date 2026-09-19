@@ -1,5 +1,4 @@
 use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
-use core::cmp::min;
 use std::{
   collections::HashSet,
   fs::write,
@@ -36,14 +35,8 @@ use crate::{
   functions::{
     display_help::display_help, report::report, report_module_result::report_module_result,
   },
-  records::{
-    cli_config_resolver::CliConfigResolver, cli_file_resolver::CliFileResolver,
-    task_scheduler::TaskScheduler,
-  },
+  records::{cli_config_resolver::CliConfigResolver, cli_file_resolver::CliFileResolver},
 };
-/// worker 线程数上限, 镜像 cpp `std::min(getThreadCount(), 8u)`
-const MAX_WORKER_THREADS: u32 = 8;
-
 pub fn main() {
   exit(run());
 }
@@ -170,17 +163,15 @@ fn run() -> i32 {
   // for (const std::string& path : files) frontend.queueModuleCheck(path);
   frontend.queue_module_check_vector_module_name(&files);
 
-  // if (threadCount <= 0) threadCount = std::min(getThreadCount(), 8u);
-  if thread_count <= 0 {
-    thread_count = min(TaskScheduler::get_thread_count(), MAX_WORKER_THREADS) as i32;
-  }
-
   // cpp: `TaskScheduler scheduler(threadCount)` + `executeTasks` 把每个
   // performQueueItemTask 派发到 worker 线程上执行。Rust 端 `Frontend` 经
   // `wire_self_pointers` 自引用，且类型检查会原地改写它，既不是 `Send` 也不是 `Sync`，
   // 所以队列任务只能在持有 `&mut Frontend` 的本线程上跑：这里等价于 cpp 的默认 executor
-  // （顺序立即执行）。`thread_count`/`-j` 保持解析兼容，不再决定并发度。
-  let _ = thread_count;
+  // （顺序立即执行）。`-j` 保持解析兼容但不再决定并发度——对用户可观测地说明缺口，
+  // 避免以为参数生效。
+  if thread_count > 1 {
+    eprintln!("note: -j is not effective in this build; typechecking runs single-threaded");
+  }
 
   // try { checkedModules = frontend.checkQueuedModules(...); }
   let result = catch_unwind(AssertUnwindSafe(|| {

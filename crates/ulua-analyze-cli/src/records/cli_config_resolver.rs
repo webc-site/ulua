@@ -28,6 +28,9 @@ use ulua_config::records::config::Config;
 pub struct CliConfigResolver {
   pub base: ConfigResolver,
   pub default_config: Config,
-  pub config_cache: UnsafeCell<HashMap<String, Config>>,
+  /// 值走 `Box` 堆上定址：std HashMap 在后续 insert 触发 grow 时会 memmove
+  /// 全部内联值，已返回的 `&Config` 即悬垂；Box 使值地址与表结构解耦，
+  /// 等价 cpp `std::unordered_map` 的节点式地址稳定（缓存项永不删除）。
+  pub config_cache: UnsafeCell<HashMap<String, Box<Config>>>,
   pub config_errors: UnsafeCell<Vec<(String, String)>>,
 }
