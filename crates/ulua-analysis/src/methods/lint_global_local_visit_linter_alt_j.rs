@@ -1,6 +1,6 @@
 use ulua_ast::{
-  records::ast_stat_for_in::AstStatForIn,
-  visit::{ast_expr_visit, ast_stat_block_visit},
+  methods::ast_stat_block_visit::ast_stat_block_visit, records::ast_stat_for_in::AstStatForIn,
+  visit::ast_expr_visit,
 };
 
 use crate::records::lint_global_local::LintGlobalLocal;

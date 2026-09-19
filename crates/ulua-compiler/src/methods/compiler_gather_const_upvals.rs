@@ -1,4 +1,6 @@
-use ulua_ast::{records::ast_expr_function::AstExprFunction, visit::ast_stat_block_visit};
+use ulua_ast::{
+  methods::ast_stat_block_visit::ast_stat_block_visit, records::ast_expr_function::AstExprFunction,
+};
 
 use crate::records::compiler::Compiler;
 

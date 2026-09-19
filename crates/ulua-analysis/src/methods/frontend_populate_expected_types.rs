@@ -1,6 +1,6 @@
 use alloc::sync::Arc;
 
-use ulua_ast::visit::ast_stat_block_visit;
+use ulua_ast::methods::ast_stat_block_visit::ast_stat_block_visit;
 
 use crate::{
   functions::{freeze::freeze, unfreeze::unfreeze},

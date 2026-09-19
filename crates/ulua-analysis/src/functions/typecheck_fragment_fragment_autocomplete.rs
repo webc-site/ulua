@@ -7,8 +7,8 @@ use core::{
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
 use ulua_ast::{
+  methods::ast_stat_block_visit::ast_stat_block_visit,
   records::{allocator::Allocator, ast_stat_block::AstStatBlock, position::Position},
-  visit::ast_stat_block_visit,
 };
 use ulua_common::{
   fflag, fint,

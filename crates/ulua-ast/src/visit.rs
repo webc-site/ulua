@@ -14,10 +14,6 @@
 //! loops over `AstArray` children), never `child.visit(v)` directly, because the
 //! static type of `self.child` is only the base.
 
-// `block->visit(visitor)` where the static type is already `AstStatBlock` —
-// C++ calls the override directly (no virtual dispatch needed), so route to
-// the node's own `visit` impl rather than the class-index dispatcher.
-pub use crate::methods::ast_stat_block_visit::ast_stat_block_visit;
 use crate::{
   records::{
     ast_attr::AstAttr, ast_expr::AstExpr, ast_expr_binary::AstExprBinary,
@@ -144,6 +140,10 @@ pub unsafe fn ast_node_visit<V: AstVisitor + ?Sized>(node: *mut AstNode, visitor
 /// The central class-index dispatcher — the analog of the C++ vtable. One arm
 /// per concrete node type; each downcast is sound for the same reason as
 /// `ast_node_as` (standard-layout, base at offset 0).
+///
+/// 静态类型已是 `AstStatBlock` 的入口（cpp `block->visit(visitor)` 直调 override，
+/// 无需 class-index 分发）不走这里，改调
+/// [`crate::methods::ast_stat_block_visit::ast_stat_block_visit`]。
 ///
 /// 关联常量 `T::CLASS_INDEX` 直接作 match 模式（i32 结构匹配合法）：编译器
 /// 可将其优化为对 60 个分支的比较树/跳转表，而 guard 写法 `x if x == ..`

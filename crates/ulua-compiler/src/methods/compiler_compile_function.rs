@@ -1,11 +1,11 @@
 use core::ptr::null_mut;
 
 use ulua_ast::{
+  methods::ast_stat_block_visit::ast_stat_block_visit,
   records::{
     ast_attr::AstAttrType::DebugNoinline, ast_expr_function::AstExprFunction, ast_node::AstNode,
     ast_stat::AstStat,
   },
-  visit::ast_stat_block_visit,
 };
 use ulua_common::{
   enums::{

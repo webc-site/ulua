@@ -1,8 +1,8 @@
 use ulua_ast::{
+  methods::ast_stat_block_visit::ast_stat_block_visit,
   records::{
     ast_stat::AstStat, ast_stat_block::AstStatBlock, location::Location, position::Position,
   },
-  visit::ast_stat_block_visit,
 };
 
 use crate::{

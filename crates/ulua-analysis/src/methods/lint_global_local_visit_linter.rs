@@ -1,13 +1,13 @@
 use core::ffi::c_void;
 
 use ulua_ast::{
+  methods::ast_stat_block_visit::ast_stat_block_visit,
   records::{
     ast_expr_function::AstExprFunction, ast_expr_global::AstExprGlobal,
     ast_expr_local::AstExprLocal, ast_stat_assign::AstStatAssign, ast_stat_for::AstStatFor,
     ast_stat_for_in::AstStatForIn, ast_stat_function::AstStatFunction, ast_stat_if::AstStatIf,
     ast_stat_repeat::AstStatRepeat, ast_stat_while::AstStatWhile, ast_visitor::AstVisitor,
   },
-  visit::ast_stat_block_visit,
 };
 
 use crate::records::{function_info::FunctionInfo, lint_global_local::LintGlobalLocal};

@@ -8,8 +8,8 @@
 use alloc::string::String;
 
 use ulua_ast::{
+  methods::ast_stat_block_visit::ast_stat_block_visit,
   records::{ast_stat_block::AstStatBlock, location::Location},
-  visit::ast_stat_block_visit,
 };
 use ulua_common::macros::luau_timetrace_scope::LUAU_TIMETRACE_SCOPE;
 
