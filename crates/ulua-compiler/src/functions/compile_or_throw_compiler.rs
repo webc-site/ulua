@@ -132,15 +132,13 @@ pub fn compile_or_throw_bytecode_builder_parse_result_ast_name_table_compile_opt
       )
     };
 
-    if fflag::LuauCompilePropagateTableProps2.get() && fflag::LuauCompileFoldOptimize.get() {
-      unsafe {
-        build_table_constant_map(
-          &mut compiler.table_constants,
-          &compiler.variables,
-          root_node,
-        )
-      };
-    }
+    unsafe {
+      build_table_constant_map(
+        &mut compiler.table_constants,
+        &compiler.variables,
+        root_node,
+      )
+    };
 
     unsafe {
       compiler.fold_constants(root_node, false);

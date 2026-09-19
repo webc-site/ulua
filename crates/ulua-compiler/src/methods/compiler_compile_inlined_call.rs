@@ -242,15 +242,10 @@ impl Compiler {
         inline_builtins.clear();
       }
 
-      let record_changes =
-        fflag::LuauCompilePropagateTableProps2.get() && fflag::LuauCompileFoldOptimize.get();
+      self.expr_changes.clear();
+      self.local_changes.clear();
 
-      if record_changes {
-        self.expr_changes.clear();
-        self.local_changes.clear();
-      }
-
-      self.fold_constants(func_body as *mut AstNode, record_changes);
+      self.fold_constants(func_body as *mut AstNode, true);
 
       let mut terminates_early = false;
       for &stat in (*func_body).body.as_slice() {
@@ -306,12 +301,8 @@ impl Compiler {
         inline_builtins_backup.clear();
       }
 
-      if record_changes {
-        undo_changes_expr(&mut self.constants, &self.expr_changes);
-        undo_changes_local(&mut self.locstants, &self.local_changes);
-      } else {
-        self.fold_constants(func_body as *mut AstNode, false);
-      }
+      undo_changes_expr(&mut self.constants, &self.expr_changes);
+      undo_changes_local(&mut self.locstants, &self.local_changes);
     }
   }
 }

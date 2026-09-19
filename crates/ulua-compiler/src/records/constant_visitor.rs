@@ -141,9 +141,7 @@ impl<'a> ConstantVisitor<'a> {
     {
       if let Some(l) = self.locals.find(&expr.local) {
         result = *l;
-      } else if fflag::LuauCompileFoldOptimize.get()
-        && let Some(l) = self.table_locals.find(&expr.local)
-      {
+      } else if let Some(l) = self.table_locals.find(&expr.local) {
         result = *l;
       }
     } else if ast_node_is::<AstExprGlobal>(node as *mut AstNode)
@@ -167,12 +165,10 @@ impl<'a> ConstantVisitor<'a> {
 
           self.builtin_args.reserve(offset + expr.args.size);
 
-          // FFlag 读取提升出参循环；可折叠条件合并为单一谓词
-          let propagate_table = fflag::LuauCompilePropagateTableProps2.get();
           for &arg in expr.args.iter() {
             let ac = self.analyze(arg);
 
-            if ac.r#type != Unknown && (!propagate_table || ac.r#type != Table) {
+            if ac.r#type != Unknown && ac.r#type != Table {
               self.builtin_args.push(ac);
             } else {
               can_fold = false;
@@ -205,7 +201,7 @@ impl<'a> ConstantVisitor<'a> {
       unsafe { ast_node_as::<AstExprIndexName>(node as *mut AstNode).as_mut() }
     {
       let value = self.analyze(expr.expr);
-      if fflag::LuauCompilePropagateTableProps2.get() && value.r#type == Table {
+      if value.r#type == Table {
         let table_index = unsafe { value.data.value_table };
         LUAU_ASSERT!(table_index < self.constant_tables.len());
         if table_index < self.constant_tables.len() {
@@ -257,10 +253,7 @@ impl<'a> ConstantVisitor<'a> {
       let index_val = self.analyze(expr.index);
       let table_val = self.analyze(expr.expr);
 
-      if fflag::LuauCompilePropagateTableProps2.get()
-        && table_val.r#type == Table
-        && index_val.r#type == String
-      {
+      if table_val.r#type == Table && index_val.r#type == String {
         let table_index = unsafe { table_val.data.value_table };
         LUAU_ASSERT!(table_index < self.constant_tables.len());
         if table_index < self.constant_tables.len() && index_val.string_length != 0 {
@@ -281,40 +274,30 @@ impl<'a> ConstantVisitor<'a> {
       }
     } else if let Some(expr) = unsafe { ast_node_as::<AstExprTable>(node as *mut AstNode).as_mut() }
     {
-      if fflag::LuauCompilePropagateTableProps2.get() {
-        let mut props = DenseHashMap::new(AstName::new());
-        for item in expr.items.iter() {
-          let value_val = self.analyze(item.value);
+      let mut props = DenseHashMap::new(AstName::new());
+      for item in expr.items.iter() {
+        let value_val = self.analyze(item.value);
 
-          if !item.key.is_null() {
-            let key_val = self.analyze(item.key);
+        if !item.key.is_null() {
+          let key_val = self.analyze(item.key);
 
-            if key_val.r#type == String
-              && value_val.r#type != Unknown
-              && value_val.r#type != Table
-              && key_val.string_length != 0
-            {
-              let const_key = self
-                .string_table
-                .get_or_add_slice(key_val.get_string_bytes());
-              props.try_insert(const_key, value_val);
-            }
+          if key_val.r#type == String
+            && value_val.r#type != Unknown
+            && value_val.r#type != Table
+            && key_val.string_length != 0
+          {
+            let const_key = self
+              .string_table
+              .get_or_add_slice(key_val.get_string_bytes());
+            props.try_insert(const_key, value_val);
           }
         }
+      }
 
-        if props.size() == expr.items.size {
-          result.r#type = Table;
-          result.data.value_table = self.constant_tables.len();
-          self.constant_tables.push(props);
-        }
-      } else {
-        for item in expr.items.iter() {
-          if !item.key.is_null() {
-            self.analyze(item.key);
-          }
-
-          self.analyze(item.value);
-        }
+      if props.size() == expr.items.size {
+        result.r#type = Table;
+        result.data.value_table = self.constant_tables.len();
+        self.constant_tables.push(props);
       }
     } else if let Some(expr) = unsafe { ast_node_as::<AstExprUnary>(node as *mut AstNode).as_mut() }
     {
@@ -384,59 +367,33 @@ impl<'a> ConstantVisitor<'a> {
   }
 
   pub(crate) fn record_expr_constant(&mut self, key: *mut AstExpr, value: Constant) {
-    if fflag::LuauCompileFoldOptimize.get() && fflag::LuauCompilePropagateTableProps2.get() {
-      if value.r#type == Table {
-        // Table constants are recorded in a separate map
-      } else if value.r#type != Unknown {
-        self.log_expr_change(key, None);
-        *self.constants.get_or_insert(key) = value;
-      } else if self.was_empty {
-        // No need to clear out entries if we started with empty maps
-      } else if let Some(old) = self.constants.find(&key).copied() {
-        // C++ `old->type = Unknown`: clear the STALE entry. try_insert is a no-op
-        // when the key exists, so the stale constant survived across inline re-folds.
-        // find + get_or_insert 两次哈希：借用安全前提下已是最少次数。
-        self.log_expr_change(key, Some(old));
-        *self.constants.get_or_insert(key) = Constant::default();
-      }
-    } else {
-      if value.r#type != Unknown {
-        // C++ recordConstant：覆写前必记录旧值，否则 undoChanges 无法回滚
-        self.log_expr_change(key, None);
-        *self.constants.get_or_insert(key) = value;
-      } else if self.was_empty && !fflag::LuauCompilePropagateTableProps2.get() {
-        // nothing
-      } else if let Some(old) = self.constants.find(&key).copied() {
-        self.log_expr_change(key, Some(old));
-        *self.constants.get_or_insert(key) = Constant::default();
-      }
+    if value.r#type == Table {
+      // Table constants are recorded in a separate map
+    } else if value.r#type != Unknown {
+      self.log_expr_change(key, None);
+      *self.constants.get_or_insert(key) = value;
+    } else if self.was_empty {
+      // No need to clear out entries if we started with empty maps
+    } else if let Some(old) = self.constants.find(&key).copied() {
+      // C++ `old->type = Unknown`: clear the STALE entry. try_insert is a no-op
+      // when the key exists, so the stale constant survived across inline re-folds.
+      // find + get_or_insert 两次哈希：借用安全前提下已是最少次数。
+      self.log_expr_change(key, Some(old));
+      *self.constants.get_or_insert(key) = Constant::default();
     }
   }
 
   pub(crate) fn record_local_constant(&mut self, key: *mut AstLocal, value: Constant) {
-    if fflag::LuauCompileFoldOptimize.get() && fflag::LuauCompilePropagateTableProps2.get() {
-      if value.r#type == Table {
-        // Table constants are recorded in a separate map
-      } else if value.r#type != Unknown {
-        self.log_local_change(key, None);
-        *self.locals.get_or_insert(key) = value;
-      } else if self.was_empty {
-        // No need to clear out entries if we started with empty maps
-      } else if let Some(old) = self.locals.find(&key).copied() {
-        self.log_local_change(key, Some(old));
-        *self.locals.get_or_insert(key) = Constant::default();
-      }
-    } else {
-      if value.r#type != Unknown {
-        // 同上：覆写前记录旧值供 undoChanges 回滚
-        self.log_local_change(key, None);
-        *self.locals.get_or_insert(key) = value;
-      } else if self.was_empty && !fflag::LuauCompilePropagateTableProps2.get() {
-        // nothing
-      } else if let Some(old) = self.locals.find(&key).copied() {
-        self.log_local_change(key, Some(old));
-        *self.locals.get_or_insert(key) = Constant::default();
-      }
+    if value.r#type == Table {
+      // Table constants are recorded in a separate map
+    } else if value.r#type != Unknown {
+      self.log_local_change(key, None);
+      *self.locals.get_or_insert(key) = value;
+    } else if self.was_empty {
+      // No need to clear out entries if we started with empty maps
+    } else if let Some(old) = self.locals.find(&key).copied() {
+      self.log_local_change(key, Some(old));
+      *self.locals.get_or_insert(key) = Constant::default();
     }
   }
 
@@ -487,20 +444,11 @@ impl<'a> ConstantVisitor<'a> {
     let v = self.variables.find_mut(&local).unwrap();
 
     if !v.written {
-      if fflag::LuauCompileFoldOptimize.get() && fflag::LuauCompilePropagateTableProps2.get() {
-        if value.r#type == Table {
-          v.constant = false;
-          self.table_locals.try_insert(local, value);
-        } else {
-          v.constant = value.r#type != Unknown;
-          self.record_local_constant(local, value);
-        }
+      if value.r#type == Table {
+        v.constant = false;
+        self.table_locals.try_insert(local, value);
       } else {
-        v.constant = if fflag::LuauCompilePropagateTableProps2.get() {
-          value.r#type != Unknown && value.r#type != Table
-        } else {
-          value.r#type != Unknown
-        };
+        v.constant = value.r#type != Unknown;
         self.record_local_constant(local, value);
       }
     }
