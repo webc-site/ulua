@@ -5,8 +5,7 @@ use ulua_config::records::config::Config;
 use crate::{
   records::{
     frontend::FrontendStats, frontend_options::FrontendOptions,
-    internal_compiler_error::InternalCompilerError, require_cycle::RequireCycle,
-    source_module::SourceModule, source_node::SourceNode,
+    require_cycle::RequireCycle, source_module::SourceModule, source_node::SourceNode,
   },
   type_aliases::{
     module_name_type::ModuleName, module_ptr_module::ModulePtr, scope_ptr_type::ScopePtr,
@@ -28,11 +27,9 @@ pub struct BuildQueueItem {
   pub dirty_dependencies: i32,
   pub processing: bool,
   // Result
-  // C++: `std::exception_ptr exception;` which here only ever holds a
-  // `Luau::InternalCompilerError` (a recursion/internal compiler error). It is
-  // used as a presence flag (`if (item.exception)`) and later rethrown in
-  // `recordItemResult`. Modeled as an `Option` carrying the caught error.
-  pub exception: Option<InternalCompilerError>,
+  // cpp `std::exception_ptr exception` 的对应物已删除：本端口把 InternalCompilerError
+  // 建模为 panic（见 perform_queue_item_task），任务成功路径上该字段恒为 None，
+  // 失败直接 unwind 出 check_queued_modules，无需 presence flag。
   pub module: ModulePtr,
   pub stats: FrontendStats,
 }

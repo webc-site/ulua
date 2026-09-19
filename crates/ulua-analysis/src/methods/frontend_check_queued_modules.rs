@@ -142,7 +142,6 @@ impl Frontend {
       self.send_queue_cycle_item_task(state.clone(), &mut execute_tasks);
     }
 
-    let mut item_with_exception: Option<usize> = None;
     let mut cancelled = false;
 
     while state.remaining() != 0 {
@@ -155,18 +154,8 @@ impl Frontend {
         // Handle checked items. 原地取空就绪队列，与 C++ 处理后清空等价
         let ready: Vec<usize> = take(&mut guard.ready_queue_items);
         for i in ready.iter().copied() {
-          let (has_exception, is_cancelled) = {
-            let item = &guard.build_queue_items[i];
-            (item.exception.is_some(), item.module.cancelled)
-          };
-          if has_exception {
-            item_with_exception = Some(i);
-          }
-          if is_cancelled {
+          if guard.build_queue_items[i].module.cancelled {
             cancelled = true;
-          }
-
-          if item_with_exception.is_some() || cancelled {
             break;
           }
 
@@ -207,12 +196,6 @@ impl Frontend {
         // Typechecking might have been cancelled by user; don't return partial results.
         if cancelled {
           return Vec::new();
-        }
-
-        // We might have stopped because of a pending exception.
-        if let Some(idx) = item_with_exception {
-          let guard = state.lock();
-          self.record_item_result(&guard.build_queue_items[idx]);
         }
       }
 

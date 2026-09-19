@@ -17,8 +17,9 @@ impl Frontend {
 
     // C++: `try { checkBuildQueueItem(item); } catch (const InternalCompilerError&) {
     //   item.exception = std::current_exception(); }`
-    // Rust 端口把 ICE 建模为 panic（与仓库其余部分一致），因此这里不捕获：
-    // `item.exception` 在成功路径上保持 `None`，panic 由调用方的 `catch_unwind` 处理。
+    // Rust 端口把 ICE 建模为 panic（与仓库其余部分一致），这里不捕获：
+    // panic 直接 unwind 出 `check_queued_modules`，故 cpp 的 presence flag
+    // （`item.exception`）无对应物且已删除。
     {
       let mut queue = state.lock();
       queue.ready_queue_items.push(item_pos);

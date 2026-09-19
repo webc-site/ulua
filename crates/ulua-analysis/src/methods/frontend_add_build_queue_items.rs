@@ -82,7 +82,6 @@ impl Frontend {
         reverse_deps: Vec::new(),
         dirty_dependencies: 0,
         processing: false,
-        exception: None,
         module: Arc::new(Module::default()),
         stats: FrontendStats::default(),
       });
