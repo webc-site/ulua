@@ -149,7 +149,8 @@ pub fn compile(source: &str) -> StdResult<Vec<u8>, Error> {
 /// C++ REPL does) on a compile, load or runtime error.
 pub fn eval(source: &str) -> StdResult<(), Error> {
   // v11+ bytecode needs the default Luau flags enabled (the CLI's
-  // setLuauFlagsDefault(true) analog; safe entry point).
+  // setLuauFlagsDefault(true) analog)。进程内幂等：只有首次调用真的写旗标，
+  // 之后每次 eval 不再与运行中 VM 的旗标读取相撞（见其文档）。
   set_luau_bool_flags(true);
 
   let bytecode = compile(source)?;
