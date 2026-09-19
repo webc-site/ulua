@@ -1,9 +1,7 @@
+use ulua_cli_lib::records::global_options::{get_debug_level, get_optimization_level};
 use ulua_compiler::records::compile_options::CompileOptions as LuauCompileOptions;
 
-use crate::{
-  functions::coverage_active::coverage_active,
-  records::global_options::{get_debug_level, get_optimization_level},
-};
+use crate::functions::coverage_active::coverage_active;
 
 pub fn copts() -> LuauCompileOptions {
   LuauCompileOptions {

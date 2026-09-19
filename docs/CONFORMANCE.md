@@ -91,6 +91,14 @@ The conformance claims in the rest of this document are about the translated *en
   `if local … then` test-syntax construct is not ported at all), `RequireApiEncode`,
   `RequireUserdataMarkCallback`, `RequireWeakRef*` (3), `RequireBytecodeDumpLinked`.
 
+- **Cyclic-require `TEST_CASE`s scaffolded but `#[ignore]`d** (5 cases:
+  `RequireCyclicPath`, `RequireCyclicDependencyErrorOn{Access,Mutation,NonStringKey}`,
+  `RequireSubmoduleUsingSelfWithOverrideAttempt`): fixtures + Rust tests exist in
+  `crates/ulua-cli-test/tests/require_by_string.rs`; blocked on porting FFlag
+  `LuauCyclicRequireShortCircuit`, DFFlag `LuauSelfIsSelfAndAlwaysSelf`, VM
+  `lua_usesexport`, and Require `createPlaceholder` (see the matching KNOWN-GAP note
+  in repl-cli `load.rs`).
+
 - **cpp test-suite deltas still unported** (tracked by count, per cpp test file):
   Frontend `Scc*` 39 cases, `TypeInfer.classes` 32, `Compiler` 22, `Parser` 25-case diff,
   `Autocomplete` 27, checked-macros trybuild UI suite, and `ulua-web` wasm

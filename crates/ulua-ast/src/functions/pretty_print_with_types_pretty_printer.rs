@@ -7,7 +7,7 @@ use crate::{
 
 pub fn pretty_print_with_types_ast_stat_block_cst_node_map(
   block: &mut AstStatBlock,
-  cst_node_map: CstNodeMap,
+  cst_node_map: &CstNodeMap,
 ) -> String {
   pretty_print_impl(block, cst_node_map, true)
 }

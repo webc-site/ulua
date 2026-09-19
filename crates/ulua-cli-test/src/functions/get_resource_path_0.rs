@@ -51,4 +51,3 @@ pub fn get_resource_path_0() -> Option<alloc::string::String> {
     Some(s)
   }
 }
-

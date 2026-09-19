@@ -77,8 +77,16 @@ fn vectord_key_covers_all_four_components() {
 
   assert_ne!(base, bcb.add_constant_vector_d(1.5, 2.0, 3.0, 4.0), "x");
   assert_ne!(base, bcb.add_constant_vector_d(1.0, 2.5, 3.0, 4.0), "y");
-  assert_ne!(base, bcb.add_constant_vector_d(1.0, 2.0, 3.5, 4.0), "extra2=z");
-  assert_ne!(base, bcb.add_constant_vector_d(1.0, 2.0, 3.0, 4.5), "extra3=w");
+  assert_ne!(
+    base,
+    bcb.add_constant_vector_d(1.0, 2.0, 3.5, 4.0),
+    "extra2=z"
+  );
+  assert_ne!(
+    base,
+    bcb.add_constant_vector_d(1.0, 2.0, 3.0, 4.5),
+    "extra3=w"
+  );
 
   // 按位建键（与 cpp 的 memcpy 语义一致）：+0.0 与 -0.0 是两条不同常量
   assert_ne!(base, bcb.add_constant_vector_d(1.0, 2.0, 3.0, -0.0));

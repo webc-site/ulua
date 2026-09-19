@@ -1,6 +1,5 @@
+use ulua_cli_lib::records::global_options::{get_debug_level, get_optimization_level};
 use ulua_compiler::records::compile_options::CompileOptions;
-
-use crate::records::global_options::{get_debug_level, get_optimization_level};
 
 pub fn copts() -> CompileOptions {
   CompileOptions {

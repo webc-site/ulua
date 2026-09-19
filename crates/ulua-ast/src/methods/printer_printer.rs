@@ -4,7 +4,7 @@ use crate::{
 };
 
 impl<'a, W: Writer> Printer<'a, W> {
-  pub fn new(writer: &'a mut W, cst_node_map: CstNodeMap) -> Self {
+  pub fn new(writer: &'a mut W, cst_node_map: &'a CstNodeMap) -> Self {
     Self {
       write_types: false,
       writer,

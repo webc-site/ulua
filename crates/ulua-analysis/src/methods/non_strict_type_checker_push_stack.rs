@@ -1,8 +1,6 @@
 use ulua_ast::records::ast_node::AstNode;
 
-use crate::records::{
-  non_strict_type_checker::NonStrictTypeChecker, stack_pusher::StackPusher,
-};
+use crate::records::{non_strict_type_checker::NonStrictTypeChecker, stack_pusher::StackPusher};
 
 impl NonStrictTypeChecker {
   pub fn push_stack(&mut self, node: *mut AstNode) -> Option<StackPusher> {

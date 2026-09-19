@@ -16,17 +16,7 @@ use ulua_vm::{
 };
 
 use crate::{
-  methods::{
-    cli_config_resolver_read_config_rec,
-    file_navigation_context_get_alias::file_navigation_context_get_alias,
-    file_navigation_context_get_config::file_navigation_context_get_config,
-    file_navigation_context_get_config_behavior::file_navigation_context_get_config_behavior,
-    file_navigation_context_get_config_status::file_navigation_context_get_config_status,
-    file_navigation_context_jump_to_alias::file_navigation_context_jump_to_alias,
-    file_navigation_context_reset_to_requirer::file_navigation_context_reset_to_requirer,
-    file_navigation_context_to_child::file_navigation_context_to_child,
-    file_navigation_context_to_parent::file_navigation_context_to_parent,
-  },
+  methods::cli_config_resolver_read_config_rec,
   records::{
     file_navigation_context::FileNavigationContext,
     luau_config_interrupt_info::LuauConfigInterruptInfo,
@@ -34,35 +24,35 @@ use crate::{
 };
 impl NavigationContextTrait for FileNavigationContext {
   fn reset_to_requirer(&mut self) -> NavigateResult {
-    unsafe { file_navigation_context_reset_to_requirer(self) }
+    FileNavigationContext::reset_to_requirer(self)
   }
 
   fn jump_to_alias(&mut self, path: &[u8]) -> NavigateResult {
-    unsafe { file_navigation_context_jump_to_alias(self, path) }
+    FileNavigationContext::jump_to_alias(self, path)
   }
 
   fn to_parent(&mut self) -> NavigateResult {
-    unsafe { file_navigation_context_to_parent(self) }
+    FileNavigationContext::to_parent(self)
   }
 
   fn to_child(&mut self, component: &[u8]) -> NavigateResult {
-    unsafe { file_navigation_context_to_child(self, component) }
+    FileNavigationContext::to_child(self, component)
   }
 
   fn get_config_status(&self) -> ConfigStatus {
-    unsafe { file_navigation_context_get_config_status(self) }
+    FileNavigationContext::get_config_status(self)
   }
 
   fn get_config_behavior(&self) -> ConfigBehavior {
-    unsafe { file_navigation_context_get_config_behavior(self) }
+    FileNavigationContext::get_config_behavior(self)
   }
 
   fn get_alias(&self, alias: &[u8]) -> Option<Vec<u8>> {
-    unsafe { file_navigation_context_get_alias(self, alias) }
+    FileNavigationContext::get_alias(self, alias)
   }
 
   fn get_config(&self) -> Option<Vec<u8>> {
-    unsafe { file_navigation_context_get_config(self) }
+    FileNavigationContext::get_config(self)
   }
 
   /// C++ `navigationContext.luauConfigInit = [&info](lua_State* l) { lua_setthreaddata(l, &info); };`

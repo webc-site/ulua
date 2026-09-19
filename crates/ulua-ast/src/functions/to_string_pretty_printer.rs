@@ -19,7 +19,8 @@ pub unsafe fn to_string_ast_node(node: *mut AstNode) -> String {
     last_char: '\0',
   };
 
-  let mut printer = Printer::new(&mut writer, CstNodeMap::new(null_mut()));
+  let empty_cst_node_map = CstNodeMap::new(null_mut());
+  let mut printer = Printer::new(&mut writer, &empty_cst_node_map);
   printer.write_types = true;
 
   let stat_node = node_ref.as_stat_const();

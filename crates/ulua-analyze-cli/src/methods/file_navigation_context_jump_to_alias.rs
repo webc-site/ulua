@@ -8,15 +8,8 @@ use crate::{
   records::file_navigation_context::FileNavigationContext,
 };
 
-/// # Safety
-/// 调用方须保证满足 C++ 原实现的调用契约。
-pub unsafe fn file_navigation_context_jump_to_alias(
-  this: *mut FileNavigationContext,
-  path: &[u8],
-) -> NavigateResult {
-  unsafe {
-    let this = &mut *this;
-
+impl FileNavigationContext {
+  pub fn jump_to_alias(&mut self, path: &[u8]) -> NavigateResult {
     // `is_absolute_path` / `VfsNavigator::reset_to_path` 属 ulua-cli-lib，仍以
     // `&str` 收参；合法 UTF-8 路径下该转换是恒等的，不改变任何判定。
     let path = String::from_utf8_lossy(path);
@@ -25,7 +18,7 @@ pub unsafe fn file_navigation_context_jump_to_alias(
       return NavigateResult::NotFound;
     }
 
-    let status = this.vfs.reset_to_path(&path);
+    let status = self.vfs.reset_to_path(&path);
     convert(status)
   }
 }

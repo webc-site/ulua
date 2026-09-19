@@ -7,10 +7,13 @@
 use alloc::{string::String, vec::Vec};
 use core::sync::atomic::{AtomicBool, Ordering};
 
-use ulua_cli_lib::functions::{
-  assertion_handler::install_assertion_handler, atoi::atoi, display_help::display_help,
-  get_source_files::get_source_files_from_slice, parse_level_arg::parse_level_arg,
-  set_luau_flags_flags_alt_b::set_luau_flags, time_trace_unsupported::time_trace_unsupported,
+use ulua_cli_lib::{
+  functions::{
+    assertion_handler::install_assertion_handler, atoi::atoi, display_help::display_help,
+    get_source_files::get_source_files_from_slice, parse_level_arg::parse_level_arg,
+    set_luau_flags_flags_alt_b::set_luau_flags, time_trace_unsupported::time_trace_unsupported,
+  },
+  records::global_options::{reset_to_defaults, set_debug_level, set_optimization_level},
 };
 use ulua_code_gen::functions::is_supported::is_supported;
 use ulua_common::fflag::DebugLuauTimeTracing;
@@ -19,13 +22,10 @@ use ulua_vm::{
   type_aliases::lua_state::lua_State,
 };
 
-use crate::{
-  functions::{
-    counters_dump::counters_dump, counters_init::counters_init, coverage_dump::coverage_dump,
-    coverage_init::coverage_init, profiler_dump::profiler_dump, profiler_start::profiler_start,
-    profiler_stop::profiler_stop, run_file::run_file, run_repl::run_repl, setup_state::setup_state,
-  },
-  records::global_options::{set_debug_level, set_optimization_level},
+use crate::functions::{
+  counters_dump::counters_dump, counters_init::counters_init, coverage_dump::coverage_dump,
+  coverage_init::coverage_init, profiler_dump::profiler_dump, profiler_start::profiler_start,
+  profiler_stop::profiler_stop, run_file::run_file, run_repl::run_repl, setup_state::setup_state,
 };
 
 // CLI-level static from Repl.cpp: `static bool codegen`. `program_argc/argv`
@@ -53,10 +53,9 @@ pub fn repl_main(args: &[impl AsRef<str>]) -> i32 {
   let mut counters = false;
   let mut program_argc = argc;
 
-  // Reset the CLI static to the C++ default for this invocation.
+  // Reset the CLI statics to the C++ defaults for this invocation.
   REPL_CODEGEN.store(false, Ordering::Relaxed);
-  set_optimization_level(1);
-  set_debug_level(1);
+  reset_to_defaults();
 
   let argv0 = args.first().map(|s| s.as_ref()).unwrap_or("luau");
 
@@ -144,48 +143,50 @@ pub fn repl_main(args: &[impl AsRef<str>]) -> i32 {
     }
     0
   } else {
+    let l: *mut lua_State = lua_l_newstate();
+
     unsafe {
-      let l: *mut lua_State = lua_l_newstate();
-
       setup_state(l);
-
-      if profile != 0 {
-        profiler_start(l, profile);
-      }
-
-      if coverage {
-        coverage_init(l);
-      }
-
-      if counters {
-        counters_init(l);
-      }
-
-      let mut failed = 0i32;
-
-      let n = files.len();
-      for (idx, file) in files.iter().enumerate() {
-        let is_last_file = idx == n - 1;
-        let ran = run_file(file, l, interactive && is_last_file, program_args);
-        failed += (!ran) as i32;
-      }
-
-      if profile != 0 {
-        profiler_stop();
-        profiler_dump("profile.out");
-      }
-
-      if coverage {
-        coverage_dump("coverage.out");
-      }
-
-      if counters {
-        counters_dump("callgrind.out");
-      }
-
-      lua_close(l);
-
-      if failed != 0 { 1 } else { 0 }
     }
+
+    if profile != 0 {
+      profiler_start(l, profile);
+    }
+
+    if coverage {
+      coverage_init(l);
+    }
+
+    if counters {
+      counters_init(l);
+    }
+
+    let mut failed = 0i32;
+
+    let n = files.len();
+    for (idx, file) in files.iter().enumerate() {
+      let is_last_file = idx == n - 1;
+      let ran = unsafe { run_file(file, l, interactive && is_last_file, program_args) };
+      failed += (!ran) as i32;
+    }
+
+    if profile != 0 {
+      profiler_stop();
+      profiler_dump("profile.out");
+    }
+
+    if coverage {
+      coverage_dump("coverage.out");
+    }
+
+    if counters {
+      counters_dump("callgrind.out");
+    }
+
+    unsafe {
+      lua_close(l);
+    }
+
+    if failed != 0 { 1 } else { 0 }
   }
 }

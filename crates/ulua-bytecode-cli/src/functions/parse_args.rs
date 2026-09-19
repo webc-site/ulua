@@ -2,14 +2,12 @@
 
 use alloc::string::String;
 
-use ulua_cli_lib::functions::{
-  parse_level_arg::parse_level_arg, set_luau_flags_flags_alt_b::set_luau_flags,
-};
-
-use crate::{
-  functions::display_help::display_help,
+use ulua_cli_lib::{
+  functions::{parse_level_arg::parse_level_arg, set_luau_flags_flags_alt_b::set_luau_flags},
   records::global_options::{set_debug_level, set_optimization_level},
 };
+
+use crate::functions::display_help::display_help;
 
 pub(crate) fn parse_args(args: &[String], summary_file: &mut String) -> bool {
   let argv0 = args.first().map(String::as_str).unwrap_or("ulua-bytecode");

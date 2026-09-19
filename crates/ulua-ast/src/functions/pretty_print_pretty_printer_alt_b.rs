@@ -7,5 +7,5 @@ use crate::{
 };
 
 pub fn pretty_print_ast_stat_block(block: &mut AstStatBlock) -> String {
-  pretty_print_ast_stat_block_cst_node_map(block, CstNodeMap::new(null_mut()))
+  pretty_print_ast_stat_block_cst_node_map(block, &CstNodeMap::new(null_mut()))
 }

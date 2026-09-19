@@ -39,3 +39,4 @@ pub mod split_path;
 pub mod time_trace_unsupported;
 pub mod traverse_directory;
 pub mod try_replace_top_with_index;
+pub mod write_json_entries;

@@ -5,14 +5,9 @@ use crate::{
   records::file_navigation_context::FileNavigationContext,
 };
 
-/// # Safety
-/// 调用方须保证满足 C++ 原实现的调用契约。
-pub unsafe fn file_navigation_context_to_parent(
-  this: *mut FileNavigationContext,
-) -> NavigateResult {
-  unsafe {
-    let this = &mut *this;
-    let status = this.vfs.to_parent();
+impl FileNavigationContext {
+  pub fn to_parent(&mut self) -> NavigateResult {
+    let status = self.vfs.to_parent();
     convert(status)
   }
 }

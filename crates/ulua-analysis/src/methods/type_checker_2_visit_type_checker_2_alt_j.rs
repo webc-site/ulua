@@ -8,7 +8,8 @@ use ulua_ast::records::{
 };
 
 use crate::{
-  enums::value_context::ValueContext, functions::extend_type_pack::extend_type_pack,
+  enums::value_context::ValueContext,
+  functions::extend_type_pack::extend_type_pack,
   records::{count_mismatch::CountMismatch, type_checker_2::TypeChecker2, type_pack::TypePack},
 };
 impl TypeChecker2 {

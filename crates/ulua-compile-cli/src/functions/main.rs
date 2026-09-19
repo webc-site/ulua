@@ -9,7 +9,7 @@ use ulua_cli_lib::functions::{
   assertion_handler::install_assertion_handler, escape_filename::escape_filename,
   get_source_files::get_source_files_from_slice, parse_level_arg::parse_level_arg,
   set_luau_flags_default::set_luau_flags_default, set_luau_flags_flags_alt_b::set_luau_flags,
-  time_trace_unsupported::time_trace_unsupported,
+  time_trace_unsupported::time_trace_unsupported, write_json_entries::write_json_entries,
 };
 use ulua_code_gen::{
   enums::{function_stats_flags::FunctionStatsFlags, target::Target},
@@ -255,12 +255,14 @@ fn write_per_file_stats<W: Write>(
 ) -> Result<()> {
   writeln!(out, "{{")?;
 
-  let last = files.len().saturating_sub(1);
-  for (i, (file, file_stat)) in files.iter().zip(file_stats.iter()).enumerate() {
-    write!(out, "    \"{}\": ", escape_filename(file))?;
-    serialize_compile_stats(out, file_stat)?;
-    write!(out, "{}", if i == last { "\n" } else { ",\n" })?;
-  }
+  write_json_entries(
+    out,
+    files.iter().zip(file_stats.iter()),
+    |out, (file, file_stat)| {
+      write!(out, "    \"{}\": ", escape_filename(file))?;
+      serialize_compile_stats(out, file_stat)
+    },
+  )?;
 
   write!(out, "}}")
 }

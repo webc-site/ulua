@@ -15,15 +15,9 @@ use ulua_require::{
   records::{error_handler::ErrorHandler, navigator::Navigator},
 };
 
-use crate::{
-  methods::{
-    file_navigation_context_get_identifier::file_navigation_context_get_identifier,
-    file_navigation_context_is_module_present::file_navigation_context_is_module_present,
-  },
-  records::{
-    cli_file_resolver::CliFileResolver, file_navigation_context::FileNavigationContext,
-    luau_config_interrupt_info::LuauConfigInterruptInfo,
-  },
+use crate::records::{
+  cli_file_resolver::CliFileResolver, file_navigation_context::FileNavigationContext,
+  luau_config_interrupt_info::LuauConfigInterruptInfo,
 };
 struct NullErrorHandler;
 
@@ -40,62 +34,59 @@ impl CliFileResolver {
     expr: &AstExpr,
     limits: &TypeCheckLimits,
   ) -> Option<ModuleInfo> {
-    unsafe {
-      // if (AstExprConstantString* expr = node->as<AstExprConstantString>())
-      let const_str = ast_node_as::<AstExprConstantString>(expr as *const AstExpr as *mut AstNode);
-      if const_str.is_null() {
-        return None;
-      }
-
-      // std::string path{expr->value.data, expr->value.size};
-      // 路径以原始字节进入导航器（cpp `std::string` 语义），判定链不做 UTF-8 校验
-      let bytes: &[u8] = {
-        let slice = (*const_str).value.as_slice();
-        from_raw_parts(slice.as_ptr() as *const u8, slice.len())
-      };
-
-      // FileNavigationContext navigationContext{context->name};
-      // cpp 无条件解引用 context（空上下文为 UB），此处以空模块名兜底。
-      let mut navigation_context =
-        FileNavigationContext::new(context.map(|c| c.name.clone()).unwrap_or_default());
-
-      // LuauConfigInterruptInfo info = {limits, path};
-      // navigationContext.luauConfigInit / luauConfigInterrupt capture &info.
-      // `module` 只用于抛出取消错误（ulua-analysis 收 `String`），是链路唯一的展示转换点。
-      navigation_context.interrupt_info = Some(Box::new(LuauConfigInterruptInfo {
-        limits: limits.clone(),
-        module: String::from_utf8_lossy(bytes).into_owned(),
-      }));
-
-      let mut null_error_handler = NullErrorHandler;
-
-      // Require::Navigator navigator(navigationContext, nullErrorHandler);
-      let mut navigator = Navigator::new(&mut navigation_context, &mut null_error_handler);
-
-      // if (navigator.navigate(std::move(path)) != Status::Success) return std::nullopt;
-      if navigator.navigate(bytes) != Status::Success {
-        return None;
-      }
-
-      // The navigator borrows navigation_context for its lifetime; end that
-      // borrow before reading back the (now-mutated) context.
-      let _ = navigator;
-
-      // if (!navigationContext.isModulePresent()) return std::nullopt;
-      if !file_navigation_context_is_module_present(&navigation_context) {
-        return None;
-      }
-
-      // if (std::optional<std::string> identifier = navigationContext.getIdentifier())
-      //     return {{*identifier}};
-      if let Some(identifier) = file_navigation_context_get_identifier(&navigation_context) {
-        return Some(ModuleInfo {
-          name: identifier,
-          optional: false,
-        });
-      }
-
-      None
+    // if (AstExprConstantString* expr = node->as<AstExprConstantString>())
+    let const_str =
+      unsafe { ast_node_as::<AstExprConstantString>(expr as *const AstExpr as *mut AstNode) };
+    if const_str.is_null() {
+      return None;
     }
+
+    // std::string path{expr->value.data, expr->value.size};
+    // 路径以原始字节进入导航器（cpp `std::string` 语义），判定链不做 UTF-8 校验
+    let bytes: &[u8] = unsafe {
+      let slice = (*const_str).value.as_slice();
+      from_raw_parts(slice.as_ptr() as *const u8, slice.len())
+    };
+
+    // FileNavigationContext navigationContext{context->name};
+    // cpp 无条件解引用 context（空上下文为 UB），此处以空模块名兜底。
+    let mut navigation_context =
+      FileNavigationContext::new(context.map(|c| c.name.clone()).unwrap_or_default());
+
+    // LuauConfigInterruptInfo info = {limits, path};
+    // navigationContext.luauConfigInit / luauConfigInterrupt capture &info.
+    // `module` 只用于抛出取消错误（ulua-analysis 收 `String`），是链路唯一的展示转换点。
+    navigation_context.interrupt_info = Some(Box::new(LuauConfigInterruptInfo {
+      limits: limits.clone(),
+      module: String::from_utf8_lossy(bytes).into_owned(),
+    }));
+
+    let mut null_error_handler = NullErrorHandler;
+
+    // Require::Navigator navigator(navigationContext, nullErrorHandler);
+    let mut navigator = Navigator::new(&mut navigation_context, &mut null_error_handler);
+
+    // if (navigator.navigate(std::move(path)) != Status::Success) return std::nullopt;
+    if navigator.navigate(bytes) != Status::Success {
+      return None;
+    }
+
+    // The navigator borrows navigation_context for its lifetime; end that
+    // borrow before reading back the (now-mutated) context.
+    let _ = navigator;
+
+    // if (!navigationContext.isModulePresent()) return std::nullopt;
+    if !navigation_context.is_module_present() {
+      return None;
+    }
+
+    // if (std::optional<std::string> identifier = navigationContext.getIdentifier())
+    //     return {{*identifier}};
+    navigation_context
+      .get_identifier()
+      .map(|identifier| ModuleInfo {
+        name: identifier,
+        optional: false,
+      })
   }
 }

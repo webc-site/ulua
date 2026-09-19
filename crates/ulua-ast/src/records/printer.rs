@@ -44,7 +44,7 @@ impl<T> IntoNodePtr<T> for &*mut T {
 pub struct Printer<'a, W: Writer> {
   pub(crate) write_types: bool,
   pub(crate) writer: &'a mut W,
-  pub(crate) cst_node_map: CstNodeMap,
+  pub(crate) cst_node_map: &'a CstNodeMap,
 }
 
 impl<'a, W: Writer> Printer<'a, W> {

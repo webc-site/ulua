@@ -2046,3 +2046,105 @@ fn require_by_string_require_with_file_ambiguity() {
         "error requiring module \"./ambiguous/file/dependency\": could not resolve child component \"dependency\" (ambiguous)",
     ]);
 }
+
+// KNOWN-GAP：以下 5 例对齐 cpp `RequireByString.test.cpp:654,962-995`，夹具
+// （fixtures/tests/require/without_config/cyclic_*、config_tests/*/nested_override）
+// 已在库中。阻塞部件尚未移植：FFlag `LuauCyclicRequireShortCircuit`（cyclic 系列）、
+// DFFlag `LuauSelfIsSelfAndAlwaysSelf`（override 例）、VM `lua_usesexport` 与
+// Require `createPlaceholder`（见 repl-cli load.rs 的同名缺口注释）。
+// 补齐链路后去掉 #[ignore] 即可启用。
+
+#[test]
+#[ignore = "KNOWN-GAP: LuauCyclicRequireShortCircuit + lua_usesexport + createPlaceholder not ported"]
+fn require_by_string_require_cyclic_path() {
+  use ulua_cli_test::{
+    enums::path_type::PathType,
+    methods::repl_with_path_fixture_run_protected_require::repl_with_path_fixture_run_protected_require,
+    records::repl_with_path_fixture::ReplWithPathFixture,
+  };
+
+  let _sff = sff_export_value();
+  let mut fixture = ReplWithPathFixture::new();
+  // cpp 同时置 LuauCyclicRequireShortCircuit=true；该 flag 未移植。
+  // Both modules use the export keyword. The compiler uses the runtime-provided
+  // placeholder as the export table, so the cycle resolves automatically.
+  let path = fixture.get_luau_directory(PathType::Relative)
+    + "/tests/require/without_config/cyclic_requirer";
+  repl_with_path_fixture_run_protected_require(&fixture, &path);
+  fixture.assert_output_contains_all(&["true"]);
+}
+
+#[test]
+#[ignore = "KNOWN-GAP: LuauCyclicRequireShortCircuit + lua_usesexport + createPlaceholder not ported"]
+fn require_by_string_require_cyclic_dependency_error_on_access() {
+  use ulua_cli_test::{
+    enums::path_type::PathType,
+    methods::repl_with_path_fixture_run_protected_require::repl_with_path_fixture_run_protected_require,
+    records::repl_with_path_fixture::ReplWithPathFixture,
+  };
+
+  let _sff = sff_export_value();
+  let mut fixture = ReplWithPathFixture::new();
+  let path = fixture.get_luau_directory(PathType::Relative)
+    + "/tests/require/without_config/cyclic_access_a";
+  repl_with_path_fixture_run_protected_require(&fixture, &path);
+  fixture.assert_output_contains_all(&["false", "Cannot access the exported field 'Tree'"]);
+}
+
+#[test]
+#[ignore = "KNOWN-GAP: LuauCyclicRequireShortCircuit + lua_usesexport + createPlaceholder not ported"]
+fn require_by_string_require_cyclic_dependency_error_on_mutation() {
+  use ulua_cli_test::{
+    enums::path_type::PathType,
+    methods::repl_with_path_fixture_run_protected_require::repl_with_path_fixture_run_protected_require,
+    records::repl_with_path_fixture::ReplWithPathFixture,
+  };
+
+  let _sff = sff_export_value();
+  let mut fixture = ReplWithPathFixture::new();
+  let path = fixture.get_luau_directory(PathType::Relative)
+    + "/tests/require/without_config/cyclic_mutation_b";
+  repl_with_path_fixture_run_protected_require(&fixture, &path);
+  fixture.assert_output_contains_all(&["false", "Cannot set the exported field 'foo'"]);
+}
+
+#[test]
+#[ignore = "KNOWN-GAP: LuauCyclicRequireShortCircuit + lua_usesexport + createPlaceholder not ported"]
+fn require_by_string_require_cyclic_dependency_error_on_non_string_key() {
+  use ulua_cli_test::{
+    enums::path_type::PathType,
+    methods::repl_with_path_fixture_run_protected_require::repl_with_path_fixture_run_protected_require,
+    records::repl_with_path_fixture::ReplWithPathFixture,
+  };
+
+  let _sff = sff_export_value();
+  let mut fixture = ReplWithPathFixture::new();
+  let path = fixture.get_luau_directory(PathType::Relative)
+    + "/tests/require/without_config/cyclic_access_nonstringkey_a";
+  repl_with_path_fixture_run_protected_require(&fixture, &path);
+  fixture.assert_output_contains_all(&["false", "Cannot access the exported field 'unknown'"]);
+}
+
+#[test]
+#[ignore = "KNOWN-GAP: DFFlag LuauSelfIsSelfAndAlwaysSelf not ported"]
+fn require_by_string_require_submodule_using_self_with_override_attempt() {
+  use ulua_cli_test::{
+    enums::path_type::PathType,
+    methods::repl_with_path_fixture_run_protected_require::repl_with_path_fixture_run_protected_require,
+    records::repl_with_path_fixture::ReplWithPathFixture,
+  };
+
+  let mut fixture = ReplWithPathFixture::new();
+  {
+    let path = fixture.get_luau_directory(PathType::Relative)
+      + "/tests/require/config_tests/with_config/nested_override";
+    repl_with_path_fixture_run_protected_require(&fixture, &path);
+    fixture.assert_output_contains_all(&["true", "result from submodule"]);
+  }
+  {
+    let path = fixture.get_luau_directory(PathType::Relative)
+      + "/tests/require/config_tests/with_config_luau/nested_override";
+    repl_with_path_fixture_run_protected_require(&fixture, &path);
+    fixture.assert_output_contains_all(&["true", "result from submodule"]);
+  }
+}

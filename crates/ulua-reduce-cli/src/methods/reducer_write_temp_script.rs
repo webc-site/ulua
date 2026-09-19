@@ -11,7 +11,7 @@ impl Reducer {
     let mut source = pretty_print_with_types_ast_stat_block_cst_node_map(
       // SAFETY: 见上
       unsafe { &mut *self.root },
-      self.cst_node_map.clone(),
+      &self.cst_node_map,
     );
 
     if minify {

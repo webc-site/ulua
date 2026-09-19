@@ -45,30 +45,25 @@ pub unsafe extern "C-unwind" fn load(
 
   let loadname = unsafe { CStr::from_ptr(loadname) }.to_string_lossy();
 
-  let contents = read_file(&loadname);
-  let had_contents = contents.is_some();
-  let mut status: c_int = LuaStatus::Ok as c_int;
+  // cpp: `if (!contents) return luaL_error(L, "could not read file '%s'", loadName);`
+  let Some(source) = read_file(&loadname) else {
+    unsafe { luaL_error!(l, "could not read file '{}'", loadname) }
+  };
 
-  if let Some(ref source) = contents {
-    // now we can compile & run module on the new thread
-    // (req.copts 与 crate copts 来源不同, 保留独立编译调用)
-    let options = (req.copts)();
-    let parse_options = ParseOptions::default();
-    let bytecode = compile(source, &options, &parse_options, NoopEncoder);
-    status = unsafe {
-      luau_load(
-        ml,
-        chunkname,
-        bytecode.as_ptr() as *const c_char,
-        bytecode.len(),
-        0,
-      )
-    };
-  }
-
-  if !had_contents {
-    unsafe { luaL_error!(l, "could not read file '{}'", loadname) };
-  }
+  // now we can compile & run module on the new thread
+  // (req.copts 与 crate copts 来源不同, 保留独立编译调用)
+  let options = (req.copts)();
+  let parse_options = ParseOptions::default();
+  let bytecode = compile(&source, &options, &parse_options, NoopEncoder);
+  let status = unsafe {
+    luau_load(
+      ml,
+      chunkname,
+      bytecode.as_ptr() as *const c_char,
+      bytecode.len(),
+      0,
+    )
+  };
 
   if status == 0 {
     // cpp（ReplRequirer.cpp:170）此处为

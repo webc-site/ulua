@@ -3,6 +3,7 @@ use std::{
   io::{self, BufWriter, Write},
 };
 
+use ulua_cli_lib::functions::write_json_entries::write_json_entries;
 use ulua_code_gen::records::function_bytecode_summary::FunctionBytecodeSummary;
 
 use crate::functions::serialize_script_summary::serialize_script_summary;
@@ -19,18 +20,14 @@ pub fn serialize_summaries(
     return false;
   };
 
-  // 逐项写条目；逗号/换行分隔符用 peekable 前瞻，免去下标比较
+  // 条目分隔符统一走 write_json_entries
   let write_entries = |writer: &mut BufWriter<File>| -> io::Result<()> {
     writeln!(writer, "{{")?;
-    let mut entries = files.iter().zip(script_summaries.iter()).peekable();
-    while let Some((path, summary)) = entries.next() {
-      serialize_script_summary(path, summary, writer)?;
-      if entries.peek().is_some() {
-        writeln!(writer, ",")?;
-      } else {
-        writeln!(writer)?;
-      }
-    }
+    write_json_entries(
+      writer,
+      files.iter().zip(script_summaries.iter()),
+      |writer, (path, summary)| serialize_script_summary(path, summary, writer),
+    )?;
     write!(writer, "}}")
   };
 

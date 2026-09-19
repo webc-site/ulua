@@ -13,20 +13,13 @@ use crate::{
 ///     return convert(vfs.resetToStdIn());
 /// return convert(vfs.resetToPath(requirerPath));
 /// ```
-///
-/// # Safety
-/// 调用方须保证满足 C++ 原实现的调用契约。
-pub unsafe fn file_navigation_context_reset_to_requirer(
-  this: *mut FileNavigationContext,
-) -> NavigateResult {
-  unsafe {
-    let this = &mut *this;
-
-    if this.requirer_path == "-" {
-      return convert(vfs_navigator_reset_to_std_in(&mut this.vfs));
+impl FileNavigationContext {
+  pub fn reset_to_requirer(&mut self) -> NavigateResult {
+    if self.requirer_path == "-" {
+      return convert(vfs_navigator_reset_to_std_in(&mut self.vfs));
     }
 
     // reset_to_path 可变借用 vfs 字段、共享借用 requirer_path 字段，字段不相交，免 clone
-    convert(this.vfs.reset_to_path(&this.requirer_path))
+    convert(self.vfs.reset_to_path(&self.requirer_path))
   }
 }

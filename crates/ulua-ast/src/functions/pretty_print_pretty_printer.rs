@@ -11,7 +11,7 @@ use crate::{
 
 pub fn pretty_print_ast_stat_block_cst_node_map(
   block: &mut AstStatBlock,
-  cst_node_map: CstNodeMap,
+  cst_node_map: &CstNodeMap,
 ) -> String {
   pretty_print_impl(block, cst_node_map, false)
 }
@@ -20,7 +20,7 @@ pub fn pretty_print_ast_stat_block_cst_node_map(
 /// Printer 泛型于 `W: Writer`：此处静态单态化到 StringWriter，无 dyn 开销。
 pub(crate) fn pretty_print_impl(
   block: &mut AstStatBlock,
-  cst_node_map: CstNodeMap,
+  cst_node_map: &CstNodeMap,
   write_types: bool,
 ) -> String {
   let mut writer = StringWriter {
@@ -119,7 +119,8 @@ mod tests {
       last_char: '\0',
     };
     {
-      let mut printer = Printer::new(&mut writer, CstNodeMap::new(null_mut()));
+      let empty_cst_node_map = CstNodeMap::new(null_mut());
+      let mut printer = Printer::new(&mut writer, &empty_cst_node_map);
       // SAFETY: parse 成功后 root 指向 arena 中存活的 AstStatBlock；打印器只写
       // Writer，节点全程共享借用
       let root = unsafe { &*parse_result.root };

@@ -50,13 +50,13 @@ pub fn pretty_print_string_view_parse_options_bool_bool(
   let root = unsafe { &mut *parse_result.root };
   if with_types {
     PrettyPrintResult {
-      code: pretty_print_with_types_ast_stat_block_cst_node_map(root, parse_result.cst_node_map),
+      code: pretty_print_with_types_ast_stat_block_cst_node_map(root, &parse_result.cst_node_map),
       error_location: Location::default(),
       parse_error: String::new(),
     }
   } else {
     PrettyPrintResult {
-      code: pretty_print_ast_stat_block_cst_node_map(root, parse_result.cst_node_map),
+      code: pretty_print_ast_stat_block_cst_node_map(root, &parse_result.cst_node_map),
       error_location: Location::default(),
       parse_error: String::new(),
     }

@@ -514,9 +514,7 @@ mod runtime_limits_typescript_port_of_result_type {
 
     use ulua_analysis::records::code_too_complex::CodeTooComplex;
     use ulua_common::fflag;
-    use ulua_unit_test::{
-      functions::has_error::has_error, records::limit_fixture::LimitFixture,
-    };
+    use ulua_unit_test::{functions::has_error::has_error, records::limit_fixture::LimitFixture};
 
     let mut fixture = LimitFixture::default();
     fixture.base.get_frontend();

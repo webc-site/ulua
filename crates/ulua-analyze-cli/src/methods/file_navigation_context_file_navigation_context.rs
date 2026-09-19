@@ -14,15 +14,3 @@ impl FileNavigationContext {
     }
   }
 }
-
-/// Compatibility shim for the pinned skeleton name: assigns `requirerPath` onto an
-/// existing context (the in-place member-init form).
-///
-/// # Safety
-/// 调用方须保证满足 C++ 原实现的调用契约。
-pub unsafe fn file_navigation_context_file_navigation_context(
-  this: &mut FileNavigationContext,
-  requirer_path: String,
-) {
-  this.requirer_path = requirer_path;
-}

@@ -48,8 +48,9 @@ unsafe extern "C-unwind" fn value_callback_cb(
 
 // Faithful port of `void countersDump(const char* path)`.
 pub fn counters_dump(path: &str) {
+  let counters_ptr = addr_of_mut!(G_COUNTERS);
+
   unsafe {
-    let counters_ptr = addr_of_mut!(G_COUNTERS);
     let l = (*counters_ptr).l;
 
     // 循环体只读 module_refs、写 module_counters，字段不相交，直接借用免 clone
@@ -83,50 +84,52 @@ pub fn counters_dump(path: &str) {
 
       lua_pop(l, 1);
     }
+  }
 
-    // cpp `fopen(path, "wb")`：std::fs 写模式打开，失败报错返回
-    let Ok(file) = File::create(path) else {
-      eprintln!("Error opening counters file (callgrind) {}", path);
-      return;
-    };
-    let mut out = BufWriter::new(file);
+  let module_counters = unsafe { &(*counters_ptr).module_counters };
 
-    // cpp 忽略 fprintf 返回值，此处一致
-    let _ = write!(
-      out,
-      "version: 1\ncreator: Luau REPL\nevents: Regular Fallback VmExit\n"
-    );
+  // cpp `fopen(path, "wb")`：std::fs 写模式打开，失败报错返回
+  let Ok(file) = File::create(path) else {
+    eprintln!("Error opening counters file (callgrind) {}", path);
+    return;
+  };
+  let mut out = BufWriter::new(file);
 
-    for module_counter in (*counters_ptr).module_counters.iter() {
-      let _ = writeln!(out, "fl={}", module_counter.name);
+  // cpp 忽略 fprintf 返回值，此处一致
+  let _ = write!(
+    out,
+    "version: 1\ncreator: Luau REPL\nevents: Regular Fallback VmExit\n"
+  );
 
-      for function_counter in module_counter.functions.iter() {
-        let _ = writeln!(out, "fn={}", function_counter.name);
+  for module_counter in module_counters.iter() {
+    let _ = writeln!(out, "fl={}", module_counter.name);
 
-        // BTreeMap already iterates by ascending line, matching the C++
-        // "sorted by line" presentation requirement.
-        for (line, counters) in function_counter.counters.iter() {
-          if counters.regular_executed != 0
-            || counters.fallback_executed != 0
-            || counters.vm_exit_taken != 0
-          {
-            let _ = writeln!(
-              out,
-              "{line} {} {} {}",
-              counters.regular_executed, counters.fallback_executed, counters.vm_exit_taken
-            );
-          }
+    for function_counter in module_counter.functions.iter() {
+      let _ = writeln!(out, "fn={}", function_counter.name);
+
+      // BTreeMap already iterates by ascending line, matching the C++
+      // "sorted by line" presentation requirement.
+      for (line, counters) in function_counter.counters.iter() {
+        if counters.regular_executed != 0
+          || counters.fallback_executed != 0
+          || counters.vm_exit_taken != 0
+        {
+          let _ = writeln!(
+            out,
+            "{line} {} {} {}",
+            counters.regular_executed, counters.fallback_executed, counters.vm_exit_taken
+          );
         }
       }
     }
-
-    // cpp `fclose` 隐式 flush；失败同样静默
-    let _ = out.flush();
-
-    println!(
-      "Counters data written to {} ({} modules)",
-      path,
-      (*counters_ptr).module_counters.len()
-    );
   }
+
+  // cpp `fclose` 隐式 flush；失败同样静默
+  let _ = out.flush();
+
+  println!(
+    "Counters data written to {} ({} modules)",
+    path,
+    module_counters.len()
+  );
 }
