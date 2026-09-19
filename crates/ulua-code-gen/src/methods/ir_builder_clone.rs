@@ -4,7 +4,11 @@ use crate::{
   enums::{ir_cmd::IrCmd, ir_op_kind::IrOpKind},
   functions::{add_use::add_use, is_pseudo::is_pseudo, kill_ir_utils::kill_ir_function_ir_inst},
   macros::codegen_assert::CODEGEN_ASSERT,
-  records::{ir_block::K_BLOCK_NO_START_PC, ir_builder::IrBuilder, ir_op::IrOp},
+  records::{
+    ir_block::{K_BLOCK_FLAG_SAFE_ENV_CHECK, K_BLOCK_NO_START_PC},
+    ir_builder::IrBuilder,
+    ir_op::IrOp,
+  },
 };
 
 impl IrBuilder {
@@ -23,7 +27,6 @@ impl IrBuilder {
         self.in_terminated_block = false;
       }
 
-      const K_BLOCK_FLAG_SAFE_ENV_CHECK: u8 = 1 << 0;
       if (source.flags & K_BLOCK_FLAG_SAFE_ENV_CHECK) != 0 {
         CODEGEN_ASSERT!(source.startpc != K_BLOCK_NO_START_PC);
         let exit = self.vm_exit(source.startpc);

@@ -1,12 +1,12 @@
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
   fflag::LuauBackedgeHeapCheck,
+  functions::{get_jump_target::get_jump_target, get_op_length::get_op_length},
   macros::{luau_insn_a::luau_insn_a, luau_insn_op::luau_insn_op},
 };
 
 use crate::{
   enums::{ir_cmd::IrCmd, ir_condition::IrCondition, ir_op_kind::IrOpKind},
-  functions::{get_jump_target::get_jump_target, get_op_length::get_op_length},
   macros::codegen_assert::CODEGEN_ASSERT,
   records::ir_builder::IrBuilder,
   type_aliases::instruction_ir_builder::Instruction,

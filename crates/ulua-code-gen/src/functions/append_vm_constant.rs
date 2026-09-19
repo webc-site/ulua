@@ -5,6 +5,7 @@ extern crate alloc;
 use alloc::string::String;
 use core::slice::from_raw_parts;
 
+use ulua_common::functions::format_g::format_g;
 use ulua_vm::{
   macros::{gco_2_ts::gco2ts, getstr::getstr, lua_vector_size::LUA_VECTOR_SIZE},
   records::{g_cheader::GCheader, t_string::tstring},
@@ -12,7 +13,7 @@ use ulua_vm::{
 };
 
 use crate::functions::{
-  append::append, format_g::format_g, is_printable_string_constant::is_printable_string_constant,
+  append::append, is_printable_string_constant::is_printable_string_constant,
 };
 
 // Lua value type tags (lobject.h)

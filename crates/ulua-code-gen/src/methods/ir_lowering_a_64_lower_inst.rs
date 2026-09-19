@@ -34,14 +34,20 @@ use crate::{
   },
   macros::codegen_assert::{CODEGEN_ASSERT, unsupported_instruction_form},
   records::{
-    address_a_64::AddressA64, assembly_builder_a_64::AssemblyBuilderA64,
-    interrupt_handler_ir_lowering_a_64::InterruptHandler, ir_block::IrBlock, ir_const::IrConst,
-    ir_inst::IrInst, ir_lowering_a_64::IrLoweringA64, ir_op::IrOp, label::Label,
-    native_context::NativeContext, register_a_64::RegisterA64,
+    address_a_64::AddressA64,
+    assembly_builder_a_64::{AssemblyBuilderA64, K_MAX_IMMEDIATE},
+    interrupt_handler_ir_lowering_a_64::InterruptHandler,
+    ir_block::IrBlock,
+    ir_const::IrConst,
+    ir_inst::IrInst,
+    ir_lowering_a_64::IrLoweringA64,
+    ir_op::IrOp,
+    label::Label,
+    native_context::NativeContext,
+    register_a_64::RegisterA64,
   },
 };
 // local register/address constants (mirrors EmitCommonA64.h)
-const K_MAX_IMMEDIATE: u32 = 4095;
 const INT_MAX: i32 = i32::MAX;
 const K_TVALUE_SIZE_LOG2: i32 = 4;
 const K_LUA_NODE_SIZE_LOG2: i32 = 5;
@@ -1086,7 +1092,7 @@ impl IrLoweringA64 {
             &[(*get_op_mut(inst, 0)), (*get_op_mut(inst, 1))],
           );
           if (*get_op_mut(inst, 1)).kind() == IrOpKind::Constant
-            && ((self.int_op(*get_op_mut(inst, 1))) as u32) <= K_MAX_IMMEDIATE
+            && ((self.int_op(*get_op_mut(inst, 1))) as u32) <= K_MAX_IMMEDIATE as u32
           {
             (*self.build).add(
               inst.reg_a64,
@@ -1094,7 +1100,7 @@ impl IrLoweringA64 {
               (self.int_op(*get_op_mut(inst, 1))) as u16,
             );
           } else if (*get_op_mut(inst, 0)).kind() == IrOpKind::Constant
-            && ((self.int_op(*get_op_mut(inst, 0))) as u32) <= K_MAX_IMMEDIATE
+            && ((self.int_op(*get_op_mut(inst, 0))) as u32) <= K_MAX_IMMEDIATE as u32
           {
             (*self.build).add(
               inst.reg_a64,
@@ -1114,7 +1120,7 @@ impl IrLoweringA64 {
             &[(*get_op_mut(inst, 0)), (*get_op_mut(inst, 1))],
           );
           if (*get_op_mut(inst, 1)).kind() == IrOpKind::Constant
-            && ((self.int_op(*get_op_mut(inst, 1))) as u32) <= K_MAX_IMMEDIATE
+            && ((self.int_op(*get_op_mut(inst, 1))) as u32) <= K_MAX_IMMEDIATE as u32
           {
             (*self.build).sub(
               inst.reg_a64,
@@ -2001,7 +2007,7 @@ impl IrLoweringA64 {
           let cond = condition_op(*get_op_mut(inst, 2));
 
           if (*get_op_mut(inst, 0)).kind() == IrOpKind::Constant {
-            if ((self.int_op(*get_op_mut(inst, 0))) as u32) <= K_MAX_IMMEDIATE {
+            if ((self.int_op(*get_op_mut(inst, 0))) as u32) <= K_MAX_IMMEDIATE as u32 {
               (*self.build).cmp(
                 self.reg_op(*get_op_mut(inst, 1)),
                 (self.int_op(*get_op_mut(inst, 0))) as u16,
@@ -2015,7 +2021,7 @@ impl IrLoweringA64 {
 
             (*self.build).cset(inst.reg_a64, get_inverse_condition(get_condition_int(cond)));
           } else if (*get_op_mut(inst, 0)).kind() == IrOpKind::Inst {
-            if ((self.int_op(*get_op_mut(inst, 1))) as u32) <= K_MAX_IMMEDIATE {
+            if ((self.int_op(*get_op_mut(inst, 1))) as u32) <= K_MAX_IMMEDIATE as u32 {
               (*self.build).cmp(
                 self.reg_op(*get_op_mut(inst, 0)),
                 (self.int_op(*get_op_mut(inst, 1))) as u16,
@@ -2457,7 +2463,7 @@ impl IrLoweringA64 {
               self.label_op(*get_op_mut(inst, 3)),
             );
           } else {
-            CODEGEN_ASSERT!(((self.int_op(*get_op_mut(inst, 1))) as u32) <= K_MAX_IMMEDIATE);
+            CODEGEN_ASSERT!(((self.int_op(*get_op_mut(inst, 1))) as u32) <= K_MAX_IMMEDIATE as u32);
             (*self.build).cmp(
               self.reg_op(*get_op_mut(inst, 0)),
               (self.int_op(*get_op_mut(inst, 1))) as u16,
@@ -3554,7 +3560,7 @@ impl IrLoweringA64 {
             } else if (*get_op_mut(inst, 1)).kind() == IrOpKind::Constant {
               if self.int_op(*get_op_mut(inst, 1)) == 0 {
                 (*self.build).cbz(temp, &mut *fail);
-              } else if ((self.int_op(*get_op_mut(inst, 1))) as usize) <= K_MAX_IMMEDIATE as usize {
+              } else if ((self.int_op(*get_op_mut(inst, 1))) as usize) <= K_MAX_IMMEDIATE {
                 (*self.build).cmp(temp, (self.int_op(*get_op_mut(inst, 1))) as u16);
                 (*self.build).b_condition_a_64_label(ConditionA64::UnsignedLessEqual, &mut *fail);
               } else {
@@ -3801,7 +3807,7 @@ impl IrLoweringA64 {
         }
         IrCmd::CheckUserdataTag => {
           {
-            CODEGEN_ASSERT!(((self.int_op(*get_op_mut(inst, 1))) as u32) <= K_MAX_IMMEDIATE);
+            CODEGEN_ASSERT!(((self.int_op(*get_op_mut(inst, 1))) as u32) <= K_MAX_IMMEDIATE as u32);
 
             let mut fresh = Label::default(); // used when guard aborts execution or jumps to a VM exit
             let fail =
@@ -3856,7 +3862,7 @@ impl IrLoweringA64 {
               let temp_a = self.temp_int(*get_op_mut(inst, 0));
 
               if (*get_op_mut(inst, 1)).kind() == IrOpKind::Constant
-                && ((self.int_op(*get_op_mut(inst, 1))) as u32) <= K_MAX_IMMEDIATE
+                && ((self.int_op(*get_op_mut(inst, 1))) as u32) <= K_MAX_IMMEDIATE as u32
               {
                 (*self.build).cmp(temp_a, (self.int_op(*get_op_mut(inst, 1))) as u16);
               } else {
@@ -5348,7 +5354,7 @@ impl IrLoweringA64 {
             );
             (*self.build).ldr(tempw, mem(temp, (offset_of!(Proto, funid) as i32)));
             let proto_id = self.uint_op(*get_op_mut(inst, 1));
-            if proto_id <= K_MAX_IMMEDIATE {
+            if proto_id <= K_MAX_IMMEDIATE as u32 {
               (*self.build).cmp(tempw, proto_id as u16);
             } else {
               let temp2 = self.regs.alloc_temp(KindA64::W);
