@@ -30,7 +30,7 @@ use crate::enums::size_x_64::SizeX64 as CrateSizeX64;
 use crate::{
   enums::{
     condition_x_64::ConditionX64, features_x_64::FeaturesX64, ir_cmd::IrCmd,
-    ir_condition::IrCondition, ir_const_kind::IrConstKind, ir_op_kind::IrOpKind,
+    ir_condition::IrCondition, ir_op_kind::IrOpKind,
     ir_value_kind::IrValueKind, rounding_mode_x_64::RoundingModeX64, size_x_64::SizeX64,
   },
   macros::{
@@ -42,7 +42,8 @@ use crate::{
   },
   records::{
     interrupt_handler_ir_lowering_x_64::InterruptHandler, ir_block::IrBlock,
-    ir_call_wrapper_x_64::IrCallWrapperX64, ir_inst::IrInst, ir_lowering_x_64::IrLoweringX64,
+    ir_call_wrapper_x_64::IrCallWrapperX64, ir_const::IrConst, ir_inst::IrInst,
+    ir_lowering_x_64::IrLoweringX64,
     ir_op::IrOp, label::Label, native_context::NativeContext, operand_x_64::OperandX64,
     register_x_64::RegisterX64, scoped_reg_x_64::ScopedRegX64, scoped_spills::ScopedSpills,
   },
@@ -6266,7 +6267,10 @@ impl IrLoweringX64 {
 
           if HAS_OP_C!(inst) {
             let is_int = if (*get_op_mut(inst, 2_u32)).kind() == IrOpKind::Constant {
-              self.ir_lowering_x_64_const_op(*get_op_mut(inst, 2)).kind == IrConstKind::Int
+              matches!(
+                self.ir_lowering_x_64_const_op(*get_op_mut(inst, 2)),
+                IrConst::Int(_)
+              )
             } else {
               get_cmd_value_kind((*self.function).inst_op(*get_op_mut(inst, 2)).cmd)
                 == IrValueKind::Int

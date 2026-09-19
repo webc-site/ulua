@@ -1002,11 +1002,10 @@ fn conformance_codegen_nop_padding_deterministic_off() {
   use ulua_compiler::functions::luau_compile::luau_compile;
   use ulua_vm::functions::{lua_l_newstate::lua_l_newstate, luau_load::luau_load};
 
-  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
+  use crate::common::{
+    functions::{c_alloc::c_free, run_conformance::CODEGEN},
+    records::state_ref::StateRef,
+  };
 
   if !CODEGEN || luau_codegen_supported() == 0 {
     return;
@@ -1034,7 +1033,7 @@ fn conformance_codegen_nop_padding_deterministic_off() {
       assert!(!bytecode.is_null());
 
       let result = luau_load(l, c"=test".as_ptr(), bytecode, bytecode_size, 0);
-      free(bytecode as *mut c_void);
+      c_free(bytecode.cast());
       assert_eq!(0, result);
 
       let mut stats = CompilationStats::default();
@@ -1061,11 +1060,10 @@ fn conformance_codegen_randomize_code_size_non_decreasing() {
   use ulua_compiler::functions::luau_compile::luau_compile;
   use ulua_vm::functions::{lua_l_newstate::lua_l_newstate, luau_load::luau_load};
 
-  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
+  use crate::common::{
+    functions::{c_alloc::c_free, run_conformance::CODEGEN},
+    records::state_ref::StateRef,
+  };
 
   if !CODEGEN || luau_codegen_supported() == 0 {
     return;
@@ -1101,7 +1099,7 @@ fn conformance_codegen_randomize_code_size_non_decreasing() {
       assert!(!bytecode.is_null());
 
       let result = luau_load(l, c"=test".as_ptr(), bytecode, bytecode_size, 0);
-      free(bytecode as *mut c_void);
+      c_free(bytecode.cast());
       assert_eq!(0, result);
 
       let options = CompilationOptions {
@@ -1137,11 +1135,10 @@ fn conformance_codegen_randomize_functional_correctness() {
     macros::{lua_tonumber::lua_tonumber, lua_tostring::lua_tostring},
   };
 
-  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
+  use crate::common::{
+    functions::{c_alloc::c_free, run_conformance::CODEGEN},
+    records::state_ref::StateRef,
+  };
 
   if !CODEGEN || luau_codegen_supported() == 0 {
     return;
@@ -1171,7 +1168,7 @@ fn conformance_codegen_randomize_functional_correctness() {
     assert!(!bytecode.is_null());
 
     let load_result = luau_load(l, c"=test".as_ptr(), bytecode, bytecode_size, 0);
-    free(bytecode as *mut c_void);
+    c_free(bytecode.cast());
     assert_eq!(0, load_result);
 
     let nop_options = CompilationOptions {
@@ -1663,11 +1660,10 @@ fn conformance_huge_constant_table() {
     macros::lua_tonumber::lua_tonumber,
   };
 
-  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
+  use crate::common::{
+    functions::{c_alloc::c_free, run_conformance::CODEGEN},
+    records::state_ref::StateRef,
+  };
 
   let mut source = String::from("function foo(...)\n");
   source.push_str("    local args = ...\n");
@@ -1713,7 +1709,7 @@ fn conformance_huge_constant_table() {
       bytecode_size,
       0,
     );
-    free(bytecode as *mut c_void);
+    c_free(bytecode.cast());
 
     assert_eq!(0, result);
 
@@ -1754,13 +1750,9 @@ fn conformance_huge_function() {
   };
 
   use crate::common::{
-    functions::{make_huge_function_source::make_huge_function_source, run_conformance::CODEGEN},
+    functions::{c_alloc::c_free, make_huge_function_source::make_huge_function_source, run_conformance::CODEGEN},
     records::state_ref::StateRef,
   };
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
 
   let source = make_huge_function_source();
   let global_state = StateRef::new(lua_l_newstate()).expect("lua state allocation failed");
@@ -1785,7 +1777,7 @@ fn conformance_huge_function() {
     assert!(!bytecode.is_null());
 
     let result = luau_load(l, c"=HugeFunction".as_ptr(), bytecode, bytecode_size, 0);
-    free(bytecode as *mut c_void);
+    c_free(bytecode.cast());
 
     assert_eq!(0, result);
 
@@ -1822,6 +1814,7 @@ fn conformance_huge_function_load_failure() {
 
   use crate::common::{
     functions::{
+      c_alloc::c_free,
       huge_function_load_failure_test_allocate::{
         HUGE_FUNCTION_LOAD_FAILURE_LARGE_ALLOCATION_COUNT,
         HUGE_FUNCTION_LOAD_FAILURE_LARGE_ALLOCATION_TO_FAIL,
@@ -1831,10 +1824,6 @@ fn conformance_huge_function_load_failure() {
     },
     records::state_ref::StateRef,
   };
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
 
   let source = make_huge_function_source();
   let expected_total_large_allocations = 2usize;
@@ -1876,7 +1865,7 @@ fn conformance_huge_function_load_failure() {
       large_allocation_to_fail += 1;
     }
 
-    free(bytecode as *mut c_void);
+    c_free(bytecode.cast());
 
     assert_eq!(large_allocation_to_fail, expected_total_large_allocations);
   }
@@ -2084,6 +2073,7 @@ fn conformance_interrupt_error_inspection() {
 
   use crate::common::{
     functions::{
+      c_alloc::c_free,
       conformance_interrupt_error_inspection_interrupt::conformance_interrupt_error_inspection_interrupt,
       conformance_interrupt_inspection_hook::conformance_interrupt_inspection_hook,
     },
@@ -2092,10 +2082,6 @@ fn conformance_interrupt_error_inspection() {
       state_ref::StateRef,
     },
   };
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
 
   let source = r#"
 function fib(n)
@@ -2132,7 +2118,7 @@ fib(5)
         bytecode_size,
         0,
       );
-      free(bytecode as *mut c_void);
+      c_free(bytecode.cast());
 
       assert_eq!(LuaStatus::Ok as i32, result);
 
@@ -2190,13 +2176,9 @@ fn conformance_ir_instruction_limit() {
   };
 
   use crate::common::{
-    functions::run_conformance::CODEGEN, records::state_ref::StateRef,
+    functions::{c_alloc::c_free, run_conformance::CODEGEN}, records::state_ref::StateRef,
     type_aliases::scoped_fast_int::ScopedFastInt,
   };
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
 
   if !CODEGEN || luau_codegen_supported() == 0 {
     return;
@@ -2240,7 +2222,7 @@ fn conformance_ir_instruction_limit() {
     assert!(!bytecode.is_null());
 
     let result = luau_load(l, c"=HugeFunction".as_ptr(), bytecode, bytecode_size, 0);
-    free(bytecode as *mut c_void);
+    c_free(bytecode.cast());
 
     assert_eq!(0, result);
 
@@ -2397,11 +2379,10 @@ fn conformance_large_nested_closure() {
     macros::lua_tonumber::lua_tonumber,
   };
 
-  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
+  use crate::common::{
+    functions::{c_alloc::c_free, run_conformance::CODEGEN},
+    records::state_ref::StateRef,
+  };
 
   const K_COUNT: usize = 2048;
 
@@ -2452,7 +2433,7 @@ fn conformance_large_nested_closure() {
       bytecode_size,
       0,
     );
-    free(bytecode as *mut c_void);
+    c_free(bytecode.cast());
 
     assert_eq!(0, result);
 
@@ -2729,11 +2710,10 @@ fn conformance_native_attribute() {
     lua_l_sandboxthread::lua_l_sandboxthread, luau_load::luau_load,
   };
 
-  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
+  use crate::common::{
+    functions::{c_alloc::c_free, run_conformance::CODEGEN},
+    records::state_ref::StateRef,
+  };
 
   if !CODEGEN || luau_codegen_supported() == 0 {
     return;
@@ -2776,7 +2756,7 @@ fn conformance_native_attribute() {
     assert!(!bytecode.is_null());
 
     let result = luau_load(l, c"=Code".as_ptr(), bytecode, bytecode_size, 0);
-    free(bytecode as *mut c_void);
+    c_free(bytecode.cast());
 
     assert_eq!(0, result);
 
@@ -5161,13 +5141,9 @@ fn shared_code_allocator_shared_allocation() {
   use ulua_vm::functions::{lua_l_newstate::lua_l_newstate, luau_load::luau_load};
 
   use crate::common::{
-    functions::shared_code_allocator_module_id::shared_code_allocator_module_id as module_id,
+    functions::{c_alloc::c_free, shared_code_allocator_module_id::shared_code_allocator_module_id as module_id},
     records::state_ref::StateRef,
   };
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
 
   struct SharedContextRef(UniqueSharedCodeGenContext);
 
@@ -5218,7 +5194,7 @@ fn shared_code_allocator_shared_allocation() {
   unsafe {
     let load_result1 = luau_load(l1, c"=Functions".as_ptr(), bytecode, bytecode_size, 0);
     let load_result2 = luau_load(l2, c"=Functions".as_ptr(), bytecode, bytecode_size, 0);
-    free(bytecode as *mut c_void);
+    c_free(bytecode.cast());
 
     assert_eq!(0, load_result1);
     assert_eq!(0, load_result2);
@@ -5294,11 +5270,10 @@ fn conformance_large_module_a64() {
     lua_tonumber,
   };
 
-  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
+  use crate::common::{
+    functions::{c_alloc::c_free, run_conformance::CODEGEN},
+    records::state_ref::StateRef,
+  };
 
   // C++ 还设 LuauCodegenA64FarRefs/LuauCodegenProtectData，但 Rust 移植无读取点。
   const FILLER_COUNT: usize = 60;
@@ -5356,7 +5331,7 @@ fn conformance_large_module_a64() {
       &mut bytecode_size,
     );
     let result = luau_load(l, c"=LargeModuleA64".as_ptr(), bytecode, bytecode_size, 0);
-    free(bytecode as *mut c_void);
+    c_free(bytecode.cast());
     assert_eq!(0, result);
 
     if luau_codegen_supported() != 0 {

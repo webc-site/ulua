@@ -29,7 +29,7 @@ use ulua_vm::{
 use crate::{
   enums::{
     address_kind_a_64::AddressKindA64, condition_a_64::ConditionA64, features_a_64::FeaturesA64,
-    ir_cmd::IrCmd, ir_condition::IrCondition, ir_const_kind::IrConstKind, ir_op_kind::IrOpKind,
+    ir_cmd::IrCmd, ir_condition::IrCondition, ir_op_kind::IrOpKind,
     ir_value_kind::IrValueKind, kind_a_64::KindA64,
   },
   macros::codegen_assert::{CODEGEN_ASSERT, unsupported_instruction_form},
@@ -5054,7 +5054,7 @@ impl IrLoweringA64 {
           {
             if has_op_c(inst) {
               let is_int = if (*get_op_mut(inst, 2)).kind() == IrOpKind::Constant {
-                self.const_op(*get_op_mut(inst, 2)).kind == IrConstKind::Int
+                matches!(self.const_op(*get_op_mut(inst, 2)), IrConst::Int(_))
               } else {
                 get_cmd_value_kind((*self.function).inst_op(*get_op_mut(inst, 2)).cmd)
                   == IrValueKind::Int

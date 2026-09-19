@@ -141,7 +141,11 @@ pub unsafe fn run_repl_impl(l: *mut lua_State) {
       match editor.readline(prompt) {
         Ok(line) => {
           // First, try the expression shorthand: `return <line>`.
-          if run_code(l, &(String::from("return ") + &line)).is_none() {
+          // 预分配一次成型，免 `from + &line` 的二次扩容
+          let mut wrapped = String::with_capacity("return ".len() + line.len());
+          wrapped.push_str("return ");
+          wrapped.push_str(&line);
+          if run_code(l, &wrapped).is_none() {
             let _ = editor.add_history_entry(line.as_str());
             continue;
           }

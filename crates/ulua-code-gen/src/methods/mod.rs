@@ -432,7 +432,6 @@ pub mod ir_builder_const_int;
 pub mod ir_builder_const_int_64;
 pub mod ir_builder_const_tag;
 pub mod ir_builder_const_uint;
-pub mod ir_builder_constant_key_operator_eq;
 pub mod ir_builder_fallback_block;
 pub mod ir_builder_handle_fastcall_fallback;
 pub mod ir_builder_inst_ir_builder;

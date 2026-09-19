@@ -29,7 +29,6 @@ pub mod compilation_options;
 pub mod compilation_result;
 pub mod compilation_stats;
 pub mod const_prop_state;
-pub mod constant_key;
 pub mod emit_common_a_64;
 pub mod emit_common_x_64;
 pub mod entry_locations_code_gen_a_64;
