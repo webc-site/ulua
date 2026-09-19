@@ -12,15 +12,6 @@ impl LintRedundantNativeAttribute {
   pub fn lint_redundant_native_attribute(&mut self) {
     self.context = null_mut();
   }
-
-  pub fn process(&mut self) {
-    // NOTE: exact warning emission/reporting is implemented in a separate translated method file.
-    // This record item only models state needed by that method.
-  }
-
-  pub fn visit_node(&mut self, _node: *mut c_void) -> bool {
-    true
-  }
 }
 
 impl AstVisitor for LintRedundantNativeAttribute {
@@ -28,10 +19,7 @@ impl AstVisitor for LintRedundantNativeAttribute {
     self.visit_ast_expr_function(node as *mut AstExprFunction)
   }
 
-  fn visit_node(&mut self, node: *mut c_void) -> bool {
-    self.visit_node(node)
-  }
-
+  // visit_node 沿用 trait 默认实现（返回 true）
   fn visit_attr(&mut self, _node: *mut c_void) -> bool {
     false
   }

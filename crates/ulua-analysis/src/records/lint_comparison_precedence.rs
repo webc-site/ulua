@@ -8,21 +8,12 @@ pub struct LintComparisonPrecedence {
   pub(crate) context: *mut LintContext,
 }
 
-impl LintComparisonPrecedence {
-  pub fn visit_node(&mut self, _node: *mut c_void) -> bool {
-    true
-  }
-}
-
 impl AstVisitor for LintComparisonPrecedence {
   fn visit_expr_binary(&mut self, node: *mut c_void) -> bool {
     self.visit_ast_expr_binary(node as *mut AstExprBinary)
   }
 
-  fn visit_node(&mut self, node: *mut c_void) -> bool {
-    self.visit_node(node)
-  }
-
+  // visit_node 沿用 trait 默认实现（返回 true）
   fn visit_attr(&mut self, _node: *mut c_void) -> bool {
     false
   }

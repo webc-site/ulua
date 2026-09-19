@@ -44,9 +44,3 @@ pub mod value;
 pub mod value_context;
 pub mod variance;
 pub mod variant;
-
-/// `TypeVariant` 的再导出：functions/methods 以 `crate::enums::type_variant`
-/// 路径引用，保留以免跨模块破坏。
-pub mod type_variant {
-  pub use crate::type_aliases::type_variant::*;
-}

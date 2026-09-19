@@ -12,10 +12,6 @@ impl LintMisleadingAndOr {
   pub fn lint_misleading_and_or(&mut self) {
     self.context = null_mut();
   }
-
-  pub fn visit_node(&mut self, _node: *mut c_void) -> bool {
-    true
-  }
 }
 
 impl AstVisitor for LintMisleadingAndOr {
@@ -23,10 +19,7 @@ impl AstVisitor for LintMisleadingAndOr {
     self.visit_ast_expr_binary(node as *mut AstExprBinary)
   }
 
-  fn visit_node(&mut self, node: *mut c_void) -> bool {
-    self.visit_node(node)
-  }
-
+  // visit_node 沿用 trait 默认实现（返回 true）
   fn visit_attr(&mut self, _node: *mut c_void) -> bool {
     false
   }

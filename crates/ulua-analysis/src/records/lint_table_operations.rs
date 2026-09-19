@@ -10,12 +10,6 @@ pub struct LintTableOperations {
   pub(crate) context: *mut LintContext,
 }
 
-impl LintTableOperations {
-  pub fn visit_node(&mut self, _node: *mut c_void) -> bool {
-    true
-  }
-}
-
 impl AstVisitor for LintTableOperations {
   fn visit_expr_unary(&mut self, node: *mut c_void) -> bool {
     self.visit_ast_expr_unary(node as *mut AstExprUnary)
@@ -25,10 +19,7 @@ impl AstVisitor for LintTableOperations {
     self.visit_ast_expr_call(node as *mut AstExprCall)
   }
 
-  fn visit_node(&mut self, node: *mut c_void) -> bool {
-    self.visit_node(node)
-  }
-
+  // visit_node 沿用 trait 默认实现（返回 true）
   fn visit_attr(&mut self, _node: *mut c_void) -> bool {
     false
   }

@@ -19,10 +19,6 @@ impl LintIntegerParsing {
   pub fn visit_expr_constant_integer(&mut self, node: *mut c_void) -> bool {
     unsafe { lint_integer_parsing_visit(self, node as *mut AstExprConstantNumber) }
   }
-
-  pub fn visit_node(&mut self, _node: *mut c_void) -> bool {
-    true
-  }
 }
 
 impl AstVisitor for LintIntegerParsing {
@@ -30,10 +26,7 @@ impl AstVisitor for LintIntegerParsing {
     LintIntegerParsing::visit_expr_constant_integer(self, node)
   }
 
-  fn visit_node(&mut self, node: *mut c_void) -> bool {
-    LintIntegerParsing::visit_node(self, node)
-  }
-
+  // visit_node 沿用 trait 默认实现（返回 true）
   fn visit_type(&mut self, _node: *mut c_void) -> bool {
     false
   }

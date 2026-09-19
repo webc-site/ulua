@@ -5,7 +5,7 @@ use ulua_ast::records::{ast_name::AstName, ast_stat_class::AstStatClass};
 use ulua_common::{LUAU_ASSERT, fflag};
 
 use crate::{
-  enums::{control_flow::ControlFlow, type_variant::TypeVariant},
+  enums::control_flow::ControlFlow,
   functions::{
     add_all_as_dependencies_and_chain_returns::add_all_as_dependencies_and_chain_returns,
     as_mutable_type::as_mutable_type_id, checkpoint::checkpoint, follow_type::follow_type_id,
@@ -20,7 +20,9 @@ use crate::{
     generalization_constraint::GeneralizationConstraint, property_type::Property,
     table_type::TableType,
   },
-  type_aliases::{constraint_v::ConstraintV, scope_ptr_type::ScopePtr},
+  type_aliases::{
+    constraint_v::ConstraintV, scope_ptr_type::ScopePtr, type_variant::TypeVariant,
+  },
 };
 fn ast_name_to_string(name: AstName) -> String {
   name.as_str_or_empty().to_string()

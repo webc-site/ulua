@@ -19,7 +19,7 @@ use ulua_ast::{
 use ulua_common::fflag;
 
 use crate::{
-  enums::{polarity::Polarity, table_state::TableState, type_variant::TypeVariant},
+  enums::{polarity::Polarity, table_state::TableState},
   functions::{
     as_mutable_type::as_mutable_type_id, follow_type::follow,
     get_mutable_type::get_mutable_type_id, get_type_alt_j::get_type_id,
@@ -39,6 +39,7 @@ use crate::{
   type_aliases::{
     bound_type::BoundType, name_type::Name, nominal_relation::NominalRelation,
     scope_ptr_type::ScopePtr, type_error_data::TypeErrorData, type_id::TypeId,
+    type_variant::TypeVariant,
   },
 };
 /// 类的默认构造/静态属性名（C++ `new`，两处同款）。
