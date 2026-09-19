@@ -36,7 +36,6 @@ use crate::{
   functions::{
     display_help::display_help, report::report, report_module_result::report_module_result,
   },
-  methods::task_scheduler_push::task_scheduler_push,
   records::{
     cli_config_resolver::CliConfigResolver, cli_file_resolver::CliFileResolver,
     task_scheduler::TaskScheduler,
@@ -176,26 +175,22 @@ fn run() -> i32 {
     thread_count = min(TaskScheduler::get_thread_count(), MAX_WORKER_THREADS) as i32;
   }
 
-  // try { TaskScheduler scheduler(threadCount); checkedModules = frontend.checkQueuedModules(...); }
-  let frontend_ptr: *mut Frontend = &mut frontend;
-  let result = catch_unwind(AssertUnwindSafe(|| {
-    let scheduler = TaskScheduler::task_scheduler_task_scheduler(thread_count as u32);
-    let scheduler_ptr: *const TaskScheduler = &scheduler;
+  // cpp: `TaskScheduler scheduler(threadCount)` + `executeTasks` 把每个
+  // performQueueItemTask 派发到 worker 线程上执行。Rust 端 `Frontend` 经
+  // `wire_self_pointers` 自引用，且类型检查会原地改写它，既不是 `Send` 也不是 `Sync`，
+  // 所以队列任务只能在持有 `&mut Frontend` 的本线程上跑：这里等价于 cpp 的默认 executor
+  // （顺序立即执行）。`thread_count`/`-j` 保持解析兼容，不再决定并发度。
+  let _ = thread_count;
 
-    // The executor pushes each task onto the scheduler queue, matching:
-    //   [&](std::vector<std::function<void()>> tasks) { for (auto& t : tasks) scheduler.push(std::move(t)); }
-    let execute_tasks: TaskQueue = Box::new(move |tasks| {
+  // try { checkedModules = frontend.checkQueuedModules(...); }
+  let result = catch_unwind(AssertUnwindSafe(|| {
+    let execute_tasks: TaskQueue = Box::new(|tasks, run| {
       for task in tasks {
-        task_scheduler_push(unsafe { &*scheduler_ptr }, Some(task));
+        run(task);
       }
     });
 
-    let modules =
-      unsafe { (*frontend_ptr).check_queued_modules(None, execute_tasks, |_done, _total| true) };
-
-    // scheduler is dropped here (joins workers), matching the C++ block scope.
-    drop(scheduler);
-    modules
+    frontend.check_queued_modules(None, execute_tasks, |_done, _total| true)
   }));
 
   let checked_modules: Vec<ModuleName> = match result {

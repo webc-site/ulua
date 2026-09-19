@@ -3296,9 +3296,9 @@ mod frontend_queue_check_cycle_delayed {
       .queue_module_check_module_name(&String::from("game/Gui/Modules/B"));
     fixture.get_frontend().check_queued_modules(
       None,
-      Box::new(|tasks| {
+      Box::new(|tasks, run| {
         for task in tasks {
-          task();
+          run(task);
         }
       }),
       |_, _| true,
@@ -3365,9 +3365,9 @@ mod frontend_queue_check_cycle_instant {
       .queue_module_check_module_name(&String::from("game/Gui/Modules/B"));
     fixture.get_frontend().check_queued_modules(
       None,
-      Box::new(|tasks| {
+      Box::new(|tasks, run| {
         for task in tasks {
-          task();
+          run(task);
         }
       }),
       |_, _| true,
@@ -3428,9 +3428,9 @@ mod frontend_queue_check_propagates_ice {
     let result = catch_unwind(AssertUnwindSafe(|| {
       fixture.get_frontend().check_queued_modules(
         None,
-        Box::new(|tasks| {
+        Box::new(|tasks, run| {
           for task in tasks {
-            task();
+            run(task);
           }
         }),
         |_, _| true,
@@ -3487,9 +3487,9 @@ mod frontend_queue_check_simple {
       .queue_module_check_module_name(&String::from("game/Gui/Modules/B"));
     fixture.get_frontend().check_queued_modules(
       None,
-      Box::new(|tasks| {
+      Box::new(|tasks, run| {
         for task in tasks {
-          task();
+          run(task);
         }
       }),
       |_, _| true,
