@@ -29,8 +29,8 @@ use ulua_vm::{
 use crate::{
   enums::{
     address_kind_a_64::AddressKindA64, condition_a_64::ConditionA64, features_a_64::FeaturesA64,
-    ir_cmd::IrCmd, ir_condition::IrCondition, ir_op_kind::IrOpKind,
-    ir_value_kind::IrValueKind, kind_a_64::KindA64,
+    ir_cmd::IrCmd, ir_condition::IrCondition, ir_op_kind::IrOpKind, ir_value_kind::IrValueKind,
+    kind_a_64::KindA64,
   },
   macros::codegen_assert::{CODEGEN_ASSERT, unsupported_instruction_form},
   records::{

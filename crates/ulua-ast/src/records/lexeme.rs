@@ -12,7 +12,6 @@ use core::{
   ptr::null,
 };
 
-pub use crate::enums::type_lexer::Type;
 use crate::records::{ast_name::AstName, location::Location};
 
 /// `Lexeme::QuoteStyle` (`Ast/include/Luau/Lexer.h`) — the delimiter of a quoted

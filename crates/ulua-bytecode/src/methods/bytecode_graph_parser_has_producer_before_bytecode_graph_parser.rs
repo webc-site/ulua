@@ -35,7 +35,8 @@ fn has_producer_before_impl(
     return false;
   }
 
-  if block_producers.multi_return.kind != BcOpKind::None && reg >= block_producers.multi_return_start
+  if block_producers.multi_return.kind != BcOpKind::None
+    && reg >= block_producers.multi_return_start
   {
     return true;
   }

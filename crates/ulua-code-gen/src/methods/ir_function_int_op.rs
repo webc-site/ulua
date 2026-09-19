@@ -1,6 +1,4 @@
-use crate::{
-  records::{ir_const::IrConst, ir_function::IrFunction, ir_op::IrOp},
-};
+use crate::records::{ir_const::IrConst, ir_function::IrFunction, ir_op::IrOp};
 
 impl IrFunction {
   pub fn int_op(&self, op: IrOp) -> i32 {

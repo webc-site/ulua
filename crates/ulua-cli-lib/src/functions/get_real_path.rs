@@ -71,8 +71,5 @@ pub fn get_real_path(module_path: &str) -> ResolvedRealPath {
     return ResolvedRealPath::new(NavigationStatus::NotFound, String::new());
   };
 
-  ResolvedRealPath::new(
-    NavigationStatus::Success,
-    format!("{module_path}{suffix}"),
-  )
+  ResolvedRealPath::new(NavigationStatus::Success, format!("{module_path}{suffix}"))
 }

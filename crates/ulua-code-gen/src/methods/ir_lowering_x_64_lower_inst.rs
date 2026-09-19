@@ -30,8 +30,8 @@ use crate::enums::size_x_64::SizeX64 as CrateSizeX64;
 use crate::{
   enums::{
     condition_x_64::ConditionX64, features_x_64::FeaturesX64, ir_cmd::IrCmd,
-    ir_condition::IrCondition, ir_op_kind::IrOpKind,
-    ir_value_kind::IrValueKind, rounding_mode_x_64::RoundingModeX64, size_x_64::SizeX64,
+    ir_condition::IrCondition, ir_op_kind::IrOpKind, ir_value_kind::IrValueKind,
+    rounding_mode_x_64::RoundingModeX64, size_x_64::SizeX64,
   },
   macros::{
     codegen_assert::{CODEGEN_ASSERT, unsupported_instruction_form},
@@ -43,9 +43,9 @@ use crate::{
   records::{
     interrupt_handler_ir_lowering_x_64::InterruptHandler, ir_block::IrBlock,
     ir_call_wrapper_x_64::IrCallWrapperX64, ir_const::IrConst, ir_inst::IrInst,
-    ir_lowering_x_64::IrLoweringX64,
-    ir_op::IrOp, label::Label, native_context::NativeContext, operand_x_64::OperandX64,
-    register_x_64::RegisterX64, scoped_reg_x_64::ScopedRegX64, scoped_spills::ScopedSpills,
+    ir_lowering_x_64::IrLoweringX64, ir_op::IrOp, label::Label, native_context::NativeContext,
+    operand_x_64::OperandX64, register_x_64::RegisterX64, scoped_reg_x_64::ScopedRegX64,
+    scoped_spills::ScopedSpills,
   },
 };
 const K_TVALUE_SIZE_LOG2: i32 = 4;
