@@ -30,8 +30,6 @@ pub(crate) unsafe fn lua_v_doarithimpl(
   unsafe {
     let mut tempb = TValue::default();
     let mut tempc = TValue::default();
-    let _b: *const TValue;
-    let _c: *const TValue;
 
     let vb = if ttisvector!(rb) {
       vvalue!(rb).as_ptr()
@@ -46,60 +44,13 @@ pub(crate) unsafe fn lua_v_doarithimpl(
 
     if !vb.is_null() && !vc.is_null() {
       match op {
-        TMS::TmAdd => {
-          setvvalue!(
-            ra,
-            *vb.add(0) + *vc.add(0),
-            *vb.add(1) + *vc.add(1),
-            *vb.add(2) + *vc.add(2),
-            *vb.add(3) + *vc.add(3)
-          );
-          return;
-        }
-        TMS::TmSub => {
-          setvvalue!(
-            ra,
-            *vb.add(0) - *vc.add(0),
-            *vb.add(1) - *vc.add(1),
-            *vb.add(2) - *vc.add(2),
-            *vb.add(3) - *vc.add(3)
-          );
-          return;
-        }
-        TMS::TmMul => {
-          setvvalue!(
-            ra,
-            *vb.add(0) * *vc.add(0),
-            *vb.add(1) * *vc.add(1),
-            *vb.add(2) * *vc.add(2),
-            *vb.add(3) * *vc.add(3)
-          );
-          return;
-        }
-        TMS::TmDiv => {
-          setvvalue!(
-            ra,
-            *vb.add(0) / *vc.add(0),
-            *vb.add(1) / *vc.add(1),
-            *vb.add(2) / *vc.add(2),
-            *vb.add(3) / *vc.add(3)
-          );
-          return;
-        }
-        TMS::TmIDiv => {
-          setvvalue!(
-            ra,
-            luai_numidiv(*vb.add(0) as f64, *vc.add(0) as f64) as f32,
-            luai_numidiv(*vb.add(1) as f64, *vc.add(1) as f64) as f32,
-            luai_numidiv(*vb.add(2) as f64, *vc.add(2) as f64) as f32,
-            luai_numidiv(*vb.add(3) as f64, *vc.add(3) as f64) as f32
-          );
-          return;
-        }
-        TMS::TmUnm => {
-          setvvalue!(ra, -*vb.add(0), -*vb.add(1), -*vb.add(2), -*vb.add(3));
-          return;
-        }
+        TMS::TmAdd => return set_vec_binop(ra, vb, vc, |a, b| a + b),
+        TMS::TmSub => return set_vec_binop(ra, vb, vc, |a, b| a - b),
+        TMS::TmMul => return set_vec_binop(ra, vb, vc, |a, b| a * b),
+        TMS::TmDiv => return set_vec_binop(ra, vb, vc, |a, b| a / b),
+        TMS::TmIDiv => return set_vec_binop(ra, vb, vc, |a, b| luai_numidiv(a as f64, b as f64) as f32),
+        // 一元取负：第二个通道指针不会被 `f` 读取，复用 vb
+        TMS::TmUnm => return set_vec_binop(ra, vb, vb, |a, _| -a),
         _ => {}
       }
     } else if !vb.is_null() {
@@ -110,36 +61,15 @@ pub(crate) unsafe fn lua_v_doarithimpl(
       };
       if !c_ptr.is_null() {
         let nc = cast_to!(f32, nvalue!(c_ptr));
+        // 标量广播到 4 通道
+        let ncs = [nc; 4];
         match op {
-          TMS::TmMul => {
-            setvvalue!(
-              ra,
-              *vb.add(0) * nc,
-              *vb.add(1) * nc,
-              *vb.add(2) * nc,
-              *vb.add(3) * nc
-            );
-            return;
-          }
-          TMS::TmDiv => {
-            setvvalue!(
-              ra,
-              *vb.add(0) / nc,
-              *vb.add(1) / nc,
-              *vb.add(2) / nc,
-              *vb.add(3) / nc
-            );
-            return;
-          }
+          TMS::TmMul => return set_vec_binop(ra, vb, ncs.as_ptr(), |a, b| a * b),
+          TMS::TmDiv => return set_vec_binop(ra, vb, ncs.as_ptr(), |a, b| a / b),
           TMS::TmIDiv => {
-            setvvalue!(
-              ra,
-              luai_numidiv(*vb.add(0) as f64, nc as f64) as f32,
-              luai_numidiv(*vb.add(1) as f64, nc as f64) as f32,
-              luai_numidiv(*vb.add(2) as f64, nc as f64) as f32,
-              luai_numidiv(*vb.add(3) as f64, nc as f64) as f32
-            );
-            return;
+            return set_vec_binop(ra, vb, ncs.as_ptr(), |a, b| {
+              luai_numidiv(a as f64, b as f64) as f32
+            })
           }
           _ => {}
         }
@@ -152,36 +82,15 @@ pub(crate) unsafe fn lua_v_doarithimpl(
       };
       if !b_ptr.is_null() {
         let nb = cast_to!(f32, nvalue!(b_ptr));
+        // 标量广播到 4 通道
+        let nbs = [nb; 4];
         match op {
-          TMS::TmMul => {
-            setvvalue!(
-              ra,
-              nb * *vc.add(0),
-              nb * *vc.add(1),
-              nb * *vc.add(2),
-              nb * *vc.add(3)
-            );
-            return;
-          }
-          TMS::TmDiv => {
-            setvvalue!(
-              ra,
-              nb / *vc.add(0),
-              nb / *vc.add(1),
-              nb / *vc.add(2),
-              nb / *vc.add(3)
-            );
-            return;
-          }
+          TMS::TmMul => return set_vec_binop(ra, nbs.as_ptr(), vc, |a, b| a * b),
+          TMS::TmDiv => return set_vec_binop(ra, nbs.as_ptr(), vc, |a, b| a / b),
           TMS::TmIDiv => {
-            setvvalue!(
-              ra,
-              luai_numidiv(nb as f64, *vc.add(0) as f64) as f32,
-              luai_numidiv(nb as f64, *vc.add(1) as f64) as f32,
-              luai_numidiv(nb as f64, *vc.add(2) as f64) as f32,
-              luai_numidiv(nb as f64, *vc.add(3) as f64) as f32
-            );
-            return;
+            return set_vec_binop(ra, nbs.as_ptr(), vc, |a, b| {
+              luai_numidiv(a as f64, b as f64) as f32
+            })
           }
           _ => {}
         }
@@ -207,6 +116,30 @@ pub(crate) unsafe fn lua_v_doarithimpl(
     } else if call_bin_tm(l, rb, rc, ra, op) == 0 {
       luaG_aritherror(l, rb, rc, op);
     }
+  }
+}
+
+/// 向量分支是否已处理完该运算（Add/Sub/Mul/Div/IDiv/Unm 有向量形态）
+fn is_arith_handled(op: TMS) -> bool {
+  matches!(
+    op,
+    TMS::TmAdd | TMS::TmSub | TMS::TmMul | TMS::TmDiv | TMS::TmIDiv | TMS::TmUnm
+  )
+}
+
+/// 对 4 通道向量按分量执行二元运算并写入 `ra`。
+/// `f` 经内联后与逐通道手写展开等价；`vc` 只在 `f` 内解引用，
+/// 一元运算（TmUnm）可对两个参数传同一指针。
+#[inline]
+unsafe fn set_vec_binop(ra: StkId, vb: *const f32, vc: *const f32, f: impl Fn(f32, f32) -> f32) {
+  unsafe {
+    setvvalue!(
+      ra,
+      f(*vb.add(0), *vc.add(0)),
+      f(*vb.add(1), *vc.add(1)),
+      f(*vb.add(2), *vc.add(2)),
+      f(*vb.add(3), *vc.add(3))
+    );
   }
 }
 
