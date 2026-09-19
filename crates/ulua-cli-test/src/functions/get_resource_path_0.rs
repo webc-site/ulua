@@ -1,16 +1,11 @@
-#[cfg(target_os = "macos")]
 const PATH_MAX: usize = 1024;
 
-#[cfg(target_os = "macos")]
 type CFBundleRef = *const core::ffi::c_void;
 
-#[cfg(target_os = "macos")]
 type CFURLRef = *const core::ffi::c_void;
 
-#[cfg(target_os = "macos")]
 type Boolean = core::ffi::c_uchar;
 
-#[cfg(target_os = "macos")]
 #[link(name = "CoreFoundation", kind = "framework")]
 unsafe extern "C" {
   fn CFBundleGetMainBundle() -> CFBundleRef;
@@ -24,7 +19,6 @@ unsafe extern "C" {
   fn CFRelease(cf: *const core::ffi::c_void);
 }
 
-#[cfg(target_os = "macos")]
 pub fn get_resource_path_0() -> Option<alloc::string::String> {
   unsafe {
     let main_bundle = CFBundleGetMainBundle();
@@ -58,7 +52,3 @@ pub fn get_resource_path_0() -> Option<alloc::string::String> {
   }
 }
 
-#[cfg(not(target_os = "macos"))]
-pub fn get_resource_path_0() -> Option<alloc::string::String> {
-  None
-}

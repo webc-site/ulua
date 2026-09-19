@@ -63,6 +63,13 @@ impl ReplWithPathFixture {
           luau_dir_rel = format!("./{}", &res[cwd_val.len()..]);
         }
       }
+      // cpp:125-130：Xcode 之外跑 iOS 测试时用 TEST_SOURCE_ROOT 切回源码目录；
+      // cpp 里重取的 cwd 由下方统一的 `get_current_working_directory()` 覆盖。
+      if let Ok(repo_root) = std::env::var("TEST_SOURCE_ROOT")
+        && std::env::set_current_dir(&repo_root).is_ok()
+      {
+        luau_dir_rel = String::from(".");
+      }
     }
 
     let cwd = get_current_working_directory();

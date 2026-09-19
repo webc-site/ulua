@@ -1,3 +1,5 @@
+use alloc::string::String;
+
 use ulua_analysis::records::{config_resolver::ConfigResolver, type_check_limits::TypeCheckLimits};
 use ulua_cli_lib::functions::get_parent_path::get_parent_path;
 use ulua_config::{records::config::Config, type_aliases::module_name::ModuleName};
@@ -23,9 +25,8 @@ impl CliConfigResolver {
   /// C++ `const Config& getConfig(const ModuleName& name, const TypeCheckLimits& limits) const`
   /// (`CLI/src/Analyze.cpp:243-250`).
   ///
-  /// `getConfig` is logically `const` in C++ but mutates the `mutable` `configCache`
-  /// / `configErrors` members through `readConfigRec`; the `&self` receiver is cast
-  /// to `&mut self` for those interior mutations, matching the C++ `mutable` intent.
+  /// 逻辑 const、经 `UnsafeCell` 填充 `mutable` 的 configCache/configErrors
+  /// （见 [`CliConfigResolver`] 字段文档的单线程契约）。
   pub fn get_config(&self, name: &ModuleName, limits: &TypeCheckLimits) -> &Config {
     // std::optional<std::string> path = getParentPath(name);
     // if (!path) return defaultConfig;
@@ -35,7 +36,16 @@ impl CliConfigResolver {
     };
 
     // return readConfigRec(*path, limits);
-    let this = self as *const CliConfigResolver as *mut CliConfigResolver;
-    unsafe { (*this).read_config_rec(&path, limits) }
+    self.read_config_rec(&path, limits)
+  }
+
+  /// C++ `const std::vector<std::pair<std::string, std::string>>& getConfigErrors() const`。
+  ///
+  /// # Safety（类型级契约）
+  /// resolver 单线程使用；读取时不得有其它借用正通过回调写这两个 cell。
+  /// CLI 在全部模块检查结束后调用，满足契约。
+  pub fn config_errors(&self) -> &[(String, String)] {
+    // SAFETY: 见方法文档；此处无重叠可变借用。
+    unsafe { &*self.config_errors.get() }
   }
 }

@@ -74,9 +74,15 @@ pub(crate) unsafe extern "C-unwind" fn luau_config_interrupt(l: *mut lua_State, 
 impl CliConfigResolver {
   /// C++ `const Config& readConfigRec(const std::string& path, const TypeCheckLimits& limits) const`
   /// (`CLI/src/Analyze.cpp:252-320`).
-  pub fn read_config_rec(&mut self, path: &str, limits: &TypeCheckLimits) -> &Config {
+  ///
+  /// 逻辑 const：缓存读写走 `UnsafeCell`（C++ `mutable`），单线程契约见
+  /// [`CliConfigResolver`] 字段文档。
+  pub fn read_config_rec(&self, path: &str, limits: &TypeCheckLimits) -> &Config {
     // auto it = configCache.find(path); if (it != configCache.end()) return it->second;
-    if let Some(cached) = self.config_cache.get(path) {
+    // 借用只在单语句内存在：本函数会递归调用自身，长活 `&mut` 会自重叠（UB）。
+    if let Some(cached) = unsafe { &*self.config_cache.get() }.get(path) {
+      // SAFETY: 单线程契约（见 CliConfigResolver 字段文档），返回的 &Config
+      // 指向缓存节点，与 C++ `return it->second` 同义。
       return cached;
     }
 
@@ -111,9 +117,7 @@ impl CliConfigResolver {
         "Both {} and {} files exist",
         K_CONFIG_NAME, K_LUAU_CONFIG_NAME
       );
-      self
-        .config_errors
-        .push((config_path.clone(), ambiguous_error));
+      unsafe { &mut *self.config_errors.get() }.push((config_path.clone(), ambiguous_error));
     } else if let Some(config_path) = config_path.as_ref() {
       // if (std::optional<std::string> contents = readFile(*configPath))
       if let Some(contents) = read_file(config_path) {
@@ -129,7 +133,7 @@ impl CliConfigResolver {
 
         // std::optional<std::string> error = parseConfig(*contents, result, opts);
         if let Some(error) = parse_config(&contents, &mut result, &opts) {
-          self.config_errors.push((config_path.clone(), error));
+          unsafe { &mut *self.config_errors.get() }.push((config_path.clone(), error));
         }
       }
     } else if let Some(luau_config_path) = luau_config_path.as_ref() {
@@ -163,13 +167,14 @@ impl CliConfigResolver {
         if let Some(error) =
           extract_luau_config(&contents, &mut result, Some(alias_opts), callbacks)
         {
-          self.config_errors.push((luau_config_path.clone(), error));
+          unsafe { &mut *self.config_errors.get() }.push((luau_config_path.clone(), error));
         }
       }
     }
 
     // return configCache[path] = result;
-    self.config_cache.insert(path.to_string(), result);
-    &self.config_cache[path]
+    let cache = unsafe { &mut *self.config_cache.get() };
+    cache.insert(path.to_string(), result);
+    &cache[path]
   }
 }

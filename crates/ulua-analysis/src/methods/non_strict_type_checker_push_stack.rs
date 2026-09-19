@@ -1,7 +1,7 @@
 use ulua_ast::records::ast_node::AstNode;
 
 use crate::records::{
-  non_strict_type_checker::NonStrictTypeChecker, stack_pusher_non_strict_type_checker::StackPusher,
+  non_strict_type_checker::NonStrictTypeChecker, stack_pusher::StackPusher,
 };
 
 impl NonStrictTypeChecker {

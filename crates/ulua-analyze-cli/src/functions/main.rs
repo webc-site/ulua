@@ -266,10 +266,11 @@ fn run() -> i32 {
   }
 
   // if (!configResolver.configErrors.empty()) { ... }
-  if !config_resolver.config_errors.is_empty() {
-    failed += config_resolver.config_errors.len() as i32;
+  let config_errors = config_resolver.config_errors();
+  if !config_errors.is_empty() {
+    failed += config_errors.len() as i32;
 
-    for (path, error) in &config_resolver.config_errors {
+    for (path, error) in config_errors {
       eprintln!("{}: {}", path, error);
     }
   }

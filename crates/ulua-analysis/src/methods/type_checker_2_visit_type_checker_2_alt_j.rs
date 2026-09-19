@@ -8,10 +8,8 @@ use ulua_ast::records::{
 };
 
 use crate::{
-  enums::value_context::ValueContext,
-  functions::{extend_type_pack::extend_type_pack, follow_type::follow_type_id},
+  enums::value_context::ValueContext, functions::extend_type_pack::extend_type_pack,
   records::{count_mismatch::CountMismatch, type_checker_2::TypeChecker2, type_pack::TypePack},
-  type_aliases::type_error_data::TypeErrorData,
 };
 impl TypeChecker2 {
   /// # Safety
@@ -53,19 +51,8 @@ impl TypeChecker2 {
             } else {
               None
             };
-            if let Some(value_type) = value_type {
-              let duplicate_solver_mismatch = (*self.module).errors.iter().position(|error| {
-                if let TypeErrorData::TypeMismatch(mismatch) = &error.data {
-                  follow_type_id(mismatch.wanted_type) == follow_type_id(annotation_type)
-                    && follow_type_id(mismatch.given_type) == follow_type_id(value_type)
-                } else {
-                  false
-                }
-              });
-
-              if let Some(index) = duplicate_solver_mismatch {
-                (*self.module).errors.remove(index);
-              }
+            // cpp: `if (valueType) testPotentialLiteralIsSubtype(value, annotationType);`
+            if value_type.is_some() {
               // SAFETY: value 指向 AST arena 节点。
               self.test_potential_literal_is_subtype(&*value, annotation_type);
             }

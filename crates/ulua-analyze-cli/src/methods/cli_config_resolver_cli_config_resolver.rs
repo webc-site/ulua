@@ -1,4 +1,5 @@
 use alloc::vec::Vec;
+use core::cell::UnsafeCell;
 use std::collections::HashMap;
 
 use ulua_analysis::records::config_resolver::ConfigResolver;
@@ -23,8 +24,8 @@ impl CliConfigResolver {
         get_config: Some(cli_config_resolver_get_config_thunk),
       },
       default_config,
-      config_cache: HashMap::new(),
-      config_errors: Vec::new(),
+      config_cache: UnsafeCell::new(HashMap::new()),
+      config_errors: UnsafeCell::new(Vec::new()),
     }
   }
 }

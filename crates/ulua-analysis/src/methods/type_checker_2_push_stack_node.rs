@@ -1,6 +1,6 @@
 use ulua_ast::records::ast_node::AstNode;
 
-use crate::records::{stack_pusher_type_checker_2::StackPusher, type_checker_2::TypeChecker2};
+use crate::records::{stack_pusher::StackPusher, type_checker_2::TypeChecker2};
 
 impl TypeChecker2 {
   // C++ `std::optional<StackPusher> TypeChecker2::pushStack(AstNode* node)`

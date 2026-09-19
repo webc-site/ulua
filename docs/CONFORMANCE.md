@@ -79,8 +79,27 @@ The conformance claims in the rest of this document are about the translated *en
   carrying a one-line reason. They are unreachable by construction, which is why the full
   suite is green.
 
+- **`--dump-regspills` not plumbed through:** cpp `Compile.cpp` forwards
+  `globalOptions.dumpRegSpills` into `CodeGenAssemblyOptions::includeRegSpills`, consumed by
+  the X64/A64 register-allocator assembly loggers. The Rust port parses the CLI flag
+  faithfully but `ulua-code-gen` has no regalloc logging subsystem yet, so the flag is a
+  documented no-op (`compile_file.rs`, `main.rs` notes). Port target: regalloc logger +
+  `AssemblyOptions::include_reg_spills`.
+
+- **Missing upstream `TEST_CASE`s** (`cpp/tests/RequireByString.test.cpp`, 7 cases not
+  registered in `ulua-conformance/tests/conformance.rs`): `RequireIfLocalPath` (the
+  `if local … then` test-syntax construct is not ported at all), `RequireApiEncode`,
+  `RequireUserdataMarkCallback`, `RequireWeakRef*` (3), `RequireBytecodeDumpLinked`.
+
+- **cpp test-suite deltas still unported** (tracked by count, per cpp test file):
+  Frontend `Scc*` 39 cases, `TypeInfer.classes` 32, `Compiler` 22, `Parser` 25-case diff,
+  `Autocomplete` 27, checked-macros trybuild UI suite, and `ulua-web` wasm
+  `capturing_print` tests (also missing a `test` step for the wasm job in `ci.yml`).
+
 ## Reproducing
 
 ```sh
-cargo nextest run --workspace      # 5,347 + 293 + CLI integration, all green
+./test.sh --no-fail-fast           # 6,223 tests (2 skipped), all green; builds the CLI
+                                   # binaries the e2e suite drives (bare `cargo nextest`
+                                   # misses them)
 ```
