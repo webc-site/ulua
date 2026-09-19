@@ -3,5 +3,6 @@ use ulua_common::{
 };
 
 pub fn set_luau_flags_default() {
-  FValue::<bool>::set_all_unless(true, |name| !is_default_enabled_flag(name));
+  // SAFETY: CLI 启动期参数处理，单线程
+  unsafe { FValue::<bool>::set_all_unless(true, |name| !is_default_enabled_flag(name)) };
 }

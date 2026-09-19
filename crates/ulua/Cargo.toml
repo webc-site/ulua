@@ -39,7 +39,7 @@ ulua-repl-cli = { path = "../ulua-repl-cli", version = "0.1.2", optional = true 
 # `default-features = false` (optionally re-adding `typecheck`).
 default = ["typecheck", "cli"]
 # The installable command-line binary (script runner / REPL). Pulls ulua-repl-cli.
-cli = ["dep:ulua-repl-cli", "ulua-repl-cli/cli"]
+cli = ["dep:ulua-repl-cli"]
 # Mirror ulua-rt's opt-in flags so `ulua = { features = ["serde"] }` works the
 # same as depending on ulua-rt directly. `async` and `send` compose (see
 # ulua-rt's `send` feature note).

@@ -30,8 +30,5 @@ rustyline = "18"
 [features]
 default = ["std"]
 std = []
-native = ["std"]
-cli = ["native"]
-native-codegen = ["native"]
 wasm = []
 

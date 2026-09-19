@@ -88,7 +88,8 @@ fn run() -> i32 {
     } else if arg == "--annotate" {
       annotate = true;
     } else if arg == "--timetrace" {
-      fflag::DebugLuauTimeTracing.set(true);
+      // SAFETY: 启动期解析 --timetracing 时写入，先于任何 VM 线程
+      unsafe { fflag::DebugLuauTimeTracing.set(true) };
     } else if let Some(rest) = arg.strip_prefix("--fflags=") {
       set_luau_flags(rest);
     } else if let Some(rest) = arg.strip_prefix("-j") {

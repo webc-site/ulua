@@ -72,7 +72,8 @@ fn compile_then_load_and_run_via_vm() {
   };
 
   let bytecode = compile("assert(3 + 4 == 7)").expect("compile ok");
-  set_all_flags(true);
+  // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
+  unsafe { set_all_flags(true) };
 
   // SAFETY: l/t 均校验非空；bytecode 来自 compile 的合法产物；resume 到 completion 后统一 close。
   unsafe {

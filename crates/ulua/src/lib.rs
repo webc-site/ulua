@@ -135,7 +135,8 @@ pub fn eval(source: &str) -> StdResult<(), String> {
 
   // v11+ bytecode needs the default Luau flags enabled (matches the CLI's
   // setLuauFlagsDefault(true)).
-  ulua_common::set_all_flags(true);
+  // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
+  unsafe { ulua_common::set_all_flags(true) };
 
   unsafe {
     let l = lua_l_newstate();

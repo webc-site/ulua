@@ -79,7 +79,8 @@ pub fn run(args: &[String]) -> i32 {
       };
       assembly_target = target;
     } else if arg == "--timetrace" {
-      DebugLuauTimeTracing.set(true);
+      // SAFETY: 启动期解析 --timetracing 时写入，先于任何 VM 线程
+      unsafe { DebugLuauTimeTracing.set(true) };
     } else if let Some(value) = arg.strip_prefix("--record-stats=") {
       record_stats = match value {
         "total" => RecordStats::Total,

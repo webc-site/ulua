@@ -216,7 +216,8 @@ impl Lua {
   pub fn new() -> Lua {
     // ulua's v11+ bytecode needs the default Luau flags on (see the
     // umbrella crate's `eval`).
-    ulua_common::set_all_flags(true);
+    // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
+    unsafe { ulua_common::set_all_flags(true) };
     unsafe {
       let state = lua_l_newstate();
       lua_l_openlibs(state);
@@ -229,7 +230,8 @@ impl Lua {
   /// A deliberate deviation from mlua (which exposes `StdLib` flags); a
   /// minimal convenience for embedders who want a clean global table.
   pub fn new_empty() -> Lua {
-    ulua_common::set_all_flags(true);
+    // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
+    unsafe { ulua_common::set_all_flags(true) };
     wrap_new_state(lua_l_newstate())
   }
 
@@ -258,7 +260,8 @@ impl Lua {
   /// opens nothing (see [`StdLib`]). `options` is recorded on the VM (currently
   /// only `catch_rust_panics` is observable).
   pub fn new_with(libs: StdLib, options: LuaOptions) -> Result<Lua> {
-    ulua_common::set_all_flags(true);
+    // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
+    unsafe { ulua_common::set_all_flags(true) };
     unsafe {
       let state = lua_l_newstate();
       if !libs.is_none() {

@@ -26,8 +26,5 @@ ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
 [features]
 default = ["std"]
 std = []
-native = ["std"]
-cli = ["native"]
-native-codegen = ["native"]
 wasm = ["dep:wasm-bindgen", "dep:console_error_panic_hook"]
 

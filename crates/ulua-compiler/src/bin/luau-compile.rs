@@ -26,7 +26,8 @@ fn main() -> io::Result<()> {
   File::open(&path)?.read_to_end(&mut src)?;
 
   // mirror the CLI's flag state so compilation decisions match the oracle
-  set_all_flags(true);
+  // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
+  unsafe { set_all_flags(true) };
 
   // SAFETY: src 是合法 UTF-8 源码缓冲区；outsize 指向可写 usize。
   let (bc, outsize) = unsafe {

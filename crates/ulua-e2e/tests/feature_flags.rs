@@ -35,20 +35,20 @@ fn library_fflag_toggle_is_observable() {
   // get(). (FValue<bool> is a process-global, matching Luau's FFlag storage.)
   let original = fflag::LuauCompileConcatTargetTop.get();
 
-  fflag::LuauCompileConcatTargetTop.set(false);
+  unsafe { fflag::LuauCompileConcatTargetTop.set(false) };
   assert!(
     !fflag::LuauCompileConcatTargetTop.get(),
     "flag should read back false"
   );
 
-  fflag::LuauCompileConcatTargetTop.set(true);
+  unsafe { fflag::LuauCompileConcatTargetTop.set(true) };
   assert!(
     fflag::LuauCompileConcatTargetTop.get(),
     "flag should read back true"
   );
 
   // Restore so we don't perturb other tests sharing this process.
-  fflag::LuauCompileConcatTargetTop.set(original);
+  unsafe { fflag::LuauCompileConcatTargetTop.set(original) };
 }
 
 #[test]
@@ -58,12 +58,13 @@ fn set_all_flags_round_trips() {
   let original = fflag::LuauCompileConcatTargetTop.get();
   // The CLI's setLuauFlagsDefault() analog must run without panicking and be
   // observable on at least one representative flag.
-  ulua_common::set_all_flags(true);
+  // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
+  unsafe { ulua_common::set_all_flags(true) };
   assert!(
     fflag::LuauCompileConcatTargetTop.get(),
     "set_all_flags(true) should enable Luau flags"
   );
-  fflag::LuauCompileConcatTargetTop.set(original);
+  unsafe { fflag::LuauCompileConcatTargetTop.set(original) };
 }
 
 // ---------------------------------------------------------------------------

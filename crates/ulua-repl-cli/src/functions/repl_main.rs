@@ -98,7 +98,8 @@ pub fn repl_main(args: &[impl AsRef<str>]) -> i32 {
     } else if a == "--counters" {
       counters = true;
     } else if a == "--timetrace" {
-      DebugLuauTimeTracing.set(true);
+      // SAFETY: 启动期解析 --timetracing 时写入，先于任何 VM 线程
+      unsafe { DebugLuauTimeTracing.set(true) };
     } else if let Some(flags) = a.strip_prefix("--fflags=") {
       set_luau_flags(flags);
     } else if a == "--jit-inliner" {

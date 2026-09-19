@@ -141,7 +141,8 @@ unsafe impl<T: Sync> Sync for FValue<T> {}
 /// `Luau*` non-experimental bool flags (see `is_default_enabled_flag`).
 /// Call before threads start.
 pub fn set_luau_bool_flags(value: bool) {
-  FValue::<bool>::set_all_unless(value, |name| !is_default_enabled_flag(name));
+  // SAFETY: 受控安全入口——契约与 C++ 相同：仅在线程启动前调用（CLI 参数解析期）
+  unsafe { FValue::<bool>::set_all_unless(value, |name| !is_default_enabled_flag(name)) };
 }
 
 /// Supplies the per-type intrusive-list head, replacing the inexpressible C++
@@ -188,7 +189,11 @@ impl FValueList for i32 {
 
 impl<T: Copy> FValue<T> {
   /// Runtime flag set (the CLI/host path mutates the public `value` field).
-  pub fn set(&self, value: T) {
+  ///
+  /// # Safety
+  /// 仅允许在启动期/独占控制期调用：与并发 `get()`（经 `UnsafeCell` 裸读）
+  /// 同时发生即数据竞争。进程级批量入口见 [`set_luau_bool_flags`]。
+  pub unsafe fn set(&self, value: T) {
     unsafe { *self.value.get() = value };
   }
 
@@ -235,7 +240,10 @@ impl<T: FValueList + Copy + 'static> FValue<T> {
   /// returns true. Models the bool `--fflags=true|false` branch of the C++
   /// test harness `setFastFlags`, which sets every non-skipped flag. Startup-
   /// only, single-threaded — the same contract as flag construction.
-  pub fn set_all_unless(value: T, skip: impl Fn(&str) -> bool) {
+  ///
+  /// # Safety
+  /// 启动期/无并发 `get()` 时调用，否则与只读方构成数据竞争。
+  pub unsafe fn set_all_unless(value: T, skip: impl Fn(&str) -> bool) {
     with_registered_flags(|| unsafe {
       let mut cur = T::head().load(Ordering::Relaxed) as *const FValue<T>;
       while !cur.is_null() {
@@ -250,7 +258,10 @@ impl<T: FValueList + Copy + 'static> FValue<T> {
 
   /// Walk the flag list, matching either exact name or `<name><version>`.
   /// Returns true if a flag was found and set.
-  pub fn set_flag_by_name(name: &str, value: T) -> bool {
+  ///
+  /// # Safety
+  /// 启动期/无并发 `get()` 时调用，否则与只读方构成数据竞争。
+  pub unsafe fn set_flag_by_name(name: &str, value: T) -> bool {
     with_registered_flags(|| unsafe {
       let mut cur = T::head().load(Ordering::Relaxed) as *const FValue<T>;
       while !cur.is_null() {
