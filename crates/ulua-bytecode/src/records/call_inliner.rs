@@ -3,7 +3,7 @@ use alloc::vec::Vec;
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet};
 
 use crate::{
-  records::{bc_call_fb::BcCallFB, bc_function::BcFunction, bc_op::BcOp, bc_op_hash::BcOpHash},
+  records::{bc_function::BcFunction, bc_op::BcOp, bc_op_hash::BcOpHash},
   type_aliases::reg::Reg,
 };
 
@@ -11,7 +11,10 @@ use crate::{
 pub struct CallInliner<'a> {
   pub(crate) caller: &'a mut BcFunction,
   pub(crate) target: &'a mut BcFunction,
-  pub(crate) call: BcCallFB<'a>,
+  /// cpp `BcCallFB<VmConst> call`。这里只存被内联 CALLFB 的 `BcOp`：`BcCallFB`
+  /// 自带 `&mut BcFunction`，与上面的 `caller` 借用了同一个图，二者不可能共存；
+  /// 需要读写该指令时经 [`CallInliner::call_view`] 现取一个短生命期视图。
+  pub(crate) call_op: BcOp,
   pub(crate) call_params: Vec<BcOp>,
   pub(crate) target_reg: Reg,
 

@@ -4,11 +4,11 @@ use ulua_common::enums::luau_opcode::LuauOpcode;
 
 use crate::{
   methods::bc_inst_helper_create::BcInstHelperCreate,
-  records::{bc_inst_type::BcInstType,
+  records::{
     bc_function::{BcFunction, VmConst},
-    bc_inst::BcInst,
     bc_inst_helper::BcInstHelper,
-    bc_ref::BcRef,
+    bc_inst_type::BcInstType,
+    bc_op::BcOp,
   },
   type_aliases::reg::Reg,
 };
@@ -22,12 +22,10 @@ pub struct BcGetVarArgs<'a, T = VmConst> {
 impl<'a, T> BcGetVarArgs<'a, T> {
   pub const K_START_REG_INPUT: u32 = 0;
 
-  /// # Safety
-  ///
-  /// `graph` must point to a valid, initialized `BcFunction`.
-  pub unsafe fn from(graph: *mut BcFunction, inst: BcRef<'a, BcInst>) -> Self {
+  /// 持有图的唯一可变借用 + 指令 `BcOp`（见 `BcReturn::from`）。
+  pub fn from(graph: &'a mut BcFunction, inst: BcOp) -> Self {
     Self {
-      base: unsafe { BcInstHelper::new(&mut *graph, inst) },
+      base: BcInstHelper::new(graph, inst),
       _marker: PhantomData,
     }
   }

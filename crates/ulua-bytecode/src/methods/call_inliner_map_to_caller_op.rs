@@ -41,8 +41,7 @@ impl<'a> CallInliner<'a> {
 
         for target_phi_op in target_phi_ops {
           let mapped = self.map_to_caller_op(target_phi_op);
-          let mut phi = self.caller.phi(phi_op);
-          phi.operator_deref_mut().ops.push_back(mapped);
+          self.caller.phi_op(phi_op).ops.push_back(mapped);
         }
         phi_op
       }

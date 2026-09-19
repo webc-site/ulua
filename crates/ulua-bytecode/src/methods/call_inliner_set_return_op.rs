@@ -4,6 +4,7 @@ use crate::{
 };
 
 impl<'a> CallInliner<'a> {
+  /// cpp `setReturnOp(idx, op)`：第 `idx` 个返回槽位累计多个候选时折叠成 phi。
   pub fn set_return_op(&mut self, idx: u32, op: BcOp) {
     if (idx as usize) >= self.return_ops.len() {
       self.return_ops.resize(idx as usize + 1, BcOp::new());
@@ -16,17 +17,12 @@ impl<'a> CallInliner<'a> {
 
     if self.return_ops[idx as usize].kind != BcOpKind::Phi {
       let phi_op = self.caller.add_phi();
-      {
-        let mut phi = self.caller.phi(phi_op);
-        phi
-          .operator_deref_mut()
-          .ops
-          .push_back(self.return_ops[idx as usize]);
-      }
+      let previous = self.return_ops[idx as usize];
+      self.caller.phi_op(phi_op).ops.push_back(previous);
       self.return_ops[idx as usize] = phi_op;
     } else {
-      let mut phi = self.caller.phi(self.return_ops[idx as usize]);
-      phi.operator_deref_mut().ops.push_back(op);
+      let phi_op = self.return_ops[idx as usize];
+      self.caller.phi_op(phi_op).ops.push_back(op);
     }
   }
 }
