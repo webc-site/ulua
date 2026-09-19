@@ -1,5 +1,5 @@
 use crate::{
-  functions::as_mutable_type_pack::as_mutable_type_pack_id,
+  functions::as_mutable_type_pack::as_mutable_type_pack,
   records::type_cloner::TypeCloner,
   type_aliases::{
     bound_type_pack::BoundTypePack, error_type_pack::ErrorTypePack, type_pack_id::TypePackId,
@@ -13,7 +13,7 @@ impl TypeCloner {
   /// C++: `visit([&](auto&& t){ return cloneChildren(&t); }, asMutable(tp)->ty);`
   /// — dispatches over the `TypePackVariant` to the matching concrete overload.
   pub fn clone_children_type_pack_id(&mut self, tp: TypePackId) {
-    let tv: &mut TypePackVariant = unsafe { &mut (*as_mutable_type_pack_id(tp)).ty };
+    let tv: &mut TypePackVariant = unsafe { &mut (*as_mutable_type_pack(tp)).ty };
     match tv {
       // `Bound<TypePackId>` is repr-transparent over its single field.
       TypePackVariant::Bound(inner) => unsafe {

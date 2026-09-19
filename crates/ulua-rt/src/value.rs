@@ -406,14 +406,19 @@ unsafe fn ref_value(lua: &Lua, idx: c_int, wrap: fn(LuaRef) -> Value) -> Value {
 pub(crate) fn value_from_stack(lua: &Lua, idx: c_int) -> Result<Value> {
   let state = lua.state();
   unsafe {
-    let value = match lua_type(state, idx) {
-      ttype::NIL | ttype::NONE => Value::Nil,
-      ttype::BOOLEAN => Value::Boolean(lua_toboolean(state, idx) != 0),
-      ttype::LIGHTUSERDATA => {
+    // 类型标签唯一真相是 `LuaType`；未知 tag 与其余 exotic 标签同样折叠为 Nil
+    let Some(ty) = LuaType::from_c_int(lua_type(state, idx)) else {
+      return Ok(Value::Nil);
+    };
+
+    let value = match ty {
+      LuaType::Nil | LuaType::None => Value::Nil,
+      LuaType::Boolean => Value::Boolean(lua_toboolean(state, idx) != 0),
+      LuaType::LightUserData => {
         let p = lua_tolightuserdata(state, idx);
         Value::LightUserData(LightUserData(p))
       }
-      ttype::NUMBER => {
+      LuaType::Number => {
         let n = lua_tonumberx(state, idx, null_mut());
         if is_exact_integer(n) {
           Value::Integer(n as i64)
@@ -421,12 +426,12 @@ pub(crate) fn value_from_stack(lua: &Lua, idx: c_int) -> Result<Value> {
           Value::Number(n)
         }
       }
-      ttype::STRING => ref_value(lua, idx, |r| Value::String(LuaString::from_ref(r))),
-      ttype::TABLE => ref_value(lua, idx, |r| Value::Table(Table::from_ref(r))),
-      ttype::FUNCTION => ref_value(lua, idx, |r| Value::Function(Function::from_ref(r))),
-      ttype::USERDATA => ref_value(lua, idx, |r| Value::UserData(AnyUserData::from_ref(r))),
-      ttype::THREAD => ref_value(lua, idx, |r| Value::Thread(Thread::from_ref(r))),
-      ttype::VECTOR => {
+      LuaType::String => ref_value(lua, idx, |r| Value::String(LuaString::from_ref(r))),
+      LuaType::Table => ref_value(lua, idx, |r| Value::Table(Table::from_ref(r))),
+      LuaType::Function => ref_value(lua, idx, |r| Value::Function(Function::from_ref(r))),
+      LuaType::UserData => ref_value(lua, idx, |r| Value::UserData(AnyUserData::from_ref(r))),
+      LuaType::Thread => ref_value(lua, idx, |r| Value::Thread(Thread::from_ref(r))),
+      LuaType::Vector => {
         // ulua is a 3-wide vector build: read the three components from
         // the inline `TValue` via `lua_tovector`.
         let p = lua_tovector(state, idx);
@@ -437,7 +442,7 @@ pub(crate) fn value_from_stack(lua: &Lua, idx: c_int) -> Result<Value> {
           Value::Vector(Vector::new(comps[0], comps[1], comps[2]))
         }
       }
-      ttype::BUFFER => ref_value(lua, idx, |r| Value::Buffer(Buffer::from_ref(r))),
+      LuaType::Buffer => ref_value(lua, idx, |r| Value::Buffer(Buffer::from_ref(r))),
       // Any other exotic tags collapse to Nil.
       _ => Value::Nil,
     };

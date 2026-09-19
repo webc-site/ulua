@@ -52,17 +52,15 @@ fn import_id_bit_encoding() {
 /// C++ computeCost：低 7 位已饱和（0x7f）时直接返回，不应用折扣
 #[test]
 fn compute_cost_saturated_skips_discounts() {
-  unsafe {
-    assert_eq!(compute_cost(0x7f, [true, true].as_ptr(), 2), 0x7f);
-    // 基础成本 5，第 0 个变量折扣 1 且为常量 → 5 - 1 = 4；
-    // 第 1 个变量折扣为 0（model 位 16..23）→ 不变
-    let model = 5 | (1 << 8);
-    let vars = [true, false];
-    assert_eq!(compute_cost(model, vars.as_ptr(), 2), 4);
-    // 非常量变量不产生折扣
-    let vars_not_const = [false, false];
-    assert_eq!(compute_cost(model, vars_not_const.as_ptr(), 2), 5);
-  }
+  assert_eq!(compute_cost(0x7f, &[true, true]), 0x7f);
+  // 基础成本 5，第 0 个变量折扣 1 且为常量 → 5 - 1 = 4；
+  // 第 1 个变量折扣为 0（model 位 16..23）→ 不变
+  let model = 5 | (1 << 8);
+  let vars = [true, false];
+  assert_eq!(compute_cost(model, &vars), 4);
+  // 非常量变量不产生折扣
+  let vars_not_const = [false, false];
+  assert_eq!(compute_cost(model, &vars_not_const), 5);
 }
 
 /// C++ bit32：经 i64 转换，负数与大数优雅截断
@@ -276,7 +274,7 @@ fn record_constant_logs_overwrite_for_undo() {
   use core::ptr::{NonNull, null, null_mut};
 
   use ulua_ast::records::{ast_expr::AstExpr, ast_local::AstLocal};
-  use ulua_common::{fflag, records::dense_hash_map::DenseHashMap};
+  use ulua_common::records::dense_hash_map::DenseHashMap;
 
   use crate::{
     enums::table_constant_kind::TableConstantKind,
@@ -290,10 +288,6 @@ fn record_constant_logs_overwrite_for_undo() {
       local_constant_change_log::LocalConstantChangeLog,
     },
   };
-
-  // 固定走 C++ recordConstant 直映射分支（与 vendored 实现一致）
-  fflag::LuauCompileFoldOptimize.set(false);
-  fflag::LuauCompilePropagateTableProps2.set(false);
 
   let (_alloc, mut names) = string_table!();
 

@@ -182,7 +182,11 @@ impl Thread {
     let parent = lua.state();
     let co = self.thread_state;
     unsafe {
-      if status != status::OK && status != status::YIELD && status != status::BREAK {
+      // 状态码真相在 `LuaStatus`，比较处只做 `as c_int` 边界转换
+      if status != LuaStatus::Ok as c_int
+        && status != LuaStatus::Yield as c_int
+        && status != LuaStatus::Break as c_int
+      {
         // Error: the error object sits on top of the coroutine's stack (there
         // may be *other* leftover values below it). Move everything over,
         // read the error off the new top, then truncate the parent back to
@@ -202,7 +206,7 @@ impl Thread {
       // continue from the break point on the next resume). We must NOT
       // touch its stack — moving any values off would strip live
       // registers and corrupt the re-entry. Return an empty result.
-      if status == status::BREAK {
+      if status == LuaStatus::Break as c_int {
         return R::from_lua_multi(MultiValue::with_capacity(0), lua);
       }
       // Success/yield: the produced values sit on the coroutine stack.
@@ -251,11 +255,11 @@ impl Thread {
       // resume). Treat it like a value-less `coroutine.yield` and do NOT touch
       // its stack — moving anything off would corrupt the re-entry (same
       // contract as `finish_resume`).
-      if status == status::BREAK {
+      if status == LuaStatus::Break as c_int {
         return Ok(AsyncResume::Yielded(MultiValue::new()));
       }
 
-      if status != status::OK && status != status::YIELD {
+      if status != LuaStatus::Ok as c_int && status != LuaStatus::Yield as c_int {
         // Error path: move everything to the parent, read the error off the
         // top, then truncate back — otherwise the non-error leftovers would
         // leak onto the parent stack (see `finish_resume`).
@@ -269,7 +273,7 @@ impl Thread {
         return Err(err);
       }
 
-      let yielded = status == status::YIELD;
+      let yielded = status == LuaStatus::Yield as c_int;
       let nres = lua_gettop(co);
 
       // Detect the single-light-userdata pending marker (top of the
@@ -318,7 +322,7 @@ impl Thread {
       lua_xmove(parent, co, 1);
       let status = lua_resume(co, parent, 1);
       // resume 期间再次触发中断则整窗存活，绝不能截断。
-      if status != status::BREAK {
+      if status != LuaStatus::Break as c_int {
         lua_settop(co, 0);
       }
     }
@@ -330,7 +334,7 @@ impl Thread {
   #[cfg(feature = "async")]
   fn is_interrupt_suspended(&self) -> bool {
     let co = self.thread_state;
-    unsafe { lua_status(co) == status::BREAK }
+    unsafe { lua_status(co) == LuaStatus::Break as c_int }
   }
 
   /// The thread's status. Mirrors `mlua::Thread::status`.
@@ -347,22 +351,22 @@ impl Thread {
       // `LUA_BREAK`; `lua_costatus` reports that as "normal", but the
       // coroutine is in fact resumable (it continues from the break point
       // on the next resume). Detect it directly.
-      if lua_status(co) == status::BREAK {
+      if lua_status(co) == LuaStatus::Break as c_int {
         return ThreadStatus::Resumable;
       }
-      let cos = lua_costatus(parent, co);
-      match cos {
-        costatus::SUSPENDED => ThreadStatus::Resumable,
-        costatus::RUNNING => ThreadStatus::Running,
-        costatus::NORMAL => ThreadStatus::Normal,
-        costatus::FINISHED => ThreadStatus::Finished,
-        costatus::ERROR => ThreadStatus::Error,
+      // 协程状态真相在 `LuaCoStatus`；未知码退回 lua_status 判定
+      match LuaCoStatus::from_c_int(lua_costatus(parent, co)) {
+        Some(LuaCoStatus::CoSus) => ThreadStatus::Resumable,
+        Some(LuaCoStatus::CoRun) => ThreadStatus::Running,
+        Some(LuaCoStatus::CoNor) => ThreadStatus::Normal,
+        Some(LuaCoStatus::CoFin) => ThreadStatus::Finished,
+        Some(LuaCoStatus::CoErr) => ThreadStatus::Error,
         _ => {
           // Fall back to lua_status for any unexpected code.
           let s = lua_status(co);
-          if s == status::YIELD {
+          if s == LuaStatus::Yield as c_int {
             ThreadStatus::Resumable
-          } else if s == status::OK {
+          } else if s == LuaStatus::Ok as c_int {
             // New (function on stack) vs finished (empty stack).
             if lua_gettop(co) > 0 {
               ThreadStatus::Resumable

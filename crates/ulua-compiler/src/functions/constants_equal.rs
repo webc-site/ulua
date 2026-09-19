@@ -1,9 +1,6 @@
 use core::slice::from_raw_parts;
 
-use ulua_common::{
-  fflag::{LuauCompilePropagateTableProps2, LuauIntegerType2},
-  macros::luau_assert::LUAU_ASSERT,
-};
+use ulua_common::{fflag::LuauIntegerType2, macros::luau_assert::LUAU_ASSERT};
 
 use crate::{enums::type_constant_folding::Type, records::constant::Constant};
 
@@ -34,12 +31,7 @@ pub fn constants_equal(la: &Constant, ra: &Constant) -> bool {
         }
     }
     Type::Table => {
-      if LuauCompilePropagateTableProps2.get() {
-        ra.r#type == Type::Table && unsafe { la.data.value_table == ra.data.value_table }
-      } else {
-        LUAU_ASSERT!(false);
-        false
-      }
+      ra.r#type == Type::Table && unsafe { la.data.value_table == ra.data.value_table }
     }
     Type::Integer => {
       if LuauIntegerType2.get() {

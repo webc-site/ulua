@@ -2,13 +2,13 @@ use crate::{
   functions::mark_dead_stores_in_inst::mark_dead_stores_in_inst,
   macros::codegen_assert::CODEGEN_ASSERT,
   records::{
-    ir_block::IrBlock, ir_builder::IrBuilder, ir_function::IrFunction, ir_inst::IrInst,
+    ir_block::{IrBlock, K_BLOCK_FLAG_SAFE_ENV_CHECK},
+    ir_builder::IrBuilder,
+    ir_function::IrFunction,
+    ir_inst::IrInst,
     remove_dead_store_state::RemoveDeadStoreState,
   },
 };
-
-// IrData.h: `inline constexpr uint8_t kBlockFlagSafeEnvCheck = 1 << 0;`
-const K_BLOCK_FLAG_SAFE_ENV_CHECK: u8 = 1 << 0;
 
 pub fn mark_dead_stores_in_block(
   build: &mut IrBuilder,

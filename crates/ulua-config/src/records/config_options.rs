@@ -1,4 +1,4 @@
-pub use crate::records::alias_options::AliasOptions;
+use crate::records::alias_options::AliasOptions;
 
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 pub struct ConfigOptions {

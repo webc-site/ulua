@@ -887,7 +887,7 @@ impl Lua {
       // so `set_memory_limit` callers can match it, mirroring mlua.
       // `luau_load` reports OOM with a generic non-zero rc but the same
       // "not enough memory" message, so we also detect it by message.
-      if status == status::ERRMEM || msg == OOM_MSG {
+      if status == LuaStatus::ErrMem as c_int || msg == OOM_MSG {
         return Error::MemoryError(msg);
       }
       Error::RuntimeError(msg)

@@ -20,7 +20,6 @@ const ERR_ITERATE_OVER: &str = "iterate over";
 use core::{
   cmp::Ordering::{Equal, Less},
   ffi::c_void,
-  mem::{transmute, zeroed},
   ptr::{null, null_mut},
 };
 
@@ -144,7 +143,10 @@ use crate::{
     t_string::tstring,
     up_val::UpVal,
   },
-  type_aliases::{instruction::Instruction, stk_id::StkId, t_value::TValue},
+  type_aliases::{
+    instruction::Instruction, lua_userdata_direct_field_get::from_ptr, stk_id::StkId,
+    t_value::TValue,
+  },
 };
 
 /// C++ `void luau_execute(lua_State* l)` (lvmexecute.cpp:3716) — dispatches
@@ -323,7 +325,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
               continue 'dispatch;
             } else {
               // slow-path, may invoke Lua calls via __index metamethod
-              let mut g: TValue = zeroed();
+              let mut g = TValue::default();
               sethvalue!(l, &mut g as *mut TValue, h);
               (*l).cachedslot = slot;
               vm_protect!(l, pc, base, {
@@ -361,7 +363,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
               continue 'dispatch;
             } else {
               // slow-path, may invoke Lua calls via __newindex metamethod
-              let mut g: TValue = zeroed();
+              let mut g = TValue::default();
               sethvalue!(l, &mut g as *mut TValue, h);
               (*l).cachedslot = slot;
               vm_protect!(l, pc, base, {
@@ -498,20 +500,19 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
                   if ttisstring!(gkey!(n))
                     && tsvalue!(gkey!(n)) == tsvalue!(kv as *const TValue)
                     && !ttisnil!(gval!(n))
+                    && let Some(f) = from_ptr(pvalue!(gval!(n)))
                   {
-                    let f: unsafe extern "C-unwind" fn(*mut c_void, *mut c_void) =
-                      transmute(pvalue!(gval!(n)));
                     let u = uvalue!(rb);
                     f(u.data.as_ptr() as *mut c_void, ra as *mut c_void);
                     continue 'dispatch;
                   }
 
                   let fptr = luaH_getstr(dispatch_t, tsvalue!(kv as *const TValue) as *mut tstring);
-                  if !ttisnil!(fptr) {
+                  if !ttisnil!(fptr)
+                    && let Some(f) = from_ptr(pvalue!(fptr))
+                  {
                     // cache slot for future lookups
                     vm_patch_c(pc.sub(2), gval2slot!(dispatch_t, fptr));
-                    let f: unsafe extern "C-unwind" fn(*mut c_void, *mut c_void) =
-                      transmute(pvalue!(fptr));
                     let u = uvalue!(rb);
                     f(u.data.as_ptr() as *mut c_void, ra as *mut c_void);
                     continue 'dispatch;
@@ -523,7 +524,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
 
               // fast-path: user data with C __index TM
               let fn_tm = if ttisuserdata!(rb) {
-                fasttm(l, uvalue!(rb).metatable, TMS::TmIndex as i32)
+                fasttm(l, uvalue!(rb).metatable, TMS::TmIndex)
               } else {
                 null()
               };
@@ -556,11 +557,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
                   continue 'dispatch;
                 }
 
-                let fn_tm = fasttm(
-                  l,
-                  (*(*l).global).mt[LuaType::Vector as usize],
-                  TMS::TmIndex as i32,
-                );
+                let fn_tm = fasttm(l, (*(*l).global).mt[LuaType::Vector as usize], TMS::TmIndex);
 
                 if !fn_tm.is_null() && ttisfunction!(fn_tm) && (*clvalue!(fn_tm)).is_c != 0 {
                   // note: it's safe to push arguments past top for
@@ -646,7 +643,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
                 setobj2t!(l, gval!(n), ra);
                 luaC_barriert!(l, h, ra);
                 continue 'dispatch;
-              } else if fastnotm((*h).metatable, TMS::TmNewIndex as i32) && (*h).readonly == 0 {
+              } else if fastnotm((*h).metatable, TMS::TmNewIndex) && (*h).readonly == 0 {
                 (*(*l).ci).savedpc = pc; // vm_protect_pc(): set may fail
 
                 let res = luaH_setstr(l, h, tsvalue!(kv as *const TValue) as *mut tstring);
@@ -669,7 +666,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
             } else {
               // fast-path: user data with C __newindex TM
               let fn_tm = if ttisuserdata!(rb) {
-                fasttm(l, uvalue!(rb).metatable, TMS::TmNewIndex as i32)
+                fasttm(l, uvalue!(rb).metatable, TMS::TmNewIndex)
               } else {
                 null()
               };
@@ -790,7 +787,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
             }
 
             // slow-path: handles out of bounds array lookups
-            let mut n: TValue = zeroed();
+            let mut n = TValue::default();
             setnvalue!(&mut n as *mut TValue, (c + 1) as f64);
             vm_protect!(l, pc, base, {
               lua_v_gettable(l, rb, &mut n as *mut TValue, ra);
@@ -822,7 +819,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
             }
 
             // slow-path: handles out of bounds array lookups
-            let mut n: TValue = zeroed();
+            let mut n = TValue::default();
             setnvalue!(&mut n as *mut TValue, (c + 1) as f64);
             vm_protect!(l, pc, base, {
               lua_v_settable(l, rb, &mut n as *mut TValue, ra);
@@ -917,7 +914,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
                 // __index table, and it has the result in the expected slot
                 let mut hit_mt_fast = false;
                 if gnext!(n) == 0 {
-                  let mt = fasttm(l, (*hvalue!(rb)).metatable, TMS::TmIndex as i32);
+                  let mt = fasttm(l, (*hvalue!(rb)).metatable, TMS::TmIndex);
                   if !mt.is_null() && ttistable!(mt) {
                     let mtn = (*hvalue!(mt))
                       .node
@@ -956,7 +953,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
               };
 
               // fast-path: metatable with __namecall
-              let fn_nc = fasttm(l, mt, TMS::TmNameCall as i32);
+              let fn_nc = fasttm(l, mt, TMS::TmNameCall);
               if !fn_nc.is_null() {
                 // note: order of copies allows rb to alias ra+1 or ra
                 setobj_2_s!(l, ra.add(1), rb);
@@ -964,7 +961,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
 
                 (*l).namecall = tsvalue!(kv as *const TValue) as *mut tstring;
               } else {
-                let tmi = fasttm(l, mt, TMS::TmIndex as i32);
+                let tmi = fasttm(l, mt, TMS::TmIndex);
                 if !tmi.is_null() && ttistable!(tmi) {
                   let h = hvalue!(tmi);
                   let slot = (luau_insn_c(insn) as i32) & (*h).nodemask8 as i32;
@@ -1530,7 +1527,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
               } else if t == LuaType::Table as i32 {
                 // fast-path: same metatable, no EQ metamethod
                 if (*hvalue!(ra)).metatable == (*hvalue!(rb)).metatable {
-                  let fn_tm = fasttm(l, (*hvalue!(ra)).metatable, TMS::TmEq as i32);
+                  let fn_tm = fasttm(l, (*hvalue!(ra)).metatable, TMS::TmEq);
                   if fn_tm.is_null() {
                     jump_and_next!(hvalue!(ra) == hvalue!(rb));
                   }
@@ -1539,7 +1536,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
               } else if t == LuaType::UserData as i32 {
                 // fast-path: same metatable, no EQ metamethod or C metamethod
                 if uvalue!(ra).metatable == uvalue!(rb).metatable {
-                  let fn_tm = fasttm(l, uvalue!(ra).metatable, TMS::TmEq as i32);
+                  let fn_tm = fasttm(l, uvalue!(ra).metatable, TMS::TmEq);
                   if fn_tm.is_null() {
                     jump_and_next!(
                       uvalue!(ra) as *const _ as *const c_void
@@ -1646,7 +1643,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
               } else if t == LuaType::Table as i32 {
                 // fast-path: same metatable, no EQ metamethod
                 if (*hvalue!(ra)).metatable == (*hvalue!(rb)).metatable {
-                  let fn_tm = fasttm(l, (*hvalue!(ra)).metatable, TMS::TmEq as i32);
+                  let fn_tm = fasttm(l, (*hvalue!(ra)).metatable, TMS::TmEq);
                   if fn_tm.is_null() {
                     jump_and_next!(hvalue!(ra) != hvalue!(rb));
                   }
@@ -1655,7 +1652,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
               } else if t == LuaType::UserData as i32 {
                 // fast-path: same metatable, no EQ metamethod or C metamethod
                 if uvalue!(ra).metatable == uvalue!(rb).metatable {
-                  let fn_tm = fasttm(l, uvalue!(ra).metatable, TMS::TmEq as i32);
+                  let fn_tm = fasttm(l, uvalue!(ra).metatable, TMS::TmEq);
                   if fn_tm.is_null() {
                     jump_and_next!(
                       uvalue!(ra) as *const _ as *const c_void
@@ -2632,7 +2629,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
             if ttistable!(rb) {
               let h = hvalue!(rb);
 
-              if fastnotm((*h).metatable, TMS::TmLen as i32) {
+              if fastnotm((*h).metatable, TMS::TmLen) {
                 setnvalue!(ra, lua_h_getn(h) as f64);
                 continue 'dispatch;
               } else {
@@ -2830,7 +2827,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
                 } else {
                   null_mut()
                 };
-                let mut fn_tm = fasttm(l, mt, TMS::TmIter as i32);
+                let mut fn_tm = fasttm(l, mt, TMS::TmIter);
 
                 if fn_tm.is_null() && ttisobject!(ra) {
                   fn_tm = lua_t_gettmbyobj(l, ra, TMS::TmIter);
@@ -2862,7 +2859,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
                     (*(*l).ci).savedpc = pc; // vm_protect_pc(): next call always errors
                     luaG_typeerrorL(l, ra, "call");
                   }
-                } else if !fasttm(l, mt, TMS::TmCall as i32).is_null() {
+                } else if !fasttm(l, mt, TMS::TmCall).is_null() {
                   // table or userdata with __call, will be called during FORGLOOP
                   // TODO: we might be able to stop supporting this depending
                   // on whether it's used in practice
@@ -2888,7 +2885,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
                   null_mut()
                 };
 
-                let fn_tm = fasttm(l, mt, TMS::TmIter as i32);
+                let fn_tm = fasttm(l, mt, TMS::TmIter);
                 if !fn_tm.is_null() {
                   setobj_2_s!(l, ra.add(1), ra);
                   setobj_2_s!(l, ra, fn_tm);
@@ -2910,7 +2907,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
                     (*(*l).ci).savedpc = pc; // vm_protect_pc(): next call always errors
                     luaG_typeerrorL(l, ra, "call");
                   }
-                } else if !fasttm(l, mt, TMS::TmCall as i32).is_null() {
+                } else if !fasttm(l, mt, TMS::TmCall).is_null() {
                   // table or userdata with __call, will be called during FORGLOOP
                   // TODO: we might be able to stop supporting this depending
                   // on whether it's used in practice

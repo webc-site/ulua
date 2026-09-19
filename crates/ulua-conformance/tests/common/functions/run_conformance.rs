@@ -2,7 +2,6 @@ use alloc::string::String;
 use core::{
   ffi::{c_char, c_int, c_void},
   ptr::{null, null_mut},
-  str,
 };
 use std::{
   env::var,
@@ -97,7 +96,7 @@ fn default_lua_compile_options() -> LuaCompileOptions {
 /// cpp: `validateBytecodeGraph`（`cpp/tests/Conformance.test.cpp:210`）。
 /// 源码编译到 BytecodeBuilder 后逐函数做
 /// `fromFunctionBytecode` → `toFunctionBytecode` 往返验证。
-fn validate_bytecode_graph(source: &str, opts: &LuaCompileOptions) {
+fn validate_bytecode_graph(source: &[u8], opts: &LuaCompileOptions) {
   // Box 钉堆：AstNameTable/Lexer/Parser 捕获 allocator 地址，宿主移动即悬垂。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
@@ -259,8 +258,7 @@ pub unsafe fn run_conformance(
     // （`cpp/tests/Conformance.test.cpp:351`）。
     // 源与 `luau_compile` 一致按 unchecked UTF-8 透传（`luau_compile.rs:40`），
     // literals/pm/sort 等含非 UTF-8 原始字节。
-    let source_str: &str = str::from_utf8_unchecked(&source);
-    validate_bytecode_graph(source_str, &*options);
+    validate_bytecode_graph(&source, &*options);
 
     let mut bytecode_size = 0usize;
     let bytecode = luau_compile(

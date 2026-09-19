@@ -42,7 +42,8 @@ use ulua_vm::{
     lua_setreadonly::lua_setreadonly,
   },
   macros::{
-    LUA_PUSHCCLOSURE, LUA_PUSHLIGHTUSERDATA, lua_pop::lua_pop, lua_registryindex::LUA_REGISTRYINDEX,
+    lua_pop::lua_pop, lua_pushcclosure::lua_pushcclosure,
+    lua_pushlightuserdata::lua_pushlightuserdata, lua_registryindex::LUA_REGISTRYINDEX,
   },
   records::lua_state,
 };
@@ -369,7 +370,7 @@ pub fn user_defined_type_function(
 
       // LUA_PUSHLIGHTUSERDATA(l, curr.first);
       // lua_gettable(l, LUA_REGISTRYINDEX);
-      LUA_PUSHLIGHTUSERDATA::LUA_PUSHLIGHTUSERDATA(l, curr_ptr as *mut c_void);
+      lua_pushlightuserdata(l_vm, curr_ptr as *mut c_void);
       lua_gettable(l_vm, LUA_REGISTRYINDEX);
 
       // if (!lua_isfunction(l, -1))
@@ -408,7 +409,7 @@ pub fn user_defined_type_function(
         if *def_depth >= curr_depth {
           // LUA_PUSHLIGHTUSERDATA(l, definition.first);
           // lua_gettable(l, LUA_REGISTRYINDEX);
-          LUA_PUSHLIGHTUSERDATA::LUA_PUSHLIGHTUSERDATA(l, *def_ptr as *mut c_void);
+          lua_pushlightuserdata(l_vm, *def_ptr as *mut c_void);
           lua_gettable(l_vm, LUA_REGISTRYINDEX);
 
           // if (!lua_isfunction(l, -1)) break;
@@ -492,8 +493,8 @@ pub fn user_defined_type_function(
             // LUA_PUSHLIGHTUSERDATA(l, definition.first);
             // LUA_PUSHCCLOSURE(l, evaluateTypeAliasCall, name.c_str(), 1);
             // lua_setfield(l, -2, name.c_str());
-            LUA_PUSHLIGHTUSERDATA::LUA_PUSHLIGHTUSERDATA(l, *def_ptr as *mut c_void);
-            LUA_PUSHCCLOSURE::LUA_PUSHCCLOSURE(
+            lua_pushlightuserdata(l_vm, *def_ptr as *mut c_void);
+            lua_pushcclosure(
               l_vm,
               Some(evaluate_type_alias_call_thunk),
               name_c.as_ptr(),
@@ -513,10 +514,7 @@ pub fn user_defined_type_function(
     // Fetch the function we want to evaluate
     // LUA_PUSHLIGHTUSERDATA(l, typeFunction->userFuncData.definition);
     // lua_gettable(l, LUA_REGISTRYINDEX);
-    LUA_PUSHLIGHTUSERDATA::LUA_PUSHLIGHTUSERDATA(
-      l,
-      type_function.user_func_data.definition as *mut c_void,
-    );
+    lua_pushlightuserdata(l_vm, type_function.user_func_data.definition as *mut c_void);
     lua_gettable(l_vm, LUA_REGISTRYINDEX);
 
     // if (!lua_isfunction(l, -1))

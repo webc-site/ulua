@@ -10,6 +10,10 @@ pub(crate) use core::ffi::{c_char, c_int, c_void};
 
 // ---- garbage collection --------------------------------------------------
 pub(crate) use ulua_vm::enums::lua_gc_op::LuaGcOp;
+// ---- 状态/类型标签（唯一真相在 ulua-vm 的枚举里，边界处 `as c_int`）------
+pub(crate) use ulua_vm::enums::{
+  lua_co_status::LuaCoStatus, lua_status::LuaStatus, lua_type::LuaType,
+};
 // ---- interrupts / sandbox / memory categories (Luau) ---------------------
 pub(crate) use ulua_vm::functions::lua_callbacks::lua_callbacks;
 // ---- refs / call / load --------------------------------------------------
@@ -80,46 +84,3 @@ pub(crate) use ulua_vm::{
   records::lua_debug::LuaDebug,
   type_aliases::lua_state::lua_State,
 };
-
-/// Lua type tags (subset we care about). The VM returns these as `c_int` from
-/// [`lua_type`]; we keep our own constants to avoid leaking the VM enum.
-pub(crate) mod ttype {
-  use super::c_int;
-  pub const NONE: c_int = -1;
-  pub const NIL: c_int = 0;
-  pub const BOOLEAN: c_int = 1;
-  pub const LIGHTUSERDATA: c_int = 2;
-  pub const VECTOR: c_int = 5;
-  pub const NUMBER: c_int = 3;
-  pub const STRING: c_int = 6;
-  pub const TABLE: c_int = 7;
-  pub const FUNCTION: c_int = 8;
-  pub const USERDATA: c_int = 9;
-  pub const THREAD: c_int = 10;
-  pub const BUFFER: c_int = 11;
-}
-
-/// Coroutine status codes returned by [`super::lua_costatus`] (mirrors ulua's
-/// `lua_CoStatus`). Kept local so we don't leak the VM enum.
-pub(crate) mod costatus {
-  use super::c_int;
-  pub const RUNNING: c_int = 0;
-  pub const SUSPENDED: c_int = 1;
-  pub const NORMAL: c_int = 2;
-  pub const FINISHED: c_int = 3;
-  pub const ERROR: c_int = 4;
-}
-
-/// Lua call/load status codes (subset). Mirrors ulua's `LuaStatus`.
-pub(crate) mod status {
-  use super::c_int;
-  pub const OK: c_int = 0;
-  pub const YIELD: c_int = 1;
-  /// `LUA_ERRMEM` — out-of-memory (the VM sets the error object to
-  /// "not enough memory"). Surfaced as `Error::MemoryError` in `pop_error`.
-  pub const ERRMEM: c_int = 4;
-  /// `LUA_BREAK` — produced when an interrupt callback yields the VM via
-  /// `lua_break`. The coroutine is still resumable (it continues from the
-  /// break point on the next `lua_resume`), so we treat it like a yield.
-  pub const BREAK: c_int = 6;
-}

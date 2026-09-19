@@ -1,4 +1,4 @@
-use core::{ffi::c_void, mem::zeroed};
+use core::ffi::c_void;
 
 use crate::{
   enums::lua_type::LuaType,
@@ -21,7 +21,7 @@ pub(crate) unsafe fn lua_h_setp(
     if p != luaO_nilobject {
       cast_to!(*mut TValue, p)
     } else {
-      let mut k: TValue = zeroed();
+      let mut k = TValue::default();
 
       k.value.p = key;
       k.extra[0] = tag;

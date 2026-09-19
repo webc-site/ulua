@@ -5,6 +5,12 @@ use crate::{
   records::{t_string::tstring, temp_buffer::TempBuffer},
 };
 
+/// cpp `lvmload.cpp:57-61` `readString` 对应：id 为 0 表示「无字符串」。
+///
+/// 与 cpp 的差异：cpp 只靠 `TempBuffer::operator[]` 里的 `LUAU_ASSERT`
+/// （release 直接编译掉，损坏字节码就是越界读），Rust 侧必须硬校验，
+/// 故越界返回 `None` 由 `loadsafe` 转成损坏字节码错误。
+///
 /// # Safety
 ///
 /// Pointer arguments must be valid, aligned, and properly initialized.
@@ -13,14 +19,21 @@ pub(crate) unsafe fn read_string(
   data: *const c_char,
   size: usize,
   offset: &mut usize,
-) -> *mut tstring {
+) -> Option<*mut tstring> {
   unsafe {
     let id = read_var_int(data, size, offset);
 
     if id == 0 {
-      null_mut()
-    } else {
-      *strings.data.add((id - 1) as usize)
+      return Some(null_mut());
     }
+
+    let index = (id - 1) as usize;
+
+    if index >= strings.count {
+      return None;
+    }
+
+    // 上面已硬校验过边界，Index 内的 LUAU_ASSERT 恒真
+    Some(strings[index])
   }
 }

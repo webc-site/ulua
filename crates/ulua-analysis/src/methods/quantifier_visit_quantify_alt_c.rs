@@ -2,7 +2,7 @@ use core::ptr::null_mut;
 
 use crate::{
   enums::polarity::Polarity,
-  functions::as_mutable_type_pack::as_mutable_type_pack_id,
+  functions::as_mutable_type_pack::as_mutable_type_pack,
   records::{
     free_type_pack::FreeTypePack, generic_type_pack::GenericTypePack, quantifier::Quantifier,
     type_pack_var::TypePackVar,
@@ -29,7 +29,7 @@ impl Quantifier {
     gtp.generic_type_pack_type_level(self.level);
 
     unsafe {
-      *as_mutable_type_pack_id(tp) = TypePackVar::from(gtp);
+      *as_mutable_type_pack(tp) = TypePackVar::from(gtp);
     }
 
     self.generic_packs.push(tp);

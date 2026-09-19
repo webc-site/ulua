@@ -3,7 +3,7 @@ use core::iter::{repeat, repeat_n};
 
 use crate::{
   functions::{
-    as_mutable_type_pack::as_mutable_type_pack_id, follow_type_pack::follow_type_pack_id,
+    as_mutable_type_pack::as_mutable_type_pack, follow_type_pack::follow_type_pack_id,
     get_mutable_type_pack::get_mutable_type_pack_id, get_type_pack::get_type_pack_id,
     track_interior_free_type::track_interior_free_type,
     track_interior_free_type_pack::track_interior_free_type_pack,
@@ -103,7 +103,7 @@ pub unsafe fn extend_type_pack(
 
       // SAFETY: 原地改写 TypePack 变体，C++ const_cast 语义
       unsafe {
-        (*as_mutable_type_pack_id(current_pack)).ty = TypePackVariant::TypePack(new_pack);
+        (*as_mutable_type_pack(current_pack)).ty = TypePackVariant::TypePack(new_pack);
       }
 
       return result;

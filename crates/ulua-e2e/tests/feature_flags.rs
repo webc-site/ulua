@@ -17,7 +17,7 @@ use predicates::prelude::*;
 // ---------------------------------------------------------------------------
 
 /// `FValue` 是进程级全局：`cargo test` 在同一个进程里以多线程跑本文件的用例，
-/// 下面的用例会互相覆写 `LuauCompileFoldOptimize`。用一把锁把改全局旗标的用例
+/// 下面的用例会互相覆写 `LuauCompileConcatTargetTop`。用一把锁把改全局旗标的用例
 /// 串行化（nextest 每用例独立进程时该锁无竞争）。
 static FLAG_TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -33,37 +33,37 @@ fn library_fflag_toggle_is_observable() {
   let _serial = lock_flags();
   // The flag API round-trips: setting a value is immediately observable via
   // get(). (FValue<bool> is a process-global, matching Luau's FFlag storage.)
-  let original = fflag::LuauCompileFoldOptimize.get();
+  let original = fflag::LuauCompileConcatTargetTop.get();
 
-  fflag::LuauCompileFoldOptimize.set(false);
+  fflag::LuauCompileConcatTargetTop.set(false);
   assert!(
-    !fflag::LuauCompileFoldOptimize.get(),
+    !fflag::LuauCompileConcatTargetTop.get(),
     "flag should read back false"
   );
 
-  fflag::LuauCompileFoldOptimize.set(true);
+  fflag::LuauCompileConcatTargetTop.set(true);
   assert!(
-    fflag::LuauCompileFoldOptimize.get(),
+    fflag::LuauCompileConcatTargetTop.get(),
     "flag should read back true"
   );
 
   // Restore so we don't perturb other tests sharing this process.
-  fflag::LuauCompileFoldOptimize.set(original);
+  fflag::LuauCompileConcatTargetTop.set(original);
 }
 
 #[test]
 fn set_all_flags_round_trips() {
   use ulua_common::fflag;
   let _serial = lock_flags();
-  let original = fflag::LuauCompileFoldOptimize.get();
+  let original = fflag::LuauCompileConcatTargetTop.get();
   // The CLI's setLuauFlagsDefault() analog must run without panicking and be
   // observable on at least one representative flag.
   ulua_common::set_all_flags(true);
   assert!(
-    fflag::LuauCompileFoldOptimize.get(),
+    fflag::LuauCompileConcatTargetTop.get(),
     "set_all_flags(true) should enable Luau flags"
   );
-  fflag::LuauCompileFoldOptimize.set(original);
+  fflag::LuauCompileConcatTargetTop.set(original);
 }
 
 // ---------------------------------------------------------------------------
@@ -101,7 +101,7 @@ fn cli_named_fflag_does_not_fail() {
   // setter warns about an unrecognized name (faithful: setLuauFlags does not
   // abort on an unknown flag).
   common::bin("ulua-compile")
-    .arg("--fflags=LuauCompileFoldOptimize=true")
+    .arg("--fflags=LuauCompileConcatTargetTop=true")
     .arg(&path)
     .assert()
     .success();

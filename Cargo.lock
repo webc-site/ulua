@@ -827,6 +827,7 @@ dependencies = [
 name = "ulua-reduce-cli"
 version = "0.1.2"
 dependencies = [
+ "memchr",
  "tempfile",
  "ulua-ast",
  "ulua-bytecode",

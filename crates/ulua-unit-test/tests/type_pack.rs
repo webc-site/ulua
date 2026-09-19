@@ -6,7 +6,7 @@ mod type_pack_content_reassignment {
   #[test]
   fn type_pack_content_reassignment() {
     use ulua_analysis::{
-      functions::{as_mutable_type_pack::as_mutable, get_type_pack::get_type_pack_id},
+      functions::{as_mutable_type_pack::as_mutable_type_pack, get_type_pack::get_type_pack_id},
       records::{
         free_type_pack::FreeTypePack, type_arena::TypeArena, type_level::TypeLevel,
         type_pack_var::TypePackVar,
@@ -21,7 +21,7 @@ mod type_pack_content_reassignment {
 
     let future_error = arena.add_type_pack_t(FreeTypePack::new(TypeLevel::default()));
     unsafe {
-      (*as_mutable(future_error)).reassign(&my_error);
+      (*as_mutable_type_pack(future_error)).reassign(&my_error);
     }
 
     assert!(get_type_pack_id::<ErrorTypePack>(future_error).is_some());
@@ -73,7 +73,8 @@ mod type_pack_follows_bound_type_packs {
   #[test]
   fn type_pack_follows_bound_type_packs() {
     use ulua_analysis::{
-      functions::as_mutable_type_pack::as_mutable, type_aliases::type_pack_variant::TypePackVariant,
+      functions::as_mutable_type_pack::as_mutable_type_pack,
+      type_aliases::type_pack_variant::TypePackVariant,
     };
     use ulua_unit_test::{
       functions::collect_type_pack::collect_type_pack, records::type_pack_fixture::TypePackFixture,
@@ -83,7 +84,8 @@ mod type_pack_follows_bound_type_packs {
     let tail_tp = fixture.new_type_pack(alloc::vec![fixture.types[2], fixture.types[3]], None);
     let middle_tp = fixture.fresh_type_pack();
     unsafe {
-      (*as_mutable(middle_tp)).operator_assign_type_pack_variant(TypePackVariant::Bound(tail_tp));
+      (*as_mutable_type_pack(middle_tp))
+        .operator_assign_type_pack_variant(TypePackVariant::Bound(tail_tp));
     }
     let head_tp = fixture.new_type_pack(alloc::vec![], Some(middle_tp));
 

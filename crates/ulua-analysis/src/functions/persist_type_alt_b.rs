@@ -2,7 +2,7 @@ use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   functions::{
-    as_mutable_type_pack_alt_d::as_mutable_type_pack, get_type_pack::get_type_pack_id,
+    as_mutable_type_pack::as_mutable_type_pack, get_type_pack::get_type_pack_id,
     persist_type::persist as persist_type,
   },
   records::{

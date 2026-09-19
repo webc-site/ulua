@@ -1,5 +1,3 @@
-use core::ffi::c_void;
-
 use crate::{
   enums::lua_type::LuaType,
   functions::{
@@ -27,7 +25,7 @@ pub unsafe fn lua_l_sandbox(l: *mut lua_State) {
     }
 
     // set all builtin metatables to read-only
-    lua_pushliteral(l as *mut c_void, c"".as_ptr());
+    lua_pushliteral(l, c"".as_ptr());
     if lua_getmetatable(l, -1) != 0 {
       lua_setreadonly(l, -1, 1);
       lua_pop(l, 2);

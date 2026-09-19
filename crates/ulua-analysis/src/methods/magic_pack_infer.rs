@@ -4,7 +4,7 @@ use core::ptr::null_mut;
 use crate::{
   enums::table_state::TableState,
   functions::{
-    as_mutable_type_pack_alt_d::as_mutable_type_pack, flatten_type_pack::flatten_type_pack_id,
+    as_mutable_type_pack::as_mutable_type_pack, flatten_type_pack::flatten_type_pack_id,
     get_type_pack::get_type_pack_id, reduce_union::reduce_union,
   },
   records::{

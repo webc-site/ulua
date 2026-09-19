@@ -31,8 +31,8 @@ use ulua_vm::{
     luau_load::luau_load,
   },
   macros::{
-    LUA_PUSHLIGHTUSERDATA, lua_globalsindex::LUA_GLOBALSINDEX, lua_pop::lua_pop,
-    lua_registryindex::LUA_REGISTRYINDEX,
+    lua_globalsindex::LUA_GLOBALSINDEX, lua_pop::lua_pop,
+    lua_pushlightuserdata::lua_pushlightuserdata, lua_registryindex::LUA_REGISTRYINDEX,
   },
   records::lua_state,
 };
@@ -72,7 +72,7 @@ impl TypeFunctionRuntime {
 
       // Fetch to check if function is already registered
       // LUA_PUSHLIGHTUSERDATA(global, function); lua_gettable(global, LUA_REGISTRYINDEX);
-      LUA_PUSHLIGHTUSERDATA::LUA_PUSHLIGHTUSERDATA(global, function as *mut c_void);
+      lua_pushlightuserdata(global_vm, function as *mut c_void);
       lua_gettable(global_vm, LUA_REGISTRYINDEX);
 
       // if (!lua_isnil(global, -1)) { lua_pop(global, 1); return std::nullopt; }
@@ -211,7 +211,7 @@ impl TypeFunctionRuntime {
 
       // Store resulting function in the registry
       // LUA_PUSHLIGHTUSERDATA(global, function); lua_xmove(l, global, 1); lua_settable(global, LUA_REGISTRYINDEX);
-      LUA_PUSHLIGHTUSERDATA::LUA_PUSHLIGHTUSERDATA(global, function as *mut c_void);
+      lua_pushlightuserdata(global_vm, function as *mut c_void);
       lua_xmove(l_vm, global_vm, 1);
       lua_settable(global_vm, LUA_REGISTRYINDEX);
 

@@ -1,11 +1,12 @@
-use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_insn_op::luau_insn_op};
-
-use crate::{
+use ulua_common::{
+  enums::luau_opcode::LuauOpcode,
   functions::{
     get_jump_target::get_jump_target, get_op_length::get_op_length, is_fast_call::is_fast_call,
   },
-  records::{bytecode_block::BytecodeBlock, ir_function::IrFunction},
+  macros::luau_insn_op::luau_insn_op,
 };
+
+use crate::records::{bytecode_block::BytecodeBlock, ir_function::IrFunction};
 
 macro_rules! CODEGEN_ASSERT {
   ($expr:expr) => {

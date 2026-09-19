@@ -6,8 +6,12 @@ use crate::{
     try_get_luau_tag_for_bc_type::try_get_luau_tag_for_bc_type,
   },
   records::{
-    bytecode_type_info::BytecodeTypeInfo, cfg_info::CfgInfo, const_prop_state::ConstPropState,
-    ir_block::IrBlock, ir_builder::IrBuilder, ir_function::IrFunction,
+    bytecode_type_info::BytecodeTypeInfo,
+    cfg_info::CfgInfo,
+    const_prop_state::ConstPropState,
+    ir_block::{IrBlock, K_BLOCK_FLAG_ENTRY_ARG_CHECK},
+    ir_builder::IrBuilder,
+    ir_function::IrFunction,
   },
 };
 
@@ -20,8 +24,7 @@ pub fn setup_block_entry_state_ir_builder_ir_function_ir_block_const_prop_state(
   state: &mut ConstPropState,
 ) {
   let block_flags = block.flags;
-  let entry_arg_check_bit = 1u8 << 2;
-  if (block_flags & entry_arg_check_bit) != 0 {
+  if (block_flags & K_BLOCK_FLAG_ENTRY_ARG_CHECK) != 0 {
     return;
   }
 

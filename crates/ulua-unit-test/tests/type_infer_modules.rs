@@ -1997,7 +1997,7 @@ mod type_infer_modules_require_a_variadic_function {
 
     use ulua_analysis::{
       functions::{
-        begin_type_pack, end_type_pack, follow_type::follow, get_type_id::get_type_id,
+        begin_type_pack, end_type_pack, follow_type::follow, get_type_alt_j::get_type_id,
         get_type_pack::get_type_pack_id,
       },
       records::{function_type::FunctionType, variadic_type_pack::VariadicTypePack},
@@ -2164,7 +2164,7 @@ mod type_infer_modules_require_types {
     use alloc::string::String;
 
     use ulua_analysis::{
-      functions::{get_type_id::get_type_id, to_string_to_string_alt_c::to_string_type_id},
+      functions::{get_type_alt_j::get_type_id, to_string_to_string_alt_c::to_string_type_id},
       records::table_type::TableType,
     };
     use ulua_unit_test::records::builtins_fixture::BuiltinsFixture;

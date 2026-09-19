@@ -24,7 +24,6 @@ use ulua_common::{
 };
 
 use crate::{
-  enums::type_constant_folding::Type::Unknown,
   methods::cost_visitor_visit_cost_model_alt_b::visit_ast_stat_for,
   records::{constant::Constant, cost::Cost},
 };
@@ -39,13 +38,7 @@ pub struct CostVisitor {
 
 impl CostVisitor {
   pub fn model(&mut self, node: *mut AstExpr) -> Cost {
-    if fflag::LuauCompilePropagateTableProps2.get() && !fflag::LuauCompileFoldOptimize.get() {
-      if let Some(c) = unsafe { &*self.constants }.find(&node)
-        && c.r#type != Unknown
-      {
-        return Cost::new(0, Cost::K_LITERAL);
-      }
-    } else if unsafe { &*self.constants }.find(&node).is_some() {
+    if unsafe { &*self.constants }.find(&node).is_some() {
       return Cost::new(0, Cost::K_LITERAL);
     }
 

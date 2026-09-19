@@ -3932,13 +3932,8 @@ mod compiler_fold_const_table_props {
       type_aliases::scoped_fast_flag::ScopedFastFlag,
     };
 
-    let _luau_compile_propagate_table_props =
-      ScopedFastFlag::new(&fflag::LuauCompilePropagateTableProps2, true);
     let _luau_compile_duptable_constant_pack =
       ScopedFastFlag::new(&fflag::LuauCompileDuptableConstantPack2, true);
-    let _luau_compile_new_table_mutation_tracker =
-      ScopedFastFlag::new(&fflag::LuauCompileNewTableMutationTracker, true);
-    let _luau_compile_fold_optimize = ScopedFastFlag::new(&fflag::LuauCompileFoldOptimize, true);
 
     let actual = compile_function(
       r#"local t = { hello = "world" }
@@ -4280,13 +4275,8 @@ mod compiler_fold_const_table_props_or_and {
       type_aliases::scoped_fast_flag::ScopedFastFlag,
     };
 
-    let _luau_compile_propagate_table_props =
-      ScopedFastFlag::new(&fflag::LuauCompilePropagateTableProps2, true);
     let _luau_compile_duptable_constant_pack =
       ScopedFastFlag::new(&fflag::LuauCompileDuptableConstantPack2, true);
-    let _luau_compile_new_table_mutation_tracker =
-      ScopedFastFlag::new(&fflag::LuauCompileNewTableMutationTracker, true);
-    let _luau_compile_fold_optimize = ScopedFastFlag::new(&fflag::LuauCompileFoldOptimize, true);
 
     // handle 'or'
     let result1 = compile_function_0("local t = { a = 1, b = 2 }\nreturn t.a or t.b\n");
@@ -4327,13 +4317,8 @@ mod compiler_fold_const_table_props_return_local {
     };
 
     let _emit_call_fb = ScopedFastFlag::new(&fflag::LuauEmitCallFeedback, true);
-    let _luau_compile_propagate_table_props =
-      ScopedFastFlag::new(&fflag::LuauCompilePropagateTableProps2, true);
     let _luau_compile_duptable_constant_pack =
       ScopedFastFlag::new(&fflag::LuauCompileDuptableConstantPack2, true);
-    let _luau_compile_new_table_mutation_tracker =
-      ScopedFastFlag::new(&fflag::LuauCompileNewTableMutationTracker, true);
-    let _luau_compile_fold_optimize = ScopedFastFlag::new(&fflag::LuauCompileFoldOptimize, true);
 
     let actual1 = compile_function_0(
       r#"local t = { a = 1, b = 2 }
@@ -4367,13 +4352,8 @@ mod compiler_fold_const_table_props_return_upvalue {
       functions::compile_function::compile_function, type_aliases::scoped_fast_flag::ScopedFastFlag,
     };
 
-    let _luau_compile_propagate_table_props =
-      ScopedFastFlag::new(&fflag::LuauCompilePropagateTableProps2, true);
     let _luau_compile_duptable_constant_pack =
       ScopedFastFlag::new(&fflag::LuauCompileDuptableConstantPack2, true);
-    let _luau_compile_new_table_mutation_tracker =
-      ScopedFastFlag::new(&fflag::LuauCompileNewTableMutationTracker, true);
-    let _luau_compile_fold_optimize = ScopedFastFlag::new(&fflag::LuauCompileFoldOptimize, true);
 
     let actual1 = compile_function(
       r#"local t = { x = 1 }
@@ -6533,11 +6513,6 @@ mod compiler_inline_table_function {
       functions::compile_function::compile_function, type_aliases::scoped_fast_flag::ScopedFastFlag,
     };
 
-    let _luau_compile_propagate_table_props =
-      ScopedFastFlag::new(&fflag::LuauCompilePropagateTableProps2, true);
-    let _luau_compile_new_table_mutation_tracker =
-      ScopedFastFlag::new(&fflag::LuauCompileNewTableMutationTracker, true);
-    let _luau_compile_fold_optimize = ScopedFastFlag::new(&fflag::LuauCompileFoldOptimize, true);
     let _luau_compile_inline_table_functions =
       ScopedFastFlag::new(&fflag::LuauCompileInlineTableFunctions, true);
 
@@ -9988,7 +9963,6 @@ mod compiler_table_constant_string_index {
 
     let _luau_compile_duptable_constant_pack2 =
       ScopedFastFlag::new(&fflag::LuauCompileDuptableConstantPack2, true);
-    let _sff = ScopedFastFlag::new(&fflag::LuauCompilePropagateTableProps2, true);
 
     let actual1 = "\n".to_string() + &compile_function_0("local t = { a = 2 }\nreturn t['a']");
     let expected1 = "\nDUPTABLE R0 2\nLOADN R1 2\nRETURN R1 1\n";

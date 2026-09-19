@@ -1,11 +1,9 @@
-use core::ffi::c_void;
-
 use crate::{
   functions::{
     lua_createtable::lua_createtable, lua_pushvalue::lua_pushvalue, lua_setfield::lua_setfield,
     lua_setmetatable::lua_setmetatable,
   },
-  macros::{lua_pop::lua_pop, lua_pushliteral::LUA_PUSHLITERAL},
+  macros::{lua_pop::lua_pop, lua_pushliteral::lua_pushliteral},
   type_aliases::lua_state::lua_State,
 };
 
@@ -15,7 +13,7 @@ pub(crate) unsafe fn createmetatable_mut(l: *mut lua_State) {
   unsafe {
     lua_createtable(l, 0, 1); // create metatable for strings
 
-    LUA_PUSHLITERAL(l as *mut c_void, c"".as_ptr()); // dummy string
+    lua_pushliteral(l, c"".as_ptr()); // dummy string
 
     lua_pushvalue(l, -2);
 

@@ -4,9 +4,8 @@ use ulua_common::macros::luau_big_endian::LUAU_BIG_ENDIAN;
 
 use crate::{
   functions::{
-    buffer_errors::buffer_oob_error, buffer_swapbe::buffer_swapbe,
-    lua_l_checkbuffer::lua_l_checkbuffer, lua_l_checkinteger::lua_l_checkinteger,
-    lua_pushinteger_64::lua_pushinteger_64,
+    buffer_errors::buffer_oob_error, buffer_swapbe::SwapBe, lua_l_checkbuffer::lua_l_checkbuffer,
+    lua_l_checkinteger::lua_l_checkinteger, lua_pushinteger_64::lua_pushinteger_64,
   },
   macros::isoutofbounds::isoutofbounds,
   type_aliases::lua_state::lua_State,
@@ -32,7 +31,7 @@ pub(crate) unsafe extern "C-unwind" fn buffer_readlong(l: *mut lua_State) -> c_i
     );
 
     if LUAU_BIG_ENDIAN {
-      val = buffer_swapbe(val);
+      val = val.swap_be();
     }
 
     lua_pushinteger_64(l, val as i64);

@@ -18,7 +18,7 @@ pub(crate) unsafe fn get_comp_tm(
   event: TMS,
 ) -> *const TValue {
   unsafe {
-    let tm1 = fasttm(l, mt1, event as i32);
+    let tm1 = fasttm(l, mt1, event);
 
     if tm1.is_null() {
       return null();
@@ -28,7 +28,7 @@ pub(crate) unsafe fn get_comp_tm(
       return tm1;
     }
 
-    let tm2 = fasttm(l, mt2, event as i32);
+    let tm2 = fasttm(l, mt2, event);
     if tm2.is_null() {
       return null();
     }

@@ -1,11 +1,11 @@
-use core::ffi::{c_int, c_void};
+use core::ffi::c_int;
 
 use crate::{
   functions::{
     lua_l_checkinteger::lua_l_checkinteger, lua_l_checklstring::lua_l_checklstring,
     lua_l_optinteger::lua_l_optinteger, lua_pushlstring::lua_pushlstring, posrelat::posrelat,
   },
-  macros::lua_pushliteral::LUA_PUSHLITERAL,
+  macros::lua_pushliteral::lua_pushliteral,
   type_aliases::lua_state::lua_State,
 };
 
@@ -29,7 +29,7 @@ pub(crate) unsafe extern "C-unwind" fn str_sub(l: *mut lua_State) -> c_int {
     if start <= end {
       lua_pushlstring(l, s.add((start - 1) as usize), (end - start + 1) as usize);
     } else {
-      LUA_PUSHLITERAL(l as *mut c_void, c"".as_ptr());
+      lua_pushliteral(l, c"".as_ptr());
     }
     1
   }

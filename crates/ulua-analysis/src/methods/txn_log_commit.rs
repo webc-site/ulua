@@ -4,7 +4,7 @@ use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   functions::{
-    as_mutable_type::as_mutable_type_id, as_mutable_type_pack::as_mutable_type_pack_id,
+    as_mutable_type::as_mutable_type_id, as_mutable_type_pack::as_mutable_type_pack,
     occurs_txn_log::occurs_txn_log_type_id_type_id,
   },
   records::{pending_type::PendingType, pending_type_pack::PendingTypePack, txn_log::TxnLog},
@@ -45,7 +45,7 @@ impl TxnLog {
 
     for (tp, rep) in type_pack_entries {
       unsafe {
-        (*as_mutable_type_pack_id(tp)).reassign(&(*rep).pending);
+        (*as_mutable_type_pack(tp)).reassign(&(*rep).pending);
       }
     }
 

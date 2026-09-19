@@ -2,7 +2,7 @@ use alloc::vec;
 
 use crate::{
   functions::{
-    as_mutable_type_pack_alt_d::as_mutable_type_pack, flatten_type_pack::flatten_type_pack_id,
+    as_mutable_type_pack::as_mutable_type_pack, flatten_type_pack::flatten_type_pack_id,
     follow_type::follow_type_id, get_type_alt_j::get_type_id,
   },
   records::{

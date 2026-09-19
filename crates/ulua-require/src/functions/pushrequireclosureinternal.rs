@@ -7,8 +7,8 @@ use core::{
 use ulua_vm::{
   functions::lua_pushcclosurek::lua_pushcclosurek,
   macros::{
-    LUA_PUSHLIGHTUSERDATA::LUA_PUSHLIGHTUSERDATA, lua_l_error::luaL_error,
-    lua_newuserdata::lua_newuserdata,
+    lua_l_error::luaL_error, lua_newuserdata::lua_newuserdata,
+    lua_pushlightuserdata::lua_pushlightuserdata,
   },
   records::lua_state::lua_State,
   type_aliases::lua_c_function::LuaCfunction,
@@ -48,7 +48,7 @@ pub(crate) unsafe fn pushrequireclosureinternal(
     config_init(config);
     validate_config(l, &*config);
 
-    LUA_PUSHLIGHTUSERDATA(l as *mut c_void, ctx);
+    lua_pushlightuserdata(l, ctx);
     lua_pushcclosurek(l, requirelikefunc, debugname, 2, Some(lua_requirecont));
     1
   }

@@ -4,10 +4,10 @@ use ulua_ast::records::{ast_expr::AstExpr, ast_expr_function::AstExprFunction, a
 
 use crate::{
   functions::{
-    allows_no_return_values::allows_no_return_values,
-    as_mutable_type_pack::as_mutable_type_pack_id, follow_type_pack::follow_type_pack_id,
-    get_end_location::get_end_location, get_fallthrough::get_fallthrough,
-    get_mutable_type::get_mutable_type_id, get_type_pack::get_type_pack_id,
+    allows_no_return_values::allows_no_return_values, as_mutable_type_pack::as_mutable_type_pack,
+    follow_type_pack::follow_type_pack_id, get_end_location::get_end_location,
+    get_fallthrough::get_fallthrough, get_mutable_type::get_mutable_type_id,
+    get_type_pack::get_type_pack_id,
   },
   records::{
     free_type_pack::FreeTypePack, function_exits_without_returning::FunctionExitsWithoutReturning,
@@ -35,7 +35,7 @@ impl TypeChecker {
     let ret_pack_is_bound = get_type_pack_id::<BoundTypePack>(fun_ty.ret_types).is_some();
     if !ret_pack_is_bound && get_type_pack_id::<FreeTypePack>(fun_ty.ret_types).is_some() {
       // SAFETY: as_mutable_type_pack_id 去除 const（C++ asMutable 同义），ret_types 有效。
-      let ret_pack = as_mutable_type_pack_id(fun_ty.ret_types);
+      let ret_pack = as_mutable_type_pack(fun_ty.ret_types);
       unsafe {
         (*ret_pack).ty = TypePackVariant::TypePack(TypePack {
           head: Vec::new(),

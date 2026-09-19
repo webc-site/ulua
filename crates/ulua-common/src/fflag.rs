@@ -210,22 +210,10 @@ pub mod _inner {
     LUAU_COMPILE_FASTCALL3_COST_MODEL,
     LuauCompileFastcall3CostModel
   );
-  // Compiler/src/ConstantFolding.cpp
-  crate::LUAU_FASTFLAGVARIABLE!(LUAU_COMPILE_FOLD_OPTIMIZE, LuauCompileFoldOptimize);
   // Compiler/src/Compiler.cpp
   crate::LUAU_FASTFLAGVARIABLE!(
     LUAU_COMPILE_INLINE_TABLE_FUNCTIONS,
     LuauCompileInlineTableFunctions
-  );
-  // Compiler/src/ConstantFolding.cpp
-  crate::LUAU_FASTFLAGVARIABLE!(
-    LUAU_COMPILE_NEW_TABLE_MUTATION_TRACKER,
-    LuauCompileNewTableMutationTracker
-  );
-  // Compiler/src/ConstantFolding.cpp
-  crate::LUAU_FASTFLAGVARIABLE!(
-    LUAU_COMPILE_PROPAGATE_TABLE_PROPS2,
-    LuauCompilePropagateTableProps2
   );
   // Compiler/src/Compiler.cpp
   crate::LUAU_FASTFLAGVARIABLE!(LUAU_COMPILE_CONCAT_TARGET_TOP, LuauCompileConcatTargetTop);
@@ -536,10 +524,7 @@ pub use _inner::{
   LUAU_COMPILE_EXPAND_LIMIT as LuauCompileExpandLimit,
   LUAU_COMPILE_FASTCALL3_COST_MODEL as LuauCompileFastcall3CostModel,
   LUAU_COMPILE_FASTPCALL as LuauCompileFastpcall,
-  LUAU_COMPILE_FOLD_OPTIMIZE as LuauCompileFoldOptimize,
   LUAU_COMPILE_INLINE_TABLE_FUNCTIONS as LuauCompileInlineTableFunctions,
-  LUAU_COMPILE_NEW_TABLE_MUTATION_TRACKER as LuauCompileNewTableMutationTracker,
-  LUAU_COMPILE_PROPAGATE_TABLE_PROPS2 as LuauCompilePropagateTableProps2,
   LUAU_COMPILE_RECURSIVE_ALIASES as LuauCompileRecursiveAliases,
   LUAU_COMPILE_STRING_INTERP_TARGET_TOP as LuauCompileStringInterpTargetTop,
   LUAU_COMPILE_TYPE_ALIASES as LuauCompileTypeAliases,
@@ -671,10 +656,7 @@ pub fn register_flags() {
     fflag::LUAU_CODEGEN_DSE_RESTORE_HINT_UPDATE.register();
     fflag::LUAU_COMPILE_DUPTABLE_CONSTANT_PACK2.register();
     fflag::LUAU_COMPILE_FASTCALL3_COST_MODEL.register();
-    fflag::LUAU_COMPILE_FOLD_OPTIMIZE.register();
     fflag::LUAU_COMPILE_INLINE_TABLE_FUNCTIONS.register();
-    fflag::LUAU_COMPILE_NEW_TABLE_MUTATION_TRACKER.register();
-    fflag::LUAU_COMPILE_PROPAGATE_TABLE_PROPS2.register();
     fflag::LUAU_COMPILE_CONCAT_TARGET_TOP.register();
     fflag::LUAU_COMPILE_STRING_INTERP_TARGET_TOP.register();
     fflag::LUAU_COMPILE_RECURSIVE_ALIASES.register();

@@ -7,8 +7,12 @@ use crate::{
     save_block_exit_state::save_block_exit_state,
     setup_block_entry_state_optimize_const_prop::setup_block_entry_state_ir_builder_ir_function_ir_block_const_prop_state,
   },
-  macros::{codegen_assert::CODEGEN_ASSERT, op_a::op_a},
-  records::{const_prop_state::ConstPropState, ir_block::IrBlock, ir_builder::IrBuilder},
+  macros::{codegen_assert::CODEGEN_ASSERT, op_a_ref::op_a_ref},
+  records::{
+    const_prop_state::ConstPropState,
+    ir_block::{IrBlock, K_BLOCK_FLAG_SAFE_ENV_CHECK},
+    ir_builder::IrBuilder,
+  },
 };
 
 /// # Safety
@@ -41,8 +45,8 @@ pub unsafe fn const_prop_in_block_chain(
     visited[block_idx as usize] = 1;
 
     unsafe {
-      if state.in_safe_env && ((*block).flags & (1 << 0)) != 0 {
-        (*block).flags &= !(1 << 0);
+      if state.in_safe_env && ((*block).flags & K_BLOCK_FLAG_SAFE_ENV_CHECK) != 0 {
+        (*block).flags &= !K_BLOCK_FLAG_SAFE_ENV_CHECK;
       }
 
       const_prop_in_block(build, &mut *block, state);
@@ -55,27 +59,30 @@ pub unsafe fn const_prop_in_block_chain(
       (*block).chainkey = chain_pos;
       chain_pos += 1;
 
-      let term = (&mut (*function).instructions)[(*block).finish as usize].clone();
+      // cpp: `IrInst& termInst = function.instructions[block->finish];`
+      // 链遍历是热路径，只取终止指令的 Copy 字段（cmd 与第 0 个操作数），
+      // 不再克隆整条 IrInst（含操作数 SmallVector）。
+      let (term_cmd, target_op) = {
+        let term = &(&(*function).instructions)[(*block).finish as usize];
+        (term.cmd, op_a_ref(term))
+      };
       let mut next_block: *mut IrBlock = null_mut();
 
-      if term.cmd == IrCmd::JUMP {
-        let target_op = op_a(&mut term.clone());
-        if target_op.kind() == IrOpKind::Block {
-          let target_idx = target_op.index();
-          let target = &mut (&mut (*function).blocks)[target_idx as usize] as *mut IrBlock;
+      if term_cmd == IrCmd::JUMP && target_op.kind() == IrOpKind::Block {
+        let target_idx = target_op.index();
+        let target = &mut (&mut (*function).blocks)[target_idx as usize] as *mut IrBlock;
 
-          if (*target).use_count == 1
-            && visited[target_idx as usize] == 0
-            && (*target).kind != IrBlockKind::Fallback
-          {
-            // cpp OptimizeConstProp.cpp:3672-3673：live-out 非空直接终止链，出口状态不落盘
-            if get_live_out_value_count(&mut *function, &mut *target) != 0 {
-              break;
-            }
-
-            (*block).expected_next_block = target_idx;
-            next_block = target;
+        if (*target).use_count == 1
+          && visited[target_idx as usize] == 0
+          && (*target).kind != IrBlockKind::Fallback
+        {
+          // cpp OptimizeConstProp.cpp:3672-3673：live-out 非空直接终止链，出口状态不落盘
+          if get_live_out_value_count(&mut *function, &mut *target) != 0 {
+            break;
           }
+
+          (*block).expected_next_block = target_idx;
+          next_block = target;
         }
       }
 

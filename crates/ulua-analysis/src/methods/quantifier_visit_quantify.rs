@@ -1,5 +1,5 @@
 use crate::{
-  functions::as_mutable_type_id::as_mutable_type_id,
+  functions::as_mutable_type::as_mutable_type_id,
   records::{free_type::FreeType, generic_type::GenericType, quantifier::Quantifier, r#type::Type},
   type_aliases::type_id::TypeId,
 };

@@ -4,8 +4,7 @@ use ulua_ast::records::ast_expr::AstExpr;
 
 use crate::{
   functions::{
-    as_mutable_type_pack_alt_d::as_mutable_type_pack,
-    check_require_path_dcr::check_require_path_dcr,
+    as_mutable_type_pack::as_mutable_type_pack, check_require_path_dcr::check_require_path_dcr,
   },
   records::{
     generic_error::GenericError, magic_function_call_context::MagicFunctionCallContext,

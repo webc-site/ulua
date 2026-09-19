@@ -56,8 +56,9 @@ mod fastflag_timetrace_tests {
     LUAU_TIMETRACE_SCOPE!("name", "category");
     LUAU_TIMETRACE_OPTIONAL_TAIL_SCOPE!("name", "category", 100);
     LUAU_TIMETRACE_ARGUMENT!("k", "v");
-    DebugLuauTimeTracing.set(true);
+    DebugLuauTimeTracing.push_test_override(true);
     assert!(DebugLuauTimeTracing.get());
+    DebugLuauTimeTracing.pop_test_override();
   }
 
   #[test]

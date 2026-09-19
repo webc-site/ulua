@@ -1,5 +1,5 @@
 use crate::{
-  functions::as_mutable_type_pack_alt_d::as_mutable_type_pack,
+  functions::as_mutable_type_pack::as_mutable_type_pack,
   records::{type_arena::TypeArena, type_pack_var::TypePackVar},
   type_aliases::type_pack_id::TypePackId,
 };

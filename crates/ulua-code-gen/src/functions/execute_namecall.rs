@@ -94,14 +94,14 @@ pub unsafe fn execute_namecall(
         (*(*l).global).mt[ttype!(rb as *const TValue) as usize]
       };
 
-      let fn_nc = fasttm(l, mt, TMS::TmNameCall as i32);
+      let fn_nc = fasttm(l, mt, TMS::TmNameCall);
       if !fn_nc.is_null() {
         setobj2s!(l, ra.add(1), rb as *const TValue);
         setobj2s!(l, ra, fn_nc);
 
         (*l).namecall = tsvalue!(kv as *const TValue) as *mut _;
       } else {
-        let tmi = fasttm(l, mt, TMS::TmIndex as i32);
+        let tmi = fasttm(l, mt, TMS::TmIndex);
         if !tmi.is_null() && ttistable!(tmi) {
           let h = hvalue!(tmi);
           let slot = (luau_insn_c(insn) as i32) & (*h).nodemask8 as i32;

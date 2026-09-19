@@ -54,7 +54,6 @@ pub mod code_too_complex;
 pub mod config_resolver;
 pub mod conjunction_control_flow_graph;
 pub mod conjunction_refinement;
-pub mod const_iterator;
 pub mod constraint;
 pub mod constraint_block;
 pub mod constraint_generation_log;

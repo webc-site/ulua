@@ -5,7 +5,7 @@ use ulua_common::records::dense_hash_map::DenseHashMap;
 
 use crate::{
   functions::{
-    as_mutable_type_pack_alt_d::as_mutable_type_pack, flatten_type_pack::flatten_type_pack_id,
+    as_mutable_type_pack::as_mutable_type_pack, flatten_type_pack::flatten_type_pack_id,
     follow_type::follow_type_id, get_mutable_type::get_mutable_type_id,
     get_type_alt_j::get_type_id, shallow_clone_clone_alt_b::shallow_clone,
     track_interior_free_type::track_interior_free_type,

@@ -3,8 +3,7 @@ use ulua_ast::records::{ast_node::AstNode, ast_stat_for::AstStatFor};
 use crate::{
   enums::type_constant_folding::Type,
   functions::{
-    cnum::cnum, compute_cost::compute_cost_slice, cost_model::model_cost,
-    get_trip_count::get_trip_count,
+    cnum::cnum, compute_cost::compute_cost, cost_model::model_cost, get_trip_count::get_trip_count,
   },
   records::compiler::Compiler,
 };
@@ -86,8 +85,8 @@ impl Compiler {
       )
     };
 
-    let unrolled_cost = compute_cost_slice(cost_model, &[true]) * trip_count;
-    let baseline_cost = (compute_cost_slice(cost_model, &[]) + 1) * trip_count;
+    let unrolled_cost = compute_cost(cost_model, &[true]) * trip_count;
+    let baseline_cost = (compute_cost(cost_model, &[]) + 1) * trip_count;
     let unroll_profit = if unrolled_cost == 0 {
       threshold_max_boost
     } else {

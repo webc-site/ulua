@@ -61,7 +61,7 @@ impl LuaString {
       // `lua_tolstring` 会把数字就地转成字符串，而转换产物不受注册表引用
       // 保护；`LuaString` 只从真实字符串构造，这里加一道类型闸门防御，
       // 保证指针指向的必是注册表钉住的原对象。
-      let bytes = if lua_type(state, -1) == ttype::STRING {
+      let bytes = if lua_type(state, -1) == LuaType::String as c_int {
         let mut len = 0usize;
         let p = lua_tolstring(state, -1, &mut len);
         if p.is_null() {
