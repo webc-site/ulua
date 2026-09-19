@@ -25,14 +25,15 @@ pub unsafe fn to_string_ast_node(node: *mut AstNode) -> String {
 
   let stat_node = node_ref.as_stat_const();
   if !stat_node.is_null() {
-    // 打印器只写 Writer，节点全程共享借用（不再从共享借用造 &mut）
-    printer.visualize_ast_stat(unsafe { &*stat_node });
+    // 打印器只写 Writer，节点全程共享借用（不再从共享借用造 &mut）；
+    // 指针判空后按 `IntoNodePtr` 交出，解引用收口在 printer 内部
+    printer.visualize_ast_stat(stat_node);
   } else {
     let expr_node = node_ref.as_expr_const();
     if !expr_node.is_null() {
-      printer.visualize_ast_expr(unsafe { &*expr_node });
+      printer.visualize_ast_expr(expr_node);
     } else {
-      printer.visualize_type_annotation(unsafe { &*node_ref.as_type() });
+      printer.visualize_type_annotation(node_ref.as_type_const());
     }
   }
 

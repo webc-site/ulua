@@ -107,7 +107,7 @@ impl AstVisitor for AutocompleteNodeFinder {
         {
           return false;
         }
-        if (*last).as_type().as_ref().is_some() {
+        if (*last).as_type_const().as_ref().is_some() {
           return false;
         }
       }

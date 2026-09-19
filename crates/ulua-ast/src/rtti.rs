@@ -40,7 +40,13 @@ use crate::records::{
   ast_stat_local::AstStatLocal, ast_stat_local_function::AstStatLocalFunction,
   ast_stat_repeat::AstStatRepeat, ast_stat_return::AstStatReturn,
   ast_stat_type_alias::AstStatTypeAlias, ast_stat_type_function::AstStatTypeFunction,
-  ast_stat_while::AstStatWhile, ast_type::AstType, ast_type_pack::AstTypePack, cst_node::CstNode,
+  ast_stat_while::AstStatWhile, ast_type::AstType, ast_type_error::AstTypeError,
+  ast_type_function::AstTypeFunction, ast_type_group::AstTypeGroup,
+  ast_type_intersection::AstTypeIntersection, ast_type_optional::AstTypeOptional,
+  ast_type_pack::AstTypePack, ast_type_reference::AstTypeReference,
+  ast_type_singleton_bool::AstTypeSingletonBool, ast_type_singleton_string::AstTypeSingletonString,
+  ast_type_table::AstTypeTable, ast_type_typeof::AstTypeTypeof, ast_type_union::AstTypeUnion,
+  cst_node::CstNode,
 };
 
 /// FNV-1a 32 位参数：offset basis 与 prime。
@@ -278,6 +284,27 @@ pub fn is_stat_class(class_index: i32) -> bool {
       | AstStatTypeAlias::CLASS_INDEX
       | AstStatTypeFunction::CLASS_INDEX
       | AstStatWhile::CLASS_INDEX
+  )
+}
+
+/// 基类家族判别：`node->asType()` 的判别面（cpp `AstNode::asType()` 只在 11 个
+/// `AstType` 派生类上非空）。与 [`is_expr_class`] 同理，供 `as_type`（可变）与
+/// `as_type_const`（只读）共用。
+#[inline]
+pub fn is_type_class(class_index: i32) -> bool {
+  matches!(
+    class_index,
+    AstTypeError::CLASS_INDEX
+      | AstTypeFunction::CLASS_INDEX
+      | AstTypeGroup::CLASS_INDEX
+      | AstTypeIntersection::CLASS_INDEX
+      | AstTypeOptional::CLASS_INDEX
+      | AstTypeReference::CLASS_INDEX
+      | AstTypeSingletonBool::CLASS_INDEX
+      | AstTypeSingletonString::CLASS_INDEX
+      | AstTypeTable::CLASS_INDEX
+      | AstTypeTypeof::CLASS_INDEX
+      | AstTypeUnion::CLASS_INDEX
   )
 }
 

@@ -1,38 +1,30 @@
-use core::ptr::null_mut;
+use core::ptr::{null, null_mut};
 
 use crate::{
-  records::{
-    ast_node::AstNode, ast_type::AstType, ast_type_error::AstTypeError,
-    ast_type_function::AstTypeFunction, ast_type_group::AstTypeGroup,
-    ast_type_intersection::AstTypeIntersection, ast_type_optional::AstTypeOptional,
-    ast_type_reference::AstTypeReference, ast_type_singleton_bool::AstTypeSingletonBool,
-    ast_type_singleton_string::AstTypeSingletonString, ast_type_table::AstTypeTable,
-    ast_type_typeof::AstTypeTypeof, ast_type_union::AstTypeUnion,
-  },
-  rtti::AstNodeClass,
+  records::{ast_node::AstNode, ast_type::AstType},
+  rtti::is_type_class,
 };
 
 impl AstNode {
-  pub fn as_type(&self) -> *mut AstType {
-    let is_type = matches!(
-      self.class_index,
-      AstTypeError::CLASS_INDEX
-        | AstTypeFunction::CLASS_INDEX
-        | AstTypeGroup::CLASS_INDEX
-        | AstTypeIntersection::CLASS_INDEX
-        | AstTypeOptional::CLASS_INDEX
-        | AstTypeReference::CLASS_INDEX
-        | AstTypeSingletonBool::CLASS_INDEX
-        | AstTypeSingletonString::CLASS_INDEX
-        | AstTypeTable::CLASS_INDEX
-        | AstTypeTypeof::CLASS_INDEX
-        | AstTypeUnion::CLASS_INDEX
-    );
-
-    if is_type {
-      self as *const AstNode as *mut AstType
+  /// cpp `AstNode::asType()`：命中 `AstType` 家族则原地降为 `*mut AstType`，
+  /// 否则 null。判别表见 [`is_type_class`]。
+  #[inline]
+  pub fn as_type(&mut self) -> *mut AstType {
+    if is_type_class(self.class_index) {
+      self as *mut AstNode as *mut AstType
     } else {
       null_mut()
+    }
+  }
+
+  /// cpp `const AstNode::asType() const`：只读判别下转，共享借用直接给 `*const`，
+  /// 不再从 `&self` 造可变指针。
+  #[inline]
+  pub fn as_type_const(&self) -> *const AstType {
+    if is_type_class(self.class_index) {
+      self as *const AstNode as *const AstType
+    } else {
+      null()
     }
   }
 }

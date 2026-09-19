@@ -71,9 +71,9 @@ pub fn autocomplete_type_names(
       continue;
     }
 
-    // SAFETY: it 判非空，AST 节点由 arena 持有。
-    let node_ref: &AstNode = unsafe { &*it };
-    let as_type = node_ref.as_type();
+    // SAFETY: it 判非空，AST 节点由 arena 持有；下转结果按 *mut 沿用到
+    // find_type_element_at_*，故直接经裸指针取，避免先造共享引用再要可变借用。
+    let as_type = unsafe { (*it).as_type() };
     if as_type.is_null() {
       parent = it;
       break;
