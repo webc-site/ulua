@@ -2,7 +2,7 @@ use ulua_ast::records::ast_expr::AstExpr;
 use ulua_common::records::dense_hash_map::DenseHashMap;
 
 use crate::{
-  enums::type_constant_folding::Type::Unknown, records::constant::Constant,
+  records::constant::Constant,
   type_aliases::expr_constant_change_log::ExprConstantChangeLog,
 };
 
@@ -13,7 +13,7 @@ pub fn undo_changes_expr(
   for it in changes.iter().rev() {
     if it.was_absent {
       if let Some(old) = constants.find_mut(&it.key) {
-        old.r#type = Unknown;
+        *old = Constant::Unknown;
       }
     } else {
       let old = it.old_value;

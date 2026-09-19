@@ -1,21 +1,21 @@
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  enums::type_constant_folding::Type,
   functions::{cstring_builtin_folding::cstring_str, cvar::cvar},
   records::constant::Constant,
 };
 
 pub fn ctype(c: &Constant) -> Constant {
-  LUAU_ASSERT!(c.r#type != Type::Unknown);
+  LUAU_ASSERT!(!c.is_unknown());
 
-  match c.r#type {
-    Type::Nil => cstring_str("nil"),
-    Type::Boolean => cstring_str("boolean"),
-    Type::Number => cstring_str("number"),
-    Type::Integer => cstring_str("integer"),
-    Type::Vector => cstring_str("vector"),
-    Type::String => cstring_str("string"),
+  match c {
+    Constant::Nil => cstring_str("nil"),
+    Constant::Boolean(_) => cstring_str("boolean"),
+    Constant::Number(_) => cstring_str("number"),
+    Constant::Integer(_) => cstring_str("integer"),
+    Constant::Vector(_) => cstring_str("vector"),
+    Constant::Str(_) => cstring_str("string"),
+    // 仅 Unknown / Table 会到达
     _ => {
       LUAU_ASSERT!(false);
       cvar()

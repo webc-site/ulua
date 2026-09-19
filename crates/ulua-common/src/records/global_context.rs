@@ -11,21 +11,15 @@ use std::{
   sync::{Mutex, MutexGuard},
 };
 
-use crate::records::{thread_context::ThreadContext, token::Token};
-
-/// `std::vector<ThreadContext*>`. The raw pointers reference thread-owned
-/// `ThreadContext`s exactly as the C++ vector does; wrapped so `Send` holds
-/// for the `Mutex`-guarded state.
-#[derive(Debug, Default)]
-pub(crate) struct ThreadPtr(pub(crate) *mut ThreadContext);
-
-// Safety: mirrors the C++ `GlobalContext`, where the same `ThreadContext*`
-// pointers are shared across threads under the protection of `context.mutex`.
-unsafe impl Send for ThreadPtr {}
+use crate::records::token::Token;
 
 #[derive(Debug, Default)]
 pub(crate) struct GlobalContextState {
-  pub(crate) threads: Vec<ThreadPtr>,
+  /// 已注册线程的 `thread_id` 列表（C++ `std::vector<ThreadContext*>`）。
+  /// 偏差（行为等价）：Rust 的 `ThreadContext` 按值移动，`this` 指针在
+  /// 构造与析构之间不稳定，故以唯一的 `thread_id` 作注册身份；该列表
+  /// 只做注册/注销配对，从不解引用。
+  pub(crate) threads: Vec<u32>,
   pub(crate) next_thread_id: u32,
   pub(crate) tokens: Vec<Token>,
   pub(crate) trace_file: Option<File>,

@@ -1,11 +1,5 @@
+/// GC 标记字节中的 FIXED 位（固定对象，不可回收）
 pub const FIXEDBIT: i32 = 3;
 
-#[inline(always)]
-pub const fn bit2mask(b1: i32, b2: i32) -> i32 {
-  (1 << b1) | (1 << b2)
-}
-
-pub const WHITE0BIT: i32 = 0;
-pub const WHITE1BIT: i32 = 1;
-
-pub const WHITEBITS: i32 = bit2mask(WHITE0BIT, WHITE1BIT);
+// WHITE0BIT/WHITE1BIT 统一以 `whitebits` 为准，此处仅转发保持旧路径可用
+pub use crate::macros::whitebits::{WHITE0BIT, WHITE1BIT, WHITEBITS};

@@ -1,4 +1,4 @@
-use core::{ffi::c_char, slice::from_raw_parts};
+use core::ffi::c_char;
 
 use ulua_ast::records::ast_array::AstArray;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
@@ -21,12 +21,7 @@ impl Constant {
   /// the slice is tied to `&self` rather than to the temporary `AstArray`.
   #[inline]
   pub fn get_string_bytes(&self) -> &[u8] {
-    let ConstantStr { ptr, len } = self.as_str();
-    if ptr.is_null() || len == 0 {
-      &[]
-    } else {
-      unsafe { from_raw_parts(ptr.cast::<u8>(), len as usize) }
-    }
+    self.as_str().bytes()
   }
 
   /// 取出字符串载荷；非字符串常量属契约违例，断言拦截

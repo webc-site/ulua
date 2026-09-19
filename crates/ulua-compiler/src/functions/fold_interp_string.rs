@@ -5,20 +5,17 @@ use ulua_ast::records::{
 };
 use ulua_common::{macros::luau_assert::LUAU_ASSERT, records::dense_hash_map::DenseHashMap};
 
-use crate::{enums::type_constant_folding::Type, records::constant::Constant};
+use crate::records::constant::Constant;
 
 /// 常量字符串折叠上限（C++ `kConstantFoldStringLimit`）
 const K_CONSTANT_FOLD_STRING_LIMIT: usize = 4096;
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn fold_interp_string(
-  result: &mut Constant,
-  expr: *mut AstExprInterpString,
-  constants: &mut DenseHashMap<*mut AstExpr, Constant>,
+/// C++ `foldInterpString`：拼接插值字符串常量；超限或不含常量时返回 `Constant::Unknown`
+pub fn fold_interp_string(
+  expr: &AstExprInterpString,
+  constants: &DenseHashMap<*mut AstExpr, Constant>,
   string_table: &mut AstNameTable,
-) {
-  let expr = unsafe { &*expr };
+) -> Constant {
   LUAU_ASSERT!(expr.strings.len() == expr.expressions.len() + 1);
 
   let strings = expr.strings.as_slice();
@@ -31,24 +28,20 @@ pub unsafe fn fold_interp_string(
     if let Some(&expr_ptr) = expressions.get(index) {
       // C++：LUAU_ASSERT(c) 后直接解引用，调用方保证表达式已折叠为字符串常量
       let c = unsafe { constants.find(&expr_ptr).unwrap_unchecked() };
-      LUAU_ASSERT!(c.r#type == Type::String);
-      result_length += c.string_length as usize;
+      LUAU_ASSERT!(matches!(c, Constant::Str(_)));
+      result_length += c.string_len() as usize;
     }
   }
 
   if result_length > K_CONSTANT_FOLD_STRING_LIMIT {
-    return;
+    return Constant::Unknown;
   }
 
-  result.r#type = Type::String;
-  result.string_length = result_length as u32;
-
   if result_length == 0 {
-    // C++ `result.valueString = ""` — a non-null pointer to a static empty C-string.
-    // A null here later trips sref()'s `LUAU_ASSERT(data.begin())` when the folded
-    // empty interpolation (e.g. `{empty}`) is emitted as a string constant.
-    result.data.value_string = c"".as_ptr();
-    return;
+    // C++ `result.valueString = ""` — 非空指针指向静态空 C 串。
+    // 若为 null，空插值（如 `{empty}`）作为字符串常量下发时会触发 sref() 的
+    // `LUAU_ASSERT(data.begin())`
+    return Constant::string(c"".as_ptr(), 0);
   }
 
   // 第二遍：拼接源串片段与已折叠的表达式字符串
@@ -62,5 +55,5 @@ pub unsafe fn fold_interp_string(
   }
 
   let name = string_table.get_or_add_slice(&tmp);
-  result.data.value_string = name.value;
+  Constant::string(name.value, result_length as u32)
 }

@@ -245,6 +245,7 @@ pub mod lexer_read_name;
 pub mod lexer_read_next;
 pub mod lexer_read_number;
 pub mod lexer_read_quoted_string;
+pub mod lexer_read_symbol_pair;
 pub mod lexer_set_skip_comments;
 pub mod lexer_skip_long_separator;
 pub mod location_contains;

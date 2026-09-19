@@ -1,10 +1,7 @@
 //! Source: `Compiler/src/ConstantFolding.cpp:944-1396`
 
 use alloc::vec::Vec;
-use core::{
-  ffi::{c_char, c_void},
-  ptr::null_mut,
-};
+use core::{ffi::c_void, ptr::null_mut};
 
 use ulua_ast::{
   records::{
@@ -30,10 +27,7 @@ use ulua_common::{
 };
 
 use crate::{
-  enums::{
-    table_constant_kind::{TableConstantKind, TableConstantKind::ConstantTable},
-    type_constant_folding::Type::{Boolean, Integer, Nil, Number, String, Table, Unknown, Vector},
-  },
+  enums::table_constant_kind::{TableConstantKind, TableConstantKind::ConstantTable},
   functions::{
     fold_binary::fold_binary, fold_builtin::fold_builtin, fold_builtin_math::fold_builtin_math,
     fold_interp_string::fold_interp_string, fold_unary::fold_unary,
@@ -115,28 +109,23 @@ impl<'a> ConstantVisitor<'a> {
     if let Some(expr) = unsafe { ast_node_as::<AstExprGroup>(node as *mut AstNode).as_mut() } {
       result = self.analyze(expr.expr);
     } else if ast_node_is::<AstExprConstantNil>(node as *mut AstNode) {
-      result.r#type = Nil;
+      result = Constant::Nil;
     } else if let Some(expr) =
       unsafe { ast_node_as::<AstExprConstantBool>(node as *mut AstNode).as_mut() }
     {
-      result.r#type = Boolean;
-      result.data.value_boolean = expr.value;
+      result = Constant::Boolean(expr.value);
     } else if let Some(expr) =
       unsafe { ast_node_as::<AstExprConstantNumber>(node as *mut AstNode).as_mut() }
     {
-      result.r#type = Number;
-      result.data.value_number = expr.value;
+      result = Constant::Number(expr.value);
     } else if let Some(expr) =
       unsafe { ast_node_as::<AstExprConstantInteger>(node as *mut AstNode).as_mut() }
     {
-      result.r#type = Integer;
-      result.data.value_integer64 = expr.value;
+      result = Constant::Integer(expr.value);
     } else if let Some(expr) =
       unsafe { ast_node_as::<AstExprConstantString>(node as *mut AstNode).as_mut() }
     {
-      result.r#type = String;
-      result.data.value_string = expr.value.data as *const c_char;
-      result.string_length = expr.value.size as u32;
+      result = Constant::string(expr.value.data.cast(), expr.value.size as u32);
     } else if let Some(expr) = unsafe { ast_node_as::<AstExprLocal>(node as *mut AstNode).as_mut() }
     {
       if let Some(l) = self.locals.find(&expr.local) {
@@ -168,7 +157,7 @@ impl<'a> ConstantVisitor<'a> {
           for &arg in expr.args.iter() {
             let ac = self.analyze(arg);
 
-            if ac.r#type != Unknown && ac.r#type != Table {
+            if !ac.is_unknown() && !matches!(ac, Constant::Table(_)) {
               self.builtin_args.push(ac);
             } else {
               can_fold = false;
@@ -201,51 +190,38 @@ impl<'a> ConstantVisitor<'a> {
       unsafe { ast_node_as::<AstExprIndexName>(node as *mut AstNode).as_mut() }
     {
       let value = self.analyze(expr.expr);
-      if value.r#type == Table {
-        let table_index = unsafe { value.data.value_table };
-        LUAU_ASSERT!(table_index < self.constant_tables.len());
-        if table_index < self.constant_tables.len() {
-          let props = &self.constant_tables[table_index];
-          if let Some(prop) = props.find(&expr.index) {
+      match value {
+        Constant::Table(table_index) => {
+          LUAU_ASSERT!(table_index < self.constant_tables.len());
+          if table_index < self.constant_tables.len()
+            && let Some(prop) = self.constant_tables[table_index].find(&expr.index)
+          {
             result = *prop;
           }
         }
-      } else if value.r#type == Vector {
-        match expr.index.as_bytes() {
-          b"x" | b"X" => {
-            result.r#type = Number;
-            result.data.value_number = unsafe { value.data.value_vector[0] as f64 };
-          }
-          b"y" | b"Y" => {
-            result.r#type = Number;
-            result.data.value_number = unsafe { value.data.value_vector[1] as f64 };
-          }
-          b"z" | b"Z" => {
-            result.r#type = Number;
-            result.data.value_number = unsafe { value.data.value_vector[2] as f64 };
-          }
+        Constant::Vector(v) => match expr.index.as_bytes() {
+          b"x" | b"X" => result = Constant::Number(f64::from(v[0])),
+          b"y" | b"Y" => result = Constant::Number(f64::from(v[1])),
+          b"z" | b"Z" => result = Constant::Number(f64::from(v[2])),
           _ => {}
-        }
+        },
+        _ if self.fold_library_k => {
+          if let Some(eg) =
+            unsafe { ast_node_as::<AstExprGlobal>(expr.expr as *mut AstNode).as_mut() }
+          {
+            if eg.name == "math" {
+              result = fold_builtin_math(expr.index);
+            }
 
-        // Do not handle 'w' component because it isn't known if the runtime will be configured in 3-wide or 4-wide mode
-        // In 3-wide, access to 'w' will call unspecified metamethod or fail
-      } else if self.fold_library_k
-        && let Some(eg) =
-          unsafe { ast_node_as::<AstExprGlobal>(expr.expr as *mut AstNode).as_mut() }
-      {
-        if eg.name == "math" {
-          result = fold_builtin_math(expr.index);
+            if let Some(cb) = self.library_member_constant_cb.filter(|_| result.is_unknown()) {
+              // C++ passes reinterpret_cast<CompileConstant*>(&result): the
+              // pointer VALUE handed to the callback must be &result itself.
+              let constant_ptr = &mut result as *mut Constant as *mut CompileConstant;
+              unsafe { cb(eg.name.value, expr.index.value, constant_ptr) };
+            }
+          }
         }
-
-        if let Some(cb) = self
-          .library_member_constant_cb
-          .filter(|_| result.r#type == Unknown)
-        {
-          // C++ passes reinterpret_cast<CompileConstant*>(&result): the
-          // pointer VALUE handed to the callback must be &result itself.
-          let constant_ptr = &mut result as *mut Constant as *mut CompileConstant;
-          unsafe { cb(eg.name.value, expr.index.value, constant_ptr) };
-        }
+        _ => {}
       }
     } else if let Some(expr) =
       unsafe { ast_node_as::<AstExprIndexExpr>(node as *mut AstNode).as_mut() }
@@ -253,11 +229,10 @@ impl<'a> ConstantVisitor<'a> {
       let index_val = self.analyze(expr.index);
       let table_val = self.analyze(expr.expr);
 
-      if table_val.r#type == Table && index_val.r#type == String {
-        let table_index = unsafe { table_val.data.value_table };
-        LUAU_ASSERT!(table_index < self.constant_tables.len());
-        if table_index < self.constant_tables.len() && index_val.string_length != 0 {
-          let props = &self.constant_tables[table_index];
+      if let (Constant::Table(table_index), Constant::Str { .. }) = (&table_val, &index_val) {
+        LUAU_ASSERT!(*table_index < self.constant_tables.len());
+        if *table_index < self.constant_tables.len() && index_val.string_len() != 0 {
+          let props = &self.constant_tables[*table_index];
           let index_name = self
             .string_table
             .get_or_add_slice(index_val.get_string_bytes());
@@ -281,10 +256,10 @@ impl<'a> ConstantVisitor<'a> {
         if !item.key.is_null() {
           let key_val = self.analyze(item.key);
 
-          if key_val.r#type == String
-            && value_val.r#type != Unknown
-            && value_val.r#type != Table
-            && key_val.string_length != 0
+          if let (Constant::Str { len, .. }, _) = (&key_val, &value_val)
+            && *len != 0
+            && !value_val.is_unknown()
+            && !matches!(value_val, Constant::Table(_))
           {
             let const_key = self
               .string_table
@@ -295,15 +270,14 @@ impl<'a> ConstantVisitor<'a> {
       }
 
       if props.size() == expr.items.size {
-        result.r#type = Table;
-        result.data.value_table = self.constant_tables.len();
+        result = Constant::Table(self.constant_tables.len());
         self.constant_tables.push(props);
       }
     } else if let Some(expr) = unsafe { ast_node_as::<AstExprUnary>(node as *mut AstNode).as_mut() }
     {
       let arg = self.analyze(expr.expr);
 
-      if arg.r#type != Unknown {
+      if !arg.is_unknown() {
         result = fold_unary(expr.op, &arg);
       }
     } else if let Some(expr) =
@@ -312,7 +286,7 @@ impl<'a> ConstantVisitor<'a> {
       let la = self.analyze(expr.left);
       let ra = self.analyze(expr.right);
 
-      if la.r#type != Unknown {
+      if !la.is_unknown() {
         result = fold_binary(expr.op, &la, &ra, self.string_table);
       }
     } else if let Some(expr) =
@@ -327,12 +301,8 @@ impl<'a> ConstantVisitor<'a> {
       let true_expr = self.analyze(expr.true_expr);
       let false_expr = self.analyze(expr.false_expr);
 
-      if cond.r#type != Unknown {
-        result = if cond.is_truthful() {
-          true_expr
-        } else {
-          false_expr
-        };
+      if !cond.is_unknown() {
+        result = if cond.is_truthful() { true_expr } else { false_expr };
       }
     } else if let Some(expr) =
       unsafe { ast_node_as::<AstExprInterpString>(node as *mut AstNode).as_mut() }
@@ -345,13 +315,13 @@ impl<'a> ConstantVisitor<'a> {
       // trip the upvalue assert.
       let mut only_constant_sub_expr = true;
       for &sub in expr.expressions.iter() {
-        if self.analyze(sub).r#type != String {
+        if !matches!(self.analyze(sub), Constant::Str(_)) {
           only_constant_sub_expr = false;
         }
       }
 
       if only_constant_sub_expr {
-        unsafe { fold_interp_string(&mut result, expr, self.constants, self.string_table) };
+        result = fold_interp_string(expr, self.constants, self.string_table);
       }
     } else if let Some(expr) =
       unsafe { ast_node_as::<AstExprInstantiate>(node as *mut AstNode).as_mut() }
@@ -367,9 +337,9 @@ impl<'a> ConstantVisitor<'a> {
   }
 
   pub(crate) fn record_expr_constant(&mut self, key: *mut AstExpr, value: Constant) {
-    if value.r#type == Table {
+    if matches!(value, Constant::Table(_)) {
       // Table constants are recorded in a separate map
-    } else if value.r#type != Unknown {
+    } else if !value.is_unknown() {
       self.log_expr_change(key, None);
       *self.constants.get_or_insert(key) = value;
     } else if self.was_empty {
@@ -384,9 +354,9 @@ impl<'a> ConstantVisitor<'a> {
   }
 
   pub(crate) fn record_local_constant(&mut self, key: *mut AstLocal, value: Constant) {
-    if value.r#type == Table {
+    if matches!(value, Constant::Table(_)) {
       // Table constants are recorded in a separate map
-    } else if value.r#type != Unknown {
+    } else if !value.is_unknown() {
       self.log_local_change(key, None);
       *self.locals.get_or_insert(key) = value;
     } else if self.was_empty {
@@ -444,11 +414,11 @@ impl<'a> ConstantVisitor<'a> {
     let v = self.variables.find_mut(&local).unwrap();
 
     if !v.written {
-      if value.r#type == Table {
+      if matches!(value, Constant::Table(_)) {
         v.constant = false;
         self.table_locals.try_insert(local, value);
       } else {
-        v.constant = value.r#type != Unknown;
+        v.constant = !value.is_unknown();
         self.record_local_constant(local, value);
       }
     }
@@ -461,7 +431,7 @@ impl<'a> ConstantVisitor<'a> {
     for (&local, &rhs) in node_ref.vars.iter().zip(node_ref.values.iter()) {
       let arg = self.analyze(rhs);
 
-      if arg.r#type == Table {
+      if matches!(arg, Constant::Table(_)) {
         // 表常量仅在其 local 被标记为 ConstantTable 时才记录，否则按 Unknown 处理
         let is_constant_table = self
           .constant_table_locals
@@ -491,14 +461,7 @@ impl<'a> ConstantVisitor<'a> {
       if !mult_ret {
         // 尾部多余变量折叠为 nil 常量
         for &var in node_ref.vars.iter().skip(node_ref.values.size) {
-          self.record_value(
-            var,
-            Constant {
-              r#type: Nil,
-              string_length: 0,
-              data: Default::default(),
-            },
-          );
+          self.record_value(var, Constant::Nil);
         }
       }
     } else {

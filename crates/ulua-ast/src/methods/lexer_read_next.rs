@@ -76,45 +76,13 @@ impl Lexer {
         )
       }
 
-      '=' => {
-        self.consume();
-        if self.peekch() == '=' {
-          self.consume();
-          Lexeme::new(Location::with_length(start, 2), Type::EQUAL)
-        } else {
-          Lexeme::from_char(Location::with_length(start, 1), '=')
-        }
-      }
+      '=' => self.read_symbol_pair(start, '=', '=', Type::EQUAL),
 
-      '<' => {
-        self.consume();
-        if self.peekch() == '=' {
-          self.consume();
-          Lexeme::new(Location::with_length(start, 2), Type::LESS_EQUAL)
-        } else {
-          Lexeme::from_char(Location::with_length(start, 1), '<')
-        }
-      }
+      '<' => self.read_symbol_pair(start, '<', '=', Type::LESS_EQUAL),
 
-      '>' => {
-        self.consume();
-        if self.peekch() == '=' {
-          self.consume();
-          Lexeme::new(Location::with_length(start, 2), Type::GREATER_EQUAL)
-        } else {
-          Lexeme::from_char(Location::with_length(start, 1), '>')
-        }
-      }
+      '>' => self.read_symbol_pair(start, '>', '=', Type::GREATER_EQUAL),
 
-      '~' => {
-        self.consume();
-        if self.peekch() == '=' {
-          self.consume();
-          Lexeme::new(Location::with_length(start, 2), Type::NOT_EQUAL)
-        } else {
-          Lexeme::from_char(Location::with_length(start, 1), '~')
-        }
-      }
+      '~' => self.read_symbol_pair(start, '~', '=', Type::NOT_EQUAL),
 
       '"' | '\'' => self.read_quoted_string(),
 
@@ -142,15 +110,7 @@ impl Lexer {
         }
       }
 
-      '+' => {
-        self.consume();
-        if self.peekch() == '=' {
-          self.consume();
-          Lexeme::new(Location::with_length(start, 2), Type::ADD_ASSIGN)
-        } else {
-          Lexeme::from_char(Location::with_length(start, 1), '+')
-        }
-      }
+      '+' => self.read_symbol_pair(start, '+', '=', Type::ADD_ASSIGN),
 
       '/' => {
         self.consume();
@@ -174,45 +134,13 @@ impl Lexer {
         }
       }
 
-      '*' => {
-        self.consume();
-        if self.peekch() == '=' {
-          self.consume();
-          Lexeme::new(Location::with_length(start, 2), Type::MUL_ASSIGN)
-        } else {
-          Lexeme::from_char(Location::with_length(start, 1), '*')
-        }
-      }
+      '*' => self.read_symbol_pair(start, '*', '=', Type::MUL_ASSIGN),
 
-      '%' => {
-        self.consume();
-        if self.peekch() == '=' {
-          self.consume();
-          Lexeme::new(Location::with_length(start, 2), Type::MOD_ASSIGN)
-        } else {
-          Lexeme::from_char(Location::with_length(start, 1), '%')
-        }
-      }
+      '%' => self.read_symbol_pair(start, '%', '=', Type::MOD_ASSIGN),
 
-      '^' => {
-        self.consume();
-        if self.peekch() == '=' {
-          self.consume();
-          Lexeme::new(Location::with_length(start, 2), Type::POW_ASSIGN)
-        } else {
-          Lexeme::from_char(Location::with_length(start, 1), '^')
-        }
-      }
+      '^' => self.read_symbol_pair(start, '^', '=', Type::POW_ASSIGN),
 
-      ':' => {
-        self.consume();
-        if self.peekch() == ':' {
-          self.consume();
-          Lexeme::new(Location::with_length(start, 2), Type::DOUBLE_COLON)
-        } else {
-          Lexeme::from_char(Location::with_length(start, 1), ':')
-        }
-      }
+      ':' => self.read_symbol_pair(start, ':', ':', Type::DOUBLE_COLON),
 
       '(' | ')' | ']' | ';' | ',' | '#' | '?' | '&' | '|' => {
         let ch = self.peekch();

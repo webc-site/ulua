@@ -206,6 +206,20 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
       // C++ `VM_CONTINUE(op)` re-dispatches WITHOUT refetching `*pc`.
       let mut continue_op: Option<u8> = None;
 
+      // 条件跳转 + 指令边界断言 + 重新派发，六个比较类指令臂共用此定义
+      // （`pc`/`cl`/`insn`/`'dispatch` 均在各展开点解析）。
+      macro_rules! jump_and_next {
+        ($cond:expr) => {{
+          pc = pc.offset(if $cond { luau_insn_d(insn) as isize } else { 1 });
+          let p = {
+            let l = &(*cl).inner.l;
+            l.p
+          };
+          LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+          continue 'dispatch;
+        }};
+      }
+
       // C++ `dispatch:` label; `VM_NEXT()` == `continue 'dispatch`.
       'dispatch: loop {
         // Note: in C++ this assert block is bypassed by computed goto

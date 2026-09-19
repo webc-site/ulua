@@ -2,11 +2,11 @@ use ulua_ast::records::ast_expr::AstExpr;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  enums::type_constant_folding::Type,
   functions::sref_compiler_alt_c::sref_ast_array_c_char,
   records::{
     compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
     compiler::Compiler,
+    constant::Constant,
   },
 };
 
@@ -17,24 +17,20 @@ impl Compiler {
     unsafe {
       // 单次查找 + let-else，替代双重 unwrap
       let constant = match self.constants.find(&node) {
-        Some(c) if c.r#type != Type::Unknown => c,
+        Some(c) if !c.is_unknown() => c,
         _ => return -1,
       };
-      let cid = match constant.r#type {
-        Type::Nil => (*self.bytecode).add_constant_nil(),
-        Type::Boolean => (*self.bytecode).add_constant_boolean(constant.data.value_boolean),
-        Type::Number => (*self.bytecode).add_constant_number(constant.data.value_number),
-        Type::Integer => (*self.bytecode).add_constant_integer(constant.data.value_integer64),
-        Type::Vector => (*self.bytecode).add_constant_vector(
-          constant.data.value_vector[0],
-          constant.data.value_vector[1],
-          constant.data.value_vector[2],
-          constant.data.value_vector[3],
-        ),
-        Type::String => {
-          let string_data = (*constant).get_string();
+      let cid = match *constant {
+        Constant::Nil => (*self.bytecode).add_constant_nil(),
+        Constant::Boolean(b) => (*self.bytecode).add_constant_boolean(b),
+        Constant::Number(n) => (*self.bytecode).add_constant_number(n),
+        Constant::Integer(l) => (*self.bytecode).add_constant_integer(l),
+        Constant::Vector([x, y, z, w]) => (*self.bytecode).add_constant_vector(x, y, z, w),
+        Constant::Str(_) => {
+          let string_data = constant.get_string();
           (*self.bytecode).add_constant_string(sref_ast_array_c_char(string_data))
         }
+        // 仅 Unknown / Table 会到达
         _ => {
           LUAU_ASSERT!(false);
           return -1;

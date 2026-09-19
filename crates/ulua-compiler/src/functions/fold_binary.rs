@@ -4,7 +4,6 @@ use ulua_ast::records::{ast_expr_binary::AstExprBinaryOp, ast_name_table::AstNam
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  enums::type_constant_folding::Type,
   functions::{constants_equal::constants_equal, cvar::cvar},
   records::constant::Constant,
 };
@@ -12,44 +11,39 @@ use crate::{
 /// 常量字符串折叠上限（C++ `kConstantFoldStringLimit`）
 const K_CONSTANT_FOLD_STRING_LIMIT: u32 = 4096;
 
-/// 双操作数均为 Number 常量时取出 (左, 右) 浮点值；union 读取由类型判别守卫。
-/// 刻意不用 then_some：急切求值会在未命中时读取 union 非激活字段（UB）
+/// 双操作数均为 Number 常量时取出 (左, 右) 浮点值
 #[inline]
 fn num2(la: &Constant, ra: &Constant) -> Option<(f64, f64)> {
-  if la.r#type == Type::Number && ra.r#type == Type::Number {
-    Some(unsafe { (la.data.value_number, ra.data.value_number) })
-  } else {
-    None
+  match (la, ra) {
+    (Constant::Number(a), Constant::Number(b)) => Some((*a, *b)),
+    _ => None,
   }
 }
 
 /// 双操作数均为 Vector 常量时取出 (左, 右) 分量组
 #[inline]
 fn vec2(la: &Constant, ra: &Constant) -> Option<([f32; 4], [f32; 4])> {
-  if la.r#type == Type::Vector && ra.r#type == Type::Vector {
-    Some(unsafe { (la.data.value_vector, ra.data.value_vector) })
-  } else {
-    None
+  match (la, ra) {
+    (Constant::Vector(a), Constant::Vector(b)) => Some((*a, *b)),
+    _ => None,
   }
 }
 
 /// Number 标量 × Vector：标量按 C++ 语义广播到 4 分量
 #[inline]
 fn num_vec(la: &Constant, ra: &Constant) -> Option<([f32; 4], [f32; 4])> {
-  if la.r#type == Type::Number && ra.r#type == Type::Vector {
-    Some(unsafe { ([la.data.value_number as f32; 4], ra.data.value_vector) })
-  } else {
-    None
+  match (la, ra) {
+    (Constant::Number(a), Constant::Vector(b)) => Some(([*a as f32; 4], *b)),
+    _ => None,
   }
 }
 
 /// Vector × Number 标量
 #[inline]
 fn vec_num(la: &Constant, ra: &Constant) -> Option<([f32; 4], [f32; 4])> {
-  if la.r#type == Type::Vector && ra.r#type == Type::Number {
-    Some(unsafe { (la.data.value_vector, [ra.data.value_number as f32; 4]) })
-  } else {
-    None
+  match (la, ra) {
+    (Constant::Vector(a), Constant::Number(b)) => Some((*a, [*b as f32; 4])),
+    _ => None,
   }
 }
 
@@ -65,8 +59,7 @@ fn fold_vector(
   had_w: bool,
 ) {
   if w == 0.0 || had_w {
-    result.r#type = Type::Vector;
-    result.data.value_vector = [op(la[0], ra[0]), op(la[1], ra[1]), op(la[2], ra[2]), w];
+    *result = Constant::Vector([op(la[0], ra[0]), op(la[1], ra[1]), op(la[2], ra[2]), w]);
   }
 }
 
@@ -96,7 +89,7 @@ fn fold_vector_combo(
   }
 }
 
-/// C++ `foldBinary`：折叠二元运算，未折叠时返回 `Type::Unknown` 常量
+/// C++ `foldBinary`：折叠二元运算，未折叠时返回 `Constant::Unknown`
 /// （cpp 侧表现为不写出参 `result`）
 pub fn fold_binary(
   op: AstExprBinaryOp,
@@ -109,8 +102,7 @@ pub fn fold_binary(
   match op {
     AstExprBinaryOp::Add => {
       if let Some((a, b)) = num2(la, ra) {
-        result.r#type = Type::Number;
-        result.data.value_number = a + b;
+        result = Constant::Number(a + b);
       } else if let Some((a, b)) = vec2(la, ra) {
         // 加减法的 w 分量恒参与折叠（C++ had_w = true）
         fold_vector(&mut result, a, b, |x, y| x + y, a[3] + b[3], true);
@@ -118,115 +110,98 @@ pub fn fold_binary(
     }
     AstExprBinaryOp::Sub => {
       if let Some((a, b)) = num2(la, ra) {
-        result.r#type = Type::Number;
-        result.data.value_number = a - b;
+        result = Constant::Number(a - b);
       } else if let Some((a, b)) = vec2(la, ra) {
         fold_vector(&mut result, a, b, |x, y| x - y, a[3] - b[3], true);
       }
     }
     AstExprBinaryOp::Mul => {
       if let Some((a, b)) = num2(la, ra) {
-        result.r#type = Type::Number;
-        result.data.value_number = a * b;
+        result = Constant::Number(a * b);
       } else {
         fold_vector_combo(&mut result, la, ra, |x, y| x * y);
       }
     }
     AstExprBinaryOp::Div => {
       if let Some((a, b)) = num2(la, ra) {
-        result.r#type = Type::Number;
-        result.data.value_number = a / b;
+        result = Constant::Number(a / b);
       } else {
         fold_vector_combo(&mut result, la, ra, |x, y| x / y);
       }
     }
     AstExprBinaryOp::FloorDiv => {
       if let Some((a, b)) = num2(la, ra) {
-        result.r#type = Type::Number;
-        result.data.value_number = (a / b).floor();
+        result = Constant::Number((a / b).floor());
       } else {
         fold_vector_combo(&mut result, la, ra, floor_div);
       }
     }
     AstExprBinaryOp::Mod => {
       if let Some((a, b)) = num2(la, ra) {
-        result.r#type = Type::Number;
-        result.data.value_number = a - (a / b).floor() * b;
+        result = Constant::Number(a - (a / b).floor() * b);
       }
     }
     AstExprBinaryOp::Pow => {
       if let Some((a, b)) = num2(la, ra) {
-        result.r#type = Type::Number;
-        result.data.value_number = a.powf(b);
+        result = Constant::Number(a.powf(b));
       }
     }
     AstExprBinaryOp::Concat => {
-      if la.r#type == Type::String
-        && ra.r#type == Type::String
-        && (la.string_length + ra.string_length) <= K_CONSTANT_FOLD_STRING_LIMIT
-      {
-        result.r#type = Type::String;
-        result.string_length = la.string_length + ra.string_length;
-        if la.string_length == 0 {
-          unsafe {
-            result.data.value_string = ra.data.value_string;
-          }
-        } else if ra.string_length == 0 {
-          unsafe {
-            result.data.value_string = la.data.value_string;
-          }
-        } else {
-          let mut tmp = Vec::with_capacity(result.string_length as usize);
-          tmp.extend_from_slice(la.get_string_bytes());
-          tmp.extend_from_slice(ra.get_string_bytes());
-          let name = string_table.get_or_add_slice(&tmp);
-          result.data.value_string = name.value;
+      if let (Constant::Str(l), Constant::Str(r)) = (la, ra) {
+        let total = l.len + r.len;
+        if total <= K_CONSTANT_FOLD_STRING_LIMIT {
+          // 任一侧为空时直接沿用另一侧指针，避免拼接
+          let ptr = if l.len == 0 {
+            r.ptr
+          } else if r.len == 0 {
+            l.ptr
+          } else {
+            let mut tmp = Vec::with_capacity(total as usize);
+            tmp.extend_from_slice(la.get_string_bytes());
+            tmp.extend_from_slice(ra.get_string_bytes());
+            string_table.get_or_add_slice(&tmp).value
+          };
+          result = Constant::string(ptr, total);
         }
       }
     }
     AstExprBinaryOp::CompareNe => {
-      if la.r#type != Type::Unknown && ra.r#type != Type::Unknown {
-        result.r#type = Type::Boolean;
-        result.data.value_boolean = !constants_equal(la, ra);
+      if !la.is_unknown() && !ra.is_unknown() {
+        result = Constant::Boolean(!constants_equal(la, ra));
       }
     }
     AstExprBinaryOp::CompareEq => {
-      if la.r#type != Type::Unknown && ra.r#type != Type::Unknown {
-        result.r#type = Type::Boolean;
-        result.data.value_boolean = constants_equal(la, ra);
+      if !la.is_unknown() && !ra.is_unknown() {
+        result = Constant::Boolean(constants_equal(la, ra));
       }
     }
     AstExprBinaryOp::CompareLt => {
       if let Some((a, b)) = num2(la, ra) {
-        result.r#type = Type::Boolean;
-        result.data.value_boolean = a < b;
+        result = Constant::Boolean(a < b);
       }
     }
     AstExprBinaryOp::CompareLe => {
       if let Some((a, b)) = num2(la, ra) {
-        result.r#type = Type::Boolean;
-        result.data.value_boolean = a <= b;
+        result = Constant::Boolean(a <= b);
       }
     }
     AstExprBinaryOp::CompareGt => {
       if let Some((a, b)) = num2(la, ra) {
-        result.r#type = Type::Boolean;
-        result.data.value_boolean = a > b;
+        result = Constant::Boolean(a > b);
       }
     }
     AstExprBinaryOp::CompareGe => {
       if let Some((a, b)) = num2(la, ra) {
-        result.r#type = Type::Boolean;
-        result.data.value_boolean = a >= b;
+        result = Constant::Boolean(a >= b);
       }
     }
     AstExprBinaryOp::And => {
-      if la.r#type != Type::Unknown {
+      if !la.is_unknown() {
         result = if la.is_truthful() { *ra } else { *la };
       }
     }
     AstExprBinaryOp::Or => {
-      if la.r#type != Type::Unknown {
+      if !la.is_unknown() {
         result = if la.is_truthful() { *la } else { *ra };
       }
     }
