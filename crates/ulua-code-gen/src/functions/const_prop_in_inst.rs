@@ -12,7 +12,7 @@ use ulua_vm::{
 };
 
 use crate::{
-  enums::{ir_cmd::IrCmd, ir_const_kind::IrConstKind, ir_op_kind::IrOpKind},
+  enums::{ir_cmd::IrCmd, ir_op_kind::IrOpKind},
   fflag::LUAU_CODEGEN_SUBSTITUTE_REPLACEMENTS,
   functions::{
     compare_ir_utils::{compare_f64_f64_ir_condition, compare_int},
@@ -43,6 +43,7 @@ use crate::{
     const_prop_state::ConstPropState,
     ir_block::IrBlock,
     ir_builder::IrBuilder,
+    ir_const::IrConst,
     ir_data::{K_INVALID_INST_IDX, K_UNKNOWN_TAG},
     ir_function::IrFunction,
     ir_inst::IrInst,
@@ -1300,9 +1301,9 @@ pub fn const_prop_in_inst(
         let value = state.try_get_value(target);
         if value.kind() == IrOpKind::Constant {
           let constant = function.const_op(value);
-          if constant.kind == IrConstKind::Double {
+          if matches!(constant, IrConst::Double(_)) {
             tag = LuaType::Number as u8;
-          } else if constant.kind == IrConstKind::Int64 {
+          } else if matches!(constant, IrConst::Int64(_)) {
             tag = LuaType::Integer as u8;
           }
         }
