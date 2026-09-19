@@ -201,6 +201,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "gxhash"
+version = "3.5.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f3ce1bab7aa741d4e7042b2aae415b78741f267a98a7271ea226cd5ba6c43d7d"
+dependencies = [
+ "rustversion",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.17.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -609,6 +618,7 @@ dependencies = [
 name = "ulua-analyze-cli"
 version = "0.1.2"
 dependencies = [
+ "gxhash",
  "ulua-analysis",
  "ulua-ast",
  "ulua-bytecode",
