@@ -1,23 +1,47 @@
 //! `TypeFunctionReducer::stepPack` (TypeFunction.cpp:624-646).
-//!
-//! BLOCKED on a cross-cluster record gap: `TypePackFunction::reducer` is
-//! monomorphized as `ReducerFunction<TypeId>` (`fn(TypeId, &[TypeId],
-//! &[TypePackId], *mut TypeFunctionContext) -> ...`), so it cannot be invoked
-//! with the `TypePackId` `subject` that `stepPack` follows out of `queued_tps`
-//! (`subject` is `*const TypePackVar`, the reducer's first param is
-//! `*const Type`). The C++ `tfit->function->reducer(subject, ...)` needs the
-//! reducer typed as `ReducerFunction<TypePackId>`. There are presently no type
-//! pack functions (see `TypeFunctionReducer::get_state(TypePackId)` which always
-//! returns `Unsolved`), so this branch is dead in practice; the body is left
-//! unimplemented rather than faked or cast. Unblock by typing
-//! `records/type_pack_function.rs::TypePackFunction::reducer` as
-//! `ReducerFunction<TypePackId>`.
-use crate::records::type_function_reducer::TypeFunctionReducer;
+
+use core::ffi::c_void;
+
+use crate::{
+  functions::{follow_type_pack::follow_type_pack_id, get_type_pack::get_type_pack_id},
+  records::{
+    type_function_instance_type_pack::TypeFunctionInstanceTypePack,
+    type_function_reducer::TypeFunctionReducer,
+    type_function_reduction_result::TypeFunctionReductionResult,
+  },
+};
 
 impl TypeFunctionReducer {
   pub fn step_pack(&mut self) {
-    unimplemented!(
-      "TypeFunctionReducer::stepPack: no type-pack functions exist (reducer is monomorphized to ReducerFunction<TypeId>); dead branch — see module doc to unblock"
-    )
+    // SAFETY: queued_tps 内的句柄由构造方按 C++ 契约保证有效（同 stepType 的 follow）。
+    let subject = unsafe { follow_type_pack_id(*self.queued_tps.front()) };
+    self.queued_tps.pop_front();
+
+    if self.irreducible.contains(&(subject as *const c_void)) {
+      return;
+    }
+
+    if let Some(tfit) = get_type_pack_id::<TypeFunctionInstanceTypePack>(subject) {
+      if !self.test_parameters_type_pack_id(subject, tfit) {
+        return;
+      }
+
+      if self.try_guessing(subject) {
+        return;
+      }
+
+      // C++: `tfit->function->reducer(subject, tfit->typeArguments, tfit->packArguments, ctx)`
+      // SAFETY: reducer 为函数指针，句柄有效性与 C++ 同契约。
+      let result: TypeFunctionReductionResult<_> = unsafe {
+        let reducer = (*tfit.function).reducer;
+        reducer(
+          subject,
+          &tfit.type_arguments,
+          &tfit.pack_arguments,
+          self.ctx.as_ptr(),
+        )
+      };
+      self.handle_type_function_reduction_type_pack_id(subject, result);
+    }
   }
 }

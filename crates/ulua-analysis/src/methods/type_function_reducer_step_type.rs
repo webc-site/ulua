@@ -54,7 +54,9 @@ impl TypeFunctionReducer {
 
       let test_cyclic = self.test_for_skippability_type_id(subject);
 
-      if !self.test_parameters(subject, tfit) && test_cyclic != SkipTestResult::CyclicTypeFunction {
+      if !self.test_parameters_type_id(subject, tfit)
+        && test_cyclic != SkipTestResult::CyclicTypeFunction
+      {
         let state = tfit.state;
         if state == TypeFunctionInstanceState::Stuck || state == TypeFunctionInstanceState::Solved {
           self.try_guessing(subject);

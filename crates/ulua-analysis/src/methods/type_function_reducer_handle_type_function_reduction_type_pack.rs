@@ -1,33 +1,31 @@
-//! `TypeFunctionReducer::handleTypeFunctionReduction<T>` (TypeFunction.cpp:375-453).
-//!
-//! C++ is a template branching on `std::is_same_v<T, TypeId|TypePackId>`. It is
-//! rendered as the two concrete `handle_type_function_reduction_type_id` (本文件)
-//! 与 `..._type_pack_id`（`..._reduction_type_pack.rs`）单体；结果结构体
-//! `TypeFunctionReductionResult<T = TypeId>` 与之同参。
+//! C++ `TypeFunctionReducer::handleTypeFunctionReduction<T>` 的
+//! `T = TypePackId` 单体（TypeFunction.cpp:375-453）。
 
 use alloc::vec::Vec;
-use core::{ffi::c_void, mem::take, ptr::eq};
+use core::{ffi::c_void, mem::take};
 
 use crate::{
   enums::{reduction::Reduction, type_function_instance_state::TypeFunctionInstanceState},
-  functions::get_type_alt_j::get_type_id,
   records::{
     reduce_constraint::ReduceConstraint, type_error::TypeError,
-    type_function_instance_type::TypeFunctionInstanceType,
     type_function_reducer::TypeFunctionReducer,
     type_function_reduction_result::TypeFunctionReductionResult,
-    uninhabited_type_function::UninhabitedTypeFunction,
+    uninhabited_type_pack_function::UninhabitedTypePackFunction,
     user_defined_type_function_error::UserDefinedTypeFunctionError,
   },
-  type_aliases::{constraint_v::ConstraintV, type_error_data::TypeErrorData, type_id::TypeId},
+  type_aliases::{
+    constraint_v::ConstraintV, type_error_data::TypeErrorData, type_id::TypeId,
+    type_pack_id::TypePackId,
+  },
 };
+
 impl TypeFunctionReducer {
   /// # Safety
-  /// 调用方须保证 `参数` 等裸指针参数有效，且满足 C++ 原实现的调用契约。
-  pub(crate) fn handle_type_function_reduction_type_id(
+  /// 调用方须满足 C++ 原实现的调用契约（ctx 裸指针有效）。
+  pub(crate) fn handle_type_function_reduction_type_pack_id(
     &mut self,
-    subject: TypeId,
-    mut reduction: TypeFunctionReductionResult,
+    subject: TypePackId,
+    mut reduction: TypeFunctionReductionResult<TypePackId>,
   ) {
     for message in take(&mut reduction.messages) {
       self
@@ -39,11 +37,10 @@ impl TypeFunctionReducer {
         ));
     }
 
-    if let Some(result_ty) = reduction.result {
-      self.replace_type_id(subject, result_ty);
+    if let Some(result_tp) = reduction.result {
+      self.replace_type_pack_id(subject, result_tp);
 
-      // Collect fresh instances first so we are not holding the borrow on
-      // ctx across the mutable push onto our own queue.
+      // 先取快照再入队，避免对 ctx 的借用横跨自有队列的可变操作（同 type 单体）。
       let fresh: Vec<TypeId> = unsafe { (*self.ctx.as_ptr()).fresh_instances.clone() };
       let has_solver = unsafe { !(*self.ctx.as_ptr()).solver.is_null() };
       for ty in fresh {
@@ -69,29 +66,15 @@ impl TypeFunctionReducer {
       }
 
       if reduction.reduction_status != Reduction::MaybeOk || self.force {
-        if self.get_state_type_id(subject) == TypeFunctionInstanceState::Unsolved {
+        // getState(TypePackId) 恒为 Unsolved；setState 为 cpp 显式 no-op。
+        if self.get_state_type_pack_id(subject) == TypeFunctionInstanceState::Unsolved {
           if reduction.reduction_status == Reduction::Erroneous {
-            unsafe {
-              self.set_state_type_id_type_function_instance_state(
-                subject,
-                TypeFunctionInstanceState::Stuck,
-              )
-            };
+            self.set_state_type_pack_id(subject, TypeFunctionInstanceState::Stuck);
           } else if reduction.reduction_status == Reduction::Irreducible {
-            unsafe {
-              self.set_state_type_id_type_function_instance_state(
-                subject,
-                TypeFunctionInstanceState::Solved,
-              )
-            };
+            self.set_state_type_pack_id(subject, TypeFunctionInstanceState::Solved);
           } else if reduction.reduction_status == Reduction::MaybeOk {
             // We cannot make progress because something is unsolved, but we're also forcing.
-            unsafe {
-              self.set_state_type_id_type_function_instance_state(
-                subject,
-                TypeFunctionInstanceState::Stuck,
-              )
-            };
+            self.set_state_type_pack_id(subject, TypeFunctionInstanceState::Stuck);
           } else {
             unsafe {
               (*self.ctx.as_ptr())
@@ -102,30 +85,15 @@ impl TypeFunctionReducer {
           }
         }
 
-        // C++: `if (const TypeFunctionInstanceType* tf = get<...>(subject))`
-        if let Some(tf) = get_type_id::<TypeFunctionInstanceType>(subject) {
-          // C++: `tf->function != &ctx->builtins->typeFunctions->userFunc`
-          // SAFETY: ctx 由 reducer 构造方保证存活。
-          let is_user_func = unsafe {
-            eq(
-              tf.function.as_ptr() as *const _,
-              &(*self.ctx.as_ptr())
-                .builtins
-                .as_ref()
-                .type_functions
-                .user_func as *const _,
-            )
-          };
-          if !is_user_func {
-            self
-              .result
-              .errors
-              .push(TypeError::type_error_location_type_error_data(
-                self.location,
-                TypeErrorData::UninhabitedTypeFunction(UninhabitedTypeFunction { ty: subject }),
-              ));
-          }
-        }
+        // C++: `else if constexpr (std::is_same_v<T, TypePackId>)` — pack 分支
+        // 不查 userFunc，直接记 UninhabitedTypePackFunction。
+        self
+          .result
+          .errors
+          .push(TypeError::type_error_location_type_error_data(
+            self.location,
+            TypeErrorData::UninhabitedTypePackFunction(UninhabitedTypePackFunction { tp: subject }),
+          ));
       } else if reduction.reduction_status == Reduction::MaybeOk && !self.force {
         // We're not forcing and the reduction couldn't proceed, but it isn't obviously busted.
         // Report that this type blocks further reduction.

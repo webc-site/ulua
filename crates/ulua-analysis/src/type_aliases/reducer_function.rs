@@ -21,5 +21,9 @@ use crate::{
 // fns are assignable to the `reducer` field of
 // `TypeFunction`/`TypePackFunction` without a cast — this is the project's
 // MagicFunction-style fn-pointer wiring.
-pub type ReducerFunction<T = TypeId> =
-  unsafe fn(T, &[TypeId], &[TypePackId], *mut TypeFunctionContext) -> TypeFunctionReductionResult;
+pub type ReducerFunction<T = TypeId> = unsafe fn(
+  T,
+  &[TypeId],
+  &[TypePackId],
+  *mut TypeFunctionContext,
+) -> TypeFunctionReductionResult<T>;

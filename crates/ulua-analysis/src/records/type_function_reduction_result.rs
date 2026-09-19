@@ -4,9 +4,11 @@ use crate::{
   enums::reduction::Reduction,
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
+/// C++ `TypeFunctionReductionResult<T>`（TypeFunction.h，模板）；默认参数
+/// `TypeId` 保持既有 type-family 调用点零改动，pack family 用 `<_<TypePackId>>`。
 #[derive(Debug, Clone)]
-pub struct TypeFunctionReductionResult {
-  pub result: Option<TypeId>,
+pub struct TypeFunctionReductionResult<T = TypeId> {
+  pub result: Option<T>,
   pub reduction_status: Reduction,
   pub blocked_types: Vec<TypeId>,
   pub blocked_packs: Vec<TypePackId>,
