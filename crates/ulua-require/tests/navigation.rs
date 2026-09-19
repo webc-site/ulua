@@ -4,12 +4,7 @@
 //! 路径/别名一律按字节处理（cpp 为 `std::string`），故断言也用字节串，
 //! 并专门覆盖非 UTF-8 字节不被替换为 U+FFFD 的语义。
 
-use alloc::{
-  string::{String, ToString},
-  vec::Vec,
-};
-
-use crate::{
+use ulua_require::{
   enums::{
     config_behavior::ConfigBehavior, config_status::ConfigStatus, navigate_result::NavigateResult,
     path_type::PathType, status_require_navigator::Status,

@@ -23,6 +23,6 @@ pub(crate) mod navigate_error;
 pub mod pushrequireclosureinternal;
 pub mod register_module_impl;
 pub mod resolve_require;
-pub(crate) mod split_path;
+pub mod split_path;
 pub(crate) mod utf8_boundary;
 pub mod validate_config;

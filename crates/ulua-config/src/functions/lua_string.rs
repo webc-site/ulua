@@ -14,6 +14,8 @@ pub(crate) unsafe fn lua_string(l: *mut lua_State, index: i32) -> String {
     String::new()
   } else {
     // SAFETY: lua_tolstring 返回 NUL 结尾字符串指针
+    // 已知偏差：非 UTF-8 别名字节经 lossy 折叠为 U+FFFD，理论上可与不同原始字节碰撞为同一键；
+    // 根治方案是键类型改为 Vec<u8>（字节域），划入后续轮次。
     unsafe { CStr::from_ptr(ptr) }
       .to_string_lossy()
       .into_owned()

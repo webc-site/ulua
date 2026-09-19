@@ -5,5 +5,3 @@ pub mod functions;
 pub mod methods;
 pub mod records;
 
-#[cfg(test)]
-mod tests;
