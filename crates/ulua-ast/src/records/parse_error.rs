@@ -1,6 +1,5 @@
 use alloc::string::String;
 use core::fmt::{Display, Formatter, Result};
-#[cfg(feature = "std")]
 use std::error::Error;
 
 use crate::records::location::Location;
@@ -17,5 +16,4 @@ impl Display for ParseError {
   }
 }
 
-#[cfg(feature = "std")]
 impl Error for ParseError {}

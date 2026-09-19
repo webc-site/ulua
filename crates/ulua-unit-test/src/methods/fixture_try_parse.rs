@@ -24,13 +24,7 @@ impl Fixture {
       .name_table
       .rebind_allocator(&mut self.allocator as *mut _);
 
-    let result = Parser::parse(
-      source,
-      source.len(),
-      &mut self.name_table,
-      &mut self.allocator,
-      options,
-    );
+    let result = Parser::parse(source, &mut self.name_table, &mut self.allocator, options);
 
     // SAFETY: 非 null root 指向 self.allocator 中存活的根块；生命周期绑定到
     // `&'a self`，借用期内 allocator 稳定。

@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl AstVisitable for AstTypeSingletonString {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    visitor.visit_type_singleton_string(self as *const Self as *mut c_void);
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    visitor.visit_type_singleton_string(self as *mut Self as *mut c_void);
   }
 }

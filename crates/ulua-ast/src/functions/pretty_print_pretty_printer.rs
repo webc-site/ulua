@@ -32,7 +32,7 @@ pub(crate) fn pretty_print_impl(
   {
     let mut printer = Printer::new(&mut writer, cst_node_map);
     printer.write_types = write_types;
-    printer.visualize_block_ast_stat_block(block);
+    printer.visualize_block_ast_stat_block(&*block);
   }
 
   // 直接接管 writer 内部缓冲，省一次整串拷贝。fixup 后的字符串值可含
@@ -121,7 +121,6 @@ mod tests {
     let source = "print(\"\\xff\\x02\")";
     let parse_result = Parser::parse(
       source,
-      source.len(),
       &mut names,
       &mut allocator,
       // store_cst_data = false：无 CST 时走 StringWriter::string 路径。
@@ -140,8 +139,9 @@ mod tests {
     };
     {
       let mut printer = Printer::new(&mut writer, CstNodeMap::new(null_mut()));
-      // SAFETY: parse 成功后 root 指向 arena 中存活的 AstStatBlock
-      let root = unsafe { &mut *parse_result.root };
+      // SAFETY: parse 成功后 root 指向 arena 中存活的 AstStatBlock；打印器只写
+      // Writer，节点全程共享借用
+      let root = unsafe { &*parse_result.root };
       printer.visualize_block_ast_stat_block(root);
     }
 
@@ -152,9 +152,5 @@ mod tests {
     // - 尾部 3 空格：`advance` 按源码列位补齐列差（cpp 同款 `std::string(col, ' ')`）。
     let bytes: Vec<u8> = writer.take_bytes();
     assert_eq!(bytes, b"print('\xFF\\002')   ".as_slice());
-
-    // 对照：String 出口的 lossy 语义（U+FFFD 替换 0xFF）仅为可读性降级，
-    // 不作为字节回归依据。
-    let _ = String::from_utf8_lossy(&bytes);
   }
 }

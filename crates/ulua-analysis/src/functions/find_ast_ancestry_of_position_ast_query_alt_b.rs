@@ -7,12 +7,16 @@ use ulua_ast::{
 
 use crate::records::find_full_ancestry::FindFullAncestry;
 
+/// C++ `findAstAncestryOfPosition(AstStatBlock* root, Position, bool)`
+/// （`AstQuery.cpp:247`）：形参在 cpp 侧即非 const `AstStatBlock*`，因为
+/// `AstNode::visit` 需要非 const `this`；Rust 因此取 `&mut`（而非共享引用再
+/// 伪造 `*mut`）。
 pub fn find_ast_ancestry_of_position_ast_stat_block_position_bool(
-  root: &AstStatBlock,
+  root: &mut AstStatBlock,
   mut pos: Position,
   include_types: bool,
 ) -> Vec<*mut AstNode> {
-  let root_node_ptr = root as *const AstStatBlock as *const AstNode;
+  let root_node_ptr = &*root as *const AstStatBlock as *const AstNode;
   let end = unsafe { (*root_node_ptr).location.end };
 
   if pos > end {
@@ -21,10 +25,6 @@ pub fn find_ast_ancestry_of_position_ast_stat_block_position_bool(
 
   let mut finder = FindFullAncestry::new(pos, end, include_types);
 
-  // AstStatBlock inherits from AstStat, which inherits from AstNode.
-  // In Rust, the base field chain is root.base.base for AstNode.
-  // However, the compiler error indicates AstStat might not have a 'base' field in this version,
-  // or it's accessed differently. Based on the AstNodeClass pattern, we can use the visit trait.
   root.visit(&mut finder);
 
   finder.nodes

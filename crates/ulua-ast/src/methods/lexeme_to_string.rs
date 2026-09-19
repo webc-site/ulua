@@ -5,10 +5,10 @@
 //! enum variants. `Lexeme::data` is a C `union`, so the payload arms read the
 //! active member through `unsafe { self.data.<member> }` rather than matching it.
 
+use alloc::string::String;
 use core::{
   fmt::{Display, Formatter, Result},
   slice::from_raw_parts,
-  str::from_utf8_unchecked,
 };
 
 use crate::{
@@ -22,16 +22,20 @@ const K_RESERVED: [&str; 21] = [
 ];
 
 impl Lexeme {
-  /// STRING/NUMBER 族词素的字节负载转 `&str`；空指针返回 `None`（cpp 同款判空）。
+  /// STRING/NUMBER/COMMENT 族词素的字节负载（源缓冲中的原始切片，**不保证**
+  /// UTF-8：`"\xFF"` 之类的字面量按 cpp 词法器就是逐字节存的）；空指针返回
+  /// `None`（cpp 同款判空）。调用方自行决定如何呈现（`from_utf8_lossy`）。
   ///
   /// # Safety
-  /// `self.r#type` 必须是实际写入 `data.data` 成员的变体（联合体直读）。
-  unsafe fn data_str(&self) -> Option<&str> {
+  /// `self.r#type` 必须是把指针写入 `data.data` 成员的变体（联合体直读）。
+  pub(crate) unsafe fn data_bytes(&self) -> Option<&[u8]> {
     let ptr = unsafe { self.data.data };
     if ptr.is_null() {
       return None;
     }
-    Some(unsafe { from_utf8_unchecked(from_raw_parts(ptr as *const u8, self.length as usize)) })
+    // SAFETY: 非空指针与 `length` 均由词法器成对写入，指向源缓冲内
+    // `[ptr, ptr + length)` 的存活字节；此处只建切片，不解释编码。
+    Some(unsafe { from_raw_parts(ptr as *const u8, self.length as usize) })
   }
 }
 
@@ -57,28 +61,28 @@ impl Display for Lexeme {
       Type::POW_ASSIGN => write!(f, "'^='"),
       Type::CONCAT_ASSIGN => write!(f, "'..='"),
 
-      Type::RAW_STRING | Type::QUOTED_STRING => match unsafe { self.data_str() } {
-        Some(s) => write!(f, "\"{s}\""),
+      Type::RAW_STRING | Type::QUOTED_STRING => match unsafe { self.data_bytes() } {
+        Some(s) => write!(f, "\"{}\"", String::from_utf8_lossy(s)),
         None => write!(f, "string"),
       },
-      Type::INTERP_STRING_BEGIN => match unsafe { self.data_str() } {
-        Some(s) => write!(f, "`{s}{{"),
+      Type::INTERP_STRING_BEGIN => match unsafe { self.data_bytes() } {
+        Some(s) => write!(f, "`{}{{", String::from_utf8_lossy(s)),
         None => write!(f, "the beginning of an interpolated string"),
       },
-      Type::INTERP_STRING_MID => match unsafe { self.data_str() } {
-        Some(s) => write!(f, "}}{s}{{"),
+      Type::INTERP_STRING_MID => match unsafe { self.data_bytes() } {
+        Some(s) => write!(f, "}}{}{{", String::from_utf8_lossy(s)),
         None => write!(f, "the middle of an interpolated string"),
       },
-      Type::INTERP_STRING_END => match unsafe { self.data_str() } {
-        Some(s) => write!(f, "}}{s}`"),
+      Type::INTERP_STRING_END => match unsafe { self.data_bytes() } {
+        Some(s) => write!(f, "}}{}`", String::from_utf8_lossy(s)),
         None => write!(f, "the end of an interpolated string"),
       },
-      Type::INTERP_STRING_SIMPLE => match unsafe { self.data_str() } {
-        Some(s) => write!(f, "`{s}`"),
+      Type::INTERP_STRING_SIMPLE => match unsafe { self.data_bytes() } {
+        Some(s) => write!(f, "`{}`", String::from_utf8_lossy(s)),
         None => write!(f, "interpolated string"),
       },
-      Type::NUMBER => match unsafe { self.data_str() } {
-        Some(s) => write!(f, "'{s}'"),
+      Type::NUMBER => match unsafe { self.data_bytes() } {
+        Some(s) => write!(f, "'{}'", String::from_utf8_lossy(s)),
         None => write!(f, "number"),
       },
 

@@ -6,8 +6,8 @@ use crate::{
 };
 
 impl AstVisitable for AstExprInterpString {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    if visitor.visit_expr_interp_string(self as *const Self as *mut c_void) {
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    if visitor.visit_expr_interp_string(self as *mut Self as *mut c_void) {
       for &expr in self.expressions.iter() {
         unsafe {
           ast_expr_visit(expr, visitor);

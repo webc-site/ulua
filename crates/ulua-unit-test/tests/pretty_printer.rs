@@ -1004,13 +1004,7 @@ end
     // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
     let mut allocator = Box::new(Allocator::new());
     let mut names = AstNameTable::new(&mut allocator);
-    let parse_result = Parser::parse(
-      example,
-      example.len(),
-      &mut names,
-      &mut allocator,
-      parse_options,
-    );
+    let parse_result = Parser::parse(example, &mut names, &mut allocator, parse_options);
 
     assert!(!parse_result.root.is_null());
     let _ = unsafe { pretty_print_with_types_ast_stat_block(&mut *parse_result.root) };
@@ -1666,13 +1660,7 @@ mod pretty_printer_pretty_print_ast_stat_block_overload {
     // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
     let mut allocator = Box::new(Allocator::new());
     let mut names = AstNameTable::new(&mut allocator);
-    let result = Parser::parse(
-      code,
-      code.len(),
-      &mut names,
-      &mut allocator,
-      ParseOptions::default(),
-    );
+    let result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
     assert!(!result.root.is_null());
 
@@ -1820,13 +1808,7 @@ mod pretty_printer_pretty_print_error_expr {
     // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
     let mut allocator = Box::new(Allocator::new());
     let mut names = AstNameTable::new(&mut allocator);
-    let parse_result = Parser::parse(
-      code,
-      code.len(),
-      &mut names,
-      &mut allocator,
-      ParseOptions::default(),
-    );
+    let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
     assert!(!parse_result.root.is_null());
     let actual = unsafe { pretty_print_with_types_ast_stat_block(&mut *parse_result.root) };
@@ -1853,13 +1835,7 @@ mod pretty_printer_pretty_print_error_stat {
     // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
     let mut allocator = Box::new(Allocator::new());
     let mut names = AstNameTable::new(&mut allocator);
-    let parse_result = Parser::parse(
-      code,
-      code.len(),
-      &mut names,
-      &mut allocator,
-      ParseOptions::default(),
-    );
+    let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
     assert!(!parse_result.root.is_null());
     let actual = unsafe { pretty_print_with_types_ast_stat_block(&mut *parse_result.root) };
@@ -1886,13 +1862,7 @@ mod pretty_printer_pretty_print_error_type {
     // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
     let mut allocator = Box::new(Allocator::new());
     let mut names = AstNameTable::new(&mut allocator);
-    let parse_result = Parser::parse(
-      code,
-      code.len(),
-      &mut names,
-      &mut allocator,
-      ParseOptions::default(),
-    );
+    let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
     assert!(!parse_result.root.is_null());
     let actual = unsafe { pretty_print_with_types_ast_stat_block(&mut *parse_result.root) };
@@ -1940,13 +1910,7 @@ mod pretty_printer_pretty_print_explicit_type_instantiations {
     // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
     let mut allocator = Box::new(Allocator::new());
     let mut names = AstNameTable::new(&mut allocator);
-    let parse_result = Parser::parse(
-      code,
-      code.len(),
-      &mut names,
-      &mut allocator,
-      ParseOptions::default(),
-    );
+    let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
     assert!(parse_result.errors.is_empty(), "{:?}", parse_result.errors);
     assert!(!parse_result.root.is_null());
     let actual = unsafe { pretty_print_with_types_ast_stat_block(&mut *parse_result.root) };
@@ -3133,13 +3097,7 @@ mod pretty_printer_pretty_print_to_string {
     // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
     let mut allocator = Box::new(Allocator::new());
     let mut names = AstNameTable::new(&mut allocator);
-    let parse_result = Parser::parse(
-      code,
-      code.len(),
-      &mut names,
-      &mut allocator,
-      ParseOptions::default(),
-    );
+    let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
     assert!(!parse_result.root.is_null());
     let root = unsafe { &*parse_result.root };
@@ -4066,13 +4024,7 @@ mod pretty_printer_roundtrip_generic_types {
     let mut allocator = Box::new(Allocator::new());
     let mut names = AstNameTable::new(&mut allocator);
 
-    let parse_result = Parser::parse(
-      code,
-      code.len(),
-      &mut names,
-      &mut allocator,
-      ParseOptions::default(),
-    );
+    let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
     assert!(parse_result.errors.is_empty());
     assert!(!parse_result.root.is_null());
@@ -4106,13 +4058,7 @@ mod pretty_printer_roundtrip_types {
     let mut allocator = Box::new(Allocator::new());
     let mut names = AstNameTable::new(&mut allocator);
 
-    let parse_result = Parser::parse(
-      code,
-      code.len(),
-      &mut names,
-      &mut allocator,
-      ParseOptions::default(),
-    );
+    let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
     assert!(parse_result.errors.is_empty());
     assert!(!parse_result.root.is_null());

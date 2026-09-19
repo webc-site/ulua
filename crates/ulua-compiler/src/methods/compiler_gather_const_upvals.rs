@@ -8,7 +8,7 @@ impl Compiler {
   pub unsafe fn gather_const_upvals(&mut self, func: *mut AstExprFunction) {
     let mut visitor = self.const_upvalue_visitor_const_upvalue_visitor();
     unsafe {
-      ast_stat_block_visit(&*(*func).body, &mut visitor);
+      ast_stat_block_visit(&mut *(*func).body, &mut visitor);
     }
     for local in visitor.upvals {
       unsafe { self.get_upval(local) };

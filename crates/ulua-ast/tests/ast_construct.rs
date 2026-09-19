@@ -24,13 +24,7 @@ use ulua_ast::{
 fn with_block<R>(src: &str, f: impl FnOnce(*mut AstStatBlock) -> R) -> R {
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let result = Parser::parse(
-    src,
-    src.len(),
-    &mut names,
-    &mut allocator,
-    ParseOptions::default(),
-  );
+  let result = Parser::parse(src, &mut names, &mut allocator, ParseOptions::default());
   assert!(
     result.errors.is_empty(),
     "unexpected parse errors: {:?}",

@@ -5,7 +5,7 @@
 //! 判空与字段读取全部走安全代码。
 //!
 //! 节点子指针不再在调用点解引用：直接传裸指针给 `visualize_*`（`IntoNodePtr`
-//! 归一）；`AstArray<*mut T>` 遍历统一走 `iter_mut_nodes`。
+//! 归一）；`AstArray<*mut T>` 遍历统一走 `iter_nodes`。
 
 use crate::records::{
   ast_expr_function::AstExprFunction,
@@ -19,8 +19,8 @@ use crate::records::{
 impl<'a, W: Writer> Printer<'a, W> {
   pub fn visualize_function_body<F: IntoNodePtr<AstExprFunction>>(&mut self, func: F) {
     // SAFETY: func 指向 arena 中存活的 AstExprFunction
-    let func = unsafe { &mut *func.into_node_ptr() };
-    let cst_node = self.lookup_cst_node::<CstExprFunction>(&mut func.base.base);
+    let func = unsafe { &*func.into_node_ptr() };
+    let cst_node = self.lookup_cst_node::<CstExprFunction>(&func.base.base);
 
     if func.generics.size > 0 || func.generic_packs.size > 0 {
       let mut comma = CommaSeparatorInserter::new(
@@ -29,18 +29,18 @@ impl<'a, W: Writer> Printer<'a, W> {
 
       self.maybe_advance_or_symbol(cst_node.map(|cst| &cst.open_generics_position), "<");
 
-      for generic_ty in func.generics.iter_mut_nodes() {
+      for generic_ty in func.generics.iter_nodes() {
         comma.operator_call(self.writer);
         self.writer.advance(&generic_ty.base.location.begin);
         self.writer.identifier(generic_ty.name.as_bytes());
       }
 
-      for pack in func.generic_packs.iter_mut_nodes() {
+      for pack in func.generic_packs.iter_nodes() {
         comma.operator_call(self.writer);
         self.writer.advance(&pack.base.location.begin);
         self.writer.identifier(pack.name.as_bytes());
 
-        if let Some(cst) = self.lookup_cst_node::<CstGenericTypePack>(&mut pack.base) {
+        if let Some(cst) = self.lookup_cst_node::<CstGenericTypePack>(&pack.base) {
           self.advance(cst.ellipsis_position);
         }
 
@@ -61,7 +61,7 @@ impl<'a, W: Writer> Printer<'a, W> {
     // 退化直接写 ":"。
     let colon_positions = cst_node.map(|cst| cst.args_annotation_colon_positions.as_slice());
 
-    for (i, local) in func.args.iter_mut_nodes().enumerate() {
+    for (i, local) in func.args.iter_nodes().enumerate() {
       comma.operator_call(self.writer);
       self.advance(local.location.begin);
       self.writer.identifier(local.name.as_bytes());
@@ -108,8 +108,8 @@ impl<'a, W: Writer> Printer<'a, W> {
     }
 
     // SAFETY: body 指向 arena 存活的 AstStatBlock
-    let body = unsafe { &mut *func.body };
-    self.visualize_block_ast_stat_block(&mut *body);
+    let body = unsafe { &*func.body };
+    self.visualize_block_ast_stat_block(body);
     self.advance(body.base.base.location.end);
     self.writer.keyword("end");
   }

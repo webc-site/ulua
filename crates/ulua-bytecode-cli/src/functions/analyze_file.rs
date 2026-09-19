@@ -48,13 +48,7 @@ pub fn analyze_file(
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
   let parse_options = ParseOptions::default();
-  let parse_result = Parser::parse(
-    source.as_str(),
-    source.len(),
-    &mut names,
-    &mut allocator,
-    parse_options,
-  );
+  let parse_result = Parser::parse(source.as_str(), &mut names, &mut allocator, parse_options);
 
   if !parse_result.errors.is_empty() {
     for error in &parse_result.errors {

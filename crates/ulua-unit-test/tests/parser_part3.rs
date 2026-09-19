@@ -285,13 +285,7 @@ fn parser_incomplete_method_call() {
   // Box 钉堆：AstNameTable/Parser 捕获宿主地址，宿主移动即悬垂。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let result = Parser::parse(
-    source,
-    source.len(),
-    &mut names,
-    &mut allocator,
-    ParseOptions::new(),
-  );
+  let result = Parser::parse(source, &mut names, &mut allocator, ParseOptions::new());
 
   let root = result.root.as_ref_opt().expect("根块必须存在");
   assert_eq!(1, root.body.size);
@@ -323,13 +317,7 @@ fn parser_incomplete_method_call_2() {
 
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let result = Parser::parse(
-    source,
-    source.len(),
-    &mut names,
-    &mut allocator,
-    ParseOptions::new(),
-  );
+  let result = Parser::parse(source, &mut names, &mut allocator, ParseOptions::new());
 
   let root = result.root.as_ref_opt().expect("根块必须存在");
   assert_eq!(2, root.body.size);

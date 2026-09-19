@@ -55,15 +55,21 @@ use crate::{
 };
 
 /// C++ `AstX::visit(AstVisitor*)` override. Implemented once per concrete node
-/// by that node's `visit` method item. `&self` is enough — `visit` never mutates
-/// the node (it only feeds `self` to the visitor and recurses).
+/// by that node's `visit` method item.
+///
+/// 参数是 `&mut self` 而非 `&self`：cpp 的 `visit(AstVisitor*)` 拿到的是非 const
+/// `this`，observer（如 Analysis 的 TypeAttacher）会按 cpp 语义在 dispatch 期间
+/// 写穿节点本身。取 `&self` 再 `as *const Self as *mut c_void` 交出去等于从共享
+/// 借用造可变指针（`&self` 在 IR 里带 readonly/noalias，优化器可见的别名 UB），
+/// 因此沿 arena 的可变性一路保持 `&mut`：调用方（`dispatch_node`）从 arena 裸指
+/// 针取得独占借用，节点再把自己的 `*mut Self` 交给 visitor。
 ///
 /// The visitor travels as generic `V: AstVisitor + ?Sized`: concrete visitors
 /// monomorphize the whole recursion into static calls (no per-node vtable
 /// round-trip), while `V = dyn AstVisitor` still compiles for callers that must
 /// stay dynamically dispatched.
 pub trait AstVisitable {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V);
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V);
 }
 
 /// `expr->visit(visitor)` where `expr` is a base `*mut AstExpr` — dispatch to the
@@ -71,6 +77,9 @@ pub trait AstVisitable {
 ///
 /// # Safety
 /// `expr` must be null or point to a live `AstExpr`-prefixed node.
+///
+/// 另需：调用方独占该节点所在 arena（visitor 按 cpp `visit(AstVisitor*)`
+/// 的非 const 语义写穿节点，dispatch 内会取 `&mut`）。
 pub unsafe fn ast_expr_visit<V: AstVisitor + ?Sized>(expr: *mut AstExpr, visitor: &mut V) {
   unsafe {
     dispatch_node(expr as *mut AstNode, visitor);
@@ -81,6 +90,9 @@ pub unsafe fn ast_expr_visit<V: AstVisitor + ?Sized>(expr: *mut AstExpr, visitor
 ///
 /// # Safety
 /// `stat` must be null or point to a live `AstStat`-prefixed node.
+///
+/// 另需：调用方独占该节点所在 arena（visitor 按 cpp `visit(AstVisitor*)`
+/// 的非 const 语义写穿节点，dispatch 内会取 `&mut`）。
 pub unsafe fn ast_stat_visit<V: AstVisitor + ?Sized>(stat: *mut AstStat, visitor: &mut V) {
   unsafe {
     dispatch_node(stat as *mut AstNode, visitor);
@@ -91,6 +103,9 @@ pub unsafe fn ast_stat_visit<V: AstVisitor + ?Sized>(stat: *mut AstStat, visitor
 ///
 /// # Safety
 /// `ty` must be null or point to a live `AstType`-prefixed node.
+///
+/// 另需：调用方独占该节点所在 arena（visitor 按 cpp `visit(AstVisitor*)`
+/// 的非 const 语义写穿节点，dispatch 内会取 `&mut`）。
 pub unsafe fn ast_type_visit<V: AstVisitor + ?Sized>(ty: *mut AstType, visitor: &mut V) {
   unsafe {
     dispatch_node(ty as *mut AstNode, visitor);
@@ -101,6 +116,9 @@ pub unsafe fn ast_type_visit<V: AstVisitor + ?Sized>(ty: *mut AstType, visitor: 
 ///
 /// # Safety
 /// `pack` must be null or point to a live `AstTypePack`-prefixed node.
+///
+/// 另需：调用方独占该节点所在 arena（visitor 按 cpp `visit(AstVisitor*)`
+/// 的非 const 语义写穿节点，dispatch 内会取 `&mut`）。
 pub(crate) unsafe fn ast_type_pack_visit<V: AstVisitor + ?Sized>(
   pack: *mut AstTypePack,
   visitor: &mut V,
@@ -114,6 +132,9 @@ pub(crate) unsafe fn ast_type_pack_visit<V: AstVisitor + ?Sized>(
 ///
 /// # Safety
 /// `node` must be null or point to a live AST node.
+///
+/// 另需：调用方独占该节点所在 arena（visitor 按 cpp `visit(AstVisitor*)`
+/// 的非 const 语义写穿节点，dispatch 内会取 `&mut`）。
 pub unsafe fn ast_node_visit<V: AstVisitor + ?Sized>(node: *mut AstNode, visitor: &mut V) {
   unsafe {
     dispatch_node(node, visitor);
@@ -130,86 +151,97 @@ pub unsafe fn ast_node_visit<V: AstVisitor + ?Sized>(node: *mut AstNode, visitor
 ///
 /// # Safety
 /// `node` must be null or point to a live AST node.
+///
+/// 另需：调用方独占该节点所在 arena（visitor 按 cpp `visit(AstVisitor*)`
+/// 的非 const 语义写穿节点，dispatch 内会取 `&mut`）。
 pub unsafe fn dispatch_node<V: AstVisitor + ?Sized>(node: *mut AstNode, visitor: &mut V) {
   unsafe {
     if node.is_null() {
       return;
     }
     match (*node).class_index {
-      AstAttr::CLASS_INDEX => (&*(node as *const AstAttr)).visit(visitor),
-      AstExprBinary::CLASS_INDEX => (&*(node as *const AstExprBinary)).visit(visitor),
-      AstExprCall::CLASS_INDEX => (&*(node as *const AstExprCall)).visit(visitor),
-      AstExprConstantBool::CLASS_INDEX => (&*(node as *const AstExprConstantBool)).visit(visitor),
+      AstAttr::CLASS_INDEX => (&mut *(node as *mut AstAttr)).visit(visitor),
+      AstExprBinary::CLASS_INDEX => (&mut *(node as *mut AstExprBinary)).visit(visitor),
+      AstExprCall::CLASS_INDEX => (&mut *(node as *mut AstExprCall)).visit(visitor),
+      AstExprConstantBool::CLASS_INDEX => (&mut *(node as *mut AstExprConstantBool)).visit(visitor),
       AstExprConstantInteger::CLASS_INDEX => {
-        (&*(node as *const AstExprConstantInteger)).visit(visitor)
+        (&mut *(node as *mut AstExprConstantInteger)).visit(visitor)
       }
-      AstExprConstantNil::CLASS_INDEX => (&*(node as *const AstExprConstantNil)).visit(visitor),
+      AstExprConstantNil::CLASS_INDEX => (&mut *(node as *mut AstExprConstantNil)).visit(visitor),
       AstExprConstantNumber::CLASS_INDEX => {
-        (&*(node as *const AstExprConstantNumber)).visit(visitor)
+        (&mut *(node as *mut AstExprConstantNumber)).visit(visitor)
       }
       AstExprConstantString::CLASS_INDEX => {
-        (&*(node as *const AstExprConstantString)).visit(visitor)
+        (&mut *(node as *mut AstExprConstantString)).visit(visitor)
       }
-      AstExprError::CLASS_INDEX => (&*(node as *const AstExprError)).visit(visitor),
-      AstExprFunction::CLASS_INDEX => (&*(node as *const AstExprFunction)).visit(visitor),
-      AstExprGlobal::CLASS_INDEX => (&*(node as *const AstExprGlobal)).visit(visitor),
-      AstExprGroup::CLASS_INDEX => (&*(node as *const AstExprGroup)).visit(visitor),
-      AstExprIfElse::CLASS_INDEX => (&*(node as *const AstExprIfElse)).visit(visitor),
-      AstExprIndexExpr::CLASS_INDEX => (&*(node as *const AstExprIndexExpr)).visit(visitor),
-      AstExprIndexName::CLASS_INDEX => (&*(node as *const AstExprIndexName)).visit(visitor),
-      AstExprInstantiate::CLASS_INDEX => (&*(node as *const AstExprInstantiate)).visit(visitor),
-      AstExprInterpString::CLASS_INDEX => (&*(node as *const AstExprInterpString)).visit(visitor),
-      AstExprLocal::CLASS_INDEX => (&*(node as *const AstExprLocal)).visit(visitor),
-      AstExprTable::CLASS_INDEX => (&*(node as *const AstExprTable)).visit(visitor),
-      AstExprTypeAssertion::CLASS_INDEX => (&*(node as *const AstExprTypeAssertion)).visit(visitor),
-      AstExprUnary::CLASS_INDEX => (&*(node as *const AstExprUnary)).visit(visitor),
-      AstExprVarargs::CLASS_INDEX => (&*(node as *const AstExprVarargs)).visit(visitor),
-      AstGenericType::CLASS_INDEX => (&*(node as *const AstGenericType)).visit(visitor),
-      AstGenericTypePack::CLASS_INDEX => (&*(node as *const AstGenericTypePack)).visit(visitor),
-      AstStatAssign::CLASS_INDEX => (&*(node as *const AstStatAssign)).visit(visitor),
-      AstStatBlock::CLASS_INDEX => (&*(node as *const AstStatBlock)).visit(visitor),
-      AstStatBreak::CLASS_INDEX => (&*(node as *const AstStatBreak)).visit(visitor),
-      AstStatClass::CLASS_INDEX => (&*(node as *const AstStatClass)).visit(visitor),
+      AstExprError::CLASS_INDEX => (&mut *(node as *mut AstExprError)).visit(visitor),
+      AstExprFunction::CLASS_INDEX => (&mut *(node as *mut AstExprFunction)).visit(visitor),
+      AstExprGlobal::CLASS_INDEX => (&mut *(node as *mut AstExprGlobal)).visit(visitor),
+      AstExprGroup::CLASS_INDEX => (&mut *(node as *mut AstExprGroup)).visit(visitor),
+      AstExprIfElse::CLASS_INDEX => (&mut *(node as *mut AstExprIfElse)).visit(visitor),
+      AstExprIndexExpr::CLASS_INDEX => (&mut *(node as *mut AstExprIndexExpr)).visit(visitor),
+      AstExprIndexName::CLASS_INDEX => (&mut *(node as *mut AstExprIndexName)).visit(visitor),
+      AstExprInstantiate::CLASS_INDEX => (&mut *(node as *mut AstExprInstantiate)).visit(visitor),
+      AstExprInterpString::CLASS_INDEX => (&mut *(node as *mut AstExprInterpString)).visit(visitor),
+      AstExprLocal::CLASS_INDEX => (&mut *(node as *mut AstExprLocal)).visit(visitor),
+      AstExprTable::CLASS_INDEX => (&mut *(node as *mut AstExprTable)).visit(visitor),
+      AstExprTypeAssertion::CLASS_INDEX => {
+        (&mut *(node as *mut AstExprTypeAssertion)).visit(visitor)
+      }
+      AstExprUnary::CLASS_INDEX => (&mut *(node as *mut AstExprUnary)).visit(visitor),
+      AstExprVarargs::CLASS_INDEX => (&mut *(node as *mut AstExprVarargs)).visit(visitor),
+      AstGenericType::CLASS_INDEX => (&mut *(node as *mut AstGenericType)).visit(visitor),
+      AstGenericTypePack::CLASS_INDEX => (&mut *(node as *mut AstGenericTypePack)).visit(visitor),
+      AstStatAssign::CLASS_INDEX => (&mut *(node as *mut AstStatAssign)).visit(visitor),
+      AstStatBlock::CLASS_INDEX => (&mut *(node as *mut AstStatBlock)).visit(visitor),
+      AstStatBreak::CLASS_INDEX => (&mut *(node as *mut AstStatBreak)).visit(visitor),
+      AstStatClass::CLASS_INDEX => (&mut *(node as *mut AstStatClass)).visit(visitor),
       AstStatCompoundAssign::CLASS_INDEX => {
-        (&*(node as *const AstStatCompoundAssign)).visit(visitor)
+        (&mut *(node as *mut AstStatCompoundAssign)).visit(visitor)
       }
-      AstStatContinue::CLASS_INDEX => (&*(node as *const AstStatContinue)).visit(visitor),
+      AstStatContinue::CLASS_INDEX => (&mut *(node as *mut AstStatContinue)).visit(visitor),
       AstStatDeclareExternType::CLASS_INDEX => {
-        (&*(node as *const AstStatDeclareExternType)).visit(visitor)
+        (&mut *(node as *mut AstStatDeclareExternType)).visit(visitor)
       }
       AstStatDeclareFunction::CLASS_INDEX => {
-        (&*(node as *const AstStatDeclareFunction)).visit(visitor)
+        (&mut *(node as *mut AstStatDeclareFunction)).visit(visitor)
       }
-      AstStatDeclareGlobal::CLASS_INDEX => (&*(node as *const AstStatDeclareGlobal)).visit(visitor),
-      AstStatError::CLASS_INDEX => (&*(node as *const AstStatError)).visit(visitor),
-      AstStatExpr::CLASS_INDEX => (&*(node as *const AstStatExpr)).visit(visitor),
-      AstStatFor::CLASS_INDEX => (&*(node as *const AstStatFor)).visit(visitor),
-      AstStatForIn::CLASS_INDEX => (&*(node as *const AstStatForIn)).visit(visitor),
-      AstStatFunction::CLASS_INDEX => (&*(node as *const AstStatFunction)).visit(visitor),
-      AstStatIf::CLASS_INDEX => (&*(node as *const AstStatIf)).visit(visitor),
-      AstStatLocal::CLASS_INDEX => (&*(node as *const AstStatLocal)).visit(visitor),
-      AstStatLocalFunction::CLASS_INDEX => (&*(node as *const AstStatLocalFunction)).visit(visitor),
-      AstStatRepeat::CLASS_INDEX => (&*(node as *const AstStatRepeat)).visit(visitor),
-      AstStatReturn::CLASS_INDEX => (&*(node as *const AstStatReturn)).visit(visitor),
-      AstStatTypeAlias::CLASS_INDEX => (&*(node as *const AstStatTypeAlias)).visit(visitor),
-      AstStatTypeFunction::CLASS_INDEX => (&*(node as *const AstStatTypeFunction)).visit(visitor),
-      AstStatWhile::CLASS_INDEX => (&*(node as *const AstStatWhile)).visit(visitor),
-      AstTypeError::CLASS_INDEX => (&*(node as *const AstTypeError)).visit(visitor),
-      AstTypeFunction::CLASS_INDEX => (&*(node as *const AstTypeFunction)).visit(visitor),
-      AstTypeGroup::CLASS_INDEX => (&*(node as *const AstTypeGroup)).visit(visitor),
-      AstTypeIntersection::CLASS_INDEX => (&*(node as *const AstTypeIntersection)).visit(visitor),
-      AstTypeOptional::CLASS_INDEX => (&*(node as *const AstTypeOptional)).visit(visitor),
-      AstTypePackExplicit::CLASS_INDEX => (&*(node as *const AstTypePackExplicit)).visit(visitor),
-      AstTypePackGeneric::CLASS_INDEX => (&*(node as *const AstTypePackGeneric)).visit(visitor),
-      AstTypePackVariadic::CLASS_INDEX => (&*(node as *const AstTypePackVariadic)).visit(visitor),
-      AstTypeReference::CLASS_INDEX => (&*(node as *const AstTypeReference)).visit(visitor),
-      AstTypeSingletonBool::CLASS_INDEX => (&*(node as *const AstTypeSingletonBool)).visit(visitor),
+      AstStatDeclareGlobal::CLASS_INDEX => {
+        (&mut *(node as *mut AstStatDeclareGlobal)).visit(visitor)
+      }
+      AstStatError::CLASS_INDEX => (&mut *(node as *mut AstStatError)).visit(visitor),
+      AstStatExpr::CLASS_INDEX => (&mut *(node as *mut AstStatExpr)).visit(visitor),
+      AstStatFor::CLASS_INDEX => (&mut *(node as *mut AstStatFor)).visit(visitor),
+      AstStatForIn::CLASS_INDEX => (&mut *(node as *mut AstStatForIn)).visit(visitor),
+      AstStatFunction::CLASS_INDEX => (&mut *(node as *mut AstStatFunction)).visit(visitor),
+      AstStatIf::CLASS_INDEX => (&mut *(node as *mut AstStatIf)).visit(visitor),
+      AstStatLocal::CLASS_INDEX => (&mut *(node as *mut AstStatLocal)).visit(visitor),
+      AstStatLocalFunction::CLASS_INDEX => {
+        (&mut *(node as *mut AstStatLocalFunction)).visit(visitor)
+      }
+      AstStatRepeat::CLASS_INDEX => (&mut *(node as *mut AstStatRepeat)).visit(visitor),
+      AstStatReturn::CLASS_INDEX => (&mut *(node as *mut AstStatReturn)).visit(visitor),
+      AstStatTypeAlias::CLASS_INDEX => (&mut *(node as *mut AstStatTypeAlias)).visit(visitor),
+      AstStatTypeFunction::CLASS_INDEX => (&mut *(node as *mut AstStatTypeFunction)).visit(visitor),
+      AstStatWhile::CLASS_INDEX => (&mut *(node as *mut AstStatWhile)).visit(visitor),
+      AstTypeError::CLASS_INDEX => (&mut *(node as *mut AstTypeError)).visit(visitor),
+      AstTypeFunction::CLASS_INDEX => (&mut *(node as *mut AstTypeFunction)).visit(visitor),
+      AstTypeGroup::CLASS_INDEX => (&mut *(node as *mut AstTypeGroup)).visit(visitor),
+      AstTypeIntersection::CLASS_INDEX => (&mut *(node as *mut AstTypeIntersection)).visit(visitor),
+      AstTypeOptional::CLASS_INDEX => (&mut *(node as *mut AstTypeOptional)).visit(visitor),
+      AstTypePackExplicit::CLASS_INDEX => (&mut *(node as *mut AstTypePackExplicit)).visit(visitor),
+      AstTypePackGeneric::CLASS_INDEX => (&mut *(node as *mut AstTypePackGeneric)).visit(visitor),
+      AstTypePackVariadic::CLASS_INDEX => (&mut *(node as *mut AstTypePackVariadic)).visit(visitor),
+      AstTypeReference::CLASS_INDEX => (&mut *(node as *mut AstTypeReference)).visit(visitor),
+      AstTypeSingletonBool::CLASS_INDEX => {
+        (&mut *(node as *mut AstTypeSingletonBool)).visit(visitor)
+      }
       AstTypeSingletonString::CLASS_INDEX => {
-        (&*(node as *const AstTypeSingletonString)).visit(visitor)
+        (&mut *(node as *mut AstTypeSingletonString)).visit(visitor)
       }
-      AstTypeTable::CLASS_INDEX => (&*(node as *const AstTypeTable)).visit(visitor),
-      AstTypeTypeof::CLASS_INDEX => (&*(node as *const AstTypeTypeof)).visit(visitor),
-      AstTypeUnion::CLASS_INDEX => (&*(node as *const AstTypeUnion)).visit(visitor),
+      AstTypeTable::CLASS_INDEX => (&mut *(node as *mut AstTypeTable)).visit(visitor),
+      AstTypeTypeof::CLASS_INDEX => (&mut *(node as *mut AstTypeTypeof)).visit(visitor),
+      AstTypeUnion::CLASS_INDEX => (&mut *(node as *mut AstTypeUnion)).visit(visitor),
       _ => {
         // C++ cannot reach here: every concrete AstNode subclass overrides
         // visit. An unknown class index means arena corruption.

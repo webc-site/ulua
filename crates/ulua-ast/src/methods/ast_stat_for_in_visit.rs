@@ -6,8 +6,8 @@ use crate::{
 };
 
 impl AstVisitable for AstStatForIn {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    if visitor.visit_stat_for_in(self as *const Self as *mut c_void) {
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    if visitor.visit_stat_for_in(self as *mut Self as *mut c_void) {
       for &var in self.vars.iter() {
         // SAFETY: var 指向 arena 中存活的 AstLocal 节点。
         unsafe {

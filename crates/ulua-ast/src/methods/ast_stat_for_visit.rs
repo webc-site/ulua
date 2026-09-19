@@ -6,8 +6,8 @@ use crate::{
 };
 
 impl AstVisitable for AstStatFor {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    if visitor.visit_stat_for(self as *const Self as *mut c_void) {
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    if visitor.visit_stat_for(self as *mut Self as *mut c_void) {
       unsafe {
         if !(*self.var).annotation.is_null() {
           ast_type_visit((*self.var).annotation, visitor);

@@ -11,13 +11,7 @@ pub fn model_function(source: &str) -> u64 {
   // Box 钉堆：AstNameTable/Parser 捕获宿主地址，宿主移动即悬垂。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let result = Parser::parse(
-    source,
-    source.len(),
-    &mut names,
-    &mut allocator,
-    ParseOptions::default(),
-  );
+  let result = Parser::parse(source, &mut names, &mut allocator, ParseOptions::default());
   assert!(
     result.errors.is_empty(),
     "unexpected parse error(s): {:?}",

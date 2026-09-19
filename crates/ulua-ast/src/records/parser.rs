@@ -1,4 +1,4 @@
-use core::ffi::c_char;
+use core::{ffi::c_char, ptr::from_mut};
 
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet};
 
@@ -71,14 +71,20 @@ pub struct Parser {
 impl Parser {
   /// 查 ast→cst 映射并下转为 `T` 的可变形态（Printer::lookup_cst_node 的
   /// parser 对应）。unsafe 收口于此：映射值指向 arena 中存活的 CST 节点，
-  /// `cst_node_as` 经 class_index 命中后 repr(C) 布局保证下转有效；调用侧
-  /// 拿到 `Option<&mut T>`，判空与字段写入全部走安全代码。
-  pub(crate) fn lookup_cst_node_mut<T: CstNodeClass>(
+  /// `cst_node_as` 经 class_index 命中后 repr(C) 布局保证下转有效。
+  ///
+  /// 生命周期 `'b` 由调用方传入的 `&'b mut AstNode` 供给（不再凭空造
+  /// `'static`）：AST 与 CST 同处一个 arena 且同步构造，故「该 AST 节点在
+  /// `'b` 内被独占」即蕴含其映射的 CST 节点在 `'b` 内可独占写。
+  /// 键只按地址比较，从不解引用写回。
+  pub(crate) fn lookup_cst_node_mut<'b, T: CstNodeClass>(
     &mut self,
-    ast_node: *mut AstNode,
-  ) -> Option<&'static mut T> {
-    let cst_node = *self.cst_node_map.find(&ast_node)?;
-    // SAFETY: 同函数级注释；arena 节点存活期覆盖 parser 生命周期
+    ast_node: &'b mut AstNode,
+  ) -> Option<&'b mut T> {
+    // cpp 侧键型为 `AstNode*`；这里仅把地址重新拼回该形态用于查表。
+    let key = from_mut(ast_node);
+    let cst_node = *self.cst_node_map.find(&key)?;
+    // SAFETY: 同函数级注释；'b 的独占借用即调用方对该 arena 区间的独占证明。
     unsafe { cst_node_as::<T>(cst_node).as_mut() }
   }
 }

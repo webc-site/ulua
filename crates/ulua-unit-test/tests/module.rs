@@ -1020,7 +1020,7 @@ mod module_is_within_comment_parse_result {
       capture_comments: true,
       ..Default::default()
     };
-    let parse_result = Parser::parse(&src, src.len(), &mut names, &mut alloc, parse_options);
+    let parse_result = Parser::parse(&src, &mut names, &mut alloc, parse_options);
 
     assert_eq!(5, parse_result.comment_locations.len());
 

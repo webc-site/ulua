@@ -8,8 +8,8 @@ use crate::{
 };
 
 impl AstVisitable for AstStatTypeFunction {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    if visitor.visit_stat_type_function(self as *const Self as *mut c_void) {
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    if visitor.visit_stat_type_function(self as *mut Self as *mut c_void) {
       unsafe {
         ast_expr_visit(self.body as *mut AstExpr, visitor);
       }

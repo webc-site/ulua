@@ -177,15 +177,26 @@ pub fn ast_node_try_as<T: AstNodeClass>(node: &AstNode) -> Option<&T> {
   }
 }
 
-/// `ast_node_try_as_mut::<T>(node)` 的合并形态：裸指针进、`Option<&mut T>` 出，
-/// 把 as + as_mut 两次 unsafe 收敛为一次。
+/// `ast_node_try_as::<T>(node)` 的可变形态：独占借用进、`Option<&mut T>` 出。
+///
+/// 输出生命周期由入参借用供给（不再凭空造 `'static`）：调用方交出的
+/// `&mut AstNode` 本身就是该节点在借用期内独占证明，下转只是把同一个
+/// place 的所有权形态换成派生类型（`#[repr(C)]` 单继承保证基址重合）。
+/// 只读场景请用 [`ast_node_try_as`]。
 ///
 /// # Safety
-/// `node` 必须为 null 或指向 arena 中存活的 repr(C) 节点（同 [`ast_node_as`]）。
+/// `node` 必须指向 arena 中存活的 repr(C) 节点（同 [`ast_node_as`]），且调用方在
+/// 返回引用的整个生命周期内确实独占该节点（arena 无其他并发借用）。
 #[inline]
-pub unsafe fn ast_node_try_as_mut<T: AstNodeClass>(node: *mut AstNode) -> Option<&'static mut T> {
-  // SAFETY: 前置条件见函数级 # Safety；class_index 命中后 cast 布局有效。
-  unsafe { ast_node_as::<T>(node).as_mut() }
+pub unsafe fn ast_node_try_as_mut<T: AstNodeClass>(node: &mut AstNode) -> Option<&mut T> {
+  if node.class_index == T::CLASS_INDEX {
+    // SAFETY: 动态类型已由 class_index 判定，`&mut AstNode` 的独占借用经
+    // repr(C) 首字段（基址重合）转写为 `&mut T`，与原借用同一 place、同一
+    // 生命周期，不产生并发别名。
+    Some(unsafe { &mut *(node as *mut AstNode).cast::<T>() })
+  } else {
+    None
+  }
 }
 
 /// CST spelling of [`ast_rtti_index`] (CST and AST share the index function but

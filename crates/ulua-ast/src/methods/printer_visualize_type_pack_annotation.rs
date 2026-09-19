@@ -18,7 +18,7 @@ use crate::{
     printer::{IntoNodePtr, Printer},
     writer::Writer,
   },
-  rtti::ast_node_try_as_mut,
+  rtti::ast_node_try_as,
 };
 
 impl<'a, W: Writer> Printer<'a, W> {
@@ -30,12 +30,10 @@ impl<'a, W: Writer> Printer<'a, W> {
     for_function_return: bool,
   ) {
     // SAFETY: annotation 指向 arena 中存活的 AstTypePack 派生节点
-    let annotation = unsafe { &mut *annotation.into_node_ptr() };
+    let annotation = unsafe { &*annotation.into_node_ptr() };
     self.advance(annotation.base.location.begin);
 
-    if let Some(variadic_tp) =
-      unsafe { ast_node_try_as_mut::<AstTypePackVariadic>(&mut annotation.base) }
-    {
+    if let Some(variadic_tp) = ast_node_try_as::<AstTypePackVariadic>(&annotation.base) {
       if !for_var_arg {
         self.writer.symbol("...");
       }
@@ -43,14 +41,12 @@ impl<'a, W: Writer> Printer<'a, W> {
       return;
     }
 
-    if let Some(generic_tp) =
-      unsafe { ast_node_try_as_mut::<AstTypePackGeneric>(&mut annotation.base) }
-    {
+    if let Some(generic_tp) = ast_node_try_as::<AstTypePackGeneric>(&annotation.base) {
       self
         .writer
         .symbol(generic_tp.generic_name.as_str_or_empty());
 
-      if let Some(cst_node) = self.lookup_cst_node::<CstTypePackGeneric>(&mut annotation.base) {
+      if let Some(cst_node) = self.lookup_cst_node::<CstTypePackGeneric>(&annotation.base) {
         self.advance(cst_node.ellipsis_position);
       }
 
@@ -58,12 +54,10 @@ impl<'a, W: Writer> Printer<'a, W> {
       return;
     }
 
-    if let Some(explicit_tp) =
-      unsafe { ast_node_try_as_mut::<AstTypePackExplicit>(&mut annotation.base) }
-    {
+    if let Some(explicit_tp) = ast_node_try_as::<AstTypePackExplicit>(&annotation.base) {
       LUAU_ASSERT!(!for_var_arg);
 
-      if let Some(cst_node) = self.lookup_cst_node::<CstTypePackExplicit>(&mut annotation.base) {
+      if let Some(cst_node) = self.lookup_cst_node::<CstTypePackExplicit>(&annotation.base) {
         self.visualize_type_list(
           &explicit_tp.type_list,
           false,

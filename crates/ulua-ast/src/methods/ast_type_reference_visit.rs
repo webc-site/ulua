@@ -7,8 +7,8 @@ use crate::{
 };
 
 impl AstVisitable for AstTypeReference {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    if visitor.visit_type_reference(self as *const Self as *mut c_void) {
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    if visitor.visit_type_reference(self as *mut Self as *mut c_void) {
       visit_type_or_pack_array(visitor, self.parameters);
     }
   }

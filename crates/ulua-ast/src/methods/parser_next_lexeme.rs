@@ -1,5 +1,4 @@
 use alloc::string::String;
-use core::{slice::from_raw_parts, str::from_utf8_unchecked};
 
 use crate::{
   functions::is_space::is_space,
@@ -29,25 +28,21 @@ impl Parser {
 
       // Comments starting with ! are called "hot comments" and contain directives for type checking / linting / compiling
       if lexeme.r#type == Type::COMMENT && lexeme.get_length() > 0 {
-        unsafe {
-          // 一次性建切片后全部用索引访问，取代 text_ptr.add(...) 裸指针算术；
-          // 首字符为 '!'（非空白）保证 end >= 1，text[1..end] 恒有效。
-          let text = from_raw_parts(lexeme.data.data as *const u8, lexeme.get_length() as usize);
-
-          if text[0] == b'!' {
-            let mut end = text.len();
-            while end > 0 && is_space(text[end - 1] as char) {
-              end -= 1;
-            }
-
-            let content = from_utf8_unchecked(&text[1..end]);
-
-            self.hotcomments.push(HotComment {
-              header: self.hotcomment_header,
-              location: lexeme.location,
-              content: String::from(content),
-            });
+        // cpp `std::string(text + 1, text + end)` 是字节串；源缓冲不保证
+        // UTF-8（`--!\xFF` 合法），因此按字节取值后再 lossy 解码为 String，
+        // 绝不用 `from_utf8_unchecked` 把非法字节伪装成 `&str`。
+        if let Some(text) = unsafe { lexeme.data_bytes() }.filter(|text| text[0] == b'!') {
+          let mut end = text.len();
+          while end > 0 && is_space(text[end - 1] as char) {
+            end -= 1;
           }
+
+          // 首字符 '!' 非空白，故 end >= 1，`text[1..end]` 恒为有效切片。
+          self.hotcomments.push(HotComment {
+            header: self.hotcomment_header,
+            location: lexeme.location,
+            content: String::from_utf8_lossy(&text[1..end]).into_owned(),
+          });
         }
       }
 

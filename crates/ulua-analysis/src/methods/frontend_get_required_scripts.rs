@@ -45,11 +45,12 @@ impl Frontend {
       let mut result =
         self.parse_module_name_string_view_parse_options(name, &source_code.source, &opts);
       result.r#type = source_code.r#type;
-      // SAFETY: result.root 指向本函数刚解析出的 AST（C++ 契约）。
+      // SAFETY: result.root 指向本函数刚解析出的 AST，此处独占（C++ 契约）；
+      // RequireTracer 按 cpp `AstStatBlock*` 非 const 语义取 `&mut`。
       require = unsafe {
         trace_requires(
           self.file_resolver_mut(),
-          &*result.root,
+          &mut *result.root,
           name.clone(),
           limits,
         )

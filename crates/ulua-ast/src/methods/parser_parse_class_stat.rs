@@ -136,7 +136,7 @@ impl Parser {
 
         // SAFETY: parse_function_body 返回的 body 指向 arena 存活节点
         let body_ref = unsafe { &*body };
-        if let Some(first_arg) = body_ref.args.iter_mut_nodes().next()
+        if let Some(first_arg) = body_ref.args.iter_nodes().next()
           && first_arg.name == "self"
           && !first_arg.annotation.is_null()
         {

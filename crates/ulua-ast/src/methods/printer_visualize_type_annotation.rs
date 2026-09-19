@@ -7,7 +7,7 @@
 //! 节点子指针（`o.r#type`、`idx.index_type` 等）不再在调用点解引用：直接传
 //! 裸指针给 `visualize_type_annotation`（`IntoNodePtr` 归一），unsafe 收口在
 //! 被调函数入口一次 `&mut *into_node_ptr()`；`AstArray<*mut T>` 遍历统一走
-//! `iter_mut_nodes`（安全迭代器，见 `records/ast_array.rs`）。
+//! `iter_nodes`（安全迭代器，见 `records/ast_array.rs`）。
 
 use core::mem::swap;
 
@@ -47,7 +47,7 @@ use crate::{
     printer::{IntoNodePtr, Printer},
     writer::Writer,
   },
-  rtti::{ast_node_is, ast_node_try_as, ast_node_try_as_mut},
+  rtti::{ast_node_is, ast_node_try_as},
 };
 
 /// 数组表 indexer 的键类型名（解析器对 `{T}` 数组表固定生成 number 键）。
@@ -56,11 +56,11 @@ const NUMBER_KEY: &str = "number";
 impl<'a, W: Writer> Printer<'a, W> {
   pub fn visualize_type_annotation<T: IntoNodePtr<AstType>>(&mut self, type_annotation: T) {
     // SAFETY: type_annotation 指向 arena 中存活的 AstType 派生节点
-    let type_annotation = unsafe { &mut *type_annotation.into_node_ptr() };
+    let type_annotation = unsafe { &*type_annotation.into_node_ptr() };
     self.advance(type_annotation.base.location.begin);
 
-    if let Some(a) = unsafe { ast_node_try_as_mut::<AstTypeReference>(&mut type_annotation.base) } {
-      let cst_node = self.lookup_cst_node::<CstTypeReference>(&mut a.base.base);
+    if let Some(a) = ast_node_try_as::<AstTypeReference>(&type_annotation.base) {
+      let cst_node = self.lookup_cst_node::<CstTypeReference>(&a.base.base);
 
       if let Some(prefix) = a.prefix {
         self.writer.write(prefix.as_bytes());
@@ -95,10 +95,8 @@ impl<'a, W: Writer> Printer<'a, W> {
 
         self.maybe_advance_or_symbol(cst_node.map(|cst| &cst.close_parameters_position), ">");
       }
-    } else if let Some(a) =
-      unsafe { ast_node_try_as_mut::<AstTypeFunction>(&mut type_annotation.base) }
-    {
-      let cst_node = self.lookup_cst_node::<CstTypeFunction>(&mut a.base.base);
+    } else if let Some(a) = ast_node_try_as::<AstTypeFunction>(&type_annotation.base) {
+      let cst_node = self.lookup_cst_node::<CstTypeFunction>(&a.base.base);
 
       if a.generics.size > 0 || a.generic_packs.size > 0 {
         let mut comma = CommaSeparatorInserter::new(cst_node.map_or(EMPTY_POSITIONS, |cst| {
@@ -110,18 +108,18 @@ impl<'a, W: Writer> Printer<'a, W> {
         }
         self.writer.symbol("<");
 
-        for o in a.generics.iter_mut_nodes() {
+        for o in a.generics.iter_nodes() {
           comma.operator_call(self.writer);
           self.writer.advance(&o.base.location.begin);
           self.writer.identifier(o.name.as_bytes());
         }
 
-        for o in a.generic_packs.iter_mut_nodes() {
+        for o in a.generic_packs.iter_nodes() {
           comma.operator_call(self.writer);
           self.writer.advance(&o.base.location.begin);
           self.writer.identifier(o.name.as_bytes());
 
-          if let Some(cst) = self.lookup_cst_node::<CstGenericTypePack>(&mut o.base) {
+          if let Some(cst) = self.lookup_cst_node::<CstGenericTypePack>(&o.base) {
             self.advance(cst.ellipsis_position);
           }
           self.writer.symbol("...");
@@ -157,9 +155,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       self.writer.symbol("->");
 
       self.visualize_type_pack_annotation(a.return_types, false, cst_node.is_none(), false);
-    } else if let Some(a) =
-      unsafe { ast_node_try_as_mut::<AstTypeTable>(&mut type_annotation.base) }
-    {
+    } else if let Some(a) = ast_node_try_as::<AstTypeTable>(&type_annotation.base) {
       // SAFETY: indexer 指向 arena 存活的 AstTableIndexer（解析器保证非空时才解引用）
       let indexer = (!a.indexer.is_null()).then(|| unsafe { &*a.indexer });
       // SAFETY: index_type 指向 arena 存活的 AstType 节点；class_index 匹配后
@@ -170,7 +166,7 @@ impl<'a, W: Writer> Printer<'a, W> {
 
       self.writer.symbol("{");
 
-      let cst_node = self.lookup_cst_node::<CstTypeTable>(&mut a.base.base);
+      let cst_node = self.lookup_cst_node::<CstTypeTable>(&a.base.base);
       match cst_node {
         Some(cst) if cst.is_array => {
           LUAU_ASSERT!(a.props.size == 0 && index_type.is_some_and(|t| t.name == NUMBER_KEY));
@@ -274,11 +270,9 @@ impl<'a, W: Writer> Printer<'a, W> {
       }
       self.advance(end_pos);
       self.writer.symbol("}");
-    } else if let Some(a) =
-      unsafe { ast_node_try_as_mut::<AstTypeTypeof>(&mut type_annotation.base) }
-    {
+    } else if let Some(a) = ast_node_try_as::<AstTypeTypeof>(&type_annotation.base) {
       self.writer.keyword("typeof");
-      let cst_node = self.lookup_cst_node::<CstTypeTypeof>(&mut a.base.base);
+      let cst_node = self.lookup_cst_node::<CstTypeTypeof>(&a.base.base);
       match cst_node {
         Some(cst) => {
           self.maybe_advance_and_write(&cst.open_position, "(", false);
@@ -291,10 +285,8 @@ impl<'a, W: Writer> Printer<'a, W> {
           self.writer.symbol(")");
         }
       }
-    } else if let Some(a) =
-      unsafe { ast_node_try_as_mut::<AstTypeUnion>(&mut type_annotation.base) }
-    {
-      let cst_node = self.lookup_cst_node::<CstTypeUnion>(&mut a.base.base);
+    } else if let Some(a) = ast_node_try_as::<AstTypeUnion>(&type_annotation.base) {
+      let cst_node = self.lookup_cst_node::<CstTypeUnion>(&a.base.base);
 
       if cst_node.is_none()
         && let [l_ptr, r_ptr] = a.types.as_slice()
@@ -339,8 +331,8 @@ impl<'a, W: Writer> Printer<'a, W> {
       // 前不消耗，与 cpp `separatorIndex` 递增点一致）。
       let mut seps = cst_node.map(|cst| cst.separator_positions.as_slice().iter());
 
-      for (i, t) in a.types.iter_mut_nodes().enumerate() {
-        if let Some(optional) = unsafe { ast_node_try_as_mut::<AstTypeOptional>(&mut t.base) } {
+      for (i, t) in a.types.iter_nodes().enumerate() {
+        if let Some(optional) = ast_node_try_as::<AstTypeOptional>(&t.base) {
           self.advance(optional.base.base.location.begin);
           self.writer.symbol("?");
           continue;
@@ -365,10 +357,8 @@ impl<'a, W: Writer> Printer<'a, W> {
           self.writer.symbol(")");
         }
       }
-    } else if let Some(a) =
-      unsafe { ast_node_try_as_mut::<AstTypeIntersection>(&mut type_annotation.base) }
-    {
-      let cst_node = self.lookup_cst_node::<CstTypeIntersection>(&mut a.base.base);
+    } else if let Some(a) = ast_node_try_as::<AstTypeIntersection>(&type_annotation.base) {
+      let cst_node = self.lookup_cst_node::<CstTypeIntersection>(&a.base.base);
 
       if let Some(cst) = cst_node {
         self.maybe_advance_and_write(&cst.leading_position, "&", false);
@@ -378,7 +368,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       // 检查）；i-1 索引即顺序消耗，迭代器 next 等价。
       let mut seps = cst_node.map(|cst| cst.separator_positions.as_slice().iter());
 
-      for (i, t) in a.types.iter_mut_nodes().enumerate() {
+      for (i, t) in a.types.iter_nodes().enumerate() {
         if i > 0 {
           match seps.as_mut().and_then(Iterator::next) {
             Some(pos) => self.advance(*pos),
@@ -397,14 +387,12 @@ impl<'a, W: Writer> Printer<'a, W> {
           self.writer.symbol(")");
         }
       }
-    } else if let Some(a) =
-      unsafe { ast_node_try_as_mut::<AstTypeGroup>(&mut type_annotation.base) }
-    {
+    } else if let Some(a) = ast_node_try_as::<AstTypeGroup>(&type_annotation.base) {
       self.writer.symbol("(");
       self.visualize_type_annotation(a.type_);
 
       // cpp 无 LuauCstTypeGroup flag：无条件查 CstTypeGroup
-      let cst_node = self.lookup_cst_node::<CstTypeGroup>(&mut a.base.base);
+      let cst_node = self.lookup_cst_node::<CstTypeGroup>(&a.base.base);
       match cst_node {
         Some(cst) => self.maybe_advance_and_write(&cst.close_position, ")", false),
         None => {
@@ -412,14 +400,10 @@ impl<'a, W: Writer> Printer<'a, W> {
           self.writer.symbol(")");
         }
       }
-    } else if let Some(a) =
-      unsafe { ast_node_try_as_mut::<AstTypeSingletonBool>(&mut type_annotation.base) }
-    {
+    } else if let Some(a) = ast_node_try_as::<AstTypeSingletonBool>(&type_annotation.base) {
       self.writer.keyword(if a.value { "true" } else { "false" });
-    } else if let Some(a) =
-      unsafe { ast_node_try_as_mut::<AstTypeSingletonString>(&mut type_annotation.base) }
-    {
-      match self.lookup_cst_node::<CstTypeSingletonString>(&mut a.base.base) {
+    } else if let Some(a) = ast_node_try_as::<AstTypeSingletonString>(&type_annotation.base) {
+      match self.lookup_cst_node::<CstTypeSingletonString>(&a.base.base) {
         Some(cst) => {
           self.writer.source_string(
             // 源文本直切片（引号内原文，非 fixup 产物）。

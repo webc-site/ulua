@@ -44,6 +44,24 @@ impl<T> PtrRef<T> for *mut T {
   }
 }
 
+/// 可空裸指针的非空**独占**读法：cpp `AstNode::visit(AstVisitor*)` 的 `this` 非
+/// const，遍历期间 visitor 会写穿节点，故测试侧跑 visitor 时要的是 `&mut`。
+/// 与 [`PtrRef`] 分成两个 trait：`*const T` 无法给出独占借用。
+pub trait PtrMutRef<T> {
+  /// cpp 直接解引用 `ptr` 并允许写入：null → `None`。生命周期 `'a` 由调用点的
+  /// 使用范围约束，另需该 arena 在 `'a` 内无其他并发借用（测试内逐个遍历即满足）。
+  fn as_mut_ref_opt<'a>(&self) -> Option<&'a mut T>;
+}
+
+impl<T> PtrMutRef<T> for *mut T {
+  #[inline]
+  fn as_mut_ref_opt<'a>(&self) -> Option<&'a mut T> {
+    // SAFETY: self 为 arena 内存活对象或 null，且调用方独占所属 arena；
+    // 'a 由调用点约束。
+    unsafe { (*self).as_mut() }
+  }
+}
+
 /// AST 节点指针的读法。
 pub trait NodePtr {
   /// cpp `node->as<T>()`：下转与非空判定合为一次，类型不符 → `None`。

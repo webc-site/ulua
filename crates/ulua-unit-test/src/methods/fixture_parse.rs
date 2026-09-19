@@ -33,7 +33,6 @@ impl Fixture {
 
     let result = Parser::parse(
       source,
-      source.len(),
       &mut self.name_table,
       &mut self.allocator,
       parse_options.clone(),

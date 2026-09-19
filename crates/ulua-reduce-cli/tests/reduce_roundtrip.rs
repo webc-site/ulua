@@ -39,7 +39,6 @@ fn assert_parses(source: &str, context: &str) {
   let mut name_table = AstNameTable::new(&mut allocator);
   let result = Parser::parse(
     source,
-    source.len(),
     &mut name_table,
     &mut allocator,
     ParseOptions::default(),

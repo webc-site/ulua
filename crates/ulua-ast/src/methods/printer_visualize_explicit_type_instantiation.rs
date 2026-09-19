@@ -31,11 +31,11 @@ impl<'a, W: Writer> Printer<'a, W> {
       comma.operator_call(self.writer);
 
       if !type_or_pack.r#type.is_null() {
-        self.visualize_type_annotation(unsafe { &mut *type_or_pack.r#type });
+        self.visualize_type_annotation(unsafe { &*type_or_pack.r#type });
       } else {
         LUAU_ASSERT!(!type_or_pack.type_pack.is_null());
         self.visualize_type_pack_annotation(
-          unsafe { &mut *type_or_pack.type_pack },
+          unsafe { &*type_or_pack.type_pack },
           false,
           true,
           false,

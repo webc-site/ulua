@@ -6,8 +6,8 @@ use crate::{
 };
 
 impl AstVisitable for AstTypeError {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    if visitor.visit_type_error(self as *const Self as *mut c_void) {
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    if visitor.visit_type_error(self as *mut Self as *mut c_void) {
       for type_ptr in self.types.iter() {
         unsafe {
           ast_type_visit(*type_ptr, visitor);

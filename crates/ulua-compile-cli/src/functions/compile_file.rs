@@ -118,13 +118,7 @@ pub fn compile_file(
       ..ParseOptions::default()
     };
 
-    let parse_result = Parser::parse(
-      source.as_str(),
-      source.len(),
-      &mut names,
-      &mut allocator,
-      parse_options,
-    );
+    let parse_result = Parser::parse(source.as_str(), &mut names, &mut allocator, parse_options);
 
     if !parse_result.errors.is_empty() {
       for error in &parse_result.errors {

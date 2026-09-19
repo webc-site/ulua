@@ -18,7 +18,7 @@ impl LintGlobalLocal {
         ast_expr_visit((*node).step, self);
       }
 
-      ast_stat_block_visit(&*(*node).body, self);
+      ast_stat_block_visit(&mut *(*node).body, self);
     }
 
     if reset_to_false {

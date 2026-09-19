@@ -36,12 +36,10 @@ impl<'a, W: Writer> Printer<'a, W> {
       // SAFETY: 首元素指针指向 arena 存活的 AstType 节点；class_index 匹配后
       // 经安全 try_as 下转。首元素仅在 types 非空时解引用（cpp `data[0]`
       // 同样以 size==0 短路保护）。
-      let first_type = list.types.as_slice().first().map(|&p| unsafe { &mut *p });
+      let first_type = list.types.as_slice().first().map(|&p| unsafe { &*p });
 
       let should_parenthesize = unconditionally_parenthesize
-        && first_type
-          .as_deref()
-          .is_none_or(|t| ast_node_try_as::<AstTypeGroup>(&t.base).is_none());
+        && first_type.is_none_or(|t| ast_node_try_as::<AstTypeGroup>(&t.base).is_none());
 
       self.maybe_advance_and_write(&open_parentheses_position, "(", should_parenthesize);
 
@@ -73,7 +71,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       let mut comma = CommaSeparatorInserter::new(comma_positions);
       let mut arg_name_idx = 0;
 
-      for t in list.types.iter_mut_nodes() {
+      for t in list.types.iter_nodes() {
         comma.operator_call(self.writer);
         arg_name_idx = {
           let mut arg_name =

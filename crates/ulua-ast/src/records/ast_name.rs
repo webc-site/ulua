@@ -35,8 +35,12 @@ impl Ord for AstName {
 
 impl AstName {
   /// Returns the name as a CStr, or None if null.
+  ///
+  /// 生命周期取自 `&self` 的借用：字符串本体由 `AstNameTable` 持有（cpp
+  /// `AstName::value` 同样只要求「表还活着」），调用方只要持有本节点的借用即可
+  /// 安全读取，故这里不再凭空声明 `'static`。
   #[inline]
-  pub fn as_c_str(&self) -> Option<&'static CStr> {
+  pub fn as_c_str(&self) -> Option<&CStr> {
     if self.value.is_null() {
       None
     } else {
@@ -46,7 +50,7 @@ impl AstName {
 
   /// Returns the name as a byte slice (excluding trailing null byte), or empty slice if null.
   #[inline]
-  pub fn as_bytes(&self) -> &'static [u8] {
+  pub fn as_bytes(&self) -> &[u8] {
     match self.as_c_str() {
       Some(c_str) => c_str.to_bytes(),
       None => &[],
@@ -55,13 +59,13 @@ impl AstName {
 
   /// Tries to return the name as a UTF-8 `&str`, or None if null or invalid UTF-8.
   #[inline]
-  pub fn as_str(&self) -> Option<&'static str> {
+  pub fn as_str(&self) -> Option<&str> {
     self.as_c_str().and_then(|c_str| c_str.to_str().ok())
   }
 
   /// Returns the name as a `&str`, or `""` if null or invalid UTF-8.
   #[inline]
-  pub fn as_str_or_empty(&self) -> &'static str {
+  pub fn as_str_or_empty(&self) -> &str {
     self.as_str().unwrap_or("")
   }
 

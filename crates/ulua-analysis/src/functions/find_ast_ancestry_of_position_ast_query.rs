@@ -16,7 +16,9 @@ pub fn find_ast_ancestry_of_position_source_module_position_bool(
     return Vec::new();
   }
   find_ast_ancestry_of_position_ast_stat_block_position_bool(
-    unsafe { &*source.root },
+    // SAFETY: 上方已判空，root 指向 arena 存活的 AstStatBlock；visitor 按 cpp
+    // 非 const `AstNode::visit` 语义需要独占借用
+    unsafe { &mut *source.root },
     pos,
     include_types,
   )

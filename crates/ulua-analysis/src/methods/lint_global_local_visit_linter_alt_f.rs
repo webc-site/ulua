@@ -12,7 +12,7 @@ impl LintGlobalLocal {
 
     unsafe {
       ast_expr_visit((*node).condition, self);
-      ast_stat_block_visit(&*(*node).thenbody, self);
+      ast_stat_block_visit(&mut *(*node).thenbody, self);
 
       if !(*node).elsebody.is_null() {
         ast_stat_visit((*node).elsebody, self);

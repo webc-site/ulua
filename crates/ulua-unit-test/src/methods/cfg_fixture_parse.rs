@@ -13,7 +13,6 @@ impl CfgFixture {
 
     let result = Parser::parse(
       code,
-      code.len(),
       &mut self.names,
       &mut self.allocator,
       ParseOptions::default(),

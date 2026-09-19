@@ -11,10 +11,10 @@ use crate::{
 };
 
 impl AstVisitable for AstStatClass {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
     ulua_common::LUAU_ASSERT!(DebugLuauUserDefinedClasses.get());
 
-    if visitor.visit_stat_class(self as *const Self as *mut c_void) {
+    if visitor.visit_stat_class(self as *mut Self as *mut c_void) {
       if !self.super_.is_null() {
         unsafe {
           ast_expr_visit(self.super_, visitor);

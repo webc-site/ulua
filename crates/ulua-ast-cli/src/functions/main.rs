@@ -79,7 +79,7 @@ fn run() -> i32 {
   };
 
   // ParseResult parseResult = Parser::parse(source.data(), source.size(), names, allocator, std::move(options));
-  let mut parse_result = Parser::parse(&source, source.len(), &mut names, &mut allocator, options);
+  let mut parse_result = Parser::parse(&source, &mut names, &mut allocator, options);
 
   // if (parseResult.errors.size() > 0) { ... print each error ... }
   if !parse_result.errors.is_empty() {

@@ -223,7 +223,7 @@ impl Compiler {
         };
         let returns_one = if self.always_terminates(func_ref.body as *mut AstStat) {
           let mut rv = self.return_visitor_return_visitor();
-          ast_stat_block_visit(&*func_ref.body, &mut rv);
+          ast_stat_block_visit(&mut *func_ref.body, &mut rv);
           Some(rv.returns_one)
         } else {
           None
