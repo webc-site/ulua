@@ -1,9 +1,6 @@
 use core::slice::from_raw_parts;
 
-use ulua_common::{
-  fflag::LuauIntegerType2,
-  macros::luau_assert::LUAU_ASSERT,
-};
+use ulua_common::{fflag::LuauIntegerType2, macros::luau_assert::LUAU_ASSERT};
 
 use crate::{enums::type_constant_folding::Type, records::constant::Constant};
 
@@ -33,7 +30,9 @@ pub fn constants_equal(la: &Constant, ra: &Constant) -> bool {
             == from_raw_parts(ra.data.value_string as *const u8, ra.string_length as usize)
         }
     }
-    Type::Table => ra.r#type == Type::Table && unsafe { la.data.value_table == ra.data.value_table },
+    Type::Table => {
+      ra.r#type == Type::Table && unsafe { la.data.value_table == ra.data.value_table }
+    }
     Type::Integer => {
       if LuauIntegerType2.get() {
         ra.r#type == Type::Integer && unsafe { la.data.value_integer64 == ra.data.value_integer64 }

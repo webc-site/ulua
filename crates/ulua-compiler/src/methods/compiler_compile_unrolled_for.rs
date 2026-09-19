@@ -1,7 +1,6 @@
 use core::ptr::null_mut;
 
 use ulua_ast::records::{ast_node::AstNode, ast_stat::AstStat, ast_stat_for::AstStatFor};
-use ulua_common::fflag;
 
 use crate::{
   enums::{type_compiler::Type as LoopJumpType, type_constant_folding::Type},

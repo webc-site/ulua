@@ -274,7 +274,7 @@ fn record_constant_logs_overwrite_for_undo() {
   use core::ptr::{NonNull, null, null_mut};
 
   use ulua_ast::records::{ast_expr::AstExpr, ast_local::AstLocal};
-  use ulua_common::{fflag, records::dense_hash_map::DenseHashMap};
+  use ulua_common::records::dense_hash_map::DenseHashMap;
 
   use crate::{
     enums::table_constant_kind::TableConstantKind,
@@ -288,10 +288,6 @@ fn record_constant_logs_overwrite_for_undo() {
       local_constant_change_log::LocalConstantChangeLog,
     },
   };
-
-  // 固定走 C++ recordConstant 直映射分支（与 vendored 实现一致）
-  fflag::LuauCompileFoldOptimize.set(false);
-  fflag::LuauCompilePropagateTableProps2.set(false);
 
   let (_alloc, mut names) = string_table!();
 

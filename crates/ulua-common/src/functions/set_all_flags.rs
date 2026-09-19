@@ -34,10 +34,7 @@ pub fn set_all_flags(value: bool) {
   fflag::LuauCompileDuptableConstantPack2.set(value);
   fflag::LuauCodegenDseRestoreHintUpdate.set(value);
   fflag::LuauCompileFastcall3CostModel.set(value);
-  fflag::LuauCompileFoldOptimize.set(value);
   fflag::LuauCompileInlineTableFunctions.set(value);
-  fflag::LuauCompileNewTableMutationTracker.set(value);
-  fflag::LuauCompilePropagateTableProps2.set(value);
   fflag::LuauCompileConcatTargetTop.set(value);
   fflag::LuauCompileStringInterpTargetTop.set(value);
   fflag::LuauCompileRecursiveAliases.set(value);

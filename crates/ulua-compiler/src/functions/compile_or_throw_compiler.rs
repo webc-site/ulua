@@ -14,7 +14,6 @@ use ulua_common::{
     luau_bytecode_type::{LBC_TYPE_TAGGED_USERDATA_BASE, LBC_TYPE_TAGGED_USERDATA_END},
     luau_proto_flag::LuauProtoFlag,
   },
-  fflag,
   macros::{luau_assert::LUAU_ASSERT, luau_timetrace_scope::LUAU_TIMETRACE_SCOPE},
 };
 

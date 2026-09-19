@@ -7,7 +7,7 @@ use ulua_ast::{
   },
   rtti::ast_node_as,
 };
-use ulua_common::{enums::luau_opcode::LuauOpcode, fflag, macros::luau_assert::LUAU_ASSERT};
+use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_assert::LUAU_ASSERT};
 
 use crate::{
   enums::type_constant_folding::Type,

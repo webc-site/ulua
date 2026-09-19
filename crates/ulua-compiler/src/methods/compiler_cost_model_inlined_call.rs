@@ -3,7 +3,6 @@ use core::ptr::null_mut;
 use ulua_ast::records::{
   ast_expr_call::AstExprCall, ast_expr_function::AstExprFunction, ast_node::AstNode,
 };
-use ulua_common::fflag;
 
 use crate::{
   enums::type_constant_folding::Type,

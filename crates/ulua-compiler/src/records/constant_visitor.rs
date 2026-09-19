@@ -25,7 +25,7 @@ use ulua_ast::{
   visit::ast_stat_visit,
 };
 use ulua_common::{
-  enums::luau_builtin_function::LuauBuiltinFunction, fflag, macros::luau_assert::LUAU_ASSERT,
+  enums::luau_builtin_function::LuauBuiltinFunction, macros::luau_assert::LUAU_ASSERT,
   records::dense_hash_map::DenseHashMap,
 };
 
@@ -461,7 +461,7 @@ impl<'a> ConstantVisitor<'a> {
     for (&local, &rhs) in node_ref.vars.iter().zip(node_ref.values.iter()) {
       let arg = self.analyze(rhs);
 
-      if fflag::LuauCompilePropagateTableProps2.get() && arg.r#type == Table {
+      if arg.r#type == Table {
         // 表常量仅在其 local 被标记为 ConstantTable 时才记录，否则按 Unknown 处理
         let is_constant_table = self
           .constant_table_locals
