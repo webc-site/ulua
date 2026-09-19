@@ -276,14 +276,14 @@ mod runtime_limits_signal_exerpt {
 
     use ulua_common::fflag;
     use ulua_unit_test::{
-      records::fixture::Fixture, type_aliases::scoped_fast_flag::ScopedFastFlag,
+      records::limit_fixture::LimitFixture, type_aliases::scoped_fast_flag::ScopedFastFlag,
     };
 
     let _old_solver = ScopedFastFlag::new(&fflag::DebugLuauForceOldSolver, false);
-    let mut fixture = Fixture::fixture_bool(false);
-    fixture.get_frontend();
+    let mut fixture = LimitFixture::default();
+    fixture.base.get_frontend();
 
-    let result = fixture.check_string_optional_frontend_options(
+    let result = fixture.base.base.check_string_optional_frontend_options(
       &String::from(
         r#"
         local Signal = {}
@@ -515,11 +515,11 @@ mod runtime_limits_typescript_port_of_result_type {
     use ulua_analysis::records::code_too_complex::CodeTooComplex;
     use ulua_common::fflag;
     use ulua_unit_test::{
-      functions::has_error::has_error, records::builtins_fixture::BuiltinsFixture,
+      functions::has_error::has_error, records::limit_fixture::LimitFixture,
     };
 
-    let mut fixture = BuiltinsFixture::default();
-    fixture.get_frontend();
+    let mut fixture = LimitFixture::default();
+    fixture.base.get_frontend();
 
     let source = String::from(
       r#"
@@ -751,6 +751,7 @@ mod runtime_limits_typescript_port_of_result_type {
     );
 
     let result = fixture
+      .base
       .base
       .check_string_optional_frontend_options(&source, None);
 

@@ -1484,49 +1484,49 @@ mod type_path_builder_fields {
       type_aliases::component::Component,
     };
 
-    let check = |render: &dyn Fn(&mut PathBuilder) -> Path, expected: Path| {
+    fn check<F: FnOnce(&mut PathBuilder) -> Path>(render: F, expected: Path) {
       let mut builder = PathBuilder::new();
       assert_eq!(render(&mut builder), expected);
-    };
+    }
 
     check(
-      &|b| b.mt().build(),
+      |b| b.mt().build(),
       Path::from_component(Component::TypeField(TypeField::Metatable)),
     );
     check(
-      &|b| b.lb().build(),
+      |b| b.lb().build(),
       Path::from_component(Component::TypeField(TypeField::LowerBound)),
     );
     check(
-      &|b| b.ub().build(),
+      |b| b.ub().build(),
       Path::from_component(Component::TypeField(TypeField::UpperBound)),
     );
     check(
-      &|b| b.index_key().build(),
+      |b| b.index_key().build(),
       Path::from_component(Component::TypeField(TypeField::IndexLookup)),
     );
     check(
-      &|b| b.index_value().build(),
+      |b| b.index_value().build(),
       Path::from_component(Component::TypeField(TypeField::IndexResult)),
     );
     check(
-      &|b| b.negated().build(),
+      |b| b.negated().build(),
       Path::from_component(Component::TypeField(TypeField::Negated)),
     );
     check(
-      &|b| b.variadic().build(),
+      |b| b.variadic().build(),
       Path::from_component(Component::TypeField(TypeField::Variadic)),
     );
     check(
-      &|b| b.args().build(),
+      |b| b.args().build(),
       Path::from_component(Component::PackField(PackField::Arguments)),
     );
     check(
-      &|b| b.rets().build(),
+      |b| b.rets().build(),
       Path::from_component(Component::PackField(PackField::Returns)),
     );
     check(
-      &|b| b.tail().build(),
+      |b| b.tail().build(),
       Path::from_component(Component::PackField(PackField::Tail)),
     );
   }
