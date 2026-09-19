@@ -18,10 +18,14 @@ mod not_null_basic_stuff {
     let a = NotNull::new(&mut *a_box as *mut i32);
     let b = NotNull::new(&mut *b_box as *mut i32);
 
-    let mut d = a;
+    let d = a;
 
     let e = *d;
-    *d = 1;
+    // cpp's `*d = 1;` — NotNull is Copy, so mutation goes through get()
+    // rather than DerefMut (see records/not_null.rs deviation note).
+    unsafe {
+      *d.get() = 1;
+    }
     assert_eq!(e, 55);
 
     let f = d;

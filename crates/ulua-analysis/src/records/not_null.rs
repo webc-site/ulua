@@ -1,8 +1,13 @@
 //! Faithful runtime shape for `Luau::NotNull<T>` (`Analysis/include/Luau/NotNull.h`).
+//!
+//! Deviation from cpp: `NotNull` deliberately does NOT implement `DerefMut`.
+//! cpp's `operator*` returns `T&`, but in Rust this type is `Copy`, so
+//! `&mut NotNull<T>` could be copied to yield aliasing `&mut` to the pointee
+//! (UB). Mutation goes through `get()` with an explicit unsafe borrow.
 
 use core::{
   hash::{Hash, Hasher},
-  ops::{Deref, DerefMut},
+  ops::Deref,
   ptr::NonNull,
 };
 #[repr(transparent)]
@@ -40,12 +45,6 @@ impl<T: ?Sized> Deref for NotNull<T> {
 
   fn deref(&self) -> &Self::Target {
     unsafe { self.ptr.as_ref() }
-  }
-}
-
-impl<T: ?Sized> DerefMut for NotNull<T> {
-  fn deref_mut(&mut self) -> &mut Self::Target {
-    unsafe { self.ptr.as_mut() }
   }
 }
 
