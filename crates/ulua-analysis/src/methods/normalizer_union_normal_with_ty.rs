@@ -4,11 +4,6 @@ use alloc::boxed::Box;
 
 use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet};
 
-/// C++ `Set<TypeId>::erase(key)`. The Rust skeleton maps the seen-set parameter
-/// to `DenseHashSet`, which (faithful to `Luau::DenseHashSet`) cannot erase a
-/// single slot, whereas C++ here uses `Luau::Set` which can. We reproduce the
-/// single-element removal by rebuilding the set without `key`; `clear` preserves
-/// the empty-key sentinel, so the rebuilt set stays valid.
 use crate::methods::normalized_string_type_reset_to_string::normalized_string_type_reset_to_string;
 use crate::{
   enums::normalization_result::NormalizationResult,
@@ -46,14 +41,6 @@ use crate::{
     error_type::ErrorType, seen_table_prop_pairs::SeenTablePropPairs, type_id::TypeId,
   },
 };
-pub(crate) fn erase_seen(seen: &mut DenseHashSet<TypeId>, key: TypeId) {
-  let kept: Vec<TypeId> = seen.iter().copied().filter(|&k| k != key).collect();
-  seen.clear();
-  for k in kept {
-    seen.insert(k);
-  }
-}
-
 /// RAII guard mirroring C++ `RecursionCounter _rc(&sharedState->counters.recursionCount)`:
 /// increments the shared recursion counter on construction, decrements on drop.
 struct RcGuard {
@@ -128,12 +115,12 @@ impl Normalizer {
       for opt in options {
         let res = self.union_normal_with_ty(here, opt, seen_table_prop_pairs, seen_set_types, -1);
         if res != NormalizationResult::True {
-          erase_seen(seen_set_types, there);
+          seen_set_types.erase(&there);
           return res;
         }
       }
 
-      erase_seen(seen_set_types, there);
+      seen_set_types.erase(&there);
       return NormalizationResult::True;
     } else if let Some(itv) = get_type_id::<IntersectionType>(there) {
       if seen_set_types.contains(&there) {
@@ -149,12 +136,12 @@ impl Normalizer {
         let res =
           self.intersect_normal_with_ty(&mut norm, part, seen_table_prop_pairs, seen_set_types);
         if res != NormalizationResult::True {
-          erase_seen(seen_set_types, there);
+          seen_set_types.erase(&there);
           return res;
         }
       }
 
-      erase_seen(seen_set_types, there);
+      seen_set_types.erase(&there);
 
       return self.union_normals(here, &norm, -1);
     } else if get_type_id::<UnknownType>(here.tops).is_some() {

@@ -18,9 +18,12 @@
 
 use core::{ffi::c_char, slice};
 
-use ulua_ast::records::{
-  allocator::Allocator, ast_name_table::AstNameTable, lexeme::Lexeme, lexer::Lexer,
-  position::Position,
+use ulua_ast::{
+  enums::type_lexer::Type,
+  records::{
+    allocator::Allocator, ast_name_table::AstNameTable, lexeme::Lexeme, lexer::Lexer,
+    position::Position,
+  },
 };
 
 /// C++ 每个用例的公共前奏
@@ -91,7 +94,7 @@ mod broken_comment {
 
   use ulua_ast::records::{location::Location, position::Position};
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn broken_comment() {
@@ -111,7 +114,7 @@ mod broken_comment_kept {
   //!
   //! `skip_comments` 只跳过合法注释，BrokenComment 仍会产出（与 C++ 一致）。
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn broken_comment_kept() {
@@ -124,7 +127,7 @@ mod broken_comment_kept {
 mod comment_skipped {
   //! Source: `tests/Lexer.test.cpp:45-53`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn comment_skipped() {
@@ -139,7 +142,7 @@ mod multiline_comment_with_lexeme_in_and_after {
 
   use ulua_ast::records::{location::Location, position::Position};
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn multiline_comment_with_lexeme_in_and_after() {
@@ -165,7 +168,7 @@ mod test_broken_escape_tolerant {
 
   use ulua_ast::records::{location::Location, position::Position};
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn test_broken_escape_tolerant() {
@@ -186,7 +189,7 @@ mod test_big_delimiters {
 
   use ulua_ast::records::{location::Location, position::Position};
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn test_big_delimiters() {
@@ -204,7 +207,7 @@ mod test_big_delimiters {
 mod lookahead {
   //! Source: `tests/Lexer.test.cpp:99-139`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lookahead() {
@@ -248,7 +251,7 @@ mod lookahead {
 mod string_interpolation_basic {
   //! Source: `tests/Lexer.test.cpp:141-158`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn string_interpolation_basic() {
@@ -270,7 +273,7 @@ mod string_interpolation_basic {
 mod string_interpolation_full {
   //! Source: `tests/Lexer.test.cpp:160-188`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn string_interpolation_full() {
@@ -303,7 +306,7 @@ mod string_interpolation_full {
 mod string_interpolation_double_brace {
   //! Source: `tests/Lexer.test.cpp:190-206`
 
-  use super::{TestLexer, payload};
+  use super::{TestLexer, Type, payload};
 
   #[test]
   fn string_interpolation_double_brace() {
@@ -324,7 +327,7 @@ mod string_interpolation_double_brace {
 mod string_interpolation_double_but_unmatched_brace {
   //! Source: `tests/Lexer.test.cpp:208-220`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn string_interpolation_double_but_unmatched_brace() {
@@ -344,7 +347,7 @@ mod string_interpolation_double_but_unmatched_brace {
 mod string_interpolation_unmatched_brace {
   //! Source: `tests/Lexer.test.cpp:222-236`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn string_interpolation_unmatched_brace() {
@@ -363,7 +366,7 @@ mod string_interpolation_unmatched_brace {
 mod string_interpolation_with_unicode_escape {
   //! Source: `tests/Lexer.test.cpp:238-247`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn string_interpolation_with_unicode_escape() {
@@ -379,7 +382,7 @@ mod single_quoted_string {
 
   use ulua_ast::records::lexeme::QuoteStyle;
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn single_quoted_string() {
@@ -396,7 +399,7 @@ mod double_quoted_string {
 
   use ulua_ast::records::lexeme::QuoteStyle;
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn double_quoted_string() {
@@ -411,7 +414,7 @@ mod double_quoted_string {
 mod lexer_determines_string_block_depth_0 {
   //! Source: `tests/Lexer.test.cpp:273-283`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lexer_determines_string_block_depth_0() {
@@ -426,7 +429,7 @@ mod lexer_determines_string_block_depth_0 {
 mod lexer_determines_string_block_depth_0_multiline_1 {
   //! Source: `tests/Lexer.test.cpp:285-297`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lexer_determines_string_block_depth_0_multiline_1() {
@@ -441,7 +444,7 @@ mod lexer_determines_string_block_depth_0_multiline_1 {
 mod lexer_determines_string_block_depth_0_multiline_2 {
   //! Source: `tests/Lexer.test.cpp:299-312`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lexer_determines_string_block_depth_0_multiline_2() {
@@ -456,7 +459,7 @@ mod lexer_determines_string_block_depth_0_multiline_2 {
 mod lexer_determines_string_block_depth_0_multiline_3 {
   //! Source: `tests/Lexer.test.cpp:314-326`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lexer_determines_string_block_depth_0_multiline_3() {
@@ -471,7 +474,7 @@ mod lexer_determines_string_block_depth_0_multiline_3 {
 mod lexer_determines_string_block_depth_1 {
   //! Source: `tests/Lexer.test.cpp:328-338`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lexer_determines_string_block_depth_1() {
@@ -486,7 +489,7 @@ mod lexer_determines_string_block_depth_1 {
 mod lexer_determines_string_block_depth_2 {
   //! Source: `tests/Lexer.test.cpp:340-350`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lexer_determines_string_block_depth_2() {
@@ -501,7 +504,7 @@ mod lexer_determines_string_block_depth_2 {
 mod lexer_determines_string_block_depth_2_multiline_1 {
   //! Source: `tests/Lexer.test.cpp:352-363`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lexer_determines_string_block_depth_2_multiline_1() {
@@ -516,7 +519,7 @@ mod lexer_determines_string_block_depth_2_multiline_1 {
 mod lexer_determines_string_block_depth_2_multiline_2 {
   //! Source: `tests/Lexer.test.cpp:365-377`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lexer_determines_string_block_depth_2_multiline_2() {
@@ -531,7 +534,7 @@ mod lexer_determines_string_block_depth_2_multiline_2 {
 mod lexer_determines_string_block_depth_2_multiline_3 {
   //! Source: `tests/Lexer.test.cpp:379-391`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lexer_determines_string_block_depth_2_multiline_3() {
@@ -546,7 +549,7 @@ mod lexer_determines_string_block_depth_2_multiline_3 {
 mod lexer_determines_comment_block_depth_0 {
   //! Source: `tests/Lexer.test.cpp:394-404`
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lexer_determines_comment_block_depth_0() {
@@ -564,7 +567,7 @@ mod lexer_determines_comment_block_depth_1 {
   //! C++ 两个用例重名（`lexer_determines_string_block_depth_1`，注释版在
   //! 406 行）；Rust mod 名不可重复，按实际被测类型改名为 comment 版。
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lexer_determines_comment_block_depth_1() {
@@ -581,7 +584,7 @@ mod lexer_determines_comment_block_depth_2 {
   //!
   //! 同上：C++ 重名用例（注释版在 418 行），Rust 侧改名去重。
 
-  use super::TestLexer;
+  use super::{TestLexer, Type};
 
   #[test]
   fn lexer_determines_comment_block_depth_2() {
