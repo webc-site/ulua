@@ -60,8 +60,7 @@ fn main() {
   }
 
   // mirror the C++ CLI: setLuauFlagsDefault(true) — v11+ bytecode needs it
-  // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
-  unsafe { ulua_common::set_all_flags(true) };
+  ulua_common::set_luau_bool_flags(true);
 
   unsafe {
     let l = lua_l_newstate();

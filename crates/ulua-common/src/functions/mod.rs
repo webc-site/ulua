@@ -32,7 +32,7 @@ pub mod read;
 pub mod read_var_int;
 pub mod read_var_int_64;
 pub mod release_thread;
-pub mod set_all_flags;
+
 pub mod split;
 pub mod strip;
 pub mod thread_context_provider;

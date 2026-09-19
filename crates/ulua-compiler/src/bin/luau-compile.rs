@@ -12,7 +12,7 @@ use std::{
   io::{self, Read, Write},
 };
 
-use ulua_common::set_all_flags;
+use ulua_common::set_luau_bool_flags;
 use ulua_compiler::functions::luau_compile::luau_compile;
 
 // 所有失败路径（缺参数、文件不可读/不可写、编译返回空指针、stdout 写入失败）
@@ -26,8 +26,7 @@ fn main() -> io::Result<()> {
   File::open(&path)?.read_to_end(&mut src)?;
 
   // mirror the CLI's flag state so compilation decisions match the oracle
-  // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
-  unsafe { set_all_flags(true) };
+  set_luau_bool_flags(true);
 
   // SAFETY: src 是合法 UTF-8 源码缓冲区；outsize 指向可写 usize。
   let (bc, outsize) = unsafe {

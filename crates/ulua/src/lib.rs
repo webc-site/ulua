@@ -18,7 +18,11 @@
 //! ```
 
 // Re-export the sub-crates as modules so `ulua::vm::...` etc. work from one dep.
-use core::{ffi::c_char, ptr::null_mut, slice::from_raw_parts};
+use core::{
+  ffi::{c_char, CStr},
+  ptr::null_mut,
+  slice::from_raw_parts,
+};
 use std::result::Result as StdResult;
 
 pub use ulua_analysis as analysis;
@@ -89,17 +93,33 @@ pub mod prelude {
 
 use ulua_ast::records::parse_options::ParseOptions;
 use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
+use ulua_common::set_luau_bool_flags;
 use ulua_compiler::{
   functions::compile::compile as compiler_compile, records::compile_options::CompileOptions,
+};
+use ulua_vm::{
+  enums::lua_status::LuaStatus,
+  functions::{
+    lua_checkstack::lua_checkstack, lua_close::lua_close, lua_debugtrace::lua_debugtrace, lua_gettop::lua_gettop,
+    lua_insert::lua_insert, lua_l_newstate::lua_l_newstate, lua_l_openlibs::lua_l_openlibs,
+    lua_newthread::lua_newthread, lua_pcall::lua_pcall, lua_pushvalue::lua_pushvalue,
+    lua_remove::lua_remove, lua_resume::lua_resume, lua_tolstring::lua_tolstring,
+    lua_xmove::lua_xmove, luau_load::luau_load,
+  },
+  macros::{
+    lua_getglobal::lua_getglobal, lua_isnil::lua_isnil, lua_minstack::LUA_MINSTACK,
+    lua_pop::lua_pop, lua_tostring::lua_tostring,
+  },
+  type_aliases::lua_state::lua_State,
 };
 
 /// Compile Luau `source` to bytecode using default compile/parse options.
 ///
 /// On success the raw bytecode blob is returned. On a parse or compile error the
 /// compiler emits an "error blob" (a leading `\0` marker byte followed by the
-/// human-readable message); we detect that marker and surface the message as the
-/// `Err` variant instead.
-pub fn compile(source: &str) -> StdResult<Vec<u8>, String> {
+/// human-readable message); we detect that marker and surface the message as
+/// [`Error::SyntaxError`] instead.
+pub fn compile(source: &str) -> StdResult<Vec<u8>, Error> {
   let options = CompileOptions::default();
   let parse_options = ParseOptions::default();
 
@@ -108,40 +128,34 @@ pub fn compile(source: &str) -> StdResult<Vec<u8>, String> {
   // the non-zero LBC_VERSION_TARGET).
   if bytes.first() == Some(&0u8) {
     let message = String::from_utf8_lossy(&bytes[1..]).into_owned();
-    return Err(message);
+    return Err(Error::SyntaxError {
+      message,
+      incomplete_input: false,
+    });
   }
   Ok(bytes)
 }
 
-/// Compile, load and run `source` on a fresh Luau VM, mirroring the reference
-/// `luau` CLI (`luau_run` driver): a fresh state with the standard library open,
-/// the chunk loaded into a new thread, and `lua_resume` to execute it.
+/// Compile, load and run `source`, mirroring cpp `CLI/src/Repl.cpp` `main` +
+/// `runCode` (Repl.cpp:239-300): a fresh state with the standard library, the
+/// chunk loaded on the main state then moved to a fresh coroutine, and
+/// `lua_resume` to execute it. On normal return, leftover results are printed
+/// through `_PRETTYPRINT` (falling back to `print`), exactly like the REPL.
 ///
-/// Returns `Ok(())` if the script ran to completion, or `Err(message)` carrying
-/// the Lua error string (the same text the CLI would print) on a compile, load
-/// or runtime error.
-pub fn eval(source: &str) -> StdResult<(), String> {
-  use ulua_vm::{
-    enums::lua_status::LuaStatus,
-    functions::{
-      lua_close::lua_close, lua_l_newstate::lua_l_newstate, lua_l_openlibs::lua_l_openlibs,
-      lua_newthread::lua_newthread, lua_resume::lua_resume, lua_tolstring::lua_tolstring,
-      luau_load::luau_load,
-    },
-    type_aliases::lua_state::lua_State,
-  };
+/// Returns `Ok(())` if the script ran to completion, or [`Error`] carrying the
+/// Lua error text with the `lua_debugtrace` stack backtrace appended (as the
+/// C++ REPL does) on a compile, load or runtime error.
+pub fn eval(source: &str) -> StdResult<(), Error> {
+  // v11+ bytecode needs the default Luau flags enabled (the CLI's
+  // setLuauFlagsDefault(true) analog; safe entry point).
+  set_luau_bool_flags(true);
 
   let bytecode = compile(source)?;
-
-  // v11+ bytecode needs the default Luau flags enabled (matches the CLI's
-  // setLuauFlagsDefault(true)).
-  // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
-  unsafe { ulua_common::set_all_flags(true) };
 
   unsafe {
     let l = lua_l_newstate();
     if l.is_null() {
-      return Err("lua_l_newstate returned null".to_string());
+      return Err(Error::MemoryError("lua_l_newstate returned null".to_string()));
     }
 
     // RAII 对应 cpp 侧 `std::unique_ptr<lua_State, lua_close>`: 所有退出路径
@@ -157,43 +171,82 @@ pub fn eval(source: &str) -> StdResult<(), String> {
     let _state = StateGuard(l);
 
     lua_l_openlibs(l);
+    run_code(l, &bytecode)
+  }
+}
 
-    // Run on a fresh thread, like CLI/src/Repl.cpp's runCode.
-    let t = lua_newthread(l);
-    if t.is_null() {
-      return Err("lua_newthread returned null".to_string());
-    }
-
-    let error_message = || {
-      let mut len = 0usize;
-      let s = lua_tolstring(t, -1, &mut len);
-      if s.is_null() {
-        "<non-string error>".to_string()
-      } else {
-        let bytes = from_raw_parts(s.cast::<u8>(), len);
-        String::from_utf8_lossy(bytes).into_owned()
-      }
-    };
-
+/// cpp `Repl.cpp:239 runCode` 的加载/执行段（bytecode 已在外部编译）。
+/// # Safety
+/// `l` 必须是由 `lua_l_newstate` 创建且已 openlibs 的有效状态机。
+unsafe fn run_code(l: *mut lua_State, bytecode: &[u8]) -> StdResult<(), Error> {
+  unsafe {
     let rc = luau_load(
-      t,
+      l,
       c"=eval".as_ptr(),
       bytecode.as_ptr() as *const c_char,
       bytecode.len(),
       0,
     );
     if rc != LuaStatus::Ok as i32 {
-      return Err(error_message());
+      // C++ 此处直接 lua_tolstring(-1) 取错误文本并 pop。
+      let mut len = 0usize;
+      let s = lua_tolstring(l, -1, &mut len);
+      let message = if s.is_null() {
+        String::new()
+      } else {
+        String::from_utf8_lossy(from_raw_parts(s.cast::<u8>(), len)).into_owned()
+      };
+      lua_pop(l, 1);
+      return Err(Error::RuntimeError(message));
     }
 
-    match lua_resume(t, null_mut(), 0) {
-      status if status == LuaStatus::Ok as i32 => {}
-      status if status == LuaStatus::Yield as i32 => {
-        return Err("thread yielded unexpectedly".to_string());
+    let t = lua_newthread(l);
+    if t.is_null() {
+      return Err(Error::MemoryError("lua_newthread returned null".to_string()));
+    }
+
+    // 闭包换入新协程：栈顶是 thread，-2 是刚 load 出的闭包。
+    lua_pushvalue(l, -2);
+    lua_remove(l, -3);
+    lua_xmove(l, t, 1);
+
+    let status = lua_resume(t, null_mut(), 0);
+    if status == LuaStatus::Ok as i32 {
+      let n = lua_gettop(t);
+      if n != 0 {
+        lua_checkstack(t, LUA_MINSTACK);
+        lua_getglobal(t, c"_PRETTYPRINT".as_ptr());
+        // _PRETTYPRINT 为 nil 时回退到标准 print（与 Repl.cpp 一致）。
+        if lua_isnil!(t, -1) {
+          lua_pop(t, 1);
+          lua_getglobal(t, c"print".as_ptr());
+        }
+        lua_insert(t, 1);
+        lua_pcall(t, n, 0, 0);
       }
-      _ => return Err(error_message()),
+      lua_pop(l, 1);
+      return Ok(());
     }
-  }
 
-  Ok(())
+    let mut error = String::new();
+    if status == LuaStatus::Yield as i32 {
+      error.push_str("thread yielded unexpectedly");
+    } else {
+      let s = lua_tostring!(t, -1);
+      if !s.is_null() {
+        let cstr = CStr::from_ptr(s);
+        error.push_str(&String::from_utf8_lossy(cstr.to_bytes()));
+      }
+    }
+    // C++ 无条件追加 "\nstack backtrace:\n" + lua_debugtrace(T)。
+    error.push_str("\nstack backtrace:\n");
+    let trace = lua_debugtrace(t);
+    if !trace.is_null() {
+      error.push_str(&String::from_utf8_lossy(
+        CStr::from_ptr(trace).to_bytes(),
+      ));
+    }
+    lua_pop(l, 1);
+    Err(Error::RuntimeError(error))
+  }
 }

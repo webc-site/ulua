@@ -33,7 +33,7 @@ pub mod clock_shim;
 // C++ 在命名空间作用域暴露；codegen_assert! 等宏直接引用
 // `ulua_common::assert_call_handler`。标志命名空间即 `dfflag` / `dfint` /
 // `fflag` / `fint` 四个模块，读取写作 `fflag::NAME.get()`。
-pub use functions::{assert_call_handler::assert_call_handler, set_all_flags::set_all_flags};
+pub use functions::assert_call_handler::assert_call_handler;
 pub use records::f_value::set_luau_bool_flags;
 
 #[cfg(test)]

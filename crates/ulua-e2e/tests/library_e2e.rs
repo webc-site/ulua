@@ -5,7 +5,7 @@
 
 use core::{ffi::c_char, ptr::null_mut};
 
-use ulua::{common::set_all_flags, compile, eval};
+use ulua::{Error, common::set_luau_bool_flags, compile, eval};
 #[test]
 fn compile_returns_nonempty_bytecode() {
   let bc = compile("return 2 + 2").expect("compile ok");
@@ -17,7 +17,10 @@ fn compile_returns_nonempty_bytecode() {
 #[test]
 fn compile_reports_syntax_error_as_err() {
   let err = compile("local = = =").expect_err("syntax error should be Err");
-  assert!(!err.is_empty(), "error message should be non-empty");
+  let Error::SyntaxError { message, .. } = err else {
+    panic!("expected SyntaxError, got {err:?}");
+  };
+  assert!(!message.is_empty(), "error message should be non-empty");
 }
 
 #[test]
@@ -28,9 +31,17 @@ fn eval_runs_passing_assertion() {
 #[test]
 fn eval_reports_runtime_error_message() {
   let err = eval("error('boom-from-lib')").expect_err("runtime error should be Err");
+  let Error::RuntimeError(message) = &err else {
+    panic!("expected RuntimeError, got {err:?}");
+  };
   assert!(
-    err.contains("boom-from-lib"),
-    "error should mention boom: {err}"
+    message.contains("boom-from-lib"),
+    "error should mention boom: {message}"
+  );
+  // 与 Repl.cpp runCode 一致：错误文本后追加 lua_debugtrace 回溯。
+  assert!(
+    message.contains("stack backtrace:"),
+    "error should carry a stack backtrace: {message}"
   );
 }
 
@@ -38,7 +49,7 @@ fn eval_reports_runtime_error_message() {
 fn eval_reports_assertion_failure() {
   let err = eval("assert(false, 'nope')").expect_err("failed assert should be Err");
   assert!(
-    err.contains("nope"),
+    err.to_string().contains("nope"),
     "error should carry the assert message: {err}"
   );
 }
@@ -47,7 +58,7 @@ fn eval_reports_assertion_failure() {
 fn eval_reports_nil_index_error() {
   let err = eval("local t = nil; return t.x").expect_err("indexing nil should be Err");
   assert!(
-    !err.is_empty(),
+    !err.to_string().is_empty(),
     "nil-index error should be non-empty: {err}"
   );
 }
@@ -72,8 +83,7 @@ fn compile_then_load_and_run_via_vm() {
   };
 
   let bytecode = compile("assert(3 + 4 == 7)").expect("compile ok");
-  // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
-  unsafe { set_all_flags(true) };
+  set_luau_bool_flags(true);
 
   // SAFETY: l/t 均校验非空；bytecode 来自 compile 的合法产物；resume 到 completion 后统一 close。
   unsafe {

@@ -10,7 +10,7 @@ use core::{
 };
 
 use ulua::{
-  common::set_all_flags,
+  common::set_luau_bool_flags,
   vm::functions::{
     lua_close::lua_close, lua_gettop::lua_gettop, lua_l_newstate::lua_l_newstate,
     lua_l_openlibs::lua_l_openlibs, lua_newthread::lua_newthread, lua_resume::lua_resume,
@@ -22,8 +22,7 @@ fn main() {
   let bytecode = ulua::compile("return 6 * 7").expect("compile failed");
 
   // v11+ 字节码需要默认 Luau flags（与 CLI 一致）。
-  // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
-  unsafe { set_all_flags(true) };
+  set_luau_bool_flags(true);
 
   unsafe {
     let l = lua_l_newstate();

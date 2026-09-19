@@ -52,17 +52,16 @@ fn library_fflag_toggle_is_observable() {
 }
 
 #[test]
-fn set_all_flags_round_trips() {
+fn set_luau_bool_flags_round_trips() {
   use ulua_common::fflag;
   let _serial = lock_flags();
   let original = fflag::LuauCompileConcatTargetTop.get();
   // The CLI's setLuauFlagsDefault() analog must run without panicking and be
   // observable on at least one representative flag.
-  // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
-  unsafe { ulua_common::set_all_flags(true) };
+  ulua_common::set_luau_bool_flags(true);
   assert!(
     fflag::LuauCompileConcatTargetTop.get(),
-    "set_all_flags(true) should enable Luau flags"
+    "set_luau_bool_flags(true) should enable Luau flags"
   );
   unsafe { fflag::LuauCompileConcatTargetTop.set(original) };
 }

@@ -431,7 +431,7 @@ fn test_fflags() {
   // We cannot rely on any particular feature flag to be present.
   //
   // DEVIATION: ulua's FastFlags are a fixed, compile-time `FFlag` enum
-  // (configured at VM creation via `ulua_common::set_all_flags`), not a
+  // (configured at VM creation via `ulua_common::set_luau_bool_flags`), not a
   // string-keyed registry, so an arbitrary name is always unknown — exactly
   // mlua's contract for an unrecognized flag, which is all this test asserts.
   assert!(Lua::set_fflag("UnknownFlag", true).is_err());

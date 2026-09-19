@@ -30,6 +30,8 @@ use core::future::Future;
 use core::{cell::RefCell, ffi::c_void, slice::from_raw_parts};
 use std::{cell::Cell, sync::Arc};
 
+use ulua_common::set_luau_bool_flags;
+
 #[cfg(feature = "async")]
 use crate::async_support::{AsyncCallback, clear_async_state, create_async_callback};
 // Re-export the GC-control types here so they live at `ulua_rt::state::{..}`,
@@ -216,8 +218,7 @@ impl Lua {
   pub fn new() -> Lua {
     // ulua's v11+ bytecode needs the default Luau flags on (see the
     // umbrella crate's `eval`).
-    // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
-    unsafe { ulua_common::set_all_flags(true) };
+    set_luau_bool_flags(true);
     unsafe {
       let state = lua_l_newstate();
       lua_l_openlibs(state);
@@ -230,8 +231,7 @@ impl Lua {
   /// A deliberate deviation from mlua (which exposes `StdLib` flags); a
   /// minimal convenience for embedders who want a clean global table.
   pub fn new_empty() -> Lua {
-    // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
-    unsafe { ulua_common::set_all_flags(true) };
+        set_luau_bool_flags(true);   
     wrap_new_state(lua_l_newstate())
   }
 
@@ -260,8 +260,7 @@ impl Lua {
   /// opens nothing (see [`StdLib`]). `options` is recorded on the VM (currently
   /// only `catch_rust_panics` is observable).
   pub fn new_with(libs: StdLib, options: LuaOptions) -> Result<Lua> {
-    // SAFETY: 进程启动期写入旗标，此后只读（同 C++ 全局初始化契约）
-    unsafe { ulua_common::set_all_flags(true) };
+        set_luau_bool_flags(true);   
     unsafe {
       let state = lua_l_newstate();
       if !libs.is_none() {

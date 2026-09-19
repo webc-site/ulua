@@ -206,7 +206,7 @@ impl Lua {
   /// by an arbitrary name. This therefore always reports the name as unknown
   /// (`Err`) — which matches mlua's contract for an unrecognized flag (the
   /// only behavior its `test_fflags` asserts). Known flags are configured at
-  /// VM-construction time via `ulua_common::set_all_flags`.
+  /// VM-construction time via `ulua_common::set_luau_bool_flags`.
   pub fn set_fflag(name: &str, _enabled: bool) -> Result<()> {
     Err(Error::runtime(format!("fflag '{name}' is not supported")))
   }
