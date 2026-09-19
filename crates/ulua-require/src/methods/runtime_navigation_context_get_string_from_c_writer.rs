@@ -88,11 +88,9 @@ impl RuntimeNavigationContext<'_> {
       return None;
     }
 
-    // 兼容 size_out 含结尾 NUL 的 writer：截去末尾的 '\0'
-    let mut end = size.min(buffer.len());
-    if buffer[..end].ends_with(&[0]) {
-      end -= 1;
-    }
+    // cpp/Navigation.cpp:155-158 仅 `buffer.resize(size)`：size_out 即内容字节数，
+    // 不剥任何结尾零。
+    let end = size.min(buffer.len());
     buffer.truncate(end);
     Some(buffer)
   }

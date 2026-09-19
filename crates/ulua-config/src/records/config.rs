@@ -71,12 +71,6 @@ impl Config {
       }
     }
   }
-
-  /// 对应 C++ `operator=(const Config&)`：拷贝构造 + swap。
-  pub fn config_assign(&mut self, other: &Config) -> &mut Self {
-    self.copy_from(other);
-    self
-  }
 }
 
 impl DenseDefault for AliasInfo {

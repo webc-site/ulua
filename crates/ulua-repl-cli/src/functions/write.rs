@@ -40,7 +40,9 @@ pub unsafe fn write(
     // cpp `memcpy(buffer, contents->c_str(), nullTerminatedSize)`：连同结尾 NUL
     dst[..contents.len()].copy_from_slice(contents.as_bytes());
     dst[contents.len()] = 0;
-    *size_out = null_terminated_size;
+    // Require.h:57-59：成功时 size_out 是写入的字节数；NUL 只是给 C 风格消费者的
+    // 哨兵，不计入长度（cpp Navigation.cpp:155-158 据此 resize，不剥尾零）。
+    *size_out = contents.len();
   }
 
   LuarequireWriteResult::WRITE_SUCCESS
