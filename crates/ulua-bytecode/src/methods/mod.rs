@@ -109,8 +109,6 @@ pub mod bytecode_builder_set_dump_flags;
 pub mod bytecode_builder_set_dump_source;
 pub mod bytecode_builder_set_function_type_info;
 pub mod bytecode_builder_set_main_function;
-pub mod bytecode_builder_string_ref_operator_eq;
-pub mod bytecode_builder_table_shape_operator_eq;
 pub mod bytecode_builder_try_get_userdata_type_name;
 pub mod bytecode_builder_undo_emit;
 pub mod bytecode_builder_use_userdata_type;

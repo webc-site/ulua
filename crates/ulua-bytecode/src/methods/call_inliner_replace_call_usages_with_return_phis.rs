@@ -19,7 +19,7 @@ impl<'a> CallInliner<'a> {
     for i in 0..self.caller.phis.len() {
       let candidate = BcOp::bc_op_bc_op_kind_u32(BcOpKind::Phi, i as u32);
 
-      let found = self.return_ops.iter().any(|op| op.operator_eq(&candidate));
+      let found = self.return_ops.iter().any(|op| *op == candidate);
 
       if !found {
         let mut ops = mem::take(&mut self.caller.phis[i].ops);
