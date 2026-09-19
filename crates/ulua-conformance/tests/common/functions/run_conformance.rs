@@ -1,6 +1,6 @@
 use alloc::string::String;
 use core::{
-  ffi::{c_char, c_int, c_void},
+  ffi::{c_char, c_int},
   ptr::{null, null_mut},
 };
 use std::{
@@ -129,11 +129,8 @@ fn validate_bytecode_graph(source: &[u8], opts: &LuaCompileOptions) {
     &compile_options,
   );
 
-  let strings: Vec<&[u8]> = bcb
-    .get_string_table()
-    .iter()
-    .map(|s| s.as_bytes())
-    .collect();
+  // get_string_table 现返回原始字节（B2：不做 UTF-8 往返），直接喂给图解析器
+  let strings: Vec<&[u8]> = bcb.get_string_table();
   let mut reserialized = BytecodeBuilder::new(None);
 
   for fid in 0..bcb.get_function_count() {

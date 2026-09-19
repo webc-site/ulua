@@ -270,11 +270,13 @@ fn read_constant(
     LBC_CONSTANT_STRING => {
       constant.kind = BcVmConstKind::String;
       let s = read_string(strings, c)?;
-      // Box::leak 从所有权副本产出真正的 'static 字符串，消除对调用方
-      // bytecode 缓冲的借用（旧实现用 transmute 谎报生命期，属悬垂 UB）。
+      // 与 cpp `readString` 一致：常量按**原始字节**保留，绝不做 UTF-8 往返
+      // （非法序列经 lossy 会变成 U+FFFD，回写常量表即永久污染、去重键失真）。
+      // Box::leak 从所有权副本产出真正的 'static 切片，消除对调用方
+      // 字符串表的借用（旧实现用 transmute 谎报生命期，属悬垂 UB）。
       // 常量表随编译产物存续，副本泄漏量以字符串常量数为上界。
-      constant.value.value_string =
-        Box::leak(String::from_utf8_lossy(s).into_owned().into_boxed_str());
+      // 文本化（dump/错误消息）才在输出处 `from_utf8_lossy`。
+      constant.value.value_string = Box::leak(s.to_vec().into_boxed_slice());
     }
     LBC_CONSTANT_IMPORT => {
       constant.kind = BcVmConstKind::Import;

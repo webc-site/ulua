@@ -18,7 +18,10 @@ pub union BcVmConstValue {
   pub value_vector: [f32; 4],
   /// cpp `valueVectord`（`BytecodeGraph.h:160`）
   pub value_vectord: [f64; 4],
-  pub value_string: &'static str,
+  /// cpp `valueString`：`string_view` 的非拥有等价物。存 `&'static [u8]` 而非
+  /// `&'static str`：Lua 字符串常量不保证 UTF-8，按 `str` 存会经
+  /// `from_utf8_lossy` 改写非法字节（回写常量表即永久污染），原始字节必须原样保留。
+  pub value_string: &'static [u8],
   pub value_import: u32,
   pub value_table: u32,
   pub value_closure: u32,
