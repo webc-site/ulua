@@ -665,6 +665,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+ "thiserror",
  "ulua-rt",
 ]
 

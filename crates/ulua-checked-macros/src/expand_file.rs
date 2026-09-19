@@ -29,11 +29,11 @@ pub fn expand(tokens: TokenStream) -> TokenStream {
     &root_source,
     &modules,
     defs_source.as_deref(),
-    |lit| paths::read_manifest_file(lit).map_err(|err| err.to_string()),
+    paths::read_manifest_file,
   );
 
-  if let Err(diagnostics) = result {
-    return report::diagnostics_error(root.span(), &diagnostics);
+  if let Err(failure) = result {
+    return report::failure_error(root.span(), failure);
   }
 
   modules_check::expand_include_strs(&root, defs.as_ref(), &modules)

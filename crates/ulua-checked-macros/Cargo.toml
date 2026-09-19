@@ -17,4 +17,5 @@ ulua-rt = { path = "../ulua-rt", version = "0.1.2", features = ["typecheck"] }
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = { version = "3.0", features = ["full"] }
+thiserror = "2.0.20"
 

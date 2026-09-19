@@ -26,8 +26,8 @@ pub fn expand(tokens: TokenStream) -> TokenStream {
     |lit| Ok(lit.value()),
   );
 
-  if let Err(diagnostics) = result {
-    return report::diagnostics_error(source.span(), &diagnostics);
+  if let Err(failure) = result {
+    return report::failure_error(source.span(), failure);
   }
 
   quote! { #source }
