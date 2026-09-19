@@ -43,7 +43,6 @@ pub mod are_seen;
 pub mod are_unsatisfied_arguments_optional;
 pub mod as_mutable_type;
 pub mod as_mutable_type_pack;
-pub mod as_mutable_type_pack_alt_d;
 pub mod assert_invariant;
 pub mod assert_reasoning_valid_subtyping;
 pub mod assign_cycle_names;
@@ -674,19 +673,3 @@ pub mod write_json_emitter_alt_w;
 pub mod write_json_emitter_alt_x;
 pub mod write_table_prop;
 pub mod wrong_number_of_args_string;
-
-pub mod as_mutable_type_id {
-  pub use crate::functions::as_mutable_type::as_mutable_type_id;
-}
-pub mod as_mutable_type_pack_id {
-  pub use crate::functions::as_mutable_type_pack::as_mutable_type_pack_id;
-}
-pub mod get_type_id {
-  pub use crate::functions::get_type_alt_j::get_type_id;
-}
-pub mod get_type_pack_id {
-  pub use crate::functions::get_type_pack::get_type_pack_id;
-}
-pub mod follow_type_id {
-  pub use crate::functions::follow_type::follow_type_id;
-}

@@ -5,7 +5,7 @@ use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT};
 use crate::{
   enums::{occurs_check_result::OccursCheckResult, unify_result::UnifyResult},
   functions::{
-    as_mutable_type_pack::as_mutable_type_pack_id, emplace_type_pack::emplace_type_pack,
+    as_mutable_type_pack::as_mutable_type_pack, emplace_type_pack::emplace_type_pack,
     follow_type::follow_type_id, follow_type_pack::follow_type_pack_id, get_2::get2,
     get_mutable_type::get_mutable_type_id, get_type_pack::get_type_pack_id,
     is_blocked_type_utils::is_blocked,
@@ -95,7 +95,7 @@ impl SubtypingUnifier {
           if OccursCheckResult::Fail == occurs_check_type_pack_id_type_pack_id(sub_tp, super_tp) {
             unsafe {
               emplace_type_pack(
-                as_mutable_type_pack_id(sub_tp),
+                as_mutable_type_pack(sub_tp),
                 TypePackVariant::Bound(error_pack),
               )
             };
@@ -105,7 +105,7 @@ impl SubtypingUnifier {
           if OccursCheckResult::Fail == self.occurs_check_deprecated(sub_tp, super_tp) {
             unsafe {
               emplace_type_pack(
-                as_mutable_type_pack_id(sub_tp),
+                as_mutable_type_pack(sub_tp),
                 TypePackVariant::Bound(error_pack),
               )
             };
@@ -114,7 +114,7 @@ impl SubtypingUnifier {
         }
         unsafe {
           emplace_type_pack(
-            as_mutable_type_pack_id(sub_tp),
+            as_mutable_type_pack(sub_tp),
             TypePackVariant::Bound(super_tp),
           )
         };
@@ -126,7 +126,7 @@ impl SubtypingUnifier {
           if OccursCheckResult::Fail == occurs_check_type_pack_id_type_pack_id(super_tp, sub_tp) {
             unsafe {
               emplace_type_pack(
-                as_mutable_type_pack_id(super_tp),
+                as_mutable_type_pack(super_tp),
                 TypePackVariant::Bound(error_pack),
               )
             };
@@ -136,7 +136,7 @@ impl SubtypingUnifier {
           if OccursCheckResult::Fail == self.occurs_check_deprecated(super_tp, sub_tp) {
             unsafe {
               emplace_type_pack(
-                as_mutable_type_pack_id(super_tp),
+                as_mutable_type_pack(super_tp),
                 TypePackVariant::Bound(error_pack),
               )
             };
@@ -146,7 +146,7 @@ impl SubtypingUnifier {
 
         unsafe {
           emplace_type_pack(
-            as_mutable_type_pack_id(super_tp),
+            as_mutable_type_pack(super_tp),
             TypePackVariant::Bound(sub_tp),
           )
         };

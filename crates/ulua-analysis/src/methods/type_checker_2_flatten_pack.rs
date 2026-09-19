@@ -8,7 +8,7 @@ use ulua_ast::records::location::Location;
 use crate::{
   enums::polarity::Polarity,
   functions::{
-    as_mutable_type_pack::as_mutable, finite::finite, first::first,
+    as_mutable_type_pack::as_mutable_type_pack, finite::finite, first::first,
     follow_type_pack::follow_type_pack_id, fresh_index::fresh_index, get_type_pack::get,
     size_type_pack::size,
   },
@@ -54,7 +54,7 @@ impl TypeChecker2 {
           })
       };
 
-      let result_pack = unsafe { &mut *as_mutable(pack) };
+      let result_pack = unsafe { &mut *as_mutable_type_pack(pack) };
       result_pack.ty = TypePackVariant::TypePack(TypePack {
         head: alloc::vec![result],
         tail: Some(free_tail),

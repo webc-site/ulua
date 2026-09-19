@@ -7,8 +7,6 @@ use crate::records::build_queue_item::BuildQueueItem;
 pub type Task = Box<dyn FnOnce() + Send>;
 
 pub struct BuildQueueWorkState {
-  // C++: `std::function<void(std::function<void()> task)> executeTask_DEPRECATED;`
-  pub execute_task_deprecated: Option<Box<dyn Fn(Task) + Send + Sync>>,
   // C++: `std::function<void(std::vector<std::function<void()>> tasks)> executeTasks;`
   pub execute_tasks: Option<Box<dyn Fn(Vec<Task>) + Send + Sync>>,
 

@@ -10,7 +10,7 @@ use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT};
 use crate::{
   enums::polarity::Polarity,
   functions::{
-    as_mutable_type_pack::as_mutable_type_pack_id, bind_free_type::bind_free_type,
+    as_mutable_type_pack::as_mutable_type_pack, bind_free_type::bind_free_type,
     emplace_type_pack::emplace_type_pack, extend_type_pack::extend_type_pack,
     follow_type::follow_type_id, follow_type_pack::follow_type_pack_id,
     get_type_alt_j::get_type_id, get_type_pack::get_type_pack_id, is_nil::is_nil,
@@ -361,7 +361,7 @@ impl ConstraintGenerator {
       {
         unsafe {
           emplace_type_pack(
-            as_mutable_type_pack_id(return_type),
+            as_mutable_type_pack(return_type),
             TypePackVariant::Bound(annotated_ret_type),
           )
         };
@@ -370,7 +370,7 @@ impl ConstraintGenerator {
       // 对照 C++:4432-4434 `else if (expectedFunction) emplaceTypePack<BoundTypePack>(...)`
       unsafe {
         emplace_type_pack(
-          as_mutable_type_pack_id(return_type),
+          as_mutable_type_pack(return_type),
           TypePackVariant::Bound(expected_function.ret_types),
         )
       };

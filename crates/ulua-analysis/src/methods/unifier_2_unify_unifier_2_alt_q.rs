@@ -16,7 +16,7 @@ use ulua_common::{
 use crate::{
   enums::{occurs_check_result::OccursCheckResult, unify_result::UnifyResult},
   functions::{
-    as_mutable_type_pack::as_mutable_type_pack_id, emplace_type_pack::emplace_type_pack,
+    as_mutable_type_pack::as_mutable_type_pack, emplace_type_pack::emplace_type_pack,
     extend_type_pack::extend_type_pack, flatten_type_pack::flatten_type_pack_id,
     follow_type_pack::follow_type_pack_id, get_type_pack::get_type_pack_id,
     is_irresolvable_unifier_2_alt_b::is_irresolvable,
@@ -203,7 +203,7 @@ impl Unifier2 {
       if occurs_check_type_pack_id_type_pack_id(target, bound_to) == OccursCheckResult::Fail {
         unsafe {
           emplace_type_pack(
-            as_mutable_type_pack_id(target),
+            as_mutable_type_pack(target),
             TypePackVariant::Bound(error_pack),
           )
         };
@@ -214,7 +214,7 @@ impl Unifier2 {
       if OccursCheckResult::Fail == self.occurs_check_deprecated(&mut seen, target, bound_to) {
         unsafe {
           emplace_type_pack(
-            as_mutable_type_pack_id(target),
+            as_mutable_type_pack(target),
             TypePackVariant::Bound(error_pack),
           )
         };
@@ -224,7 +224,7 @@ impl Unifier2 {
 
     unsafe {
       emplace_type_pack(
-        as_mutable_type_pack_id(target),
+        as_mutable_type_pack(target),
         TypePackVariant::Bound(bound_to),
       )
     };

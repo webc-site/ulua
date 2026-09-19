@@ -4,7 +4,7 @@ use ulua_common::macros::luau_assert::LUAU_ASSERT;
 use crate::{
   enums::polarity::Polarity,
   functions::{
-    as_mutable_type::as_mutable_type_id, as_mutable_type_pack::as_mutable_type_pack_id,
+    as_mutable_type::as_mutable_type_id, as_mutable_type_pack::as_mutable_type_pack,
     emplace_type_pack::emplace_type_pack,
   },
   methods::unifiable_bound_type_id_emplace_type_bound_type::unifiable_bound_type_id_emplace_type_bound_type,
@@ -73,7 +73,7 @@ impl ConstraintGenerator {
         {
           unsafe {
             emplace_type_pack(
-              as_mutable_type_pack_id(to_unblock),
+              as_mutable_type_pack(to_unblock),
               TypePackVariant::Bound(resolved),
             )
           };

@@ -11,7 +11,7 @@ use ulua_ast::{
 
 use crate::{
   functions::{
-    as_mutable_type_pack_alt_d::as_mutable_type_pack, flatten_type_pack::flatten_type_pack_id,
+    as_mutable_type_pack::as_mutable_type_pack, flatten_type_pack::flatten_type_pack_id,
   },
   records::{
     generic_error::GenericError, magic_function_call_context::MagicFunctionCallContext,

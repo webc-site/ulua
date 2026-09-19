@@ -4,7 +4,7 @@ use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   functions::{
-    as_mutable_type::as_mutable_type_id, as_mutable_type_pack::as_mutable_type_pack_id,
+    as_mutable_type::as_mutable_type_id, as_mutable_type_pack::as_mutable_type_pack,
     follow_type::follow_type_id, follow_type_pack::follow_type_pack_id, generalize::generalize,
     generalize_type::generalize_type, generalize_type_pack::generalize_type_pack,
     get_mutable_type::get_mutable_type_id, get_type_alt_j::get_type_id,
@@ -151,7 +151,7 @@ impl ConstraintSolver {
         ft.generics.clear();
 
         for r#gen in ft.generic_packs.iter().copied() {
-          (*as_mutable_type_pack_id(r#gen)).ty =
+          (*as_mutable_type_pack(r#gen)).ty =
             TypePackVariant::Bound((*self.builtin_types).unknown_type_pack);
         }
         ft.generic_packs.clear();

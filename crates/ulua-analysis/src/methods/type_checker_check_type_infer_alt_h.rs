@@ -13,7 +13,7 @@ use ulua_common::fflag;
 use crate::{
   enums::{control_flow::ControlFlow, value_context::ValueContext},
   functions::{
-    as_mutable_type_pack::as_mutable_type_pack_id, begin_type_pack::begin, end_type_pack::end,
+    as_mutable_type_pack::as_mutable_type_pack, begin_type_pack::begin, end_type_pack::end,
     follow_type::follow_type_id, follow_type_pack::follow_type_pack_id,
     get_mutable_type_pack::get_mutable_type_pack_id, get_table_type::get_table_type,
     get_type_alt_j::get_type_id, get_type_pack::get_type_pack_id, is_generic::is_generic,
@@ -123,7 +123,7 @@ impl TypeChecker {
         } else if get_type_pack_id::<FreeTypePack>(tail_pack).is_some() {
           // SAFETY: as_mutable_type_pack_id 去 const（C++ asMutable 同义），句柄有效。
           unsafe {
-            (*as_mutable_type_pack_id(tail_pack)).ty = TypePackVariant::TypePack(TypePack {
+            (*as_mutable_type_pack(tail_pack)).ty = TypePackVariant::TypePack(TypePack {
               head: alloc::vec![left],
               tail: None,
             });

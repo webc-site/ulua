@@ -2,7 +2,7 @@ use core::ptr::null_mut;
 
 use crate::{
   enums::polarity::Polarity,
-  functions::as_mutable_type_pack_alt_d::as_mutable_type_pack,
+  functions::as_mutable_type_pack::as_mutable_type_pack,
   records::{
     free_type_pack::FreeTypePack, scope::Scope, type_arena::TypeArena, type_level::TypeLevel,
     type_pack_var::TypePackVar,

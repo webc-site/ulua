@@ -4,7 +4,7 @@ use core::ptr::{NonNull, null_mut};
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  functions::{get_mutable_type_pack::get_mutable_type_pack_id, get_type_id::get_type_id},
+  functions::{get_mutable_type_pack::get_mutable_type_pack_id, get_type_alt_j::get_type_id},
   records::{
     blocked_type_pack::BlockedTypePack, constraint::Constraint,
     constraint_solver::ConstraintSolver, function_call_constraint::FunctionCallConstraint,
