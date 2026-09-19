@@ -154,6 +154,14 @@ fn run() -> i32 {
   // freeze(frontend.globals.globalTypes);
   unsafe {
     let frontend_ptr: *mut Frontend = &mut frontend;
+    // NOTE(跨 crate 缺口，勿模仿；review A1 C12)：cpp 签名是
+    // `registerBuiltinGlobals(Frontend&, GlobalTypes&)`，本行照此从同一个
+    // `frontend_ptr` 派生出两个并存的可变借用（`&mut *frontend_ptr` 与其字段
+    // `(*frontend_ptr).globals`），且函数体内 `frontend.load_definition_file(globals, …)`
+    // 会同时经两者写入 —— 这是刻意为等价移植保留的重叠借用，Stacked Borrows/noalias
+    // 下并不成立。根因在 ulua-analysis 的签名未收窄（应收成 `&mut Frontend` 单一入参
+    // 或让 globals 由 frontend 内部取得），收窄后本行改回单一借用。
+    // **禁止在其他位置复制此形态。**
     register_builtin_globals(&mut *frontend_ptr, &mut (*frontend_ptr).globals, false);
     freeze((*frontend_ptr).globals.global_types_mut());
   }
