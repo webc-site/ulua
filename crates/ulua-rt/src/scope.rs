@@ -148,8 +148,10 @@ impl<'scope, 'env: 'scope> Scope<'scope, 'env> {
   ///
   /// This is the scoped version of `create_function_mut`. The closure is
   /// guarded by a [`RefCell`]; re-entrant calls (the callback triggering Lua
-  /// that calls the same callback) surface as a runtime error rather than a
-  /// borrow panic, matching mlua's `RecursiveMutCallback` intent.
+  /// that calls the same callback) surface as
+  /// [`Error::RecursiveMutCallback`](crate::Error::RecursiveMutCallback)
+  /// rather than a borrow panic — same variant as
+  /// [`Lua::create_function_mut`](crate::Lua::create_function_mut), mirroring mlua.
   pub fn create_function_mut<F, A, R>(&'scope self, func: F) -> Result<Function>
   where
     F: FnMut(&Lua, A) -> Result<R> + 'scope,
@@ -158,9 +160,7 @@ impl<'scope, 'env: 'scope> Scope<'scope, 'env> {
   {
     let func = RefCell::new(func);
     self.create_function(move |lua, args| {
-      let mut borrow = func
-        .try_borrow_mut()
-        .map_err(|_| Error::runtime("mutable callback called recursively"))?;
+      let mut borrow = func.try_borrow_mut().map_err(|_| Error::RecursiveMutCallback)?;
       (borrow)(lua, args)
     })
   }

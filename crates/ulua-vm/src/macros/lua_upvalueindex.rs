@@ -1,7 +1,6 @@
-pub const LUAI_MAXCSTACK: i32 = 8000;
+pub use crate::macros::lua_globalsindex::LUA_GLOBALSINDEX;
 
-pub const LUA_GLOBALSINDEX: i32 = -LUAI_MAXCSTACK - 2002;
-
+/// C 闭包第 `i` 个 upvalue 的伪索引（`lua_upvalueindex`）
 #[inline(always)]
 pub const fn lua_upvalueindex(i: i32) -> i32 {
   LUA_GLOBALSINDEX - i

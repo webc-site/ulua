@@ -3,14 +3,16 @@ use core::{ffi::c_char, slice::from_raw_parts};
 use ulua_ast::records::ast_array::AstArray;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
-use crate::{enums::type_constant_folding::Type, records::constant::Constant};
+use crate::records::constant::{Constant, ConstantStr};
 
 impl Constant {
   pub fn get_string(&self) -> AstArray<c_char> {
-    LUAU_ASSERT!(self.r#type == Type::String);
-    let data = unsafe { self.data.value_string as *mut c_char };
-    let size = self.string_length as usize;
-    AstArray { data, size }
+    let ConstantStr { ptr, len } = self.as_str();
+    // 指针借用自 AST/字符串表，沿用 C++ 的 AstArray 可变指针表示
+    AstArray {
+      data: ptr.cast_mut(),
+      size: len as usize,
+    }
   }
 
   /// Returns the string constant as a byte slice.
@@ -19,13 +21,24 @@ impl Constant {
   /// the slice is tied to `&self` rather than to the temporary `AstArray`.
   #[inline]
   pub fn get_string_bytes(&self) -> &[u8] {
-    LUAU_ASSERT!(self.r#type == Type::String);
-    let data = unsafe { self.data.value_string as *const u8 };
-    let size = self.string_length as usize;
-    if data.is_null() || size == 0 {
+    let ConstantStr { ptr, len } = self.as_str();
+    if ptr.is_null() || len == 0 {
       &[]
     } else {
-      unsafe { from_raw_parts(data, size) }
+      unsafe { from_raw_parts(ptr.cast::<u8>(), len as usize) }
+    }
+  }
+
+  /// 取出字符串载荷；非字符串常量属契约违例，断言拦截
+  #[inline]
+  pub(crate) fn as_str(&self) -> ConstantStr {
+    LUAU_ASSERT!(matches!(self, Constant::Str(_)));
+    match self {
+      Constant::Str(s) => *s,
+      _ => ConstantStr {
+        ptr: core::ptr::null(),
+        len: 0,
+      },
     }
   }
 }

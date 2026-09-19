@@ -119,17 +119,8 @@ pub(crate) unsafe fn lua_v_doarithimpl(
   }
 }
 
-/// 向量分支是否已处理完该运算（Add/Sub/Mul/Div/IDiv/Unm 有向量形态）
-fn is_arith_handled(op: TMS) -> bool {
-  matches!(
-    op,
-    TMS::TmAdd | TMS::TmSub | TMS::TmMul | TMS::TmDiv | TMS::TmIDiv | TMS::TmUnm
-  )
-}
-
-/// 对 4 通道向量按分量执行二元运算并写入 `ra`。
-/// `f` 经内联后与逐通道手写展开等价；`vc` 只在 `f` 内解引用，
-/// 一元运算（TmUnm）可对两个参数传同一指针。
+/// 向量逐通道二元运算辅助：对 4 通道按分量执行 `f` 并写入 `ra`。
+/// `f` 经内联后与逐通道手写展开等价；一元运算（TmUnm）可对两个参数传同一指针。
 #[inline]
 unsafe fn set_vec_binop(ra: StkId, vb: *const f32, vc: *const f32, f: impl Fn(f32, f32) -> f32) {
   unsafe {
