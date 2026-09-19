@@ -27,7 +27,7 @@ use ulua_ast::{
 use ulua_common::fint;
 use ulua_unit_test::{
   functions::{
-    ast_node_ref::{CstNodePtr, NodePtr, PtrRef, as_node_at, deref_at, elem, node_key},
+    ast_node_ref::{CstNodePtr, NodePtr, PtrMutRef, PtrRef, as_node_at, deref_at, elem, node_key},
     check_first_error_for_attributes::check_first_error_for_attributes,
   },
   records::{count_ast_nodes::CountAstNodes, fixture::Fixture},
@@ -142,7 +142,11 @@ mod parser_recovery_of_parenthesized_expressions {
       .expect("sourceModule 必须存在")
       .root;
     let mut counter = CountAstNodes::default();
-    root.as_ref_opt().expect("根块非空").visit(&mut counter);
+    // visit 需要独占借用：cpp `AstNode::visit(AstVisitor*)` 的 this 非 const。
+    root
+      .as_mut_ref_opt()
+      .expect("根块非空")
+      .visit(&mut counter);
     counter.count
   }
 
