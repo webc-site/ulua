@@ -2,12 +2,8 @@ use core::cmp;
 
 use crate::{
   records::{
-    bc_function::VmConst,
-    bc_get_var_args::BcGetVarArgs,
-    bc_load_nil::BcLoadNil,
-    bc_move::BcMove,
-    bc_op::BcOp,
-    call_inliner::CallInliner,
+    bc_function::VmConst, bc_get_var_args::BcGetVarArgs, bc_load_nil::BcLoadNil, bc_move::BcMove,
+    bc_op::BcOp, call_inliner::CallInliner,
   },
   type_aliases::reg::Reg,
 };

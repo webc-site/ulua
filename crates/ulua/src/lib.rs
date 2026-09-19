@@ -19,7 +19,7 @@
 
 // Re-export the sub-crates as modules so `ulua::vm::...` etc. work from one dep.
 use core::{
-  ffi::{c_char, CStr},
+  ffi::{CStr, c_char},
   ptr::null_mut,
   slice::from_raw_parts,
 };
@@ -100,15 +100,15 @@ use ulua_compiler::{
 use ulua_vm::{
   enums::lua_status::LuaStatus,
   functions::{
-    lua_checkstack::lua_checkstack, lua_close::lua_close, lua_debugtrace::lua_debugtrace, lua_gettop::lua_gettop,
-    lua_insert::lua_insert, lua_l_newstate::lua_l_newstate, lua_l_openlibs::lua_l_openlibs,
-    lua_newthread::lua_newthread, lua_pcall::lua_pcall, lua_pushvalue::lua_pushvalue,
-    lua_remove::lua_remove, lua_resume::lua_resume, lua_tolstring::lua_tolstring,
-    lua_xmove::lua_xmove, luau_load::luau_load,
+    lua_checkstack::lua_checkstack, lua_close::lua_close, lua_debugtrace::lua_debugtrace,
+    lua_gettop::lua_gettop, lua_insert::lua_insert, lua_l_newstate::lua_l_newstate,
+    lua_l_openlibs::lua_l_openlibs, lua_newthread::lua_newthread, lua_pcall::lua_pcall,
+    lua_pushvalue::lua_pushvalue, lua_remove::lua_remove, lua_resume::lua_resume,
+    lua_tolstring::lua_tolstring, lua_xmove::lua_xmove, luau_load::luau_load,
   },
   macros::{
     lua_getglobal::lua_getglobal, lua_isnil::lua_isnil, lua_minstack::LUA_MINSTACK,
-    lua_pop::lua_pop, lua_tostring::lua_tostring,
+    lua_pop::lua_pop,
   },
   type_aliases::lua_state::lua_State,
 };
@@ -155,7 +155,9 @@ pub fn eval(source: &str) -> StdResult<(), Error> {
   unsafe {
     let l = lua_l_newstate();
     if l.is_null() {
-      return Err(Error::MemoryError("lua_l_newstate returned null".to_string()));
+      return Err(Error::MemoryError(
+        "lua_l_newstate returned null".to_string(),
+      ));
     }
 
     // RAII 对应 cpp 侧 `std::unique_ptr<lua_State, lua_close>`: 所有退出路径
@@ -202,7 +204,9 @@ unsafe fn run_code(l: *mut lua_State, bytecode: &[u8]) -> StdResult<(), Error> {
 
     let t = lua_newthread(l);
     if t.is_null() {
-      return Err(Error::MemoryError("lua_newthread returned null".to_string()));
+      return Err(Error::MemoryError(
+        "lua_newthread returned null".to_string(),
+      ));
     }
 
     // 闭包换入新协程：栈顶是 thread，-2 是刚 load 出的闭包。
@@ -232,19 +236,23 @@ unsafe fn run_code(l: *mut lua_State, bytecode: &[u8]) -> StdResult<(), Error> {
     if status == LuaStatus::Yield as i32 {
       error.push_str("thread yielded unexpectedly");
     } else {
-      let s = lua_tostring!(t, -1);
+      // C++ 用 lua_tostring（= lua_tolstring(L,-1,NULL)），非字符串得 nullptr，
+      // 错误文本为空但仍追加回溯。这里改用带长度出参的 tolstring 以保留嵌入
+      // NUL 字节（已知超集偏差），且不再引入 "<non-string error>" 哨兵。
+      let mut len = 0usize;
+      let s = lua_tolstring(t, -1, &mut len);
       if !s.is_null() {
-        let cstr = CStr::from_ptr(s);
-        error.push_str(&String::from_utf8_lossy(cstr.to_bytes()));
+        error.push_str(&String::from_utf8_lossy(from_raw_parts(
+          s.cast::<u8>(),
+          len,
+        )));
       }
     }
     // C++ 无条件追加 "\nstack backtrace:\n" + lua_debugtrace(T)。
     error.push_str("\nstack backtrace:\n");
     let trace = lua_debugtrace(t);
     if !trace.is_null() {
-      error.push_str(&String::from_utf8_lossy(
-        CStr::from_ptr(trace).to_bytes(),
-      ));
+      error.push_str(&String::from_utf8_lossy(CStr::from_ptr(trace).to_bytes()));
     }
     lua_pop(l, 1);
     Err(Error::RuntimeError(error))

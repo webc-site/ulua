@@ -107,14 +107,37 @@ impl<'a, W: Writer> Printer<'a, W> {
         // 数字源文本直切片（非 fixup 产物）；literal 走字节通道。
         self.writer.literal(cst_node.value.as_bytes());
       } else if a.value >= 0 {
+        // cpp `snprintf(buffer, "%lldi")`：栈上字符数组拼接。itoa 本身无分配
+        // （内联 Buffer），只需把它的字节抄进栈数组再补 'i'，避免 `format!`
+        // 的 String 堆分配。i64::MAX 十进制 19 位 + 'i'，24 足够。
         let mut buf = itoa::Buffer::new();
-        self
-          .writer
-          .literal(format!("{}i", buf.format(a.value)).as_bytes());
+        let digits = buf.format(a.value).as_bytes();
+        let mut out = [0u8; 24];
+        out[..digits.len()].copy_from_slice(digits);
+        out[digits.len()] = b'i';
+        self.writer.literal(&out[..digits.len() + 1]);
       } else {
-        self
-          .writer
-          .literal(format!("0x{:x}i", a.value as u64).as_bytes());
+        // cpp `snprintf(buffer, "0x%llxi", (unsigned long long)value)`：
+        // 负数以补码无符号形态打小写十六进制（`%llx` 无前导零）。逐位取 nibble
+        // 写入栈数组，同样免 `format!` 堆分配。u64 最长 16 位 + "0x" + 'i'。
+        const HEX_DIGITS: &[u8; 16] = b"0123456789abcdef";
+        let mut digits = [0u8; 16];
+        let mut first = 16usize;
+        let mut rest = a.value as u64;
+        loop {
+          first -= 1;
+          digits[first] = HEX_DIGITS[(rest & 0xf) as usize];
+          rest >>= 4;
+          if rest == 0 {
+            break;
+          }
+        }
+        let count = 16 - first;
+        let mut out = [0u8; 19];
+        out[..2].copy_from_slice(b"0x");
+        out[2..2 + count].copy_from_slice(&digits[first..]);
+        out[2 + count] = b'i';
+        self.writer.literal(&out[..3 + count]);
       }
     } else if let Some(a) = ast_node_try_as::<AstExprConstantString>(node) {
       if let Some(cst_node) = self.lookup_cst_node::<CstExprConstantString>(node) {

@@ -1,8 +1,8 @@
 use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_unreachable::LUAU_UNREACHABLE};
 
 use crate::records::{
-  bc_call::BcCall, bc_call_fb::BcCallFB, bc_op::BcOp, bc_return::BcReturn,
-  bc_set_list::BcSetList, call_inliner::CallInliner,
+  bc_call::BcCall, bc_call_fb::BcCallFB, bc_op::BcOp, bc_return::BcReturn, bc_set_list::BcSetList,
+  call_inliner::CallInliner,
 };
 
 impl<'a> CallInliner<'a> {

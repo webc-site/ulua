@@ -5,12 +5,8 @@ use ulua_common::enums::luau_opcode::LuauOpcode;
 use crate::{
   enums::{bc_block_flag::BcBlockFlag, bc_op_kind::BcOpKind},
   records::{
-    bc_block::BcBlock,
-    bc_block_edge::BcBlockEdge,
-    bc_function::VmConst,
-    bc_op::BcOp,
-    bc_return::BcReturn,
-    call_inliner::CallInliner,
+    bc_block::BcBlock, bc_block_edge::BcBlockEdge, bc_function::VmConst, bc_op::BcOp,
+    bc_return::BcReturn, call_inliner::CallInliner,
   },
 };
 

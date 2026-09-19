@@ -4,9 +4,10 @@ use ulua_common::enums::luau_opcode::LuauOpcode;
 
 use crate::{
   methods::bc_inst_helper_create::BcInstHelperCreate,
-  records::{bc_inst_type::BcInstType,
+  records::{
     bc_function::{BcFunction, VmConst},
     bc_inst_helper::BcInstHelper,
+    bc_inst_type::BcInstType,
     bc_op::BcOp,
   },
   type_aliases::reg::Reg,

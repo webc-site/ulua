@@ -231,7 +231,7 @@ impl Lua {
   /// A deliberate deviation from mlua (which exposes `StdLib` flags); a
   /// minimal convenience for embedders who want a clean global table.
   pub fn new_empty() -> Lua {
-        set_luau_bool_flags(true);   
+    set_luau_bool_flags(true);
     wrap_new_state(lua_l_newstate())
   }
 
@@ -260,7 +260,7 @@ impl Lua {
   /// opens nothing (see [`StdLib`]). `options` is recorded on the VM (currently
   /// only `catch_rust_panics` is observable).
   pub fn new_with(libs: StdLib, options: LuaOptions) -> Result<Lua> {
-        set_luau_bool_flags(true);   
+    set_luau_bool_flags(true);
     unsafe {
       let state = lua_l_newstate();
       if !libs.is_none() {

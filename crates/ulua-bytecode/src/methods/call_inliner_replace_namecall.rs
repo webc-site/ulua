@@ -1,12 +1,8 @@
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::records::{
-  bc_function::VmConst,
-  bc_get_table_ks::BcGetTableKS,
-  bc_inst_helper::BcInstHelper,
-  bc_move::BcMove,
-  bc_op::BcOp,
-  call_inliner::CallInliner,
+  bc_function::VmConst, bc_get_table_ks::BcGetTableKS, bc_inst_helper::BcInstHelper,
+  bc_move::BcMove, bc_op::BcOp, call_inliner::CallInliner,
 };
 
 impl<'a> CallInliner<'a> {

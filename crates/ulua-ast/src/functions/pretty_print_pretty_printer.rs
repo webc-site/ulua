@@ -42,54 +42,35 @@ pub(crate) fn pretty_print_impl(
   String::from_utf8_lossy(&writer.take_bytes()).into_owned()
 }
 
-impl Writer for StringWriter {
-  fn advance(&mut self, new_pos: &Position) {
-    self.advance(new_pos);
-  }
+/// `Writer` 的 12 个方法全部只是把实参原样转发到 `StringWriter` 的同名固有
+/// 方法（cpp 侧 `StringWriter` 逐条 `override` 纯虚函数，无适配层）。手写 12
+/// 条重复样板既冗长又会与固有方法签名漂移，宏一次生成；固有方法优先于 trait
+/// 方法解析，故 `self.$name(..)` 落在固有实现上、不会自递归。
+macro_rules! forward_writer_methods {
+  ($(fn $name:ident(&mut self $(, $arg:ident : $ty:ty)*);)*) => {
+    impl Writer for StringWriter {
+      $(
+        fn $name(&mut self $(, $arg: $ty)*) {
+          self.$name($($arg),*)
+        }
+      )*
+    }
+  };
+}
 
-  fn maybe_space(&mut self, new_pos: &Position, reserve: i32) {
-    self.maybe_space(new_pos, reserve);
-  }
-
-  fn newline(&mut self) {
-    self.newline();
-  }
-
-  fn space(&mut self) {
-    self.space();
-  }
-
-  fn write_multiline(&mut self, s: &[u8]) {
-    self.write_multiline(s);
-  }
-
-  fn write(&mut self, s: &[u8]) {
-    self.write(s);
-  }
-
-  fn identifier(&mut self, s: &[u8]) {
-    self.identifier(s);
-  }
-
-  fn keyword(&mut self, s: &str) {
-    self.keyword(s);
-  }
-
-  fn symbol(&mut self, s: &str) {
-    self.symbol(s);
-  }
-
-  fn literal(&mut self, s: &[u8]) {
-    self.literal(s);
-  }
-
-  fn string(&mut self, s: &[u8]) {
-    self.string(s);
-  }
-
-  fn source_string(&mut self, s: &[u8], quote_style: QuoteStyle, block_depth: u32) {
-    self.source_string(s, quote_style, block_depth);
-  }
+forward_writer_methods! {
+  fn advance(&mut self, pos: &Position);
+  fn newline(&mut self);
+  fn space(&mut self);
+  fn maybe_space(&mut self, new_pos: &Position, reserve: i32);
+  fn write(&mut self, s: &[u8]);
+  fn write_multiline(&mut self, s: &[u8]);
+  fn identifier(&mut self, name: &[u8]);
+  fn keyword(&mut self, s: &str);
+  fn symbol(&mut self, s: &str);
+  fn literal(&mut self, s: &[u8]);
+  fn string(&mut self, s: &[u8]);
+  fn source_string(&mut self, s: &[u8], quote_style: QuoteStyle, block_depth: u32);
 }
 
 #[cfg(test)]

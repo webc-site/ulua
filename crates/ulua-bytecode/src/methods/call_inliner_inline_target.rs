@@ -1,6 +1,5 @@
-use core::{cmp, mem};
-
 use alloc::vec::Vec;
+use core::{cmp, mem};
 
 use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_assert::LUAU_ASSERT};
 

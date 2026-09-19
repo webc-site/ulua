@@ -23,14 +23,22 @@ impl<'a> CallInliner<'a> {
         ))
     );
 
-    self.caller.block_op(from_op).successors.push_back(BcBlockEdge {
-      kind,
-      target: to_op,
-    });
+    self
+      .caller
+      .block_op(from_op)
+      .successors
+      .push_back(BcBlockEdge {
+        kind,
+        target: to_op,
+      });
 
-    self.caller.block_op(to_op).predecessors.push_back(BcBlockEdge {
-      kind,
-      target: from_op,
-    });
+    self
+      .caller
+      .block_op(to_op)
+      .predecessors
+      .push_back(BcBlockEdge {
+        kind,
+        target: from_op,
+      });
   }
 }

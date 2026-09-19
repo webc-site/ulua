@@ -13,7 +13,7 @@ use std::time::Duration;
 
 use common::{bin, write_script};
 use predicates::prelude::*;
-use ulua::{compile, eval};
+use ulua::{Error, compile, eval};
 
 /// Stderr must never contain a leaked Rust panic banner: the VM/parser use
 /// `panic_any` for `longjmp`-style control flow, but those caught unwinds are
@@ -184,7 +184,7 @@ fn non_ascii_identifier_errors_like_upstream() {
   // (matches upstream `luau`). The library `compile` surfaces it as `Err`.
   let err = compile("local é = 1\nreturn é").expect_err("non-ascii ident should be Err");
   assert!(
-    err.contains("Unicode character"),
+    err.to_string().contains("Unicode character"),
     "expected unicode-ident error: {err}"
   );
 }
@@ -220,7 +220,10 @@ fn syntax_error_at_eof_is_clean() {
 #[test]
 fn library_syntax_error_is_err_not_panic() {
   let err = compile("if then end").expect_err("malformed if should be Err");
-  assert!(!err.is_empty());
+  let Error::SyntaxError { message, .. } = err else {
+    panic!("expected SyntaxError");
+  };
+  assert!(!message.is_empty());
 }
 
 // ---------------------------------------------------------------------------
