@@ -126,7 +126,7 @@ mod parser_recovery_error_limit_2 {
     assert_eq!("3 parse errors", errors.what());
     assert_eq!(
       "Reached error limit (2)",
-      errors.get_errors().last().unwrap().get_message().as_str()
+      errors.get_errors().last().unwrap().get_message()
     );
   }
 }
@@ -620,7 +620,7 @@ mod parser_table_type_keys_cant_contain_nul {
     );
     assert_eq!(
       "String literal contains malformed escape sequence or \\0",
-      result.errors[0].get_message().as_str()
+      result.errors[0].get_message()
     );
   }
 }
@@ -922,7 +922,7 @@ mod parser_unfinished_string_literal_types_get_reported_but_parsing_continues {
     );
     assert_eq!(
       "Malformed string; did you forget to finish it?",
-      result.errors[0].get_message().as_str()
+      result.errors[0].get_message()
     );
     assert_eq!(2, result.root_block().expect("根块必须存在").body.size);
   }
@@ -948,7 +948,7 @@ mod parser_unfinished_string_literals_get_reported_but_parsing_continues {
     );
     assert_eq!(
       "Malformed string; did you forget to finish it?",
-      result.errors[0].get_message().as_str()
+      result.errors[0].get_message()
     );
     assert_eq!(2, result.root_block().expect("根块必须存在").body.size);
   }

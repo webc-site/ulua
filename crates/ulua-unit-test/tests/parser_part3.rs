@@ -63,7 +63,7 @@ use ulua_unit_test::{
 fn assert_single_error(errors: &[ParseError], location: Location, message: &str) {
   assert_eq!(1, errors.len());
   assert_eq!(&location, errors[0].get_location());
-  assert_eq!(message, errors[0].get_message().as_str());
+  assert_eq!(message, errors[0].get_message());
 }
 
 /// `Location{{l, c}, {l, c}}` 的简写，对应 cpp 同名构造。
@@ -107,7 +107,7 @@ fn parser_generic_type_list_recovery() {
   assert_eq!(2, result.errors.len());
   assert_eq!(
     "Generic types come before generic type packs",
-    result.errors[0].get_message().as_str()
+    result.errors[0].get_message()
   );
 }
 
@@ -655,15 +655,12 @@ fn parser_missing_default_type_pack_argument_after_variadic_type_parameter() {
   assert_eq!(2, result.errors.len());
 
   assert_eq!(&loc((1, 23), (1, 25)), result.errors[0].get_location());
-  assert_eq!(
-    "Expected type, got '>'",
-    result.errors[0].get_message().as_str()
-  );
+  assert_eq!("Expected type, got '>'", result.errors[0].get_message());
 
   assert_eq!(&loc((1, 23), (1, 24)), result.errors[1].get_location());
   assert_eq!(
     "Expected type pack after '=', got type",
-    result.errors[1].get_message().as_str()
+    result.errors[1].get_message()
   );
 }
 

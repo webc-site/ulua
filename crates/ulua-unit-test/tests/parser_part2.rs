@@ -189,7 +189,7 @@ mod parser_error_message_for_using_function_as_type_annotation {
 
     assert_eq!(result.errors.len(), 1);
     assert_eq!(
-      result.errors[0].get_message().as_str(),
+      result.errors[0].get_message(),
       "Using 'function' as a type annotation is not supported, consider replacing with a function type annotation e.g. '(...any) -> ...any'"
     );
   }
@@ -392,7 +392,7 @@ mod parser_export_is_an_identifier_only_when_followed_by_type {
 
     assert_eq!(result.errors.len(), 1);
     assert_eq!(
-      result.errors.first().unwrap().get_message().as_str(),
+      result.errors.first().unwrap().get_message(),
       "Incomplete statement: expected assignment or a function call"
     );
   }
@@ -730,7 +730,7 @@ mod parser_extern_read_write_attributes {
     assert_eq!(result.errors.len(), 1);
     assert_eq!(result.errors[0].get_location().begin.line, 5);
     assert_eq!(
-      *result.errors[0].get_message(),
+      result.errors[0].get_message(),
       "Expected blank or 'read' or 'write' attribute, got 'wRITE'"
     );
 
