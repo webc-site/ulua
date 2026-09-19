@@ -37,9 +37,11 @@ pub fn get_real_path(module_path: &str) -> ResolvedRealPath {
   let last_slash = module_path.rfind('/');
   LUAU_ASSERT!(last_slash.is_some());
 
+  // cpp `modulePath.substr(lastSlash + 1)`：lastSlash == npos 时是 substr(0)，
+  // 即整串（不是空串）。debug 下上面的断言先炸，release 下无斜杠输入走此分支。
   let last_component = match last_slash {
     Some(idx) => &module_path[idx + 1..],
-    None => "",
+    None => module_path.as_str(),
   };
 
   // 常规模块后缀（`init` 末段交给下方目录分支）
