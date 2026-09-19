@@ -1290,7 +1290,7 @@ mod type_infer_annotations_luau_print_is_magic_if_the_flag_is_set {
 
     static OUTPUT_COUNT: AtomicUsize = AtomicUsize::new(0);
 
-    extern "C-unwind" fn capture_print_line(_line: &String) {
+    fn capture_print_line(_line: &str) {
       OUTPUT_COUNT.fetch_add(1, Ordering::SeqCst);
     }
 
