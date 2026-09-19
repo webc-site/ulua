@@ -22,7 +22,7 @@ impl Frontend {
 
     {
       let mtx = unsafe { &(*state_ptr).mtx };
-      let _guard = mtx.lock().unwrap();
+      let _guard = mtx.lock().unwrap_or_else(|e| e.into_inner());
       let ready = unsafe { &mut (*state_ptr).ready_queue_items };
       ready.push(item_pos);
     }

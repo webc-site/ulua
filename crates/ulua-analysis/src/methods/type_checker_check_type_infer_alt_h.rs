@@ -121,7 +121,7 @@ impl TypeChecker {
         } else if let Some(vtp) = get_type_pack_id::<VariadicTypePack>(tail_pack) {
           right = vtp.ty;
         } else if get_type_pack_id::<FreeTypePack>(tail_pack).is_some() {
-          // SAFETY: as_mutable_type_pack_id 去 const（C++ asMutable 同义），句柄有效。
+          // SAFETY:  as_mutable_type_pack 去 const（C++ asMutable 同义），句柄有效。
           unsafe {
             (*as_mutable_type_pack(tail_pack)).ty = TypePackVariant::TypePack(TypePack {
               head: alloc::vec![left],

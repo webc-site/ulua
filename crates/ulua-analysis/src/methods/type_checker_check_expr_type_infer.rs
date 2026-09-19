@@ -153,7 +153,7 @@ impl TypeChecker {
             tail: Some(tail),
           };
         } else {
-          // SAFETY: as_mutable_type_pack_id 去 const（C++ asMutable 同义），句柄有效。
+          // SAFETY:  as_mutable_type_pack 去 const（C++ asMutable 同义），句柄有效。
           unsafe {
             *as_mutable_type_pack(vararg_pack) = TypePackVar::from(TypePack {
               head: alloc::vec![head],

@@ -178,7 +178,8 @@ impl Frontend {
       {
         let mtx = unsafe { &(*state_ptr).mtx };
         let cv = unsafe { &(*state_ptr).cv };
-        let guard = mtx.lock().unwrap();
+        // 中毒不再级联 panic 掩盖原始错误：取出内值继续（对齐 cpp std::mutex）
+        let guard = mtx.lock().unwrap_or_else(|e| e.into_inner());
 
         // If nothing is ready yet, wait.
         let _guard = cv
@@ -186,7 +187,7 @@ impl Frontend {
             let ready = unsafe { &(*state_ptr).ready_queue_items };
             ready.is_empty()
           })
-          .unwrap();
+          .unwrap_or_else(|e| e.into_inner());
 
         // Handle checked items. 原地取空就绪队列，与 C++ 处理后清空等价
         let ready: Vec<usize> = take(unsafe { &mut (*state_ptr).ready_queue_items });

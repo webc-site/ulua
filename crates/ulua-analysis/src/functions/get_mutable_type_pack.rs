@@ -16,7 +16,7 @@ use crate::{
 pub fn get_mutable<T: TypePackVariantMember + 'static>(tp: TypePackId) -> Option<&'static mut T> {
   LUAU_ASSERT!(!tp.is_null());
 
-  // SAFETY: tp 的有效性由调用方按 C++ 同契约保证；as_mutable_type_pack_id 仅去除
+  // SAFETY: tp 的有效性由调用方按 C++ 同契约保证；as_mutable_type_pack 仅去除
   // const（C++ const_cast 同义），此处解引用一次。
   let ty = unsafe { &mut (*as_mutable_type_pack(tp)).ty };
 

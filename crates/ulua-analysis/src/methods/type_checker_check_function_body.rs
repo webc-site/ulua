@@ -34,7 +34,7 @@ impl TypeChecker {
     // We explicitly don't follow here to check if we have a 'true' free type instead of bound one
     let ret_pack_is_bound = get_type_pack_id::<BoundTypePack>(fun_ty.ret_types).is_some();
     if !ret_pack_is_bound && get_type_pack_id::<FreeTypePack>(fun_ty.ret_types).is_some() {
-      // SAFETY: as_mutable_type_pack_id 去除 const（C++ asMutable 同义），ret_types 有效。
+      // SAFETY: as_mutable_type_pack 去除 const（C++ asMutable 同义），ret_types 有效。
       let ret_pack = as_mutable_type_pack(fun_ty.ret_types);
       unsafe {
         (*ret_pack).ty = TypePackVariant::TypePack(TypePack {
