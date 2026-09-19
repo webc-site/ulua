@@ -20,8 +20,17 @@
 use core::ptr::{null, null_mut};
 
 use crate::records::{
-  ast_expr::AstExpr, ast_node::AstNode, ast_stat::AstStat, ast_type::AstType,
-  ast_type_pack::AstTypePack, cst_node::CstNode,
+  ast_expr::AstExpr, ast_node::AstNode, ast_stat::AstStat, ast_stat_assign::AstStatAssign,
+  ast_stat_block::AstStatBlock, ast_stat_break::AstStatBreak, ast_stat_class::AstStatClass,
+  ast_stat_compound_assign::AstStatCompoundAssign, ast_stat_continue::AstStatContinue,
+  ast_stat_declare_extern_type::AstStatDeclareExternType,
+  ast_stat_declare_function::AstStatDeclareFunction, ast_stat_declare_global::AstStatDeclareGlobal,
+  ast_stat_error::AstStatError, ast_stat_expr::AstStatExpr, ast_stat_for::AstStatFor,
+  ast_stat_for_in::AstStatForIn, ast_stat_function::AstStatFunction, ast_stat_if::AstStatIf,
+  ast_stat_local::AstStatLocal, ast_stat_local_function::AstStatLocalFunction,
+  ast_stat_repeat::AstStatRepeat, ast_stat_return::AstStatReturn,
+  ast_stat_type_alias::AstStatTypeAlias, ast_stat_type_function::AstStatTypeFunction,
+  ast_stat_while::AstStatWhile, ast_type::AstType, ast_type_pack::AstTypePack, cst_node::CstNode,
 };
 
 /// FNV-1a 32 位参数：offset basis 与 prime。
@@ -197,6 +206,38 @@ pub unsafe fn ast_node_try_as_mut<T: AstNodeClass>(node: &mut AstNode) -> Option
   } else {
     None
   }
+}
+
+/// 基类家族判别：`node->asStat()` 的判别面（cpp `AstNode::asStat()` 只在 21 个
+/// `AstStat` 派生类上非空）。类索引判别与指针转换解耦，供 `as_stat`（可变）与
+/// `as_stat_const`（只读）共用，避免两份 `matches!` 表漂移。
+#[inline]
+pub fn is_stat_class(class_index: i32) -> bool {
+  matches!(
+    class_index,
+    AstStatAssign::CLASS_INDEX
+      | AstStatBlock::CLASS_INDEX
+      | AstStatBreak::CLASS_INDEX
+      | AstStatClass::CLASS_INDEX
+      | AstStatCompoundAssign::CLASS_INDEX
+      | AstStatContinue::CLASS_INDEX
+      | AstStatDeclareExternType::CLASS_INDEX
+      | AstStatDeclareFunction::CLASS_INDEX
+      | AstStatDeclareGlobal::CLASS_INDEX
+      | AstStatError::CLASS_INDEX
+      | AstStatExpr::CLASS_INDEX
+      | AstStatFor::CLASS_INDEX
+      | AstStatForIn::CLASS_INDEX
+      | AstStatFunction::CLASS_INDEX
+      | AstStatIf::CLASS_INDEX
+      | AstStatLocal::CLASS_INDEX
+      | AstStatLocalFunction::CLASS_INDEX
+      | AstStatRepeat::CLASS_INDEX
+      | AstStatReturn::CLASS_INDEX
+      | AstStatTypeAlias::CLASS_INDEX
+      | AstStatTypeFunction::CLASS_INDEX
+      | AstStatWhile::CLASS_INDEX
+  )
 }
 
 /// CST spelling of [`ast_rtti_index`] (CST and AST share the index function but
