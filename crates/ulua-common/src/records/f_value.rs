@@ -32,7 +32,20 @@ use core::{
 };
 use std::{cell::RefCell, collections::HashMap, ptr::null_mut, sync::OnceLock};
 
+use foldhash::fast::FixedState;
+
 use crate::functions::is_default_enabled_flag::is_default_enabled_flag;
+
+/// 覆盖栈表：固定种子 foldhash，取代 std `HashMap` 默认的 SipHash
+/// `RandomState`。理由与工作区先例 `ulua-analysis/src/type_aliases/collections.rs`
+/// 一致 —— 键虽是 flag 的 `'static` 地址，但 `--fflags=` 的名字/顺序会经链接期
+/// 影响地址分布，而 SipHash 的每进程随机种子又让桶序跨进程不可复现；
+/// `FixedState` 既快又确定。
+///
+/// 仓库规范首选 `gxhash`，但本 crate 必须能编到 `wasm32-unknown-unknown`
+/// （`ulua-web`），gxhash 3.5.0 只有 x86/x86_64/arm/aarch64 平台实现，wasm 下
+/// 连编译都过不去，故落到同为工作区依赖、同样非 SipHash 的 foldhash。
+type OverrideMap<T> = HashMap<usize, Vec<T>, FixedState>;
 
 // ---------------------------------------------------------------------------
 // Thread-local flag overrides (test isolation)
@@ -72,7 +85,7 @@ pub fn overrides_active() -> bool {
 /// 本 trait 上；两者实现集相同（bool / i32），故以超 trait 关联，使
 /// `T: FValueOverridable` 即可读值。
 pub trait FValueOverridable: Copy + FValueList {
-  fn with_overrides<R>(f: impl FnOnce(&mut HashMap<usize, Vec<Self>>) -> R) -> R;
+  fn with_overrides<R>(f: impl FnOnce(&mut OverrideMap<Self>) -> R) -> R;
 
   fn override_top(addr: usize) -> Option<Self> {
     Self::with_overrides(|m| m.get(&addr).and_then(|s| s.last().copied()))
@@ -94,20 +107,20 @@ pub trait FValueOverridable: Copy + FValueList {
 }
 
 thread_local! {
-    static BOOL_OVERRIDES: RefCell<HashMap<usize, Vec<bool>>> =
-        RefCell::new(HashMap::new());
-    static INT_OVERRIDES: RefCell<HashMap<usize, Vec<i32>>> =
-        RefCell::new(HashMap::new());
+    static BOOL_OVERRIDES: RefCell<OverrideMap<bool>> =
+        RefCell::new(OverrideMap::default());
+    static INT_OVERRIDES: RefCell<OverrideMap<i32>> =
+        RefCell::new(OverrideMap::default());
 }
 
 impl FValueOverridable for bool {
-  fn with_overrides<R>(f: impl FnOnce(&mut HashMap<usize, Vec<Self>>) -> R) -> R {
+  fn with_overrides<R>(f: impl FnOnce(&mut OverrideMap<Self>) -> R) -> R {
     BOOL_OVERRIDES.with(|c| f(&mut c.borrow_mut()))
   }
 }
 
 impl FValueOverridable for i32 {
-  fn with_overrides<R>(f: impl FnOnce(&mut HashMap<usize, Vec<Self>>) -> R) -> R {
+  fn with_overrides<R>(f: impl FnOnce(&mut OverrideMap<Self>) -> R) -> R {
     INT_OVERRIDES.with(|c| f(&mut c.borrow_mut()))
   }
 }
