@@ -515,7 +515,6 @@ pub mod user_defined_function_data;
 pub mod user_defined_type_function_error;
 pub mod variadic;
 pub mod variadic_type_pack;
-pub mod variant;
 pub mod visitor;
 pub mod warning_comparator;
 pub mod weird_iter;
