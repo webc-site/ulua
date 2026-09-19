@@ -129,7 +129,6 @@ pub mod function;
 pub mod hot_comment;
 pub mod lexeme;
 pub mod lexer;
-pub mod local;
 pub mod location;
 pub mod match_lexeme;
 pub mod name;

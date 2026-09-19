@@ -286,7 +286,6 @@ pub mod parser_extract_string_details;
 pub mod parser_function_function;
 pub mod parser_guarded_parse;
 pub mod parser_increment_recursion_counter;
-pub mod parser_local_local;
 pub mod parser_match_lexeme_match_lexeme;
 pub mod parser_name_name;
 pub mod parser_next_lexeme;
