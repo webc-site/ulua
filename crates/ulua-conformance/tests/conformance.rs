@@ -2868,18 +2868,17 @@ fn conformance_native_type_annotations() {
 fn conformance_native_userdata() {
   use ulua_compiler::records::lua_compile_options::LuaCompileOptions;
 
-  use crate::common::{
-    functions::{
-      conformance_native_userdata_setup::conformance_native_userdata_setup,
-      default_codegen_options::default_codegen_options, run_conformance::run_conformance,
-    },
-    functions::codegen_ir_hook_callbacks::{
+  use crate::common::functions::{
+    codegen_ir_hook_callbacks::{
       userdata_access_bytecode_type_callback, userdata_access_callback,
       userdata_metamethod_bytecode_type_callback, userdata_metamethod_callback,
       userdata_namecall_bytecode_type_callback, userdata_namecall_callback,
       vector_access_bytecode_type_callback, vector_access_callback,
       vector_namecall_bytecode_type_callback, vector_namecall_callback,
     },
+    conformance_native_userdata_setup::conformance_native_userdata_setup,
+    default_codegen_options::default_codegen_options,
+    run_conformance::run_conformance,
   };
 
   let userdata_compile_types = [
@@ -3557,15 +3556,14 @@ fn conformance_var_arg() {
 fn conformance_vector() {
   use ulua_compiler::records::lua_compile_options::LuaCompileOptions;
 
-  use crate::common::{
-    functions::{
-      conformance_vector_setup::conformance_vector_setup,
-      default_codegen_options::default_codegen_options, run_conformance::run_conformance,
-    },
-    functions::codegen_ir_hook_callbacks::{
+  use crate::common::functions::{
+    codegen_ir_hook_callbacks::{
       vector_access_bytecode_type_callback, vector_access_callback,
       vector_namecall_bytecode_type_callback, vector_namecall_callback,
     },
+    conformance_vector_setup::conformance_vector_setup,
+    default_codegen_options::default_codegen_options,
+    run_conformance::run_conformance,
   };
 
   for use_ir_hooks in [false, true] {

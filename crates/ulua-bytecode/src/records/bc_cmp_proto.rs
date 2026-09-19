@@ -42,7 +42,6 @@ impl<'a, T> BcCmpProto<'a, T> {
   }
 }
 
-
 impl<T> BcInstHelperCreate for BcCmpProto<'_, T> {
   const OPCODE: LuauOpcode = LuauOpcode::LOP_CMPPROTO;
 }

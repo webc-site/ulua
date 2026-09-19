@@ -53,7 +53,9 @@ pub struct Compiler {
   pub builtin_types: BuiltinAstTypes,
   pub names: *mut AstNameTable,
   pub export_table_local: AstLocal,
-  pub builtins_fold: *const DenseHashMap<*mut AstExprCall, i32>,
+  /// cpp `builtinsFold` 指针的 Rust 化：不存自指裸指针（会被后续 `&mut self.builtins`
+  /// 使 provenance 失效），只记录折叠门控是否开启，`fold_constants` 时现取 `&self.builtins`。
+  pub builtins_fold: bool,
   pub builtins_fold_library_k: bool,
   pub reg_top: u32,
   pub stack_size: u32,

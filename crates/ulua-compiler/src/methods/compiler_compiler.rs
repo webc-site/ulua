@@ -1,4 +1,4 @@
-use core::ptr::{null, null_mut};
+use core::ptr::null_mut;
 
 use ulua_ast::records::{
   ast_local::AstLocal, ast_name::AstName, ast_name_table::AstNameTable, location::Location,
@@ -49,7 +49,7 @@ impl Compiler {
         null_mut(),
         true,
       ),
-      builtins_fold: null(),
+      builtins_fold: false,
       builtins_fold_library_k: false,
       reg_top: 0,
       stack_size: 0,

@@ -34,7 +34,6 @@ impl<'a, T> BcJump<'a, T> {
   }
 }
 
-
 impl<T> BcInstHelperCreate for BcJump<'_, T> {
   const OPCODE: LuauOpcode = LuauOpcode::LOP_JUMP;
 }

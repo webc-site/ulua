@@ -63,7 +63,6 @@ impl<'a, T> BcGetTableKS<'a, T> {
   }
 }
 
-
 impl<T> BcInstHelperCreate for BcGetTableKS<'_, T> {
   const OPCODE: LuauOpcode = LuauOpcode::LOP_GETTABLEKS;
 }

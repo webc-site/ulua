@@ -1,4 +1,4 @@
-use core::ptr::null_mut;
+use core::ptr::{null, null_mut};
 
 use ulua_ast::records::ast_node::AstNode;
 
@@ -29,7 +29,11 @@ impl Compiler {
           constants: &mut self.constants,
           variables: &mut self.variables,
           locals: &mut self.locstants,
-          builtins: self.builtins_fold,
+          builtins: if self.builtins_fold {
+            &self.builtins
+          } else {
+            null()
+          },
           fold_library_k: self.builtins_fold_library_k,
           library_member_constant_cb: self.options.library_member_constant_cb,
           string_table: &mut *self.names,

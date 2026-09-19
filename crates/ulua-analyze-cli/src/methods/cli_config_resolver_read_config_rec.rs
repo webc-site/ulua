@@ -175,7 +175,7 @@ impl CliConfigResolver {
 
     // return configCache[path] = result;
     let cache = unsafe { &mut *self.config_cache.get() };
-    
+
     (cache
       .entry(path.to_string())
       .or_insert_with(move || Box::new(result))) as _

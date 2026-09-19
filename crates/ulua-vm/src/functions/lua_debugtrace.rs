@@ -26,7 +26,11 @@ unsafe fn write_c_str(buf: &mut [c_char], parts: &[&str]) {
     let mut n = 0;
     for part in parts {
       let take = part.len().min(buf.len() - 1 - n);
-      copy_nonoverlapping(part.as_ptr() as *const c_char, buf.as_mut_ptr().add(n), take);
+      copy_nonoverlapping(
+        part.as_ptr() as *const c_char,
+        buf.as_mut_ptr().add(n),
+        take,
+      );
       n += take;
     }
     buf[n] = 0;
@@ -72,11 +76,7 @@ pub unsafe fn lua_debugtrace(l: *mut lua_State) -> *const c_char {
         let mut num = itoa::Buffer::new();
         write_c_str(
           &mut skip,
-          &[
-            "... (+",
-            num.format(depth - LIMIT1 - LIMIT2),
-            " frames)\n",
-          ],
+          &["... (+", num.format(depth - LIMIT1 - LIMIT2), " frames)\n"],
         );
 
         offset = append(buf_ptr, BUF_LEN, offset, skip.as_ptr());

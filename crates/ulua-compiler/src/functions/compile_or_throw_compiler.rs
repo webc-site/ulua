@@ -99,7 +99,7 @@ pub fn compile_or_throw_bytecode_builder_parse_result_ast_name_table_compile_opt
   }
 
   if options.optimization_level >= 2 && !compiler.getfenv_used && !compiler.setfenv_used {
-    compiler.builtins_fold = &compiler.builtins as *const _;
+    compiler.builtins_fold = true;
 
     let math = names.get_str("math");
     if !math.value.is_null() && get_global_state(&compiler.globals, math) == Global::Default {

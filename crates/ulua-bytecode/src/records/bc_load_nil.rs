@@ -18,7 +18,6 @@ pub struct BcLoadNil<'a, T = VmConst> {
   _marker: PhantomData<T>,
 }
 
-
 impl<T> BcInstHelperCreate for BcLoadNil<'_, T> {
   const OPCODE: LuauOpcode = LuauOpcode::LOP_LOADNIL;
 }

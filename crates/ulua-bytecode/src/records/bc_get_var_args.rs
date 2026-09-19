@@ -38,7 +38,6 @@ impl<'a, T> BcGetVarArgs<'a, T> {
   }
 }
 
-
 impl<T> BcInstHelperCreate for BcGetVarArgs<'_, T> {
   const OPCODE: LuauOpcode = LuauOpcode::LOP_GETVARARGS;
 }
