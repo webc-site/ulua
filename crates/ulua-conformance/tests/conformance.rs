@@ -3103,7 +3103,7 @@ fn conformance_same_hash() {
   use ulua_bytecode::records::{bytecode_builder::BytecodeBuilder, string_ref::StringRef};
   use ulua_vm::functions::lua_s_hash::lua_s_hash;
 
-  fn string_ref(s: &'static [u8]) -> StringRef {
+  fn string_ref(s: &'static [u8]) -> StringRef<'static> {
     StringRef::from_slice(s)
   }
 
