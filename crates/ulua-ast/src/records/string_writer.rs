@@ -70,19 +70,18 @@ impl StringWriter {
     // 观测行为一致。
     self.last_char = *s.last().unwrap_or(&0) as char;
 
-    // memchr SIMD 单趟扫描 '\n'：记行数与最后一个换行后的列偏移。
+    // memchr SIMD 单趟扫描 '\n'：行数累加，search_from 停在最后一个换行之后，
+    // 即 cpp 侧 `index` 的值，无需再留一个同值变量。
     let mut num_lines = 0u32;
-    let mut index = 0usize;
     let mut search_from = 0usize;
     while let Some(pos) = memchr::memchr(b'\n', &s[search_from..]) {
       num_lines += 1;
       search_from += pos + 1;
-      index = search_from;
     }
 
     self.pos.line += num_lines;
     if num_lines > 0 {
-      self.pos.column = (s.len() - index) as u32;
+      self.pos.column = (s.len() - search_from) as u32;
     } else {
       self.pos.column += s.len() as u32;
     }
@@ -99,11 +98,13 @@ impl StringWriter {
     self.last_char = *s.last().unwrap_or(&0) as char;
   }
 
-  pub(crate) fn write_char(&mut self, c: char) {
-    // cpp `write(char c)` 写单字节；实参恒为 ASCII（引号、'='、括号、空格）。
-    self.ss.push(c as u8);
+  /// cpp `StringWriter::write(char c)`：单字节写入。参数取 `u8` 而非 `char`
+  /// （cpp `char` 本身就是字节类型）——`char as u8` 会静默截断非 Latin-1 值。
+  /// `last_char` 仍以 cpp 的 `char`（Latin-1）形态存 `char`，`u8 as char` 无损。
+  pub(crate) fn write_char(&mut self, c: u8) {
+    self.ss.push(c);
     self.pos.column += 1;
-    self.last_char = c;
+    self.last_char = c as char;
   }
 
   // C++ StringWriter::identifier 与 keyword 函数体逐字相同（见
@@ -144,10 +145,10 @@ impl StringWriter {
   }
 
   pub(crate) fn string(&mut self, s: &[u8]) {
-    let mut quote = '\'';
+    let mut quote = b'\'';
     // cpp `s.find('\'')` 的字节版：只扫单引号字节，多字节序列不受影响。
     if s.contains(&b'\'') {
-      quote = '\"';
+      quote = b'\"';
     }
 
     self.write_char(quote);
@@ -159,34 +160,35 @@ impl StringWriter {
     if quote_style == QuoteStyle::QuotedRaw {
       // C++ 先构造 `std::string(blockDepth, '=')` 再写三次；此处直接逐
       // 字符写 '='，省一次临时堆分配（write_char 同步推进 column）。
-      self.write_char('[');
+      self.write_char(b'[');
       for _ in 0..block_depth {
-        self.write_char('=');
+        self.write_char(b'=');
       }
-      self.write_char('[');
+      self.write_char(b'[');
       self.write_multiline(s);
-      self.write_char(']');
+      self.write_char(b']');
       for _ in 0..block_depth {
-        self.write_char('=');
+        self.write_char(b'=');
       }
-      self.write_char(']');
-    } else {
-      debug_assert!(block_depth == 0);
-
-      let quote = match quote_style {
-        QuoteStyle::QuotedDouble => '"',
-        QuoteStyle::QuotedSingle => '\'',
-        QuoteStyle::QuotedInterp => '`',
-        _ => {
-          debug_assert!(false, "Unhandled quote type");
-          '"'
-        }
-      };
-
-      self.write_char(quote);
-      self.write_multiline(s);
-      self.write_char(quote);
+      self.write_char(b']');
+      return;
     }
+
+    debug_assert!(block_depth == 0);
+
+    // cpp `char quote = '"'` 加 switch：`default` 只留 LUAU_ASSERT、
+    // 静默退回双引号。这里改为对 QuoteStyle 穷举匹配，新增变体时编译器会
+    // 强制补分支；QuotedRaw 已由上方分支拦截，此臂不可达。
+    let quote = match quote_style {
+      QuoteStyle::QuotedDouble => b'"',
+      QuoteStyle::QuotedSingle => b'\'',
+      QuoteStyle::QuotedInterp => b'`',
+      QuoteStyle::QuotedRaw => unreachable!("QuotedRaw 由上方分支处理"),
+    };
+
+    self.write_char(quote);
+    self.write_multiline(s);
+    self.write_char(quote);
   }
 
   /// 整体接管输出缓冲。字节直出（可能非 UTF-8），String 出口由调用方决定
