@@ -1,5 +1,9 @@
 use crate::records::assembly_builder_x_64::AssemblyBuilderX64;
 
+/// 单条 x64 指令的最大字节数，对应 cpp/CodeGen/src/AssemblyBuilderX64.cpp:68
+/// `const unsigned kMaxInstructionLength = 16;`
+const K_MAX_INSTRUCTION_LENGTH: usize = 16;
+
 impl AssemblyBuilderX64 {
   pub fn commit(&mut self) {
     // CODEGEN_ASSERT(codePos <= codeEnd);
@@ -8,7 +12,7 @@ impl AssemblyBuilderX64 {
     let code_pos = self.code_pos as usize;
     let code_end = self.code_end as usize;
 
-    if (code_end.wrapping_sub(code_pos)) < u32::from(u16::MAX) as usize {
+    if (code_end.wrapping_sub(code_pos)) < K_MAX_INSTRUCTION_LENGTH {
       self.extend();
     }
   }
@@ -16,7 +20,7 @@ impl AssemblyBuilderX64 {
   pub fn extend(&mut self) {
     let count = self.get_code_size();
 
-    let new_size = self.code.len().wrapping_mul(2);
+    let new_size = self.code.len() * 2;
     self.code.resize(new_size, 0);
 
     let data_ptr = self.code.as_mut_ptr();
