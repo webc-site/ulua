@@ -21,7 +21,9 @@ impl BytecodeBuilder {
       extra3: 0,
     });
 
-    let table_shape_map = DenseHashMap::new(TableShape::default());
+    // 注意：`TableShape::default()`（零长度 DUPTABLE 可达）不可作哨兵，
+    // 详见 `TableShape::EMPTY_KEY_SENTINEL` 的说明。
+    let table_shape_map = DenseHashMap::new(TableShape::EMPTY_KEY_SENTINEL);
 
     let proto_map = DenseHashMap::new(!0u32);
 

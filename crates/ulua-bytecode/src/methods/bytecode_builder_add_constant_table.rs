@@ -9,6 +9,14 @@ use crate::{
 
 impl BytecodeBuilder {
   pub fn add_constant_table(&mut self, shape: &TableShape) -> i32 {
+    // 去重键不得撞上 `DenseHashMap` 的空键哨兵：撞上时 `find` 恒 `None`、
+    // `try_insert` 会把哨兵写进槽位，故在入口把这条不变量显式化。
+    debug_assert_ne!(
+      *shape,
+      TableShape::EMPTY_KEY_SENTINEL,
+      "TableShape 去重键不得与 DenseHashMap 空键哨兵相撞"
+    );
+
     if let Some(cache) = self.table_shape_map.find(shape) {
       return *cache;
     }

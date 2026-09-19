@@ -3,7 +3,9 @@
 //! 对齐 cpp `BytecodeBuilder::addConstant*`（`Bytecode/src/BytecodeBuilder.cpp`）：
 //! `ConstantKey` 是去重键，必须逐字段参与判等，且不能与 `DenseHashMap` 的空键哨兵相撞。
 
-use ulua_bytecode::records::{bytecode_builder::BytecodeBuilder, string_ref::StringRef};
+use ulua_bytecode::records::{
+  bytecode_builder::BytecodeBuilder, string_ref::StringRef, table_shape::TableShape,
+};
 
 /// 条目 1 的回归点：`impl Default for BytecodeBuilder` 若不复用 `new(None)`，
 /// `constant_map` 的空键哨兵就等于 `{Nil,0,0,0,0}`，于是 nil 常量命中"已存在"
@@ -119,4 +121,50 @@ fn string_constants_dedupe_by_content() {
 
   let other = bcb.add_constant_string(StringRef::from_slice(b"world"));
   assert_ne!(first, other);
+}
+
+/// 哨兵可达性回归：`TableShape::default()` 是解析器接受的零长度 DUPTABLE 形状
+/// （`from_function_bytecode` 只拒 `length > K_MAX_LENGTH`），旧实现直接把它当
+/// `DenseHashMap` 空键哨兵，于是 `find` 恒 `None`（去重彻底失效），
+/// `insert_unsafe` 的 `debug_assert` 在 debug 下直接 panic。
+#[test]
+fn zero_length_table_shape_dedupes() {
+  let mut bcb = BytecodeBuilder::new(None);
+
+  let empty = TableShape::default();
+  let first = bcb.add_constant_table(&empty);
+  let second = bcb.add_constant_table(&empty);
+
+  assert_eq!(first, 0, "首条 table 常量应落在 id 0");
+  assert_eq!(first, second, "零长度 DUPTABLE 必须复用同一条常量");
+}
+
+/// 去重键必须逐字段判等：`has_constants` 是 cpp `TableShape::operator==` 的显式
+/// 比较项，零长度形状只有它能区分。
+#[test]
+fn table_shape_has_constants_distinguishes_zero_length() {
+  let mut bcb = BytecodeBuilder::new(None);
+
+  let no_consts = TableShape::default();
+  let with_consts = TableShape {
+    has_constants: true,
+    ..TableShape::default()
+  };
+
+  let a = bcb.add_constant_table(&no_consts);
+  let b = bcb.add_constant_table(&with_consts);
+  assert_ne!(a, b, "hasConstants 必须参与判等");
+  assert_eq!(a, bcb.add_constant_table(&no_consts));
+  assert_eq!(b, bcb.add_constant_table(&with_consts));
+}
+
+/// 哨兵本身不可达：一旦长度上界校验放宽，`table_shape.rs` 的编译期 `const` 断言
+/// 就会失败，这里再守一条「哨兵 ≠ 任何 default 派生形状」。
+#[test]
+fn table_shape_sentinel_is_unreachable() {
+  assert_ne!(
+    TableShape::EMPTY_KEY_SENTINEL,
+    TableShape::default(),
+    "哨兵不得复用 default 形状"
+  );
 }
