@@ -27,8 +27,7 @@ impl CliFileResolver {
 impl FileResolver for CliFileResolver {
   /// `std::optional<SourceCode> readSource(const ModuleName&)`
   fn read_source(&mut self, name: &ModuleName) -> Option<SourceCode> {
-    // SAFETY: 固有方法要求 C++ 调用契约（读 stdin / 文件系统）。
-    unsafe { Self::read_source(self, name) }
+    Self::read_source(self, name)
   }
 
   /// `std::optional<ModuleInfo> resolveModule(const ModuleInfo*, AstExpr*, const TypeCheckLimits&)`

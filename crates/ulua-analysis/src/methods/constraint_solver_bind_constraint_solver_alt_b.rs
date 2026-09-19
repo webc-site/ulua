@@ -9,7 +9,7 @@ use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT};
 use crate::{
   enums::occurs_check_result::OccursCheckResult,
   functions::{
-    as_mutable_type_pack::as_mutable_type_pack_id, follow_type_pack::follow_type_pack_id,
+    as_mutable_type_pack::as_mutable_type_pack, follow_type_pack::follow_type_pack_id,
     get_type_pack::get_type_pack_id,
     occurs_check_type_utils_alt_b::occurs_check_type_pack_id_type_pack_id,
   },
@@ -52,12 +52,12 @@ impl ConstraintSolver {
         .into(),
         &location,
       );
-      let mutable_tp = as_mutable_type_pack_id(tp);
+      let mutable_tp = as_mutable_type_pack(tp);
       // SAFETY: builtin_types 在 solver 存活期内有效。
       let mut err_arg = unsafe { (*self.builtin_types).error_type_pack };
       unsafe { emplace_type_pack(mutable_tp, &mut err_arg) };
     } else {
-      let mutable_tp = as_mutable_type_pack_id(tp);
+      let mutable_tp = as_mutable_type_pack(tp);
       let mut bound_arg = bound_to;
       unsafe { emplace_type_pack(mutable_tp, &mut bound_arg) };
     }

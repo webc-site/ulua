@@ -3,7 +3,6 @@ use core::ptr::null_mut;
 use ulua_ast::records::{
   ast_expr_call::AstExprCall, ast_expr_function::AstExprFunction, ast_node::AstNode,
 };
-use ulua_common::fflag;
 
 use crate::{
   enums::type_constant_folding::Type,
@@ -60,15 +59,10 @@ impl Compiler {
         }
       }
 
-      let record_changes =
-        fflag::LuauCompilePropagateTableProps2.get() && fflag::LuauCompileFoldOptimize.get();
+      self.expr_changes.clear();
+      self.local_changes.clear();
 
-      if record_changes {
-        self.expr_changes.clear();
-        self.local_changes.clear();
-      }
-
-      self.fold_constants(func_ref.body as *mut AstNode, record_changes);
+      self.fold_constants(func_ref.body as *mut AstNode, true);
 
       let cost = model_cost(
         func_ref.body as *mut AstNode,
@@ -84,12 +78,8 @@ impl Compiler {
         }
       }
 
-      if record_changes {
-        undo_changes_expr(&mut self.constants, &self.expr_changes);
-        undo_changes_local(&mut self.locstants, &self.local_changes);
-      } else {
-        self.fold_constants(func_ref.body as *mut AstNode, false);
-      }
+      undo_changes_expr(&mut self.constants, &self.expr_changes);
+      undo_changes_local(&mut self.locstants, &self.local_changes);
 
       cost
     }

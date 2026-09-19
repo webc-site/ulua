@@ -17,7 +17,7 @@ use ulua_vm::{
     lua_setuserdatadtor::lua_setuserdatadtor,
   },
   macros::{
-    LUA_PUSHCCLOSURE::LUA_PUSHCCLOSURE, lua_newtable::lua_newtable, lua_pop::lua_pop,
+    lua_newtable::lua_newtable, lua_pop::lua_pop, lua_pushcclosure::lua_pushcclosure,
     lua_pushcfunction::LUA_PUSHCFUNCTION,
   },
   records::{lua_l_reg::LuaLReg, lua_state},
@@ -429,7 +429,7 @@ pub unsafe fn register_type_user_data(l: *mut LuaState) {
     // lua_setreadonly(l, -1, true);
     lua_setreadonly(vm_l, -1, 1);
     // LUA_PUSHCCLOSURE(l, typeUserdataIndex, "__index", 1);
-    LUA_PUSHCCLOSURE(
+    lua_pushcclosure(
       vm_l,
       Some(type_userdata_index_thunk),
       c"__index".as_ptr(),

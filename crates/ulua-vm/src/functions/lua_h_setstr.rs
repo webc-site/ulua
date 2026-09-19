@@ -1,5 +1,3 @@
-use core::mem::zeroed;
-
 use crate::{
   functions::{lua_h_getstr::lua_h_getstr, newkey::newkey},
   macros::{
@@ -20,7 +18,7 @@ pub unsafe fn lua_h_setstr(l: *mut lua_State, t: *mut LuaTable, key: *mut tstrin
     if p != luaO_nilobject {
       cast_to!(*mut TValue, p)
     } else {
-      let mut k: TValue = zeroed();
+      let mut k = TValue::default();
       setsvalue!(l, &mut k, key);
 
       newkey(l, t, &k)

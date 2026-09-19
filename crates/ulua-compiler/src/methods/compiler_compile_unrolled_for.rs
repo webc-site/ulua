@@ -1,7 +1,6 @@
 use core::ptr::null_mut;
 
 use ulua_ast::records::{ast_node::AstNode, ast_stat::AstStat, ast_stat_for::AstStatFor};
-use ulua_common::fflag;
 
 use crate::{
   enums::{type_compiler::Type as LoopJumpType, type_constant_folding::Type},
@@ -38,13 +37,8 @@ impl Compiler {
         continue_used: null_mut(),
       });
 
-      let record_changes =
-        fflag::LuauCompilePropagateTableProps2.get() && fflag::LuauCompileFoldOptimize.get();
-
-      if record_changes {
-        self.expr_changes.clear();
-        self.local_changes.clear();
-      }
+      self.expr_changes.clear();
+      self.local_changes.clear();
 
       for iv in 0..trip_count {
         *self.locstants.get_or_insert(stat_ref.var) = Constant {
@@ -55,7 +49,7 @@ impl Compiler {
           },
         };
 
-        self.fold_constants(stat_ref.body as *mut AstNode, record_changes && iv == 0);
+        self.fold_constants(stat_ref.body as *mut AstNode, iv == 0);
 
         let iter_jumps = self.loop_jumps.len();
         self.compile_stat(stat_ref.body as *mut AstStat);
@@ -89,12 +83,8 @@ impl Compiler {
 
       self.locstants.get_or_insert(stat_ref.var).r#type = Type::Unknown;
 
-      if record_changes {
-        undo_changes_expr(&mut self.constants, &self.expr_changes);
-        undo_changes_local(&mut self.locstants, &self.local_changes);
-      } else {
-        self.fold_constants(stat_ref.body as *mut AstNode, false);
-      }
+      undo_changes_expr(&mut self.constants, &self.expr_changes);
+      undo_changes_local(&mut self.locstants, &self.local_changes);
     }
   }
 }

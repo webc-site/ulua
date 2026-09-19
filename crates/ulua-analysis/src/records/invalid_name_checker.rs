@@ -41,6 +41,3 @@ impl InvalidNameChecker {
     false
   }
 }
-
-unsafe impl Send for InvalidNameChecker {}
-unsafe impl Sync for InvalidNameChecker {}

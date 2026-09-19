@@ -7,7 +7,7 @@ use ulua_ast::{
 
 use crate::{
   functions::{
-    as_mutable_type_pack_alt_d::as_mutable_type_pack, flatten_type_pack::flatten_type_pack_id,
+    as_mutable_type_pack::as_mutable_type_pack, flatten_type_pack::flatten_type_pack_id,
     parse_pattern_string::parse_pattern_string_bytes,
   },
   records::{

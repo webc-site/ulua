@@ -52,7 +52,6 @@ impl Frontend {
     let mut seen: DenseHashSet<ModuleName> = DenseHashSet::new(ModuleName::default());
 
     let state = Arc::new(BuildQueueWorkState {
-      execute_task_deprecated: None,
       execute_tasks: None,
       build_queue_items: Vec::new(),
       mtx: Mutex::new(()),

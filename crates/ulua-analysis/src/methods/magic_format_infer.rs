@@ -14,7 +14,7 @@ use ulua_ast::{
 use crate::{
   enums::value::Value,
   functions::{
-    as_mutable_type_pack_alt_d::as_mutable_type_pack, begin_type_pack::begin, end_type_pack::end,
+    as_mutable_type_pack::as_mutable_type_pack, begin_type_pack::begin, end_type_pack::end,
     flatten_type_pack::flatten_type_pack_id, follow_type::follow_type_id,
     get_type_alt_j::get_type_id, parse_format_string::parse_format_string_bytes,
     should_suppress_errors_type_utils::should_suppress_errors, unwrap_group::unwrap_group,

@@ -34,7 +34,7 @@ use ulua_common::fint;
 use crate::{
   enums::{table_state::TableState, value_context::ValueContext},
   functions::{
-    as_mutable_type_pack::as_mutable_type_pack_id, first::first, follow_type::follow_type_id,
+    as_mutable_type_pack::as_mutable_type_pack, first::first, follow_type::follow_type_id,
     follow_type_pack::follow_type_pack_id, get_mutable_type_pack::get_mutable_type_pack_id,
     get_type_alt_j::get_type_id, get_type_pack::get_type_pack_id, maybe_singleton::maybe_singleton,
     maybe_string::maybe_string, try_get_l_value::try_get_l_value,
@@ -155,7 +155,7 @@ impl TypeChecker {
         } else {
           // SAFETY: as_mutable_type_pack_id 去 const（C++ asMutable 同义），句柄有效。
           unsafe {
-            *as_mutable_type_pack_id(vararg_pack) = TypePackVar::from(TypePack {
+            *as_mutable_type_pack(vararg_pack) = TypePackVar::from(TypePack {
               head: alloc::vec![head],
               tail: Some(tail),
             });

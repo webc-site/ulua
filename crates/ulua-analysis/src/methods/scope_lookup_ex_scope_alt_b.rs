@@ -1,24 +1,15 @@
 use crate::records::{binding::Binding, scope::Scope, symbol::Symbol};
 
 impl Scope {
-  pub fn lookup_ex_symbol(&mut self, sym: Symbol) -> Option<(*mut Binding, *mut Scope)> {
-    let mut s: *mut Scope = self as *mut Scope;
-
+  /// 沿 parent 链查找 sym，返回（绑定，定义处作用域）。
+  /// cpp/Scope.cpp:32 用 const_cast 取 &mut；本实现真只读（&self），无 unsafe。
+  pub fn lookup_ex_symbol(&self, sym: Symbol) -> Option<(&Binding, &Scope)> {
+    let mut cur = self;
     loop {
-      let bindings = unsafe { &(*s).bindings };
-      if let Some(binding) = bindings.get(&sym) {
-        return Some((binding as *const Binding as *mut Binding, s));
+      if let Some(binding) = cur.bindings.get(&sym) {
+        return Some((binding, cur));
       }
-
-      let parent = unsafe { &(*s).parent };
-      match parent {
-        Some(parent_scope) => {
-          s = parent_scope.as_ref() as *const Scope as *mut Scope;
-        }
-        None => {
-          return None;
-        }
-      }
+      cur = cur.parent.as_deref()?;
     }
   }
 }

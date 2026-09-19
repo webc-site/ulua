@@ -1,7 +1,7 @@
 use ulua_common::records::dense_hash_set::DenseHashSet;
 
 use crate::{
-  functions::{follow_type_id::follow_type_id, get_type_alt_j::get_type_id},
+  functions::{follow_type::follow_type_id, get_type_alt_j::get_type_id},
   records::union_type::UnionType,
   type_aliases::type_id::TypeId,
 };

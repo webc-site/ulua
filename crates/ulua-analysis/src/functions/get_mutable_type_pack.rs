@@ -7,7 +7,7 @@ use core::any::TypeId;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  functions::as_mutable_type_pack::as_mutable_type_pack_id,
+  functions::as_mutable_type_pack::as_mutable_type_pack,
   type_aliases::{
     bound_type_pack::BoundTypePack, type_pack_id::TypePackId,
     type_pack_variant::TypePackVariantMember,
@@ -18,7 +18,7 @@ pub fn get_mutable<T: TypePackVariantMember + 'static>(tp: TypePackId) -> Option
 
   // SAFETY: tp 的有效性由调用方按 C++ 同契约保证；as_mutable_type_pack_id 仅去除
   // const（C++ const_cast 同义），此处解引用一次。
-  let ty = unsafe { &mut (*as_mutable_type_pack_id(tp)).ty };
+  let ty = unsafe { &mut (*as_mutable_type_pack(tp)).ty };
 
   if TypeId::of::<T>() != TypeId::of::<BoundTypePack>() {
     LUAU_ASSERT!(BoundTypePack::get_if(ty).is_none());

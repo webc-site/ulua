@@ -45,7 +45,7 @@ impl<C: NavigationContextTrait, E: ErrorHandler> Navigator<'_, C, E> {
       let next_alias = extract_alias(value);
       let next_key = utf8_owned(next_alias);
 
-      let (error, was_overridden) = self.to_alias_override(next_alias);
+      let (error, was_overridden) = self.navigate_to_alias_override(next_alias);
       if error.is_some() {
         return error;
       }
@@ -69,7 +69,7 @@ impl<C: NavigationContextTrait, E: ErrorHandler> Navigator<'_, C, E> {
           {
             return Some(error);
           }
-        } else if let Some(error) = self.to_alias_fallback(next_alias) {
+        } else if let Some(error) = self.navigate_to_alias_fallback(next_alias) {
           return Some(error);
         }
       }

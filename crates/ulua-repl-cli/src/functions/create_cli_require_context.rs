@@ -11,7 +11,7 @@ use ulua_vm::{
     lua_insert::lua_insert, lua_newuserdatadtor::lua_newuserdatadtor, lua_settable::lua_settable,
   },
   macros::{
-    LUA_PUSHLIGHTUSERDATA::LUA_PUSHLIGHTUSERDATA, lua_l_error::luaL_error,
+    lua_l_error::luaL_error, lua_pushlightuserdata::lua_pushlightuserdata,
     lua_registryindex::LUA_REGISTRYINDEX,
   },
   type_aliases::lua_state::lua_State,
@@ -64,7 +64,7 @@ pub unsafe fn create_cli_require_context(l: *mut lua_State) -> *mut c_void {
     );
 
     // 以内存地址为键存入 registry，使 ReplRequirer 与该 lua_State 同生命周期。
-    LUA_PUSHLIGHTUSERDATA(l as *mut c_void, ctx);
+    lua_pushlightuserdata(l, ctx);
     lua_insert(l, -2);
     lua_settable(l, LUA_REGISTRYINDEX);
 

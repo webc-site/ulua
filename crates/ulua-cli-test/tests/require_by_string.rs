@@ -459,9 +459,8 @@ fn require_by_string_parse_aliases() {
   use ulua_config::{
     functions::parse_config::parse_config,
     records::{
-      alias_info::AliasInfo,
-      config::Config,
-      config_options::{AliasOptions, ConfigOptions},
+      alias_info::AliasInfo, alias_options::AliasOptions, config::Config,
+      config_options::ConfigOptions,
     },
   };
 
@@ -503,7 +502,7 @@ fn require_by_string_parse_aliases() {
   check_contents(&copy_constructed_config);
 
   let mut copy_assigned_config = Config::default();
-  copy_assigned_config.config_assign(&config);
+  copy_assigned_config.clone_from(&config);
   check_contents(&copy_assigned_config);
 }
 

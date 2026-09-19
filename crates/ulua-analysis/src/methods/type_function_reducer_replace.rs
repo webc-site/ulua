@@ -9,7 +9,7 @@
 use alloc::string::String;
 
 use crate::{
-  functions::{as_mutable_type::as_mutable_type_id, as_mutable_type_pack::as_mutable_type_pack_id},
+  functions::{as_mutable_type::as_mutable_type_id, as_mutable_type_pack::as_mutable_type_pack},
   records::{
     internal_error::InternalError, type_error::TypeError,
     type_function_reducer::TypeFunctionReducer,
@@ -62,7 +62,7 @@ impl TypeFunctionReducer {
       }
 
       // asMutable(subject)->ty.emplace<Unifiable::Bound<TypePackId>>(replacement);
-      (*as_mutable_type_pack_id(subject)).ty = TypePackVariant::Bound(replacement);
+      (*as_mutable_type_pack(subject)).ty = TypePackVariant::Bound(replacement);
     }
 
     self.result.reduced_packs.insert(subject);

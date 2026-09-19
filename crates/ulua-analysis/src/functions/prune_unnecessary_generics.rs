@@ -5,7 +5,7 @@ use ulua_common::{fint, records::dense_hash_set::DenseHashSet};
 use crate::{
   enums::polarity::Polarity,
   functions::{
-    as_mutable_type::as_mutable_type_id, as_mutable_type_pack::as_mutable_type_pack_id,
+    as_mutable_type::as_mutable_type_id, as_mutable_type_pack::as_mutable_type_pack,
     follow_type::follow_type_id, follow_type_pack::follow_type_pack_id,
     get_mutable_type::get_mutable_type_id, get_tail::get_tail, get_type_alt_j::get_type_id,
     get_type_pack::get_type_pack_id, invert_polarity::invert,
@@ -123,7 +123,7 @@ pub unsafe fn prune_unnecessary_generics(
       if state.count == 1 {
         // SAFETY: 同上，generic_pack 引用计数为 1，改写 Bound 安全。
         unsafe {
-          (*as_mutable_type_pack_id(generic_pack)).ty =
+          (*as_mutable_type_pack(generic_pack)).ty =
             TypePackVariant::Bound(builtin_types.unknown_type_pack)
         };
       }

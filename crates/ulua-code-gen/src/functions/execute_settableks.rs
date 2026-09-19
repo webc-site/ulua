@@ -75,7 +75,7 @@ pub unsafe fn execute_settableks(
     if ttistable!(rb as *const TValue) {
       let h = hvalue!(rb as *const TValue);
 
-      if fastnotm((*h).metatable, TMS::TmNewIndex as i32) && (*h).readonly == 0 {
+      if fastnotm((*h).metatable, TMS::TmNewIndex) && (*h).readonly == 0 {
         vm_protect_pc(l, pc_ptr);
 
         let res = luaH_setstr(l, h, tsvalue!(kv as *const TValue) as *mut _);
@@ -97,11 +97,7 @@ pub unsafe fn execute_settableks(
     let fn_tm: *const TValue;
     if ttisuserdata!(rb as *const TValue)
       && {
-        fn_tm = fasttm(
-          l,
-          uvalue!(rb as *const TValue).metatable,
-          TMS::TmNewIndex as i32,
-        );
+        fn_tm = fasttm(l, uvalue!(rb as *const TValue).metatable, TMS::TmNewIndex);
         !fn_tm.is_null()
       }
       && ttisfunction!(fn_tm)

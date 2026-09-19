@@ -61,7 +61,7 @@ pub(crate) unsafe fn enumtable(ctx: *mut EnumContext, h: *mut LuaTable) {
       let g = (*(*ctx).l).global;
       let metatable = (*h).metatable;
       if !metatable.is_null() {
-        let mode = gfasttm(g, metatable, TMS::TmMode as i32);
+        let mode = gfasttm(g, metatable, TMS::TmMode);
         if !mode.is_null() && ttisstring!(mode) {
           let mode_str = svalue!(mode);
           let mode_slice = CStr::from_ptr(mode_str).to_bytes();

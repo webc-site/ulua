@@ -5,13 +5,8 @@ use crate::{
 
 impl Scope {
   pub fn lookup_symbol(&self, sym: Symbol) -> Option<TypeId> {
-    let mutable_self = self as *const Scope as *mut Scope;
-    let r = unsafe { (*mutable_self).lookup_ex_symbol(sym) };
-
-    if let Some((binding, _)) = r {
-      Some(unsafe { (*binding).type_id })
-    } else {
-      None
-    }
+    self
+      .lookup_ex_symbol(sym)
+      .map(|(binding, _)| binding.type_id)
   }
 }

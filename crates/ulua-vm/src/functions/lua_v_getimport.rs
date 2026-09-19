@@ -1,5 +1,3 @@
-use core::mem::zeroed;
-
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
@@ -33,7 +31,7 @@ pub unsafe fn lua_v_getimport(
     let resp = savestack!(l, res);
 
     // global lookup for id0
-    let mut g: TValue = zeroed();
+    let mut g = TValue::default();
     sethvalue!(l, &mut g as *mut TValue, env);
     lua_v_gettable(l, &g as *const TValue, k.add(id0), res);
 

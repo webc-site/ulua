@@ -5,7 +5,7 @@ use ulua_common::macros::{
 
 use crate::{
   enums::type_file_resolver::Type,
-  functions::{first::first, get_type_pack_id::get_type_pack_id},
+  functions::{first::first, get_type_pack::get_type_pack_id},
   records::{
     illegal_require::IllegalRequire, module_info::ModuleInfo, type_checker::TypeChecker,
     type_error::TypeError, unknown_require::UnknownRequire,

@@ -7,7 +7,6 @@ use crate::records::{enqueuer::Enqueuer, reducer::Reducer};
 impl Reducer {
   pub fn walk(&mut self, block: *mut AstStatBlock) {
     let mut queue: VecDeque<*mut AstStatBlock> = VecDeque::new();
-    let mut enqueuer = Enqueuer::new(&mut queue as *mut VecDeque<*mut AstStatBlock>);
 
     queue.push_back(block);
 
@@ -23,6 +22,7 @@ impl Reducer {
 
       // SAFETY: `b` 出自 parser 产出的存活 AST 队列, body 切片长度可信
       unsafe {
+        let mut enqueuer = Enqueuer::new(&mut queue);
         for stat in (*b).body.as_slice() {
           ast_stat_visit(*stat, &mut enqueuer);
         }

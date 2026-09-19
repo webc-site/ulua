@@ -5,8 +5,8 @@ use core::ptr::{null, null_mut};
 use crate::{
   enums::polarity::Polarity,
   functions::{
-    as_mutable_type_pack::as_mutable, emplace_type_pack::emplace_type_pack, finite::finite,
-    first::first, follow_type_pack::follow_type_pack_id, fresh_index::fresh_index,
+    as_mutable_type_pack::as_mutable_type_pack, emplace_type_pack::emplace_type_pack,
+    finite::finite, first::first, follow_type_pack::follow_type_pack_id, fresh_index::fresh_index,
     get_type_pack::get, size_type_pack::size,
   },
   records::{
@@ -55,7 +55,7 @@ impl NonStrictTypeChecker {
       let result_pack = {
         unsafe {
           emplace_type_pack(
-            as_mutable(pack),
+            as_mutable_type_pack(pack),
             TypePackVariant::TypePack(TypePack {
               head: alloc::vec![result],
               tail: Some(free_tail),

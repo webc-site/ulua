@@ -3,6 +3,8 @@ use std::{
   process::{Command, Stdio},
 };
 
+use memchr::memmem;
+
 use crate::{enums::test_result::TestResult, records::reducer::Reducer};
 
 impl Reducer {
@@ -63,7 +65,7 @@ impl Reducer {
           break;
         }
 
-        if String::from_utf8_lossy(&line).contains(self.search_text.as_str()) {
+        if memmem::find(&line, self.search_text.as_bytes()).is_some() {
           result = TestResult::BugFound;
           break;
         }

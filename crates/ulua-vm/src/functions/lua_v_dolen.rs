@@ -18,7 +18,7 @@ pub(crate) unsafe fn lua_v_dolen(l: *mut LuaState, ra: StkId, rb: *const TValue)
     let tm: *const TValue = match ttype!(rb) {
       x if x == LuaType::Table as i32 => {
         let h = hvalue!(rb);
-        let tm = fasttm(l, (*h).metatable, TMS::TmLen as i32);
+        let tm = fasttm(l, (*h).metatable, TMS::TmLen);
         if tm.is_null() {
           setnvalue!(ra, cast_num!(lua_h_getn(h)));
           return;
