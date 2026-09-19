@@ -100,8 +100,8 @@ use ulua_compiler::{
 use ulua_vm::{
   enums::lua_status::LuaStatus,
   functions::{
-    lua_checkstack::lua_checkstack, lua_close::lua_close, lua_debugtrace::lua_debugtrace,
-    lua_gettop::lua_gettop, lua_insert::lua_insert, lua_l_newstate::lua_l_newstate,
+    lua_close::lua_close, lua_debugtrace::lua_debugtrace, lua_gettop::lua_gettop,
+    lua_insert::lua_insert, lua_l_checkstack::lua_l_checkstack, lua_l_newstate::lua_l_newstate,
     lua_l_openlibs::lua_l_openlibs, lua_newthread::lua_newthread, lua_pcall::lua_pcall,
     lua_pushvalue::lua_pushvalue, lua_remove::lua_remove, lua_resume::lua_resume,
     lua_tolstring::lua_tolstring, lua_xmove::lua_xmove, luau_load::luau_load,
@@ -218,7 +218,9 @@ unsafe fn run_code(l: *mut lua_State, bytecode: &[u8]) -> StdResult<(), Error> {
     if status == LuaStatus::Ok as i32 {
       let n = lua_gettop(t);
       if n != 0 {
-        lua_checkstack(t, LUA_MINSTACK);
+        // 上游 Repl.cpp:267 是 luaL_checkstack（分配失败抛 Lua 错误），
+        // 底层 lua_checkstack 的返回值在此处会被丢弃。
+        lua_l_checkstack(t, LUA_MINSTACK, "too many results to print");
         lua_getglobal(t, c"_PRETTYPRINT".as_ptr());
         // _PRETTYPRINT 为 nil 时回退到标准 print（与 Repl.cpp 一致）。
         if lua_isnil!(t, -1) {
