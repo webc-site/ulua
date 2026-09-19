@@ -22,8 +22,8 @@ use crate::{
 /// 调用方须保证满足 C++ 原实现的调用契约。
 pub unsafe fn intersect_type_function(
   _instance: TypeId,
-  type_params: Vec<TypeId>,
-  pack_params: Vec<TypePackId>,
+  type_params: &[TypeId],
+  pack_params: &[TypePackId],
   ctx: *mut TypeFunctionContext,
 ) -> TypeFunctionReductionResult {
   unsafe {
@@ -187,7 +187,9 @@ pub unsafe fn intersect_type_function(
     // we'll just produce the intersection plainly instead, but this might be revisitable
     // if we ever give `never` some kind of "explanation" trail.
     if !get_type_id::<NeverType>(result_ty).is_none() {
-      let intersection = (*ctx.arena.as_ptr()).add_type(IntersectionType { parts: type_params });
+      let intersection = (*ctx.arena.as_ptr()).add_type(IntersectionType {
+        parts: type_params.to_vec(),
+      });
       return TypeFunctionReductionResult {
         result: Some(intersection),
         reduction_status: Reduction::MaybeOk,

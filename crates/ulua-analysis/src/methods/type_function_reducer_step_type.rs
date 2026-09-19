@@ -76,9 +76,12 @@ impl TypeFunctionReducer {
       // SAFETY: reducer 为内建函数指针，句柄有效性与 C++ 同契约。
       let result: TypeFunctionReductionResult = unsafe {
         let reducer = tfit.function.as_ref().reducer;
-        let type_arguments = tfit.type_arguments.clone();
-        let pack_arguments = tfit.pack_arguments.clone();
-        reducer(subject, type_arguments, pack_arguments, self.ctx.as_ptr())
+        reducer(
+          subject,
+          &tfit.type_arguments,
+          &tfit.pack_arguments,
+          self.ctx.as_ptr(),
+        )
       };
       self.handle_type_function_reduction_type_id(subject, result);
     }

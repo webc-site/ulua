@@ -1,4 +1,4 @@
-use alloc::{vec, vec::Vec};
+use alloc::vec;
 
 use ulua_ast::records::{location::Location, position::Position};
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
@@ -27,8 +27,8 @@ fn empty_location() -> Location {
 /// 调用方须保证满足 C++ 原实现的调用契约。
 pub unsafe fn unm_type_function(
   instance: TypeId,
-  type_params: Vec<TypeId>,
-  pack_params: Vec<TypePackId>,
+  type_params: &[TypeId],
+  pack_params: &[TypePackId],
   ctx: *mut TypeFunctionContext,
 ) -> TypeFunctionReductionResult {
   let ctx_ref = unsafe { &*ctx };
@@ -102,10 +102,10 @@ pub unsafe fn unm_type_function(
 
   if let Some(result) = unsafe {
     try_distribute_type_function_app(
-      &mut |i, tp, pp, c| unm_type_function(i, tp, pp, c),
+      |i, tp, pp, c| unm_type_function(i, tp, pp, c),
       instance,
-      &type_params,
-      &pack_params,
+      type_params,
+      pack_params,
       ctx,
     )
   } {

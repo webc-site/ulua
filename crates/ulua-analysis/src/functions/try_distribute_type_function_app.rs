@@ -23,10 +23,13 @@ pub unsafe fn try_distribute_type_function_app<F>(
   ctx: *mut TypeFunctionContext,
 ) -> Option<TypeFunctionReductionResult>
 where
-  F: FnMut(
+  // Single shared late-bound lifetime: closures with two elided reference
+  // parameters cannot be inferred as `for<'a, 'b>` (higher-ranked lifetime
+  // error); the forwarding sites all hold both slices from the same borrow.
+  F: for<'a> FnMut(
     TypeId,
-    Vec<TypeId>,
-    Vec<TypePackId>,
+    &'a [TypeId],
+    &'a [TypePackId],
     *mut TypeFunctionContext,
   ) -> TypeFunctionReductionResult,
 {
@@ -74,7 +77,7 @@ where
   for option in first_union_options {
     arguments[union_index] = option;
 
-    let result = f(instance, arguments.clone(), pack_params.to_vec(), ctx);
+    let result = f(instance, &arguments, pack_params, ctx);
     blocked_types.extend(result.blocked_types.iter().copied());
 
     if result.reduction_status != Reduction::MaybeOk {

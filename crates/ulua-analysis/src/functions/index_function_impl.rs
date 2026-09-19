@@ -74,8 +74,8 @@ fn maybe_ok_blocked(blocked: Vec<TypeId>) -> TypeFunctionReductionResult {
 /// # Safety
 /// 调用方须保证满足 C++ 原实现的调用契约。
 pub unsafe fn index_function_impl(
-  type_params: Vec<TypeId>,
-  _pack_params: Vec<TypePackId>,
+  type_params: &[TypeId],
+  _pack_params: &[TypePackId],
   ctx: *mut TypeFunctionContext,
   is_raw: bool,
 ) -> TypeFunctionReductionResult {

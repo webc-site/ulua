@@ -15,8 +15,8 @@ use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 pub(crate) fn type_function_fixture_swap_reducer(
   _instance: TypeId,
-  tys: Vec<TypeId>,
-  tps: Vec<TypePackId>,
+  tys: &[TypeId],
+  tps: &[TypePackId],
   ctx: *mut TypeFunctionContext,
 ) -> TypeFunctionReductionResult {
   LUAU_ASSERT!(tys.len() == 1);

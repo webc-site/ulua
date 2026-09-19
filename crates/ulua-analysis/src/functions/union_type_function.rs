@@ -20,8 +20,8 @@ use crate::{
 /// 调用方须保证满足 C++ 原实现的调用契约。
 pub unsafe fn union_type_function(
   _instance: TypeId,
-  type_params: Vec<TypeId>,
-  pack_params: Vec<TypePackId>,
+  type_params: &[TypeId],
+  pack_params: &[TypePackId],
   ctx: *mut TypeFunctionContext,
 ) -> TypeFunctionReductionResult {
   unsafe {
@@ -47,7 +47,7 @@ pub unsafe fn union_type_function(
 
     let mut options = Vec::new();
     let mut blocking_types = Vec::new();
-    let mut worklist = type_params;
+    let mut worklist = type_params.to_vec();
 
     while let Some(ty) = worklist.pop() {
       let ty = follow_type_id(ty);

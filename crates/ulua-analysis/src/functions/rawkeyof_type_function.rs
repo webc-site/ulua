@@ -1,5 +1,3 @@
-use alloc::vec::Vec;
-
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
@@ -13,8 +11,8 @@ use crate::{
 
 pub(crate) fn rawkeyof_type_function(
   _instance: TypeId,
-  type_params: Vec<TypeId>,
-  pack_params: Vec<TypePackId>,
+  type_params: &[TypeId],
+  pack_params: &[TypePackId],
   ctx: *mut TypeFunctionContext,
 ) -> TypeFunctionReductionResult {
   if type_params.len() != 1 || !pack_params.is_empty() {

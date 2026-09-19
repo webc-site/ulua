@@ -113,8 +113,8 @@ type StepResult = (TypeId, Vec<TypeId>);
 /// 调用方须保证满足 C++ 原实现的调用契约。
 pub unsafe fn refine_type_function(
   instance: TypeId,
-  type_params: Vec<TypeId>,
-  pack_params: Vec<TypePackId>,
+  type_params: &[TypeId],
+  pack_params: &[TypePackId],
   ctx: *mut TypeFunctionContext,
 ) -> TypeFunctionReductionResult {
   // SAFETY: reducer 由 ReducerFunction 裸指针调用，契约保证 ctx 非空且会话期有效。

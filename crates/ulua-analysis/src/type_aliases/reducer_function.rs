@@ -1,7 +1,3 @@
-extern crate alloc;
-
-use alloc::vec::Vec;
-
 use crate::{
   records::{
     type_function_context::TypeFunctionContext,
@@ -17,16 +13,13 @@ use crate::{
 // TypePackFunction instantiates `ReducerFunction<TypePackId>`.
 //
 // The concrete reducer fns in `functions/*_type_function.rs` all share the
-// signature `unsafe fn(T, Vec<TypeId>, Vec<TypePackId>, *mut TypeFunctionContext)
-// -> TypeFunctionReductionResult` (by-value vectors, raw ctx pointer dereferenced
-// inside the body — clippy `not_unsafe_ptr_arg_deref` requires the fn to be
-// marked `unsafe`, mirroring C++ where the unsafety is implicit). The alias
-// matches that exactly so the fns are assignable to the `reducer` field of
+// signature `unsafe fn(T, &[TypeId], &[TypePackId], *mut TypeFunctionContext)
+// -> TypeFunctionReductionResult` (borrowed vectors mirroring cpp's const
+// references; raw ctx pointer dereferenced inside the body — clippy
+// `not_unsafe_ptr_arg_deref` requires the fn to be marked `unsafe`, mirroring
+// C++ where the unsafety is implicit). The alias matches that exactly so the
+// fns are assignable to the `reducer` field of
 // `TypeFunction`/`TypePackFunction` without a cast — this is the project's
 // MagicFunction-style fn-pointer wiring.
-pub type ReducerFunction<T = TypeId> = unsafe fn(
-  T,
-  Vec<TypeId>,
-  Vec<TypePackId>,
-  *mut TypeFunctionContext,
-) -> TypeFunctionReductionResult;
+pub type ReducerFunction<T = TypeId> =
+  unsafe fn(T, &[TypeId], &[TypePackId], *mut TypeFunctionContext) -> TypeFunctionReductionResult;

@@ -13,8 +13,8 @@ use crate::{
 /// 调用方须保证满足 C++ 原实现的调用契约。
 pub unsafe fn le_type_function(
   instance: TypeId,
-  type_params: Vec<TypeId>,
-  pack_params: Vec<TypePackId>,
+  type_params: &[TypeId],
+  pack_params: &[TypePackId],
   ctx: *mut TypeFunctionContext,
 ) -> TypeFunctionReductionResult {
   let _ctx_ref = unsafe { &*ctx };

@@ -134,8 +134,8 @@ unsafe extern "C-unwind" fn user_defined_type_function_interrupt(
 
 pub fn user_defined_type_function(
   instance: TypeId,
-  type_params: Vec<TypeId>,
-  _pack_params: Vec<TypePackId>,
+  type_params: &[TypeId],
+  _pack_params: &[TypePackId],
   ctx: *mut TypeFunctionContext,
 ) -> TypeFunctionReductionResult {
   // SAFETY: reducer 由 ReducerFunction 裸指针调用，契约保证 ctx 非空且会话期有效；

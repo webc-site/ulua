@@ -20,8 +20,8 @@ use crate::{
 /// 调用方须保证满足 C++ 原实现的调用契约。
 pub unsafe fn setmetatable_type_function(
   _instance: TypeId,
-  type_params: Vec<TypeId>,
-  pack_params: Vec<TypePackId>,
+  type_params: &[TypeId],
+  pack_params: &[TypePackId],
   ctx: *mut TypeFunctionContext,
 ) -> TypeFunctionReductionResult {
   if type_params.len() != 2 || !pack_params.is_empty() {

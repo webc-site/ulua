@@ -1,8 +1,8 @@
 //! `TypeFunctionReducer::stepPack` (TypeFunction.cpp:624-646).
 //!
 //! BLOCKED on a cross-cluster record gap: `TypePackFunction::reducer` is
-//! monomorphized as `ReducerFunction<TypeId>` (`fn(TypeId, Vec<TypeId>,
-//! Vec<TypePackId>, *mut TypeFunctionContext) -> ...`), so it cannot be invoked
+//! monomorphized as `ReducerFunction<TypeId>` (`fn(TypeId, &[TypeId],
+//! &[TypePackId], *mut TypeFunctionContext) -> ...`), so it cannot be invoked
 //! with the `TypePackId` `subject` that `stepPack` follows out of `queued_tps`
 //! (`subject` is `*const TypePackVar`, the reducer's first param is
 //! `*const Type`). The C++ `tfit->function->reducer(subject, ...)` needs the

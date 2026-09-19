@@ -1,5 +1,3 @@
-use alloc::vec::Vec;
-
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
@@ -15,8 +13,8 @@ use crate::{
 /// 调用方须保证满足 C++ 原实现的调用契约。
 pub unsafe fn lt_type_function(
   _instance: TypeId,
-  _type_params: Vec<TypeId>,
-  _pack_params: Vec<TypePackId>,
+  _type_params: &[TypeId],
+  _pack_params: &[TypePackId],
   _ctx: *mut TypeFunctionContext,
 ) -> TypeFunctionReductionResult {
   let _ctx_ref = unsafe { &*_ctx };
