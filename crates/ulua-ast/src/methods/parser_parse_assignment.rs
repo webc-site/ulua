@@ -9,9 +9,9 @@
 use crate::{
   functions::is_expr_l_value::is_expr_l_value,
   records::{
-    ast_expr::AstExpr, ast_node::AstNode, ast_stat::AstStat, ast_stat_assign::AstStatAssign,
-    cst_node::CstNode, cst_stat_assign::CstStatAssign, lexeme::Type, location::Location,
-    parser::Parser, position::Position, temp_vector::TempVector,
+    ast_expr::AstExpr, ast_stat::AstStat, ast_stat_assign::AstStatAssign,
+    cst_stat_assign::CstStatAssign, lexeme::Type, location::Location, parser::Parser,
+    position::Position, temp_vector::TempVector,
   },
 };
 
@@ -76,7 +76,11 @@ impl Parser {
       let vars_comma = self.copy_temp_vector_t(&vars_comma_positions);
       let values_comma = self.copy_temp_vector_t(&values_comma_positions);
       self.attach_cst(node, |alloc| {
-        alloc.alloc(CstStatAssign::new(vars_comma, equals_position, values_comma))
+        alloc.alloc(CstStatAssign::new(
+          vars_comma,
+          equals_position,
+          values_comma,
+        ))
       });
     }
 

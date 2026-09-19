@@ -213,7 +213,10 @@ impl<'a> ConstantVisitor<'a> {
               result = fold_builtin_math(expr.index);
             }
 
-            if let Some(cb) = self.library_member_constant_cb.filter(|_| result.is_unknown()) {
+            if let Some(cb) = self
+              .library_member_constant_cb
+              .filter(|_| result.is_unknown())
+            {
               // C++ passes reinterpret_cast<CompileConstant*>(&result): the
               // pointer VALUE handed to the callback must be &result itself.
               let constant_ptr = &mut result as *mut Constant as *mut CompileConstant;
@@ -302,7 +305,11 @@ impl<'a> ConstantVisitor<'a> {
       let false_expr = self.analyze(expr.false_expr);
 
       if !cond.is_unknown() {
-        result = if cond.is_truthful() { true_expr } else { false_expr };
+        result = if cond.is_truthful() {
+          true_expr
+        } else {
+          false_expr
+        };
       }
     } else if let Some(expr) =
       unsafe { ast_node_as::<AstExprInterpString>(node as *mut AstNode).as_mut() }

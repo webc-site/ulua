@@ -1,8 +1,10 @@
 use core::{f64::consts::PI, slice::from_raw_parts};
 
 use ulua_ast::records::ast_name_table::AstNameTable;
-use ulua_common::enums::luau_builtin_function::{LuauBuiltinFunction, *};
-use ulua_common::macros::luau_assert::LUAU_ASSERT;
+use ulua_common::{
+  enums::luau_builtin_function::{LuauBuiltinFunction, *},
+  macros::luau_assert::LUAU_ASSERT,
+};
 
 use crate::{
   functions::{
@@ -418,7 +420,10 @@ pub unsafe fn fold_builtin(
         if let Some(&b) = s.first() {
           return cnum(b as f64);
         }
-      } else if count == 2 && matches!(args[0], Constant::Str(_)) && matches!(args[1], Constant::Number(_)) {
+      } else if count == 2
+        && matches!(args[0], Constant::Str(_))
+        && matches!(args[1], Constant::Number(_))
+      {
         let i = num(&args[1]) as i32;
         let s = args[0].get_string_bytes();
         if i > 0
@@ -472,7 +477,8 @@ pub unsafe fn fold_builtin(
     }
 
     LBF_STRING_SUB => {
-      if count >= 2 && matches!(args[0], Constant::Str(_)) && matches!(args[1], Constant::Number(_)) {
+      if count >= 2 && matches!(args[0], Constant::Str(_)) && matches!(args[1], Constant::Number(_))
+      {
         if count >= 3 && !matches!(args[2], Constant::Number(_)) {
           return cvar();
         }
@@ -538,12 +544,18 @@ pub unsafe fn fold_builtin(
     }
 
     LBF_VECTOR => {
-      if count >= 2 && matches!(args[0], Constant::Number(_)) && matches!(args[1], Constant::Number(_)) {
+      if count >= 2
+        && matches!(args[0], Constant::Number(_))
+        && matches!(args[1], Constant::Number(_))
+      {
         if count == 2 {
           return cvector(num(&args[0]), num(&args[1]), 0.0, 0.0);
         } else if count == 3 && matches!(args[2], Constant::Number(_)) {
           return cvector(num(&args[0]), num(&args[1]), num(&args[2]), 0.0);
-        } else if count == 4 && matches!(args[2], Constant::Number(_)) && matches!(args[3], Constant::Number(_)) {
+        } else if count == 4
+          && matches!(args[2], Constant::Number(_))
+          && matches!(args[3], Constant::Number(_))
+        {
           return cvector(num(&args[0]), num(&args[1]), num(&args[2]), num(&args[3]));
         }
       }

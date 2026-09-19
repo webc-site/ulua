@@ -137,8 +137,7 @@ fn encode_hash_size_is_log2_plus_one() {
 fn folds_number_arithmetic() {
   let (_alloc, mut names) = string_table!();
 
-  let mut fold =
-    |op, la: Constant, ra: Constant| as_number(fold_binary(op, &la, &ra, &mut names));
+  let mut fold = |op, la: Constant, ra: Constant| as_number(fold_binary(op, &la, &ra, &mut names));
 
   assert_eq!(fold(AstExprBinaryOp::Add, cnum(1.5), cnum(2.25)), 3.75);
   assert_eq!(fold(AstExprBinaryOp::Sub, cnum(1.5), cnum(2.25)), -0.75);
@@ -154,8 +153,7 @@ fn folds_number_arithmetic() {
 fn folds_number_compare() {
   let (_alloc, mut names) = string_table!();
 
-  let mut fold =
-    |op, la: Constant, ra: Constant| as_boolean(fold_binary(op, &la, &ra, &mut names));
+  let mut fold = |op, la: Constant, ra: Constant| as_boolean(fold_binary(op, &la, &ra, &mut names));
 
   assert!(fold(AstExprBinaryOp::CompareLt, cnum(1.0), cnum(2.0)));
   assert!(!fold(AstExprBinaryOp::CompareLt, cnum(2.0), cnum(1.0)));

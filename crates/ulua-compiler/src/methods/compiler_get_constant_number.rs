@@ -1,11 +1,9 @@
 use ulua_ast::records::ast_expr::AstExpr;
 
-use crate::{
-  records::{
-    compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
-    compiler::Compiler,
-    constant::Constant,
-  },
+use crate::records::{
+  compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
+  compiler::Compiler,
+  constant::Constant,
 };
 
 impl Compiler {

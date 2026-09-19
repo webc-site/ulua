@@ -32,6 +32,12 @@ impl BytecodeBuilder {
       func.data.reserve(32 + self.insns.len() * 7);
     }
 
+    // cpp `#ifdef LUAU_ASSERTENABLED validate(); #endif`：紧随 maxstacksize /
+    // numupvalues 落位之后、`encoder.encode` 置换操作码之前（`validate` 内部按
+    // `LUAU_ASSERTENABLED` 常量短路，release 零开销）。缺了这一步，非法图会被
+    // 静默写进 data，错误一路延后到反序列化/VM 才暴露。
+    self.validate();
+
     // 字段级不相交借用: self.encoder 与 self.insns 可同时可变, 无需 unsafe
     if let Some(encoder) = self.encoder.as_mut() {
       encoder.encode(&mut self.insns);

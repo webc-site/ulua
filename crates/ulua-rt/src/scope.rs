@@ -160,7 +160,9 @@ impl<'scope, 'env: 'scope> Scope<'scope, 'env> {
   {
     let func = RefCell::new(func);
     self.create_function(move |lua, args| {
-      let mut borrow = func.try_borrow_mut().map_err(|_| Error::RecursiveMutCallback)?;
+      let mut borrow = func
+        .try_borrow_mut()
+        .map_err(|_| Error::RecursiveMutCallback)?;
       (borrow)(lua, args)
     })
   }

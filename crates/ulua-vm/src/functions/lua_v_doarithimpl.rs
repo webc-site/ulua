@@ -49,7 +49,7 @@ pub(crate) unsafe fn lua_v_doarithimpl(
         TMS::TmMul => return set_vec_binop(ra, vb, vc, |a, b| a * b),
         TMS::TmDiv => return set_vec_binop(ra, vb, vc, |a, b| a / b),
         TMS::TmIDiv => {
-          return set_vec_binop(ra, vb, vc, |a, b| luai_numidiv(a as f64, b as f64) as f32)
+          return set_vec_binop(ra, vb, vc, |a, b| luai_numidiv(a as f64, b as f64) as f32);
         }
         // 一元取负：第二个通道指针不会被 `f` 读取，复用 vb
         TMS::TmUnm => return set_vec_binop(ra, vb, vb, |a, _| -a),
@@ -71,7 +71,7 @@ pub(crate) unsafe fn lua_v_doarithimpl(
           TMS::TmIDiv => {
             return set_vec_binop(ra, vb, ncs.as_ptr(), |a, b| {
               luai_numidiv(a as f64, b as f64) as f32
-            })
+            });
           }
           _ => {}
         }
@@ -92,7 +92,7 @@ pub(crate) unsafe fn lua_v_doarithimpl(
           TMS::TmIDiv => {
             return set_vec_binop(ra, nbs.as_ptr(), vc, |a, b| {
               luai_numidiv(a as f64, b as f64) as f32
-            })
+            });
           }
           _ => {}
         }

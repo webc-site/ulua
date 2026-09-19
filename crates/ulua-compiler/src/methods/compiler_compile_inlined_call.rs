@@ -15,10 +15,7 @@ use crate::{
     undo_changes_constant_folding_alt_b::undo_changes_local,
   },
   records::{
-    compiler::Compiler,
-    constant::Constant,
-    inline_arg::InlineArg,
-    inline_frame::InlineFrame,
+    compiler::Compiler, constant::Constant, inline_arg::InlineArg, inline_frame::InlineFrame,
   },
 };
 

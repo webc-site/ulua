@@ -1,6 +1,6 @@
 use ulua_ast::records::ast_expr::AstExpr;
 
-use crate::{records::constant::Constant, records::cost_visitor::CostVisitor};
+use crate::records::{constant::Constant, cost_visitor::CostVisitor};
 
 impl CostVisitor {
   pub fn get_number(&self, node: *mut AstExpr, result: &mut f64) -> bool {

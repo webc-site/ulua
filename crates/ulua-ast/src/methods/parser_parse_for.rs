@@ -10,10 +10,10 @@
 use core::ptr::null_mut;
 
 use crate::records::{
-  ast_array::AstArray, ast_expr::AstExpr, ast_node::AstNode, ast_stat::AstStat,
-  ast_stat_for::AstStatFor, ast_stat_for_in::AstStatForIn, cst_node::CstNode,
-  cst_stat_for::CstStatFor, cst_stat_for_in::CstStatForIn, lexeme::Type, location::Location,
-  match_lexeme::MatchLexeme, parser::Parser, position::Position, temp_vector::TempVector,
+  ast_array::AstArray, ast_expr::AstExpr, ast_stat::AstStat, ast_stat_for::AstStatFor,
+  ast_stat_for_in::AstStatForIn, cst_stat_for::CstStatFor, cst_stat_for_in::CstStatForIn,
+  lexeme::Type, location::Location, match_lexeme::MatchLexeme, parser::Parser, position::Position,
+  temp_vector::TempVector,
 };
 
 impl Parser {
@@ -181,7 +181,11 @@ impl Parser {
         let annotation = self.extract_annotation_colon_positions(&names);
         let values_comma = self.copy_temp_vector_t(&values_comma_positions);
         self.attach_cst(node, |alloc| {
-          alloc.alloc(CstStatForIn::new(annotation, vars_comma_position, values_comma))
+          alloc.alloc(CstStatForIn::new(
+            annotation,
+            vars_comma_position,
+            values_comma,
+          ))
         });
       }
 

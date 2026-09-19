@@ -6,10 +6,9 @@
 //! comma positions under `store_cst_data` and records CST open/close parens.
 
 use crate::records::{
-  ast_array::AstArray, ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_node::AstNode,
-  ast_type_or_pack::AstTypeOrPack, cst_expr_call::CstExprCall, cst_node::CstNode, lexeme::Type,
-  location::Location, match_lexeme::MatchLexeme, parser::Parser, position::Position,
-  temp_vector::TempVector,
+  ast_array::AstArray, ast_expr::AstExpr, ast_expr_call::AstExprCall,
+  ast_type_or_pack::AstTypeOrPack, cst_expr_call::CstExprCall, lexeme::Type, location::Location,
+  match_lexeme::MatchLexeme, parser::Parser, position::Position, temp_vector::TempVector,
 };
 
 impl Parser {
@@ -59,20 +58,18 @@ impl Parser {
 
       if self.options.store_cst_data {
         let comma_positions_array = self.copy_temp_vector_t(&comma_positions);
-        let cst_node = unsafe {
-          (*self.allocator).alloc(CstExprCall::new(
+        let close_position = if closing_paren_found {
+          self.lexer.previous_location().begin
+        } else {
+          Position::missing()
+        };
+        self.attach_cst(node, |alloc| {
+          alloc.alloc(CstExprCall::new(
             match_paren.position,
-            if closing_paren_found {
-              self.lexer.previous_location().begin
-            } else {
-              Position::missing()
-            },
+            close_position,
             comma_positions_array,
           ))
-        };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
+        });
       }
 
       node as *mut AstExpr

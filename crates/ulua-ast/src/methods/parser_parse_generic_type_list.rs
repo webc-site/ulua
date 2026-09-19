@@ -4,9 +4,9 @@ use crate::{
   functions::should_parse_type_pack::should_parse_type_pack,
   records::{
     ast_array::AstArray, ast_generic_type::AstGenericType,
-    ast_generic_type_pack::AstGenericTypePack, ast_node::AstNode, cst_generic_type::CstGenericType,
-    cst_generic_type_pack::CstGenericTypePack, cst_node::CstNode, lexeme::Type,
-    match_lexeme::MatchLexeme, parser::Parser, position::Position, temp_vector::TempVector,
+    ast_generic_type_pack::AstGenericTypePack, cst_generic_type::CstGenericType,
+    cst_generic_type_pack::CstGenericTypePack, lexeme::Type, match_lexeme::MatchLexeme,
+    parser::Parser, position::Position, temp_vector::TempVector,
   },
 };
 
@@ -142,8 +142,9 @@ impl Parser {
               (*self.allocator).alloc(AstGenericType::new(name_location, name.name, default_type))
             };
             if self.options.store_cst_data {
-              self
-                .attach_cst(node, |alloc| alloc.alloc(CstGenericType::new(equals_position)));
+              self.attach_cst(node, |alloc| {
+                alloc.alloc(CstGenericType::new(equals_position))
+              });
             }
             names.push_back(node);
           } else {

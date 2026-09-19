@@ -8,12 +8,7 @@ use crate::{
     undo_changes_constant_folding::undo_changes_expr,
     undo_changes_constant_folding_alt_b::undo_changes_local,
   },
-  records::{
-    compiler::Compiler,
-    constant::Constant,
-    r#loop::Loop,
-    loop_jump::LoopJump,
-  },
+  records::{compiler::Compiler, constant::Constant, r#loop::Loop, loop_jump::LoopJump},
 };
 
 impl Compiler {
@@ -41,8 +36,7 @@ impl Compiler {
       self.local_changes.clear();
 
       for iv in 0..trip_count {
-        *self.locstants.get_or_insert(stat_ref.var) =
-          Constant::Number(from + f64::from(iv) * step);
+        *self.locstants.get_or_insert(stat_ref.var) = Constant::Number(from + f64::from(iv) * step);
 
         self.fold_constants(stat_ref.body as *mut AstNode, iv == 0);
 

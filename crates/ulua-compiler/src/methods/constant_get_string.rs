@@ -1,4 +1,4 @@
-use core::ffi::c_char;
+use core::{ffi::c_char, ptr::null};
 
 use ulua_ast::records::ast_array::AstArray;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
@@ -38,7 +38,7 @@ impl Constant {
     match self {
       Constant::Str(s) => *s,
       _ => ConstantStr {
-        ptr: core::ptr::null(),
+        ptr: null(),
         len: 0,
       },
     }
