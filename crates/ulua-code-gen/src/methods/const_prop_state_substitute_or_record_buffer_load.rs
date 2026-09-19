@@ -27,7 +27,12 @@ impl ConstPropState {
     let tag = unsafe { (&*self.function).tag_op(op_c_ref(load_inst)) };
     let address = op_a(load_inst);
 
-    for info in self.buffer_load_store_info.clone() {
+    // 循环体内有 `&mut self` 调用（substitute_or_record / const_int），无法持有
+    // buffer_load_store_info 的迭代借用；元素是 Copy，按下标取值即可，
+    // 不再整表 clone（cpp 是零分配遍历）
+    for i in 0..self.buffer_load_store_info.len() {
+      let info = self.buffer_load_store_info[i];
+
       if info.address == address && info.offset == offset && info.tag == tag {
         if info.from_store {
           match load_inst.cmd {
