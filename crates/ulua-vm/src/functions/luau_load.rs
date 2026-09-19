@@ -3,8 +3,6 @@ use core::{
   ptr::null_mut,
 };
 
-use ulua_common::macros::luau_assert::LUAU_ASSERT;
-
 use crate::{
   enums::lua_status::LuaStatus,
   functions::{lua_d_rawrunprotected_ldo::luaD_rawrunprotected, lua_pushstring::lua_pushstring},
@@ -60,18 +58,77 @@ pub unsafe fn luau_load(
       &mut ctx as *mut LoadContext as *mut c_void,
     );
 
-    // load can either succeed or get an OOM error, any other errors should be handled internally
-    LUAU_ASSERT!(status == LuaStatus::Ok as c_int || status == LuaStatus::ErrMem as c_int);
-
+    // load 只能成功或 OOM，其它错误都由 loadsafe 内部收口
     let result = if status == LuaStatus::ErrMem as c_int {
       lua_pushstring(l, LUA_MEMERRMSG.as_ptr());
       1
     } else {
-      ctx.result
+      load_return_code(status, ctx.result)
     };
 
     drop(pause_gc);
 
     result
+  }
+}
+
+/// `luaD_rawrunprotected` 的 status 到 `luau_load` 返回码的映射。
+///
+/// 上游 `cpp/VM/src/lvmload.cpp:832` 只有一句
+/// `LUAU_ASSERT(status == LUA_OK || status == LUA_ERRMEM)`，release 编译掉后就变成
+/// 「非 ERRMEM 一律取 `ctx.result`」，而 `ctx.result` 的初值是 0（成功）。上游成立
+/// 的前提是反序列化除 OOM 外不抛任何东西；Rust 侧 `luaD_rawrunprotected` 用
+/// `catch_unwind` 收口，任何逃逸 panic 都会被映射成 `ErrRun`（并由
+/// `luaG_pusherror` 把消息压栈），此时照抄上游会把「栈顶是错误串」的调用伪装成
+/// 成功返回 0。
+///
+/// 因此只承认 `Ok` 一种 status 可以沿用 loadsafe 的结论；其余 status（`ErrRun`、
+/// 以及理论上可达的 `Yield`/`ErrSyntax`/`ErrErr`/`Break`）都按错误返回 1，
+/// 与 `luau_load` 既有的「非 0 即栈顶为错误串」契约同形态，不新增错误码。
+/// 逃逸 panic 在 `catch_unwind` 前已由默认 panic hook 打到 stderr，
+/// 无需在此再断一次。
+fn load_return_code(status: c_int, result: c_int) -> c_int {
+  if status == LuaStatus::Ok as c_int {
+    result
+  } else {
+    1
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+
+  /// 只有 `Ok` 才允许把 loadsafe 的结论透传给调用方
+  #[test]
+  fn load_return_code_only_follows_ok() {
+    assert_eq!(load_return_code(LuaStatus::Ok as c_int, 0), 0);
+    assert_eq!(load_return_code(LuaStatus::Ok as c_int, 1), 1);
+  }
+
+  /// 非 `Ok`/`ErrMem` 的 status（逃逸 panic 收口成 `ErrRun`）不得回落到
+  /// `ctx.result` 的初值 0，必须以错误码返回
+  #[test]
+  fn load_return_code_rejects_unverified_status() {
+    for status in [
+      LuaStatus::Yield,
+      LuaStatus::ErrRun,
+      LuaStatus::ErrSyntax,
+      LuaStatus::ErrErr,
+      LuaStatus::Break,
+    ] {
+      assert_eq!(
+        load_return_code(status as c_int, 0),
+        1,
+        "{status:?} 不能当成功返回"
+      );
+    }
+  }
+
+  /// status 不在枚举取值内（脏数据）同样按错误处理
+  #[test]
+  fn load_return_code_rejects_unknown_status() {
+    assert_eq!(load_return_code(42, 0), 1);
+    assert_eq!(load_return_code(-1, 0), 1);
   }
 }
