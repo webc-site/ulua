@@ -1,9 +1,6 @@
-use alloc::{boxed::Box, sync::Arc, vec::Vec};
+use alloc::{rc::Rc, vec::Vec};
 use core::mem::take;
-use std::{
-  collections::HashMap,
-  sync::{Condvar, Mutex},
-};
+use std::collections::HashMap;
 
 use ulua_common::{macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet};
 
@@ -11,34 +8,23 @@ use crate::{
   enums::solver_mode::SolverMode,
   functions::make_type_check_limits::make_type_check_limits,
   records::{
-    build_queue_work_state::{BuildQueueWorkState, Task},
-    frontend::Frontend,
-    frontend_options::FrontendOptions,
+    build_queue_item::BuildQueueItem, build_queue_work_state::BuildQueueWorkState,
+    frontend::Frontend, frontend_options::FrontendOptions,
   },
   type_aliases::{frontend_callbacks::TaskQueue, module_name_type::ModuleName},
 };
-/// Wraps the caller-provided (non-`Send`) executor so it can populate the
-/// `Send + Sync` `execute_tasks` slot. The default single-threaded executor runs
-/// every task immediately on the calling thread, so the `Send`/`Sync` assertion is
-/// sound — tasks never actually cross a thread boundary.
-struct ExecutorWrapper {
-  inner: TaskQueue,
-}
-
-unsafe impl Send for ExecutorWrapper {}
-unsafe impl Sync for ExecutorWrapper {}
-
-impl ExecutorWrapper {
-  fn run(&self, tasks: Vec<Task>) {
-    (self.inner)(tasks);
-  }
-}
 
 impl Frontend {
+  /// 检查 `module_queue` 里排队的模块。
+  ///
+  /// `execute_tasks` 是任务派发方（C++: `executeTasks`）：它收到的是构建队列**下标**，
+  /// 并通过回调的执行器 `run` 在当前线程完成检查；默认（cpp 亦同）为顺序就地执行。
+  ///
+  /// C++: `Frontend::checkQueuedModules(optionOverride, executeTasks, progress)`。
   pub fn check_queued_modules(
     &mut self,
     option_override: Option<FrontendOptions>,
-    execute_tasks: TaskQueue,
+    mut execute_tasks: TaskQueue,
     progress: impl Fn(usize, usize) -> bool,
   ) -> Vec<ModuleName> {
     let mut frontend_options = option_override.unwrap_or_else(|| self.options.clone());
@@ -51,20 +37,9 @@ impl Frontend {
 
     let mut seen: DenseHashSet<ModuleName> = DenseHashSet::new(ModuleName::default());
 
-    let state = Arc::new(BuildQueueWorkState {
-      execute_tasks: None,
-      build_queue_items: Vec::new(),
-      mtx: Mutex::new(()),
-      cv: Condvar::new(),
-      ready_queue_items: Vec::new(),
-      processing: 0,
-      remaining: 0,
-    });
-
-    // SAFETY: `state` is uniquely owned here until tasks are dispatched, and the
-    // default executor runs synchronously; the C++ relies on `shared_ptr` + `mtx`
-    // for the same in-place mutation.
-    let state_ptr = Arc::as_ptr(&state) as *mut BuildQueueWorkState;
+    // C++ 直接往 `state->buildQueueItems` 里追加；这里先落在局部 Vec 上，
+    // 到首次派发时才包进共享的 `Rc<BuildQueueWorkState>`，全程不存在 &mut 别名。
+    let mut build_queue_items: Vec<BuildQueueItem> = Vec::new();
 
     for name in &curr_module_queue {
       if seen.contains(name) {
@@ -84,117 +59,93 @@ impl Frontend {
         frontend_options.for_autocomplete,
       );
 
-      {
-        let bqi = unsafe { &mut (*state_ptr).build_queue_items };
-        self.add_build_queue_items(bqi, &queue, cycle_detected, &mut seen, &frontend_options);
-      }
+      self.add_build_queue_items(
+        &mut build_queue_items,
+        &queue,
+        cycle_detected,
+        &mut seen,
+        &frontend_options,
+      );
     }
 
-    {
-      let bqi = unsafe { &(*state_ptr).build_queue_items };
-      if bqi.is_empty() {
-        return Vec::new();
-      }
+    if build_queue_items.is_empty() {
+      return Vec::new();
     }
 
     // Mapping from modules to build queue slots.
     let mut module_name_to_queue: HashMap<ModuleName, usize> = HashMap::new();
-    {
-      let bqi = unsafe { &(*state_ptr).build_queue_items };
-      for (i, item) in bqi.iter().enumerate() {
-        module_name_to_queue.insert(item.name.clone(), i);
-      }
-    }
-
-    // Wire `execute_tasks` into the work state. C++ defaults a null executor to a
-    // single-threaded immediate runner.
-    let executor = ExecutorWrapper {
-      inner: execute_tasks,
-    };
-    unsafe {
-      (*state_ptr).execute_tasks = Some(Box::new(move |tasks: Vec<Task>| {
-        executor.run(tasks);
-      }));
-    }
-    // 队列长度读一次，同时用于 remaining 与依赖记录循环
-    let count = unsafe { (*state_ptr).build_queue_items.len() };
-    unsafe {
-      (*state_ptr).remaining = count;
+    for (i, item) in build_queue_items.iter().enumerate() {
+      module_name_to_queue.insert(item.name.clone(), i);
     }
 
     // Record dependencies between modules.
-    for (i, item) in unsafe { &(*state_ptr).build_queue_items }
+    // 先只读地收集每个模块指向的「脏依赖」下标，再统一写回，避免同时持有两处借用。
+    let dirty_deps: Vec<Vec<usize>> = build_queue_items
       .iter()
-      .enumerate()
-    {
-      // 收集本模块指向的"脏依赖"在队列中的位置，再统一写入
-      let dirty_dep_positions: Vec<usize> = item
-        .source_node
-        .require_set
-        .iter()
-        .filter(|dep| {
-          self
-            .source_nodes
-            .get(*dep)
-            .is_some_and(|node| node.has_dirty_module(frontend_options.for_autocomplete))
-        })
-        .map(|dep| module_name_to_queue[dep])
-        .collect();
-      if dirty_dep_positions.is_empty() {
+      .map(|item| {
+        item
+          .source_node
+          .require_set
+          .iter()
+          .filter(|dep| {
+            self
+              .source_nodes
+              .get(*dep)
+              .is_some_and(|node| node.has_dirty_module(frontend_options.for_autocomplete))
+          })
+          .map(|dep| module_name_to_queue[dep])
+          .collect()
+      })
+      .collect();
+
+    for (i, positions) in dirty_deps.iter().enumerate() {
+      if positions.is_empty() {
         continue;
       }
-      let bqi = unsafe { &mut (*state_ptr).build_queue_items };
-      bqi[i].dirty_dependencies += dirty_dep_positions.len() as i32;
-      for dep_pos in dirty_dep_positions {
-        bqi[dep_pos].reverse_deps.push(i);
+      build_queue_items[i].dirty_dependencies += positions.len() as i32;
+      for &dep_pos in positions {
+        build_queue_items[dep_pos].reverse_deps.push(i);
       }
     }
 
     let mut next_items: Vec<usize> = Vec::new();
 
     // First pass: check all modules with no pending dependencies.
-    {
-      let bqi = unsafe { &(*state_ptr).build_queue_items };
-      for (i, item) in bqi.iter().enumerate() {
-        if item.dirty_dependencies == 0 {
-          next_items.push(i);
-        }
+    for (i, item) in build_queue_items.iter().enumerate() {
+      if item.dirty_dependencies == 0 {
+        next_items.push(i);
       }
     }
 
+    // 从这里开始队列成为共享句柄：`Rc` + `Mutex<QueueState>` + `Condvar`，
+    // 派发侧（`perform_queue_item_task`）与回收侧（下面的等待循环）都只经锁访问。
+    let state = Rc::new(BuildQueueWorkState::new(build_queue_items));
+
     if !next_items.is_empty() {
-      self.send_queue_item_tasks(state.clone(), take(&mut next_items));
+      self.send_queue_item_tasks(state.clone(), take(&mut next_items), &mut execute_tasks);
     }
 
     // If not a single item was found, a cycle in the graph was hit.
-    if unsafe { (*state_ptr).processing } == 0 {
-      self.send_queue_cycle_item_task(state.clone());
+    if state.processing() == 0 {
+      self.send_queue_cycle_item_task(state.clone(), &mut execute_tasks);
     }
 
     let mut item_with_exception: Option<usize> = None;
     let mut cancelled = false;
 
-    while unsafe { (*state_ptr).remaining } != 0 {
+    while state.remaining() != 0 {
       {
-        let mtx = unsafe { &(*state_ptr).mtx };
-        let cv = unsafe { &(*state_ptr).cv };
-        // 中毒不再级联 panic 掩盖原始错误：取出内值继续（对齐 cpp std::mutex）
-        let guard = mtx.lock().unwrap_or_else(|e| e.into_inner());
+        let guard = state.lock();
 
         // If nothing is ready yet, wait.
-        let _guard = cv
-          .wait_while(guard, |_| {
-            let ready = unsafe { &(*state_ptr).ready_queue_items };
-            ready.is_empty()
-          })
-          .unwrap_or_else(|e| e.into_inner());
+        let mut guard = state.wait_for_ready_tasks(guard);
 
         // Handle checked items. 原地取空就绪队列，与 C++ 处理后清空等价
-        let ready: Vec<usize> = take(unsafe { &mut (*state_ptr).ready_queue_items });
+        let ready: Vec<usize> = take(&mut guard.ready_queue_items);
         for i in ready.iter().copied() {
           let (has_exception, is_cancelled) = {
-            let bqi = unsafe { &(*state_ptr).build_queue_items };
-            (bqi[i].exception.is_some(), bqi[i].module.cancelled)
+            let item = &guard.build_queue_items[i];
+            (item.exception.is_some(), item.module.cancelled)
           };
           if has_exception {
             item_with_exception = Some(i);
@@ -207,57 +158,40 @@ impl Frontend {
             break;
           }
 
-          {
-            let bqi = unsafe { &(*state_ptr).build_queue_items };
-            let item_ref = &bqi[i];
-            self.record_item_result(item_ref);
-          }
+          self.record_item_result(&guard.build_queue_items[i]);
 
           // Notify items waiting on this dependency.
-          let reverse_deps: Vec<usize> = {
-            let bqi = unsafe { &(*state_ptr).build_queue_items };
-            bqi[i].reverse_deps.clone()
-          };
+          let reverse_deps: Vec<usize> = guard.build_queue_items[i].reverse_deps.clone();
           for reverse_dep in reverse_deps {
-            let bqi = unsafe { &mut (*state_ptr).build_queue_items };
-            LUAU_ASSERT!(bqi[reverse_dep].dirty_dependencies != 0);
-            bqi[reverse_dep].dirty_dependencies -= 1;
+            let dep = &mut guard.build_queue_items[reverse_dep];
+            LUAU_ASSERT!(dep.dirty_dependencies != 0);
+            dep.dirty_dependencies -= 1;
 
-            if !bqi[reverse_dep].processing && bqi[reverse_dep].dirty_dependencies == 0 {
+            if !dep.processing && dep.dirty_dependencies == 0 {
               next_items.push(reverse_dep);
             }
           }
         }
 
-        {
-          let ready_len = ready.len();
-          unsafe {
-            LUAU_ASSERT!((*state_ptr).processing >= ready_len);
-            (*state_ptr).processing -= ready_len;
+        let ready_len = ready.len();
+        LUAU_ASSERT!(guard.processing >= ready_len);
+        guard.processing -= ready_len;
 
-            LUAU_ASSERT!((*state_ptr).remaining >= ready_len);
-            (*state_ptr).remaining -= ready_len;
-          }
-        }
+        LUAU_ASSERT!(guard.remaining >= ready_len);
+        guard.remaining -= ready_len;
       }
 
-      {
-        let total = {
-          let bqi = unsafe { &(*state_ptr).build_queue_items };
-          bqi.len()
-        };
-        let done = total - unsafe { (*state_ptr).remaining };
-        if !progress(done, total) {
-          cancelled = true;
-        }
+      let (done, total) = state.progress_counts();
+      if !progress(done, total) {
+        cancelled = true;
       }
 
       // Items cannot be submitted while holding the lock.
       if !next_items.is_empty() {
-        self.send_queue_item_tasks(state.clone(), take(&mut next_items));
+        self.send_queue_item_tasks(state.clone(), take(&mut next_items), &mut execute_tasks);
       }
 
-      if unsafe { (*state_ptr).processing } == 0 {
+      if state.processing() == 0 {
         // Typechecking might have been cancelled by user; don't return partial results.
         if cancelled {
           return Vec::new();
@@ -265,23 +199,22 @@ impl Frontend {
 
         // We might have stopped because of a pending exception.
         if let Some(idx) = item_with_exception {
-          let bqi = unsafe { &(*state_ptr).build_queue_items };
-          let item_ref = &bqi[idx];
-          self.record_item_result(item_ref);
+          let guard = state.lock();
+          self.record_item_result(&guard.build_queue_items[idx]);
         }
       }
 
       // If we aren't done but have nothing processing, we hit a cycle.
-      if unsafe { (*state_ptr).remaining } != 0 && unsafe { (*state_ptr).processing } == 0 {
-        self.send_queue_cycle_item_task(state.clone());
+      if state.remaining() != 0 && state.processing() == 0 {
+        self.send_queue_cycle_item_task(state.clone(), &mut execute_tasks);
       }
     }
 
     let mut checked_modules: Vec<ModuleName> = Vec::new();
     {
-      let bqi = unsafe { &mut (*state_ptr).build_queue_items };
-      checked_modules.reserve(bqi.len());
-      for item in bqi.iter_mut() {
+      let mut guard = state.lock();
+      checked_modules.reserve(guard.build_queue_items.len());
+      for item in guard.build_queue_items.iter_mut() {
         checked_modules.push(take(&mut item.name));
       }
     }

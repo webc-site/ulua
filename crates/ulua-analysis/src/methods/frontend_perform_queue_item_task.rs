@@ -1,33 +1,29 @@
-use alloc::sync::Arc;
+use alloc::rc::Rc;
 
 use crate::records::{build_queue_work_state::BuildQueueWorkState, frontend::Frontend};
 
 impl Frontend {
-  pub fn perform_queue_item_task(&mut self, state: Arc<BuildQueueWorkState>, item_pos: usize) {
-    // SAFETY: `state` is shared across the (logically concurrent) build queue.
-    // The C++ relies on `state` being a `shared_ptr` whose `BuildQueueItem`s are
-    // mutated in place while synchronization is provided by `state->mtx`. We mirror
-    // that by taking a `*mut` through the `Arc`.
-    let state_ptr = Arc::as_ptr(&state) as *mut BuildQueueWorkState;
-
-    // C++ wraps this in `try { ... } catch (const InternalCompilerError&)`,
-    // recording the exception into `item.exception`. The Rust port models an ICE
-    // as a panic (matching the rest of the codebase), so there is no catch here;
-    // `item.exception` remains `None` on the success path.
+  /// 执行一个队列项并把下标回报到就绪队列。
+  ///
+  /// C++: `Frontend::performQueueItemTask(state, itemPos)`。
+  pub fn perform_queue_item_task(&mut self, state: Rc<BuildQueueWorkState>, item_pos: usize) {
+    // C++ 在锁外原地改写 `state->buildQueueItems[itemPos]`，靠「每个任务只碰自己的项」
+    // 规避竞争；这里队列项与同步状态同属一个 `Mutex`，检查期间持锁即可。
+    // `check_build_queue_item` 不会回到队列（既不发任务也不读就绪队列），无重入死锁。
     {
-      let items = unsafe { &mut (*state_ptr).build_queue_items };
-      let item = &mut items[item_pos];
-      self.check_build_queue_item(item);
+      let mut queue = state.lock();
+      self.check_build_queue_item(&mut queue.build_queue_items[item_pos]);
     }
 
+    // C++: `try { checkBuildQueueItem(item); } catch (const InternalCompilerError&) {
+    //   item.exception = std::current_exception(); }`
+    // Rust 端口把 ICE 建模为 panic（与仓库其余部分一致），因此这里不捕获：
+    // `item.exception` 在成功路径上保持 `None`，panic 由调用方的 `catch_unwind` 处理。
     {
-      let mtx = unsafe { &(*state_ptr).mtx };
-      let _guard = mtx.lock().unwrap_or_else(|e| e.into_inner());
-      let ready = unsafe { &mut (*state_ptr).ready_queue_items };
-      ready.push(item_pos);
+      let mut queue = state.lock();
+      queue.ready_queue_items.push(item_pos);
     }
 
-    let cv = unsafe { &(*state_ptr).cv };
-    cv.notify_one();
+    state.notify_task_ready();
   }
 }
