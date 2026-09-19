@@ -54,7 +54,8 @@ pub unsafe fn lua_debugtrace(l: *mut lua_State) -> *const c_char {
 
       if ar.currentline > 0 {
         let mut line: [c_char; 32] = [0; 32];
-        write_c_str(&mut line, &alloc::format!(":{}", ar.currentline));
+        let mut num = itoa::Buffer::new();
+        write_c_str(&mut line, &[":", num.format(ar.currentline)]);
 
         offset = append(buf_ptr, BUF_LEN, offset, line.as_ptr());
       }
@@ -68,9 +69,14 @@ pub unsafe fn lua_debugtrace(l: *mut lua_State) -> *const c_char {
 
       if depth > LIMIT1 + LIMIT2 && level == LIMIT1 - 1 {
         let mut skip: [c_char; 32] = [0; 32];
+        let mut num = itoa::Buffer::new();
         write_c_str(
           &mut skip,
-          &alloc::format!("... (+{} frames)\n", depth - LIMIT1 - LIMIT2),
+          &[
+            "... (+",
+            num.format(depth - LIMIT1 - LIMIT2),
+            " frames)\n",
+          ],
         );
 
         offset = append(buf_ptr, BUF_LEN, offset, skip.as_ptr());
