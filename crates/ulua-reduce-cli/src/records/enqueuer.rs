@@ -4,27 +4,22 @@ use std::collections::VecDeque;
 use ulua_ast::records::{ast_stat_block::AstStatBlock, ast_visitor::AstVisitor};
 
 /// `Enqueuer` is a visitor that pushes visited `AstStatBlock`s into a queue.
-/// It is native-only and not portable to wasm32-unknown-unknown.
-#[repr(C)]
+/// 借用版（原 `*mut VecDeque` + null 契约在 release 下无守卫，Rust 可直接 `&mut`）。
 #[derive(Debug)]
-pub struct Enqueuer {
-  pub queue: *mut VecDeque<*mut AstStatBlock>,
+pub struct Enqueuer<'q> {
+  pub queue: &'q mut VecDeque<*mut AstStatBlock>,
 }
 
-impl Enqueuer {
-  pub fn new(queue: *mut VecDeque<*mut AstStatBlock>) -> Self {
-    debug_assert!(!queue.is_null());
+impl<'q> Enqueuer<'q> {
+  pub fn new(queue: &'q mut VecDeque<*mut AstStatBlock>) -> Self {
     Enqueuer { queue }
   }
 }
 
-impl AstVisitor for Enqueuer {
+impl AstVisitor for Enqueuer<'_> {
   fn visit_stat_block(&mut self, node: *mut c_void) -> bool {
     let block = node as *mut AstStatBlock;
-    // SAFETY: `self.queue` is non-null as ensured in `new`.
-    unsafe {
-      (*self.queue).push_back(block);
-    }
+    self.queue.push_back(block);
     false
   }
 }
