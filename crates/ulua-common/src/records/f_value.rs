@@ -30,9 +30,27 @@ use core::{
   cell::UnsafeCell,
   sync::atomic::{AtomicBool, AtomicPtr, Ordering},
 };
-use std::{cell::RefCell, collections::HashMap, ptr::null_mut, sync::OnceLock};
+use std::{
+  cell::RefCell,
+  collections::HashMap,
+  ptr::null_mut,
+  sync::{Once, OnceLock},
+};
+
+use foldhash::fast::FixedState;
 
 use crate::functions::is_default_enabled_flag::is_default_enabled_flag;
+
+/// 覆盖栈表：固定种子 foldhash，取代 std `HashMap` 默认的 SipHash
+/// `RandomState`。理由与工作区先例 `ulua-analysis/src/type_aliases/collections.rs`
+/// 一致 —— 键虽是 flag 的 `'static` 地址，但 `--fflags=` 的名字/顺序会经链接期
+/// 影响地址分布，而 SipHash 的每进程随机种子又让桶序跨进程不可复现；
+/// `FixedState` 既快又确定。
+///
+/// 仓库规范首选 `gxhash`，但本 crate 必须能编到 `wasm32-unknown-unknown`
+/// （`ulua-web`），gxhash 3.5.0 只有 x86/x86_64/arm/aarch64 平台实现，wasm 下
+/// 连编译都过不去，故落到同为工作区依赖、同样非 SipHash 的 foldhash。
+type OverrideMap<T> = HashMap<usize, Vec<T>, FixedState>;
 
 // ---------------------------------------------------------------------------
 // Thread-local flag overrides (test isolation)
@@ -72,7 +90,7 @@ pub fn overrides_active() -> bool {
 /// 本 trait 上；两者实现集相同（bool / i32），故以超 trait 关联，使
 /// `T: FValueOverridable` 即可读值。
 pub trait FValueOverridable: Copy + FValueList {
-  fn with_overrides<R>(f: impl FnOnce(&mut HashMap<usize, Vec<Self>>) -> R) -> R;
+  fn with_overrides<R>(f: impl FnOnce(&mut OverrideMap<Self>) -> R) -> R;
 
   fn override_top(addr: usize) -> Option<Self> {
     Self::with_overrides(|m| m.get(&addr).and_then(|s| s.last().copied()))
@@ -94,20 +112,20 @@ pub trait FValueOverridable: Copy + FValueList {
 }
 
 thread_local! {
-    static BOOL_OVERRIDES: RefCell<HashMap<usize, Vec<bool>>> =
-        RefCell::new(HashMap::new());
-    static INT_OVERRIDES: RefCell<HashMap<usize, Vec<i32>>> =
-        RefCell::new(HashMap::new());
+    static BOOL_OVERRIDES: RefCell<OverrideMap<bool>> =
+        RefCell::new(OverrideMap::default());
+    static INT_OVERRIDES: RefCell<OverrideMap<i32>> =
+        RefCell::new(OverrideMap::default());
 }
 
 impl FValueOverridable for bool {
-  fn with_overrides<R>(f: impl FnOnce(&mut HashMap<usize, Vec<Self>>) -> R) -> R {
+  fn with_overrides<R>(f: impl FnOnce(&mut OverrideMap<Self>) -> R) -> R {
     BOOL_OVERRIDES.with(|c| f(&mut c.borrow_mut()))
   }
 }
 
 impl FValueOverridable for i32 {
-  fn with_overrides<R>(f: impl FnOnce(&mut HashMap<usize, Vec<Self>>) -> R) -> R {
+  fn with_overrides<R>(f: impl FnOnce(&mut OverrideMap<Self>) -> R) -> R {
     INT_OVERRIDES.with(|c| f(&mut c.borrow_mut()))
   }
 }
@@ -140,9 +158,24 @@ unsafe impl<T: Sync> Sync for FValue<T> {}
 /// C++ `setLuauFlagsDefault` analog (CLI default-on behavior): enable the
 /// `Luau*` non-experimental bool flags (see `is_default_enabled_flag`).
 /// Call before threads start.
+///
+/// 进程内幂等：批量写只在**首次**调用发生。`FValue::set_all_unless` 写的是
+/// 数百个 `UnsafeCell` static（非原子），若每次 `eval` / `execute_script` /
+/// wasm `run` 都重跑一遍，就会与另一线程正在跑的 VM 的 `get()` 裸读构成
+/// 数据竞争（UB）。收口成 `Once` 后，重复调用至多串行等待首个调用完成，
+/// 之后的调用是 no-op——旗标自始即按「启动期配置、此后只读」对待。
+///
+/// 因此首次调用之后传入相反值不会生效；需要显式改旗标走 [`FValue::set`]
+/// （测试期用 [`FValue::push_test_override`] 的线程本地覆盖），或 CLI 的
+/// `--fflags=`（直调 [`FValue::set_all_unless`]，不经本入口）。
 pub fn set_luau_bool_flags(value: bool) {
-  // SAFETY: 受控安全入口——契约与 C++ 相同：仅在线程启动前调用（CLI 参数解析期）
-  unsafe { FValue::<bool>::set_all_unless(value, |name| !is_default_enabled_flag(name)) };
+  static APPLIED: Once = Once::new();
+  APPLIED.call_once(|| {
+    // SAFETY: 受控安全入口——契约与 C++ 相同：仅在线程启动前首次配置
+    // （CLI 参数解析期）；`Once` 保证同一进程内只跑一次批量写，且并发
+    // 调用者被串行化，不会与另一次批量写重叠。
+    unsafe { FValue::<bool>::set_all_unless(value, |name| !is_default_enabled_flag(name)) };
+  });
 }
 
 /// Supplies the per-type intrusive-list head, replacing the inexpressible C++

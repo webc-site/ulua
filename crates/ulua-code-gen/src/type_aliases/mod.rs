@@ -9,7 +9,6 @@ pub mod host_vector_access_handler;
 pub mod host_vector_namecall_handler;
 pub mod host_vector_operation_bytecode_type;
 pub mod instruction_ir_builder;
-pub mod instruction_ir_translation;
 pub mod ir_ops;
 pub mod lua_state;
 pub mod luau_fast_function;

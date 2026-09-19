@@ -14,7 +14,9 @@
 //! ulua::eval("assert(1 + 1 == 2)").unwrap();
 //! let bytecode = ulua::compile("return 2 + 2").unwrap();
 //! assert!(!bytecode.is_empty());
+//! # #[cfg(feature = "typecheck")] {
 //! ulua::check("local x: number = 1").unwrap();
+//! # }
 //! ```
 
 // Re-export the sub-crates as modules so `ulua::vm::...` etc. work from one dep.
@@ -100,9 +102,10 @@ use ulua_compiler::{
 use ulua_vm::{
   enums::lua_status::LuaStatus,
   functions::{
-    lua_checkstack::lua_checkstack, lua_close::lua_close, lua_debugtrace::lua_debugtrace,
-    lua_gettop::lua_gettop, lua_insert::lua_insert, lua_l_newstate::lua_l_newstate,
-    lua_l_openlibs::lua_l_openlibs, lua_newthread::lua_newthread, lua_pcall::lua_pcall,
+    lua_close::lua_close, lua_debugtrace::lua_debugtrace, lua_gettop::lua_gettop,
+    lua_insert::lua_insert, lua_l_checkstack::lua_l_checkstack, lua_l_newstate::lua_l_newstate,
+    lua_l_openlibs::lua_l_openlibs, lua_l_sandbox::lua_l_sandbox,
+    lua_l_sandboxthread::lua_l_sandboxthread, lua_newthread::lua_newthread, lua_pcall::lua_pcall,
     lua_pushvalue::lua_pushvalue, lua_remove::lua_remove, lua_resume::lua_resume,
     lua_tolstring::lua_tolstring, lua_xmove::lua_xmove, luau_load::luau_load,
   },
@@ -136,18 +139,25 @@ pub fn compile(source: &str) -> StdResult<Vec<u8>, Error> {
   Ok(bytes)
 }
 
-/// Compile, load and run `source`, mirroring cpp `CLI/src/Repl.cpp` `main` +
-/// `runCode` (Repl.cpp:239-300): a fresh state with the standard library, the
-/// chunk loaded on the main state then moved to a fresh coroutine, and
-/// `lua_resume` to execute it. On normal return, leftover results are printed
-/// through `_PRETTYPRINT` (falling back to `print`), exactly like the REPL.
+/// Compile, load and run `source`, mirroring cpp `CLI/src/Repl.cpp` 的 REPL
+/// 会话：`setupState`（Repl.cpp:205-230，即 `luaL_openlibs` + `luaL_sandbox`）、
+/// `runRepl` 在宿主 state 上的 `luaL_sandboxthread`（Repl.cpp:566），再接
+/// `runCode` 的 load / 换协程 / resume（Repl.cpp:239-300）。On normal return,
+/// leftover results are printed through `_PRETTYPRINT` (falling back to `print`),
+/// exactly like the REPL.
+///
+/// 与 CLI `setupState` 有意未对齐的一段：`loadstring` / `collectgarbage` 注册与
+/// `luaopen_require`（三者依赖 CLI 侧的 require 上下文与命令行配置，只有
+/// `ulua` 二进制提供）。因此脚本里的 `require(...)` / `loadstring(...)` /
+/// `collectgarbage(...)` 在 CLI 下可用、在 `eval` 下是 nil。
 ///
 /// Returns `Ok(())` if the script ran to completion, or [`Error`] carrying the
 /// Lua error text with the `lua_debugtrace` stack backtrace appended (as the
 /// C++ REPL does) on a compile, load or runtime error.
 pub fn eval(source: &str) -> StdResult<(), Error> {
   // v11+ bytecode needs the default Luau flags enabled (the CLI's
-  // setLuauFlagsDefault(true) analog; safe entry point).
+  // setLuauFlagsDefault(true) analog)。进程内幂等：只有首次调用真的写旗标，
+  // 之后每次 eval 不再与运行中 VM 的旗标读取相撞（见其文档）。
   set_luau_bool_flags(true);
 
   let bytecode = compile(source)?;
@@ -173,13 +183,21 @@ pub fn eval(source: &str) -> StdResult<(), Error> {
     let _state = StateGuard(l);
 
     lua_l_openlibs(l);
+    // cpp setupState 的收尾：库表与真 `_G` 上锁（Repl.cpp:230），再按
+    // runRepl:566 给宿主 state 换一张 __index 指向真 `_G` 的可写代理全局表。
+    // `runCode` 的闭包在主 state 上 load，其 env 即这张代理表，故脚本写新
+    // 全局落在代理表里、不污染已上锁的真 `_G`（CLI 的 runFile:599-602 是同样
+    // 的组合，只是代理表建在它自建的协程上）。
+    lua_l_sandbox(l);
+    lua_l_sandboxthread(l);
     run_code(l, &bytecode)
   }
 }
 
 /// cpp `Repl.cpp:239 runCode` 的加载/执行段（bytecode 已在外部编译）。
 /// # Safety
-/// `l` 必须是由 `lua_l_newstate` 创建且已 openlibs 的有效状态机。
+/// `l` 必须是由 `lua_l_newstate` 创建、已 `lua_l_openlibs` + `lua_l_sandbox` +
+/// `lua_l_sandboxthread` 的有效状态机（闭包的 env 取自它的全局表）。
 unsafe fn run_code(l: *mut lua_State, bytecode: &[u8]) -> StdResult<(), Error> {
   unsafe {
     let rc = luau_load(
@@ -218,7 +236,9 @@ unsafe fn run_code(l: *mut lua_State, bytecode: &[u8]) -> StdResult<(), Error> {
     if status == LuaStatus::Ok as i32 {
       let n = lua_gettop(t);
       if n != 0 {
-        lua_checkstack(t, LUA_MINSTACK);
+        // 上游 Repl.cpp:267 是 luaL_checkstack（分配失败抛 Lua 错误），
+        // 底层 lua_checkstack 的返回值在此处会被丢弃。
+        lua_l_checkstack(t, LUA_MINSTACK, "too many results to print");
         lua_getglobal(t, c"_PRETTYPRINT".as_ptr());
         // _PRETTYPRINT 为 nil 时回退到标准 print（与 Repl.cpp 一致）。
         if lua_isnil!(t, -1) {

@@ -3,7 +3,7 @@ use ulua_vm::enums::lua_type::LuaType;
 
 use crate::{
   enums::ir_cmd::IrCmd, records::ir_builder::IrBuilder,
-  type_aliases::instruction_ir_translation::Instruction,
+  type_aliases::instruction_ir_builder::Instruction,
 };
 
 /// # Safety

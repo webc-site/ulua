@@ -1,6 +1,8 @@
 use crate::{
   macros::codegen_assert::CODEGEN_ASSERT,
-  records::{ir_reg_alloc_a_64::IrRegAllocA64, register_a_64::RegisterA64},
+  records::{
+    ir_data::K_INVALID_INST_IDX, ir_reg_alloc_a_64::IrRegAllocA64, register_a_64::RegisterA64,
+  },
 };
 
 impl IrRegAllocA64 {
@@ -14,6 +16,6 @@ impl IrRegAllocA64 {
     CODEGEN_ASSERT!((set.temp & bit) == 0);
 
     set.free |= bit;
-    set.defs[reg.index() as usize] = Self::K_INVALID_INST_IDX;
+    set.defs[reg.index() as usize] = K_INVALID_INST_IDX;
   }
 }

@@ -7,9 +7,9 @@ use crate::{
   functions::lower_impl::lower_impl_a_64,
   records::{
     assembly_builder_a_64::AssemblyBuilderA64, assembly_options::AssemblyOptions,
-    ir_builder::IrBuilder, ir_lowering_a_64::IrLoweringA64, ir_reg_alloc_a_64::IrRegAllocA64,
-    ir_value_location_tracking::IrValueLocationTracking, lowering_stats::LoweringStats,
-    module_helpers::ModuleHelpers, register_a_64::RegisterA64,
+    ir_builder::IrBuilder, ir_data::K_INVALID_INST_IDX, ir_lowering_a_64::IrLoweringA64,
+    ir_reg_alloc_a_64::IrRegAllocA64, ir_value_location_tracking::IrValueLocationTracking,
+    lowering_stats::LoweringStats, module_helpers::ModuleHelpers, register_a_64::RegisterA64,
   },
 };
 
@@ -74,7 +74,7 @@ pub unsafe fn lower_ir_a_64_assembly_builder_a_64_ir_builder_vector_u32_module_h
     exit_handlers: Vec::new(),
     exit_handler_map: DenseHashMap::new(!0u32),
     exit_sync_alloc_token: 0,
-    exit_sync_inst_idx: IrLoweringA64::K_INVALID_INST_IDX,
+    exit_sync_inst_idx: K_INVALID_INST_IDX,
     error: false,
   };
   lowering.ir_lowering_a_64_ir_lowering_a_64();

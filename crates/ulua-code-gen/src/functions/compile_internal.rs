@@ -238,7 +238,15 @@ pub unsafe fn compile_internal(
       (*header).native_code_size = (end - begin) as usize;
     }
 
-    let bind_result = ((*code_gen_context).bind_module_fn.unwrap())(
+    // bind_module_fn 由 standalone / shared 上下文构造时补齐，基构造器置 None；
+    // 缺失时不再 unwrap panic，改为断言 + 与「上下文未初始化」同一条失败通道返回
+    let Some(bind_module_fn) = (*code_gen_context).bind_module_fn else {
+      CODEGEN_ASSERT!(false, "bindModuleFn is not set on the code gen context");
+      compilation_result.result = CodeGenCompilationResult::CodeGenNotInitialized;
+      return compilation_result;
+    };
+
+    let bind_result = bind_module_fn(
       code_gen_context,
       module_id,
       &protos,

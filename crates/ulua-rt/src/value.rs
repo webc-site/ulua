@@ -1,11 +1,22 @@
 //! The [`Value`] enum and the stack <-> `Value` bridges.
 //!
-//! Mirrors `mlua::Value`. Luau (like Lua 5.x without the integer subtype)
-//! stores every number as an `f64`; there is no distinct integer tag at the VM
-//! level. We therefore reconstruct the [`Value::Integer`] vs [`Value::Number`]
-//! distinction on the way out by testing whether the `f64` is an exact,
-//! in-range integer — matching mlua's observable behavior closely enough for
-//! the high-level API.
+//! Mirrors `mlua::Value`. Luau has **two** number tags, and unlike Lua 5.x
+//! without the integer subtype it really does keep them distinct at the VM
+//! level:
+//!
+//! - `LUA_TNUMBER` — an `f64`.
+//! - `LUA_TINTEGER` — the integer subtype, an exact `i64` held in the `TValue`
+//!   (produced by `Integer.*`, `buffer.readlong`, int64 bytecode constants,
+//!   `userdata::setinteger`, ...). Integer and number keys even hash into
+//!   different table slots, so the distinction is observable.
+//!
+//! [`value_from_stack`] therefore reads the two separately: an
+//! `LUA_TINTEGER` slot goes through `lua_l_checkinteger_64` to recover the
+//! exact `i64` (`lua_tonumberx` deliberately does *not* accept that tag and
+//! would report `0`, and `lua_tointegerx` truncates to `c_int`), while a
+//! `LUA_TNUMBER` slot is split into [`Value::Integer`] vs [`Value::Number`] by
+//! testing whether the `f64` is an exact, in-range integer — matching mlua's
+//! observable behavior for the high-level API.
 
 use core::{
   ffi::c_void,
@@ -45,7 +56,8 @@ pub enum Value {
   Nil,
   /// A boolean.
   Boolean(bool),
-  /// An integer (an `f64` that is an exact, in-range whole number).
+  /// An integer (either a `LUA_TINTEGER` slot's exact `i64`, or an `f64` that
+  /// is an exact, in-range whole number).
   Integer(Integer),
   /// A floating-point number.
   Number(Number),
@@ -426,6 +438,10 @@ pub(crate) fn value_from_stack(lua: &Lua, idx: c_int) -> Result<Value> {
           Value::Number(n)
         }
       }
+      // 整数子类型：i64 原样存在 TValue 里，`lua_tonumberx` 不认这个 tag（会报
+      // 0）、`lua_tointegerx` 又截断成 c_int，只能走 64 位读取。tag 已由上面的
+      // `lua_type` 判明，故 `lua_l_checkinteger_64` 内的 `tag_error` 不会触发。
+      LuaType::Integer => Value::Integer(lua_l_checkinteger_64(state, idx)),
       LuaType::String => ref_value(lua, idx, |r| Value::String(LuaString::from_ref(r))),
       LuaType::Table => ref_value(lua, idx, |r| Value::Table(Table::from_ref(r))),
       LuaType::Function => ref_value(lua, idx, |r| Value::Function(Function::from_ref(r))),

@@ -2,7 +2,7 @@ use ulua_common::macros::luau_insn_a::luau_insn_a;
 
 use crate::{
   functions::translate_inst_load_constant::translate_inst_load_constant,
-  records::ir_builder::IrBuilder, type_aliases::instruction_ir_translation::Instruction,
+  records::ir_builder::IrBuilder, type_aliases::instruction_ir_builder::Instruction,
 };
 
 /// # Safety

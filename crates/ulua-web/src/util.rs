@@ -1,13 +1,12 @@
 //! crate 内部共用的小工具函数与常量。
 
-use alloc::{borrow::Cow, string::String};
 use core::{
   cell::RefCell,
   ffi::{CStr, c_char, c_int},
   ptr::null,
   slice,
 };
-use std::ffi::CString;
+use std::{borrow::Cow, ffi::CString, string::String};
 
 use ulua_vm::macros::lua_memerrmsg::LUA_MEMERRMSG;
 

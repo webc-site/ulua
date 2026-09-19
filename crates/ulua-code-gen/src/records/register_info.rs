@@ -7,9 +7,9 @@ pub struct RegisterInfo {
   pub value: IrOp,
   pub version: u32,
 
-  pub known_not_readonly_deprecated: bool,
-  pub known_no_metatable_deprecated: bool,
-  pub known_table_array_size_deprecated: i32,
+  /// `LuauCodegenExtraTableOpts` 关闭时走的旧路径：缓存 NewTable 的 array size，
+  /// `-1` 表示未知。
+  pub known_table_array_size: i32,
 }
 
 impl Default for RegisterInfo {
@@ -18,9 +18,7 @@ impl Default for RegisterInfo {
       tag: 0xff,
       value: IrOp::default(),
       version: 0,
-      known_not_readonly_deprecated: false,
-      known_no_metatable_deprecated: false,
-      known_table_array_size_deprecated: -1,
+      known_table_array_size: -1,
     }
   }
 }

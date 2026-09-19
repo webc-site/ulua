@@ -183,7 +183,6 @@ pub mod get_next_block;
 pub mod get_next_inst_use;
 pub mod get_non_vol_xmm_storage_size;
 pub mod get_op_ir_data;
-pub mod get_op_ir_data_alt_b;
 pub mod get_reg_tag;
 pub mod get_reload_address;
 pub mod get_reload_offset;

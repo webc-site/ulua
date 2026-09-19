@@ -16,9 +16,7 @@ impl ConstPropState {
           (*info).value = value;
 
           if !LuauCodegenExtraTableOpts.get() {
-            (*info).known_not_readonly_deprecated = false;
-            (*info).known_no_metatable_deprecated = false;
-            (*info).known_table_array_size_deprecated = -1;
+            (*info).known_table_array_size = -1;
           }
 
           (*info).version += 1;

@@ -202,7 +202,11 @@ pub struct Lua {
 }
 
 /// 从 `lua_l_newstate` 的返回值构造持有型 [`Lua`]（null 断言 + 封装）。
-/// `Lua::new` / `new_empty` / `new_with` 共用。
+/// `Lua::new` / `new_empty` / `new_with` 共用（都经 [`build_lua`] 取回非空 state）。
+///
+/// **前置条件**：`state` 必须**已经过非空检查**（[`build_lua`] 的 `is_null` 分支）。
+/// `lua_newstate` 只可能返回 null 或一个完整可用的 state，对 null 调用
+/// `lua_l_openlibs` 等任何 `lua_*` 入口都是空指针解引用，所以检查必须在使用之前。
 fn wrap_new_state(state: *mut lua_State) -> Lua {
   assert!(!state.is_null(), "lua_l_newstate returned null");
   Lua {
@@ -211,28 +215,54 @@ fn wrap_new_state(state: *mut lua_State) -> Lua {
   }
 }
 
+/// 创建一个 VM 并按需打开标准库，**分配失败时返回 `None`**。
+///
+/// `create` 是 state 的产生者（生产路径为 [`lua_l_newstate`]，测试可注入返回 null
+/// 的分配器以覆盖 OOM 分支）；`openlibs` 为 true 时打开 Luau 标准库。
+///
+/// 关键顺序：`create` 的返回值先做 null 检查，**之后**才允许被任何 `lua_*` 入口
+/// 使用（含 [`lua_l_openlibs`]）——见 [`wrap_new_state`] 的前置条件。
+fn build_lua(create: impl FnOnce() -> *mut lua_State, openlibs: bool) -> Option<Lua> {
+  let state = create();
+  if state.is_null() {
+    return None;
+  }
+  if openlibs {
+    unsafe { lua_l_openlibs(state) };
+  }
+  Some(wrap_new_state(state))
+}
+
+/// OOM 创建 VM 时的统一错误文案（[`Lua::new_with`]）。
+const STATE_ALLOC_MSG: &str = "failed to create Lua state: memory allocation failure";
+
 impl Lua {
   /// Create a new Lua state with the standard library opened.
   ///
   /// Mirrors `mlua::Lua::new`.
+  ///
+  /// # Panics
+  /// Panics with `"lua_l_newstate returned null"` if the VM cannot be allocated
+  /// (the state is checked for null **before** the libraries are opened, so a
+  /// failed allocation panics instead of dereferencing a null state).
   pub fn new() -> Lua {
     // ulua's v11+ bytecode needs the default Luau flags on (see the
     // umbrella crate's `eval`).
     set_luau_bool_flags(true);
-    unsafe {
-      let state = lua_l_newstate();
-      lua_l_openlibs(state);
-      wrap_new_state(state)
-    }
+    build_lua(lua_l_newstate, true).expect("lua_l_newstate returned null")
   }
 
   /// Create a new Lua state **without** opening the standard library.
   ///
   /// A deliberate deviation from mlua (which exposes `StdLib` flags); a
   /// minimal convenience for embedders who want a clean global table.
+  ///
+  /// # Panics
+  /// Panics (before any use of the state) if the VM cannot be allocated; see
+  /// [`Lua::new`].
   pub fn new_empty() -> Lua {
     set_luau_bool_flags(true);
-    wrap_new_state(lua_l_newstate())
+    build_lua(lua_l_newstate, false).expect("lua_l_newstate returned null")
   }
 
   /// Create a new Lua state with the standard library opened, **without** the
@@ -259,17 +289,16 @@ impl Lua {
   /// non-empty `libs` opens the full standard library and [`StdLib::NONE`]
   /// opens nothing (see [`StdLib`]). `options` is recorded on the VM (currently
   /// only `catch_rust_panics` is observable).
+  ///
+  /// # Errors
+  /// [`Error::MemoryError`] if the state itself cannot be allocated — the null
+  /// return of `lua_newstate` is detected **before** `lua_l_openlibs` runs.
   pub fn new_with(libs: StdLib, options: LuaOptions) -> Result<Lua> {
     set_luau_bool_flags(true);
-    unsafe {
-      let state = lua_l_newstate();
-      if !libs.is_none() {
-        lua_l_openlibs(state);
-      }
-      let lua = wrap_new_state(state);
-      lua.set_catch_rust_panics(options.catch_rust_panics);
-      Ok(lua)
-    }
+    let lua = build_lua(lua_l_newstate, !libs.is_none())
+      .ok_or_else(|| Error::MemoryError(STATE_ALLOC_MSG.to_string()))?;
+    lua.set_catch_rust_panics(options.catch_rust_panics);
+    Ok(lua)
   }
 
   /// The raw state pointer. Internal use only.
@@ -926,5 +955,72 @@ impl Lua {
       lua_settop(state, base);
       Ok(results)
     }
+  }
+}
+
+#[cfg(test)]
+mod tests {
+  use core::{ffi::c_void, ptr::null_mut};
+  use std::panic::catch_unwind;
+
+  use ulua_vm::{functions::lua_newstate::lua_newstate, type_aliases::lua_state::lua_State};
+
+  use super::build_lua;
+
+  /// 一个总是分配失败的 VM 分配器（模拟 OOM）。
+  unsafe extern "C-unwind" fn failing_alloc(
+    _ud: *mut c_void,
+    ptr: *mut u8,
+    _osize: usize,
+    nsize: usize,
+  ) -> *mut u8 {
+    // 释放请求必须照常「成功」（返回 null 表示已释放），否则 VM 会以为泄漏。
+    let _ = ptr;
+    if nsize == 0 {
+      return null_mut();
+    }
+    null_mut()
+  }
+
+  /// `lua_newstate` 在分配失败时确实返回 null —— `build_lua` 的 null 分支可达。
+  #[test]
+  fn newstate_returns_null_on_alloc_failure() {
+    let state = unsafe { lua_newstate(Some(failing_alloc), null_mut()) };
+    assert!(state.is_null(), "failing allocator must yield a null state");
+  }
+
+  /// R5：null 检查必须先于 `lua_l_openlibs`——注入 null 时只得到 `None`/panic，
+  /// 不会把空 state 交给 openlibs（那是空指针解引用）。
+  #[test]
+  fn build_lua_rejects_null_state_before_openlibs() {
+    // 1) 直接返回 null 的 create：走 openlibs 分支也只得到 None。
+    assert!(build_lua(null_mut::<lua_State>, true).is_none());
+    assert!(build_lua(null_mut::<lua_State>, false).is_none());
+
+    // 2) 真实 OOM 路径（failing allocator）同样返回 None。
+    assert!(
+      build_lua(
+        || unsafe { lua_newstate(Some(failing_alloc), null_mut()) },
+        true
+      )
+      .is_none()
+    );
+
+    // 3) `Lua::new` 的失败形态是「state 为空」panic，而不是 openlibs 崩溃。
+    let err = match catch_unwind(|| {
+      build_lua(null_mut::<lua_State>, true).expect("lua_l_newstate returned null")
+    }) {
+      Err(err) => err,
+      Ok(_) => panic!("a null state must panic instead of being opened"),
+    };
+    let msg = err
+      .downcast_ref::<String>()
+      .cloned()
+      .or_else(|| err.downcast_ref::<&str>().map(|s| (*s).to_string()))
+      .unwrap_or_default();
+    assert!(
+      msg.contains("null"),
+      "panic must report the null state, got {msg:?}"
+    );
   }
 }

@@ -11,7 +11,7 @@ use crate::{
     is_userdata_bytecode_type::is_userdata_bytecode_type,
   },
   records::{fallback_stream_scope::FallbackStreamScope, ir_builder::IrBuilder, ir_op::IrOp},
-  type_aliases::instruction_ir_translation::Instruction,
+  type_aliases::instruction_ir_builder::Instruction,
 };
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。

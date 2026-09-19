@@ -18,6 +18,7 @@ use crate::{
     assembly_options::AssemblyOptions,
     bytecode_types::LBC_TYPE_ANY,
     ir_block::{IrBlock, K_BLOCK_FLAG_SAFE_ENV_CHECK, K_BLOCK_NO_START_PC},
+    ir_data::K_INVALID_INST_IDX,
     ir_function::IrFunction,
     ir_lowering_a_64::IrLoweringA64,
     ir_lowering_x_64::IrLoweringX64,
@@ -59,10 +60,7 @@ pub unsafe fn lower_impl_x_64(
     let mut code_size = build.get_code_size();
     let mut seen_fallback = false;
 
-    let mut dummy = IrBlock {
-      start: u32::MAX,
-      ..IrBlock::default()
-    };
+    let mut dummy = IrBlock::default();
 
     debug_assert!(sorted_blocks[0] == 0);
     debug_assert!(function.entry_block == 0);
@@ -151,7 +149,7 @@ pub unsafe fn lower_impl_x_64(
           IrOp {
             kind_and_index: IrOpKind::VmExit as u32 | ((*block_ptr).startpc << IrOp::INDEX_SHIFT),
           },
-          IrLoweringX64::K_INVALID_INST_IDX,
+          K_INVALID_INST_IDX,
           &*next_block_ptr,
         );
       }
@@ -206,7 +204,7 @@ pub unsafe fn lower_impl_x_64(
           if let Some(hint) = function.find_store_location_hint(index) {
             lowering.regs.curr_inst_idx = index;
             lowering.value_tracker.process_store_location_hint(hint);
-            lowering.regs.curr_inst_idx = IrLoweringX64::K_INVALID_INST_IDX;
+            lowering.regs.curr_inst_idx = K_INVALID_INST_IDX;
           }
 
           debug_assert!((*inst_ptr).use_count == 0);
@@ -345,10 +343,7 @@ pub unsafe fn lower_impl_a_64(
     let mut code_size = build.get_code_size();
     let mut seen_fallback = false;
 
-    let mut dummy = IrBlock {
-      start: u32::MAX,
-      ..IrBlock::default()
-    };
+    let mut dummy = IrBlock::default();
 
     debug_assert!(sorted_blocks[0] == 0);
     debug_assert!(function.entry_block == 0);
@@ -437,7 +432,7 @@ pub unsafe fn lower_impl_a_64(
           IrOp {
             kind_and_index: IrOpKind::VmExit as u32 | ((*block_ptr).startpc << IrOp::INDEX_SHIFT),
           },
-          IrLoweringA64::K_INVALID_INST_IDX,
+          K_INVALID_INST_IDX,
           &*next_block_ptr,
         );
       }
@@ -490,7 +485,7 @@ pub unsafe fn lower_impl_a_64(
           if let Some(hint) = function.find_store_location_hint(index) {
             lowering.regs.curr_inst_idx = index;
             lowering.value_tracker.process_store_location_hint(hint);
-            lowering.regs.curr_inst_idx = IrLoweringA64::K_INVALID_INST_IDX;
+            lowering.regs.curr_inst_idx = K_INVALID_INST_IDX;
           }
 
           debug_assert!((*inst_ptr).use_count == 0);

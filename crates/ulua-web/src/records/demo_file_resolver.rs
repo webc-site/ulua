@@ -7,8 +7,7 @@
 //! C++ member: `std::unordered_map<ModuleName, std::string> source;` — ported as
 //! a typed `HashMap<ModuleName, String>` (no untyped JSON).
 
-use alloc::string::String;
-use std::collections::HashMap;
+use std::{collections::HashMap, string::String};
 
 use ulua_analysis::{
   records::{

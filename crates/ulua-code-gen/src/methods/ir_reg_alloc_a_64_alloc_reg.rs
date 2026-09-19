@@ -4,7 +4,10 @@ use crate::{
   enums::kind_a_64::KindA64,
   functions::{countlz_bit_utils::countlz_u32, countrz_bit_utils::countrz_u32},
   macros::codegen_assert::CODEGEN_ASSERT,
-  records::{ir_reg_alloc_a_64::IrRegAllocA64, register_a_64::RegisterA64, set::Set},
+  records::{
+    ir_data::K_INVALID_INST_IDX, ir_reg_alloc_a_64::IrRegAllocA64, register_a_64::RegisterA64,
+    set::Set,
+  },
 };
 
 impl IrRegAllocA64 {
@@ -17,7 +20,7 @@ impl IrRegAllocA64 {
       // Try to find and spill a register that is not used in the current instruction and has the furthest next use
       if let Some(furthest_use_target) = unsafe {
         let result = self.find_instruction_with_furthest_next_use(&mut *set);
-        if result != Self::K_INVALID_INST_IDX {
+        if result != K_INVALID_INST_IDX {
           Some(result)
         } else {
           None

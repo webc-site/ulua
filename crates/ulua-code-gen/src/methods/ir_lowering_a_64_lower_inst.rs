@@ -39,6 +39,7 @@ use crate::{
     interrupt_handler_ir_lowering_a_64::InterruptHandler,
     ir_block::IrBlock,
     ir_const::IrConst,
+    ir_data::K_INVALID_INST_IDX,
     ir_inst::IrInst,
     ir_lowering_a_64::IrLoweringA64,
     ir_op::IrOp,
@@ -56,7 +57,6 @@ const K_TSTRING_LEN_OFFSET: i32 = 36;
 const K_BUFFER_LEN_OFFSET: i32 = 16;
 const K_OFFSET_OF_TKEY_TAG_NEXT: i32 = 12;
 const K_TKEY_TAG_BITS: i32 = 4;
-const K_INVALID_INST_IDX: u32 = IrLoweringA64::K_INVALID_INST_IDX;
 const FEATURE_JSCVT: u32 = FeaturesA64::FeatureJscvt as u32;
 const FEATURE_ADV_SIMD: u32 = FeaturesA64::FeatureAdvSimd as u32;
 const LUA_TNIL: u8 = LuaType::Nil as u8;

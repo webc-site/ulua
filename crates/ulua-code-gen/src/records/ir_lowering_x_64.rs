@@ -32,7 +32,3 @@ pub struct IrLoweringX64 {
   pub exit_sync_alloc_token: u32,
   pub exit_sync_inst_idx: u32,
 }
-
-impl IrLoweringX64 {
-  pub(crate) const K_INVALID_INST_IDX: u32 = !0u32;
-}

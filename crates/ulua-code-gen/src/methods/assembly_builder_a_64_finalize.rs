@@ -13,11 +13,11 @@ impl AssemblyBuilderA64 {
 
     let pending_labels = take(&mut self.pending_labels);
     for fixup in pending_labels {
-      let label = fixup.label();
+      let label = fixup.label;
       CODEGEN_ASSERT!(self.label_locations[label as usize - 1] != !0u32);
       let value = (self.label_locations[label as usize - 1] as i32) - (fixup.location as i32);
 
-      self.patch_offset(fixup.location, value, fixup.kind());
+      self.patch_offset(fixup.location, value, fixup.kind);
     }
 
     let data_size = self.data.len() - self.data_pos;

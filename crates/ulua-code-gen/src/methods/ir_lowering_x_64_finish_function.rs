@@ -10,7 +10,7 @@ use crate::{
     operand_x_64::OperandX64,
     register_x_64::RegisterX64,
   },
-  type_aliases::instruction_ir_translation::Instruction,
+  type_aliases::instruction_ir_builder::Instruction,
 };
 
 const K_VM_EXIT_ENTRY_GUARD_PC: u32 = (1u32 << 28) - 1;

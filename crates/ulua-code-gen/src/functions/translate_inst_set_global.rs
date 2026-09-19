@@ -6,7 +6,7 @@ use ulua_vm::type_aliases::lua_node::LuaNode;
 use crate::{
   enums::ir_cmd::IrCmd,
   records::{fallback_stream_scope::FallbackStreamScope, ir_builder::IrBuilder},
-  type_aliases::instruction_ir_translation::Instruction,
+  type_aliases::instruction_ir_builder::Instruction,
 };
 
 /// # Safety

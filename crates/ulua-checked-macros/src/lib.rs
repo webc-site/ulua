@@ -5,6 +5,7 @@
 
 use proc_macro::TokenStream;
 
+mod error;
 mod expand_file;
 mod expand_inline;
 mod fields;

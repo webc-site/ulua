@@ -4,8 +4,8 @@ use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHa
 
 use crate::records::{
   array_value_entry::ArrayValueEntry, buffer_load_store_info::BufferLoadStoreInfo,
-  ir_builder::IrBuilder, ir_function::IrFunction, ir_inst::IrInst, ir_inst_eq::IrInstEq,
-  ir_inst_hash::IrInstHash, ir_op::IrOp, node_slot_state::NodeSlotState,
+  ir_builder::IrBuilder, ir_data::K_INVALID_INST_IDX, ir_function::IrFunction, ir_inst::IrInst,
+  ir_inst_eq::IrInstEq, ir_inst_hash::IrInstHash, ir_op::IrOp, node_slot_state::NodeSlotState,
   numbered_instruction::NumberedInstruction, register_info::RegisterInfo,
   register_link::RegisterLink,
 };
@@ -65,7 +65,7 @@ impl ConstPropState {
     self.check_buffer_len_cache.clear();
     self.useradata_tag_cache.clear();
     self.buffer_load_store_info.clear();
-    self.load_env_idx = !0;
+    self.load_env_idx = K_INVALID_INST_IDX;
     self.inst_not_readonly.clear();
     self.inst_no_metatable.clear();
     self.inst_array_size.clear();

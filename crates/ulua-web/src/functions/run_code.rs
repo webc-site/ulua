@@ -5,8 +5,8 @@
 //! results, and returns "" on success or a formatted error (with source:line
 //! prefix and stack backtrace) on failure.
 
-use alloc::string::String;
 use core::{mem, ptr::null_mut};
+use std::string::String;
 
 use ulua_ast::records::parse_options::ParseOptions;
 use ulua_bytecode::records::bytecode_encoder::NoopEncoder;

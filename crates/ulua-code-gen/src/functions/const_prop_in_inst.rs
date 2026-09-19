@@ -523,9 +523,7 @@ pub fn const_prop_in_inst(
           {
             unsafe {
               let array_size_op = (&(*value_ptr).ops)[0];
-              (*info).known_not_readonly_deprecated = true;
-              (*info).known_no_metatable_deprecated = true;
-              (*info).known_table_array_size_deprecated = function.uint_op(array_size_op) as i32;
+              (*info).known_table_array_size = function.uint_op(array_size_op) as i32;
             }
           }
         }
@@ -1861,8 +1859,8 @@ pub fn const_prop_in_inst(
         }
       } else if let Some(info) = state.try_get_register_info(op_b_ref(inst)) {
         unsafe {
-          if (*info).known_table_array_size_deprecated >= 0 {
-            let replacement = build.const_uint((*info).known_table_array_size_deprecated as u32);
+          if (*info).known_table_array_size >= 0 {
+            let replacement = build.const_uint((*info).known_table_array_size as u32);
             replace_ir_function_ir_op_ir_op(function, &mut inst.ops[5], replacement);
           }
         }

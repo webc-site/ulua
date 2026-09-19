@@ -5,7 +5,7 @@ use ulua_vm::enums::tms::TMS;
 
 use crate::{
   functions::translate_inst_binary_numeric::translate_inst_binary_numeric,
-  records::ir_builder::IrBuilder, type_aliases::instruction_ir_translation::Instruction,
+  records::ir_builder::IrBuilder, type_aliases::instruction_ir_builder::Instruction,
 };
 
 /// # Safety
