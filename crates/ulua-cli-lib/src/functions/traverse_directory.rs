@@ -1,7 +1,7 @@
 //! cpp `traverseDirectory` + 静态 `traverseDirectoryRec`（CLI/src/ FileUtils.cpp）
 use std::{fs::read_dir, path::Path};
 
-/// 递归收集 `path` 下全部文件，回调收到完整路径；目录不可读返回 false
+/// 递归收集 `path` 下全部文件，回调收到完整路径；仅顶层目录不可读时返回 false
 pub fn traverse_directory(path: &str, mut callback: impl FnMut(&str)) -> bool {
   traverse_directory_rec(path, &mut callback)
 }
@@ -26,8 +26,10 @@ fn traverse_directory_rec(path: &str, callback: &mut impl FnMut(&str)) -> bool {
     let full_path = path_obj.join(&file_name);
     let path_str = full_path.to_string_lossy();
 
-    if file_type.is_dir() && !traverse_directory_rec(path_str.as_ref(), callback) {
-      return false;
+    if file_type.is_dir() {
+      // cpp `traverseDirectoryRec` 丢弃递归返回值（FileUtils.cpp:260,318）：
+      // 子目录不可读只跳过该子树，不得中断同层/父级遍历
+      let _ = traverse_directory_rec(path_str.as_ref(), callback);
     } else if file_type.is_file() {
       callback(path_str.as_ref());
     }

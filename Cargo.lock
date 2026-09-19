@@ -684,6 +684,7 @@ dependencies = [
 name = "ulua-cli-test"
 version = "0.1.2"
 dependencies = [
+ "tempfile",
  "ulua-cli-lib",
  "ulua-common",
  "ulua-config",
