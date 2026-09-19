@@ -37,7 +37,7 @@ impl Compiler {
       }
 
       if let Some(cv) = self.constants.find(&node)
-        && cv.r#type != Type::Unknown
+        && !cv.is_unknown()
       {
         let cv = *cv;
         self.compile_expr_constant(node, &cv, target);

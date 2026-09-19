@@ -11,7 +11,7 @@ use ulua_ast::{
 };
 use ulua_common::enums::luau_opcode::LuauOpcode;
 
-use crate::{enums::type_constant_folding::Type, records::compiler::Compiler};
+use crate::records::compiler::Compiler;
 
 impl Compiler {
   /// # Safety
@@ -24,7 +24,7 @@ impl Compiler {
     only_truth: bool,
   ) {
     if let Some(cv) = self.constants.find(&node)
-      && cv.r#type != Type::Unknown
+      && !cv.is_unknown()
     {
       if cv.is_truthful() == only_truth {
         if !target.is_null() {

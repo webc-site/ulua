@@ -8,7 +8,6 @@ use ulua_bytecode::methods::bytecode_builder_get_string_hash::bytecode_builder_g
 use ulua_common::{enums::luau_opcode::LuauOpcode, fflag};
 
 use crate::{
-  enums::type_constant_folding::Type,
   functions::{
     escape_and_append::escape_and_append, sref_compiler::sref_ast_name,
     sref_compiler_alt_c::sref_ast_array_c_char,
@@ -16,6 +15,7 @@ use crate::{
   records::{
     compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
     compiler::Compiler,
+    constant::Constant,
   },
 };
 
@@ -48,7 +48,7 @@ impl Compiler {
         escape_and_append(&mut format_string, string.as_bytes());
         if let Some(&sub_expr) = expressions.get(i) {
           if let Some(c) = self.constants.find(&sub_expr)
-            && c.r#type == Type::String
+            && matches!(c, Constant::Str(_))
           {
             escape_and_append(&mut format_string, c.get_string_bytes());
             sub_is_string_const.push(true);

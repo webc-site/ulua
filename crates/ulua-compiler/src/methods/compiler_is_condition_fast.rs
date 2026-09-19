@@ -8,7 +8,7 @@ use ulua_ast::{
   rtti::ast_node_as,
 };
 
-use crate::{enums::type_constant_folding::Type, records::compiler::Compiler};
+use crate::records::compiler::Compiler;
 
 impl Compiler {
   pub fn is_condition_fast(&mut self, node: *mut AstExpr) -> bool {
@@ -19,9 +19,7 @@ impl Compiler {
 
       let cv = self.constants.find(&node);
 
-      if let Some(constant) = cv
-        && constant.r#type != Type::Unknown
-      {
+      if cv.is_some_and(|constant| !constant.is_unknown()) {
         return true;
       }
 

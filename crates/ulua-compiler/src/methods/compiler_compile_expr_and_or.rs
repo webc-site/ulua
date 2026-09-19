@@ -1,7 +1,7 @@
 use ulua_ast::records::ast_expr_binary::{AstExprBinary, AstExprBinaryOp};
 use ulua_common::enums::luau_opcode::LuauOpcode;
 
-use crate::{enums::type_constant_folding::Type, records::compiler::Compiler};
+use crate::records::compiler::Compiler;
 
 impl Compiler {
   /// # Safety
@@ -18,7 +18,7 @@ impl Compiler {
       let mut rs = self.reg_scope_compiler();
 
       if let Some(cl) = self.constants.find(&expr_ref.left)
-        && cl.r#type != Type::Unknown
+        && !cl.is_unknown()
       {
         self.compile_expr(
           if and_ == cl.is_truthful() {
