@@ -30,14 +30,15 @@ pub fn get_documentation_symbol_at_position(
   let ancestry = find_ast_ancestry_of_position_source_module_position_bool(source, position, false);
 
   // C++: ancestry[...]->asExpr() — base-class downcast, not concrete RTTI.
-  let target_expr = if !ancestry.is_empty() {
-    unsafe { (*ancestry[ancestry.len() - 1]).as_expr() }
-  } else {
-    null_mut()
+  // 先把裸指针从 ancestry 复制出来，再交给 `as_expr`（`&mut self` 下转需要可变 place）
+  let target_expr = match ancestry.last().copied() {
+    Some(node) => unsafe { (*node).as_expr() },
+    None => null_mut(),
   };
 
   let parent_expr = if ancestry.len() >= 2 {
-    unsafe { (*ancestry[ancestry.len() - 2]).as_expr() }
+    let parent_node = ancestry[ancestry.len() - 2];
+    unsafe { (*parent_node).as_expr() }
   } else {
     null_mut()
   };

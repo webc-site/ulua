@@ -20,8 +20,18 @@
 use core::ptr::{null, null_mut};
 
 use crate::records::{
-  ast_expr::AstExpr, ast_node::AstNode, ast_stat::AstStat, ast_stat_assign::AstStatAssign,
-  ast_stat_block::AstStatBlock, ast_stat_break::AstStatBreak, ast_stat_class::AstStatClass,
+  ast_expr::AstExpr, ast_expr_binary::AstExprBinary, ast_expr_call::AstExprCall,
+  ast_expr_constant_bool::AstExprConstantBool, ast_expr_constant_integer::AstExprConstantInteger,
+  ast_expr_constant_nil::AstExprConstantNil, ast_expr_constant_number::AstExprConstantNumber,
+  ast_expr_constant_string::AstExprConstantString, ast_expr_error::AstExprError,
+  ast_expr_function::AstExprFunction, ast_expr_global::AstExprGlobal, ast_expr_group::AstExprGroup,
+  ast_expr_if_else::AstExprIfElse, ast_expr_index_expr::AstExprIndexExpr,
+  ast_expr_index_name::AstExprIndexName, ast_expr_instantiate::AstExprInstantiate,
+  ast_expr_interp_string::AstExprInterpString, ast_expr_local::AstExprLocal,
+  ast_expr_table::AstExprTable, ast_expr_type_assertion::AstExprTypeAssertion,
+  ast_expr_unary::AstExprUnary, ast_expr_varargs::AstExprVarargs, ast_node::AstNode,
+  ast_stat::AstStat, ast_stat_assign::AstStatAssign, ast_stat_block::AstStatBlock,
+  ast_stat_break::AstStatBreak, ast_stat_class::AstStatClass,
   ast_stat_compound_assign::AstStatCompoundAssign, ast_stat_continue::AstStatContinue,
   ast_stat_declare_extern_type::AstStatDeclareExternType,
   ast_stat_declare_function::AstStatDeclareFunction, ast_stat_declare_global::AstStatDeclareGlobal,
@@ -206,6 +216,37 @@ pub unsafe fn ast_node_try_as_mut<T: AstNodeClass>(node: &mut AstNode) -> Option
   } else {
     None
   }
+}
+
+/// 基类家族判别：`node->asExpr()` 的判别面（cpp `AstNode::asExpr()` 只在 21 个
+/// `AstExpr` 派生类上非空）。与 [`is_stat_class`] 同理，判别表集中于此，供
+/// `as_expr`（可变）与 `as_expr_const`（只读）共用。
+#[inline]
+pub fn is_expr_class(class_index: i32) -> bool {
+  matches!(
+    class_index,
+    AstExprBinary::CLASS_INDEX
+      | AstExprCall::CLASS_INDEX
+      | AstExprConstantBool::CLASS_INDEX
+      | AstExprConstantInteger::CLASS_INDEX
+      | AstExprConstantNil::CLASS_INDEX
+      | AstExprConstantNumber::CLASS_INDEX
+      | AstExprConstantString::CLASS_INDEX
+      | AstExprError::CLASS_INDEX
+      | AstExprFunction::CLASS_INDEX
+      | AstExprGlobal::CLASS_INDEX
+      | AstExprGroup::CLASS_INDEX
+      | AstExprIfElse::CLASS_INDEX
+      | AstExprIndexExpr::CLASS_INDEX
+      | AstExprIndexName::CLASS_INDEX
+      | AstExprInstantiate::CLASS_INDEX
+      | AstExprInterpString::CLASS_INDEX
+      | AstExprLocal::CLASS_INDEX
+      | AstExprTable::CLASS_INDEX
+      | AstExprTypeAssertion::CLASS_INDEX
+      | AstExprUnary::CLASS_INDEX
+      | AstExprVarargs::CLASS_INDEX
+  )
 }
 
 /// 基类家族判别：`node->asStat()` 的判别面（cpp `AstNode::asStat()` 只在 21 个

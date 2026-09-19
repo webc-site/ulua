@@ -1,6 +1,6 @@
 use ulua_ast::{
   records::{ast_expr_function::AstExprFunction, ast_node::AstNode, position::Position},
-  rtti::ast_node_is,
+  rtti::{ast_node_is, is_expr_class},
 };
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
@@ -19,7 +19,7 @@ pub fn autocomplete_keywords(
   let node = *ancestry.last().unwrap();
 
   let is_expr_function = unsafe { ast_node_is::<AstExprFunction>(&*node) };
-  let is_expr = unsafe { !(*node).as_expr().is_null() };
+  let is_expr = unsafe { is_expr_class((*node).class_index) };
 
   if !is_expr_function && is_expr {
     result.insert(
