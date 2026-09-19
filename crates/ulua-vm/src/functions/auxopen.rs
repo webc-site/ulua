@@ -2,9 +2,7 @@ use core::{ffi::c_char, ptr::null};
 
 use crate::{
   functions::lua_setfield::lua_setfield,
-  macros::{
-    lua_pushcclosure::lua_pushcclosure, lua_pushcfunction::LUA_PUSHCFUNCTION,
-  },
+  macros::{lua_pushcclosure::lua_pushcclosure, lua_pushcfunction::LUA_PUSHCFUNCTION},
   type_aliases::{lua_c_function::LuaCFunction, lua_state::lua_State},
 };
 

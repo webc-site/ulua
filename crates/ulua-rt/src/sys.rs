@@ -10,6 +10,10 @@ pub(crate) use core::ffi::{c_char, c_int, c_void};
 
 // ---- garbage collection --------------------------------------------------
 pub(crate) use ulua_vm::enums::lua_gc_op::LuaGcOp;
+// ---- 状态/类型标签（唯一真相在 ulua-vm 的枚举里，边界处 `as c_int`）------
+pub(crate) use ulua_vm::enums::{
+  lua_co_status::LuaCoStatus, lua_status::LuaStatus, lua_type::LuaType,
+};
 // ---- interrupts / sandbox / memory categories (Luau) ---------------------
 pub(crate) use ulua_vm::functions::lua_callbacks::lua_callbacks;
 // ---- refs / call / load --------------------------------------------------
@@ -79,9 +83,4 @@ pub(crate) use ulua_vm::{
   },
   records::lua_debug::LuaDebug,
   type_aliases::lua_state::lua_State,
-};
-
-// ---- 状态/类型标签（唯一真相在 ulua-vm 的枚举里，边界处 `as c_int`）------
-pub(crate) use ulua_vm::enums::{
-  lua_co_status::LuaCoStatus, lua_status::LuaStatus, lua_type::LuaType,
 };

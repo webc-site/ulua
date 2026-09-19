@@ -5,8 +5,7 @@ use crate::{
     lua_setreadonly::lua_setreadonly, lua_setsafeenv::lua_setsafeenv, lua_type::lua_type,
   },
   macros::{
-    lua_globalsindex::LUA_GLOBALSINDEX, lua_pop::lua_pop,
-    lua_pushliteral::lua_pushliteral,
+    lua_globalsindex::LUA_GLOBALSINDEX, lua_pop::lua_pop, lua_pushliteral::lua_pushliteral,
   },
   type_aliases::lua_state::lua_State,
 };

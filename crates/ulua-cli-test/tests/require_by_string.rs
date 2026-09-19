@@ -459,9 +459,7 @@ fn require_by_string_parse_aliases() {
   use ulua_config::{
     functions::parse_config::parse_config,
     records::{
-      alias_info::AliasInfo,
-      alias_options::AliasOptions,
-      config::Config,
+      alias_info::AliasInfo, alias_options::AliasOptions, config::Config,
       config_options::ConfigOptions,
     },
   };

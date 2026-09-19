@@ -1,8 +1,6 @@
 use core::ffi::{CStr, c_char};
 
-use crate::{
-  functions::lua_pushlstring::lua_pushlstring, type_aliases::lua_state::lua_State,
-};
+use crate::{functions::lua_pushlstring::lua_pushlstring, type_aliases::lua_state::lua_State};
 
 /// cpp `lua.h:517` `#define lua_pushliteral(L, s) lua_pushlstring(L, "" s, len)` 对应：
 /// 长度即 C 字符串字节数，直接转发 `lua_pushlstring`，无返回值。

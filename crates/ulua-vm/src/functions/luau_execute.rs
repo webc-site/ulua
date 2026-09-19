@@ -557,11 +557,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut lua_State) {
                   continue 'dispatch;
                 }
 
-                let fn_tm = fasttm(
-                  l,
-                  (*(*l).global).mt[LuaType::Vector as usize],
-                  TMS::TmIndex,
-                );
+                let fn_tm = fasttm(l, (*(*l).global).mt[LuaType::Vector as usize], TMS::TmIndex);
 
                 if !fn_tm.is_null() && ttisfunction!(fn_tm) && (*clvalue!(fn_tm)).is_c != 0 {
                   // note: it's safe to push arguments past top for

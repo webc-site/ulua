@@ -158,11 +158,7 @@ pub unsafe fn execute_gettableks(
     let mut fn_tm: *const TValue;
     if ttisuserdata!(rb as *const TValue)
       && {
-        fn_tm = fasttm(
-          l,
-          uvalue!(rb as *const TValue).metatable,
-          TMS::TmIndex,
-        );
+        fn_tm = fasttm(l, uvalue!(rb as *const TValue).metatable, TMS::TmIndex);
         !fn_tm.is_null()
       }
       && ttisfunction!(fn_tm)
@@ -191,11 +187,7 @@ pub unsafe fn execute_gettableks(
         return pc_ptr;
       }
 
-      fn_tm = fasttm(
-        l,
-        (*(*l).global).mt[LuaType::Vector as usize],
-        TMS::TmIndex,
-      );
+      fn_tm = fasttm(l, (*(*l).global).mt[LuaType::Vector as usize], TMS::TmIndex);
 
       if !fn_tm.is_null() && ttisfunction!(fn_tm) && (*clvalue!(fn_tm)).is_c != 0 {
         ulua_common::LUAU_ASSERT!((*l).top.add(3) < (*l).stack.add((*l).stacksize as usize));

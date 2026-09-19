@@ -61,7 +61,11 @@ impl State {
   /// 栈顶字符串（错误消息）
   unsafe fn top_string(&self) -> String {
     unsafe {
-      assert_eq!(lua_type(self.l, -1), LuaType::String as i32, "栈顶必须是错误字符串");
+      assert_eq!(
+        lua_type(self.l, -1),
+        LuaType::String as i32,
+        "栈顶必须是错误字符串"
+      );
       let mut len = 0;
       let p = lua_tolstring(self.l, -1, &mut len);
       assert!(!eq(p, null()));
@@ -140,7 +144,7 @@ impl ProtoSpec<'_> {
     }
 
     blob.varint(0); // typesize：无类型信息
-    blob.varint(self.sizecode.unwrap_or_else(|| self.code.len() as u32));
+    blob.varint(self.sizecode.unwrap_or(self.code.len() as u32));
 
     for insn in self.code {
       blob.u32le(*insn);
@@ -194,7 +198,10 @@ fn assert_malformed(blob: &[u8], expect: &str) {
       message.starts_with("malformed: "),
       "错误必须以 chunkid 起头: {message}"
     );
-    assert!(message.contains(expect), "错误消息应含 {expect}，实际 {message}");
+    assert!(
+      message.contains(expect),
+      "错误消息应含 {expect}，实际 {message}"
+    );
   }
 }
 
@@ -297,7 +304,10 @@ fn forward_inner_proto_ref_is_rejected() {
 /// main proto id 越界
 #[test]
 fn main_proto_id_beyond_table_is_rejected() {
-  assert_malformed(&proto_blob(&[ProtoSpec::default()], 5), "main proto id is out of range");
+  assert_malformed(
+    &proto_blob(&[ProtoSpec::default()], 5),
+    "main proto id is out of range",
+  );
 }
 
 /// protoCount=0 时 mainid 无从指向

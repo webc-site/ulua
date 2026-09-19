@@ -97,11 +97,7 @@ pub unsafe fn execute_settableks(
     let fn_tm: *const TValue;
     if ttisuserdata!(rb as *const TValue)
       && {
-        fn_tm = fasttm(
-          l,
-          uvalue!(rb as *const TValue).metatable,
-          TMS::TmNewIndex,
-        );
+        fn_tm = fasttm(l, uvalue!(rb as *const TValue).metatable, TMS::TmNewIndex);
         !fn_tm.is_null()
       }
       && ttisfunction!(fn_tm)

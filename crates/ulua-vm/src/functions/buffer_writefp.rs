@@ -7,9 +7,8 @@ use ulua_common::macros::luau_big_endian::LUAU_BIG_ENDIAN;
 
 use crate::{
   functions::{
-    buffer_errors::buffer_oob_error, buffer_swapbe::SwapBe,
-    lua_l_checkbuffer::lua_l_checkbuffer, lua_l_checkinteger::lua_l_checkinteger,
-    lua_l_checknumber::lua_l_checknumber,
+    buffer_errors::buffer_oob_error, buffer_swapbe::SwapBe, lua_l_checkbuffer::lua_l_checkbuffer,
+    lua_l_checkinteger::lua_l_checkinteger, lua_l_checknumber::lua_l_checknumber,
   },
   macros::isoutofbounds::isoutofbounds,
   type_aliases::lua_state::lua_State,

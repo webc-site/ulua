@@ -32,8 +32,7 @@ use ulua_vm::{
   },
   macros::{
     lua_globalsindex::LUA_GLOBALSINDEX, lua_pop::lua_pop,
-    lua_pushlightuserdata::lua_pushlightuserdata,
-    lua_registryindex::LUA_REGISTRYINDEX,
+    lua_pushlightuserdata::lua_pushlightuserdata, lua_registryindex::LUA_REGISTRYINDEX,
   },
   records::lua_state,
 };

@@ -1,4 +1,3 @@
-
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
@@ -49,9 +48,12 @@ pub(crate) unsafe fn validatetable(g: *mut global_State, h: *mut LuaTable) {
       LUAU_ASSERT!(i + next_val >= 0 && i + next_val < sizenode);
 
       if !ttisnil!(gval!(n)) {
-        let mut k = TValue::default();
-        k.tt = (*gkey!(n)).tt();
-        k.value = (*gkey!(n)).value;
+        let src = &*gkey!(n);
+        let k = TValue {
+          tt: src.tt(),
+          value: src.value,
+          ..Default::default()
+        };
 
         validateref(g, h_gco, &k);
         validateref(g, h_gco, &*gval!(n));

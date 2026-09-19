@@ -223,7 +223,11 @@ pub(crate) unsafe fn loadsafe(
 
       while index != 0 {
         let Some(name) = read_string(strings, data, size, &mut offset) else {
-          malformed!(l, chunkname, "bytecode userdata type name id is out of range");
+          malformed!(
+            l,
+            chunkname,
+            "bytecode userdata type name id is out of range"
+          );
         };
 
         if ((index - 1) as usize) < USERDATA_TYPE_LIMIT
@@ -586,7 +590,11 @@ pub(crate) unsafe fn loadsafe(
             // We take over the upper 16 bits of AUX - so no constants with big indices.
             if aux < 0x10000 {
               let Some(k) = constant_at(p, i64::from(aux)) else {
-                malformed!(l, chunkname, "bytecode direct access constant index is out of range");
+                malformed!(
+                  l,
+                  chunkname,
+                  "bytecode direct access constant index is out of range"
+                );
               };
               let s = tsvalue!(k) as *mut tstring;
 
@@ -623,7 +631,11 @@ pub(crate) unsafe fn loadsafe(
 
       (*p).linedefined = read_var_int(data, size, &mut offset) as c_int;
       let Some(debugname) = read_string(strings, data, size, &mut offset) else {
-        malformed!(l, chunkname, "bytecode debug name string id is out of range");
+        malformed!(
+          l,
+          chunkname,
+          "bytecode debug name string id is out of range"
+        );
       };
       (*p).debugname = debugname;
 
@@ -665,7 +677,11 @@ pub(crate) unsafe fn loadsafe(
         let sizelocvars = read_var_int(data, size, &mut offset) as c_int;
         // 每个 LocVar 至少占 4 字节（varname/startpc/endpc 各 1 + reg 1）
         if !count_fits(i64::from(sizelocvars), 4, size, offset) {
-          malformed!(l, chunkname, "bytecode local variable count is out of range");
+          malformed!(
+            l,
+            chunkname,
+            "bytecode local variable count is out of range"
+          );
         }
 
         (*p).locvars = luaM_newarray!(l, sizelocvars as usize, LocVar, (*p).hdr.memcat);
@@ -673,7 +689,11 @@ pub(crate) unsafe fn loadsafe(
 
         for locvar in c_slice_mut((*p).locvars, (*p).sizelocvars as usize) {
           let Some(varname) = read_string(strings, data, size, &mut offset) else {
-            malformed!(l, chunkname, "bytecode local variable name id is out of range");
+            malformed!(
+              l,
+              chunkname,
+              "bytecode local variable name id is out of range"
+            );
           };
           locvar.varname = varname;
           locvar.startpc = read_var_int(data, size, &mut offset) as c_int;
