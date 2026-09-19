@@ -8,9 +8,8 @@ use crate::{
     metatable_type::MetatableType,
     table_type::TableType,
     type_checker_2::TypeChecker2,
-    type_error_data::TypeErrorData,
   },
-  type_aliases::type_id::TypeId,
+  type_aliases::{type_error_data::TypeErrorData, type_id::TypeId},
 };
 impl TypeChecker2 {
   pub fn type_checker_2_index_expr_metatable_helper(

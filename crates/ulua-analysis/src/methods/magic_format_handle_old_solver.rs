@@ -17,10 +17,12 @@ use crate::{
     module::Module,
     type_checker::TypeChecker,
     type_error::TypeError,
-    type_error_data::TypeErrorData,
     with_predicate::WithPredicate,
   },
-  type_aliases::{scope_ptr_type::ScopePtr, type_id::TypeId, type_pack_id::TypePackId},
+  type_aliases::{
+    scope_ptr_type::ScopePtr, type_error_data::TypeErrorData, type_id::TypeId,
+    type_pack_id::TypePackId,
+  },
 };
 pub fn magic_format_handle_old_solver(
   typechecker: &mut TypeChecker,

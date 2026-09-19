@@ -5,7 +5,10 @@ use core::{
 };
 
 use ulua_ast::records::ast_expr::AstExpr;
-use ulua_common::{fflag, records::dense_hash_map::DenseHashMap as CommonDenseHashMap};
+use ulua_common::{
+  fflag,
+  records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet},
+};
 
 use crate::{
   enums::polarity::Polarity,
@@ -16,11 +19,10 @@ use crate::{
     push_type_into::push_type_into, unwrap_group::unwrap_group,
   },
   records::{
-    constraint::Constraint, constraint_solver::ConstraintSolver, dense_hash_map::DenseHashMap,
-    dense_hash_set::DenseHashSet, function_check_constraint::FunctionCheckConstraint,
-    function_type::FunctionType, generic_type::GenericType,
-    internal_error_reporter::InternalErrorReporter, push_type_constraint::PushTypeConstraint,
-    scope::Scope, unifier_2::Unifier2,
+    constraint::Constraint, constraint_solver::ConstraintSolver,
+    function_check_constraint::FunctionCheckConstraint, function_type::FunctionType,
+    generic_type::GenericType, internal_error_reporter::InternalErrorReporter,
+    push_type_constraint::PushTypeConstraint, scope::Scope, unifier_2::Unifier2,
   },
   type_aliases::{constraint_v::ConstraintV, type_id::TypeId, type_pack_id::TypePackId},
 };
@@ -54,7 +56,7 @@ impl ConstraintSolver {
       let blocked_types = unsafe {
         find_blocked_arg_types_in(
           c.call_site,
-          c.ast_types as *mut CommonDenseHashMap<*const AstExpr, TypeId>,
+          c.ast_types as *mut DenseHashMap<*const AstExpr, TypeId>,
         )
       };
       for ty in &blocked_types {
@@ -135,9 +137,8 @@ impl ConstraintSolver {
       let expr = unwrap_group(*arg);
 
       let result = push_type_into(
-        NonNull::new(c.ast_types as *mut CommonDenseHashMap<*const AstExpr, TypeId>).unwrap(),
-        NonNull::new(c.ast_expected_types as *mut CommonDenseHashMap<*const AstExpr, TypeId>)
-          .unwrap(),
+        NonNull::new(c.ast_types as *mut DenseHashMap<*const AstExpr, TypeId>).unwrap(),
+        NonNull::new(c.ast_expected_types as *mut DenseHashMap<*const AstExpr, TypeId>).unwrap(),
         NonNull::new(self as *mut ConstraintSolver).unwrap(),
         NonNull::new(constraint as *mut Constraint).unwrap(),
         NonNull::new(&mut generic_types_and_packs as *mut DenseHashSet<*const c_void>).unwrap(),

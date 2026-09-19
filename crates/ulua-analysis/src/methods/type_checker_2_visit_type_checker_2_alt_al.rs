@@ -27,10 +27,10 @@ use crate::{
     property_access_violation::{self, PropertyAccessViolation},
     table_type::TableType,
     type_checker_2::TypeChecker2,
-    type_error_data::TypeErrorData,
     type_iterator::TypeIterator,
     union_type::UnionType,
   },
+  type_aliases::type_error_data::TypeErrorData,
 };
 impl TypeChecker2 {
   pub fn visit_ast_expr_index_expr_value_context(
