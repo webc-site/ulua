@@ -1,5 +1,5 @@
-use alloc::string::String;
 use core::{ffi::c_char, ptr::null_mut};
+use std::ffi::CString;
 
 use ulua_cli_lib::functions::{
   normalize_path::normalize_path, read_file::read_file, setup_arguments::setup_arguments,
@@ -47,13 +47,14 @@ pub unsafe fn run_file(
     // new thread needs to have the globals sandboxed
     lua_l_sandboxthread(l);
 
-    let chunkname = String::from("@") + &normalize_path(name) + "\0";
+    // cpp Repl.cpp:604 `("@" + normalizePath(name)).c_str()`：由 CString 负责终止符
+    let chunkname = CString::new(format!("@{}", normalize_path(name))).unwrap_or_default();
 
     let bytecode = compile_source(&source);
 
     let status: i32 = if luau_load(
       l,
-      chunkname.as_ptr() as *const c_char,
+      chunkname.as_ptr(),
       bytecode.as_ptr() as *const c_char,
       bytecode.len(),
       0,

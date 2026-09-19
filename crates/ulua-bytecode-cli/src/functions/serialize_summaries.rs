@@ -14,9 +14,9 @@ pub fn serialize_summaries(
   script_summaries: &[Vec<FunctionBytecodeSummary>],
   summary_file: &str,
 ) -> bool {
-  let clean_path = summary_file.trim_matches('\0');
-  let Ok(file) = File::create(clean_path) else {
-    eprintln!("Unable to open '{clean_path}'.");
+  // `--summary-file=` 的参数值不含 NUL，无需裁剪
+  let Ok(file) = File::create(summary_file) else {
+    eprintln!("Unable to open '{summary_file}'.");
     return false;
   };
 

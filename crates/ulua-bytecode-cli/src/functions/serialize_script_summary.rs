@@ -13,8 +13,8 @@ pub fn serialize_script_summary<W: Write>(
   script_summary: &[FunctionBytecodeSummary],
   out: &mut W,
 ) -> Result<()> {
-  let clean_file = file.trim_matches('\0');
-  let escaped = escape_filename(clean_file);
+  // 路径来自 `getSourceFiles`，不含 NUL（cpp 侧同样直接用 std::string）
+  let escaped = escape_filename(file);
 
   writeln!(out, "    \"{escaped}\": [")?;
 

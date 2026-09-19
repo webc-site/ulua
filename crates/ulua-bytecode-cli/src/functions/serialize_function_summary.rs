@@ -10,8 +10,9 @@ pub fn serialize_function_summary<W: Write>(
   let nesting_limit = summary.get_nesting_limit();
   let op_limit = summary.get_op_limit();
 
-  let source = summary.get_source().trim_matches('\0');
-  let name = summary.get_name().trim_matches('\0');
+  // summary 的 source/name 由 `CStr::from_ptr` 生成（不含终止符），无需再去 NUL
+  let source = summary.get_source();
+  let name = summary.get_name();
 
   writeln!(out, "        {{")?;
   writeln!(out, "            \"source\": \"{source}\",")?;
