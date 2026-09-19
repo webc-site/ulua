@@ -115,16 +115,13 @@ impl Parser {
             Position::missing()
           };
           let comma_positions_array = self.copy_temp_vector_t(&arg_comma_positions);
-          let cst_node = unsafe {
-            (*self.allocator).alloc(CstTypePackExplicit::with_positions(
+          self.attach_cst(node, |alloc| {
+            alloc.alloc(CstTypePackExplicit::with_positions(
               open_pos,
               close_pos,
               comma_positions_array,
             ))
-          };
-          self
-            .cst_node_map
-            .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
+          });
         }
         return AstTypeOrPack {
           r#type: null_mut(),
@@ -143,10 +140,7 @@ impl Parser {
           } else {
             Position::missing()
           };
-          let cst_node = unsafe { (*self.allocator).alloc(CstTypeGroup::new(close_pos)) };
-          self
-            .cst_node_map
-            .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
+          self.attach_cst(node, |alloc| alloc.alloc(CstTypeGroup::new(close_pos)));
         }
         return AstTypeOrPack {
           r#type: node as *mut AstType,
@@ -177,16 +171,13 @@ impl Parser {
           Position::missing()
         };
         let comma_positions_array = self.copy_temp_vector_t(&arg_comma_positions);
-        let cst_node = unsafe {
-          (*self.allocator).alloc(CstTypePackExplicit::with_positions(
+        self.attach_cst(node, |alloc| {
+          alloc.alloc(CstTypePackExplicit::with_positions(
             open_pos,
             close_pos,
             comma_positions_array,
           ))
-        };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
+        });
       }
       return AstTypeOrPack {
         r#type: null_mut(),
@@ -222,8 +213,8 @@ impl Parser {
       } else {
         Position::missing()
       };
-      let cst_node = unsafe {
-        (*self.allocator).alloc(CstTypeFunction::new(
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstTypeFunction::new(
           generics_open_position,
           generics_comma_positions,
           generics_close_position,
@@ -233,10 +224,7 @@ impl Parser {
           close_args_pos,
           return_arrow_position,
         ))
-      };
-      self
-        .cst_node_map
-        .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
+      });
     }
 
     AstTypeOrPack {
