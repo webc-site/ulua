@@ -23,9 +23,11 @@
 //! The capture mirrors `lua_b_print` exactly (tab-separated args, trailing
 //! newline, `luaL_tolstring` coercion) so observable behavior is unchanged.
 
-use alloc::string::{String, ToString};
 use core::{cell::RefCell, ffi::c_int, mem};
-use std::panic;
+use std::{
+  panic,
+  string::{String, ToString},
+};
 
 use ulua_cli_lib::records::lua_state_guard::LuaStateGuard;
 use ulua_common::set_luau_bool_flags;

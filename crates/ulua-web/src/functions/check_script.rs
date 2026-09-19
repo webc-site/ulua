@@ -7,13 +7,16 @@
 //! caches the result in a function-`static std::string` so the returned pointer
 //! outlives the call; the Rust analog is a thread-local `CString`.
 
-use alloc::string::{String, ToString};
 use core::{
   any::Any,
   cell::RefCell,
   ffi::{c_char, c_int},
 };
-use std::{ffi::CString, panic::catch_unwind};
+use std::{
+  ffi::CString,
+  panic::catch_unwind,
+  string::{String, ToString},
+};
 
 use ulua_analysis::{
   enums::solver_mode::SolverMode,

@@ -7,7 +7,7 @@
 //! }
 //! ```
 
-use alloc::string::String;
+use std::string::String;
 
 use ulua_analysis::type_aliases::module_name_type::ModuleName;
 
