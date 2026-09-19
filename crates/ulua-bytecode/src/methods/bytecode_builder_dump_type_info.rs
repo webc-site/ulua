@@ -1,4 +1,4 @@
-use alloc::string::String;
+use std::string::String;
 
 use ulua_common::{
   enums::luau_bytecode_type::{LBC_TYPE_FUNCTION, LBC_TYPE_OPTIONAL_BIT},

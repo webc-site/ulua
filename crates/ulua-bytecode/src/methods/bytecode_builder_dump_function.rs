@@ -1,4 +1,4 @@
-use alloc::string::String;
+use std::string::String;
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 

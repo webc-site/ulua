@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use std::vec::Vec;
 
 use crate::records::bytecode_builder::BytecodeBuilder;
 

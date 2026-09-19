@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use std::vec::Vec;
 
 use ulua_common::{
   enums::luau_opcode::LuauOpcode, functions::is_jump_d::is_jump_d, macros::luau_assert::LUAU_ASSERT,

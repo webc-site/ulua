@@ -1,5 +1,4 @@
-use alloc::vec::Vec;
-use std::collections::HashSet;
+use std::{collections::HashSet, vec::Vec};
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 

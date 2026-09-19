@@ -1,4 +1,4 @@
-use alloc::{collections::VecDeque, vec::Vec};
+use std::{collections::VecDeque, vec::Vec};
 
 use crate::{records::bc_op::BcOp, type_aliases::bc_edges::BcEdges};
 

@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use std::vec::Vec;
 
 use crate::{
   functions::write_var_int::write_var_int,

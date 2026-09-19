@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use std::{string::String, vec::Vec};
 
 use ulua_common::{macros::luau_assert::LUAU_ASSERT, records::dense_hash_map::DenseHashMap};
 

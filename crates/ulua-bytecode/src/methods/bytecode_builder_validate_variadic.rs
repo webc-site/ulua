@@ -1,4 +1,4 @@
-use alloc::vec;
+use std::vec;
 
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,

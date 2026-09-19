@@ -1,4 +1,4 @@
-use alloc::string::String;
+use std::string::String;
 
 use crate::records::{bytecode_builder::BytecodeBuilder, string_ref::StringRef};
 

@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use std::vec::Vec;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct ClassShape {

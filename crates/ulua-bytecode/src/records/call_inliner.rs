@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use std::vec::Vec;
 
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet};
 

@@ -1,4 +1,4 @@
-use alloc::vec::Vec;
+use std::vec::Vec;
 
 use crate::records::{
   bc_function::BcFunction, bytecode_builder::BytecodeBuilder, jump_info::JumpInfo,

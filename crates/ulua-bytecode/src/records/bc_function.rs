@@ -1,5 +1,4 @@
-use alloc::{string::String, vec::Vec};
-use std::collections::HashMap;
+use std::{collections::HashMap, string::String, vec::Vec};
 
 use ulua_common::enums::luau_bytecode_type::LuauBytecodeType;
 
@@ -47,5 +46,8 @@ pub struct BcFunction {
   pub upvalue_names: Vec<String>,
   pub locals: Vec<DebugLocal>,
 
+  /// cpp `BcFunction::regs` 即 `std::unordered_map<BcOp, Reg, BcOpHash>`：
+  /// 保持 std HashMap 而非 DenseHashMap——键域内不存在可证明不可达的哨兵值
+  /// （kind 判别最小的合法 op 也可能全零），硬选哨兵会重演 B3 的相撞风险。
   pub regs: HashMap<BcOp, Reg, BcOpHash>,
 }

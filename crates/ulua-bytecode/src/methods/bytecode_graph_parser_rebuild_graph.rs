@@ -1,6 +1,8 @@
-use alloc::{collections::VecDeque, vec::Vec};
 use core::cmp;
-use std::collections::HashSet;
+use std::{
+  collections::{HashSet, VecDeque},
+  vec::Vec,
+};
 
 use ulua_common::{
   enums::{luau_capture_type::LuauCaptureType, luau_opcode::LuauOpcode},

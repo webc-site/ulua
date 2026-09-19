@@ -1,4 +1,4 @@
-use alloc::{collections::VecDeque, vec::Vec};
+use std::{collections::VecDeque, vec::Vec};
 
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,

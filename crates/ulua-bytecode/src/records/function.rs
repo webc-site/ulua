@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use std::{string::String, vec::Vec};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Default)]
 pub struct Function {

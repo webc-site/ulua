@@ -1,5 +1,5 @@
-use alloc::vec::Vec;
 use core::marker::PhantomData;
+use std::vec::Vec;
 
 use ulua_common::enums::luau_opcode::LuauOpcode;
 

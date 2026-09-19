@@ -1,5 +1,5 @@
-use alloc::{string::String, vec};
 use core::cmp::min;
+use std::{string::String, vec};
 
 use ulua_common::{
   fflag,

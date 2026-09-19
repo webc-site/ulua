@@ -1,5 +1,5 @@
-use alloc::{string::String, vec, vec::Vec};
 use core::mem::size_of;
+use std::{string::String, vec, vec::Vec};
 
 use ulua_common::{
   enums::{

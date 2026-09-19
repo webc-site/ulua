@@ -16,8 +16,7 @@ crate-type = ["rlib"]
 memchr = { version = "2.8", default-features = false, features = ["alloc"] }
 ulua-common = { path = "../ulua-common", version = "0.1.2" }
 
-[features]
-default = ["std"]
-std = []
-wasm = []
+# 本 crate 为 std-only 移植：旧 [features] 段的 default/std/wasm 全为零消费点
+# 的空特性（无 cfg(feature=...) 门控），且库根曾 `extern crate alloc` 造成
+# alloc/std 双路径混写。已统一 std 路径，故删除虚假 no_std 特性面。
 

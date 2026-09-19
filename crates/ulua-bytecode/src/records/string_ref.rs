@@ -1,7 +1,3 @@
-use alloc::{
-  borrow::Cow,
-  string::String,
-};
 use core::{
   ffi::c_char,
   fmt::{self, Display, Formatter},
@@ -10,6 +6,7 @@ use core::{
   ptr, slice,
   str::{Utf8Error, from_utf8},
 };
+use std::{borrow::Cow, string::String};
 
 /// cpp `BytecodeBuilder::StringRef` —— 指向外部所有字节的**非拥有**视图。
 ///
