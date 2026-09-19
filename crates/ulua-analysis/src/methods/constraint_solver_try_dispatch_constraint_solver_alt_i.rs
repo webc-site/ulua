@@ -16,13 +16,13 @@ use crate::{
     push_type_into::push_type_into, unwrap_group::unwrap_group,
   },
   records::{
-    constraint::Constraint, constraint_solver::ConstraintSolver, constraint_v::ConstraintV,
-    dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet,
-    function_check_constraint::FunctionCheckConstraint, function_type::FunctionType,
-    generic_type::GenericType, internal_error_reporter::InternalErrorReporter,
-    push_type_constraint::PushTypeConstraint, scope::Scope, unifier_2::Unifier2,
+    constraint::Constraint, constraint_solver::ConstraintSolver, dense_hash_map::DenseHashMap,
+    dense_hash_set::DenseHashSet, function_check_constraint::FunctionCheckConstraint,
+    function_type::FunctionType, generic_type::GenericType,
+    internal_error_reporter::InternalErrorReporter, push_type_constraint::PushTypeConstraint,
+    scope::Scope, unifier_2::Unifier2,
   },
-  type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
+  type_aliases::{constraint_v::ConstraintV, type_id::TypeId, type_pack_id::TypePackId},
 };
 impl ConstraintSolver {
   /// # Safety

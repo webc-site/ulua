@@ -23,13 +23,13 @@ use crate::{
   methods::type_checker_check_binary_operation::is_any_like,
   records::{
     any_type::AnyType, boolean_singleton::BooleanSingleton,
-    cannot_infer_binary_operation::CannotInferBinaryOperation, error_type::ErrorType,
-    free_type::FreeType, function_type::FunctionType, generic_error::GenericError, module::Module,
+    cannot_infer_binary_operation::CannotInferBinaryOperation, free_type::FreeType,
+    function_type::FunctionType, generic_error::GenericError, module::Module,
     never_type::NeverType, primitive_type::PrimitiveType, singleton_type::SingletonType,
     type_checker::TypeChecker, union_type::UnionType,
   },
   type_aliases::{
-    predicate_vec::PredicateVec, scope_ptr_type::ScopePtr,
+    error_type::ErrorType, predicate_vec::PredicateVec, scope_ptr_type::ScopePtr,
     singleton_variant::SingletonVariantMember, type_error_data::TypeErrorData, type_id::TypeId,
   },
 };

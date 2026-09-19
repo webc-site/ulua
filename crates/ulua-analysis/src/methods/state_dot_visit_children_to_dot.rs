@@ -9,18 +9,18 @@ use crate::{
   functions::{get_type_alt_j::get_type_id, to_string_to_string_alt_c::to_string_type_id},
   records::{
     any_type::AnyType, blocked_type::BlockedType, boolean_singleton::BooleanSingleton,
-    error_type::ErrorType, extern_type::ExternType, free_type::FreeType,
-    function_type::FunctionType, generic_type::GenericType, intersection_type::IntersectionType,
-    lazy_type::LazyType, metatable_type::MetatableType, negation_type::NegationType,
-    never_type::NeverType, no_refine_type::NoRefineType,
-    pending_expansion_type::PendingExpansionType, primitive_type::PrimitiveType,
-    singleton_type::SingletonType, state_dot::StateDot, string_singleton::StringSingleton,
-    table_type::TableType, type_function_instance_type::TypeFunctionInstanceType,
-    union_type::UnionType, unknown_type::UnknownType,
+    extern_type::ExternType, free_type::FreeType, function_type::FunctionType,
+    generic_type::GenericType, intersection_type::IntersectionType, lazy_type::LazyType,
+    metatable_type::MetatableType, negation_type::NegationType, never_type::NeverType,
+    no_refine_type::NoRefineType, pending_expansion_type::PendingExpansionType,
+    primitive_type::PrimitiveType, singleton_type::SingletonType, state_dot::StateDot,
+    string_singleton::StringSingleton, table_type::TableType,
+    type_function_instance_type::TypeFunctionInstanceType, union_type::UnionType,
+    unknown_type::UnknownType,
   },
   type_aliases::{
-    bound_type::BoundType, props_type::Props, singleton_variant::SingletonVariantMember,
-    type_id::TypeId,
+    bound_type::BoundType, error_type::ErrorType, props_type::Props,
+    singleton_variant::SingletonVariantMember, type_id::TypeId,
   },
 };
 impl StateDot {

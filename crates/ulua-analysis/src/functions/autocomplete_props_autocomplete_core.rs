@@ -15,16 +15,16 @@ use crate::{
     get_singleton_type::get_singleton_type, get_type_alt_j::get_type_id, is_nil::is_nil,
   },
   records::{
-    autocomplete_entry::AutocompleteEntry, builtin_types::BuiltinTypes, error_type::ErrorType,
-    extern_type::ExternType, function_type::FunctionType, intersection_type::IntersectionType,
+    autocomplete_entry::AutocompleteEntry, builtin_types::BuiltinTypes, extern_type::ExternType,
+    function_type::FunctionType, intersection_type::IntersectionType,
     metatable_type::MetatableType, module::Module, never_type::NeverType,
     primitive_type::PrimitiveType, property_type::Property, property_type_path, scope::Scope,
     singleton_type::SingletonType, string_singleton::StringSingleton, table_type::TableType,
     type_arena::TypeArena, union_type::UnionType,
   },
   type_aliases::{
-    autocomplete_entry_map::AutocompleteEntryMap, collections::HashSet, props_type::Props,
-    type_id::TypeId,
+    autocomplete_entry_map::AutocompleteEntryMap, collections::HashSet, error_type::ErrorType,
+    props_type::Props, type_id::TypeId,
   },
 };
 const K_PARSE_NAME_ERROR: &str = "%error-id%";

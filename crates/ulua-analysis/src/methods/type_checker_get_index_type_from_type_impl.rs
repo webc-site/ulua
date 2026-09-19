@@ -12,14 +12,14 @@ use crate::{
     lookup_extern_type_prop::lookup_extern_type_prop, reduce_union::reduce_union,
   },
   records::{
-    any_type::AnyType, error_type::ErrorType, extern_type::ExternType,
-    intersection_type::IntersectionType, missing_union_property::MissingUnionProperty,
-    module::Module, never_type::NeverType, property_type::Property,
-    recursion_limiter::RecursionLimiter, type_checker::TypeChecker, union_type::UnionType,
-    unknown_property::UnknownProperty,
+    any_type::AnyType, extern_type::ExternType, intersection_type::IntersectionType,
+    missing_union_property::MissingUnionProperty, module::Module, never_type::NeverType,
+    property_type::Property, recursion_limiter::RecursionLimiter, type_checker::TypeChecker,
+    union_type::UnionType, unknown_property::UnknownProperty,
   },
   type_aliases::{
-    name_type::Name, scope_ptr_type::ScopePtr, type_error_data::TypeErrorData, type_id::TypeId,
+    error_type::ErrorType, name_type::Name, scope_ptr_type::ScopePtr,
+    type_error_data::TypeErrorData, type_id::TypeId,
   },
 };
 impl TypeChecker {

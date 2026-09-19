@@ -7,9 +7,12 @@ use crate::{
   records::{
     blocked_type::BlockedType, constraint_generator::ConstraintGenerator,
     normalization_too_complex::NormalizationTooComplex, scope::Scope,
-    subtype_constraint::SubtypeConstraint, symbol::Symbol, type_error_data::TypeErrorData,
+    subtype_constraint::SubtypeConstraint, symbol::Symbol,
   },
-  type_aliases::{constraint_v::ConstraintV, scope_ptr_type::ScopePtr, type_id::TypeId},
+  type_aliases::{
+    constraint_v::ConstraintV, scope_ptr_type::ScopePtr, type_error_data::TypeErrorData,
+    type_id::TypeId,
+  },
 };
 impl ConstraintGenerator {
   // ConstraintGenerator::visitLValue(const ScopePtr&, AstExprLocal*, TypeId)

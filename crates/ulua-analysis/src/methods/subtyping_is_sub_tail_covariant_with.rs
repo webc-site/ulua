@@ -16,18 +16,17 @@ use crate::{
     path_builder_variadic::PathBuilderVariadic,
   },
   records::{
-    error_type_pack::ErrorTypePack, free_type_pack::FreeTypePack,
-    generic_pack_mapping::GenericPackMapping, generic_type_pack::GenericTypePack, index::Index,
-    pack_slice::PackSlice, pack_subtype_constraint::PackSubtypeConstraint, path::Path,
-    path_builder::PathBuilder, scope::Scope, subtyping::Subtyping,
-    subtyping_environment::SubtypingEnvironment, subtyping_result::SubtypingResult,
-    type_error::TypeError, type_pack::TypePack,
+    free_type_pack::FreeTypePack, generic_pack_mapping::GenericPackMapping,
+    generic_type_pack::GenericTypePack, index::Index, pack_slice::PackSlice,
+    pack_subtype_constraint::PackSubtypeConstraint, path::Path, path_builder::PathBuilder,
+    scope::Scope, subtyping::Subtyping, subtyping_environment::SubtypingEnvironment,
+    subtyping_result::SubtypingResult, type_error::TypeError, type_pack::TypePack,
     unexpected_type_pack_in_subtyping::UnexpectedTypePackInSubtyping,
     variadic_type_pack::VariadicTypePack,
   },
   type_aliases::{
-    component::Component, constraint_v::ConstraintV, lookup_result::LookupResult, type_id::TypeId,
-    type_pack_id::TypePackId,
+    component::Component, constraint_v::ConstraintV, error_type_pack::ErrorTypePack,
+    lookup_result::LookupResult, type_id::TypeId, type_pack_id::TypePackId,
   },
 };
 /// `is_sub_tail_covariant_with` 的参数包（C++ Subtyping.cpp:1180 十参数签名，

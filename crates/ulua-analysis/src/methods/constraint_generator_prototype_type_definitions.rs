@@ -26,7 +26,7 @@ use crate::{
     is_valid_class_metamethod::is_valid_class_metamethod,
   },
   records::{
-    binding::Binding, blocked_type::BlockedType, bound_type::BoundType,
+    binding::Binding, blocked_type::BlockedType,
     built_in_type_function_error::BuiltInTypeFunctionError, class_decl_record::ClassDeclRecord,
     constraint_generator::ConstraintGenerator, duplicate_type_definition::DuplicateTypeDefinition,
     extern_type::ExternType, function_type::FunctionType, generic_error::GenericError,
@@ -37,8 +37,8 @@ use crate::{
     type_level::TypeLevel, user_defined_function_data::UserDefinedFunctionData,
   },
   type_aliases::{
-    name_type::Name, nominal_relation::NominalRelation, scope_ptr_type::ScopePtr,
-    type_error_data::TypeErrorData, type_id::TypeId,
+    bound_type::BoundType, name_type::Name, nominal_relation::NominalRelation,
+    scope_ptr_type::ScopePtr, type_error_data::TypeErrorData, type_id::TypeId,
   },
 };
 /// 类的默认构造/静态属性名（C++ `new`，两处同款）。

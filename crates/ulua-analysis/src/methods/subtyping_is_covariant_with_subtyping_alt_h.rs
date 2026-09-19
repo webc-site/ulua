@@ -2,13 +2,13 @@ use crate::{
   enums::{subtyping_suppression_policy::SubtypingSuppressionPolicy, type_field::TypeField},
   functions::{follow_type::follow_type_id, get_type_alt_j::get_type_id},
   records::{
-    any_type::AnyType, error_type::ErrorType, function_type::FunctionType,
-    intersection_type::IntersectionType, metatable_type::MetatableType,
-    negation_type::NegationType, never_type::NeverType, scope::Scope, subtyping::Subtyping,
-    subtyping_environment::SubtypingEnvironment, subtyping_result::SubtypingResult,
-    table_type::TableType, union_type::UnionType, unknown_type::UnknownType,
+    any_type::AnyType, function_type::FunctionType, intersection_type::IntersectionType,
+    metatable_type::MetatableType, negation_type::NegationType, never_type::NeverType,
+    scope::Scope, subtyping::Subtyping, subtyping_environment::SubtypingEnvironment,
+    subtyping_result::SubtypingResult, table_type::TableType, union_type::UnionType,
+    unknown_type::UnknownType,
   },
-  type_aliases::{component::Component, type_id::TypeId},
+  type_aliases::{component::Component, error_type::ErrorType, type_id::TypeId},
 };
 
 impl Subtyping {

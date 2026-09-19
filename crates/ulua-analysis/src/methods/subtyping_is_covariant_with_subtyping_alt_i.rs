@@ -4,7 +4,6 @@ use crate::{
   records::{
     any_type::AnyType,
     boolean_singleton::BooleanSingleton,
-    error_type::ErrorType,
     extern_type::ExternType,
     function_type::FunctionType,
     intersection_type::IntersectionType,
@@ -22,7 +21,7 @@ use crate::{
     union_type::UnionType,
     unknown_type::UnknownType,
   },
-  type_aliases::{component::Component, type_id::TypeId},
+  type_aliases::{component::Component, error_type::ErrorType, type_id::TypeId},
 };
 
 impl Subtyping {

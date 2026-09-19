@@ -15,7 +15,6 @@ use crate::{
   records::{
     any_type::AnyType,
     blocked_type::BlockedType,
-    error_type::ErrorType,
     extern_type::ExternType,
     free_type::FreeType,
     function_type::FunctionType,
@@ -37,7 +36,9 @@ use crate::{
     union_type::UnionType,
     unknown_type::UnknownType,
   },
-  type_aliases::{component::Component, constraint_v::ConstraintV, type_id::TypeId},
+  type_aliases::{
+    component::Component, constraint_v::ConstraintV, error_type::ErrorType, type_id::TypeId,
+  },
 };
 impl Subtyping {
   /// # Safety

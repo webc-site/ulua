@@ -17,13 +17,12 @@ use crate::{
   },
   records::{
     any_type::AnyType, cannot_infer_binary_operation::CannotInferBinaryOperation,
-    error_type::ErrorType, free_type::FreeType, function_type::FunctionType,
-    generic_error::GenericError, module::Module, never_type::NeverType, r#type::Type,
-    type_checker::TypeChecker, union_type::UnionType,
+    free_type::FreeType, function_type::FunctionType, generic_error::GenericError, module::Module,
+    never_type::NeverType, r#type::Type, type_checker::TypeChecker, union_type::UnionType,
   },
   type_aliases::{
-    predicate_vec::PredicateVec, scope_ptr_type::ScopePtr, type_error_data::TypeErrorData,
-    type_id::TypeId,
+    error_type::ErrorType, predicate_vec::PredicateVec, scope_ptr_type::ScopePtr,
+    type_error_data::TypeErrorData, type_id::TypeId,
   },
 };
 impl TypeChecker {

@@ -17,15 +17,17 @@ use crate::{
     subtyping_is_sub_tail_covariant_with::SubTailCovariantArgs,
   },
   records::{
-    error_type_pack::ErrorTypePack, free_type_pack::FreeTypePack,
-    generic_type_pack::GenericTypePack, index::Index,
+    free_type_pack::FreeTypePack, generic_type_pack::GenericTypePack, index::Index,
     non_exceptional_recursion_limiter::NonExceptionalRecursionLimiter, nothing::Nothing,
     pack_subtype_constraint::PackSubtypeConstraint, scope::Scope, subtyping::Subtyping,
     subtyping_environment::SubtypingEnvironment, subtyping_result::SubtypingResult,
     type_error::TypeError, unexpected_type_pack_in_subtyping::UnexpectedTypePackInSubtyping,
     variadic_type_pack::VariadicTypePack,
   },
-  type_aliases::{component::Component, constraint_v::ConstraintV, type_pack_id::TypePackId},
+  type_aliases::{
+    component::Component, constraint_v::ConstraintV, error_type_pack::ErrorTypePack,
+    type_pack_id::TypePackId,
+  },
 };
 impl Subtyping {
   /// # Safety

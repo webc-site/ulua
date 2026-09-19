@@ -4,8 +4,8 @@ use ulua_config::records::config::Config;
 
 use crate::{
   records::{
-    frontend::FrontendStats, frontend_options::FrontendOptions,
-    require_cycle::RequireCycle, source_module::SourceModule, source_node::SourceNode,
+    frontend::FrontendStats, frontend_options::FrontendOptions, require_cycle::RequireCycle,
+    source_module::SourceModule, source_node::SourceNode,
   },
   type_aliases::{
     module_name_type::ModuleName, module_ptr_module::ModulePtr, scope_ptr_type::ScopePtr,

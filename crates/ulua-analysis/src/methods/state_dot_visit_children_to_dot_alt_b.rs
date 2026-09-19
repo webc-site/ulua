@@ -3,11 +3,12 @@ use ulua_common::{functions::format_append::format_append, macros::luau_assert::
 use crate::{
   functions::get_type_pack::get_type_pack_id,
   records::{
-    error_type_pack::ErrorTypePack, free_type_pack::FreeTypePack,
-    generic_type_pack::GenericTypePack, state_dot::StateDot, type_pack::TypePack,
-    variadic_type_pack::VariadicTypePack,
+    free_type_pack::FreeTypePack, generic_type_pack::GenericTypePack, state_dot::StateDot,
+    type_pack::TypePack, variadic_type_pack::VariadicTypePack,
   },
-  type_aliases::{bound_type_pack::BoundTypePack, type_pack_id::TypePackId},
+  type_aliases::{
+    bound_type_pack::BoundTypePack, error_type_pack::ErrorTypePack, type_pack_id::TypePackId,
+  },
 };
 impl StateDot {
   pub fn visit_children_type_pack_id_i32(&mut self, tp: TypePackId, index: i32) {
