@@ -47,7 +47,7 @@ use crate::{
     printer::{IntoNodePtr, Printer},
     writer::Writer,
   },
-  rtti::{ast_node_is, ast_node_try_as, ast_node_try_as_mut},
+  rtti::{ast_node_is, ast_node_try_as},
 };
 
 /// 数组表 indexer 的键类型名（解析器对 `{T}` 数组表固定生成 number 键）。

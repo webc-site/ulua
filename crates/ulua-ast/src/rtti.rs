@@ -177,20 +177,20 @@ pub fn ast_node_try_as<T: AstNodeClass>(node: &AstNode) -> Option<&T> {
   }
 }
 
-/// `ast_node_try_as::<T>(node)` 的可变形态：独占借用进、`Option<&'a mut T>` 出。
+/// `ast_node_try_as::<T>(node)` 的可变形态：独占借用进、`Option<&mut T>` 出。
 ///
-/// 生命周期 `'a` 由入参借用供给（不再凭空造 `'static`）：调用方交出的
-/// `&'a mut AstNode` 本身就是该节点在 `'a` 内的独占证明，下转只是把同一个
+/// 输出生命周期由入参借用供给（不再凭空造 `'static`）：调用方交出的
+/// `&mut AstNode` 本身就是该节点在借用期内独占证明，下转只是把同一个
 /// place 的所有权形态换成派生类型（`#[repr(C)]` 单继承保证基址重合）。
 /// 只读场景请用 [`ast_node_try_as`]。
 ///
 /// # Safety
 /// `node` 必须指向 arena 中存活的 repr(C) 节点（同 [`ast_node_as`]），且调用方在
-/// `'a` 内确实独占该节点（arena 无其他并发借用）。
+/// 返回引用的整个生命周期内确实独占该节点（arena 无其他并发借用）。
 #[inline]
-pub unsafe fn ast_node_try_as_mut<'a, T: AstNodeClass>(
-  node: &'a mut AstNode,
-) -> Option<&'a mut T> {
+pub unsafe fn ast_node_try_as_mut<T: AstNodeClass>(
+  node: &mut AstNode,
+) -> Option<&mut T> {
   if node.class_index == T::CLASS_INDEX {
     // SAFETY: 动态类型已由 class_index 判定，`&mut AstNode` 的独占借用经
     // repr(C) 首字段（基址重合）转写为 `&mut T`，与原借用同一 place、同一

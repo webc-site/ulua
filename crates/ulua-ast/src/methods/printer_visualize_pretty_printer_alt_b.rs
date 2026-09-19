@@ -35,7 +35,6 @@ use crate::{
     ast_expr_type_assertion::AstExprTypeAssertion,
     ast_expr_unary::{AstExprUnary, AstExprUnaryOp},
     ast_expr_varargs::AstExprVarargs,
-    ast_node::AstNode,
     comma_separator_inserter::CommaSeparatorInserter,
     cst_expr_call::CstExprCall,
     cst_expr_constant_integer::CstExprConstantInteger,
@@ -52,7 +51,7 @@ use crate::{
     printer::{IntoNodePtr, Printer},
     writer::Writer,
   },
-  rtti::{ast_node_is, ast_node_try_as, ast_node_try_as_mut},
+  rtti::{ast_node_is, ast_node_try_as},
 };
 
 impl<'a, W: Writer> Printer<'a, W> {

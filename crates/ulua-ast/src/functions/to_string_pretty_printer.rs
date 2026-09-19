@@ -2,10 +2,7 @@ use alloc::string::String;
 use core::ptr::null_mut;
 
 use crate::{
-  records::{
-    ast_expr::AstExpr, ast_node::AstNode, ast_stat::AstStat, printer::Printer,
-    string_writer::StringWriter,
-  },
+  records::{ast_node::AstNode, printer::Printer, string_writer::StringWriter},
   type_aliases::cst_node_map::CstNodeMap,
 };
 

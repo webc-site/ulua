@@ -39,9 +39,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       let first_type = list.types.as_slice().first().map(|&p| unsafe { &*p });
 
       let should_parenthesize = unconditionally_parenthesize
-        && first_type
-          .as_deref()
-          .is_none_or(|t| ast_node_try_as::<AstTypeGroup>(&t.base).is_none());
+        && first_type.is_none_or(|t| ast_node_try_as::<AstTypeGroup>(&t.base).is_none());
 
       self.maybe_advance_and_write(&open_parentheses_position, "(", should_parenthesize);
 

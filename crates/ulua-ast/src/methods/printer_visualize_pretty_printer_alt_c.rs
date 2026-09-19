@@ -18,7 +18,6 @@ use crate::{
     ast_class_property::AstClassProperty,
     ast_expr_binary::AstExprBinaryOp,
     ast_local::AstLocal,
-    ast_node::AstNode,
     ast_stat::AstStat,
     ast_stat_assign::AstStatAssign,
     ast_stat_block::AstStatBlock,

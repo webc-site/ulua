@@ -33,9 +33,9 @@ impl Parser {
       local_stat.is_exported = true;
 
       // cpp: `for (AstLocal* local : statLocal->vars) { ...; local->isExported = true; }`
-      // —— 判重/报错按只读借用取值（iter_nodes），唯一的写入 `is_exported` 沿
-      // cpp 的指针形态经元素裸指针完成：从共享借用造 &mut 是 noalias UB。
-      for &local_ptr in local_stat.vars.iter_nodes_ptr() {
+      // —— 逐元素取裸指针副本（iter().copied()），只读判断用 `&*p`、唯一的写入
+      // `is_exported` 用 `(*p).…`：`iter_nodes()` 只能给 `&T`，而写穿必须走裸指针。
+      for local_ptr in local_stat.vars.iter().copied() {
         let local = unsafe { &*local_ptr };
         if !self.check_duplicate_export_value(local.name, local.location) {
           let stats = self.copy_initializer_list_t(&[stat]);
