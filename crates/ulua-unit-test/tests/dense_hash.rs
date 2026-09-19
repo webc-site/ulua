@@ -549,7 +549,6 @@ mod set_pointer_keys {
   //! C++ `Test*` 键镜像为裸指针 `*const Test`；`shared_ptr` 由 `Arc` 持有保活。
 
   struct Test {
-    #[expect(dead_code)]
     a: i32,
   }
 
@@ -566,6 +565,9 @@ mod set_pointer_keys {
     s.insert(Arc::as_ptr(&ta));
     s.insert(Arc::as_ptr(&tb));
 
+    // 键指向的对象确实存活且字段可读（替代 #[expect(dead_code)] 的压制）
+    assert_eq!(ta.a, 1);
+    assert_eq!(tb.a, 2);
     assert_eq!(s.size(), 2);
     assert!(s.contains(&Arc::as_ptr(&ta)));
     assert!(s.contains(&Arc::as_ptr(&tb)));
@@ -577,7 +579,6 @@ mod map_pointer_keys {
   //! Source: `tests/DenseHash.test.cpp:407-429`
 
   struct Test {
-    #[expect(dead_code)]
     a: i32,
   }
 
@@ -594,6 +595,9 @@ mod map_pointer_keys {
     m.insert(Arc::as_ptr(&ta), 1);
     m.insert(Arc::as_ptr(&tb), 2);
 
+    // 键指向的对象确实存活且字段可读（替代 #[expect(dead_code)] 的压制）
+    assert_eq!(ta.a, 1);
+    assert_eq!(tb.a, 2);
     assert_eq!(m.size(), 2);
     assert_eq!(*m.find(&Arc::as_ptr(&ta)).unwrap(), 1);
     assert_eq!(*m.find(&Arc::as_ptr(&tb)).unwrap(), 2);

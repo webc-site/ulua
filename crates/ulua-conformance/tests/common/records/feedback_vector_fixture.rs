@@ -6,7 +6,7 @@ use ulua_vm::{
   records::{Proto::Proto, closure::Closure, lua_state::lua_State},
 };
 
-use crate::common::{functions::alloc::alloc as luau_alloc, type_aliases::state_ref::StateRef};
+use crate::common::{functions::alloc::alloc as luau_alloc, records::state_ref::StateRef};
 pub struct FeedbackVectorFixture {
   pub bcb: BytecodeBuilder,
   pub l: StateRef,

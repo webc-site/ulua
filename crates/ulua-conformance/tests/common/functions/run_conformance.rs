@@ -60,7 +60,7 @@ use crate::common::{
     lua_collectgarbage::lua_collectgarbage, lua_loadstring::lua_loadstring,
     lua_silence::lua_silence,
   },
-  type_aliases::state_ref::StateRef,
+  records::state_ref::StateRef,
 };
 unsafe extern "C" {
   fn free(ptr: *mut c_void);

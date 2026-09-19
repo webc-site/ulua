@@ -18,8 +18,7 @@ use crate::common::{
     configure_codegen_options, cstr_to_str, luau_library_type_lookup_callback,
     make_assembly_options,
   },
-  records::lowering_fixture::LoweringFixture,
-  type_aliases::state_ref::StateRef,
+  records::{lowering_fixture::LoweringFixture, state_ref::StateRef},
 };
 
 // 与 `luau_compile` 内部的 malloc 配对：ir_lowering 树不含 c_alloc（realloc

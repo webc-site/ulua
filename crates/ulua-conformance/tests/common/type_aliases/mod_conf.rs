@@ -3,5 +3,3 @@
 pub mod scoped_fast_flag;
 #[path = "scoped_fast_int.rs"]
 pub mod scoped_fast_int;
-#[path = "state_ref.rs"]
-pub mod state_ref;

@@ -21,6 +21,8 @@ pub mod exception_result;
 pub mod feedback_vector_fixture;
 #[path = "scoped_f_value.rs"]
 pub mod scoped_f_value;
+#[path = "state_ref.rs"]
+pub mod state_ref;
 #[path = "vec_2_conformance_ir_hooks.rs"]
 pub mod vec_2_conformance_ir_hooks;
 #[path = "vec_2_direct_field_access_test.rs"]

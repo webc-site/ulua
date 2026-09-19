@@ -3,6 +3,8 @@
 pub mod lowering_fixture;
 #[path = "scoped_f_value.rs"]
 pub mod scoped_f_value;
+#[path = "state_ref.rs"]
+pub mod state_ref;
 #[path = "vec_2_conformance_ir_hooks.rs"]
 pub mod vec_2_conformance_ir_hooks;
 #[path = "vertex.rs"]

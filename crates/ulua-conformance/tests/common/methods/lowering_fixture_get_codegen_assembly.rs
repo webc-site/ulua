@@ -43,8 +43,7 @@ use crate::common::{
     vector_access_bytecode_type_callback, vector_access_callback,
     vector_namecall_bytecode_type_callback, vector_namecall_callback,
   },
-  records::lowering_fixture::LoweringFixture,
-  type_aliases::state_ref::StateRef,
+  records::{lowering_fixture::LoweringFixture, state_ref::StateRef},
 };
 
 #[inline]

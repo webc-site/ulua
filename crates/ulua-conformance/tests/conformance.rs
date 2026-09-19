@@ -19,9 +19,7 @@ fn conformance_api_alloc() {
 
   use ulua_vm::functions::{lua_getallocf::lua_getallocf, lua_newstate::lua_newstate};
 
-  use crate::common::{
-    functions::limited_realloc::limited_realloc, type_aliases::state_ref::StateRef,
-  };
+  use crate::common::{functions::limited_realloc::limited_realloc, records::state_ref::StateRef};
 
   let mut ud = 0;
   let global_state =
@@ -53,7 +51,7 @@ fn conformance_api_atoms() {
 
   use crate::common::{
     functions::conformance_api_atoms_useratom::conformance_api_atoms_useratom,
-    type_aliases::state_ref::StateRef,
+    records::state_ref::StateRef,
   };
 
   let global_state = StateRef::new(lua_l_newstate()).expect("lua state allocation failed");
@@ -102,7 +100,7 @@ fn conformance_api_buffer() {
     macros::{lua_isbuffer::lua_isbuffer, lua_pop::lua_pop},
   };
 
-  use crate::common::type_aliases::state_ref::StateRef;
+  use crate::common::records::state_ref::StateRef;
 
   let global_state = StateRef::new(lua_l_newstate()).expect("lua state allocation failed");
   let l = global_state.as_ptr();
@@ -437,7 +435,7 @@ fn conformance_api_iter() {
     macros::{lua_newtable::lua_newtable, lua_pop::lua_pop, lua_tonumber::lua_tonumber},
   };
 
-  use crate::common::type_aliases::state_ref::StateRef;
+  use crate::common::records::state_ref::StateRef;
 
   let global_state = StateRef::new(lua_l_newstate()).expect("lua state allocation failed");
   let l = global_state.as_ptr();
@@ -520,7 +518,7 @@ fn conformance_api_stack() {
       blockable_realloc::blockable_realloc, blockable_realloc_allowed::BLOCKABLE_REALLOC_ALLOWED,
       slowly_overflow_stack::slowly_overflow_stack,
     },
-    type_aliases::state_ref::StateRef,
+    records::state_ref::StateRef,
   };
 
   let global_state = StateRef::new(unsafe { lua_newstate(Some(blockable_realloc), null_mut()) })
@@ -575,7 +573,7 @@ fn conformance_api_tables() {
     },
   };
 
-  use crate::common::type_aliases::state_ref::StateRef;
+  use crate::common::records::state_ref::StateRef;
 
   let global_state = StateRef::new(lua_l_newstate()).expect("lua state allocation failed");
   let l = global_state.as_ptr();
@@ -676,7 +674,7 @@ fn conformance_api_type() {
     macros::{lua_newtable::lua_newtable, lua_newuserdata::lua_newuserdata},
   };
 
-  use crate::common::type_aliases::state_ref::StateRef;
+  use crate::common::records::state_ref::StateRef;
 
   let global_state = StateRef::new(lua_l_newstate()).expect("lua state allocation failed");
   let l = global_state.as_ptr();
@@ -1004,7 +1002,7 @@ fn conformance_codegen_nop_padding_deterministic_off() {
   use ulua_compiler::functions::luau_compile::luau_compile;
   use ulua_vm::functions::{lua_l_newstate::lua_l_newstate, luau_load::luau_load};
 
-  use crate::common::{functions::run_conformance::CODEGEN, type_aliases::state_ref::StateRef};
+  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
 
   unsafe extern "C" {
     fn free(ptr: *mut c_void);
@@ -1063,7 +1061,7 @@ fn conformance_codegen_randomize_code_size_non_decreasing() {
   use ulua_compiler::functions::luau_compile::luau_compile;
   use ulua_vm::functions::{lua_l_newstate::lua_l_newstate, luau_load::luau_load};
 
-  use crate::common::{functions::run_conformance::CODEGEN, type_aliases::state_ref::StateRef};
+  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
 
   unsafe extern "C" {
     fn free(ptr: *mut c_void);
@@ -1139,7 +1137,7 @@ fn conformance_codegen_randomize_functional_correctness() {
     macros::{lua_tonumber::lua_tonumber, lua_tostring::lua_tostring},
   };
 
-  use crate::common::{functions::run_conformance::CODEGEN, type_aliases::state_ref::StateRef};
+  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
 
   unsafe extern "C" {
     fn free(ptr: *mut c_void);
@@ -1319,7 +1317,7 @@ fn conformance_debug_api() {
     records::lua_debug::LuaDebug,
   };
 
-  use crate::common::type_aliases::state_ref::StateRef;
+  use crate::common::records::state_ref::StateRef;
 
   let global_state = StateRef::new(lua_l_newstate()).expect("lua state allocation failed");
   let l = global_state.as_ptr();
@@ -1545,8 +1543,9 @@ fn conformance_gc_dump() {
       conformance_gc_dump_node::conformance_gc_dump_node, lua_loadstring::lua_loadstring,
       lua_silence::lua_silence,
     },
-    records::conformance_gc_dump_enum_context::ConformanceGcDumpEnumContext,
-    type_aliases::state_ref::StateRef,
+    records::{
+      conformance_gc_dump_enum_context::ConformanceGcDumpEnumContext, state_ref::StateRef,
+    },
   };
 
   unsafe extern "C" {
@@ -1664,7 +1663,7 @@ fn conformance_huge_constant_table() {
     macros::lua_tonumber::lua_tonumber,
   };
 
-  use crate::common::{functions::run_conformance::CODEGEN, type_aliases::state_ref::StateRef};
+  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
 
   unsafe extern "C" {
     fn free(ptr: *mut c_void);
@@ -1756,7 +1755,7 @@ fn conformance_huge_function() {
 
   use crate::common::{
     functions::{make_huge_function_source::make_huge_function_source, run_conformance::CODEGEN},
-    type_aliases::state_ref::StateRef,
+    records::state_ref::StateRef,
   };
 
   unsafe extern "C" {
@@ -1830,7 +1829,7 @@ fn conformance_huge_function_load_failure() {
       },
       make_huge_function_source::make_huge_function_source,
     },
-    type_aliases::state_ref::StateRef,
+    records::state_ref::StateRef,
   };
 
   unsafe extern "C" {
@@ -2088,8 +2087,10 @@ fn conformance_interrupt_error_inspection() {
       conformance_interrupt_error_inspection_interrupt::conformance_interrupt_error_inspection_interrupt,
       conformance_interrupt_inspection_hook::conformance_interrupt_inspection_hook,
     },
-    records::conformance_interrupt_error_inspection_state::CONFORMANCE_INTERRUPT_ERROR_INSPECTION_STATE,
-    type_aliases::state_ref::StateRef,
+    records::{
+      conformance_interrupt_error_inspection_state::CONFORMANCE_INTERRUPT_ERROR_INSPECTION_STATE,
+      state_ref::StateRef,
+    },
   };
 
   unsafe extern "C" {
@@ -2189,8 +2190,8 @@ fn conformance_ir_instruction_limit() {
   };
 
   use crate::common::{
-    functions::run_conformance::CODEGEN,
-    type_aliases::{scoped_fast_int::ScopedFastInt, state_ref::StateRef},
+    functions::run_conformance::CODEGEN, records::state_ref::StateRef,
+    type_aliases::scoped_fast_int::ScopedFastInt,
   };
 
   unsafe extern "C" {
@@ -2310,7 +2311,8 @@ fn conformance_jit_inliner() {
       conformance_jit_inliner_interrupt::{JIT_INLINER_INDEX, conformance_jit_inliner_interrupt},
       run_conformance::run_conformance,
     },
-    type_aliases::{scoped_fast_flag::ScopedFastFlag, state_ref::StateRef},
+    records::state_ref::StateRef,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
   };
 
   let _luau_emit_call_feedback = ScopedFastFlag::new(&fflag::LuauEmitCallFeedback, true);
@@ -2395,7 +2397,7 @@ fn conformance_large_nested_closure() {
     macros::lua_tonumber::lua_tonumber,
   };
 
-  use crate::common::{functions::run_conformance::CODEGEN, type_aliases::state_ref::StateRef};
+  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
 
   unsafe extern "C" {
     fn free(ptr: *mut c_void);
@@ -2486,7 +2488,7 @@ fn conformance_lightuserdata_api() {
     macros::lua_pop::lua_pop,
   };
 
-  use crate::common::type_aliases::state_ref::StateRef;
+  use crate::common::records::state_ref::StateRef;
 
   let global_state = StateRef::new(lua_l_newstate()).expect("lua state allocation failed");
   let l = global_state.as_ptr();
@@ -2727,7 +2729,7 @@ fn conformance_native_attribute() {
     lua_l_sandboxthread::lua_l_sandboxthread, luau_load::luau_load,
   };
 
-  use crate::common::{functions::run_conformance::CODEGEN, type_aliases::state_ref::StateRef};
+  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
 
   unsafe extern "C" {
     fn free(ptr: *mut c_void);
@@ -2963,7 +2965,7 @@ fn conformance_new_userdata_overflow() {
 
   use crate::common::{
     functions::conformance_new_userdata_overflow_callback::conformance_new_userdata_overflow_callback,
-    type_aliases::state_ref::StateRef,
+    records::state_ref::StateRef,
   };
 
   let global_state = StateRef::new(lua_l_newstate()).expect("lua state allocation failed");
@@ -3061,7 +3063,7 @@ fn conformance_reference() {
       conformance_reference_dtor::conformance_reference_dtor,
       conformance_reference_dtor_hits::CONFORMANCE_REFERENCE_DTOR_HITS,
     },
-    type_aliases::state_ref::StateRef,
+    records::state_ref::StateRef,
   };
 
   CONFORMANCE_REFERENCE_DTOR_HITS.store(0, Ordering::SeqCst);
@@ -3164,7 +3166,7 @@ fn conformance_sandbox_without_libs() {
     macros::lua_globalsindex::LUA_GLOBALSINDEX,
   };
 
-  use crate::common::type_aliases::state_ref::StateRef;
+  use crate::common::records::state_ref::StateRef;
 
   let global_state = StateRef::new(lua_l_newstate()).expect("lua state allocation failed");
   let l = global_state.as_ptr();
@@ -3350,7 +3352,7 @@ fn conformance_userdata_alignment() {
       userdata_alignment_alloc::userdata_alignment_alloc,
       userdata_alignment_dtor::userdata_alignment_dtor,
     },
-    type_aliases::state_ref::StateRef,
+    records::state_ref::StateRef,
   };
 
   let global_state =
@@ -3403,7 +3405,7 @@ fn conformance_userdata_api() {
       userdata_api_inline_int_dtor::userdata_api_inline_int_dtor,
       userdata_api_tag_dtor::userdata_api_tag_dtor,
     },
-    type_aliases::state_ref::StateRef,
+    records::state_ref::StateRef,
   };
 
   USERDATA_API_DTOR_HITS.store(0, Ordering::SeqCst);
@@ -3670,7 +3672,8 @@ fn direct_field_access_handler_setboolean_result() {
       direct_field_access_get_non_zero_boolean::direct_field_access_get_non_zero_boolean,
       direct_field_access_k_tag_vec_2::K_TAG_VEC2, run_code::run_code,
     },
-    type_aliases::{scoped_fast_flag::ScopedFastFlag, state_ref::StateRef},
+    records::state_ref::StateRef,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
   };
 
   let _sff = ScopedFastFlag::new(&fflag::LuauDirectFieldGet, true);
@@ -3740,7 +3743,8 @@ fn direct_field_access_handler_setnumber_result() {
       direct_field_access_get_x_number::direct_field_access_get_x_number,
       direct_field_access_k_tag_vec_2::K_TAG_VEC2, run_code::run_code,
     },
-    type_aliases::{scoped_fast_flag::ScopedFastFlag, state_ref::StateRef},
+    records::state_ref::StateRef,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
   };
 
   let _sff = ScopedFastFlag::new(&fflag::LuauDirectFieldGet, true);
@@ -3798,7 +3802,8 @@ fn direct_field_access_multiple_fields_same_type_dispatch_independently() {
       direct_field_access_get_y_number::direct_field_access_get_y_number,
       direct_field_access_k_tag_vec_2::K_TAG_VEC2, run_code::run_code,
     },
-    type_aliases::{scoped_fast_flag::ScopedFastFlag, state_ref::StateRef},
+    records::state_ref::StateRef,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
   };
 
   let _sff = ScopedFastFlag::new(&fflag::LuauDirectFieldGet, true);
@@ -3865,7 +3870,8 @@ fn direct_field_access_repeated_access_handler_called_every_iteration() {
       direct_field_access_reset_handler_hit_count::direct_field_access_reset_handler_hit_count,
       run_code::run_code,
     },
-    type_aliases::{scoped_fast_flag::ScopedFastFlag, state_ref::StateRef},
+    records::state_ref::StateRef,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
   };
 
   let _lock = DIRECT_FIELD_ACCESS_TEST_MUTEX.lock().unwrap();
@@ -3934,7 +3940,8 @@ fn direct_field_access_same_field_name_different_tags_dispatch_independently() {
       direct_field_access_reset_handler_hit_count::direct_field_access_reset_handler_hit_count,
       run_code::run_code,
     },
-    type_aliases::{scoped_fast_flag::ScopedFastFlag, state_ref::StateRef},
+    records::state_ref::StateRef,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
   };
 
   let _lock = DIRECT_FIELD_ACCESS_TEST_MUTEX.lock().unwrap();
@@ -4016,7 +4023,8 @@ fn direct_field_access_unregistered_tag_falls_through_to_index_metamethod() {
       direct_field_access_reset_handler_hit_count::direct_field_access_reset_handler_hit_count,
       run_code::run_code,
     },
-    type_aliases::{scoped_fast_flag::ScopedFastFlag, state_ref::StateRef},
+    records::state_ref::StateRef,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
   };
 
   let _lock = DIRECT_FIELD_ACCESS_TEST_MUTEX.lock().unwrap();
@@ -5156,7 +5164,7 @@ fn shared_code_allocator_shared_allocation() {
 
   use crate::common::{
     functions::shared_code_allocator_module_id::shared_code_allocator_module_id as module_id,
-    type_aliases::state_ref::StateRef,
+    records::state_ref::StateRef,
   };
 
   unsafe extern "C" {
@@ -5288,7 +5296,7 @@ fn conformance_large_module_a64() {
     lua_tonumber,
   };
 
-  use crate::common::{functions::run_conformance::CODEGEN, type_aliases::state_ref::StateRef};
+  use crate::common::{functions::run_conformance::CODEGEN, records::state_ref::StateRef};
 
   unsafe extern "C" {
     fn free(ptr: *mut c_void);
