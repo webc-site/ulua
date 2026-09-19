@@ -5,13 +5,12 @@
 //! `using DenseHashDefault = std::conditional_t<is_pointer_v<T>, DenseHashPointer, std::hash<T>>;`
 //!
 //! Deviation (documented, behaviorally faithful): Rust has no stable
-//! specialization, so a single `K: Hash` blanket impl serves every key type,
-//! including raw pointers, via the inline FNV-1a hasher below. C++'s pointer
-//! specialization (`DenseHashPointer`，乘法混洗版，见
-//! `records::dense_hash_pointer`) and `std::hash`
-//! differ only in the constant scrambling — any consistent hash is correct
-//! here because `DenseHash` iteration order is not a contract. The exact
-//! `DenseHashPointer` remains available for explicit use.
+//! specialization, so a single `K: Hash` blanket impl serves every key type —
+//! raw pointers included — via the inline FNV-1a hasher below. cpp 的指针特化
+//! `DenseHashPointer`（HashUtil.h:14-26，乘法混洗 + 右移异或）因此不移植：
+//! 全仓零使用者，需要时按上游那 12 行补回即可。两者只差常量混洗强度：
+//! `DenseHash` 的迭代序从来不是契约，任何自洽哈希都正确，且槽位下标由
+//! `DenseHashTable::do_hash` 的 fibonacci 散射取高位，不依赖哈希函数的低位质量。
 
 use core::{
   hash::{Hash, Hasher},

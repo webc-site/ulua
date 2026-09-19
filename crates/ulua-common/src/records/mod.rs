@@ -1,6 +1,5 @@
 pub mod const_iterator;
 pub mod dense_hash_map;
-pub mod dense_hash_pointer;
 pub mod dense_hash_set;
 pub mod dense_hash_table;
 pub mod event;
