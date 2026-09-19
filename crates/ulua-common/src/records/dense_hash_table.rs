@@ -271,6 +271,11 @@ where
   /// cpp `getBucket`（DenseHash.h:619-641）：key 已存在时返回其槽位，否则
   /// 返回第一个空槽。调用方须保证容量非 0 且表未满（探测必然终止）。
   fn bucket_of(&self, key: &K) -> usize {
+    // cpp `DenseHash.h:622` `LUAU_ASSERT(count < capacity)`（"Guarantees that
+    // this function will terminate"）：表未满时线性探测必然撞上空槽，故下面的
+    // 无界 loop + get_unchecked 成立；容量 0 或表满都会让探测无限循环，
+    // 调用方（insert_unsafe / rehash）先经 rehash_if_full 保证此不变式。
+    debug_assert!(self.capacity > 0 && self.count < self.capacity);
     let hashmod = self.capacity - 1;
     let mut bucket = self.do_hash(key);
     loop {
