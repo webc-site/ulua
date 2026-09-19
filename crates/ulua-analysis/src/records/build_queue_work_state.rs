@@ -27,8 +27,8 @@ pub struct QueueState {
 /// C++: `struct BuildQueueWorkState`（去掉 `executeTasks`：executor 由调用方以可变借用
 /// 传入，见 [`crate::type_aliases::frontend_callbacks::TaskQueue`]）。
 ///
-/// 可变状态全部收进 `Mutex<QueueState>`，因此不存在 `Arc::as_ptr(...) as *mut _` 再取
-/// `&mut` 的未定义行为；`cv` 与锁配对，保持 cpp `mtx` + `cv` 的
+/// 可变状态全部收进 `Mutex<QueueState>`，因此不存在「拿 `Rc`/`Arc` 的裸指针再转
+/// `&mut` 就地改写」的未定义行为；`cv` 与锁配对，保持 cpp `mtx` + `cv` 的
 /// 「等待就绪队列非空 / notify_one」语义。
 ///
 /// 共享句柄是 `Rc<Self>` 而非 `Arc<Self>`：队列项携带的
