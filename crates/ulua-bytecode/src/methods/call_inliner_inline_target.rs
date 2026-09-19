@@ -125,8 +125,6 @@ impl<'a> CallInliner<'a> {
 
     self.replace_call_usages_with_return_phis();
 
-    self.drop_prep_var_args_in_inlined_path();
-
     // 多返回值聚合 phi 锚定到汇合块（cpp inline 尾部）
     let return_phis: Vec<BcOp> = self
       .return_ops

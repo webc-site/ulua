@@ -23,8 +23,7 @@ impl ConstantStr {
 /// 以带载荷 enum 取代 C++ 的 `type` 标签 + union，类型与数据合一，消除 union 误读的 UB 风险。
 /// 尺寸与原 `#[repr(C)]` 结构相同（24 字节），热路径按值拷贝无回退。
 /// 不派生 `PartialEq`：字符串相等须比较内容而非指针，统一走 `constants_equal`。
-#[derive(Clone, Copy, Debug)]
-#[derive(Default)]
+#[derive(Clone, Copy, Debug, Default)]
 pub enum Constant {
   /// 未知 / 不可折叠
   #[default]
@@ -66,4 +65,3 @@ impl DenseDefault for Constant {
     Self::Unknown
   }
 }
-

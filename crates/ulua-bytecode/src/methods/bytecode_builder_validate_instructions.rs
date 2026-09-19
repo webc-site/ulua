@@ -189,6 +189,7 @@ impl BytecodeBuilder {
         | LuauOpcode::LOP_SUB
         | LuauOpcode::LOP_MUL
         | LuauOpcode::LOP_DIV
+        | LuauOpcode::LOP_IDIV
         | LuauOpcode::LOP_MOD
         | LuauOpcode::LOP_POW => {
           VREG!(luau_insn_a(insn) as u8, func);
@@ -199,6 +200,7 @@ impl BytecodeBuilder {
         | LuauOpcode::LOP_SUBK
         | LuauOpcode::LOP_MULK
         | LuauOpcode::LOP_DIVK
+        | LuauOpcode::LOP_IDIVK
         | LuauOpcode::LOP_MODK
         | LuauOpcode::LOP_POWK => {
           VREG!(luau_insn_a(insn) as u8, func);

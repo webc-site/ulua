@@ -38,8 +38,11 @@ impl<'a> CallInliner<'a> {
         _ => false,
       };
 
+      // cpp `if (op == RETURN || op == GETVARARGS || op == PREPVARARGS) continue`：
+      // PREPVARARGS 携带被内联函数的 numparams，绝不能被复制进调用方的指令槽。
       if target_inst_data.op == LuauOpcode::LOP_RETURN
         || target_inst_data.op == LuauOpcode::LOP_GETVARARGS
+        || target_inst_data.op == LuauOpcode::LOP_PREPVARARGS
       {
         continue;
       }
