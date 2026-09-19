@@ -17,11 +17,6 @@ where
 {
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let result = Parser::parse(
-    source,
-    &mut names,
-    &mut allocator,
-    parse_options.clone(),
-  );
+  let result = Parser::parse(source, &mut names, &mut allocator, parse_options.clone());
   (allocator, names, result)
 }

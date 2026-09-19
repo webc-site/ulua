@@ -19,12 +19,7 @@ pub fn require_tracer_fixture_parse<'a>(
 ) -> &'a mut AstStatBlock {
   names.rebind_allocator(&mut **allocator as *mut Allocator);
 
-  let result = Parser::parse(
-    source,
-    names,
-    allocator,
-    ParseOptions::default(),
-  );
+  let result = Parser::parse(source, names, allocator, ParseOptions::default());
 
   assert!(
     result.errors.is_empty(),

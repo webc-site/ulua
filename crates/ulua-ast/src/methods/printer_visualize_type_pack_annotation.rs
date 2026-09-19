@@ -33,9 +33,7 @@ impl<'a, W: Writer> Printer<'a, W> {
     let annotation = unsafe { &*annotation.into_node_ptr() };
     self.advance(annotation.base.location.begin);
 
-    if let Some(variadic_tp) =
-      ast_node_try_as::<AstTypePackVariadic>(&annotation.base)
-    {
+    if let Some(variadic_tp) = ast_node_try_as::<AstTypePackVariadic>(&annotation.base) {
       if !for_var_arg {
         self.writer.symbol("...");
       }
@@ -43,9 +41,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       return;
     }
 
-    if let Some(generic_tp) =
-      ast_node_try_as::<AstTypePackGeneric>(&annotation.base)
-    {
+    if let Some(generic_tp) = ast_node_try_as::<AstTypePackGeneric>(&annotation.base) {
       self
         .writer
         .symbol(generic_tp.generic_name.as_str_or_empty());
@@ -58,9 +54,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       return;
     }
 
-    if let Some(explicit_tp) =
-      ast_node_try_as::<AstTypePackExplicit>(&annotation.base)
-    {
+    if let Some(explicit_tp) = ast_node_try_as::<AstTypePackExplicit>(&annotation.base) {
       LUAU_ASSERT!(!for_var_arg);
 
       if let Some(cst_node) = self.lookup_cst_node::<CstTypePackExplicit>(&annotation.base) {

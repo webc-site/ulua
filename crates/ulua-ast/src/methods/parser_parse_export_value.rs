@@ -52,8 +52,7 @@ impl Parser {
       }
 
       if self.options.store_cst_data {
-        let cst_stat_local =
-          self.lookup_cst_node_mut::<CstStatLocal>(&mut local_stat.base.base);
+        let cst_stat_local = self.lookup_cst_node_mut::<CstStatLocal>(&mut local_stat.base.base);
         LUAU_ASSERT!(cst_stat_local.is_some());
         if let Some(cst_stat_local) = cst_stat_local {
           cst_stat_local.declaration_keyword_position = keyword_position;

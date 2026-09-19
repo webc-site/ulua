@@ -188,9 +188,7 @@ pub fn ast_node_try_as<T: AstNodeClass>(node: &AstNode) -> Option<&T> {
 /// `node` 必须指向 arena 中存活的 repr(C) 节点（同 [`ast_node_as`]），且调用方在
 /// 返回引用的整个生命周期内确实独占该节点（arena 无其他并发借用）。
 #[inline]
-pub unsafe fn ast_node_try_as_mut<T: AstNodeClass>(
-  node: &mut AstNode,
-) -> Option<&mut T> {
+pub unsafe fn ast_node_try_as_mut<T: AstNodeClass>(node: &mut AstNode) -> Option<&mut T> {
   if node.class_index == T::CLASS_INDEX {
     // SAFETY: 动态类型已由 class_index 判定，`&mut AstNode` 的独占借用经
     // repr(C) 首字段（基址重合）转写为 `&mut T`，与原借用同一 place、同一

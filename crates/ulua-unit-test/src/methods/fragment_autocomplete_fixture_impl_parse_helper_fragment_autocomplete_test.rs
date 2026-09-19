@@ -16,14 +16,8 @@ impl FragmentAutocompleteFixtureImpl {
       Arc::get_mut(&mut source.names).expect("fresh fragment source name table must be unique");
     names.rebind_allocator(allocator);
 
-    let parse_result = unsafe {
-      Parser::parse(
-        document.as_str(),
-        names,
-        &mut *allocator,
-        parse_options,
-      )
-    };
+    let parse_result =
+      unsafe { Parser::parse(document.as_str(), names, &mut *allocator, parse_options) };
 
     source.parse_errors = parse_result.errors.clone();
     source.root = parse_result.root;

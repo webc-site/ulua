@@ -95,9 +95,7 @@ impl<'a, W: Writer> Printer<'a, W> {
 
         self.maybe_advance_or_symbol(cst_node.map(|cst| &cst.close_parameters_position), ">");
       }
-    } else if let Some(a) =
-      ast_node_try_as::<AstTypeFunction>(&type_annotation.base)
-    {
+    } else if let Some(a) = ast_node_try_as::<AstTypeFunction>(&type_annotation.base) {
       let cst_node = self.lookup_cst_node::<CstTypeFunction>(&a.base.base);
 
       if a.generics.size > 0 || a.generic_packs.size > 0 {
@@ -157,9 +155,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       self.writer.symbol("->");
 
       self.visualize_type_pack_annotation(a.return_types, false, cst_node.is_none(), false);
-    } else if let Some(a) =
-      ast_node_try_as::<AstTypeTable>(&type_annotation.base)
-    {
+    } else if let Some(a) = ast_node_try_as::<AstTypeTable>(&type_annotation.base) {
       // SAFETY: indexer 指向 arena 存活的 AstTableIndexer（解析器保证非空时才解引用）
       let indexer = (!a.indexer.is_null()).then(|| unsafe { &*a.indexer });
       // SAFETY: index_type 指向 arena 存活的 AstType 节点；class_index 匹配后
@@ -274,9 +270,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       }
       self.advance(end_pos);
       self.writer.symbol("}");
-    } else if let Some(a) =
-      ast_node_try_as::<AstTypeTypeof>(&type_annotation.base)
-    {
+    } else if let Some(a) = ast_node_try_as::<AstTypeTypeof>(&type_annotation.base) {
       self.writer.keyword("typeof");
       let cst_node = self.lookup_cst_node::<CstTypeTypeof>(&a.base.base);
       match cst_node {
@@ -291,9 +285,7 @@ impl<'a, W: Writer> Printer<'a, W> {
           self.writer.symbol(")");
         }
       }
-    } else if let Some(a) =
-      ast_node_try_as::<AstTypeUnion>(&type_annotation.base)
-    {
+    } else if let Some(a) = ast_node_try_as::<AstTypeUnion>(&type_annotation.base) {
       let cst_node = self.lookup_cst_node::<CstTypeUnion>(&a.base.base);
 
       if cst_node.is_none()
@@ -365,9 +357,7 @@ impl<'a, W: Writer> Printer<'a, W> {
           self.writer.symbol(")");
         }
       }
-    } else if let Some(a) =
-      ast_node_try_as::<AstTypeIntersection>(&type_annotation.base)
-    {
+    } else if let Some(a) = ast_node_try_as::<AstTypeIntersection>(&type_annotation.base) {
       let cst_node = self.lookup_cst_node::<CstTypeIntersection>(&a.base.base);
 
       if let Some(cst) = cst_node {
@@ -397,9 +387,7 @@ impl<'a, W: Writer> Printer<'a, W> {
           self.writer.symbol(")");
         }
       }
-    } else if let Some(a) =
-      ast_node_try_as::<AstTypeGroup>(&type_annotation.base)
-    {
+    } else if let Some(a) = ast_node_try_as::<AstTypeGroup>(&type_annotation.base) {
       self.writer.symbol("(");
       self.visualize_type_annotation(a.type_);
 
@@ -412,13 +400,9 @@ impl<'a, W: Writer> Printer<'a, W> {
           self.writer.symbol(")");
         }
       }
-    } else if let Some(a) =
-      ast_node_try_as::<AstTypeSingletonBool>(&type_annotation.base)
-    {
+    } else if let Some(a) = ast_node_try_as::<AstTypeSingletonBool>(&type_annotation.base) {
       self.writer.keyword(if a.value { "true" } else { "false" });
-    } else if let Some(a) =
-      ast_node_try_as::<AstTypeSingletonString>(&type_annotation.base)
-    {
+    } else if let Some(a) = ast_node_try_as::<AstTypeSingletonString>(&type_annotation.base) {
       match self.lookup_cst_node::<CstTypeSingletonString>(&a.base.base) {
         Some(cst) => {
           self.writer.source_string(

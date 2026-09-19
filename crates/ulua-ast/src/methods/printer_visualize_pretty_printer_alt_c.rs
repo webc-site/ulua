@@ -336,8 +336,7 @@ impl<'a, W: Writer> Printer<'a, W> {
           }
           for o in a.generic_packs.iter_nodes() {
             comma.operator_call(self.writer);
-            let generic_type_pack_cst_node =
-              self.lookup_cst_node::<CstGenericTypePack>(&o.base);
+            let generic_type_pack_cst_node = self.lookup_cst_node::<CstGenericTypePack>(&o.base);
             self.writer.advance(&o.base.location.begin);
             self.writer.identifier(o.name.as_bytes());
             if let Some(cst) = generic_type_pack_cst_node {

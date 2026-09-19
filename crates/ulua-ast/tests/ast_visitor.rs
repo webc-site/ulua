@@ -60,12 +60,7 @@ fn with_block(src: &str, f: impl FnOnce(*mut AstStatBlock)) {
   // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let result = Parser::parse(
-    src,
-    &mut names,
-    &mut allocator,
-    ParseOptions::default(),
-  );
+  let result = Parser::parse(src, &mut names, &mut allocator, ParseOptions::default());
   assert!(
     result.errors.is_empty(),
     "unexpected parse errors: {}",

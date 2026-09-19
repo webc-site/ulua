@@ -100,12 +100,7 @@ fn validate_bytecode_graph(source: &[u8], opts: &LuaCompileOptions) {
   // Box 钉堆：AstNameTable/Lexer/Parser 捕获 allocator 地址，宿主移动即悬垂。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let parse_result = Parser::parse(
-    source,
-    &mut names,
-    &mut allocator,
-    ParseOptions::default(),
-  );
+  let parse_result = Parser::parse(source, &mut names, &mut allocator, ParseOptions::default());
 
   assert!(
     parse_result.errors.is_empty(),

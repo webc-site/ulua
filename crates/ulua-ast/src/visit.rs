@@ -185,7 +185,9 @@ pub unsafe fn dispatch_node<V: AstVisitor + ?Sized>(node: *mut AstNode, visitor:
       AstExprInterpString::CLASS_INDEX => (&mut *(node as *mut AstExprInterpString)).visit(visitor),
       AstExprLocal::CLASS_INDEX => (&mut *(node as *mut AstExprLocal)).visit(visitor),
       AstExprTable::CLASS_INDEX => (&mut *(node as *mut AstExprTable)).visit(visitor),
-      AstExprTypeAssertion::CLASS_INDEX => (&mut *(node as *mut AstExprTypeAssertion)).visit(visitor),
+      AstExprTypeAssertion::CLASS_INDEX => {
+        (&mut *(node as *mut AstExprTypeAssertion)).visit(visitor)
+      }
       AstExprUnary::CLASS_INDEX => (&mut *(node as *mut AstExprUnary)).visit(visitor),
       AstExprVarargs::CLASS_INDEX => (&mut *(node as *mut AstExprVarargs)).visit(visitor),
       AstGenericType::CLASS_INDEX => (&mut *(node as *mut AstGenericType)).visit(visitor),
@@ -204,7 +206,9 @@ pub unsafe fn dispatch_node<V: AstVisitor + ?Sized>(node: *mut AstNode, visitor:
       AstStatDeclareFunction::CLASS_INDEX => {
         (&mut *(node as *mut AstStatDeclareFunction)).visit(visitor)
       }
-      AstStatDeclareGlobal::CLASS_INDEX => (&mut *(node as *mut AstStatDeclareGlobal)).visit(visitor),
+      AstStatDeclareGlobal::CLASS_INDEX => {
+        (&mut *(node as *mut AstStatDeclareGlobal)).visit(visitor)
+      }
       AstStatError::CLASS_INDEX => (&mut *(node as *mut AstStatError)).visit(visitor),
       AstStatExpr::CLASS_INDEX => (&mut *(node as *mut AstStatExpr)).visit(visitor),
       AstStatFor::CLASS_INDEX => (&mut *(node as *mut AstStatFor)).visit(visitor),
@@ -212,7 +216,9 @@ pub unsafe fn dispatch_node<V: AstVisitor + ?Sized>(node: *mut AstNode, visitor:
       AstStatFunction::CLASS_INDEX => (&mut *(node as *mut AstStatFunction)).visit(visitor),
       AstStatIf::CLASS_INDEX => (&mut *(node as *mut AstStatIf)).visit(visitor),
       AstStatLocal::CLASS_INDEX => (&mut *(node as *mut AstStatLocal)).visit(visitor),
-      AstStatLocalFunction::CLASS_INDEX => (&mut *(node as *mut AstStatLocalFunction)).visit(visitor),
+      AstStatLocalFunction::CLASS_INDEX => {
+        (&mut *(node as *mut AstStatLocalFunction)).visit(visitor)
+      }
       AstStatRepeat::CLASS_INDEX => (&mut *(node as *mut AstStatRepeat)).visit(visitor),
       AstStatReturn::CLASS_INDEX => (&mut *(node as *mut AstStatReturn)).visit(visitor),
       AstStatTypeAlias::CLASS_INDEX => (&mut *(node as *mut AstStatTypeAlias)).visit(visitor),
@@ -227,7 +233,9 @@ pub unsafe fn dispatch_node<V: AstVisitor + ?Sized>(node: *mut AstNode, visitor:
       AstTypePackGeneric::CLASS_INDEX => (&mut *(node as *mut AstTypePackGeneric)).visit(visitor),
       AstTypePackVariadic::CLASS_INDEX => (&mut *(node as *mut AstTypePackVariadic)).visit(visitor),
       AstTypeReference::CLASS_INDEX => (&mut *(node as *mut AstTypeReference)).visit(visitor),
-      AstTypeSingletonBool::CLASS_INDEX => (&mut *(node as *mut AstTypeSingletonBool)).visit(visitor),
+      AstTypeSingletonBool::CLASS_INDEX => {
+        (&mut *(node as *mut AstTypeSingletonBool)).visit(visitor)
+      }
       AstTypeSingletonString::CLASS_INDEX => {
         (&mut *(node as *mut AstTypeSingletonString)).visit(visitor)
       }

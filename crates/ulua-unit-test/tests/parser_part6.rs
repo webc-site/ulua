@@ -143,10 +143,7 @@ mod parser_recovery_of_parenthesized_expressions {
       .root;
     let mut counter = CountAstNodes::default();
     // visit 需要独占借用：cpp `AstNode::visit(AstVisitor*)` 的 this 非 const。
-    root
-      .as_mut_ref_opt()
-      .expect("根块非空")
-      .visit(&mut counter);
+    root.as_mut_ref_opt().expect("根块非空").visit(&mut counter);
     counter.count
   }
 

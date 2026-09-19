@@ -10,11 +10,6 @@ impl JsonEncoderFixture {
     };
     self.names.rebind_allocator(&mut self.allocator as *mut _);
 
-    Parser::parse(
-      src,
-      &mut self.names,
-      &mut self.allocator,
-      options,
-    )
+    Parser::parse(src, &mut self.names, &mut self.allocator, options)
   }
 }

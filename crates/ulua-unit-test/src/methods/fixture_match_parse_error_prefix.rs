@@ -17,12 +17,7 @@ impl Fixture {
       .name_table
       .rebind_allocator(&mut self.allocator as *mut _);
 
-    let result = Parser::parse(
-      source,
-      &mut self.name_table,
-      &mut self.allocator,
-      options,
-    );
+    let result = Parser::parse(source, &mut self.name_table, &mut self.allocator, options);
 
     // C++: CHECK_MESSAGE(!result.errors.empty(), "Expected a parse error in '" << source << "'");
     assert!(
