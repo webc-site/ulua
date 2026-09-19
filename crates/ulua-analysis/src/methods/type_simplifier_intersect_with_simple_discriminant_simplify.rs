@@ -8,13 +8,12 @@ use crate::{
     shallow_clone_clone_alt_b::shallow_clone,
   },
   records::{
-    any_type::AnyType, clone_state::CloneState, error_type::ErrorType,
-    intersection_type::IntersectionType, negation_type::NegationType, never_type::NeverType,
-    table_type::TableType, type_function_instance_type::TypeFunctionInstanceType,
-    type_ids::TypeIds, type_simplifier::TypeSimplifier, union_type::UnionType,
-    unknown_type::UnknownType,
+    any_type::AnyType, clone_state::CloneState, intersection_type::IntersectionType,
+    negation_type::NegationType, never_type::NeverType, table_type::TableType,
+    type_function_instance_type::TypeFunctionInstanceType, type_ids::TypeIds,
+    type_simplifier::TypeSimplifier, union_type::UnionType, unknown_type::UnknownType,
   },
-  type_aliases::type_id::TypeId,
+  type_aliases::{error_type::ErrorType, type_id::TypeId},
 };
 
 impl TypeSimplifier {

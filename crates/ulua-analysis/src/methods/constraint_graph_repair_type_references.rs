@@ -1,11 +1,13 @@
 use core::ptr::null;
 
+use ulua_common::records::dense_hash_set::DenseHashSet;
+
 use crate::{
   functions::{
     follow_type::follow_type_id, follow_type_pack::follow_type_pack_id,
     get_type_alt_j::get_type_id, get_type_pack::get_type_pack_id,
   },
-  records::{constraint_graph::ConstraintGraph, dense_hash_set::DenseHashSet},
+  records::constraint_graph::ConstraintGraph,
   type_aliases::{
     bound_type::BoundType, bound_type_pack::BoundTypePack, type_id::TypeId,
     type_pack_id::TypePackId,

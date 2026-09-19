@@ -7,13 +7,12 @@ use crate::{
     is_approximately_truthy_type::is_approximately_truthy_type,
   },
   records::{
-    any_type::AnyType, boolean_singleton::BooleanSingleton, error_type::ErrorType,
-    extern_type::ExternType, function_type::FunctionType, metatable_type::MetatableType,
-    never_type::NeverType, primitive_type::PrimitiveType, singleton_type::SingletonType,
-    table_type::TableType, type_simplifier::TypeSimplifier, union_type::UnionType,
-    unknown_type::UnknownType,
+    any_type::AnyType, boolean_singleton::BooleanSingleton, extern_type::ExternType,
+    function_type::FunctionType, metatable_type::MetatableType, never_type::NeverType,
+    primitive_type::PrimitiveType, singleton_type::SingletonType, table_type::TableType,
+    type_simplifier::TypeSimplifier, union_type::UnionType, unknown_type::UnknownType,
   },
-  type_aliases::type_id::TypeId,
+  type_aliases::{error_type::ErrorType, type_id::TypeId},
 };
 
 impl TypeSimplifier {

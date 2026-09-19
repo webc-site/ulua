@@ -7,12 +7,11 @@ use crate::{
     is_type_variable::is_type_variable, relate_simplify_alt_b::relate_type_id_type_id,
   },
   records::{
-    any_type::AnyType, error_type::ErrorType, free_type::FreeType,
-    intersection_type::IntersectionType, negation_type::NegationType, never_type::NeverType,
-    recursion_limiter::RecursionLimiter, type_simplifier::TypeSimplifier, union_type::UnionType,
-    unknown_type::UnknownType,
+    any_type::AnyType, free_type::FreeType, intersection_type::IntersectionType,
+    negation_type::NegationType, never_type::NeverType, recursion_limiter::RecursionLimiter,
+    type_simplifier::TypeSimplifier, union_type::UnionType, unknown_type::UnknownType,
   },
-  type_aliases::type_id::TypeId,
+  type_aliases::{error_type::ErrorType, type_id::TypeId},
 };
 impl TypeSimplifier {
   pub fn intersect(&mut self, mut left: TypeId, mut right: TypeId) -> TypeId {

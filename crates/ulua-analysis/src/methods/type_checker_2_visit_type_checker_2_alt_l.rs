@@ -17,7 +17,6 @@ use crate::{
     any_type::AnyType,
     cannot_call_non_function::CannotCallNonFunction,
     count_mismatch::{CountMismatch, CountMismatchContext},
-    error_type::ErrorType,
     function_type::FunctionType,
     generic_error::GenericError,
     instantiation::Instantiation,
@@ -34,7 +33,7 @@ use crate::{
     unification_too_complex::UnificationTooComplex,
     union_type::UnionType,
   },
-  type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
+  type_aliases::{error_type::ErrorType, type_id::TypeId, type_pack_id::TypePackId},
 };
 impl TypeChecker2 {
   pub fn visit_ast_stat_for_in(&mut self, for_in_statement: &AstStatForIn) {

@@ -9,12 +9,12 @@ use crate::{
     relate_simplify_alt_b::relate_type_id_type_id,
   },
   records::{
-    any_type::AnyType, boolean_singleton::BooleanSingleton, error_type::ErrorType,
-    negation_type::NegationType, never_type::NeverType, primitive_type::PrimitiveType,
-    singleton_type::SingletonType, table_type::TableType, type_level::TypeLevel,
-    type_simplifier::TypeSimplifier, union_type::UnionType, unknown_type::UnknownType,
+    any_type::AnyType, boolean_singleton::BooleanSingleton, negation_type::NegationType,
+    never_type::NeverType, primitive_type::PrimitiveType, singleton_type::SingletonType,
+    table_type::TableType, type_level::TypeLevel, type_simplifier::TypeSimplifier,
+    union_type::UnionType, unknown_type::UnknownType,
   },
-  type_aliases::type_id::TypeId,
+  type_aliases::{error_type::ErrorType, type_id::TypeId},
 };
 
 impl TypeSimplifier {
