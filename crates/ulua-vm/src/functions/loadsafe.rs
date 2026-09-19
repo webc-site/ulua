@@ -2,7 +2,7 @@ use alloc::fmt;
 use core::{
   ffi::{CStr, c_char, c_int},
   mem::size_of,
-  ptr::copy_nonoverlapping,
+  ptr::{copy_nonoverlapping, null_mut},
   slice::from_raw_parts,
 };
 
@@ -78,6 +78,60 @@ const VERSION_WITH_FEEDBACK: u8 = 11;
 /// 首个每个 proto 带前缀 protoSize 的字节码版本（cpp lvmload.cpp:375）
 const VERSION_WITH_PROTO_SIZE: u8 = 12;
 
+/// 不可信数据（id / 长度 / count）越界时的统一收口。
+///
+/// cpp 侧只有 `LUAU_ASSERT`，release 编译掉后就是越界读；Rust 侧必须转成
+/// 「损坏字节码」错误：push 错误字符串并返回 1，与版本不匹配三处同形态。
+macro_rules! malformed {
+  ($l:expr, $chunkname:expr, $($detail:tt)+) => {
+    return push_chunk_error($l, $chunkname, format_args!($($detail)+))
+  };
+}
+
+/// `[offset, offset + len)` 是否完整落在 blob 内（不可信长度/count 的硬校验，
+/// `checked_add` 兼顾 `offset + len` 自身溢出）。
+fn fits(offset: usize, len: usize, size: usize) -> bool {
+  offset.checked_add(len).is_some_and(|end| end <= size)
+}
+
+/// 不可信 count 的硬校验：`u32 as c_int` 可以是负数，且 blob 尾部必须容得下
+/// 每项至少 `item_bytes` 字节，否则随后的 `c_slice_mut`/分配就是越界构造。
+fn count_fits(count: i64, item_bytes: usize, size: usize, offset: usize) -> bool {
+  let remaining = size.saturating_sub(offset);
+
+  count >= 0
+    && (count as usize)
+      .checked_mul(item_bytes)
+      .is_some_and(|need| need <= remaining)
+}
+
+/// 取已填充前缀内的 proto。
+///
+/// `loaded` 为已写入的槽数：合法字节码里被引用的 proto 总先于引用点写入
+/// （cpp lvmload.cpp 的 proto 表是自内而后的后序），因此越界或槽仍为 `null`
+/// 都属损坏字节码，绝不能把裸 `protos[fid]` 的越界读/未初始化读带进来。
+fn proto_at(protos: &TempBuffer<*mut Proto>, id: u32, loaded: usize) -> Option<*mut Proto> {
+  let index = id as usize;
+
+  if index >= loaded.min(protos.count) {
+    return None;
+  }
+
+  // 上面已硬校验过边界，Index 内的 LUAU_ASSERT 恒真
+  let proto = protos[index];
+
+  (!proto.is_null()).then_some(proto)
+}
+
+/// 常量表索引：cpp 直接取 `&p->k[key]`，而 `key` 来自不可信字节码，
+/// 负值或越界都会跳出数组，故统一在此判定。
+unsafe fn constant_at(p: *mut Proto, id: i64) -> Option<*mut TValue> {
+  let sizek = unsafe { (*p).sizek };
+  let k = unsafe { (*p).k };
+
+  ((0..sizek as i64).contains(&id)).then(|| unsafe { k.add(id as usize) })
+}
+
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub(crate) unsafe fn loadsafe(
@@ -151,6 +205,11 @@ pub(crate) unsafe fn loadsafe(
     for slot in c_slice_mut(strings.data, string_count as usize) {
       let length = read_var_int(data, size, &mut offset);
 
+      // 字符串体是 blob 内原字节，长度来自不可信数据：必须硬校验后再取
+      if !fits(offset, length as usize, size) {
+        malformed!(l, chunkname, "bytecode string table is truncated");
+      }
+
       *slot = luaS_newlstr(l, data.add(offset), length as usize);
       offset += length as usize;
     }
@@ -163,7 +222,9 @@ pub(crate) unsafe fn loadsafe(
       let mut index: u8 = read(data, size, &mut offset);
 
       while index != 0 {
-        let name = read_string(strings, data, size, &mut offset);
+        let Some(name) = read_string(strings, data, size, &mut offset) else {
+          malformed!(l, chunkname, "bytecode userdata type name id is out of range");
+        };
 
         if ((index - 1) as usize) < USERDATA_TYPE_LIMIT
           && let Some(cb) = (*(*l).global).ecb.gettypemapping
@@ -179,6 +240,12 @@ pub(crate) unsafe fn loadsafe(
     let proto_count = read_var_int(data, size, &mut offset);
     protos.allocate(l, proto_count as usize);
 
+    // cpp 的 TempBuffer 槽是裸内存，`protos[fid]` 读到未写入槽只是垃圾指针；
+    // Rust 侧读到未初始化内存本身就是 UB，故先填 null，由 proto_at 据此判定损坏
+    for slot in c_slice_mut(protos.data, proto_count as usize) {
+      *slot = null_mut();
+    }
+
     for (i, slot) in c_slice_mut(protos.data, proto_count as usize)
       .iter_mut()
       .enumerate()
@@ -191,6 +258,11 @@ pub(crate) unsafe fn loadsafe(
         0
       };
       let proto_start_offset = offset;
+
+      // protoSize 决定下次读取起点，越界会让后续所有偏移都跑出 blob
+      if !fits(proto_start_offset, proto_size as usize, size) {
+        malformed!(l, chunkname, "bytecode proto size is out of range");
+      }
 
       let p = lua_f_newproto(l);
       (*p).source = source;
@@ -215,6 +287,11 @@ pub(crate) unsafe fn loadsafe(
           let typesize = read_var_int(data, size, &mut offset);
 
           if typesize != 0 {
+            // v1 头部断言会读 types[0..2]，故按 max(2) 收紧校验
+            if !fits(offset, (typesize as usize).max(2), size) {
+              malformed!(l, chunkname, "bytecode type info is truncated");
+            }
+
             let types = data.add(offset) as *mut u8;
 
             LUAU_ASSERT!(typesize == 2 + (*p).numparams as u32);
@@ -246,6 +323,10 @@ pub(crate) unsafe fn loadsafe(
           let typesize = read_var_int(data, size, &mut offset);
 
           if typesize != 0 {
+            if !fits(offset, typesize as usize, size) {
+              malformed!(l, chunkname, "bytecode type info is truncated");
+            }
+
             let types = data.add(offset) as *mut u8;
 
             (*p).typeinfo = luaM_newarray!(l, typesize as usize, u8, (*p).hdr.memcat);
@@ -266,6 +347,12 @@ pub(crate) unsafe fn loadsafe(
       }
 
       let sizecode = read_var_int(data, size, &mut offset) as c_int;
+
+      // 指令定长 4 字节且逐项从 blob 读出，count 与剩余长度必须自洽
+      if !count_fits(i64::from(sizecode), size_of::<Instruction>(), size, offset) {
+        malformed!(l, chunkname, "bytecode code size is out of range");
+      }
+
       (*p).code = luaM_newarray!(l, sizecode as usize, Instruction, (*p).hdr.memcat);
       (*p).sizecode = sizecode;
 
@@ -276,6 +363,12 @@ pub(crate) unsafe fn loadsafe(
       (*p).codeentry = (*p).code;
 
       let sizek = read_var_int(data, size, &mut offset) as c_int;
+
+      // 每个常量至少占 1 字节（tag），据此卡住虚高的 count
+      if !count_fits(i64::from(sizek), 1, size, offset) {
+        malformed!(l, chunkname, "bytecode constant count is out of range");
+      }
+
       (*p).k = luaM_newarray!(l, sizek as usize, TValue, (*p).hdr.memcat);
       (*p).sizek = sizek;
 
@@ -313,7 +406,9 @@ pub(crate) unsafe fn loadsafe(
           }
 
           LBC_CONSTANT_STRING_U8 => {
-            let v = read_string(strings, data, size, &mut offset);
+            let Some(v) = read_string(strings, data, size, &mut offset) else {
+              malformed!(l, chunkname, "bytecode string constant id is out of range");
+            };
             setsvalue!(l, k, v);
           }
 
@@ -329,7 +424,10 @@ pub(crate) unsafe fn loadsafe(
             let h = lua_h_new(l, 0, keys);
             for _ in 0..keys {
               let key = read_var_int(data, size, &mut offset) as c_int;
-              let val = luaH_set(l, h, (*p).k.add(key as usize) as *const TValue);
+              let Some(kslot) = constant_at(p, key as i64) else {
+                malformed!(l, chunkname, "bytecode table key index is out of range");
+              };
+              let val = luaH_set(l, h, kslot as *const TValue);
               setnvalue!(val, 0.0);
             }
             sethvalue!(l, k, h);
@@ -339,16 +437,23 @@ pub(crate) unsafe fn loadsafe(
             let keys = read_var_int(data, size, &mut offset);
             let h = lua_h_new(l, 0, keys as c_int);
 
+            // 每个键值对至少占 5 字节（key varint + i32 constantIdx）
+            if !count_fits(i64::from(keys), 5, size, offset) {
+              malformed!(l, chunkname, "bytecode table key count is out of range");
+            }
+
             let mut nil_keys: TempBuffer<i32> = TempBuffer::new();
             nil_keys.allocate(l, keys as usize);
             let mut nil_keys_size: usize = 0;
 
             for _ in 0..keys {
               let key = read_var_int(data, size, &mut offset) as i32;
-              let val = luaH_set(l, h, (*p).k.add(key as usize) as *const TValue);
+              let Some(kslot) = constant_at(p, key as i64) else {
+                malformed!(l, chunkname, "bytecode table key index is out of range");
+              };
+              let val = luaH_set(l, h, kslot as *const TValue);
               let constant_idx: i32 = read(data, size, &mut offset);
-              if constant_idx >= 0 {
-                let constant = (*p).k.add(constant_idx as usize);
+              if let Some(constant) = constant_at(p, constant_idx as i64) {
                 if ttisnil!(constant) {
                   *nil_keys.data.add(nil_keys_size) = key;
                   nil_keys_size += 1;
@@ -361,8 +466,12 @@ pub(crate) unsafe fn loadsafe(
               setnvalue!(val, 0.0);
             }
 
+            // key 已经过 constant_at 校验，回写 nil 时同一判定必然成立
             for key in c_slice_mut(nil_keys.data, nil_keys_size) {
-              let val = luaH_set(l, h, (*p).k.add(*key as usize) as *const TValue);
+              let Some(kslot) = constant_at(p, *key as i64) else {
+                malformed!(l, chunkname, "bytecode table key index is out of range");
+              };
+              let val = luaH_set(l, h, kslot as *const TValue);
               setnilvalue!(val);
             }
 
@@ -371,7 +480,10 @@ pub(crate) unsafe fn loadsafe(
 
           LBC_CONSTANT_CLOSURE_U8 => {
             let fid = read_var_int(data, size, &mut offset);
-            let proto = *protos.data.add(fid as usize);
+            // 闭包只允许引用本轮之前已装载完的 proto（槽 0..i）
+            let Some(proto) = proto_at(protos, fid, i) else {
+              malformed!(l, chunkname, "bytecode closure proto id is out of range");
+            };
             let cl = lua_f_new_lclosure(l, (*proto).nups as c_int, envt, proto);
             (*cl).preload = if (*cl).nupvalues > 0 { 1 } else { 0 };
             setclvalue!(l, k, cl);
@@ -379,11 +491,17 @@ pub(crate) unsafe fn loadsafe(
 
           LBC_CONSTANT_CLASS_SHAPE_U8 => {
             let cnid = read_var_int(data, size, &mut offset);
-            let classname = (*p).k.add(cnid as usize);
+            let Some(classname) = constant_at(p, i64::from(cnid)) else {
+              malformed!(l, chunkname, "bytecode class name index is out of range");
+            };
             LUAU_ASSERT!(ttisstring!(classname));
             let num_properties = read_var_int(data, size, &mut offset);
             let num_methods = read_var_int(data, size, &mut offset);
-            let num_members = num_methods + num_properties;
+            let num_members = num_methods.wrapping_add(num_properties);
+            // 每个成员至少占 1 字节（mid varint）
+            if !count_fits(i64::from(num_members), 1, size, offset) {
+              malformed!(l, chunkname, "bytecode class member count is out of range");
+            }
             let offset_to_member =
               luaM_newarray!(l, num_members as usize, *mut tstring, (*l).activememcat);
             let members_to_offset = lua_h_new(l, 0, num_members as c_int);
@@ -393,7 +511,9 @@ pub(crate) unsafe fn loadsafe(
               .enumerate()
             {
               let mid = read_var_int(data, size, &mut offset);
-              let member_name = (*p).k.add(mid as usize);
+              let Some(member_name) = constant_at(p, i64::from(mid)) else {
+                malformed!(l, chunkname, "bytecode class member index is out of range");
+              };
               LUAU_ASSERT!(ttisstring!(member_name));
               let member = tsvalue!(member_name) as *mut tstring;
               *slot = member;
@@ -455,11 +575,19 @@ pub(crate) unsafe fn loadsafe(
           }
 
           if target_op != -1 {
-            LUAU_ASSERT!(*instruction.add(1) < sizek as u32);
+            // AUX 取下一条指令字：损坏流里它可能已经越过 code 末尾
+            if instruction.add(1) >= end {
+              malformed!(l, chunkname, "bytecode instruction aux is out of range");
+            }
+
+            let aux = *instruction.add(1);
+            LUAU_ASSERT!(aux < sizek as u32);
 
             // We take over the upper 16 bits of AUX - so no constants with big indices.
-            if *instruction.add(1) < 0x10000 {
-              let k = (*p).k.add(*instruction.add(1) as usize);
+            if aux < 0x10000 {
+              let Some(k) = constant_at(p, i64::from(aux)) else {
+                malformed!(l, chunkname, "bytecode direct access constant index is out of range");
+              };
               let s = tsvalue!(k) as *mut tstring;
 
               luaS_updateatom!(l, s);
@@ -476,21 +604,38 @@ pub(crate) unsafe fn loadsafe(
       }
 
       let sizep = read_var_int(data, size, &mut offset) as c_int;
+      // 每个 fid 至少占 1 字节
+      if !count_fits(i64::from(sizep), 1, size, offset) {
+        malformed!(l, chunkname, "bytecode proto count is out of range");
+      }
+
       (*p).p = luaM_newarray!(l, sizep as usize, *mut Proto, (*p).hdr.memcat);
       (*p).sizep = sizep;
 
       for slot in c_slice_mut((*p).p, (*p).sizep as usize) {
         let fid = read_var_int(data, size, &mut offset);
-        *slot = *protos.data.add(fid as usize);
+        // 内层 proto 同样只能引用已装载完的槽（0..i）
+        let Some(proto) = proto_at(protos, fid, i) else {
+          malformed!(l, chunkname, "bytecode inner proto id is out of range");
+        };
+        *slot = proto;
       }
 
       (*p).linedefined = read_var_int(data, size, &mut offset) as c_int;
-      (*p).debugname = read_string(strings, data, size, &mut offset);
+      let Some(debugname) = read_string(strings, data, size, &mut offset) else {
+        malformed!(l, chunkname, "bytecode debug name string id is out of range");
+      };
+      (*p).debugname = debugname;
 
       let lineinfo: u8 = read(data, size, &mut offset);
 
       if lineinfo != 0 {
         (*p).linegaplog2 = read::<u8>(data, size, &mut offset) as c_int;
+
+        // 移位量来自不可信字节码：超过 c_int 位宽即 UB/panic
+        if (*p).linegaplog2 < 0 || (*p).linegaplog2 >= size_of::<c_int>() as c_int * 8 {
+          malformed!(l, chunkname, "bytecode line gap log2 is out of range");
+        }
 
         let intervals = (((*p).sizecode - 1) >> (*p).linegaplog2) + 1;
         let absoffset = ((*p).sizecode + 3) & !3;
@@ -518,11 +663,19 @@ pub(crate) unsafe fn loadsafe(
 
       if debuginfo != 0 {
         let sizelocvars = read_var_int(data, size, &mut offset) as c_int;
+        // 每个 LocVar 至少占 4 字节（varname/startpc/endpc 各 1 + reg 1）
+        if !count_fits(i64::from(sizelocvars), 4, size, offset) {
+          malformed!(l, chunkname, "bytecode local variable count is out of range");
+        }
+
         (*p).locvars = luaM_newarray!(l, sizelocvars as usize, LocVar, (*p).hdr.memcat);
         (*p).sizelocvars = sizelocvars;
 
         for locvar in c_slice_mut((*p).locvars, (*p).sizelocvars as usize) {
-          locvar.varname = read_string(strings, data, size, &mut offset);
+          let Some(varname) = read_string(strings, data, size, &mut offset) else {
+            malformed!(l, chunkname, "bytecode local variable name id is out of range");
+          };
+          locvar.varname = varname;
           locvar.startpc = read_var_int(data, size, &mut offset) as c_int;
           locvar.endpc = read_var_int(data, size, &mut offset) as c_int;
           locvar.reg = read(data, size, &mut offset);
@@ -531,17 +684,30 @@ pub(crate) unsafe fn loadsafe(
         let sizeupvalues = read_var_int(data, size, &mut offset) as c_int;
         LUAU_ASSERT!(sizeupvalues == (*p).nups as c_int);
 
+        // 每个 upvalue 名至少占 1 字节（varint id）
+        if !count_fits(i64::from(sizeupvalues), 1, size, offset) {
+          malformed!(l, chunkname, "bytecode upvalue count is out of range");
+        }
+
         (*p).upvalues = luaM_newarray!(l, sizeupvalues as usize, *mut tstring, (*p).hdr.memcat);
         (*p).sizeupvalues = sizeupvalues;
 
         for uv in c_slice_mut((*p).upvalues, (*p).sizeupvalues as usize) {
-          *uv = read_string(strings, data, size, &mut offset);
+          let Some(name) = read_string(strings, data, size, &mut offset) else {
+            malformed!(l, chunkname, "bytecode upvalue name id is out of range");
+          };
+          *uv = name;
         }
       }
 
       if version >= VERSION_WITH_FEEDBACK {
         // cpp 对 version >= 11 无条件读 feedbackvec（字节码格式 v11 自带）。
         (*p).feedbackvecsize = read_var_int(data, size, &mut offset);
+
+        // 每个 feedback 槽至少占 2 字节（slottype + pc varint）
+        if !count_fits(i64::from((*p).feedbackvecsize), 2, size, offset) {
+          malformed!(l, chunkname, "bytecode feedback slot count is out of range");
+        }
 
         if (*p).feedbackvecsize > 0 {
           (*p).feedbackvec = luaM_newarray!(
@@ -578,7 +744,9 @@ pub(crate) unsafe fn loadsafe(
 
     // "main" proto is pushed to Lua stack
     let mainid = read_var_int(data, size, &mut offset);
-    let main = *protos.data.add(mainid as usize);
+    let Some(main) = proto_at(protos, mainid, protos.count) else {
+      malformed!(l, chunkname, "bytecode main proto id is out of range");
+    };
 
     let thread_obj = l as *mut GCObject;
     if isblack!(thread_obj) {

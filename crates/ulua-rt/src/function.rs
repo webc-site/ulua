@@ -267,7 +267,7 @@ impl Function {
       }
       lua_getfenv(state, -1);
       // stack: [func, env]
-      if lua_type(state, -1) != ttype::TABLE {
+      if lua_type(state, -1) != LuaType::Table as c_int {
         lua_pop(state, 2);
         return None;
       }

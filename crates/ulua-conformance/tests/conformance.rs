@@ -1533,7 +1533,7 @@ fn conformance_gc_dump() {
       lua_resume::lua_resume, lua_setfield::lua_setfield, lua_setmetatable::lua_setmetatable,
     },
     macros::{
-      LUA_PUSHCCLOSURE::LUA_PUSHCCLOSURE, lua_newuserdata::lua_newuserdata,
+      lua_newuserdata::lua_newuserdata, lua_pushcclosure::lua_pushcclosure,
       lua_tostring::lua_tostring,
     },
     records::lua_state::lua_State,
@@ -1579,7 +1579,7 @@ fn conformance_gc_dump() {
     lua_setmetatable(l, -2);
 
     lua_pushinteger(l, 1);
-    LUA_PUSHCCLOSURE(l, Some(lua_silence), c"test".as_ptr(), 1);
+    lua_pushcclosure(l, Some(lua_silence), c"test".as_ptr(), 1);
 
     lua_newbuffer(l, 100);
 

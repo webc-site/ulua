@@ -1,4 +1,4 @@
-use core::{ffi::c_int, mem::zeroed};
+use core::ffi::c_int;
 
 use crate::{
   enums::lua_type::LuaType,
@@ -26,7 +26,7 @@ pub(crate) unsafe extern "C-unwind" fn tclone(l: *mut lua_State) -> c_int {
 
     let tt = lua_h_clone(l, hvalue!((*l).base));
 
-    let mut v: TValue = zeroed();
+    let mut v = TValue::default();
     sethvalue!(l, &mut v, tt);
     luaA_pushvalue(l, &v);
 

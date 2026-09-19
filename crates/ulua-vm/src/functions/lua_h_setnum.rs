@@ -1,7 +1,4 @@
-use core::{
-  ffi::{c_int, c_uint, c_void},
-  mem::zeroed,
-};
+use core::ffi::{c_int, c_uint, c_void};
 
 use crate::{
   functions::{lua_h_getnum::lua_h_getnum, newkey::newkey},
@@ -26,7 +23,7 @@ pub unsafe fn lua_h_setnum(l: *mut lua_State, t: *mut LuaTable, key: c_int) -> *
     if p != luaO_nilobject {
       cast_to!(*mut TValue, p)
     } else {
-      let mut k: TValue = zeroed();
+      let mut k = TValue::default();
       setnvalue!(&mut k, cast_num!(key));
 
       newkey(l, t, &k)

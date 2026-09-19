@@ -140,7 +140,7 @@ pub(crate) unsafe fn raise_structured_error(state: *mut lua_State, err: Error) -
 /// `state` must be valid and `idx` a valid (absolute) stack index.
 pub(crate) unsafe fn recover_wrapped_error(state: *mut lua_State, idx: c_int) -> Option<Error> {
   unsafe {
-    if lua_type(state, idx) != ttype::USERDATA {
+    if lua_type(state, idx) != LuaType::UserData as c_int {
       return None;
     }
     let ptr = lua_touserdata(state, idx);

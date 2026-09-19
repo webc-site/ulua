@@ -2,7 +2,9 @@ use core::{ffi::c_char, ptr::null};
 
 use crate::{
   functions::lua_setfield::lua_setfield,
-  macros::{lua_pushcclosure::LUA_PUSHCCLOSURE, lua_pushcfunction::LUA_PUSHCFUNCTION},
+  macros::{
+    lua_pushcclosure::lua_pushcclosure, lua_pushcfunction::LUA_PUSHCFUNCTION,
+  },
   type_aliases::{lua_c_function::LuaCFunction, lua_state::lua_State},
 };
 
@@ -16,7 +18,7 @@ pub(crate) unsafe fn auxopen(
 ) {
   unsafe {
     LUA_PUSHCFUNCTION(l, u, null());
-    LUA_PUSHCCLOSURE(l, f, name, 1);
+    lua_pushcclosure(l, f, name, 1);
     lua_setfield(l, -2, name);
   }
 }

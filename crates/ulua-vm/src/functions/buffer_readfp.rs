@@ -8,7 +8,7 @@ use ulua_common::macros::luau_big_endian::LUAU_BIG_ENDIAN;
 
 use crate::{
   functions::{
-    buffer_errors::buffer_oob_error, buffer_swapbe::buffer_swapbe,
+    buffer_errors::buffer_oob_error, buffer_swapbe::SwapBe,
     lua_l_checkbuffer::lua_l_checkbuffer, lua_l_checkinteger::lua_l_checkinteger,
     lua_pushnumber::lua_pushnumber,
   },
@@ -21,7 +21,7 @@ use crate::{
 pub(crate) unsafe fn buffer_readfp<T, StorageType>(l: *mut lua_State) -> c_int
 where
   T: Copy + BufferReadableFloat,
-  StorageType: Copy,
+  StorageType: SwapBe,
 {
   unsafe {
     let mut len: usize = 0;
@@ -42,7 +42,7 @@ where
         &mut tmp as *mut StorageType as *mut c_char,
         size_of::<StorageType>(),
       );
-      tmp = buffer_swapbe(tmp);
+      tmp = tmp.swap_be();
       copy_nonoverlapping(
         &tmp as *const StorageType as *const c_char,
         &mut val as *mut T as *mut c_char,

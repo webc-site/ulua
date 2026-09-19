@@ -1,4 +1,3 @@
-use core::mem::zeroed;
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
@@ -50,7 +49,7 @@ pub(crate) unsafe fn validatetable(g: *mut global_State, h: *mut LuaTable) {
       LUAU_ASSERT!(i + next_val >= 0 && i + next_val < sizenode);
 
       if !ttisnil!(gval!(n)) {
-        let mut k: TValue = zeroed();
+        let mut k = TValue::default();
         k.tt = (*gkey!(n)).tt();
         k.value = (*gkey!(n)).value;
 

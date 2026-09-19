@@ -47,7 +47,7 @@ pub unsafe fn lua_v_gettable(
           return;
         }
 
-        tm = fasttm(l, (*h).metatable, TMS::TmIndex as i32);
+        tm = fasttm(l, (*h).metatable, TMS::TmIndex);
         if tm.is_null() {
           setobj2s!(l, val, res);
           return;

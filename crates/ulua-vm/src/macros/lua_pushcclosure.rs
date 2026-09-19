@@ -19,5 +19,3 @@ pub unsafe fn lua_pushcclosure(
     lua_pushcclosurek(l, f, debugname, nup, None);
   }
 }
-
-pub use lua_pushcclosure as LUA_PUSHCCLOSURE;
