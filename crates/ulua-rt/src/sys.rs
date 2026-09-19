@@ -32,6 +32,8 @@ pub(crate) use ulua_vm::functions::lua_getfenv::lua_getfenv;
 pub(crate) use ulua_vm::functions::lua_getfield::lua_getfield;
 // ---- stack / values ------------------------------------------------------
 pub(crate) use ulua_vm::functions::lua_gettop::lua_gettop;
+// ---- 整数子类型（LUA_TINTEGER）精确读回 i64 -------------------------------
+pub(crate) use ulua_vm::functions::lua_l_checkinteger_64::lua_l_checkinteger_64;
 // ---- metatable-aware tostring --------------------------------------------
 pub(crate) use ulua_vm::functions::lua_l_tolstring::lua_l_tolstring;
 // ---- traceback -----------------------------------------------------------
