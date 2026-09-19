@@ -112,11 +112,13 @@ fn integer_and_number_share_nothing() {
 fn string_constants_dedupe_by_content() {
   let mut bcb = BytecodeBuilder::new(None);
 
-  let buf_a = b"hello".to_vec();
-  let buf_b = b"hello".to_vec();
+  // 'static 泄漏两份独立缓冲：指针不同而内容相同，验证去重走内容比较；
+  // 与 builder 的 stringTable 借用契约一致（视图在 finalize 前保持有效）。
+  let buf_a: &'static [u8] = Box::leak(b"hello".to_vec().into_boxed_slice());
+  let buf_b: &'static [u8] = Box::leak("hello".to_string().into_bytes().into_boxed_slice());
 
-  let first = bcb.add_constant_string(StringRef::from_slice(&buf_a));
-  let second = bcb.add_constant_string(StringRef::from_slice(&buf_b));
+  let first = bcb.add_constant_string(StringRef::from_slice(buf_a));
+  let second = bcb.add_constant_string(StringRef::from_slice(buf_b));
   assert_eq!(first, second, "等内容字符串必须复用同一条常量");
 
   let other = bcb.add_constant_string(StringRef::from_slice(b"world"));

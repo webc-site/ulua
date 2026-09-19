@@ -17,7 +17,7 @@ use crate::{
 impl BytecodeBuilder {
   /// 取 import 段的字符串常量（union 读取 + 前置断言，三段复用）。
   /// SAFETY 前提：`idx` 指向的常量在构建时已注册为 String 且索引非 0。
-  fn import_segment_str(&self, idx: i32) -> &StringRef {
+  fn import_segment_str(&self, idx: i32) -> &StringRef<'_> {
     // SAFETY：union 字段 value_string 仅在 r#type == String 的常量上读取，
     // 由下方 LUAU_ASSERT 保证（构建期写入时已定型）。
     let str_idx = unsafe { self.constants[idx as usize].value.value_string };

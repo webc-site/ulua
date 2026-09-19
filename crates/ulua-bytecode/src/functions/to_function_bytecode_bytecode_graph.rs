@@ -18,7 +18,9 @@ pub fn to_function_bytecode_bytecode_builder_comp_time_bc_function(
   let function_id = bcb.begin_function(fn_.numparams, fn_.is_vararg);
 
   if !fn_.debugname.is_empty() {
-    bcb.set_debug_function_name(StringRef::from(fn_.debugname.as_str()));
+    // SAFETY：cpp 同款契约——`fn_`（及其 String 字段）必须在 `bcb` 序列化
+    // （`end_function`/`finalize`）完成前保持存活；builder 只借用不拥有。
+    bcb.set_debug_function_name(unsafe { StringRef::from_slice_static(fn_.debugname.as_bytes()) });
   }
 
   bcb.set_debug_function_line_defined(fn_.linedefined as i32);
@@ -29,7 +31,8 @@ pub fn to_function_bytecode_bytecode_builder_comp_time_bc_function(
   }
 
   for upval in &fn_.upvalue_names {
-    bcb.push_debug_upval(StringRef::from(upval.as_str()));
+    // SAFETY：同上，`fn_` 存活至字符串表落盘（见 `set_debug_function_name` 处注释）。
+    bcb.push_debug_upval(unsafe { StringRef::from_slice_static(upval.as_bytes()) });
   }
 
   // cpp `std::vector<uint32_t> consts`：addConstant* 的 int32_t id 隐式转为 u32。
@@ -91,8 +94,9 @@ pub fn to_function_bytecode_bytecode_builder_comp_time_bc_function(
   }
 
   for local in &fn_.locals {
+    // SAFETY：同上，`fn_` 存活至字符串表落盘（见 `set_debug_function_name` 处注释）。
     bcb.push_debug_local(
-      StringRef::from(local.varname.as_str()),
+      unsafe { StringRef::from_slice_static(local.varname.as_bytes()) },
       local.reg,
       local.startpc,
       local.endpc,

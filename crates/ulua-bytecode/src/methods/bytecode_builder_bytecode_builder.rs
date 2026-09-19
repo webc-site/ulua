@@ -1,5 +1,4 @@
 use alloc::{string::String, vec::Vec};
-use core::ptr;
 
 use ulua_common::{macros::luau_assert::LUAU_ASSERT, records::dense_hash_map::DenseHashMap};
 
@@ -27,10 +26,7 @@ impl BytecodeBuilder {
 
     let proto_map = DenseHashMap::new(!0u32);
 
-    let string_table = DenseHashMap::new(StringRef {
-      data: ptr::null(),
-      length: 0,
-    });
+    let string_table = DenseHashMap::new(StringRef::NULL);
 
     let mut result = BytecodeBuilder {
       functions: Vec::new(),

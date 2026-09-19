@@ -32,7 +32,9 @@ impl BytecodeBuilder {
     // 无法在 iter_mut 借用存活期间调用（StringRef 存裸指针，借用即止）。
     for i in 0..self.userdata_types.len() {
       if self.userdata_types[i].used {
-        let sref = StringRef::from_slice(self.userdata_types[i].name.as_bytes());
+        // SAFETY：`name` 归属 `self.userdata_types`，直到 `finalize` 把字符串表写出
+        // 之前不会被释放或移动，满足 `from_slice_static` 的契约（借用即止）。
+        let sref = unsafe { StringRef::from_slice_static(self.userdata_types[i].name.as_bytes()) };
         let entry = self.add_string_table_entry(sref);
         self.userdata_types[i].name_ref = entry;
       }

@@ -4,7 +4,7 @@ use crate::{
 };
 
 impl BytecodeBuilder {
-  pub fn add_string_table_entry(&mut self, value: StringRef) -> u32 {
+  pub fn add_string_table_entry(&mut self, value: StringRef<'static>) -> u32 {
     if let Some(idx) = self.string_table.find(&value) {
       return *idx;
     }

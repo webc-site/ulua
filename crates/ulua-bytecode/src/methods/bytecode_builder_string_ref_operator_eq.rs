@@ -1,7 +1,7 @@
 use crate::records::string_ref::StringRef;
 
-impl StringRef {
-  pub fn operator_eq(&self, other: &StringRef) -> bool {
+impl StringRef<'_> {
+  pub fn operator_eq(&self, other: &Self) -> bool {
     self == other
   }
 }

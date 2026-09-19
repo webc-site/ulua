@@ -3,7 +3,7 @@ use crate::records::{
 };
 
 impl BytecodeBuilder {
-  pub fn push_debug_upval(&mut self, name: StringRef) {
+  pub fn push_debug_upval(&mut self, name: StringRef<'static>) {
     let index = self.add_string_table_entry(name);
 
     let upval = DebugUpval { name: index };

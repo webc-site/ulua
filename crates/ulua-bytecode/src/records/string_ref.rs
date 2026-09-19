@@ -18,7 +18,7 @@ use core::{
 /// 抹成"任意"，于是 safe API 能铸出一个可以在源缓冲析构后继续读的视图
 /// （局部 `Vec` 先 drop 即 UAF，`as_bytes`/`memchr` 越界读）。
 #[derive(Debug, Clone, Copy, Default)]
-pub struct StringRef<'a = 'static> {
+pub struct StringRef<'a> {
   pub(crate) data: *const u8,
   pub(crate) length: usize,
   /// 唯一用途：把 `data`/`length` 与 `'a` 关联起来，使本结构在 `'a` 结束前不可使用。
@@ -178,7 +178,7 @@ impl<'b> PartialEq<&'b str> for StringRef<'_> {
   }
 }
 
-impl<'b> PartialEq<StringRef<'_>> for &'b str {
+impl PartialEq<StringRef<'_>> for &str {
   #[inline]
   fn eq(&self, other: &StringRef<'_>) -> bool {
     self.as_bytes() == other.as_bytes()

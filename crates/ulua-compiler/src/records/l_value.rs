@@ -10,7 +10,7 @@ pub struct LValue {
   pub(crate) upval: u8,
   pub(crate) index: u8,
   pub(crate) number: u8,
-  pub(crate) name: StringRef,
+  pub(crate) name: StringRef<'static>,
   pub(crate) location: Location,
 }
 

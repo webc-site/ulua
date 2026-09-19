@@ -9,7 +9,7 @@ use crate::{
 };
 
 impl BytecodeBuilder {
-  pub fn add_constant_string(&mut self, value: impl Into<StringRef>) -> i32 {
+  pub fn add_constant_string(&mut self, value: impl Into<StringRef<'static>>) -> i32 {
     let index = self.add_string_table_entry(value.into());
 
     let c = Constant {

@@ -3,7 +3,7 @@ use alloc::string::String;
 use crate::records::{bytecode_builder::BytecodeBuilder, string_ref::StringRef};
 
 impl BytecodeBuilder {
-  pub fn set_debug_function_name(&mut self, name: StringRef) {
+  pub fn set_debug_function_name(&mut self, name: StringRef<'static>) {
     let index = self.add_string_table_entry(name);
 
     self.functions[self.current_function as usize].debugname = index;

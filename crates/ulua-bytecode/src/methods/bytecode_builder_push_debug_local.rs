@@ -4,7 +4,7 @@ use crate::records::{
 };
 
 impl BytecodeBuilder {
-  pub fn push_debug_local(&mut self, name: StringRef, reg: u8, startpc: u32, endpc: u32) {
+  pub fn push_debug_local(&mut self, name: StringRef<'static>, reg: u8, startpc: u32, endpc: u32) {
     let index = self.add_string_table_entry(name);
 
     let local = DebugLocal {
