@@ -39,6 +39,7 @@ pub unsafe fn write(
     let dst = from_raw_parts_mut(buffer as *mut u8, null_terminated_size);
     // cpp `memcpy(buffer, contents->c_str(), nullTerminatedSize)`：连同结尾 NUL
     dst[..contents.len()].copy_from_slice(contents.as_bytes());
+    dst[contents.len()] = 0;
     *size_out = null_terminated_size;
   }
 

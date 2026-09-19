@@ -33,7 +33,6 @@ pub fn get_resource_path_0() -> Option<alloc::string::String> {
     }
     let main_bundle_url = CFBundleCopyBundleURL(main_bundle);
     if main_bundle_url.is_null() {
-      CFRelease(main_bundle);
       return None;
     }
 
@@ -45,13 +44,13 @@ pub fn get_resource_path_0() -> Option<alloc::string::String> {
       PATH_MAX as isize,
     ) == 0
     {
+      // CFBundleGetMainBundle 返回非拥有引用（Get 规则），不得 CFRelease——此处有意修正上游
+      // cpp/tests/RequireByString.test.cpp:52,60,65 的 over-release。
       CFRelease(main_bundle_url);
-      CFRelease(main_bundle);
       return None;
     }
 
     CFRelease(main_bundle_url);
-    CFRelease(main_bundle);
 
     let len = path_buffer.iter().position(|&c| c == 0).unwrap_or(PATH_MAX);
     let s = alloc::string::String::from_utf8(path_buffer[..len].to_vec()).ok()?;
