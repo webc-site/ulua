@@ -30,10 +30,7 @@ pub(crate) unsafe extern "C-unwind" fn luaopen_coroutine(l: *mut lua_State) -> c
   }
 }
 
-struct SyncLuaLReg([LuaLReg; 8]);
-unsafe impl Sync for SyncLuaLReg {}
-
-static CO_FUNCS: SyncLuaLReg = SyncLuaLReg([
+static CO_FUNCS: SyncLuaLReg<8> = SyncLuaLReg([
   LuaLReg {
     name: c"create".as_ptr(),
     func: Some(cocreate),

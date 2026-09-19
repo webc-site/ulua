@@ -21,13 +21,7 @@ pub(crate) unsafe extern "C-unwind" fn str_lower(l: *mut lua_State) -> c_int {
     let mut len: usize = 0;
     let s = lua_l_checklstring(l, 1, &mut len);
 
-    let mut b: LuaLStrbuf = LuaLStrbuf {
-      p: null_mut(),
-      end: null_mut(),
-      l: null_mut(),
-      storage: null_mut(),
-      buffer: [0; LUA_BUFFERSIZE],
-    };
+    let mut b = LuaLStrbuf::new();
     let ptr = lua_l_buffinitsize(l, &mut b, len);
 
     // SAFETY：ptr/s 均指向 len 字节的可写/可读缓冲（buffinitsize 按 len 分配）。

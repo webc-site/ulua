@@ -17,7 +17,6 @@ name = "ulua-analyze"
 path = "src/main.rs"
 
 [dependencies]
-gxhash = "3"
 ulua-analysis = { path = "../ulua-analysis", version = "0.1.2" }
 ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
 ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.2" }

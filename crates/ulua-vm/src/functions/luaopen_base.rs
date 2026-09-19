@@ -22,10 +22,7 @@ use crate::{
   type_aliases::lua_state::lua_State,
 };
 
-struct BaseFuncs([LuaLReg; 20]);
-unsafe impl Sync for BaseFuncs {}
-
-static BASE_FUNCS: BaseFuncs = BaseFuncs([
+static BASE_FUNCS: SyncLuaLReg<20> = SyncLuaLReg([
   LuaLReg {
     name: c"assert".as_ptr(),
     func: Some(lua_b_assert),

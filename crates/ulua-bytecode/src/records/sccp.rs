@@ -158,6 +158,16 @@ impl SccpState {
   pub fn uses_of(&self, def: BcOp) -> &[BcOp] {
     self.op_uses.get(&def).map_or(&[], |v| v.as_slice())
   }
+
+  /// 把 def 的全部使用点压入 SSA 工作表。
+  ///
+  /// 字段级拆分借用（op_uses 只读出、ssa_worklist 写入），调用方无需为绕开
+  /// 借用冲突而 `to_vec` 快照——visit 阶段每次格值变化都要走这里，属热路径。
+  pub fn defer_uses_to_ssa(&mut self, def: BcOp) {
+    if let Some(uses) = self.op_uses.find_mut(&def) {
+      self.ssa_worklist.extend(uses.iter().copied());
+    }
+  }
 }
 
 impl Default for SccpState {

@@ -1,6 +1,5 @@
 use alloc::{boxed::Box, rc::Rc, string::String, vec::Vec};
 use std::{
-  collections::HashSet,
   fs::write,
   panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
   process::exit,
@@ -18,7 +17,7 @@ use ulua_analysis::{
     time_limit_error::TimeLimitError, type_error::TypeError,
     type_error_to_string_options::TypeErrorToStringOptions, user_cancel_error::UserCancelError,
   },
-  type_aliases::{frontend_callbacks::TaskQueue, module_name_type::ModuleName},
+  type_aliases::{collections::HashSet, frontend_callbacks::TaskQueue, module_name_type::ModuleName},
 };
 use ulua_ast::enums::mode::Mode;
 use ulua_cli_lib::functions::{

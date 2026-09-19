@@ -1,5 +1,10 @@
+use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
+
 use crate::{
-  records::{fuel_initializer::FuelInitializer, normalizer::Normalizer},
+  records::{
+    fuel_initializer::FuelInitializer, normalizer::Normalizer,
+    normalizer_hit_limits::NormalizerHitLimits,
+  },
   type_aliases::type_pack_id::TypePackId,
 };
 
@@ -16,6 +21,14 @@ impl Normalizer {
       initialized_fuel: false,
     };
     unsafe { fi.fuel_initializer_not_null_normalizer(self as *mut Normalizer) };
-    self.intersection_of_type_packs_internal(here, there)
+
+    // 对齐 cpp try/catch：仅捕获 NormalizerHitLimits 并返回 None，其余 panic 继续传播。
+    match catch_unwind(AssertUnwindSafe(|| {
+      self.intersection_of_type_packs_internal(here, there)
+    })) {
+      Ok(result) => result,
+      Err(payload) if payload.downcast_ref::<NormalizerHitLimits>().is_some() => None,
+      Err(payload) => resume_unwind(payload),
+    }
   }
 }

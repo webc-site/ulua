@@ -30,13 +30,7 @@ pub const LUAL_PACKPADBYTE: u8 = 0x00;
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub(crate) unsafe extern "C-unwind" fn str_pack(l: *mut lua_State) -> c_int {
   unsafe {
-    let mut b = LuaLStrbuf {
-      p: null_mut(),
-      end: null_mut(),
-      l: null_mut(),
-      storage: null_mut(),
-      buffer: [0; LUA_BUFFERSIZE],
-    };
+    let mut b = LuaLStrbuf::new();
     let mut h = Header::default();
     let mut fmt = luaL_checkstring!(l, 1); // format string
     let mut arg = 1; // current argument to pack

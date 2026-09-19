@@ -29,13 +29,7 @@ pub(crate) unsafe extern "C-unwind" fn utfchar(l: *mut lua_State) -> c_int {
       let len = buffutfchar(l, 1, buff.as_mut_ptr(), &mut charstr as *mut *const c_char);
       lua_pushlstring(l, charstr, len as usize);
     } else {
-      let mut b = LuaLStrbuf {
-        p: null_mut(),
-        end: null_mut(),
-        l: null_mut(),
-        storage: null_mut(),
-        buffer: [0; LUA_BUFFERSIZE],
-      };
+      let mut b = LuaLStrbuf::new();
       lua_l_buffinit(l, &mut b as *mut LuaLStrbuf);
       for i in 1..=n {
         let len = buffutfchar(l, i, buff.as_mut_ptr(), &mut charstr as *mut *const c_char);

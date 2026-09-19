@@ -13,10 +13,7 @@ use crate::{
   type_aliases::lua_state::lua_State,
 };
 
-struct SyncLuaLReg([LuaLReg; 6]);
-unsafe impl Sync for SyncLuaLReg {}
-
-static FUNCS: SyncLuaLReg = SyncLuaLReg([
+static FUNCS: SyncLuaLReg<6> = SyncLuaLReg([
   LuaLReg {
     name: c"offset".as_ptr(),
     func: Some(byteoffset),

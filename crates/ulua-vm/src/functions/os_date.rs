@@ -110,13 +110,7 @@ pub(crate) unsafe extern "C-unwind" fn os_date(l: *mut lua_State) -> c_int {
       setfield(l, c"yday", (*stm).tm_yday + 1);
       setboolfield(l, c"isdst", (*stm).tm_isdst);
     } else {
-      let mut b: LuaLStrbuf = LuaLStrbuf {
-        p: null_mut(),
-        end: null_mut(),
-        l: null_mut(),
-        storage: null_mut(),
-        buffer: [0; LUA_BUFFERSIZE],
-      };
+      let mut b = LuaLStrbuf::new();
       lua_l_buffinit(l, &mut b);
 
       // 零拷贝迭代剩余格式串；peek 前瞻实现 C++ 的 *(s + 1) 判定

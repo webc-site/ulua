@@ -14,10 +14,7 @@ use crate::{
   type_aliases::lua_state::lua_State,
 };
 
-struct TabFuncs([LuaLReg; 18]);
-unsafe impl Sync for TabFuncs {}
-
-static TAB_FUNCS: TabFuncs = TabFuncs([
+static TAB_FUNCS: SyncLuaLReg<18> = SyncLuaLReg([
   LuaLReg {
     name: c"concat".as_ptr(),
     func: Some(tconcat),

@@ -45,13 +45,7 @@ pub(crate) unsafe extern "C-unwind" fn str_rep(l: *mut lua_State) -> c_int {
 
     let total = len * (n as usize);
 
-    let mut b: LuaLStrbuf = LuaLStrbuf {
-      p: null_mut(),
-      end: null_mut(),
-      l: null_mut(),
-      storage: null_mut(),
-      buffer: [0; LUA_BUFFERSIZE],
-    };
+    let mut b = LuaLStrbuf::new();
     let mut ptr = lua_l_buffinitsize(l, &mut b, total);
 
     let start = ptr;

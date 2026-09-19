@@ -16,26 +16,20 @@ impl<I: VmConstOps + ?Sized> Sccp<'_, '_, I> {
   pub fn visit_phi(&mut self, phi_op: BcOp) {
     LUAU_ASSERT!(phi_op.kind == BcOpKind::Phi);
 
-    let phi_ops: Vec<BcOp> = self
-      .func
-      .phi(phi_op)
-      .operator_deref()
-      .ops
-      .as_slice()
-      .to_vec();
-    LUAU_ASSERT!(!phi_ops.is_empty());
-
+    // 借用拆分：phi 操作数只读借 `self.func`，`operand_lattice` 写 `self.state`，
+    // 两者是 Sccp 的不相交字段，无需快照整份操作数表。
     let mut fold = Constness::Undetermined;
-    for op in phi_ops {
-      let lattice = self.state.operand_lattice(op);
-      fold = lattice.merge(&fold);
+    {
+      let phi_ops = self.func.phi(phi_op).operator_deref().ops.as_slice();
+      LUAU_ASSERT!(!phi_ops.is_empty());
+      for &op in phi_ops {
+        fold = self.state.operand_lattice(op).merge(&fold);
+      }
     }
 
     let prev_lattice = *self.state.op_constness.get_or_insert(phi_op);
     if fold != prev_lattice {
-      for use_op in self.state.uses_of(phi_op).to_vec() {
-        self.state.ssa_worklist.push_back(use_op);
-      }
+      self.state.defer_uses_to_ssa(phi_op);
     }
     self.state.op_constness.insert(phi_op, fold);
   }
@@ -43,38 +37,41 @@ impl<I: VmConstOps + ?Sized> Sccp<'_, '_, I> {
   /// cpp `Sccp::visitInst`：求值、对比旧格值、登记跳转落点。
   pub fn visit_inst(&mut self, inst_op: BcOp) {
     LUAU_ASSERT!(inst_op.kind == BcOpKind::Inst);
-    let (opcode, inst_ops, inst_block) = {
-      let inst = self.func.inst(inst_op);
-      (
-        inst.operator_deref().op,
-        inst.operator_deref().ops.as_slice().to_vec(),
-        inst.operator_deref().block,
-      )
+
+    // 借用拆分：本块只读借 `self.func`，跨后续 `&mut self` 调用（evaluate 等）
+    // 仅携带 Copy 的标量与 BcOp，不持有任何切片，免整份 ops 快照。
+    let (opcode, inst_block, capture_ref_src) = {
+      let inst_repr = self.func.inst(inst_op).operator_deref();
+      let opcode = inst_repr.op;
+      let inst_block = inst_repr.block;
+
+      // CAPTURE REF 的源可经 SETUPVAL 外部修改，SSA 图不建模该别名，
+      // 将源标记为非常量以避免折叠出陈旧值
+      let mut capture_ref_src = None;
+      if opcode == LuauOpcode::LOP_CAPTURE && inst_repr.ops.len() >= 2 {
+        let capture_type_op = inst_repr.ops[0];
+        LUAU_ASSERT!(capture_type_op.kind == BcOpKind::Imm);
+        let capture_imm = *self.func.imm_op(capture_type_op);
+        let is_ref = capture_imm.kind == BcImmKind::Int
+          // Safety: kind == Int 时 value_int 为活跃字段
+          && unsafe { capture_imm.value.value_int } == (LuauCaptureType::LCT_REF as u32) as i32;
+        if is_ref {
+          capture_ref_src = Some(inst_repr.ops[1]);
+        }
+      }
+      (opcode, inst_block, capture_ref_src)
     };
 
-    // CAPTURE REF 的源可经 SETUPVAL 外部修改，SSA 图不建模该别名，
-    // 将源标记为非常量以避免折叠出陈旧值
-    if opcode == LuauOpcode::LOP_CAPTURE && inst_ops.len() >= 2 {
-      let capture_type_op = inst_ops[0];
-      LUAU_ASSERT!(capture_type_op.kind == BcOpKind::Imm);
-      let capture_imm = *self.func.imm_op(capture_type_op);
-      let is_ref = capture_imm.kind == BcImmKind::Int
-        // Safety: kind == Int 时 value_int 为活跃字段
-        && unsafe { capture_imm.value.value_int } == (LuauCaptureType::LCT_REF as u32) as i32;
-      if is_ref {
-        let src_op = inst_ops[1];
-        let prev = *self.state.op_constness.get_or_insert(src_op);
-        if !matches!(prev, Constness::NotAConstant)
-          && matches!(src_op.kind, BcOpKind::Inst | BcOpKind::Phi)
-        {
-          self
-            .state
-            .op_constness
-            .insert(src_op, Constness::NotAConstant);
-          for use_op in self.state.uses_of(src_op).to_vec() {
-            self.state.ssa_worklist.push_back(use_op);
-          }
-        }
+    if let Some(src_op) = capture_ref_src {
+      let prev = *self.state.op_constness.get_or_insert(src_op);
+      if !matches!(prev, Constness::NotAConstant)
+        && matches!(src_op.kind, BcOpKind::Inst | BcOpKind::Phi)
+      {
+        self
+          .state
+          .op_constness
+          .insert(src_op, Constness::NotAConstant);
+        self.state.defer_uses_to_ssa(src_op);
       }
     }
 
@@ -83,9 +80,7 @@ impl<I: VmConstOps + ?Sized> Sccp<'_, '_, I> {
 
     let new_val = lattice.merge(&prev_lattice);
     if new_val != prev_lattice {
-      for use_op in self.state.uses_of(inst_op).to_vec() {
-        self.state.ssa_worklist.push_back(use_op);
-      }
+      self.state.defer_uses_to_ssa(inst_op);
     }
 
     for target in self.jump_targets(inst_op).as_slice() {

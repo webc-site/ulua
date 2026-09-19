@@ -25,10 +25,7 @@ use crate::{
   type_aliases::lua_state::lua_State,
 };
 
-struct MathFuncs([LuaLReg; 38]);
-unsafe impl Sync for MathFuncs {}
-
-static MATH_FUNCS: MathFuncs = MathFuncs([
+static MATH_FUNCS: SyncLuaLReg<38> = SyncLuaLReg([
   LuaLReg {
     name: c"abs".as_ptr(),
     func: Some(math_abs),

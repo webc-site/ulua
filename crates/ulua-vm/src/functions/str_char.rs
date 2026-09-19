@@ -21,13 +21,7 @@ pub(crate) unsafe extern "C-unwind" fn str_char(l: *mut lua_State) -> c_int {
   unsafe {
     let n = lua_gettop(l); // number of arguments
 
-    let mut b = LuaLStrbuf {
-      p: null_mut(),
-      end: null_mut(),
-      l: null_mut(),
-      storage: null_mut(),
-      buffer: [0; LUA_BUFFERSIZE],
-    };
+    let mut b = LuaLStrbuf::new();
     let ptr = lua_l_buffinitsize(l, &mut b as *mut LuaLStrbuf, n as usize);
 
     // 输出切片 zip 参数序号：写入受切片边界约束，消除手写 offset 算术

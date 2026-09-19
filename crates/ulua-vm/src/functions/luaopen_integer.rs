@@ -42,9 +42,6 @@ pub(crate) unsafe extern "C-unwind" fn luaopen_integer(l: *mut lua_State) -> c_i
 }
 
 // cpp lintlib.cpp `int64lib` 注册表（39 项 + 哨兵，顺序与 C++ 一致）。
-struct Int64Lib([LuaLReg; 40]);
-unsafe impl Sync for Int64Lib {}
-
 impl Deref for Int64Lib {
   type Target = [LuaLReg; 40];
 
@@ -53,7 +50,7 @@ impl Deref for Int64Lib {
   }
 }
 
-static INT64LIB: Int64Lib = Int64Lib([
+static INT64LIB: SyncLuaLReg<40> = SyncLuaLReg([
   LuaLReg {
     name: c"create".as_ptr(),
     func: Some(int64_create),

@@ -74,9 +74,6 @@ macro_rules! reg {
   };
 }
 
-struct SyncLuaLReg<const N: usize>([LuaLReg; N]);
-unsafe impl<const N: usize> Sync for SyncLuaLReg<N> {}
-
 // 共享基表（integer 开关不影响的前 26 个条目，编译期拼接出两个注册表）
 const BUFFER_BASE: [LuaLReg; 26] = [
   reg!(c"create", buffer_create),

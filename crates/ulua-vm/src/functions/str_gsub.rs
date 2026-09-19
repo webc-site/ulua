@@ -42,13 +42,7 @@ pub(crate) unsafe extern "C-unwind" fn str_gsub(l: *mut lua_State) -> c_int {
     let mut n: i32 = 0;
 
     let mut ms: MatchState = zeroed();
-    let mut b: LuaLStrbuf = LuaLStrbuf {
-      p: null_mut(),
-      end: null_mut(),
-      l: null_mut(),
-      storage: null_mut(),
-      buffer: [0; LUA_BUFFERSIZE],
-    };
+    let mut b = LuaLStrbuf::new();
 
     luaL_argexpected!(
       l,

@@ -71,11 +71,12 @@ impl<I: VmConstOps + ?Sized> Sccp<'_, '_, I> {
 
   /// cpp `Sccp::jumpTargets`：按指令的跳转语义给出全部落点；空结果表示非分支指令。
   pub fn jump_targets(&mut self, inst_op: BcOp) -> SmallVector<JumpTarget, 2> {
-    let (opcode, ops): (LuauOpcode, Vec<BcOp>) = {
+    // 快照进 SmallVector：常规分支 ≤4 个操作数时栈内联，不走堆
+    let (opcode, ops): (LuauOpcode, SmallVector<BcOp, 4>) = {
       let inst = self.func.inst(inst_op);
       (
         inst.operator_deref().op,
-        inst.operator_deref().ops.as_slice().to_vec(),
+        inst.operator_deref().ops.clone(),
       )
     };
     let ops = ops.as_slice();

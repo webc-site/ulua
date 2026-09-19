@@ -49,13 +49,7 @@ pub(crate) unsafe extern "C-unwind" fn str_format(l: *mut lua_State) -> c_int {
     let mut strfrmt = lua_l_checklstring(l, arg, &mut sfl);
     let strfrmt_end = strfrmt.add(sfl);
 
-    let mut b: LuaLStrbuf = LuaLStrbuf {
-      p: null_mut(),
-      end: null_mut(),
-      l: null_mut(),
-      storage: null_mut(),
-      buffer: [0; LUA_BUFFERSIZE],
-    };
+    let mut b = LuaLStrbuf::new();
     lua_l_buffinit(l, &mut b);
 
     while strfrmt < strfrmt_end {

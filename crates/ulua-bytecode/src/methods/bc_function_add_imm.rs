@@ -9,6 +9,8 @@ impl BcFunction {
   pub fn add_imm(&mut self, kind: BcImmKind) -> BcOp {
     let imm = BcImm {
       kind,
+      // SAFETY：BcImmValue 各分支(bool/i32/u32)全零位型均合法，
+      // kind 未限定活跃字段前仅作占位，读取必先经 kind 判别
       value: unsafe { mem::zeroed() },
     };
     self.immediates.push(imm);

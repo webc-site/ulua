@@ -42,13 +42,7 @@ pub unsafe fn lua_l_traceback(
       }
     }
 
-    let mut buf = LuaLStrbuf {
-      p: null_mut(),
-      end: null_mut(),
-      l: null_mut(),
-      storage: null_mut(),
-      buffer: [0; LUA_BUFFERSIZE],
-    };
+    let mut buf = LuaLStrbuf::new();
     lua_l_buffinit(l, &mut buf);
 
     if let Some(msg_str) = msg {

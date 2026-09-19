@@ -2,9 +2,10 @@
 
 use alloc::{string::String, vec::Vec};
 use core::cell::UnsafeCell;
-use std::collections::HashMap;
 
-use ulua_analysis::records::config_resolver::ConfigResolver;
+use ulua_analysis::{
+  records::config_resolver::ConfigResolver, type_aliases::collections::HashMap,
+};
 use ulua_config::records::config::Config;
 
 /// Port of `struct CliConfigResolver : Luau::ConfigResolver` (`CLI/src/Analyze.cpp:231-321`).
@@ -28,9 +29,13 @@ use ulua_config::records::config::Config;
 pub struct CliConfigResolver {
   pub base: ConfigResolver,
   pub default_config: Config,
-  /// 值走 `Box` 堆上定址：std HashMap 在后续 insert 触发 grow 时会 memmove
-  /// 全部内联值，已返回的 `&Config` 即悬垂；Box 使值地址与表结构解耦，
+  /// 值走 `Box` 堆上定址：哈希表 insert 触发 grow 时会 memmove 全部内联值，
+  /// 已返回的 `&Config` 即悬垂；Box 使值地址与表结构解耦，
   /// 等价 cpp `std::unordered_map` 的节点式地址稳定（缓存项永不删除）。
+  /// 表用工作区统一的 foldhash `FixedState` 别名（先例
+  /// `ulua-analysis/src/type_aliases/collections.rs`）：仅 get/insert，无迭代，
+  /// 仅去掉 std 默认 SipHash；规范首选 gxhash，但其硬性要求 `+aes,+neon`
+  /// 目标特性（否则 `compile_error!`），x86_64 默认构建直接编不过。
   pub config_cache: UnsafeCell<HashMap<String, Box<Config>>>,
   pub config_errors: UnsafeCell<Vec<(String, String)>>,
 }

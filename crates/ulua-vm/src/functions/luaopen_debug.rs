@@ -6,10 +6,7 @@ use crate::{
   type_aliases::lua_state::lua_State,
 };
 
-struct DblibWrapper([LuaLReg; 3]);
-unsafe impl Sync for DblibWrapper {}
-
-static DBLIB: DblibWrapper = DblibWrapper([
+static DBLIB: SyncLuaLReg<3> = SyncLuaLReg([
   LuaLReg {
     name: c"info".as_ptr(),
     func: Some(db_info),

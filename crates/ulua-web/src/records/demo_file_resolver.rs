@@ -5,16 +5,19 @@
 //! delegating to the inherent methods in `methods/`.
 //!
 //! C++ member: `std::unordered_map<ModuleName, std::string> source;` — ported as
-//! a typed `HashMap<ModuleName, String>` (no untyped JSON).
+//! a typed `HashMap<ModuleName, String>` (no untyped JSON)。表用工作区统一的
+//! foldhash `FixedState` 别名（先例 `ulua-analysis/src/type_aliases/collections.rs`），
+//! 仅 get/insert/clear、无迭代；规范首选 gxhash，但其硬性要求 `+aes,+neon`
+//! 目标特性，wasm32（本 crate 的发布目标）连平台实现都没有。
 
-use std::{collections::HashMap, string::String};
+use std::string::String;
 
 use ulua_analysis::{
   records::{
     file_resolver::FileResolver, module_info::ModuleInfo, source_code::SourceCode,
     type_check_limits::TypeCheckLimits,
   },
-  type_aliases::module_name_type::ModuleName,
+  type_aliases::{collections::HashMap, module_name_type::ModuleName},
 };
 use ulua_ast::records::ast_expr::AstExpr;
 

@@ -26,13 +26,7 @@ pub(crate) unsafe extern "C-unwind" fn str_upper(l: *mut lua_State) -> c_int {
     let mut len: usize = 0;
     let s = lua_l_checklstring(l, 1, &mut len);
 
-    let mut b: LuaLStrbuf = LuaLStrbuf {
-      p: null_mut(),
-      end: null_mut(),
-      l: null_mut(),
-      storage: null_mut(),
-      buffer: [0; LUA_BUFFERSIZE],
-    };
+    let mut b = LuaLStrbuf::new();
     let ptr = lua_l_buffinitsize(l, &mut b, len);
 
     // 源与目标切片 zip 单次遍历，消除索引与越界检查

@@ -43,7 +43,9 @@ impl Normalizer {
       initialized_fuel: false,
     };
     unsafe { fi.fuel_initializer_not_null_normalizer(self as *mut Normalizer) };
-    let _ = fi;
+    // 必须绑定命名变量：`let _ = fi` 会立即 drop，FuelInitializer 析构将刚初始化的
+    // fuel 清空，导致整个 normalize 子树燃料计量失效（对齐 cpp `FuelInitializer fi{...}`）。
+    let _fi = fi;
 
     let res = self.union_normal_with_ty(
       &mut norm,

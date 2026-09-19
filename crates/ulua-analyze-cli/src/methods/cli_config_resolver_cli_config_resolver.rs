@@ -1,8 +1,9 @@
 use alloc::vec::Vec;
 use core::cell::UnsafeCell;
-use std::collections::HashMap;
 
-use ulua_analysis::records::config_resolver::ConfigResolver;
+use ulua_analysis::{
+  records::config_resolver::ConfigResolver, type_aliases::collections::HashMap,
+};
 use ulua_ast::enums::mode::Mode;
 use ulua_config::records::config::Config;
 

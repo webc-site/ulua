@@ -18,10 +18,7 @@ use crate::{
   type_aliases::lua_state::lua_State,
 };
 
-struct VectorFuncs([LuaLReg; 15]);
-unsafe impl Sync for VectorFuncs {}
-
-static VECTOR_FUNCS: VectorFuncs = VectorFuncs([
+static VECTOR_FUNCS: SyncLuaLReg<15> = SyncLuaLReg([
   LuaLReg {
     name: c"create".as_ptr(),
     func: Some(vector_create),
