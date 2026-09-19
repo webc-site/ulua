@@ -1,0 +1,206 @@
+use alloc::string::String;
+
+use crate::{
+  functions::{
+    bad_setting::{SETTING_FALSE, SETTING_TRUE},
+    parse_alias::parse_alias,
+    parse_lint_rule_string::parse_lint_rule_string,
+    parse_mode_string::parse_mode_string,
+  },
+  records::{
+    alias_options::AliasOptions, config::Config, config_table::ConfigTable,
+    config_value::ConfigValue,
+  },
+};
+
+// 雷同错误串常量化
+const ERR_LINT_VALUE_NOT_BOOL: &str = "configuration values in \"lint\" table must be booleans";
+
+/// 对应 C++ `createLuauConfigFromLuauTable`：把 "luau" 子表套用到 `config`。
+pub(crate) fn create_luau_config_from_luau_table(
+  config: &mut Config,
+  luau_table: &ConfigTable,
+  alias_options: Option<AliasOptions>,
+) -> Option<String> {
+  for (k, v) in luau_table.iter() {
+    let Some(key) = k.0.get_if_0() else {
+      return Some(String::from(
+        "configuration keys in \"luau\" table must be strings",
+      ));
+    };
+
+    match key.as_str() {
+      "languagemode" => {
+        let Some(value) = v.get_string() else {
+          return Some(String::from(
+            "configuration value for key \"languagemode\" must be a string",
+          ));
+        };
+
+        match parse_mode_string(value, false) {
+          Ok(mode) => config.mode = mode,
+          Err(error_message) => return Some(error_message),
+        }
+      }
+
+      "lint" => {
+        let Some(lint) = v.get_table() else {
+          return Some(String::from(
+            "configuration value for key \"lint\" must be a table",
+          ));
+        };
+
+        // 先处理通配符，保证覆盖顺序符合预期
+        if let Some(value) = lint.find_str("*")
+          && let Some(error_message) = apply_lint(config, "*", value)
+        {
+          return Some(error_message);
+        }
+
+        for (k, v) in lint.iter() {
+          let Some(warning_name) = k.0.get_if_0() else {
+            return Some(String::from(
+              "configuration keys in \"lint\" table must be strings",
+            ));
+          };
+
+          if warning_name == "*" {
+            continue; // 上面已处理
+          }
+
+          if let Some(error_message) = apply_lint(config, warning_name, v) {
+            return Some(error_message);
+          }
+        }
+      }
+
+      "linterrors" => {
+        let Some(value) = v.get_bool() else {
+          return Some(String::from(
+            "configuration value for key \"linterrors\" must be a boolean",
+          ));
+        };
+
+        config.lint_errors = *value;
+      }
+
+      "typeerrors" => {
+        let Some(value) = v.get_bool() else {
+          return Some(String::from(
+            "configuration value for key \"typeerrors\" must be a boolean",
+          ));
+        };
+
+        config.type_errors = *value;
+      }
+
+      "globals" => {
+        let Some(globals_table) = v.get_table() else {
+          return Some(String::from(
+            "configuration value for key \"globals\" must be an array of strings",
+          ));
+        };
+
+        let mut globals = vec![String::new(); globals_table.size()];
+
+        for (k, v) in globals_table.iter() {
+          let Some(key) = k.0.get_if_1() else {
+            return Some(String::from(
+              "configuration array \"globals\" must only have numeric keys",
+            ));
+          };
+
+          let slot = (*key as usize)
+            .checked_sub(1)
+            .and_then(|index| globals.get_mut(index));
+          let Some(slot) = slot else {
+            return Some(String::from(
+              "configuration array \"globals\" contains invalid numeric key",
+            ));
+          };
+
+          let Some(global) = v.get_string() else {
+            return Some(String::from(
+              "configuration value in \"globals\" table must be a string",
+            ));
+          };
+
+          slot.clone_from(global);
+        }
+
+        config.globals = globals;
+      }
+
+      "aliases" => {
+        let Some(aliases) = v.get_table() else {
+          return Some(String::from(
+            "configuration value for key \"aliases\" must be a table",
+          ));
+        };
+
+        for (k, v) in aliases.iter() {
+          let Some(alias_key) = k.0.get_if_0() else {
+            return Some(String::from(
+              "configuration keys in \"aliases\" table must be strings",
+            ));
+          };
+
+          let Some(alias_value) = v.get_string() else {
+            return Some(String::from(
+              "configuration values in \"aliases\" table must be strings",
+            ));
+          };
+
+          if let Some(error_message) =
+            parse_alias(config, alias_key, alias_value, alias_options.as_ref())
+          {
+            return Some(error_message);
+          }
+        }
+      }
+
+      _ => {}
+    }
+  }
+
+  None
+}
+
+/// 对应 C++ `parseLuauConfigTable`：取 "luau" 子表并套用配置。
+pub(crate) fn parse_luau_config_table(
+  config_table: &ConfigTable,
+  config: &mut Config,
+  alias_options: Option<AliasOptions>,
+) -> Option<String> {
+  let Some(luau_value) = config_table.find_str("luau") else {
+    return None; // 无 "luau" 键，无事可做
+  };
+
+  let Some(luau_table) = luau_value.get_table() else {
+    return Some(String::from(
+      "configuration value for key \"luau\" must be a table",
+    ));
+  };
+
+  create_luau_config_from_luau_table(config, luau_table, alias_options)
+}
+
+/// lint 布尔值转 C++ 侧的 "true"/"false" 设置串。
+fn lint_setting(enabled: bool) -> &'static str {
+  if enabled { SETTING_TRUE } else { SETTING_FALSE }
+}
+
+/// lint 表条目（通配符与具名共用）：取布尔值并套用规则。
+fn apply_lint(config: &mut Config, warning_name: &str, value: &ConfigValue) -> Option<String> {
+  let Some(enabled) = value.get_bool() else {
+    return Some(String::from(ERR_LINT_VALUE_NOT_BOOL));
+  };
+
+  parse_lint_rule_string(
+    &mut config.enabled_lint,
+    &mut config.fatal_lint,
+    warning_name,
+    lint_setting(*enabled),
+    false,
+  )
+}

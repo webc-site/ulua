@@ -1,0 +1,13 @@
+use ulua_compiler::records::compile_error::CompileError;
+
+use crate::functions::report::report;
+
+/// 报告编译错误 (cpp `reportError(name, CompileError)`)；bytecode/compile 两个 CLI 共用。
+pub fn report_compile_error(name: &str, error: &CompileError) {
+  report(
+    name,
+    error.get_location(),
+    "CompileError",
+    &error.to_string(),
+  );
+}

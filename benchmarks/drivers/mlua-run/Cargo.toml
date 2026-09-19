@@ -1,0 +1,26 @@
+# Standalone crate (its own [workspace]) so it is never pulled into the ulua
+# workspace build or `cargo publish`. Build the three backends with build.sh.
+[package]
+name = "mlua-run"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[[bin]]
+name = "mlua-run"
+path = "src/main.rs"
+
+[dependencies]
+mlua = { version = "0.10", default-features = false }
+
+[features]
+luau = ["mlua/luau", "mlua/vendored"]
+lua54 = ["mlua/lua54", "mlua/vendored"]
+luajit = ["mlua/luajit", "mlua/vendored"]
+
+[profile.release]
+opt-level = 3
+lto = true
+
+[workspace]
+

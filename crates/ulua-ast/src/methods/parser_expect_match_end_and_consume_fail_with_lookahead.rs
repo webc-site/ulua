@@ -1,0 +1,46 @@
+use ulua_common::macros::luau_noinline::LUAU_NOINLINE;
+
+use crate::records::{
+  lexeme::{Lexeme, Type},
+  match_lexeme::MatchLexeme,
+  parser::Parser,
+};
+
+impl Parser {
+  LUAU_NOINLINE! {
+      pub(crate) fn expect_match_end_and_consume_fail_with_lookahead(
+          &mut self,
+          type_: Type,
+          begin: &MatchLexeme,
+      ) -> bool {
+          if let Some(end_mismatch_suspect) = self.end_mismatch_suspect {
+              if end_mismatch_suspect.type_ != Type::EOF && end_mismatch_suspect.position.line > begin.position.line {
+                  let match_string = Lexeme::type_display_name(end_mismatch_suspect.type_);
+
+                  let suggestion = format!(
+                      "; did you forget to close {} at line {}?",
+                      match_string,
+                      end_mismatch_suspect.position.line + 1
+                  );
+
+                  self.expect_match_and_consume_fail(type_, begin, Some(&suggestion));
+              } else {
+                  self.expect_match_and_consume_fail(type_, begin, None);
+              }
+          } else {
+              self.expect_match_and_consume_fail(type_, begin, None);
+          }
+
+          // check if this is an extra token and the expected token is next
+          if self.lexer.lookahead().r#type == type_ {
+              // skip invalid and consume expected
+              self.next_lexeme();
+              self.next_lexeme();
+
+              return true;
+          }
+
+          false
+      }
+  }
+}

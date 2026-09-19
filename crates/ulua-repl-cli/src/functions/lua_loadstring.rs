@@ -1,0 +1,50 @@
+use alloc::string::String;
+use core::{
+  ffi::{c_char, c_int},
+  ptr::null_mut,
+  slice::from_raw_parts,
+};
+
+use ulua_vm::{
+  functions::{
+    lua_insert::lua_insert, lua_l_checklstring::lua_l_checklstring,
+    lua_l_optlstring::lua_l_optlstring, lua_pushnil::lua_pushnil, lua_setsafeenv::lua_setsafeenv,
+    luau_load::luau_load,
+  },
+  macros::lua_environindex::LUA_ENVIRONINDEX,
+  type_aliases::lua_state::lua_State,
+};
+
+use crate::functions::compile_source::compile_source;
+
+pub unsafe extern "C-unwind" fn lua_loadstring(l: *mut lua_State) -> i32 {
+  unsafe {
+    let mut len: usize = 0;
+    let s = lua_l_checklstring(l, 1, &mut len as *mut usize);
+    let chunkname = lua_l_optlstring(l, 2, s, null_mut());
+
+    lua_setsafeenv(l, LUA_ENVIRONINDEX, false as c_int);
+
+    // loadstring 参数可为任意字节串；Rust 编译管线要求 &str（UTF-8），
+    // 非法序列 lossy 替换，替代 from_utf8_unchecked 的 UB
+    // SAFETY: lua_l_checklstring 返回 len 字节缓冲（外层 unsafe 块内）
+    let source: String = String::from_utf8_lossy(from_raw_parts(s as *const u8, len)).into_owned();
+
+    let bytecode = compile_source(&source);
+
+    if luau_load(
+      l,
+      chunkname,
+      bytecode.as_ptr() as *const c_char,
+      bytecode.len(),
+      0,
+    ) == 0
+    {
+      return 1;
+    }
+
+    lua_pushnil(l);
+    lua_insert(l, -2); // put before error message
+    2 // return nil plus error message
+  }
+}

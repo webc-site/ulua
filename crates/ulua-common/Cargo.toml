@@ -1,0 +1,49 @@
+[package]
+name = "ulua-common"
+description = "Core types, flags, and shared utilities for the ulua Luau-in-Rust toolchain."
+keywords = ["luau", "lua", "data-structures", "no-std"]
+categories = ["data-structures", "no-std"]
+
+[package.version]
+workspace = true
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[lib]
+crate-type = [ "rlib" ]
+
+[features]
+default = [ "std" ]
+std = [ ]
+native = [ "std" ]
+cli = [ "native" ]
+native-codegen = [ "native" ]
+wasm = [ ]
+luau_assert = [ ]
+luau_enable_time_trace = [ ]
+
+[target."cfg(any(target_os = \"linux\", target_os = \"freebsd\"))".dependencies]
+libc = "0.2"
+
+[target."cfg(windows)".dependencies.windows-sys]
+version = "0.61"
+features = [ "Win32_Foundation", "Win32_System_Performance" ]
+
+[target.'cfg(target_os = "macos")'.dependencies]
+mach2 = "0.7.0"
+
+[dependencies]
+fast-float2 = { version = "0.2.4", default-features = false }
+foldhash = "0.2.0"
+indexmap = "2.14.2"
+smallvec = { version = "1.16.1", default-features = false, features = ["const_generics"] }

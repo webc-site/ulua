@@ -1,0 +1,27 @@
+[package]
+name = "ulua-ast"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Luau lexer, parser, and AST (faithful Rust port)."
+keywords = ["luau", "lua", "parser", "lexer", "ast"]
+categories = ["parser-implementations", "parsing"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+itoa = { version = "1.0.18", default-features = false }
+memchr = { version = "2.8.3", default-features = false }
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
+
+[features]
+default = ["std"]
+std = []
+native = ["std"]
+cli = ["native"]
+native-codegen = ["native"]
+wasm = []
+

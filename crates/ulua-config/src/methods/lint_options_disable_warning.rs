@@ -1,0 +1,7 @@
+use crate::{enums::code::Code, records::lint_options::LintOptions};
+
+impl LintOptions {
+  pub fn disable_warning(&mut self, code: Code) {
+    self.warning_mask &= !code.mask_bit();
+  }
+}

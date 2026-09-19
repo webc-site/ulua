@@ -1,0 +1,8 @@
+# Recursive Fibonacci: function-call / recursion throughput.
+def fib(n):
+    if n < 2:
+        return n
+    return fib(n - 1) + fib(n - 2)
+
+
+print("%d" % fib(35))

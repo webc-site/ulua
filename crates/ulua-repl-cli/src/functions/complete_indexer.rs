@@ -1,0 +1,73 @@
+//! 对应 cpp `CLI/src/Repl.cpp` 的 `static void completeIndexer`：从全局表出发
+//! 按 `.` / `:` 逐级下钻，对最后一段前缀调用 `complete_partial_matches`。
+
+use core::ffi::c_char;
+
+use ulua_cli_lib::functions::{
+  safe_get_table::safe_get_table, try_replace_top_with_index::try_replace_top_with_index,
+};
+use ulua_vm::{
+  functions::{
+    lua_checkstack::lua_checkstack, lua_pushlstring::lua_pushlstring, lua_pushvalue::lua_pushvalue,
+    lua_remove::lua_remove,
+  },
+  macros::{
+    lua_globalsindex::LUA_GLOBALSINDEX, lua_istable::lua_istable, lua_minstack::LUA_MINSTACK,
+    lua_pop::lua_pop,
+  },
+  type_aliases::lua_state::lua_State,
+};
+
+use crate::functions::complete_partial_matches::complete_partial_matches;
+
+/// # Safety
+///
+/// `l` 必须是有效、活跃的 `lua_State` 指针。
+pub(crate) unsafe fn complete_indexer(
+  l: *mut lua_State,
+  edit_buffer: &str,
+  add_completion_callback: &mut impl FnMut(&str, &str),
+) {
+  unsafe {
+    let mut lookup: &str = edit_buffer;
+    let mut complete_only_functions = false;
+
+    lua_checkstack(l, LUA_MINSTACK);
+
+    // Push the global variable table to begin the search
+    lua_pushvalue(l, LUA_GLOBALSINDEX);
+
+    loop {
+      // cpp: find_first_of(".:")，npos 时整串即待补全前缀
+      let sep = match lookup.find(['.', ':']) {
+        Some(idx) => idx,
+        None => {
+          complete_partial_matches(
+            l,
+            complete_only_functions,
+            edit_buffer,
+            lookup,
+            add_completion_callback,
+          );
+          break;
+        }
+      };
+      let prefix = &lookup[..sep];
+
+      // find the key in the table
+      lua_pushlstring(l, prefix.as_ptr() as *const c_char, prefix.len());
+      safe_get_table(l, -2);
+      lua_remove(l, -2);
+
+      if lua_istable!(l, -1) || try_replace_top_with_index(l) {
+        complete_only_functions = lookup.as_bytes()[sep] == b':';
+        lookup = &lookup[sep + 1..];
+      } else {
+        // Unable to search for keys, so stop searching
+        break;
+      }
+    }
+
+    lua_pop(l, 1);
+  }
+}
