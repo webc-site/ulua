@@ -66,11 +66,11 @@ impl Display for Lexeme {
         None => write!(f, "string"),
       },
       Type::INTERP_STRING_BEGIN => match unsafe { self.data_bytes() } {
-        Some(s) => write!(f, "`{}`{{", String::from_utf8_lossy(s)),
+        Some(s) => write!(f, "`{}{{", String::from_utf8_lossy(s)),
         None => write!(f, "the beginning of an interpolated string"),
       },
       Type::INTERP_STRING_MID => match unsafe { self.data_bytes() } {
-        Some(s) => write!(f, "}}{}`{{", String::from_utf8_lossy(s)),
+        Some(s) => write!(f, "}}{}{{", String::from_utf8_lossy(s)),
         None => write!(f, "the middle of an interpolated string"),
       },
       Type::INTERP_STRING_END => match unsafe { self.data_bytes() } {
