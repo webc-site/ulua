@@ -6,7 +6,7 @@ use ulua_common::{
 };
 
 use crate::{
-  enums::{dump_flags::DumpFlags, r#type::Type},
+  enums::dump_flags::DumpFlags,
   methods::bytecode_builder_get_string_hash::bytecode_builder_get_string_hash,
   records::{
     bytecode_encoder::Encoder, class_shape::ClassShape, constant::Constant,
