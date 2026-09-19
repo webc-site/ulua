@@ -20,6 +20,8 @@ impl BytecodeBuilder {
       r#type: Type::Number,
       value: value.to_bits(),
       extra: 0,
+      extra2: 0,
+      extra3: 0,
     };
 
     self.add_constant(k, c)

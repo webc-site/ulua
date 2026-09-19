@@ -14,7 +14,10 @@ pub union ConstantValue {
   pub(crate) value_boolean: bool,
   pub(crate) value_number: f64,
   pub(crate) value_integer64: i64,
+  /// cpp `valueVectorf`
   pub(crate) value_vector: [f32; 4],
+  /// cpp `valueVectord`（`BytecodeBuilder.h:226`）
+  pub(crate) value_vector_d: [f64; 4],
   pub(crate) value_string: u32,
   pub(crate) value_import: u32,
   pub(crate) value_table: u32,

@@ -4,13 +4,11 @@ use core::marker::PhantomData;
 use ulua_common::enums::luau_opcode::LuauOpcode;
 
 use crate::{
-  methods::{bc_function_as::BcInstType, bc_inst_helper_create::BcInstHelperCreate},
+  methods::bc_inst_helper_create::BcInstHelperCreate,
   records::{
     bc_function::{BcFunction, VmConst},
-    bc_inst::BcInst,
     bc_inst_helper::BcInstHelper,
     bc_op::BcOp,
-    bc_ref::BcRef,
   },
 };
 
@@ -23,12 +21,11 @@ pub struct BcCallFB<'a, T = VmConst> {
 impl<'a, T> BcCallFB<'a, T> {
   pub const K_PARAM_START_INPUT: u32 = 4;
 
-  /// # Safety
-  ///
-  /// `graph` must point to a valid, initialized `BcFunction`.
-  pub unsafe fn from(graph: *mut BcFunction, inst: BcRef<'a, BcInst>) -> Self {
+  /// 以 `&'a mut BcFunction`（唯一可变借用）+ 指令 `BcOp` 构造视图；
+  /// 取代旧的 `unsafe fn from(*mut BcFunction, BcRef<'a, BcInst>)` 双借用把戏。
+  pub fn from(graph: &'a mut BcFunction, inst: BcOp) -> Self {
     Self {
-      base: unsafe { BcInstHelper::new(&mut *graph, inst) },
+      base: BcInstHelper::new(graph, inst),
       _marker: PhantomData,
     }
   }
@@ -74,16 +71,6 @@ impl<'a, T> BcCallFB<'a, T> {
   }
 }
 
-impl<T> BcInstType for BcCallFB<'_, T> {
-  const OPCODE: i32 = LuauOpcode::LOP_CALLFB as i32;
-}
-
 impl<T> BcInstHelperCreate for BcCallFB<'_, T> {
   const OPCODE: LuauOpcode = LuauOpcode::LOP_CALLFB;
-}
-
-impl<'a, T> From<(&'a BcFunction, BcRef<'a, BcInst>)> for BcCallFB<'a, T> {
-  fn from((graph, inst): (&'a BcFunction, BcRef<'a, BcInst>)) -> Self {
-    unsafe { Self::from(graph as *const BcFunction as *mut BcFunction, inst) }
-  }
 }

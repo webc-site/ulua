@@ -3,8 +3,8 @@ use core::marker::PhantomData;
 use ulua_common::enums::luau_opcode::LuauOpcode;
 
 use crate::{
-  methods::{bc_function_as::BcInstType, bc_inst_helper_create::BcInstHelperCreate},
-  records::{
+  methods::bc_inst_helper_create::BcInstHelperCreate,
+  records::{bc_inst_type::BcInstType,
     bc_function::{BcFunction, VmConst},
     bc_inst::BcInst,
     bc_inst_helper::BcInstHelper,

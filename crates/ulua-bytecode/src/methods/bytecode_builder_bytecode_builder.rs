@@ -17,6 +17,8 @@ impl BytecodeBuilder {
       r#type: Type::Nil,
       value: !0u64,
       extra: 0,
+      extra2: 0,
+      extra3: 0,
     });
 
     let table_shape_map = DenseHashMap::new(TableShape::default());

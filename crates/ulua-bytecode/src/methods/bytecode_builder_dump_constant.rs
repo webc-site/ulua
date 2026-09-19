@@ -2,6 +2,7 @@ use alloc::{string::String, vec};
 use core::cmp::min;
 
 use ulua_common::{
+  fflag,
   functions::{format_append::format_append, format_g::format_g},
   macros::luau_assert::LUAU_ASSERT,
 };
@@ -71,6 +72,30 @@ impl BytecodeBuilder {
               format_g(v[2] as f64, 9),
               format_g(v[3] as f64, 9)
             ),
+          );
+        }
+      }
+      // cpp `BytecodeBuilder.cpp:2353-2377`：flag 开时按 %.17g 打双精度，
+      // 关时先转 float 再按 %.9g 打（与 writeFunction 的降级路径一致）。
+      // 三分量截断只看 `valueVectord[3] == 0`，与 flag 无关。
+      Type::Vectord => {
+        let v = unsafe { data.value.value_vector_d };
+        let wide = fflag::LuauCompileEmitVectorDouble.get();
+        let g = |x: f64| {
+          format_g(
+            if wide { x } else { f64::from(x as f32) },
+            if wide { 17 } else { 9 },
+          )
+        };
+        if v[3] == 0.0 {
+          format_append(
+            result,
+            format_args!("{}, {}, {}", g(v[0]), g(v[1]), g(v[2])),
+          );
+        } else {
+          format_append(
+            result,
+            format_args!("{}, {}, {}, {}", g(v[0]), g(v[1]), g(v[2]), g(v[3])),
           );
         }
       }

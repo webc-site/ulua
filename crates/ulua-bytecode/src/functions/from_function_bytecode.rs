@@ -31,6 +31,7 @@ const LBC_CONSTANT_IMPORT: u8 = LuauBytecodeTag::LBC_CONSTANT_IMPORT.0 as u8;
 const LBC_CONSTANT_TABLE: u8 = LuauBytecodeTag::LBC_CONSTANT_TABLE.0 as u8;
 const LBC_CONSTANT_CLOSURE: u8 = LuauBytecodeTag::LBC_CONSTANT_CLOSURE.0 as u8;
 const LBC_CONSTANT_VECTOR: u8 = LuauBytecodeTag::LBC_CONSTANT_VECTOR.0 as u8;
+const LBC_CONSTANT_VECTORD: u8 = LuauBytecodeTag::LBC_CONSTANT_VECTORD.0 as u8;
 const LBC_CONSTANT_TABLE_WITH_CONSTANTS: u8 =
   LuauBytecodeTag::LBC_CONSTANT_TABLE_WITH_CONSTANTS.0 as u8;
 const LBC_CONSTANT_INTEGER: u8 = LuauBytecodeTag::LBC_CONSTANT_INTEGER.0 as u8;
@@ -254,6 +255,16 @@ fn read_constant(
         c.read::<f32>()?,
         c.read::<f32>()?,
         c.read::<f32>()?,
+      ];
+    }
+    // cpp `BytecodeGraph.cpp:103-111`：LBC_CONSTANT_VECTORD 为 4×double
+    LBC_CONSTANT_VECTORD => {
+      constant.kind = BcVmConstKind::Vectord;
+      constant.value.value_vectord = [
+        c.read::<f64>()?,
+        c.read::<f64>()?,
+        c.read::<f64>()?,
+        c.read::<f64>()?,
       ];
     }
     LBC_CONSTANT_STRING => {

@@ -103,6 +103,24 @@ impl BytecodeBuilder {
           write_float(ss, vec[2]);
           write_float(ss, vec[3]);
         }
+        // cpp `BytecodeBuilder.cpp:899-916`：flag 关闭时降级为 4×float 的
+        // LBC_CONSTANT_VECTOR，与旧版本字节码兼容。
+        Type::Vectord => {
+          let vec = unsafe { c.value.value_vector_d };
+          if fflag::LuauCompileEmitVectorDouble.get() {
+            write_byte(ss, LuauBytecodeTag::LBC_CONSTANT_VECTORD.0 as u8);
+            write_double(ss, vec[0]);
+            write_double(ss, vec[1]);
+            write_double(ss, vec[2]);
+            write_double(ss, vec[3]);
+          } else {
+            write_byte(ss, LuauBytecodeTag::LBC_CONSTANT_VECTOR.0 as u8);
+            write_float(ss, vec[0] as f32);
+            write_float(ss, vec[1] as f32);
+            write_float(ss, vec[2] as f32);
+            write_float(ss, vec[3] as f32);
+          }
+        }
         Type::String => {
           write_byte(ss, LuauBytecodeTag::LBC_CONSTANT_STRING.0 as u8);
           write_var_int(ss, unsafe { c.value.value_string } as u64);

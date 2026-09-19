@@ -8,6 +8,8 @@ use crate::{
 };
 
 impl BytecodeBuilder {
+  /// cpp `addConstantVectorf`（`BytecodeBuilder.cpp:386-404`）：x/y 打进 `value`、
+  /// z/w 打进 `extra1`，两个 `f32` 分量各占 32 位。
   pub fn add_constant_vector(&mut self, x: f32, y: f32, z: f32, w: f32) -> i32 {
     let c = Constant {
       r#type: Type::Vector,
@@ -20,6 +22,8 @@ impl BytecodeBuilder {
       r#type: Type::Vector,
       value: 0,
       extra: 0,
+      extra2: 0,
+      extra3: 0,
     };
 
     k.value = x.to_bits() as u64;

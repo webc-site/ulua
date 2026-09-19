@@ -48,6 +48,11 @@ pub fn to_function_bytecode_bytecode_builder_comp_time_bc_function(
         let value = unsafe { c.value.value_vector };
         consts.push(bcb.add_constant_vector(value[0], value[1], value[2], value[3]) as u32);
       }
+      // cpp `BytecodeGraph.cpp:351-353` + `BytecodeBuilder.cpp:406-424`
+      BcVmConstKind::Vectord => {
+        let value = unsafe { c.value.value_vectord };
+        consts.push(bcb.add_constant_vector_d(value[0], value[1], value[2], value[3]) as u32);
+      }
       BcVmConstKind::String => consts
         .push(bcb.add_constant_string(StringRef::from(unsafe { c.value.value_string })) as u32),
       BcVmConstKind::Import => consts.push(bcb.add_import(unsafe { c.value.value_import }) as u32),

@@ -14,7 +14,10 @@ pub struct BcVmConst {
 pub union BcVmConstValue {
   pub value_boolean: bool,
   pub value_number: f64,
+  /// cpp `valueVectorf`
   pub value_vector: [f32; 4],
+  /// cpp `valueVectord`（`BytecodeGraph.h:160`）
+  pub value_vectord: [f64; 4],
   pub value_string: &'static str,
   pub value_import: u32,
   pub value_table: u32,
@@ -43,6 +46,8 @@ impl PartialEq for BcVmConst {
         BcVmConstKind::Boolean => self.value.value_boolean == other.value.value_boolean,
         BcVmConstKind::Number => self.value.value_number == other.value.value_number,
         BcVmConstKind::Vector => self.value.value_vector == other.value.value_vector,
+        // cpp: `BytecodeGraph.h:195-198`
+        BcVmConstKind::Vectord => self.value.value_vectord == other.value.value_vectord,
         BcVmConstKind::String => self.value.value_string == other.value.value_string,
         BcVmConstKind::Import => self.value.value_import == other.value.value_import,
         BcVmConstKind::Table => self.value.value_table == other.value.value_table,

@@ -6,7 +6,7 @@ use ulua_common::{
 };
 
 use crate::{
-  enums::{dump_flags::DumpFlags, r#type::Type},
+  enums::dump_flags::DumpFlags,
   methods::bytecode_builder_get_string_hash::bytecode_builder_get_string_hash,
   records::{
     bytecode_encoder::Encoder, class_shape::ClassShape, constant::Constant,
@@ -113,57 +113,10 @@ impl BytecodeBuilder {
   pub const DUMP_CONSTANTS: u32 = DumpFlags::Constants as u32;
 }
 
-impl Default for ConstantKey {
-  fn default() -> Self {
-    Self {
-      r#type: Type::Nil,
-      value: 0,
-      extra: 0,
-    }
-  }
-}
-
 impl Default for BytecodeBuilder {
+  /// 委托 [`Self::new`]，确保 `constant_map` 的空键哨兵与 `{Nil, 0, 0}` 这条
+  /// 真实的 nil 常量键不相撞（否则 nil 永不去重、`insert_unsafe` 虚增计数）。
   fn default() -> Self {
-    Self {
-      functions: Vec::new(),
-      current_function: !0u32,
-      main_function: !0u32,
-      total_instruction_count: 0,
-      insns: Vec::new(),
-      lines: Vec::new(),
-      constants: Vec::new(),
-      protos: Vec::new(),
-      jumps: Vec::new(),
-      table_shapes: Vec::new(),
-      class_shapes: Vec::new(),
-      fb_slots: Vec::new(),
-      has_long_jumps: false,
-      constant_map: DenseHashMap::new(ConstantKey::default()),
-      table_shape_map: DenseHashMap::new(TableShape {
-        keys: [0; 32],
-        constants: [-1; 32],
-        length: 0,
-        has_constants: false,
-      }),
-      proto_map: DenseHashMap::new(!0u32),
-      debug_line: 0,
-      debug_locals: Vec::new(),
-      debug_upvals: Vec::new(),
-      typed_locals: Vec::new(),
-      typed_upvals: Vec::new(),
-      userdata_types: Vec::new(),
-      string_table: DenseHashMap::new(StringRef::default()),
-      debug_strings: Vec::new(),
-      debug_remarks: Vec::new(),
-      debug_remark_buffer: String::new(),
-      encoder: None,
-      bytecode: Vec::new(),
-      dump_flags: 0,
-      dump_source: Vec::new(),
-      dump_remarks: Vec::new(),
-      temp_type_info: Vec::new(),
-      dump_function_ptr: None,
-    }
+    Self::new(None)
   }
 }

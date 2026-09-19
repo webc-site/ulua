@@ -23,7 +23,14 @@ impl<'a> BytecodeGraphParser<'a> {
     }
 
     // So we need to find all producers from reg to blockProducers.multi_return_start.
-    let mut res = Vec::with_capacity(multi_return_start as usize - reg as usize + 1);
+    // cpp 用 `multiReturnStart - reg + 1` 预留容量；两个操作数都是 u8 且源自不可信
+    // 字节码，差为负时在 Rust 里会 panic 或回绕成天文数字再触发巨量分配，故按
+    // saturating 计算。容量只是提示，输出序列与 cpp 保持一致。
+    let mut res = Vec::with_capacity(
+      usize::from(multi_return_start)
+        .saturating_sub(usize::from(reg))
+        .saturating_add(1),
+    );
 
     let mut r = reg;
     while r < multi_return_start {

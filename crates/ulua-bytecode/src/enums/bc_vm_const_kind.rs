@@ -4,7 +4,10 @@ pub enum BcVmConstKind {
   Nil,
   Boolean,
   Number,
+  /// cpp `BcVmConstKind::Vectorf`
   Vector,
+  /// cpp `BcVmConstKind::Vectord`（`BytecodeGraph.h:137-146`）
+  Vectord,
   String,
   Import,
   Table,
