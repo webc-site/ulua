@@ -29,7 +29,3 @@ pub struct IrRegAllocA64 {
 
   pub error: bool,
 }
-
-impl IrRegAllocA64 {
-  pub(crate) const K_INVALID_INST_IDX: u32 = 0xFFFFFFFF;
-}

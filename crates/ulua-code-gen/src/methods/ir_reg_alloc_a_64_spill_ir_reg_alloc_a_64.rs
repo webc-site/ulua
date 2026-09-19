@@ -4,7 +4,10 @@ use crate::{
   enums::kind_a_64::KindA64,
   functions::countlz_bit_utils::countlz_u32,
   macros::codegen_assert::CODEGEN_ASSERT,
-  records::{ir_reg_alloc_a_64::IrRegAllocA64, register_a_64::RegisterA64, set::Set},
+  records::{
+    ir_data::K_INVALID_INST_IDX, ir_reg_alloc_a_64::IrRegAllocA64, register_a_64::RegisterA64,
+    set::Set,
+  },
 };
 
 const fn reg(kind: KindA64, index: u8) -> RegisterA64 {
@@ -62,7 +65,7 @@ impl IrRegAllocA64 {
 
         let target_inst_idx = unsafe { (*set).defs[reg as usize] };
 
-        CODEGEN_ASSERT!(target_inst_idx != IrRegAllocA64::K_INVALID_INST_IDX);
+        CODEGEN_ASSERT!(target_inst_idx != K_INVALID_INST_IDX);
         CODEGEN_ASSERT!(
           unsafe { &mut *self.function }.instructions[target_inst_idx as usize]
             .reg_a64

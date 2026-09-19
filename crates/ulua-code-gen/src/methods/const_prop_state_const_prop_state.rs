@@ -3,8 +3,12 @@ use alloc::vec::Vec;
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet};
 
 use crate::records::{
-  const_prop_state::ConstPropState, ir_builder::IrBuilder, ir_data::K_INVALID_INST_IDX,
-  ir_function::IrFunction, ir_inst::IrInst, register_info::RegisterInfo,
+  const_prop_state::ConstPropState,
+  ir_builder::IrBuilder,
+  ir_data::{K_INVALID_INST_IDX, K_INVALID_UPVALUE},
+  ir_function::IrFunction,
+  ir_inst::IrInst,
+  register_info::RegisterInfo,
 };
 
 impl ConstPropState {
@@ -24,7 +28,7 @@ impl ConstPropState {
       inst_tag: DenseHashMap::new(K_INVALID_INST_IDX),
       inst_value: DenseHashMap::new(K_INVALID_INST_IDX),
       value_map: DenseHashMap::new(IrInst::default()),
-      upvalue_map: DenseHashMap::new(0xff),
+      upvalue_map: DenseHashMap::new(K_INVALID_UPVALUE),
       hash_value_cache: DenseHashMap::new(K_INVALID_INST_IDX),
       array_value_cache: Vec::new(),
       try_num_to_index_cache: Vec::new(),

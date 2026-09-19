@@ -13,8 +13,8 @@ use crate::{
   },
   macros::codegen_assert::CODEGEN_ASSERT,
   records::{
-    address_a_64::AddressA64, ir_inst::IrInst, ir_reg_alloc_a_64::IrRegAllocA64,
-    register_a_64::RegisterA64, set::Set, spill::Spill,
+    address_a_64::AddressA64, ir_data::K_INVALID_INST_IDX, ir_inst::IrInst,
+    ir_reg_alloc_a_64::IrRegAllocA64, register_a_64::RegisterA64, set::Set, spill::Spill,
   },
   type_aliases::mem::mem,
 };
@@ -175,6 +175,6 @@ impl IrRegAllocA64 {
     unsafe { (*def).reg_a64 = RegisterA64::NOREG };
 
     set.free |= 1u32 << reg;
-    set.defs[reg as usize] = IrRegAllocA64::K_INVALID_INST_IDX;
+    set.defs[reg as usize] = K_INVALID_INST_IDX;
   }
 }

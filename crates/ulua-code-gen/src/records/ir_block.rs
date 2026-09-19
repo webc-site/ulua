@@ -1,6 +1,6 @@
 use crate::{enums::ir_block_kind::IrBlockKind, records::label::Label};
 
-pub const K_BLOCK_NO_START_PC: u32 = !0u32;
+pub const K_BLOCK_NO_START_PC: u32 = u32::MAX;
 
 /// `IrBlock::flags` 位掩码，对应 cpp/CodeGen/include/Luau/IrData.h 的
 /// `kBlockFlagSafeEnvCheck` / `kBlockFlagSafeEnvClear` / `kBlockFlagEntryArgCheck`。
@@ -36,15 +36,15 @@ impl Default for IrBlock {
       kind: IrBlockKind::Dead,
       flags: 0,
       use_count: 0,
-      start: !0u32,
-      finish: !0u32,
-      sortkey: !0u32,
+      start: u32::MAX,
+      finish: u32::MAX,
+      sortkey: u32::MAX,
       chainkey: 0,
-      expected_next_block: !0u32,
+      expected_next_block: u32::MAX,
       startpc: K_BLOCK_NO_START_PC,
       label: Label {
         id: 0,
-        location: !0u32,
+        location: u32::MAX,
       },
     }
   }

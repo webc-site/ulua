@@ -14,8 +14,8 @@ use crate::{
   },
   macros::codegen_assert::CODEGEN_ASSERT,
   records::{
-    ir_builder::IrBuilder, ir_function::IrFunction, ir_inst::IrInst, ir_op::IrOp,
-    vm_exit_sync_info::VmExitSyncInfo,
+    ir_builder::IrBuilder, ir_data::K_INVALID_INST_IDX, ir_function::IrFunction, ir_inst::IrInst,
+    ir_op::IrOp, vm_exit_sync_info::VmExitSyncInfo,
   },
 };
 
@@ -39,8 +39,8 @@ fn collect_exit_sync_private_insts(
   function: &mut IrFunction,
   recorded_vm_exit_syncs: &[u32],
 ) -> DenseHashSet<u32> {
-  let mut private_insts: DenseHashSet<u32> = DenseHashSet::new(!0u32);
-  let mut exit_inst_use_counts: DenseHashMap<u32, u32> = DenseHashMap::new(!0u32);
+  let mut private_insts: DenseHashSet<u32> = DenseHashSet::new(K_INVALID_INST_IDX);
+  let mut exit_inst_use_counts: DenseHashMap<u32, u32> = DenseHashMap::new(K_INVALID_INST_IDX);
   let mut worklist: Vec<u32> = Vec::new();
 
   // 记录一次 exit 侧使用：计数并压入工作列表（重复入列是安全的）
@@ -130,7 +130,7 @@ pub fn generate_vm_exit_blocks(build: &mut IrBuilder, recorded_vm_exit_syncs: &V
     let mut arg_instructions: Vec<u32> = Vec::new();
     let mut inputs: Vec<(IrOp, u32)> = Vec::new();
     // Set of inputs we already sunk inside
-    let mut sunk_instructions: DenseHashSet<u32> = DenseHashSet::new(!0u32);
+    let mut sunk_instructions: DenseHashSet<u32> = DenseHashSet::new(K_INVALID_INST_IDX);
 
     // Start with the store instruction we got
     for reg_store in unsafe { &mut (*sync_info).reg_stores } {
@@ -198,7 +198,7 @@ pub fn generate_vm_exit_blocks(build: &mut IrBuilder, recorded_vm_exit_syncs: &V
     }
     build.begin_block(block_op);
 
-    let mut inst_redir: DenseHashMap<u32, u32> = DenseHashMap::new(!0u32);
+    let mut inst_redir: DenseHashMap<u32, u32> = DenseHashMap::new(K_INVALID_INST_IDX);
 
     for &inst_idx in arg_instructions.iter().rev() {
       CODEGEN_ASSERT!((inst_idx as usize) < unsafe { (*function).instructions.len() });

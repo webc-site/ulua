@@ -25,7 +25,3 @@ pub struct IrLoweringA64 {
   pub exit_sync_inst_idx: u32,
   pub error: bool,
 }
-
-impl IrLoweringA64 {
-  pub const K_INVALID_INST_IDX: u32 = !0u32;
-}

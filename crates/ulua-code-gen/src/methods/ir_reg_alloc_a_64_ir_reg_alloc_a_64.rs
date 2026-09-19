@@ -5,9 +5,9 @@ use ulua_common::records::dense_hash_map::DenseHashMap;
 use crate::{
   macros::codegen_assert::CODEGEN_ASSERT,
   records::{
-    assembly_builder_a_64::AssemblyBuilderA64, ir_function::IrFunction,
-    ir_reg_alloc_a_64::IrRegAllocA64, lowering_stats::LoweringStats, register_a_64::RegisterA64,
-    set::Set,
+    assembly_builder_a_64::AssemblyBuilderA64, ir_data::K_INVALID_INST_IDX,
+    ir_function::IrFunction, ir_reg_alloc_a_64::IrRegAllocA64, lowering_stats::LoweringStats,
+    register_a_64::RegisterA64, set::Set,
   },
 };
 
@@ -22,7 +22,7 @@ impl IrRegAllocA64 {
       build: build as *mut AssemblyBuilderA64,
       function: function as *mut IrFunction,
       stats,
-      curr_inst_idx: IrRegAllocA64::K_INVALID_INST_IDX,
+      curr_inst_idx: K_INVALID_INST_IDX,
       gpr: Set {
         base: 0,
         free: 0,
