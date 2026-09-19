@@ -14,7 +14,9 @@
 //! ulua::eval("assert(1 + 1 == 2)").unwrap();
 //! let bytecode = ulua::compile("return 2 + 2").unwrap();
 //! assert!(!bytecode.is_empty());
+//! # #[cfg(feature = "typecheck")] {
 //! ulua::check("local x: number = 1").unwrap();
+//! # }
 //! ```
 
 // Re-export the sub-crates as modules so `ulua::vm::...` etc. work from one dep.
