@@ -14,13 +14,11 @@ impl AssemblyBuilderA64 {
         self.label_locations.push(!0u32);
       }
 
-      let mut patch = Patch {
-        kind_and_label: 0,
+      self.pending_labels.push(Patch {
+        kind,
+        label: label.id,
         location,
-      };
-      patch.set_kind(kind);
-      patch.set_label(label.id);
-      self.pending_labels.push(patch);
+      });
     } else {
       let value = label.location as i32 - location as i32;
       self.patch_offset(location, value, kind);
