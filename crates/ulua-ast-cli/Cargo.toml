@@ -24,8 +24,5 @@ ulua-cli-lib = { path = "../ulua-cli-lib", version = "0.1.2" }
 [features]
 default = ["std"]
 std = []
-native = ["std"]
-cli = ["native"]
-native-codegen = ["native"]
 wasm = []
 
