@@ -55,12 +55,12 @@ impl Parser {
     };
 
     if self.options.store_cst_data {
-      self.cst_node_map.try_insert(node as *mut AstNode, unsafe {
-        (*self.allocator).alloc(CstStatTypeFunction::new(
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstStatTypeFunction::new(
           type_keyword_position,
           match_fn.location.begin,
         ))
-      } as *mut CstNode);
+      });
     }
 
     node as *mut AstStat

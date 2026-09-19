@@ -75,16 +75,9 @@ impl Parser {
     if self.options.store_cst_data {
       let vars_comma = self.copy_temp_vector_t(&vars_comma_positions);
       let values_comma = self.copy_temp_vector_t(&values_comma_positions);
-      let cst_node = unsafe {
-        (*self.allocator).alloc(CstStatAssign::new(
-          vars_comma,
-          equals_position,
-          values_comma,
-        ))
-      };
-      self
-        .cst_node_map
-        .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstStatAssign::new(vars_comma, equals_position, values_comma))
+      });
     }
 
     node as *mut AstStat

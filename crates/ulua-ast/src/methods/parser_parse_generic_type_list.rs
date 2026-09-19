@@ -142,11 +142,8 @@ impl Parser {
               (*self.allocator).alloc(AstGenericType::new(name_location, name.name, default_type))
             };
             if self.options.store_cst_data {
-              let cst_node =
-                unsafe { (*self.allocator).alloc(CstGenericType::new(equals_position)) };
               self
-                .cst_node_map
-                .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
+                .attach_cst(node, |alloc| alloc.alloc(CstGenericType::new(equals_position)));
             }
             names.push_back(node);
           } else {
@@ -161,11 +158,9 @@ impl Parser {
               (*self.allocator).alloc(AstGenericType::new(name_location, name.name, null_mut()))
             };
             if self.options.store_cst_data {
-              let cst_node =
-                unsafe { (*self.allocator).alloc(CstGenericType::new(Position::missing())) };
-              self
-                .cst_node_map
-                .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
+              self.attach_cst(node, |alloc| {
+                alloc.alloc(CstGenericType::new(Position::missing()))
+              });
             }
             names.push_back(node);
           }

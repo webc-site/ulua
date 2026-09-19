@@ -2,8 +2,6 @@ use core::{ffi::c_char, slice};
 
 use ulua_common::records::dense_hash_table::DenseDefault;
 
-use crate::enums::type_constant_folding::Type;
-
 /// 字符串常量存储：指向借用数据的裸指针 + 字节长度（与 C++ `Constant` 一致，不拷贝）
 #[derive(Clone, Copy, Debug)]
 pub struct ConstantStr {
@@ -44,21 +42,6 @@ impl Constant {
   #[inline]
   pub(crate) fn string(ptr: *const c_char, len: u32) -> Self {
     Self::Str(ConstantStr { ptr, len })
-  }
-
-  /// 类型标签，供纯标签判断使用（不读数据，无 unsafe）
-  #[inline]
-  pub fn r#type(&self) -> Type {
-    match self {
-      Self::Unknown => Type::Unknown,
-      Self::Nil => Type::Nil,
-      Self::Boolean(_) => Type::Boolean,
-      Self::Number(_) => Type::Number,
-      Self::Integer(_) => Type::Integer,
-      Self::Vector(_) => Type::Vector,
-      Self::Table(_) => Type::Table,
-      Self::Str(_) => Type::String,
-    }
   }
 
   #[inline]

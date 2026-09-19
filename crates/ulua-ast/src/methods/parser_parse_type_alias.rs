@@ -71,18 +71,15 @@ impl Parser {
 
     if self.options.store_cst_data {
       let generics_comma = self.copy_temp_vector_t(&generics_comma_positions);
-      let cst_node = unsafe {
-        (*self.allocator).alloc(CstStatTypeAlias::new(
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstStatTypeAlias::new(
           type_keyword_position,
           generics_open_position,
           generics_comma,
           generics_close_position,
           equals_position,
         ))
-      };
-      self
-        .cst_node_map
-        .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
+      });
     }
 
     node as *mut AstStat
