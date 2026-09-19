@@ -5,6 +5,9 @@ use core::{
   ptr::null,
 };
 
+use ulua_cli_test::{
+  enums::path_type::PathType, records::repl_with_path_fixture::ReplWithPathFixture,
+};
 use ulua_common::fflag::{
   DebugLuauUserDefinedClasses, DebugLuauUserDefinedClassesRuntime, LuauExportValueSyntax,
 };
@@ -89,6 +92,20 @@ fn sff_user_defined_classes() -> impl Drop {
   Sff
 }
 
+/// 夹具目录前缀:`tests/require` 下无配置与带配置两组夹具
+const WITHOUT_CONFIG_ROOT: &str = "/tests/require/without_config/";
+const CONFIG_TESTS_ROOT: &str = "/tests/require/config_tests/";
+
+/// `get_luau_directory(pt) + 前缀 + rest` 样板收敛(对照 cpp `getLuauDirectory`)
+fn without_config_dir(fixture: &ReplWithPathFixture, pt: PathType, rest: &str) -> String {
+  fixture.get_luau_directory(pt) + WITHOUT_CONFIG_ROOT + rest
+}
+
+/// 同上,`config_tests` 组
+fn config_tests_dir(fixture: &ReplWithPathFixture, pt: PathType, rest: &str) -> String {
+  fixture.get_luau_directory(pt) + CONFIG_TESTS_ROOT + rest
+}
+
 #[test]
 fn require_by_string_alias_has_illegal_format() {
   use ulua_cli_test::{
@@ -120,8 +137,7 @@ fn require_by_string_alias_not_parsed_if_configs_ambiguous() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/config_tests/config_ambiguity/requirer";
+  let path = config_tests_dir(&fixture, PathType::Relative, "config_ambiguity/requirer");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&[
     "false",
@@ -138,8 +154,11 @@ fn require_by_string_cannot_require_config_luau() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/config_tests/config_cannot_be_required/requirer";
+  let path = config_tests_dir(
+    &fixture,
+    PathType::Relative,
+    "config_cannot_be_required/requirer",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["false", "could not resolve child component \".config\""]);
 }
@@ -153,8 +172,7 @@ fn require_by_string_cannot_require_init_luau_directly() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/nested/init";
+  let path = without_config_dir(&fixture, PathType::Relative, "nested/init");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["false", "could not resolve child component \"init\""]);
 }
@@ -171,10 +189,8 @@ fn require_by_string_check_cache_after_require_init_lua() {
 
   let mut fixture = ReplWithPathFixture::new();
   let l = fixture.l;
-  let relative_path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/lua";
-  let absolute_path =
-    fixture.get_luau_directory(PathType::Absolute) + "/tests/require/without_config/lua";
+  let relative_path = without_config_dir(&fixture, PathType::Relative, "lua");
+  let absolute_path = without_config_dir(&fixture, PathType::Absolute, "lua");
 
   let cache_key = CString::new(format!("{}/init.lua", absolute_path)).unwrap();
 
@@ -204,10 +220,8 @@ fn require_by_string_check_cache_after_require_init_luau() {
 
   let mut fixture = ReplWithPathFixture::new();
   let l = fixture.l;
-  let relative_path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/luau";
-  let absolute_path =
-    fixture.get_luau_directory(PathType::Absolute) + "/tests/require/without_config/luau";
+  let relative_path = without_config_dir(&fixture, PathType::Relative, "luau");
+  let absolute_path = without_config_dir(&fixture, PathType::Absolute, "luau");
 
   let cache_key = CString::new(format!("{}/init.luau", absolute_path)).unwrap();
 
@@ -237,10 +251,8 @@ fn require_by_string_check_cache_after_require_lua() {
 
   let mut fixture = ReplWithPathFixture::new();
   let l = fixture.l;
-  let relative_path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/lua_dependency";
-  let absolute_path =
-    fixture.get_luau_directory(PathType::Absolute) + "/tests/require/without_config/lua_dependency";
+  let relative_path = without_config_dir(&fixture, PathType::Relative, "lua_dependency");
+  let absolute_path = without_config_dir(&fixture, PathType::Absolute, "lua_dependency");
 
   let key = CString::new(format!("{}.luau", absolute_path)).unwrap();
   assert_module_cache(l, &key, false, "Cache already contained module result");
@@ -265,10 +277,8 @@ fn require_by_string_check_cache_after_require_luau() {
 
   let mut fixture = ReplWithPathFixture::new();
   let l = fixture.l;
-  let relative_path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/module";
-  let absolute_path =
-    fixture.get_luau_directory(PathType::Absolute) + "/tests/require/without_config/module";
+  let relative_path = without_config_dir(&fixture, PathType::Relative, "module");
+  let absolute_path = without_config_dir(&fixture, PathType::Absolute, "module");
 
   let cache_key = CString::new(format!("{}.luau", absolute_path)).unwrap();
 
@@ -295,8 +305,7 @@ fn require_by_string_check_cached_result() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/validate_cache";
+  let path = without_config_dir(&fixture, PathType::Relative, "validate_cache");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -315,10 +324,8 @@ fn require_by_string_check_clear_cache() {
 
   let mut fixture = ReplWithPathFixture::new();
   let l = fixture.l;
-  let relative_path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/module";
-  let absolute_path =
-    fixture.get_luau_directory(PathType::Absolute) + "/tests/require/without_config/module";
+  let relative_path = without_config_dir(&fixture, PathType::Relative, "module");
+  let absolute_path = without_config_dir(&fixture, PathType::Absolute, "module");
   let cache_key = CString::new(format!("{}.luau", absolute_path)).unwrap();
 
   assert_module_cache(
@@ -358,10 +365,8 @@ fn require_by_string_check_clear_cache_entry() {
 
   let mut fixture = ReplWithPathFixture::new();
   let l = fixture.l;
-  let relative_path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/module";
-  let absolute_path =
-    fixture.get_luau_directory(PathType::Absolute) + "/tests/require/without_config/module";
+  let relative_path = without_config_dir(&fixture, PathType::Relative, "module");
+  let absolute_path = without_config_dir(&fixture, PathType::Absolute, "module");
   let cache_key_str = format!("{}.luau", absolute_path);
   let cache_key = CString::new(cache_key_str).unwrap();
 
@@ -399,8 +404,11 @@ fn require_by_string_export_as_function() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/export_as_function";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/export_as_function",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -417,8 +425,11 @@ fn require_by_string_export_counter() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_counter_module";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_counter_module",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -435,8 +446,11 @@ fn require_by_string_export_post_return_mutation_error() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_post_return_mutation_error";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_post_return_mutation_error",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -702,8 +716,7 @@ fn require_by_string_proxy_require() {
     lua_setglobal(l, c"proxyrequire".as_ptr());
   }
 
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/proxy_requirer";
+  let path = without_config_dir(&fixture, PathType::Relative, "proxy_requirer");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&[
     "true",
@@ -776,8 +789,7 @@ fn require_by_string_require_boolean() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/types/boolean";
+  let path = without_config_dir(&fixture, PathType::Relative, "types/boolean");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "false"]);
 }
@@ -791,8 +803,7 @@ fn require_by_string_require_buffer() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/types/buffer";
+  let path = without_config_dir(&fixture, PathType::Relative, "types/buffer");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "buffer"]);
 }
@@ -807,8 +818,11 @@ fn require_by_string_require_chained_aliases_failure_cyclic() {
 
   let mut fixture = ReplWithPathFixture::new();
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config/chained_aliases/subdirectory/failing_requirer_cyclic";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config/chained_aliases/subdirectory/failing_requirer_cyclic",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&[
             "false",
@@ -816,8 +830,11 @@ fn require_by_string_require_chained_aliases_failure_cyclic() {
         ]);
   }
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config_luau/chained_aliases/subdirectory/failing_requirer_cyclic";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config_luau/chained_aliases/subdirectory/failing_requirer_cyclic",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&[
             "false",
@@ -836,8 +853,11 @@ fn require_by_string_require_chained_aliases_failure_depend_on_inner_alias() {
 
   let mut fixture = ReplWithPathFixture::new();
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config/chained_aliases/subdirectory/failing_requirer_inner_dependency";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config/chained_aliases/subdirectory/failing_requirer_inner_dependency",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&[
       "false",
@@ -845,8 +865,11 @@ fn require_by_string_require_chained_aliases_failure_depend_on_inner_alias() {
     ]);
   }
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config_luau/chained_aliases/subdirectory/failing_requirer_inner_dependency";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config_luau/chained_aliases/subdirectory/failing_requirer_inner_dependency",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&[
       "false",
@@ -865,8 +888,11 @@ fn require_by_string_require_chained_aliases_failure_missing() {
 
   let mut fixture = ReplWithPathFixture::new();
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config/chained_aliases/subdirectory/failing_requirer_missing";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config/chained_aliases/subdirectory/failing_requirer_missing",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&[
       "false",
@@ -874,8 +900,11 @@ fn require_by_string_require_chained_aliases_failure_missing() {
     ]);
   }
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config_luau/chained_aliases/subdirectory/failing_requirer_missing";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config_luau/chained_aliases/subdirectory/failing_requirer_missing",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&[
       "false",
@@ -894,8 +923,11 @@ fn require_by_string_require_chained_aliases_success() {
 
   let mut fixture = ReplWithPathFixture::new();
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config/chained_aliases/subdirectory/successful_requirer";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config/chained_aliases/subdirectory/successful_requirer",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&[
       "true",
@@ -904,8 +936,11 @@ fn require_by_string_require_chained_aliases_success() {
     ]);
   }
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config_luau/chained_aliases/subdirectory/successful_requirer";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config_luau/chained_aliases/subdirectory/successful_requirer",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&[
       "true",
@@ -927,8 +962,11 @@ fn require_by_string_require_class_extends_non_open_parent() {
   let _sff = sff_user_defined_classes();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/class_extends_non_open_parent";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "class_extends_non_open_parent",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["Non-open class 'Parent' cannot be extended"]);
 }
@@ -945,8 +983,11 @@ fn require_by_string_require_class_override_instance_member_error() {
   let _sff = sff_user_defined_classes();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/class_override_instance_member_error";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "class_override_instance_member_error",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&[
     "Cannot override instance member 'x' of parent class 'Parent' in child class 'Child'",
@@ -965,8 +1006,11 @@ fn require_by_string_require_export_alias() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_alias";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_alias",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -983,8 +1027,11 @@ fn require_by_string_require_export_alias_2() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_alias2";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_alias2",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1002,8 +1049,11 @@ fn require_by_string_require_export_class() {
 
   // we create a new fixture so the new lua_State has the class library
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_class";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_class",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1020,8 +1070,11 @@ fn require_by_string_require_export_class_child_without_parent() {
   let _sff = sff_user_defined_classes();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_class_child_without_parent";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_class_child_without_parent",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1038,8 +1091,11 @@ fn require_by_string_require_export_class_both_exported() {
   let _sff = sff_user_defined_classes();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_class_both_exported";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_class_both_exported",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1056,8 +1112,11 @@ fn require_by_string_require_export_class_multi_level() {
   let _sff = sff_user_defined_classes();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_class_multi_level";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_class_multi_level",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1074,8 +1133,11 @@ fn require_by_string_require_export_compound() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_compound";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_compound",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1092,8 +1154,11 @@ fn require_by_string_require_export_const_error() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/export_const_error";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/export_const_error",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["Variable 'foo' is constant and may not be reassigned"]);
 }
@@ -1110,8 +1175,11 @@ fn require_by_string_require_export_edge_cases() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_edge_cases";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_edge_cases",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1128,8 +1196,11 @@ fn require_by_string_require_export_forward_rebind() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_forward_rebind";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_forward_rebind",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1146,8 +1217,11 @@ fn require_by_string_require_export_freeze_local_nil_ignored() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_freeze_local_nil_error";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_freeze_local_nil_error",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1164,8 +1238,11 @@ fn require_by_string_require_export_freeze_shadowing_ignored() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_freeze_shadowing";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_freeze_shadowing",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1182,8 +1259,11 @@ fn require_by_string_require_export_frozen() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_frozen";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_frozen",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1200,8 +1280,11 @@ fn require_by_string_require_export_frozen_mutate() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_frozen_mutate";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_frozen_mutate",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1218,8 +1301,11 @@ fn require_by_string_require_export_function() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_function";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_function",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1236,8 +1322,11 @@ fn require_by_string_require_export_function_rebind() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_function_rebind";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_function_rebind",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1254,8 +1343,11 @@ fn require_by_string_require_export_in_do_block_error() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/export_in_do_block_error";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/export_in_do_block_error",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["'export' may only be applied to top-level statements"]);
 }
@@ -1272,8 +1364,11 @@ fn require_by_string_require_export_in_else_if_error() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/export_in_elseif_error";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/export_in_elseif_error",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["'export' may only be applied to top-level statements"]);
 }
@@ -1290,8 +1385,11 @@ fn require_by_string_require_export_in_for_error() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/export_in_for_error";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/export_in_for_error",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["'export' may only be applied to top-level statements"]);
 }
@@ -1308,8 +1406,11 @@ fn require_by_string_require_export_in_function_error() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/export_in_function_error";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/export_in_function_error",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["'export' may only be applied to top-level statements"]);
 }
@@ -1326,8 +1427,11 @@ fn require_by_string_require_export_in_if_error() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/export_in_if_error";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/export_in_if_error",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["'export' may only be applied to top-level statements"]);
 }
@@ -1344,8 +1448,11 @@ fn require_by_string_require_export_in_repeat_error() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/export_in_repeat_error";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/export_in_repeat_error",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["'export' may only be applied to top-level statements"]);
 }
@@ -1362,8 +1469,11 @@ fn require_by_string_require_export_in_while_error() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/export_in_while_error";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/export_in_while_error",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["'export' may only be applied to top-level statements"]);
 }
@@ -1380,8 +1490,11 @@ fn require_by_string_require_export_internal_call() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_internal_call";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_internal_call",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1398,8 +1511,11 @@ fn require_by_string_require_export_mixed() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_mixed";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_mixed",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1416,8 +1532,11 @@ fn require_by_string_require_export_multi_assign() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_multi_assign";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_multi_assign",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1434,8 +1553,11 @@ fn require_by_string_require_export_multi_swap() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_multi_swap";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_multi_swap",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1452,8 +1574,11 @@ fn require_by_string_require_export_multi_var() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_multi_var";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_multi_var",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1470,8 +1595,11 @@ fn require_by_string_require_export_mutual_recursion() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_mutual_recursion";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_mutual_recursion",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1488,8 +1616,11 @@ fn require_by_string_require_export_nested_table() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_nested_table";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_nested_table",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1506,8 +1637,11 @@ fn require_by_string_require_export_shadowing() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_shadowing";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_shadowing",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1524,8 +1658,11 @@ fn require_by_string_require_export_trap() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_trap";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_trap",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1542,8 +1679,11 @@ fn require_by_string_require_export_type_with_return() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_type_with_return";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_type_with_return",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1560,8 +1700,11 @@ fn require_by_string_require_export_upvalue() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_upvalue";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_upvalue",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1578,8 +1721,11 @@ fn require_by_string_require_export_value() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/require_export_value";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/require_export_value",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -1596,8 +1742,11 @@ fn require_by_string_require_export_with_return_error() {
   let _sff = sff_export_value();
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/export_keyword/export_with_return_error";
+  let path = without_config_dir(
+    &fixture,
+    PathType::Relative,
+    "export_keyword/export_with_return_error",
+  );
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["Exporting values is not compatible with top-level return"]);
 }
@@ -1613,20 +1762,20 @@ fn require_by_string_require_from_luau_binary() {
 
   let fixture = ReplWithPathFixture::new();
 
-  let dir_rel = || fixture.get_luau_directory(PathType::Relative);
-  let dir_abs = || fixture.get_luau_directory(PathType::Absolute);
+  let rel = PathType::Relative;
+  let abs = PathType::Absolute;
 
   let paths: vec::Vec<String> = vec![
-    dir_rel() + "/tests/require/without_config/dependency.luau",
-    dir_abs() + "/tests/require/without_config/dependency.luau",
-    dir_rel() + "/tests/require/without_config/module.luau",
-    dir_abs() + "/tests/require/without_config/module.luau",
-    dir_rel() + "/tests/require/without_config/nested/init.luau",
-    dir_abs() + "/tests/require/without_config/nested/init.luau",
-    dir_rel() + "/tests/require/config_tests/with_config/src/submodule/init.luau",
-    dir_abs() + "/tests/require/config_tests/with_config/src/submodule/init.luau",
-    dir_rel() + "/tests/require/config_tests/with_config_luau/src/submodule/init.luau",
-    dir_abs() + "/tests/require/config_tests/with_config_luau/src/submodule/init.luau",
+    without_config_dir(&fixture, rel, "dependency.luau"),
+    without_config_dir(&fixture, abs, "dependency.luau"),
+    without_config_dir(&fixture, rel, "module.luau"),
+    without_config_dir(&fixture, abs, "module.luau"),
+    without_config_dir(&fixture, rel, "nested/init.luau"),
+    without_config_dir(&fixture, abs, "nested/init.luau"),
+    config_tests_dir(&fixture, rel, "with_config/src/submodule/init.luau"),
+    config_tests_dir(&fixture, abs, "with_config/src/submodule/init.luau"),
+    config_tests_dir(&fixture, rel, "with_config_luau/src/submodule/init.luau"),
+    config_tests_dir(&fixture, abs, "with_config_luau/src/submodule/init.luau"),
   ];
 
   for path in &paths {
@@ -1648,8 +1797,7 @@ fn require_by_string_require_function() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/types/function";
+  let path = without_config_dir(&fixture, PathType::Relative, "types/function");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "function"]);
 }
@@ -1663,7 +1811,7 @@ fn require_by_string_require_init_lua() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/lua";
+  let path = without_config_dir(&fixture, PathType::Relative, "lua");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "result from init.lua"]);
 }
@@ -1677,7 +1825,7 @@ fn require_by_string_require_init_luau() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/luau";
+  let path = without_config_dir(&fixture, PathType::Relative, "luau");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "result from init.luau"]);
 }
@@ -1691,8 +1839,7 @@ fn require_by_string_require_lua() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/lua_dependency";
+  let path = without_config_dir(&fixture, PathType::Relative, "lua_dependency");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "result from lua_dependency"]);
 }
@@ -1706,8 +1853,7 @@ fn require_by_string_require_nested_inits() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/nested_inits_requirer";
+  let path = without_config_dir(&fixture, PathType::Relative, "nested_inits_requirer");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&[
     "true",
@@ -1725,8 +1871,7 @@ fn require_by_string_require_nil() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/types/nil";
+  let path = without_config_dir(&fixture, PathType::Relative, "types/nil");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "nil"]);
 }
@@ -1740,8 +1885,7 @@ fn require_by_string_require_number() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/types/number";
+  let path = without_config_dir(&fixture, PathType::Relative, "types/number");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "12345"]);
 }
@@ -1756,14 +1900,20 @@ fn require_by_string_require_path_with_alias() {
 
   let mut fixture = ReplWithPathFixture::new();
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config/src/alias_requirer";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config/src/alias_requirer",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&["true", "result from dependency"]);
   }
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config_luau/src/alias_requirer";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config_luau/src/alias_requirer",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&["true", "result from dependency"]);
   }
@@ -1779,14 +1929,20 @@ fn require_by_string_require_path_with_alias_pointing_to_directory() {
 
   let mut fixture = ReplWithPathFixture::new();
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config/src/directory_alias_requirer";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config/src/directory_alias_requirer",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&["true", "result from subdirectory_dependency"]);
   }
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config_luau/src/directory_alias_requirer";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config_luau/src/directory_alias_requirer",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&["true", "result from subdirectory_dependency"]);
   }
@@ -1802,14 +1958,20 @@ fn require_by_string_require_path_with_parent_alias() {
 
   let mut fixture = ReplWithPathFixture::new();
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config/src/parent_alias_requirer";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config/src/parent_alias_requirer",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&["true", "result from other_dependency"]);
   }
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config_luau/src/parent_alias_requirer";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config_luau/src/parent_alias_requirer",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&["true", "result from other_dependency"]);
   }
@@ -1824,8 +1986,7 @@ fn require_by_string_require_relative_to_requiring_file() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/module";
+  let path = without_config_dir(&fixture, PathType::Relative, "module");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "result from dependency", "required into module"]);
 }
@@ -1839,8 +2000,7 @@ fn require_by_string_require_simple_relative_path() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/dependency";
+  let path = without_config_dir(&fixture, PathType::Relative, "dependency");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "result from dependency"]);
 }
@@ -1852,8 +2012,7 @@ fn require_by_string_require_simple_relative_path_within_pcall() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/dependency";
+  let path = without_config_dir(&fixture, PathType::Relative, "dependency");
   let code: String = format!("return pcall(require, \"{}\")", path);
   run_code_str(fixture.l, &code);
   fixture.assert_output_contains_all(&["true", "result from dependency"]);
@@ -1868,8 +2027,7 @@ fn require_by_string_require_string() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/types/string";
+  let path = without_config_dir(&fixture, PathType::Relative, "types/string");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "\"foo\""]);
 }
@@ -1883,8 +2041,7 @@ fn require_by_string_require_submodule_using_self_directly() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/nested";
+  let path = without_config_dir(&fixture, PathType::Relative, "nested");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "result from submodule"]);
 }
@@ -1898,8 +2055,7 @@ fn require_by_string_require_submodule_using_self_indirectly() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/nested_module_requirer";
+  let path = without_config_dir(&fixture, PathType::Relative, "nested_module_requirer");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "result from submodule"]);
 }
@@ -1913,8 +2069,7 @@ fn require_by_string_require_table() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/types/table";
+  let path = without_config_dir(&fixture, PathType::Relative, "types/table");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "{\"foo\", \"bar\"}"]);
 }
@@ -1928,8 +2083,7 @@ fn require_by_string_require_thread() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/types/thread";
+  let path = without_config_dir(&fixture, PathType::Relative, "types/thread");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "thread"]);
 }
@@ -1958,8 +2112,7 @@ fn require_by_string_require_userdata() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/types/userdata";
+  let path = without_config_dir(&fixture, PathType::Relative, "types/userdata");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "userdata"]);
 }
@@ -1973,8 +2126,7 @@ fn require_by_string_require_vector() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path =
-    fixture.get_luau_directory(PathType::Relative) + "/tests/require/without_config/types/vector";
+  let path = without_config_dir(&fixture, PathType::Relative, "types/vector");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true", "1, 2, 3"]);
 }
@@ -1991,14 +2143,26 @@ fn require_by_string_require_with_ambiguity_in_alias_discovery() {
   let fixture = ReplWithPathFixture::new();
 
   let paths: vec::Vec<String> = vec![
-    fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config/parent_ambiguity/folder/requirer.luau",
-    fixture.get_luau_directory(PathType::Absolute)
-      + "/tests/require/config_tests/with_config/parent_ambiguity/folder/requirer.luau",
-    fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config_luau/parent_ambiguity/folder/requirer.luau",
-    fixture.get_luau_directory(PathType::Absolute)
-      + "/tests/require/config_tests/with_config_luau/parent_ambiguity/folder/requirer.luau",
+    config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config/parent_ambiguity/folder/requirer.luau",
+    ),
+    config_tests_dir(
+      &fixture,
+      PathType::Absolute,
+      "with_config/parent_ambiguity/folder/requirer.luau",
+    ),
+    config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config_luau/parent_ambiguity/folder/requirer.luau",
+    ),
+    config_tests_dir(
+      &fixture,
+      PathType::Absolute,
+      "with_config_luau/parent_ambiguity/folder/requirer.luau",
+    ),
   ];
 
   for path in &paths {
@@ -2020,8 +2184,7 @@ fn require_by_string_require_with_directory_ambiguity() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/ambiguous_directory_requirer";
+  let path = without_config_dir(&fixture, PathType::Relative, "ambiguous_directory_requirer");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&[
         "false",
@@ -2038,8 +2201,7 @@ fn require_by_string_require_with_file_ambiguity() {
   };
 
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/ambiguous_file_requirer";
+  let path = without_config_dir(&fixture, PathType::Relative, "ambiguous_file_requirer");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&[
         "false",
@@ -2068,8 +2230,7 @@ fn require_by_string_require_cyclic_path() {
   // cpp 同时置 LuauCyclicRequireShortCircuit=true；该 flag 未移植。
   // Both modules use the export keyword. The compiler uses the runtime-provided
   // placeholder as the export table, so the cycle resolves automatically.
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/cyclic_requirer";
+  let path = without_config_dir(&fixture, PathType::Relative, "cyclic_requirer");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["true"]);
 }
@@ -2085,8 +2246,7 @@ fn require_by_string_require_cyclic_dependency_error_on_access() {
 
   let _sff = sff_export_value();
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/cyclic_access_a";
+  let path = without_config_dir(&fixture, PathType::Relative, "cyclic_access_a");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["false", "Cannot access the exported field 'Tree'"]);
 }
@@ -2102,8 +2262,7 @@ fn require_by_string_require_cyclic_dependency_error_on_mutation() {
 
   let _sff = sff_export_value();
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/cyclic_mutation_b";
+  let path = without_config_dir(&fixture, PathType::Relative, "cyclic_mutation_b");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["false", "Cannot set the exported field 'foo'"]);
 }
@@ -2119,8 +2278,7 @@ fn require_by_string_require_cyclic_dependency_error_on_non_string_key() {
 
   let _sff = sff_export_value();
   let mut fixture = ReplWithPathFixture::new();
-  let path = fixture.get_luau_directory(PathType::Relative)
-    + "/tests/require/without_config/cyclic_access_nonstringkey_a";
+  let path = without_config_dir(&fixture, PathType::Relative, "cyclic_access_nonstringkey_a");
   repl_with_path_fixture_run_protected_require(&fixture, &path);
   fixture.assert_output_contains_all(&["false", "Cannot access the exported field 'unknown'"]);
 }
@@ -2136,14 +2294,16 @@ fn require_by_string_require_submodule_using_self_with_override_attempt() {
 
   let mut fixture = ReplWithPathFixture::new();
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config/nested_override";
+    let path = config_tests_dir(&fixture, PathType::Relative, "with_config/nested_override");
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&["true", "result from submodule"]);
   }
   {
-    let path = fixture.get_luau_directory(PathType::Relative)
-      + "/tests/require/config_tests/with_config_luau/nested_override";
+    let path = config_tests_dir(
+      &fixture,
+      PathType::Relative,
+      "with_config_luau/nested_override",
+    );
     repl_with_path_fixture_run_protected_require(&fixture, &path);
     fixture.assert_output_contains_all(&["true", "result from submodule"]);
   }

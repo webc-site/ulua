@@ -2,7 +2,7 @@
 
 use alloc::vec::Vec;
 
-use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet};
+use ulua_common::records::dense_hash_map::DenseHashMap;
 
 use crate::{
   records::{
@@ -23,7 +23,6 @@ pub struct NonStrictTypeChecker {
   pub normalizer: Normalizer,
   pub subtyping: Subtyping,
   pub dfg: *const DataFlowGraph,
-  pub no_type_function_errors: DenseHashSet<TypeId>,
   pub stack: Vec<*mut Scope>,
   pub cached_negations: DenseHashMap<TypeId, TypeId>,
   pub limits: *mut TypeCheckLimits,

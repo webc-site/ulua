@@ -9,8 +9,3 @@ impl TypeLevel {
     Self { level, sub_level }
   }
 }
-
-pub const TYPE_LEVEL_DEFAULT: TypeLevel = TypeLevel {
-  level: 0,
-  sub_level: 0,
-};

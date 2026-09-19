@@ -11,5 +11,4 @@ pub struct SourceCode {
 impl SourceCode {
   pub const NONE: Type = Type::None;
   pub const MODULE: Type = Type::Module;
-  pub const SCRIPT: Type = Type::Script;
 }

@@ -1,5 +1,5 @@
 use core::{
-  ffi::{c_char, c_int, c_void},
+  ffi::{c_char, c_int},
   ptr::null_mut,
 };
 

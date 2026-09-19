@@ -5,9 +5,3 @@ pub enum Value {
   DoNotSuppress,
   NormalizationFailed,
 }
-
-impl Value {
-  pub const SUPPRESS: Value = Value::Suppress;
-  pub const DO_NOT_SUPPRESS: Value = Value::DoNotSuppress;
-  pub const NORMALIZATION_FAILED: Value = Value::NormalizationFailed;
-}

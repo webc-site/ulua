@@ -54,7 +54,6 @@ pub struct TypeChecker {
 
   pub duplicate_type_aliases: DenseHashSet<(bool, Name), HashBoolNamePair>,
   pub incorrect_extern_type_definitions: DenseHashSet<*const AstStatDeclareExternType>,
-  pub deferred_quantification: Vec<(TypeId, ScopePtr)>,
 }
 
 impl Debug for TypeChecker {

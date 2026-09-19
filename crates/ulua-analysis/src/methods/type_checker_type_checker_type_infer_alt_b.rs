@@ -68,7 +68,6 @@ impl TypeChecker {
       recursion_count: 0,
       duplicate_type_aliases: DenseHashSet::new((false, String::new())),
       incorrect_extern_type_definitions: DenseHashSet::new(null()),
-      deferred_quantification: Vec::new(),
     };
 
     result.normalizer.shared_state = &mut result.unifier_state;

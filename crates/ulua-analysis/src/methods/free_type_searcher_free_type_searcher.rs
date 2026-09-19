@@ -1,8 +1,7 @@
 use core::ptr::null;
 
 use ulua_common::records::{
-  dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet,
-  insertion_ordered_map::InsertionOrderedMap,
+  dense_hash_set::DenseHashSet, insertion_ordered_map::InsertionOrderedMap,
 };
 
 use crate::{
@@ -20,8 +19,6 @@ impl FreeTypeSearcher {
       polarity: Polarity::Positive,
       seen_positive: DenseHashSet::new(null()),
       seen_negative: DenseHashSet::new(null()),
-      negative_types: DenseHashMap::new(null()),
-      positive_types: DenseHashMap::new(null()),
       types: InsertionOrderedMap::new(),
       type_packs: InsertionOrderedMap::new(),
       unsealed_tables: DenseHashSet::new(null()),

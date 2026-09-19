@@ -1,6 +1,6 @@
 use core::ptr::{null, null_mut};
 
-use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet};
+use ulua_common::records::dense_hash_map::DenseHashMap;
 
 use crate::{
   enums::solver_mode::SolverMode,
@@ -41,7 +41,6 @@ impl NonStrictTypeChecker {
       normalizer,
       subtyping,
       dfg,
-      no_type_function_errors: DenseHashSet::new(null()),
       stack: Vec::new(),
       cached_negations: DenseHashMap::new(null()),
       limits: limits as *mut TypeCheckLimits,

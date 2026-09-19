@@ -990,7 +990,7 @@ fn conformance_closure() {
 
 #[test]
 fn conformance_codegen_nop_padding_deterministic_off() {
-  use core::ffi::{c_char, c_void};
+  use core::ffi::c_char;
 
   use ulua_code_gen::{
     functions::{
@@ -1048,7 +1048,7 @@ fn conformance_codegen_nop_padding_deterministic_off() {
 
 #[test]
 fn conformance_codegen_randomize_code_size_non_decreasing() {
-  use core::ffi::{c_char, c_void};
+  use core::ffi::c_char;
 
   use ulua_code_gen::{
     functions::{
@@ -1117,7 +1117,7 @@ fn conformance_codegen_randomize_code_size_non_decreasing() {
 
 #[test]
 fn conformance_codegen_randomize_functional_correctness() {
-  use core::ffi::{CStr, c_char, c_void};
+  use core::ffi::{CStr, c_char};
 
   use ulua_code_gen::{
     functions::{
@@ -1640,7 +1640,7 @@ return f
 
 #[test]
 fn conformance_huge_constant_table() {
-  use core::ffi::{c_char, c_void};
+  use core::ffi::c_char;
   use std::string::String;
 
   use ulua_code_gen::{
@@ -1730,7 +1730,7 @@ fn conformance_huge_constant_table() {
 
 #[test]
 fn conformance_huge_function() {
-  use core::ffi::{c_char, c_void};
+  use core::ffi::c_char;
 
   use ulua_code_gen::{
     enums::code_gen_flags::CodeGenFlags,
@@ -1750,7 +1750,10 @@ fn conformance_huge_function() {
   };
 
   use crate::common::{
-    functions::{c_alloc::c_free, make_huge_function_source::make_huge_function_source, run_conformance::CODEGEN},
+    functions::{
+      c_alloc::c_free, make_huge_function_source::make_huge_function_source,
+      run_conformance::CODEGEN,
+    },
     records::state_ref::StateRef,
   };
 
@@ -1799,7 +1802,7 @@ fn conformance_huge_function() {
 #[test]
 fn conformance_huge_function_load_failure() {
   use core::{
-    ffi::{CStr, c_char, c_void},
+    ffi::{CStr, c_char},
     sync::atomic::Ordering,
   };
 
@@ -2057,7 +2060,7 @@ fn conformance_interrupt() {
 
 #[test]
 fn conformance_interrupt_error_inspection() {
-  use core::ffi::{c_char, c_void};
+  use core::ffi::c_char;
 
   use ulua_compiler::functions::luau_compile::luau_compile;
   use ulua_vm::{
@@ -2157,7 +2160,7 @@ fn conformance_interrupt_inspection() {
 
 #[test]
 fn conformance_ir_instruction_limit() {
-  use core::ffi::{c_char, c_void};
+  use core::ffi::c_char;
   use std::string::String;
 
   use ulua_code_gen::{
@@ -2176,7 +2179,8 @@ fn conformance_ir_instruction_limit() {
   };
 
   use crate::common::{
-    functions::{c_alloc::c_free, run_conformance::CODEGEN}, records::state_ref::StateRef,
+    functions::{c_alloc::c_free, run_conformance::CODEGEN},
+    records::state_ref::StateRef,
     type_aliases::scoped_fast_int::ScopedFastInt,
   };
 
@@ -2359,7 +2363,7 @@ fn conformance_iter_fenv() {
 
 #[test]
 fn conformance_large_nested_closure() {
-  use core::ffi::{c_char, c_void};
+  use core::ffi::c_char;
   use std::string::String;
 
   use ulua_code_gen::{
@@ -2694,7 +2698,7 @@ fn conformance_native() {
 
 #[test]
 fn conformance_native_attribute() {
-  use core::ffi::{c_char, c_void};
+  use core::ffi::c_char;
 
   use ulua_code_gen::{
     enums::{code_gen_compilation_result::CodeGenCompilationResult, code_gen_flags::CodeGenFlags},
@@ -5121,7 +5125,7 @@ fn shared_code_allocator_native_proto_state() {
 
 #[test]
 fn shared_code_allocator_shared_allocation() {
-  use core::ffi::{c_char, c_void};
+  use core::ffi::c_char;
 
   use ulua_code_gen::{
     enums::{code_gen_compilation_result::CodeGenCompilationResult, code_gen_flags::CodeGenFlags},
@@ -5141,7 +5145,10 @@ fn shared_code_allocator_shared_allocation() {
   use ulua_vm::functions::{lua_l_newstate::lua_l_newstate, luau_load::luau_load};
 
   use crate::common::{
-    functions::{c_alloc::c_free, shared_code_allocator_module_id::shared_code_allocator_module_id as module_id},
+    functions::{
+      c_alloc::c_free,
+      shared_code_allocator_module_id::shared_code_allocator_module_id as module_id,
+    },
     records::state_ref::StateRef,
   };
 
@@ -5242,7 +5249,7 @@ fn shared_code_allocator_shared_allocation() {
 
 #[test]
 fn conformance_large_module_a64() {
-  use core::ffi::{c_char, c_void};
+  use core::ffi::c_char;
   use std::string::String;
 
   use ulua_code_gen::{

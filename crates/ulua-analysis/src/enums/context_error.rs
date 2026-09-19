@@ -7,5 +7,4 @@ pub enum Context {
 
 impl Context {
   pub const COVARIANT: Context = Context::CovariantContext;
-  pub const INVARIANT: Context = Context::InvariantContext;
 }

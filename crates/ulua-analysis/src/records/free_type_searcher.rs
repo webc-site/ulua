@@ -1,8 +1,7 @@
 use core::ffi::c_void;
 
 use ulua_common::records::{
-  dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet,
-  insertion_ordered_map::InsertionOrderedMap,
+  dense_hash_set::DenseHashSet, insertion_ordered_map::InsertionOrderedMap,
 };
 
 use crate::{
@@ -19,8 +18,6 @@ pub struct FreeTypeSearcher {
   pub polarity: Polarity,
   pub seen_positive: DenseHashSet<*const c_void>,
   pub seen_negative: DenseHashSet<*const c_void>,
-  pub negative_types: DenseHashMap<*const c_void, usize>,
-  pub positive_types: DenseHashMap<*const c_void, usize>,
   pub types: InsertionOrderedMap<TypeId, GeneralizationParams>,
   pub type_packs: InsertionOrderedMap<TypePackId, GeneralizationParams>,
   pub unsealed_tables: DenseHashSet<TypeId>,
