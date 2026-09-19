@@ -3,7 +3,7 @@ use std::{
   process::{Command, Stdio},
 };
 
-suse memchr::memmem;
+use memchr::memmem;
 
 use crate::{enums::test_result::TestResult, records::reducer::Reducer};
 
