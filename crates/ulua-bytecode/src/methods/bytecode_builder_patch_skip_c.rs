@@ -11,9 +11,6 @@ impl BytecodeBuilder {
     LUAU_ASSERT!(jump_label < self.insns.len());
 
     let jump_insn = self.insns[jump_label];
-    {
-      let _ = jump_insn;
-    }
 
     let op = LuauOpcode::from(luau_insn_op(jump_insn) as u8);
     LUAU_ASSERT!(is_skip_c(op) || is_fast_call(op));

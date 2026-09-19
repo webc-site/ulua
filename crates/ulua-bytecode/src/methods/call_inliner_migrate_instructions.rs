@@ -4,7 +4,7 @@ use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_assert::LUAU_ASSE
 
 use crate::{
   enums::bc_op_kind::BcOpKind,
-  records::{bc_inst::BcInst, bc_op::BcOp, bc_ref::BcRef, call_inliner::CallInliner},
+  records::{bc_op::BcOp, call_inliner::CallInliner},
 };
 
 impl<'a> CallInliner<'a> {
@@ -13,10 +13,7 @@ impl<'a> CallInliner<'a> {
       let target_insn_op = BcOp::bc_op_bc_op_kind_u32(BcOpKind::Inst, i);
       let caller_insn_op =
         BcOp::bc_op_bc_op_kind_u32(BcOpKind::Inst, self.caller_inst_size_before_inline + i);
-      let target_inst_data = {
-        let target_inst = self.target.inst(target_insn_op);
-        target_inst.operator_deref().clone()
-      };
+      let target_inst_data = self.target.inst_op(target_insn_op).clone();
       let target_ops: Vec<BcOp> = target_inst_data.ops.iter().copied().collect();
       let target_reg = self.target.regs.get(&target_insn_op).copied();
       let is_multi_consumer = match target_inst_data.op {
@@ -83,15 +80,9 @@ impl<'a> CallInliner<'a> {
             }
           }
         }
-        // SAFETY：make_fixed_consumer 只读 caller_inst 指向的指令并按 op 定位，
-        // 不会移动或释放 instructions；裸指针重建共享引用仅为绕开
-        // `&mut self` 与 `&self.caller.instructions` 的同时借用。
-        let instructions = &self.caller.instructions as *const Vec<BcInst>;
-        let mut caller_inst = BcRef {
-          vec: unsafe { &*instructions },
-          op: caller_insn_op,
-        };
-        self.make_fixed_consumer(&mut caller_inst);
+        // cpp `makeFixedConsumer(caller, callerInst)`：句柄化后直接把调用方指令的
+        // `BcOp` 交给它，内部经 `self.caller` 现取可变视图。
+        self.make_fixed_consumer(caller_insn_op);
       } else {
         for inp in target_ops {
           let mapped = self.map_to_caller_op(inp);

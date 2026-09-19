@@ -114,6 +114,8 @@ impl BytecodeBuilder {
 }
 
 impl Default for BytecodeBuilder {
+  /// 委托 [`Self::new`]，确保 `constant_map` 的空键哨兵与 `{Nil, 0, 0}` 这条
+  /// 真实的 nil 常量键不相撞（否则 nil 永不去重、`insert_unsafe` 虚增计数）。
   fn default() -> Self {
     Self::new(None)
   }

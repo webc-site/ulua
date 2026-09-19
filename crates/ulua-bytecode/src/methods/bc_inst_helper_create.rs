@@ -7,17 +7,18 @@ pub trait BcInstHelperCreate {
 }
 
 impl<'a> BcInstHelper<'a> {
-  pub fn create<T>(graph: &'a mut BcFunction) -> BcInstHelper<'a>
+  /// cpp `BcInstHelper::create<T>(graph)`：新增一条 `T::OPCODE` 指令并返回持有图的
+  /// 唯一可变借用的 helper。
+  ///
+  /// 旧实现在此用 `graph as *mut BcFunction` 把同一个图再借两次（`inst(op)` 的
+  /// `&`、`BcInstHelper::new` 的 `&mut`），是 Stacked Borrows UB；现在 helper 只存
+  /// `BcOp` 下标，无需二次借用。
+  pub fn create<T>(graph: &'a mut BcFunction) -> Self
   where
     T: BcInstHelperCreate,
   {
     let op = graph.add_inst();
-    {
-      let inst = graph.inst_op(op);
-      inst.op = T::OPCODE;
-    }
-    let graph_ptr = graph as *mut BcFunction;
-    let inst = unsafe { (*graph_ptr).inst(op) };
-    BcInstHelper::new(unsafe { &mut *graph_ptr }, inst)
+    graph.inst_op(op).op = T::OPCODE;
+    BcInstHelper::new(graph, op)
   }
 }

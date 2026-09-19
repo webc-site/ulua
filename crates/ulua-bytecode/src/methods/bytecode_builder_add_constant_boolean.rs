@@ -20,6 +20,8 @@ impl BytecodeBuilder {
       r#type: Type::Boolean,
       value: value as u64,
       extra: 0,
+      extra2: 0,
+      extra3: 0,
     };
 
     self.add_constant(k, c)

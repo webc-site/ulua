@@ -1,22 +1,20 @@
 use ulua_common::enums::luau_opcode::LuauOpcode;
 
-use crate::records::{bc_block::BcBlock, bc_ref::BcRef, call_inliner::CallInliner};
+use crate::records::call_inliner::CallInliner;
 
 impl<'a> CallInliner<'a> {
+  /// cpp `dropPrepVarArgsInInlinedPath()`：内联入口块若以 PREPVARARGS 开头则摘掉它
+  /// （变参已由调用方准备）。
   pub(crate) fn drop_prep_var_args_in_inlined_path(&mut self) {
-    let target_entry_block = self.target.entry_block;
-    let mapped_block_op = self.map_block_op(target_entry_block);
-    let inlined_entry_block: BcRef<BcBlock> = self.caller.block(mapped_block_op);
+    let mapped_block_op = self.map_block_op(self.target.entry_block);
 
-    let block_mut = unsafe { &mut *BcRef::operator_arrow(&inlined_entry_block) };
+    // 块首指令先快照成 BcOp，避免与随后 `inst_op` 的可变借用重叠
+    let Some(first_op) = self.caller.block_op(mapped_block_op).ops.front().copied() else {
+      return;
+    };
 
-    if !block_mut.ops.is_empty() {
-      let first_op = block_mut.ops.front().unwrap();
-      let first_inst = self.caller.inst_op(*first_op);
-
-      if first_inst.op == LuauOpcode::LOP_PREPVARARGS {
-        block_mut.ops.pop_front();
-      }
+    if self.caller.inst_op(first_op).op == LuauOpcode::LOP_PREPVARARGS {
+      self.caller.block_op(mapped_block_op).ops.pop_front();
     }
   }
 }

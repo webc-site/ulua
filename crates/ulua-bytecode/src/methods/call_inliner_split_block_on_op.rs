@@ -1,17 +1,19 @@
-use alloc::vec::Vec;
-
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   enums::{bc_block_edge_kind::BcBlockEdgeKind, bc_op_kind::BcOpKind},
-  records::{
-    bc_block::BcBlock, bc_block_edge::BcBlockEdge, bc_op::BcOp, bc_ref::BcRef,
-    call_inliner::CallInliner,
-  },
+  records::{bc_block_edge::BcBlockEdge, bc_op::BcOp, call_inliner::CallInliner},
 };
 
 impl<'a> CallInliner<'a> {
-  pub fn split_block_on_op(&mut self, split_op: BcOp) -> (BcRef<'a, BcBlock>, BcRef<'a, BcBlock>) {
+  /// cpp `splitBlockOnOp(BcOp splitOp)`：把 `splitOp` 所在块切成
+  /// `prev | insn | next` 三块并接好 fallthrough 边。
+  ///
+  /// 返回 `(prevBlock, nextBlock)` 的 `BcOp` 句柄：cpp 返回 `pair<BcRef<BcBlock>, ...>`
+  /// 并把 `vec` 借用谎报成图的生命期（`&self.caller.blocks as *const _ as &'a _`），
+  /// 后续再经 `BcRef::operator->` 写回——那是 Stacked Borrows UB，且 `blocks`
+  /// 重分配后引用悬垂。句柄化后调用方一律经 `block_op` 现取现用。
+  pub fn split_block_on_op(&mut self, split_op: BcOp) -> (BcOp, BcOp) {
     let prev_block_op = self.caller.instructions[split_op.index as usize].block;
     LUAU_ASSERT!(prev_block_op.kind == BcOpKind::Block);
     LUAU_ASSERT!(
@@ -106,17 +108,6 @@ impl<'a> CallInliner<'a> {
       .push_back(split_op);
     self.caller.instructions[split_op.index as usize].block = insn_block_op;
 
-    let vec_ptr: *const Vec<BcBlock> = &self.caller.blocks;
-    let vec_ref: &'a Vec<BcBlock> = unsafe { &*vec_ptr };
-    (
-      BcRef {
-        vec: vec_ref,
-        op: prev_block_op,
-      },
-      BcRef {
-        vec: vec_ref,
-        op: next_block_op,
-      },
-    )
+    (prev_block_op, next_block_op)
   }
 }

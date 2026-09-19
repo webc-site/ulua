@@ -5,7 +5,10 @@ pub enum Type {
   Boolean,
   Number,
   Integer,
+  /// cpp `Constant::Type_Vectorf`
   Vector,
+  /// cpp `Constant::Type_Vectord`（`BytecodeBuilder.h:203-214`）
+  Vectord,
   String,
   Import,
   Table,

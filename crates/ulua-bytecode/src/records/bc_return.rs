@@ -4,13 +4,11 @@ use core::marker::PhantomData;
 use ulua_common::enums::luau_opcode::LuauOpcode;
 
 use crate::{
-  methods::{bc_function_as::BcInstType, bc_inst_helper_create::BcInstHelperCreate},
+  methods::bc_inst_helper_create::BcInstHelperCreate,
   records::{
     bc_function::{BcFunction, VmConst},
-    bc_inst::BcInst,
     bc_inst_helper::BcInstHelper,
     bc_op::BcOp,
-    bc_ref::BcRef,
   },
 };
 
@@ -23,12 +21,11 @@ pub struct BcReturn<'a, T = VmConst> {
 impl<'a, T> BcReturn<'a, T> {
   pub const K_VALUES_START_INPUT: u32 = 1;
 
-  /// # Safety
-  ///
-  /// `graph` must point to a valid, initialized `BcFunction`.
-  pub unsafe fn from(graph: *mut BcFunction, inst: BcRef<'a, BcInst>) -> Self {
+  /// 持有图的唯一可变借用 + 指令 `BcOp`（旧的 `*mut BcFunction` + `BcRef` 双借用
+  /// 构造会构成别名冲突，属 UB）。
+  pub fn from(graph: &'a mut BcFunction, inst: BcOp) -> Self {
     Self {
-      base: unsafe { BcInstHelper::new(&mut *graph, inst) },
+      base: BcInstHelper::new(graph, inst),
       _marker: PhantomData,
     }
   }
@@ -48,10 +45,6 @@ impl<'a, T> BcReturn<'a, T> {
       self.base.slice_inputs(Self::K_VALUES_START_INPUT)
     }
   }
-}
-
-impl<T> BcInstType for BcReturn<'_, T> {
-  const OPCODE: i32 = LuauOpcode::LOP_RETURN as i32;
 }
 
 impl<T> BcInstHelperCreate for BcReturn<'_, T> {

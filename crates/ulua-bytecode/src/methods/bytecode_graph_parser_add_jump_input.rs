@@ -3,23 +3,21 @@ use ulua_common::{
   macros::luau_assert::LUAU_ASSERT,
 };
 
-use crate::records::{bc_inst::BcInst, bytecode_graph_parser::BytecodeGraphParser};
+use crate::records::{bc_op::BcOp, bytecode_graph_parser::BytecodeGraphParser};
 
 impl<'a> BytecodeGraphParser<'a> {
-  /// # Safety
-  ///
-  /// `inst` must be a valid, aligned, non-null pointer to a `BcInst`.
-  pub unsafe fn add_jump_input(&mut self, inst: *mut BcInst, target: i32) {
-    let inst = unsafe { &mut *inst };
-    LUAU_ASSERT!(!is_fast_call(inst.op));
+  /// cpp `addJumpInput(BcRef<BcInst>, int32_t)`：把跳转目标 PC 解析成块操作数。
+  pub fn add_jump_input(&mut self, inst: BcOp, target: i32) {
+    let inst_op = self.func.inst(inst).operator_deref().op;
+    LUAU_ASSERT!(!is_fast_call(inst_op));
     if target < 0 {
-      LUAU_ASSERT!(inst.op == LuauOpcode::LOP_LOADB);
+      LUAU_ASSERT!(inst_op == LuauOpcode::LOP_LOADB);
       return;
     }
     let target = target as u32;
     let it = self.block_by_pc.find(&target);
     LUAU_ASSERT!(it.is_some());
     let bc_op = *it.unwrap();
-    inst.ops.push(bc_op);
+    self.func.inst_op(inst).ops.push(bc_op);
   }
 }

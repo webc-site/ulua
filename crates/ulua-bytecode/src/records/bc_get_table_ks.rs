@@ -3,13 +3,12 @@ use core::marker::PhantomData;
 use ulua_common::enums::luau_opcode::LuauOpcode;
 
 use crate::{
-  methods::{bc_function_as::BcInstType, bc_inst_helper_create::BcInstHelperCreate},
+  methods::bc_inst_helper_create::BcInstHelperCreate,
   records::{
     bc_function::{BcFunction, VmConst},
-    bc_inst::BcInst,
     bc_inst_helper::BcInstHelper,
+    bc_inst_type::BcInstType,
     bc_op::BcOp,
-    bc_ref::BcRef,
   },
   type_aliases::reg::Reg,
 };
@@ -21,12 +20,10 @@ pub struct BcGetTableKS<'a, T = VmConst> {
 }
 
 impl<'a, T> BcGetTableKS<'a, T> {
-  /// # Safety
-  ///
-  /// `graph` must point to a valid, initialized `BcFunction`.
-  pub unsafe fn from(graph: *mut BcFunction, inst: BcRef<'a, BcInst>) -> Self {
+  /// 持有图的唯一可变借用 + 指令 `BcOp`（见 `BcReturn::from`）。
+  pub fn from(graph: &'a mut BcFunction, inst: BcOp) -> Self {
     Self {
-      base: unsafe { BcInstHelper::new(&mut *graph, inst) },
+      base: BcInstHelper::new(graph, inst),
       _marker: PhantomData,
     }
   }

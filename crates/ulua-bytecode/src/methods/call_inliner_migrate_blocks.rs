@@ -7,20 +7,20 @@ use crate::{
   records::{
     bc_block::BcBlock,
     bc_block_edge::BcBlockEdge,
-    bc_function::{BcFunction, VmConst},
+    bc_function::VmConst,
     bc_op::BcOp,
-    bc_ref::BcRef,
     bc_return::BcReturn,
     call_inliner::CallInliner,
   },
 };
 
 impl<'a> CallInliner<'a> {
-  pub fn migrate_blocks(&mut self, next_block: &mut BcRef<'a, BcBlock>) -> bool {
-    let call_block = self.call.base.operator_deref().block;
-    let call_block_ref = self.caller.block(call_block);
-    let insn_block_sort_key = call_block_ref.operator_deref().sortkey;
-    let insn_block_chain_key = call_block_ref.operator_deref().chainkey;
+  /// cpp `migrateBlocks(BcRef<BcBlock>& nextBlock)`：把目标图的块/边/指令搬进调用者
+  /// 预留好的槽位。`next_block_op` 为调用者侧紧跟内联区后的块句柄。
+  pub fn migrate_blocks(&mut self, next_block_op: BcOp) -> bool {
+    let call_block = self.call_block_op();
+    let insn_block_sort_key = self.caller.block_op(call_block).sortkey;
+    let insn_block_chain_key = self.caller.block_op(call_block).chainkey;
     let mut max_chain_key = 0;
 
     for i in 0..self.target.blocks.len() {
@@ -78,10 +78,7 @@ impl<'a> CallInliner<'a> {
           self.replace_get_var_arg(caller_block_op, op);
         } else if inst_op_code == LuauOpcode::LOP_RETURN {
           // cpp：此处只校验变长返回并登记站点，替换延后到 migrateBlockPhis 之后
-          let target = self.target as *mut BcFunction;
-          let target_return_ref = unsafe { (&*target).inst(op) };
-          let return_count =
-            unsafe { BcReturn::<VmConst>::from(target, target_return_ref).return_count() };
+          let return_count = BcReturn::<VmConst>::from(self.target, op).return_count();
           if return_count < 0 {
             return false;
           }
@@ -94,8 +91,8 @@ impl<'a> CallInliner<'a> {
       }
     }
 
-    self.caller.block(call_block).operator_deref_mut().chainkey = max_chain_key + 1;
-    next_block.operator_deref_mut().chainkey = max_chain_key + 2;
+    self.caller.block_op(call_block).chainkey = max_chain_key + 1;
+    self.caller.block_op(next_block_op).chainkey = max_chain_key + 2;
 
     true
   }

@@ -6,13 +6,11 @@ use crate::{
 };
 
 impl<'a> BytecodeGraphParser<'a> {
-  pub fn apply_call(
-    &mut self,
-    producers: &mut BlockProducers,
-    call_op: BcOp,
-    target_reg: Reg,
-    nresults: i32,
-  ) {
+  /// cpp `applyCall(BlockProducers&, BcOp, Reg, int)`（`BytecodeGraphParser.h:366-396`）。
+  ///
+  /// 不读取解析器自身状态，故为无接收者的关联函数：调用方可直接
+  /// `&mut self.producers[..]`，不必再用裸指针绕开借用检查。
+  pub fn apply_call(producers: &mut BlockProducers, call_op: BcOp, target_reg: Reg, nresults: i32) {
     producers.own.retain(|&reg, _| reg < target_reg);
     producers.cached.retain(|&reg, _| reg < target_reg);
 

@@ -1,21 +1,24 @@
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet};
 
 use crate::records::{
-  bc_call_fb::BcCallFB, bc_function::BcFunction, bc_op::BcOp, call_inliner::CallInliner,
+  bc_call_fb::BcCallFB,
+  bc_function::{BcFunction, VmConst},
+  bc_op::BcOp,
+  call_inliner::CallInliner,
 };
 
 impl<'a> CallInliner<'a> {
   pub fn new(caller: &'a mut BcFunction, target: &'a mut BcFunction, call_op: BcOp) -> Self {
-    let caller_ptr: *mut BcFunction = caller;
-    let call_ref = unsafe { (&*caller_ptr).inst(call_op) };
-    let call = unsafe { BcCallFB::from(caller_ptr, call_ref) };
+    // cpp `BcCallFB<VmConst> call{caller, call.op()}`：CALLFB 视图只在构造期取实参与
+    // 结果寄存器，取完即释放对图的可变借用（图的所有权仍归 `caller` 字段）。
+    let call = BcCallFB::<VmConst>::from(caller, call_op);
     let call_params = call.params();
     let target_reg = call.base.get_out_reg();
 
     CallInliner {
       caller,
       target,
-      call,
+      call_op,
       call_params,
       target_reg,
       caller_blocks_size_before_inline: 0,
