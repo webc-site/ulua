@@ -44,9 +44,7 @@ impl Parser {
           ))
         };
         if self.options.store_cst_data {
-          self.cst_node_map.try_insert(node as *mut AstNode, unsafe {
-            (*self.allocator).alloc(CstTypePackExplicit::new())
-          } as *mut CstNode);
+          self.attach_cst(node, |alloc| alloc.alloc(CstTypePackExplicit::new()));
         }
         return node as *mut AstTypePack;
       }
@@ -109,13 +107,13 @@ impl Parser {
             };
             parens_belong_to_inner_group = true;
             if self.options.store_cst_data {
-              self.cst_node_map.try_insert(inner as *mut AstNode, unsafe {
-                (*self.allocator).alloc(CstTypeGroup::new(if close_paren_found {
+              self.attach_cst(inner, |alloc| {
+                alloc.alloc(CstTypeGroup::new(if close_paren_found {
                   close_parentheses_position
                 } else {
                   Position::missing()
                 }))
-              } as *mut CstNode);
+              });
             }
           } else {
             inner = *result.operator_index(0);
@@ -130,13 +128,13 @@ impl Parser {
             *result.operator_index(0)
           };
           if vararg_annotation.is_none() && self.options.store_cst_data {
-            self.cst_node_map.try_insert(inner as *mut AstNode, unsafe {
-              (*self.allocator).alloc(CstTypeGroup::new(if close_paren_found {
+            self.attach_cst(inner, |alloc| {
+              alloc.alloc(CstTypeGroup::new(if close_paren_found {
                 close_parentheses_position
               } else {
                 Position::missing()
               }))
-            } as *mut CstNode);
+            });
           }
         }
 
@@ -168,27 +166,22 @@ impl Parser {
           ))
         };
 
-        if LuauSingleTypeOptionalPackReturnsAttributeParens.get() && self.options.store_cst_data {
-          let cst = if parens_belong_to_inner_group {
-            unsafe { (*self.allocator).alloc(CstTypePackExplicit::new()) }
+        if LuauSingleTypeOptionalPackReturnsAttributeParens.get() {
+          if parens_belong_to_inner_group {
+            self.attach_cst(node, |alloc| alloc.alloc(CstTypePackExplicit::new()));
           } else {
             let comma_positions_array = self.copy_temp_vector_t(&comma_positions);
-            unsafe {
-              (*self.allocator).alloc(CstTypePackExplicit::with_positions(
+            self.attach_cst(node, |alloc| {
+              alloc.alloc(CstTypePackExplicit::with_positions(
                 location.begin,
                 close_parentheses_position,
                 comma_positions_array,
               ))
-            }
-          };
-          self
-            .cst_node_map
-            .try_insert(node as *mut AstNode, cst as *mut CstNode);
+            });
+          }
           return node as *mut AstTypePack;
         } else if self.options.store_cst_data {
-          self.cst_node_map.try_insert(node as *mut AstNode, unsafe {
-            (*self.allocator).alloc(CstTypePackExplicit::new())
-          } as *mut CstNode);
+          self.attach_cst(node, |alloc| alloc.alloc(CstTypePackExplicit::new()));
           return node as *mut AstTypePack;
         }
         return node as *mut AstTypePack;
@@ -207,13 +200,13 @@ impl Parser {
 
       if self.options.store_cst_data {
         let comma_positions_array = self.copy_temp_vector_t(&comma_positions);
-        self.cst_node_map.try_insert(node as *mut AstNode, unsafe {
-          (*self.allocator).alloc(CstTypePackExplicit::with_positions(
+        self.attach_cst(node, |alloc| {
+          alloc.alloc(CstTypePackExplicit::with_positions(
             location.begin,
             close_parentheses_position,
             comma_positions_array,
           ))
-        } as *mut CstNode);
+        });
       }
       return node as *mut AstTypePack;
     }
@@ -241,8 +234,8 @@ impl Parser {
     {
       let name_colon_positions_array = self.copy_temp_vector_t(&name_colon_positions);
       let comma_positions_array = self.copy_temp_vector_t(&comma_positions);
-      self.cst_node_map.try_insert(tail as *mut AstNode, unsafe {
-        (*self.allocator).alloc(CstTypeFunction::new(
+      self.attach_cst(tail, |alloc| {
+        alloc.alloc(CstTypeFunction::new(
           Position::missing(),
           AstArray::EMPTY,
           Position::missing(),
@@ -252,7 +245,7 @@ impl Parser {
           close_parentheses_position,
           return_arrow_position,
         ))
-      } as *mut CstNode);
+      });
     }
 
     let types_array = self.copy_initializer_list_t(&[tail]);
@@ -267,9 +260,7 @@ impl Parser {
     };
 
     if self.options.store_cst_data {
-      self.cst_node_map.try_insert(node as *mut AstNode, unsafe {
-        (*self.allocator).alloc(CstTypePackExplicit::new())
-      } as *mut CstNode);
+      self.attach_cst(node, |alloc| alloc.alloc(CstTypePackExplicit::new()));
     }
 
     node as *mut AstTypePack

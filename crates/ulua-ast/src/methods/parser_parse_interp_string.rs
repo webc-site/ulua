@@ -175,17 +175,14 @@ impl Parser {
     };
 
     if self.options.store_cst_data {
-      let source_strings_array = self.copy_temp_vector_t(source_strings);
-      let string_positions_array = self.copy_temp_vector_t(string_positions);
-      let cst_node = unsafe {
-        (*self.allocator).alloc(CstExprInterpString::new(
+      let source_strings_array = self.copy_temp_vector_t(&source_strings);
+      let string_positions_array = self.copy_temp_vector_t(&string_positions);
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstExprInterpString::new(
           source_strings_array,
           string_positions_array,
         ))
-      };
-      self
-        .cst_node_map
-        .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
+      });
     }
 
     node as *mut AstExpr

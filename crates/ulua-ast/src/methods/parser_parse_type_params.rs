@@ -77,11 +77,8 @@ impl Parser {
                   unsafe { cst_node_as::<CstTypePackExplicit>(*cst_node) };
                 if !cst_explicit_type_pack.is_null() {
                   let close_pos = unsafe { (*cst_explicit_type_pack).close_parentheses_position };
-                  let cst_node_group =
-                    unsafe { (*self.allocator).alloc(CstTypeGroup::new(close_pos)) };
                   self
-                    .cst_node_map
-                    .try_insert(type_group as *mut AstNode, cst_node_group as *mut CstNode);
+                    .attach_cst(type_group, |alloc| alloc.alloc(CstTypeGroup::new(close_pos)));
                 }
               }
 
