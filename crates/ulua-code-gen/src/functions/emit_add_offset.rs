@@ -14,7 +14,7 @@ pub fn emit_add_offset(
 
   const K_MAX_IMMEDIATE: u16 = 4095;
 
-  if offset as u16 <= K_MAX_IMMEDIATE {
+  if offset <= K_MAX_IMMEDIATE as usize {
     build.add_register_a_64_register_a_64_u16(dst, src, offset as u16);
   } else {
     build.mov_register_a_64_i32(dst, offset as i32);

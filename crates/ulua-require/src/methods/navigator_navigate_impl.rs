@@ -51,7 +51,7 @@ impl<C: NavigationContextTrait, E: ErrorHandler> Navigator<'_, C, E> {
       return Some(error);
     }
 
-    let (error, was_overridden) = self.to_alias_override(&alias);
+    let (error, was_overridden) = self.navigate_to_alias_override(&alias);
     if error.is_some() {
       return error;
     }
@@ -81,7 +81,7 @@ impl<C: NavigationContextTrait, E: ErrorHandler> Navigator<'_, C, E> {
       return self.navigate_through_path(path);
     }
 
-    if let Some(error) = self.to_alias_fallback(&alias) {
+    if let Some(error) = self.navigate_to_alias_fallback(&alias) {
       return Some(error);
     }
 

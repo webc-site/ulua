@@ -161,8 +161,8 @@ pub fn compile_or_throw_bytecode_builder_parse_result_ast_name_table_compile_opt
         ptr = ptr.add(1);
       }
 
-      let count = ptr.offset_from(options.userdata_types) as u16;
-      if count > (LBC_TYPE_TAGGED_USERDATA_END.0 - LBC_TYPE_TAGGED_USERDATA_BASE.0) {
+      let count = ptr.offset_from(options.userdata_types) as usize;
+      if count > (LBC_TYPE_TAGGED_USERDATA_END.0 - LBC_TYPE_TAGGED_USERDATA_BASE.0) as usize {
         CompileError::raise(
           &(*root).base.base.location,
           format_args!("Exceeded userdata type limit in the compilation options"),
