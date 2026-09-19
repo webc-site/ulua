@@ -34,8 +34,10 @@ impl<'a> CallInliner<'a> {
 
       let block = self.target.instructions[tidx].block;
       LUAU_ASSERT!(block.kind == BcOpKind::Block);
-      let mapped_block =
-        BcOp::bc_op_bc_op_kind_u32(BcOpKind::Block, self.caller_blocks_size_before_inline + block.index);
+      let mapped_block = BcOp::bc_op_bc_op_kind_u32(
+        BcOpKind::Block,
+        self.caller_blocks_size_before_inline + block.index,
+      );
       self.caller.instructions[cidx].op = op;
       self.caller.instructions[cidx].block = mapped_block;
 
@@ -53,7 +55,12 @@ impl<'a> CallInliner<'a> {
           Some(imm_op) => {
             // SAFETY：读 union 字段 value_int 前提是该立即数确为整型
             //（SETLIST/CALL 系列指令的 imm 操作数在图构建时只存整数）。
-            unsafe { self.target.immediates[imm_op.index as usize].value.value_int < 0 }
+            unsafe {
+              self.target.immediates[imm_op.index as usize]
+                .value
+                .value_int
+                < 0
+            }
           }
           None => false,
         },
@@ -63,14 +70,11 @@ impl<'a> CallInliner<'a> {
       // cpp `target.is_vararg && isMultiConsumer(...) && isGetVarArg(ops.back())` 的短路求值：
       // 仅当变参路径成立时才取 `ops.last()`。无输入的操作数（如 LOADNIL，其目标寄存器记在
       // `regs` 而非 `ops`）ops 为空，提前访问会取到不存在的元素。
-      let var_arg_tail = self.target.is_vararg
-        && is_multi_consumer
-        && ops_len > 0
-        && {
-          let last = self.target.instructions[tidx].ops.as_slice()[ops_len - 1];
-          last.kind == BcOpKind::Inst
-            && self.target.instructions[last.index as usize].op == LuauOpcode::LOP_GETVARARGS
-        };
+      let var_arg_tail = self.target.is_vararg && is_multi_consumer && ops_len > 0 && {
+        let last = self.target.instructions[tidx].ops.as_slice()[ops_len - 1];
+        last.kind == BcOpKind::Inst
+          && self.target.instructions[last.index as usize].op == LuauOpcode::LOP_GETVARARGS
+      };
 
       if var_arg_tail {
         let last = self.target.instructions[tidx].ops.as_slice()[ops_len - 1];
