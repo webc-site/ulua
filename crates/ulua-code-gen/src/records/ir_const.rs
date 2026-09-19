@@ -1,54 +1,41 @@
-use core::fmt::{Debug, Formatter, Result};
+use core::mem::size_of;
 
 use crate::enums::ir_const_kind::IrConstKind;
 
-#[derive(Clone, Copy)]
-#[repr(C)]
-pub struct IrConst {
-  pub kind: IrConstKind,
-  pub value: IrConstValue,
+/// 以带载荷 enum 取代原 `IrConstKind` 标签 + `IrConstValue` union，类型与数据合一，
+/// 消除按标签误读 union 字段的 UB 风险。
+/// 尺寸与对齐和原 `#[repr(C)]` 结构完全一致（16 字节 / 8），热路径按值拷贝无回退。
+/// 不派生 `PartialEq`：`Double` 含 NaN，相等性判断统一走 `ConstantKey`（按位 `u64`）。
+#[derive(Clone, Copy, Debug)]
+pub enum IrConst {
+  Int(i32),
+  Int64(i64),
+  Uint(u32),
+  Double(f64),
+  Tag(u8),
+  Import(u32),
 }
 
-#[derive(Clone, Copy)]
-#[repr(C)]
-pub union IrConstValue {
-  pub value_int: i32,
-  pub value_int64: i64,
-  pub value_uint: u32,
-  pub value_double: f64,
-  pub value_tag: u8,
-}
+// 尺寸锁死：编译期保证与原标签+union 形态等大，防止未来加字段回退热路径
+const _: () = assert!(size_of::<IrConst>() == 16);
 
 impl Default for IrConst {
   fn default() -> Self {
-    Self {
-      kind: IrConstKind::Int,
-      value: IrConstValue { value_int: 0 },
-    }
+    Self::Int(0)
   }
 }
 
-impl Debug for IrConst {
-  fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-    let mut s = f.debug_struct("IrConst");
-    s.field("kind", &self.kind);
-    unsafe {
-      match self.kind {
-        IrConstKind::Int => s.field("value_int", &self.value.value_int),
-        IrConstKind::Int64 => s.field("value_int64", &self.value.value_int64),
-        IrConstKind::Uint | IrConstKind::Import => s.field("value_uint", &self.value.value_uint),
-        IrConstKind::Double => s.field("value_double", &self.value.value_double),
-        IrConstKind::Tag => s.field("value_tag", &self.value.value_tag),
-      };
+impl IrConst {
+  /// 种类标签；仅用于 `ConstantKey` 去重与 `is_compatible_constant` 断言，取值请直配载荷
+  #[inline]
+  pub fn kind(&self) -> IrConstKind {
+    match self {
+      Self::Int(_) => IrConstKind::Int,
+      Self::Int64(_) => IrConstKind::Int64,
+      Self::Uint(_) => IrConstKind::Uint,
+      Self::Double(_) => IrConstKind::Double,
+      Self::Tag(_) => IrConstKind::Tag,
+      Self::Import(_) => IrConstKind::Import,
     }
-    s.finish()
-  }
-}
-
-impl Debug for IrConstValue {
-  fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-    f.debug_struct("IrConstValue")
-      .field("bits", unsafe { &self.value_int64 })
-      .finish()
   }
 }

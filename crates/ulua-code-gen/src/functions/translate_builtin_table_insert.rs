@@ -1,13 +1,12 @@
 use ulua_vm::enums::lua_type::LuaType;
 
 use crate::{
-  enums::{
-    builtin_impl_type::BuiltinImplType, ir_cmd::IrCmd, ir_const_kind::IrConstKind,
-    ir_op_kind::IrOpKind,
-  },
+  enums::{builtin_impl_type::BuiltinImplType, ir_cmd::IrCmd, ir_op_kind::IrOpKind},
   functions::vm_const_op::vm_const_op,
   macros::codegen_assert::CODEGEN_ASSERT,
-  records::{builtin_impl_result::BuiltinImplResult, ir_builder::IrBuilder, ir_op::IrOp},
+  records::{
+    builtin_impl_result::BuiltinImplResult, ir_builder::IrBuilder, ir_const::IrConst, ir_op::IrOp,
+  },
 };
 
 pub fn translate_builtin_table_insert(
@@ -41,7 +40,7 @@ pub fn translate_builtin_table_insert(
   let setnum = build.inst_ir_cmd_ir_op_ir_op(IrCmd::TableSetnum, table, pos);
 
   if args.kind() == IrOpKind::Constant {
-    CODEGEN_ASSERT!(build.function.const_op(args).kind == IrConstKind::Double);
+    CODEGEN_ASSERT!(matches!(build.function.const_op(args), IrConst::Double(_)));
     build.inst_ir_cmd_ir_op_ir_op(IrCmd::StoreDouble, setnum, args);
     let tag = build.const_tag(LuaType::Number as u8);
     build.inst_ir_cmd_ir_op_ir_op(IrCmd::StoreTag, setnum, tag);

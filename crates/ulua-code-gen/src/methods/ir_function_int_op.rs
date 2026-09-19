@@ -1,15 +1,14 @@
 use crate::{
-  enums::ir_const_kind::IrConstKind,
-  records::{ir_function::IrFunction, ir_op::IrOp},
+  records::{ir_const::IrConst, ir_function::IrFunction, ir_op::IrOp},
 };
 
 impl IrFunction {
   pub fn int_op(&self, op: IrOp) -> i32 {
-    let value = self.const_op(op);
-
-    assert!(value.kind == IrConstKind::Int);
-
-    unsafe { value.value.value_int }
+    match self.const_op(op) {
+      IrConst::Int(value) => value,
+      // 与原 assert 语义一致：release 下仍校验，类型不符即编译器内部不变量被破坏
+      _ => panic!("int_op: 非 Int 常量"),
+    }
   }
 }
 

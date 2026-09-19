@@ -4,5 +4,5 @@ use crate::{
 };
 
 pub fn is_compatible_constant(build: &mut IrBuilder, arg: IrOp, expected: IrConstKind) -> bool {
-  arg.kind() != IrOpKind::Constant || build.function.const_op(arg).kind == expected
+  arg.kind() != IrOpKind::Constant || build.function.const_op(arg).kind() == expected
 }

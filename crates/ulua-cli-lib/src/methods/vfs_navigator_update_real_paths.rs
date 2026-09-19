@@ -6,8 +6,8 @@ use crate::{
 
 impl VfsNavigator {
   pub(crate) fn update_real_paths(&mut self) -> NavigationStatus {
-    let result = get_real_path(self.module_path.clone());
-    let absolute_result = get_real_path(self.absolute_module_path.clone());
+    let result = get_real_path(&self.module_path);
+    let absolute_result = get_real_path(&self.absolute_module_path);
 
     if result.status != NavigationStatus::Success {
       return result.status;

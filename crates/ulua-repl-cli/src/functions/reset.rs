@@ -2,10 +2,7 @@
 
 use core::ffi::{CStr, c_char, c_void};
 
-use ulua_cli_lib::{
-  functions::convert_navigation_status::convert_navigation_status,
-  methods::vfs_navigator_reset_to_std_in::vfs_navigator_reset_to_std_in,
-};
+use ulua_cli_lib::functions::convert_navigation_status::convert_navigation_status;
 use ulua_require::enums::luarequire_navigate_result::LuarequireNavigateResult;
 
 use crate::records::repl_requirer::ReplRequirer;
@@ -23,7 +20,7 @@ pub unsafe extern "C-unwind" fn reset(
   let chunkname = unsafe { CStr::from_ptr(requirer_chunkname) }.to_string_lossy();
 
   if chunkname == "=stdin" {
-    convert_navigation_status(vfs_navigator_reset_to_std_in(&mut req.vfs))
+    convert_navigation_status(req.vfs.reset_to_std_in())
   } else if let Some(path) = chunkname.strip_prefix('@') {
     convert_navigation_status(req.vfs.reset_to_path(path))
   } else {

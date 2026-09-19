@@ -1,4 +1,3 @@
-use ulua_cli_lib::methods::vfs_navigator_reset_to_std_in::vfs_navigator_reset_to_std_in;
 use ulua_require::enums::navigate_result::NavigateResult;
 
 use crate::{
@@ -16,7 +15,7 @@ use crate::{
 impl FileNavigationContext {
   pub fn reset_to_requirer(&mut self) -> NavigateResult {
     if self.requirer_path == "-" {
-      return convert(vfs_navigator_reset_to_std_in(&mut self.vfs));
+      return convert(self.vfs.reset_to_std_in());
     }
 
     // reset_to_path 可变借用 vfs 字段、共享借用 requirer_path 字段，字段不相交，免 clone

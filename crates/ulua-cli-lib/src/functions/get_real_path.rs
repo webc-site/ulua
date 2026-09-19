@@ -32,7 +32,8 @@ fn scan_suffixes<'a>(
   Ok(hit)
 }
 
-pub fn get_real_path(module_path: String) -> ResolvedRealPath {
+/// 借用入参模块路径，零拷贝解析真实文件路径（cpp 版按值收 `std::string`）。
+pub fn get_real_path(module_path: &str) -> ResolvedRealPath {
   let last_slash = module_path.rfind('/');
   LUAU_ASSERT!(last_slash.is_some());
 
@@ -45,18 +46,18 @@ pub fn get_real_path(module_path: String) -> ResolvedRealPath {
   let mut suffix = if last_component == "init" {
     None
   } else {
-    match scan_suffixes(&module_path, K_SUFFIXES) {
+    match scan_suffixes(module_path, K_SUFFIXES) {
       Err(status) => return ResolvedRealPath::new(status, String::new()),
       Ok(hit) => hit,
     }
   };
 
-  if is_directory(&module_path) {
+  if is_directory(module_path) {
     if suffix.is_some() {
       return ResolvedRealPath::new(NavigationStatus::Ambiguous, String::new());
     }
 
-    match scan_suffixes(&module_path, K_INIT_SUFFIXES) {
+    match scan_suffixes(module_path, K_INIT_SUFFIXES) {
       Err(status) => return ResolvedRealPath::new(status, String::new()),
       // 目录自身即模块：未命中 init 后缀时以空后缀指向目录
       Ok(hit) => suffix = Some(hit.unwrap_or_default()),
@@ -67,7 +68,8 @@ pub fn get_real_path(module_path: String) -> ResolvedRealPath {
     return ResolvedRealPath::new(NavigationStatus::NotFound, String::new());
   };
 
-  let mut result_path = module_path;
-  result_path.push_str(suffix);
-  ResolvedRealPath::new(NavigationStatus::Success, result_path)
+  ResolvedRealPath::new(
+    NavigationStatus::Success,
+    format!("{module_path}{suffix}"),
+  )
 }

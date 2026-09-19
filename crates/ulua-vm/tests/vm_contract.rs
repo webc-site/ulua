@@ -5,7 +5,6 @@ use core::{ffi::c_void, slice::from_raw_parts};
 use std::{
   ffi::c_char,
   ptr::{eq, null},
-  str::from_utf8,
 };
 
 use ulua_vm::{
@@ -132,7 +131,8 @@ fn unreferenced_string_collectable_by_full_gc() {
   }
 }
 
-/// 空串 intern 契约：零长度指向同一对象
+/// string.rep 契约：字节内容逐字节保留（含内嵌 NUL / 非法 UTF-8）、栈平衡；
+/// 零长度巨型重复返回空串
 #[test]
 fn string_rep_preserves_bytes_and_stack() {
   let s = State::new();
@@ -178,24 +178,24 @@ fn intern_empty_string() {
 fn tonumber_string_conversion_via_api() {
   let s = State::new();
   unsafe {
-    let mut cases: Vec<(&[u8], Option<f64>)> = vec![
-      (b"10", Some(10.0)),
+    // 数组直接迭代，免 Vec 堆分配与 drain
+    for (bytes, expect) in [
+      (b"10" as &[u8], Some(10.0)),
       (b"0x10", Some(16.0)),
       (b" 3.5", Some(3.5)),
       (b"1e2", Some(100.0)),
       (b"abc", None),
       (b"12xyz", None),
-    ];
-    for (bytes, expect) in cases.drain(..) {
+    ] {
       lua_pushlstring(s.l, bytes.as_ptr() as *const c_char, bytes.len());
       let mut isnum: i32 = 0;
       let v = lua_tonumberx(s.l, -1, &mut isnum);
       match expect {
         Some(e) => {
-          assert_eq!(isnum, 1, "{:?} 应可转换", from_utf8(bytes));
+          assert_eq!(isnum, 1, "{bytes:?} 应可转换");
           assert_eq!(v, e);
         }
-        None => assert_eq!(isnum, 0, "{:?} 应拒绝转换", from_utf8(bytes)),
+        None => assert_eq!(isnum, 0, "{bytes:?} 应拒绝转换"),
       }
       lua_settop(s.l, 0);
     }

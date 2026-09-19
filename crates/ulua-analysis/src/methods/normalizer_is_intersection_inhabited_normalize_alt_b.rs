@@ -52,19 +52,18 @@ impl Normalizer {
 
     let result = self.is_inhabited_normalized_type_set_type_id(&norm, seen_set);
 
-    if self.cache_inhabitance {
-      if result == NormalizationResult::True {
-        *self
-          .cached_is_inhabited_intersection
-          .get_or_insert((left, right)) = true;
-      } else if result == NormalizationResult::False {
-        *self
-          .cached_is_inhabited_intersection
-          .get_or_insert((left, right)) = false;
+    // 缓存判定结果;HitLimits 不入缓存
+    if self.cache_inhabitance
+      && let Some(inhabited) = match result {
+        NormalizationResult::True => Some(true),
+        NormalizationResult::False => Some(false),
+        NormalizationResult::HitLimits => None,
       }
+    {
+      *self
+        .cached_is_inhabited_intersection
+        .get_or_insert((left, right)) = inhabited;
     }
-
-    norm.normalized_type_destructor();
 
     result
   }

@@ -1,5 +1,5 @@
 use crate::{
-  enums::{ir_const_kind::IrConstKind, ir_op_kind::IrOpKind},
+  enums::ir_op_kind::IrOpKind,
   records::{ir_const::IrConst, ir_function::IrFunction, ir_op::IrOp},
 };
 
@@ -9,13 +9,10 @@ impl IrFunction {
       return None;
     }
 
-    let value = self.const_op(op);
-
-    if value.kind != IrConstKind::Double {
-      return None;
+    match self.const_op(op) {
+      IrConst::Double(value) => Some(value),
+      _ => None,
     }
-
-    unsafe { Some(value.value.value_double) }
   }
 }
 

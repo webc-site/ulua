@@ -1,6 +1,6 @@
 use crate::{
-  enums::{ir_const_kind::IrConstKind, ir_op_kind::IrOpKind},
-  records::{ir_function::IrFunction, ir_op::IrOp},
+  enums::ir_op_kind::IrOpKind,
+  records::{ir_const::IrConst, ir_function::IrFunction, ir_op::IrOp},
 };
 
 impl IrFunction {
@@ -9,12 +9,9 @@ impl IrFunction {
       return None;
     }
 
-    let value = self.const_op(op);
-
-    if value.kind != IrConstKind::Int64 {
-      return None;
+    match self.const_op(op) {
+      IrConst::Int64(value) => Some(value),
+      _ => None,
     }
-
-    Some(unsafe { value.value.value_int64 })
   }
 }

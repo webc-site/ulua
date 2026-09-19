@@ -10,7 +10,7 @@ use crate::{
 impl IrBuilder {
   pub fn const_any(&mut self, constant: IrConst, as_common_key: u64) -> IrOp {
     let key = ConstantKey {
-      kind: constant.kind,
+      kind: constant.kind(),
       value: as_common_key,
     };
 
