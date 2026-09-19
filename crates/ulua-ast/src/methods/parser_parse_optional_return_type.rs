@@ -2,8 +2,9 @@ use std::ptr::null_mut;
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
-use crate::records::{
-  ast_type_pack::AstTypePack, lexeme::Type, parser::Parser, position::Position,
+use crate::{
+  enums::type_lexer::Type,
+  records::{ast_type_pack::AstTypePack, parser::Parser, position::Position},
 };
 
 impl Parser {

@@ -1,13 +1,9 @@
 //! `Lexeme Lexer::read_next()` — Ast/src/Lexer.cpp:719. The single-token dispatch.
 
 use crate::{
-  enums::brace_type::BraceType,
+  enums::{brace_type::BraceType, type_lexer::Type},
   functions::{is_alpha::is_alpha, is_digit::is_digit},
-  records::{
-    lexeme::{Lexeme, Type},
-    lexer::Lexer,
-    location::Location,
-  },
+  records::{lexeme::Lexeme, lexer::Lexer, location::Location},
 };
 
 impl Lexer {

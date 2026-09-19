@@ -1,9 +1,11 @@
 use ulua_common::LUAU_ASSERT;
 
-use crate::records::lexeme::{
-  Lexeme, QuoteStyle,
-  QuoteStyle::{Double, Single},
-  Type,
+use crate::{
+  enums::type_lexer::Type,
+  records::lexeme::{
+    Lexeme, QuoteStyle,
+    QuoteStyle::{Double, Single},
+  },
 };
 
 impl Lexeme {

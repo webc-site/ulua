@@ -2,13 +2,8 @@
 //! — Ast/src/Lexer.cpp:626.
 
 use crate::{
-  enums::brace_type::BraceType,
-  records::{
-    lexeme::{Lexeme, Type},
-    lexer::Lexer,
-    location::Location,
-    position::Position,
-  },
+  enums::{brace_type::BraceType, type_lexer::Type},
+  records::{lexeme::Lexeme, lexer::Lexer, location::Location, position::Position},
 };
 
 impl Lexer {

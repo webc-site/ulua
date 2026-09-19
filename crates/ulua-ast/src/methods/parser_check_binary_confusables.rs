@@ -1,6 +1,9 @@
-use crate::records::{
-  ast_expr_binary::AstExprBinaryOp, binary_op_priority::BinaryOpPriority, lexeme::Type,
-  location::Location, parser::Parser,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_expr_binary::AstExprBinaryOp, binary_op_priority::BinaryOpPriority, location::Location,
+    parser::Parser,
+  },
 };
 
 impl Parser {

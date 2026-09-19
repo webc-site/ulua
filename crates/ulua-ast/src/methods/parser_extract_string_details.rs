@@ -1,11 +1,8 @@
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  enums::quote_style_cst::QuoteStyle,
-  records::{
-    lexeme::{QuoteStyle::Double, Type},
-    parser::Parser,
-  },
+  enums::{quote_style_cst::QuoteStyle, type_lexer::Type},
+  records::{lexeme::QuoteStyle::Double, parser::Parser},
 };
 
 impl Parser {

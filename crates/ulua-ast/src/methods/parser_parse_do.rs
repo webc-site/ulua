@@ -1,6 +1,9 @@
-use crate::records::{
-  ast_stat::AstStat, cst_stat_do::CstStatDo, lexeme::Type, match_lexeme::MatchLexeme,
-  parser::Parser, position::Position,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_stat::AstStat, cst_stat_do::CstStatDo, match_lexeme::MatchLexeme, parser::Parser,
+    position::Position,
+  },
 };
 
 impl Parser {

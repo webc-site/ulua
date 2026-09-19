@@ -1,11 +1,12 @@
 use core::ptr::{NonNull, null_mut};
 
 use crate::{
+  enums::type_lexer::Type,
   functions::{is_type_follow::is_type_follow, should_parse_type_pack::should_parse_type_pack},
   records::{
     ast_array::AstArray, ast_node::AstNode, ast_type::AstType, ast_type_group::AstTypeGroup,
     ast_type_or_pack::AstTypeOrPack, ast_type_pack_explicit::AstTypePackExplicit,
-    cst_type_group::CstTypeGroup, cst_type_pack_explicit::CstTypePackExplicit, lexeme::Type,
+    cst_type_group::CstTypeGroup, cst_type_pack_explicit::CstTypePackExplicit,
     match_lexeme::MatchLexeme, parser::Parser, position::Position, temp_vector::TempVector,
   },
   rtti::{ast_node_as, cst_node_as},

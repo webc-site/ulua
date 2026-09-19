@@ -12,8 +12,7 @@ use core::{
 };
 
 use crate::{
-  functions::find_confusable::find_confusable,
-  records::lexeme::{Lexeme, Type},
+  enums::type_lexer::Type, functions::find_confusable::find_confusable, records::lexeme::Lexeme,
 };
 
 const K_RESERVED: [&str; 21] = [

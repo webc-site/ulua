@@ -1,7 +1,9 @@
 use core::ptr::null_mut;
 
 use crate::{
-  enums::{ast_table_access::AstTableAccess, quote_style_cst::QuoteStyle::QuotedDouble},
+  enums::{
+    ast_table_access::AstTableAccess, quote_style_cst::QuoteStyle::QuotedDouble, type_lexer::Type,
+  },
   methods::lexeme_name_is::lexeme_name_is,
   records::{
     ast_array::AstArray,
@@ -14,7 +16,7 @@ use crate::{
     cst_expr_constant_string::CstExprConstantString,
     cst_node::CstNode,
     cst_type_table::{CstTypeTable, CstTypeTableItem, CstTypeTableItemKind},
-    lexeme::{Lexeme, Type},
+    lexeme::Lexeme,
     location::Location,
     match_lexeme::MatchLexeme,
     parser::Parser,

@@ -1,7 +1,10 @@
-use crate::records::{
-  ast_array::AstArray, ast_stat::AstStat, ast_stat_type_function::AstStatTypeFunction,
-  cst_stat_type_function::CstStatTypeFunction, lexeme::Type, location::Location, name::Name,
-  parser::Parser, position::Position,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_array::AstArray, ast_stat::AstStat, ast_stat_type_function::AstStatTypeFunction,
+    cst_stat_type_function::CstStatTypeFunction, location::Location, name::Name, parser::Parser,
+    position::Position,
+  },
 };
 
 impl Parser {

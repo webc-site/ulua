@@ -2,7 +2,10 @@ use core::{ffi::c_char, slice::from_raw_parts};
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
-use crate::records::{ast_array::AstArray, lexeme::Type, lexer::Lexer, parser::Parser};
+use crate::{
+  enums::type_lexer::Type,
+  records::{ast_array::AstArray, lexer::Lexer, parser::Parser},
+};
 
 impl Parser {
   pub(crate) fn parse_char_array(

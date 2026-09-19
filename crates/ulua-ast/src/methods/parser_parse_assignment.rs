@@ -7,11 +7,12 @@
 //! comma-position arena, stack-disciplined) and copied into the node.
 
 use crate::{
+  enums::type_lexer::Type,
   functions::is_expr_l_value::is_expr_l_value,
   records::{
     ast_expr::AstExpr, ast_stat::AstStat, ast_stat_assign::AstStatAssign,
-    cst_stat_assign::CstStatAssign, lexeme::Type, location::Location, parser::Parser,
-    position::Position, temp_vector::TempVector,
+    cst_stat_assign::CstStatAssign, location::Location, parser::Parser, position::Position,
+    temp_vector::TempVector,
   },
 };
 

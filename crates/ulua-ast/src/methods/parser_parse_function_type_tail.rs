@@ -1,19 +1,12 @@
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
+  enums::type_lexer::Type,
   records::{
-    ast_array::AstArray,
-    ast_attr::AstAttr,
-    ast_generic_type::AstGenericType,
-    ast_generic_type_pack::AstGenericTypePack,
-    ast_type::AstType,
-    ast_type_function::AstTypeFunction,
-    ast_type_list::AstTypeList,
-    ast_type_pack::AstTypePack,
-    ast_type_reference::AstTypeReference,
-    lexeme::{Lexeme, Type},
-    location::Location,
-    parser::Parser,
+    ast_array::AstArray, ast_attr::AstAttr, ast_generic_type::AstGenericType,
+    ast_generic_type_pack::AstGenericTypePack, ast_type::AstType,
+    ast_type_function::AstTypeFunction, ast_type_list::AstTypeList, ast_type_pack::AstTypePack,
+    ast_type_reference::AstTypeReference, lexeme::Lexeme, location::Location, parser::Parser,
   },
   type_aliases::ast_argument_name::AstArgumentName,
 };

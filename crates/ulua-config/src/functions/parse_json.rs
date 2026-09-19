@@ -4,12 +4,12 @@ use alloc::{
 };
 use core::{ffi::c_char, slice::from_raw_parts};
 
-use ulua_ast::records::{
-  allocator::Allocator,
-  ast_name_table::AstNameTable,
-  lexeme::{Lexeme, Type},
-  lexer::Lexer,
-  position::Position,
+use ulua_ast::{
+  enums::type_lexer::Type,
+  records::{
+    allocator::Allocator, ast_name_table::AstNameTable, lexeme::Lexeme, lexer::Lexer,
+    position::Position,
+  },
 };
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 

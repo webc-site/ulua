@@ -1,5 +1,6 @@
-use crate::records::{
-  binding::Binding, lexeme::Type, name::Name, parser::Parser, position::Position,
+use crate::{
+  enums::type_lexer::Type,
+  records::{binding::Binding, name::Name, parser::Parser, position::Position},
 };
 
 impl Parser {

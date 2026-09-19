@@ -9,9 +9,10 @@
 use core::ptr::null_mut;
 
 use crate::{
+  enums::type_lexer::Type,
   records::{
     ast_node::AstNode, ast_stat::AstStat, ast_stat_block::AstStatBlock, ast_stat_if::AstStatIf,
-    lexeme::Type, location::Location, match_lexeme::MatchLexeme, parser::Parser,
+    location::Location, match_lexeme::MatchLexeme, parser::Parser,
   },
   rtti::ast_node_as,
 };

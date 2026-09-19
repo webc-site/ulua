@@ -4,13 +4,9 @@
 use ulua_common::LUAU_ASSERT;
 
 use crate::{
+  enums::type_lexer::Type,
   functions::{is_alpha::is_alpha, is_digit::is_digit},
-  records::{
-    lexeme::{Lexeme, Type},
-    lexer::Lexer,
-    location::Location,
-    position::Position,
-  },
+  records::{lexeme::Lexeme, lexer::Lexer, location::Location, position::Position},
 };
 
 impl Lexer {

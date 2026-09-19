@@ -1,8 +1,10 @@
 use core::ffi::c_char;
 
-use crate::records::{
-  ast_expr::AstExpr, ast_expr_index_name::AstExprIndexName, lexeme::Type, location::Location,
-  parser::Parser,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_expr::AstExpr, ast_expr_index_name::AstExprIndexName, location::Location, parser::Parser,
+  },
 };
 
 impl Parser {

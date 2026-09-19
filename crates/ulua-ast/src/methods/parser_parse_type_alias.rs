@@ -6,10 +6,13 @@
 //! error name. Generic comma positions are gathered in a scratch arena and
 //! copied into the CST node only under `store_cst_data`.
 
-use crate::records::{
-  ast_stat::AstStat, ast_stat_type_alias::AstStatTypeAlias, cst_stat_type_alias::CstStatTypeAlias,
-  lexeme::Type, location::Location, name::Name, parser::Parser, position::Position,
-  temp_vector::TempVector,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_stat::AstStat, ast_stat_type_alias::AstStatTypeAlias,
+    cst_stat_type_alias::CstStatTypeAlias, location::Location, name::Name, parser::Parser,
+    position::Position, temp_vector::TempVector,
+  },
 };
 
 impl Parser {

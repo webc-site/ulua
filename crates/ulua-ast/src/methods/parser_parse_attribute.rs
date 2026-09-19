@@ -9,12 +9,12 @@ use core::ptr::null_mut;
 use ulua_common::LUAU_ASSERT;
 
 use crate::{
+  enums::type_lexer::Type,
   functions::{is_constant_literal::is_constant_literal, is_literal_table::is_literal_table},
   records::{
     ast_array::AstArray,
     ast_attr::{AstAttr, AstAttrType},
     ast_expr::AstExpr,
-    lexeme::Type,
     location::Location,
     match_lexeme::MatchLexeme,
     parser::Parser,

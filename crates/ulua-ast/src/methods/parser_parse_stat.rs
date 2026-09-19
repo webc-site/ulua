@@ -1,11 +1,12 @@
 use ulua_common::fflag::{DebugLuauUserDefinedClasses, LuauExportValueSyntax};
 
 use crate::{
+  enums::type_lexer::Type,
   functions::get_identifier::get_identifier,
   methods::lexeme_name_is::lexeme_name_is,
   records::{
     ast_array::AstArray, ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_stat::AstStat,
-    ast_stat_expr::AstStatExpr, lexeme::Type, parser::Parser,
+    ast_stat_expr::AstStatExpr, parser::Parser,
   },
   rtti::ast_node_is,
 };

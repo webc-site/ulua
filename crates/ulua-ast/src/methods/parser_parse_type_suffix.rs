@@ -2,12 +2,14 @@ use core::ptr::NonNull;
 
 use ulua_common::{fint::LuauTypeLengthLimit, macros::luau_assert::LUAU_ASSERT};
 
-use crate::records::{
-  ast_type::AstType, ast_type_intersection::AstTypeIntersection,
-  ast_type_optional::AstTypeOptional, ast_type_union::AstTypeUnion,
-  cst_type_intersection::CstTypeIntersection, cst_type_union::CstTypeUnion, lexeme::Type,
-  location::Location, parse_error::ParseError, parser::Parser, position::Position,
-  temp_vector::TempVector,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_type::AstType, ast_type_intersection::AstTypeIntersection,
+    ast_type_optional::AstTypeOptional, ast_type_union::AstTypeUnion,
+    cst_type_intersection::CstTypeIntersection, cst_type_union::CstTypeUnion, location::Location,
+    parse_error::ParseError, parser::Parser, position::Position, temp_vector::TempVector,
+  },
 };
 
 impl Parser {

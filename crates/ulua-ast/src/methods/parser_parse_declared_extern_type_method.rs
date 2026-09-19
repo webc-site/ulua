@@ -9,14 +9,14 @@
 use core::ptr::null_mut;
 
 use crate::{
-  enums::ast_table_access::AstTableAccess,
+  enums::{ast_table_access::AstTableAccess, type_lexer::Type},
   records::{
     ast_array::AstArray, ast_attr::AstAttr,
     ast_declared_extern_type_property::AstDeclaredExternTypeProperty,
     ast_generic_type::AstGenericType, ast_generic_type_pack::AstGenericTypePack, ast_type::AstType,
     ast_type_function::AstTypeFunction, ast_type_list::AstTypeList, ast_type_pack::AstTypePack,
-    ast_type_pack_explicit::AstTypePackExplicit, lexeme::Type, location::Location,
-    match_lexeme::MatchLexeme, parser::Parser, temp_vector::TempVector,
+    ast_type_pack_explicit::AstTypePackExplicit, location::Location, match_lexeme::MatchLexeme,
+    parser::Parser, temp_vector::TempVector,
   },
 };
 

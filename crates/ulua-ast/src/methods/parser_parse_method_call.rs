@@ -1,11 +1,12 @@
 use core::{ffi::c_char, ptr::null_mut};
 
 use crate::{
+  enums::type_lexer::Type,
   records::{
     ast_array::AstArray, ast_expr::AstExpr, ast_expr_call::AstExprCall,
     ast_expr_index_name::AstExprIndexName, ast_node::AstNode, ast_type_or_pack::AstTypeOrPack,
-    cst_expr_call::CstExprCall, cst_type_instantiation::CstTypeInstantiation, lexeme::Type,
-    location::Location, name::Name, parser::Parser, position::Position,
+    cst_expr_call::CstExprCall, cst_type_instantiation::CstTypeInstantiation, location::Location,
+    name::Name, parser::Parser, position::Position,
   },
   rtti::ast_node_try_as_mut,
 };

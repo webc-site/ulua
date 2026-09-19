@@ -1,7 +1,10 @@
-use crate::records::{
-  ast_array::AstArray, ast_attr::AstAttr, ast_expr::AstExpr,
-  ast_expr_constant_bool::AstExprConstantBool, ast_expr_constant_nil::AstExprConstantNil,
-  ast_expr_varargs::AstExprVarargs, ast_name::AstName, lexeme::Type, parser::Parser,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_array::AstArray, ast_attr::AstAttr, ast_expr::AstExpr,
+    ast_expr_constant_bool::AstExprConstantBool, ast_expr_constant_nil::AstExprConstantNil,
+    ast_expr_varargs::AstExprVarargs, ast_name::AstName, parser::Parser,
+  },
 };
 
 impl Parser {

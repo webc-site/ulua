@@ -3,7 +3,7 @@ use core::ptr::null_mut;
 use ulua_common::fflag;
 
 use crate::{
-  enums::ast_table_access::AstTableAccess,
+  enums::{ast_table_access::AstTableAccess, type_lexer::Type},
   records::{
     ast_array::AstArray, ast_attr::AstAttr,
     ast_declared_extern_type_property::AstDeclaredExternTypeProperty, ast_name::AstName,
@@ -11,8 +11,8 @@ use crate::{
     ast_stat_declare_function::AstStatDeclareFunction,
     ast_stat_declare_global::AstStatDeclareGlobal, ast_table_indexer::AstTableIndexer,
     ast_type_list::AstTypeList, ast_type_pack::AstTypePack,
-    ast_type_pack_explicit::AstTypePackExplicit, lexeme::Type, location::Location,
-    match_lexeme::MatchLexeme, parser::Parser, temp_vector::TempVector,
+    ast_type_pack_explicit::AstTypePackExplicit, location::Location, match_lexeme::MatchLexeme,
+    parser::Parser, temp_vector::TempVector,
   },
   rtti::AstNodeClass,
 };

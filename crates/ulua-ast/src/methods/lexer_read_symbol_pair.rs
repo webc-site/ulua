@@ -1,11 +1,9 @@
 //! `Lexer::read_symbol_pair` — `read_next` 中九处「吃首字符 → 看下一字符决定
 //! 双字符/单字符符号」重复模式的收口（`= ==`、`< <=`、`+ +=`、`: ::` 等）。
 
-use crate::records::{
-  lexeme::{Lexeme, Type},
-  lexer::Lexer,
-  location::Location,
-  position::Position,
+use crate::{
+  enums::type_lexer::Type,
+  records::{lexeme::Lexeme, lexer::Lexer, location::Location, position::Position},
 };
 
 impl Lexer {

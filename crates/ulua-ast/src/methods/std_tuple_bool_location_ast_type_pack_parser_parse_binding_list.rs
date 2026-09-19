@@ -1,8 +1,11 @@
 use std::ptr::null_mut;
 
-use crate::records::{
-  ast_array::AstArray, ast_type_pack::AstTypePack, binding::Binding, lexeme::Type,
-  location::Location, parser::Parser, position::Position, temp_vector::TempVector,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_array::AstArray, ast_type_pack::AstTypePack, binding::Binding, location::Location,
+    parser::Parser, position::Position, temp_vector::TempVector,
+  },
 };
 
 impl Parser {

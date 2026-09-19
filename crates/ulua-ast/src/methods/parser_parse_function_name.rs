@@ -1,9 +1,10 @@
 use core::ffi::c_char;
 
 use crate::{
+  enums::type_lexer::Type,
   records::{
     ast_expr::AstExpr, ast_expr_index_name::AstExprIndexName, ast_name::AstName, ast_node::AstNode,
-    lexeme::Type, location::Location, parser::Parser,
+    location::Location, parser::Parser,
   },
   rtti::AstNodeClass,
 };

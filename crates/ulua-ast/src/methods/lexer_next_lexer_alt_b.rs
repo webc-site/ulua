@@ -2,11 +2,9 @@
 //! — Ast/src/Lexer.cpp:374.
 
 use crate::{
+  enums::type_lexer::Type,
   functions::is_space::is_space,
-  records::{
-    lexeme::{Lexeme, Type},
-    lexer::Lexer,
-  },
+  records::{lexeme::Lexeme, lexer::Lexer},
 };
 
 impl Lexer {

@@ -1,9 +1,12 @@
 //! `Lexeme Lexer::read_utf_8_error()` — Ast/src/Lexer.cpp:1048.
 
-use crate::records::{
-  lexeme::{Lexeme, LexemeData, Type},
-  lexer::Lexer,
-  location::Location,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    lexeme::{Lexeme, LexemeData},
+    lexer::Lexer,
+    location::Location,
+  },
 };
 
 impl Lexer {

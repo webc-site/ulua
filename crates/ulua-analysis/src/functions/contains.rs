@@ -1,4 +1,7 @@
-use ulua_ast::records::{comment::Comment, lexeme::Type, position::Position};
+use ulua_ast::{
+  enums::type_lexer::Type,
+  records::{comment::Comment, position::Position},
+};
 
 pub fn contains(pos: Position, comment: Comment) -> bool {
   if comment.location.contains(pos)

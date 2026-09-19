@@ -1,6 +1,6 @@
 use ulua_common::macros::luau_noinline::LUAU_NOINLINE;
 
-use crate::records::{lexeme::Type, parser::Parser};
+use crate::{enums::type_lexer::Type, records::parser::Parser};
 
 impl Parser {
   pub(crate) fn expect_and_consume_fail_with_lookahead(

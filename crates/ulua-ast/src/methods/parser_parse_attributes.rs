@@ -1,7 +1,8 @@
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
-use crate::records::{
-  ast_array::AstArray, ast_attr::AstAttr, lexeme::Type, parser::Parser, temp_vector::TempVector,
+use crate::{
+  enums::type_lexer::Type,
+  records::{ast_array::AstArray, ast_attr::AstAttr, parser::Parser, temp_vector::TempVector},
 };
 
 impl Parser {

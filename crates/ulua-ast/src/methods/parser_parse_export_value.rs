@@ -1,11 +1,12 @@
 use ulua_common::{fflag::DebugLuauUserDefinedClasses, macros::luau_assert::LUAU_ASSERT};
 
 use crate::{
+  enums::type_lexer::Type,
   methods::lexeme_name_is::lexeme_name_is,
   records::{
     ast_array::AstArray, ast_attr::AstAttr, ast_name::AstName, ast_node::AstNode,
     ast_stat::AstStat, ast_stat_class::AstStatClass, ast_stat_local::AstStatLocal,
-    ast_stat_local_function::AstStatLocalFunction, cst_stat_local::CstStatLocal, lexeme::Type,
+    ast_stat_local_function::AstStatLocalFunction, cst_stat_local::CstStatLocal,
     location::Location, parser::Parser, position::Position,
   },
   rtti::{ast_node_as, ast_node_is},

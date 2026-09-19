@@ -1,8 +1,9 @@
 use alloc::string::String;
 
 use crate::{
+  enums::type_lexer::Type,
   functions::is_space::is_space,
-  records::{comment::Comment, hot_comment::HotComment, lexeme::Type, parser::Parser},
+  records::{comment::Comment, hot_comment::HotComment, parser::Parser},
 };
 
 impl Parser {

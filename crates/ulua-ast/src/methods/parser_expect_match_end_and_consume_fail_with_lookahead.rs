@@ -1,9 +1,8 @@
 use ulua_common::macros::luau_noinline::LUAU_NOINLINE;
 
-use crate::records::{
-  lexeme::{Lexeme, Type},
-  match_lexeme::MatchLexeme,
-  parser::Parser,
+use crate::{
+  enums::type_lexer::Type,
+  records::{lexeme::Lexeme, match_lexeme::MatchLexeme, parser::Parser},
 };
 
 impl Parser {

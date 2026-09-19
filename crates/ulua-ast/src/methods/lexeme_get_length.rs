@@ -1,6 +1,6 @@
 use ulua_common::LUAU_ASSERT;
 
-use crate::records::lexeme::{Lexeme, Type};
+use crate::{enums::type_lexer::Type, records::lexeme::Lexeme};
 
 impl Lexeme {
   pub fn get_length(&self) -> u32 {

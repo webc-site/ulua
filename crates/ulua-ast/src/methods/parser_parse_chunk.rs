@@ -1,4 +1,7 @@
-use crate::records::{ast_stat_block::AstStatBlock, lexeme::Type, parser::Parser};
+use crate::{
+  enums::type_lexer::Type,
+  records::{ast_stat_block::AstStatBlock, parser::Parser},
+};
 
 impl Parser {
   pub fn parse_chunk(&mut self) -> *mut AstStatBlock {

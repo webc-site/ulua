@@ -3,8 +3,9 @@
 
 use core::{ffi::c_char, ptr::copy_nonoverlapping};
 
-use crate::records::{
-  allocator::Allocator, ast_name::AstName, ast_name_table::AstNameTable, entry::Entry, lexeme::Type,
+use crate::{
+  enums::type_lexer::Type,
+  records::{allocator::Allocator, ast_name::AstName, ast_name_table::AstNameTable, entry::Entry},
 };
 
 impl AstNameTable {

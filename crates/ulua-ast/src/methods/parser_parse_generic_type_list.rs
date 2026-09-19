@@ -1,12 +1,13 @@
 use core::ptr::null_mut;
 
 use crate::{
+  enums::type_lexer::Type,
   functions::should_parse_type_pack::should_parse_type_pack,
   records::{
     ast_array::AstArray, ast_generic_type::AstGenericType,
     ast_generic_type_pack::AstGenericTypePack, cst_generic_type::CstGenericType,
-    cst_generic_type_pack::CstGenericTypePack, lexeme::Type, match_lexeme::MatchLexeme,
-    parser::Parser, position::Position, temp_vector::TempVector,
+    cst_generic_type_pack::CstGenericTypePack, match_lexeme::MatchLexeme, parser::Parser,
+    position::Position, temp_vector::TempVector,
   },
 };
 

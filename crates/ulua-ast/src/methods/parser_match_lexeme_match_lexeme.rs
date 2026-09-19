@@ -1,7 +1,6 @@
-use crate::records::{
-  lexeme::{Lexeme, Type},
-  match_lexeme::MatchLexeme,
-  position::Position,
+use crate::{
+  enums::type_lexer::Type,
+  records::{lexeme::Lexeme, match_lexeme::MatchLexeme, position::Position},
 };
 
 impl MatchLexeme {

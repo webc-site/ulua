@@ -1,8 +1,8 @@
 use crate::{
+  enums::type_lexer::Type,
   functions::is_stat_last::is_stat_last,
   records::{
-    ast_stat_block::AstStatBlock, lexeme::Type, location::Location, parser::Parser,
-    temp_vector::TempVector,
+    ast_stat_block::AstStatBlock, location::Location, parser::Parser, temp_vector::TempVector,
   },
 };
 

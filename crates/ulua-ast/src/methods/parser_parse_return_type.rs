@@ -9,6 +9,7 @@ use ulua_common::{
 };
 
 use crate::{
+  enums::type_lexer::Type,
   functions::should_parse_type_pack::should_parse_type_pack,
   records::{
     ast_array::AstArray, ast_type::AstType, ast_type_function::AstTypeFunction,
@@ -16,8 +17,8 @@ use crate::{
     ast_type_list::AstTypeList, ast_type_pack::AstTypePack,
     ast_type_pack_explicit::AstTypePackExplicit, ast_type_union::AstTypeUnion,
     cst_type_function::CstTypeFunction, cst_type_group::CstTypeGroup,
-    cst_type_pack_explicit::CstTypePackExplicit, lexeme::Type, location::Location,
-    match_lexeme::MatchLexeme, parser::Parser, position::Position, temp_vector::TempVector,
+    cst_type_pack_explicit::CstTypePackExplicit, location::Location, match_lexeme::MatchLexeme,
+    parser::Parser, position::Position, temp_vector::TempVector,
   },
   rtti::ast_node_is,
   type_aliases::ast_argument_name::AstArgumentName,

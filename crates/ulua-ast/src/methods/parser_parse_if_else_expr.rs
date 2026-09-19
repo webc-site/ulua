@@ -1,6 +1,9 @@
-use crate::records::{
-  ast_expr::AstExpr, ast_expr_if_else::AstExprIfElse, cst_expr_if_else::CstExprIfElse,
-  lexeme::Type, location::Location, parser::Parser, position::Position,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_expr::AstExpr, ast_expr_if_else::AstExprIfElse, cst_expr_if_else::CstExprIfElse,
+    location::Location, parser::Parser, position::Position,
+  },
 };
 
 impl Parser {

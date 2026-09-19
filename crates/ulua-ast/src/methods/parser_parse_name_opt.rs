@@ -1,4 +1,7 @@
-use crate::records::{ast_name::AstName, lexeme::Type, name::Name, parser::Parser};
+use crate::{
+  enums::type_lexer::Type,
+  records::{ast_name::AstName, name::Name, parser::Parser},
+};
 
 impl Parser {
   pub fn parse_name_opt(&mut self, context: &str) -> Option<Name> {

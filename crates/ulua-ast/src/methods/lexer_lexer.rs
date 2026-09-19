@@ -4,12 +4,12 @@
 use alloc::vec::Vec;
 use core::ffi::c_char;
 
-use crate::records::{
-  ast_name_table::AstNameTable,
-  lexeme::{Lexeme, Type},
-  lexer::Lexer,
-  location::Location,
-  position::Position,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_name_table::AstNameTable, lexeme::Lexeme, lexer::Lexer, location::Location,
+    position::Position,
+  },
 };
 
 impl Lexer {

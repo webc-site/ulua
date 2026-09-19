@@ -1,4 +1,4 @@
-use ulua_ast::records::{lexeme::Type, lexer::Lexer};
+use ulua_ast::{enums::type_lexer::Type, records::lexer::Lexer};
 
 pub(crate) fn next(lexer: &mut Lexer) {
   lexer.next_lexeme();

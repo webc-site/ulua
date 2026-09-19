@@ -12,14 +12,14 @@
 use core::ptr::null_mut;
 
 use crate::{
-  enums::quote_style_cst::QuoteStyle::QuotedDouble,
+  enums::{quote_style_cst::QuoteStyle::QuotedDouble, type_lexer::Type},
   records::{
     ast_array::AstArray, ast_name::AstName, ast_type::AstType, ast_type_or_pack::AstTypeOrPack,
     ast_type_reference::AstTypeReference, ast_type_singleton_bool::AstTypeSingletonBool,
     ast_type_singleton_string::AstTypeSingletonString, ast_type_typeof::AstTypeTypeof,
     cst_type_reference::CstTypeReference, cst_type_singleton_string::CstTypeSingletonString,
-    cst_type_typeof::CstTypeTypeof, lexeme::Type, location::Location, match_lexeme::MatchLexeme,
-    parser::Parser, position::Position, temp_vector::TempVector,
+    cst_type_typeof::CstTypeTypeof, location::Location, match_lexeme::MatchLexeme, parser::Parser,
+    position::Position, temp_vector::TempVector,
   },
 };
 

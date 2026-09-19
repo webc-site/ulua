@@ -2,10 +2,13 @@ use core::ptr::null_mut;
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
-use crate::records::{
-  ast_type_pack::AstTypePack, ast_type_pack_generic::AstTypePackGeneric,
-  ast_type_pack_variadic::AstTypePackVariadic, cst_type_pack_generic::CstTypePackGeneric,
-  lexeme::Type, location::Location, parser::Parser,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_type_pack::AstTypePack, ast_type_pack_generic::AstTypePackGeneric,
+    ast_type_pack_variadic::AstTypePackVariadic, cst_type_pack_generic::CstTypePackGeneric,
+    location::Location, parser::Parser,
+  },
 };
 
 impl Parser {

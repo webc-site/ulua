@@ -1,6 +1,6 @@
 //! Source: `Analysis/src/AstJsonEncoder.cpp` (AstJsonEncoder.cpp:1519-1552, hand-ported)
 
-use ulua_ast::records::{comment::Comment, lexeme::Type};
+use ulua_ast::{enums::type_lexer::Type, records::comment::Comment};
 
 use crate::records::ast_json_encoder::AstJsonEncoder;
 

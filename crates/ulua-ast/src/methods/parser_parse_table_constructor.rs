@@ -1,7 +1,7 @@
 use core::{ffi::c_char, ptr::null_mut};
 
 use crate::{
-  enums::quote_style_ast::QuoteStyle::Unquoted,
+  enums::{quote_style_ast::QuoteStyle::Unquoted, type_lexer::Type},
   records::{
     ast_array::AstArray,
     ast_expr::AstExpr,
@@ -13,7 +13,6 @@ use crate::{
     },
     ast_node::AstNode,
     cst_expr_table::{CstExprTable, CstExprTableItem},
-    lexeme::Type,
     location::Location,
     match_lexeme::MatchLexeme,
     parser::Parser,

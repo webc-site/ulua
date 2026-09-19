@@ -1,4 +1,7 @@
-use crate::records::{lexeme::Type, match_lexeme::MatchLexeme, parser::Parser};
+use crate::{
+  enums::type_lexer::Type,
+  records::{match_lexeme::MatchLexeme, parser::Parser},
+};
 
 impl Parser {
   pub fn expect_match_and_consume(

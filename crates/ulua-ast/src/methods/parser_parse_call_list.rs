@@ -1,6 +1,9 @@
-use crate::records::{
-  ast_array::AstArray, ast_expr::AstExpr, lexeme::Type, location::Location,
-  match_lexeme::MatchLexeme, parser::Parser, position::Position, temp_vector::TempVector,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_array::AstArray, ast_expr::AstExpr, location::Location, match_lexeme::MatchLexeme,
+    parser::Parser, position::Position, temp_vector::TempVector,
+  },
 };
 
 impl Parser {

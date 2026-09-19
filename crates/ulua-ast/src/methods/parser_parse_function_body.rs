@@ -1,26 +1,14 @@
 use core::ptr::null_mut;
 
 use crate::{
+  enums::type_lexer::Type,
   methods::ast_expr_function_ast_expr_function::AstExprFunctionArgs,
   records::{
-    ast_array::AstArray,
-    ast_attr::AstAttr,
-    ast_expr_function::AstExprFunction,
-    ast_local::AstLocal,
-    ast_name::AstName,
-    ast_node::AstNode,
-    ast_type_pack::AstTypePack,
-    binding::Binding,
-    cst_expr_function::CstExprFunction,
-    cst_node::CstNode,
-    function::Function,
-    lexeme::{Lexeme, Type},
-    location::Location,
-    match_lexeme::MatchLexeme,
-    name::Name,
-    parser::Parser,
-    position::Position,
-    temp_vector::TempVector,
+    ast_array::AstArray, ast_attr::AstAttr, ast_expr_function::AstExprFunction,
+    ast_local::AstLocal, ast_name::AstName, ast_node::AstNode, ast_type_pack::AstTypePack,
+    binding::Binding, cst_expr_function::CstExprFunction, cst_node::CstNode, function::Function,
+    lexeme::Lexeme, location::Location, match_lexeme::MatchLexeme, name::Name, parser::Parser,
+    position::Position, temp_vector::TempVector,
   },
 };
 

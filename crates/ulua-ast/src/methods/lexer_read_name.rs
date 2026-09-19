@@ -3,8 +3,9 @@
 use ulua_common::LUAU_ASSERT;
 
 use crate::{
+  enums::type_lexer::Type,
   functions::{is_alpha::is_alpha, is_digit::is_digit},
-  records::{ast_name::AstName, ast_name_table::AstNameTable, lexeme::Type, lexer::Lexer},
+  records::{ast_name::AstName, ast_name_table::AstNameTable, lexer::Lexer},
 };
 
 impl Lexer {

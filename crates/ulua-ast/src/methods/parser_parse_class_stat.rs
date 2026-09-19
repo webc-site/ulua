@@ -6,12 +6,13 @@ use ulua_common::{
 };
 
 use crate::{
+  enums::type_lexer::Type,
   methods::lexeme_name_is::lexeme_name_is,
   records::{
     ast_array::AstArray, ast_class_method::AstClassMethod, ast_class_property::AstClassProperty,
     ast_expr::AstExpr, ast_name::AstName, ast_stat::AstStat, ast_stat_class::AstStatClass,
-    ast_type::AstType, binding::Binding, lexeme::Type, location::Location, name::Name,
-    parser::Parser, position::Position, temp_vector::TempVector,
+    ast_type::AstType, binding::Binding, location::Location, name::Name, parser::Parser,
+    position::Position, temp_vector::TempVector,
   },
 };
 

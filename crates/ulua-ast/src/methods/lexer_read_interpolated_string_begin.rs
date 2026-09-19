@@ -2,9 +2,9 @@
 
 use ulua_common::LUAU_ASSERT;
 
-use crate::records::{
-  lexeme::{Lexeme, Type},
-  lexer::Lexer,
+use crate::{
+  enums::type_lexer::Type,
+  records::{lexeme::Lexeme, lexer::Lexer},
 };
 
 impl Lexer {

@@ -2,9 +2,12 @@
 
 use core::ffi::c_char;
 
-use crate::records::{
-  lexeme::{Lexeme, LexemeData, Type},
-  location::Location,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    lexeme::{Lexeme, LexemeData},
+    location::Location,
+  },
 };
 
 impl Lexeme {

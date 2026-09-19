@@ -4,9 +4,12 @@
 //! loop depth on the current function frame around the body parse and records
 //! the `do` keyword location for CST-free reconstruction.
 
-use crate::records::{
-  ast_stat::AstStat, ast_stat_while::AstStatWhile, lexeme::Type, location::Location,
-  match_lexeme::MatchLexeme, parser::Parser,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_stat::AstStat, ast_stat_while::AstStatWhile, location::Location, match_lexeme::MatchLexeme,
+    parser::Parser,
+  },
 };
 
 impl Parser {

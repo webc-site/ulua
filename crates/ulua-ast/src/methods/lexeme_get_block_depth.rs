@@ -2,7 +2,7 @@ use core::ffi::c_char;
 
 use ulua_common::LUAU_ASSERT;
 
-use crate::records::lexeme::{Lexeme, Type};
+use crate::{enums::type_lexer::Type, records::lexeme::Lexeme};
 
 impl Lexeme {
   pub fn get_block_depth(&self) -> u32 {

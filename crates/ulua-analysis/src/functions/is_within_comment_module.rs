@@ -1,4 +1,7 @@
-use ulua_ast::records::{comment::Comment, lexeme::Type, position::Position};
+use ulua_ast::{
+  enums::type_lexer::Type,
+  records::{comment::Comment, position::Position},
+};
 
 use crate::functions::contains::contains;
 

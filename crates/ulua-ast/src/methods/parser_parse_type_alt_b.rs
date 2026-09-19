@@ -1,6 +1,9 @@
 use core::ptr::NonNull;
 
-use crate::records::{ast_type::AstType, lexeme::Type, parser::Parser};
+use crate::{
+  enums::type_lexer::Type,
+  records::{ast_type::AstType, parser::Parser},
+};
 
 impl Parser {
   pub fn parse_type(&mut self, in_declaration_context: bool) -> *mut AstType {

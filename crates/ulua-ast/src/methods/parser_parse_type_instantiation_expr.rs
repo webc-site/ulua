@@ -1,15 +1,12 @@
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
-use crate::records::{
-  ast_array::AstArray,
-  ast_type_or_pack::AstTypeOrPack,
-  cst_type_instantiation::CstTypeInstantiation,
-  lexeme::{Lexeme, Type},
-  location::Location,
-  match_lexeme::MatchLexeme,
-  parser::Parser,
-  position::Position,
-  temp_vector::TempVector,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_array::AstArray, ast_type_or_pack::AstTypeOrPack,
+    cst_type_instantiation::CstTypeInstantiation, lexeme::Lexeme, location::Location,
+    match_lexeme::MatchLexeme, parser::Parser, position::Position, temp_vector::TempVector,
+  },
 };
 
 impl Parser {

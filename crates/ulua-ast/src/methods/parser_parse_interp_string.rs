@@ -3,11 +3,11 @@ use core::{ffi::c_char, slice::from_raw_parts};
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  enums::brace_type::BraceType::InterpolatedString,
+  enums::{brace_type::BraceType::InterpolatedString, type_lexer::Type},
   records::{
     ast_array::AstArray, ast_expr::AstExpr, ast_expr_interp_string::AstExprInterpString,
-    cst_expr_interp_string::CstExprInterpString, lexeme::Type, lexer::Lexer, location::Location,
-    parser::Parser, position::Position, temp_vector::TempVector,
+    cst_expr_interp_string::CstExprInterpString, lexer::Lexer, location::Location, parser::Parser,
+    position::Position, temp_vector::TempVector,
   },
 };
 

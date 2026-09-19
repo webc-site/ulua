@@ -1,4 +1,4 @@
-use crate::records::lexeme::{Lexeme, Type};
+use crate::{enums::type_lexer::Type, records::lexeme::Lexeme};
 
 /// 词法单元是否为 NAME 且名字等于 `rhs`，对应 C++ 反复出现的
 /// `lexeme.type == Lexeme::Name && AstName(lexeme.data.name) == "x"`。

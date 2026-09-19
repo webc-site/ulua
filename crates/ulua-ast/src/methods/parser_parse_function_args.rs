@@ -5,10 +5,13 @@
 //! variant produces an `AstExprCall` node; the parenthesised branch collects
 //! comma positions under `store_cst_data` and records CST open/close parens.
 
-use crate::records::{
-  ast_array::AstArray, ast_expr::AstExpr, ast_expr_call::AstExprCall,
-  ast_type_or_pack::AstTypeOrPack, cst_expr_call::CstExprCall, lexeme::Type, location::Location,
-  match_lexeme::MatchLexeme, parser::Parser, position::Position, temp_vector::TempVector,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_array::AstArray, ast_expr::AstExpr, ast_expr_call::AstExprCall,
+    ast_type_or_pack::AstTypeOrPack, cst_expr_call::CstExprCall, location::Location,
+    match_lexeme::MatchLexeme, parser::Parser, position::Position, temp_vector::TempVector,
+  },
 };
 
 impl Parser {

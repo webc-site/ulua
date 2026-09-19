@@ -1,8 +1,11 @@
 use core::ptr::null_mut;
 
-use crate::records::{
-  allocator::Allocator, ast_name_table::AstNameTable, lexeme::Type, parse_error::ParseError,
-  parse_node_result::ParseNodeResult, parse_options::ParseOptions, parser::Parser,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    allocator::Allocator, ast_name_table::AstNameTable, parse_error::ParseError,
+    parse_node_result::ParseNodeResult, parse_options::ParseOptions, parser::Parser,
+  },
 };
 
 impl Parser {

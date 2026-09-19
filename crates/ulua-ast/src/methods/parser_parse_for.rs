@@ -9,11 +9,14 @@
 
 use core::ptr::null_mut;
 
-use crate::records::{
-  ast_array::AstArray, ast_expr::AstExpr, ast_stat::AstStat, ast_stat_for::AstStatFor,
-  ast_stat_for_in::AstStatForIn, cst_stat_for::CstStatFor, cst_stat_for_in::CstStatForIn,
-  lexeme::Type, location::Location, match_lexeme::MatchLexeme, parser::Parser, position::Position,
-  temp_vector::TempVector,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_array::AstArray, ast_expr::AstExpr, ast_stat::AstStat, ast_stat_for::AstStatFor,
+    ast_stat_for_in::AstStatForIn, cst_stat_for::CstStatFor, cst_stat_for_in::CstStatForIn,
+    location::Location, match_lexeme::MatchLexeme, parser::Parser, position::Position,
+    temp_vector::TempVector,
+  },
 };
 
 impl Parser {

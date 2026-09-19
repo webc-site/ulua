@@ -1,4 +1,4 @@
-use crate::records::{lexeme::Type, lexer::Lexer};
+use crate::{enums::type_lexer::Type, records::lexer::Lexer};
 
 pub(crate) fn should_parse_type_pack(lexer: &mut Lexer) -> bool {
   lexer.current().r#type == Type::DOT3

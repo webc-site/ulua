@@ -1,9 +1,11 @@
 use ulua_common::fflag::LuauExportValueSyntax;
 
-use crate::records::{
-  ast_array::AstArray, ast_expr::AstExpr, ast_stat::AstStat, ast_stat_return::AstStatReturn,
-  cst_stat_return::CstStatReturn, lexeme::Type, location::Location, parser::Parser,
-  temp_vector::TempVector,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    ast_array::AstArray, ast_expr::AstExpr, ast_stat::AstStat, ast_stat_return::AstStatReturn,
+    cst_stat_return::CstStatReturn, location::Location, parser::Parser, temp_vector::TempVector,
+  },
 };
 
 impl Parser {

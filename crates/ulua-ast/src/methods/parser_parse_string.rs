@@ -6,11 +6,12 @@ use crate::{
   enums::{
     quote_style_ast::QuoteStyle::{QuotedRaw, QuotedSimple},
     quote_style_cst::QuoteStyle::QuotedDouble,
+    type_lexer::Type,
   },
   records::{
     ast_array::AstArray, ast_expr::AstExpr, ast_expr_constant_string::AstExprConstantString,
     ast_node::AstNode, cst_expr_constant_string::CstExprConstantString, cst_node::CstNode,
-    lexeme::Type, location::Location, parser::Parser,
+    location::Location, parser::Parser,
   },
   rtti::{AstNodeClass, CstNodeClass},
 };

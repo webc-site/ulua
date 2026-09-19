@@ -2,8 +2,9 @@ use core::{ffi::CStr, ptr::null};
 
 use ulua_common::records::dense_hash_set::DenseHashSet;
 
-use crate::records::{
-  allocator::Allocator, ast_name::AstName, ast_name_table::AstNameTable, entry::Entry, lexeme::Type,
+use crate::{
+  enums::type_lexer::Type,
+  records::{allocator::Allocator, ast_name::AstName, ast_name_table::AstNameTable, entry::Entry},
 };
 
 const K_RESERVED: [&CStr; 21] = [

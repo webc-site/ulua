@@ -66,7 +66,10 @@ fn payload(lexeme: &Lexeme) -> &[u8] {
 mod broken_string_works {
   //! Source: `tests/Lexer.test.cpp:13-22`
 
-  use ulua_ast::records::{lexeme::Type, location::Location, position::Position};
+  use ulua_ast::{
+    enums::type_lexer::Type,
+    records::{location::Location, position::Position},
+  };
 
   use super::TestLexer;
 
@@ -86,7 +89,7 @@ mod broken_string_works {
 mod broken_comment {
   //! Source: `tests/Lexer.test.cpp:24-33`
 
-  use ulua_ast::records::{lexeme::Type, location::Location, position::Position};
+  use ulua_ast::records::{location::Location, position::Position};
 
   use super::TestLexer;
 
@@ -108,8 +111,6 @@ mod broken_comment_kept {
   //!
   //! `skip_comments` 只跳过合法注释，BrokenComment 仍会产出（与 C++ 一致）。
 
-  use ulua_ast::records::lexeme::Type;
-
   use super::TestLexer;
 
   #[test]
@@ -122,8 +123,6 @@ mod broken_comment_kept {
 
 mod comment_skipped {
   //! Source: `tests/Lexer.test.cpp:45-53`
-
-  use ulua_ast::records::lexeme::Type;
 
   use super::TestLexer;
 
@@ -138,7 +137,7 @@ mod comment_skipped {
 mod multiline_comment_with_lexeme_in_and_after {
   //! Source: `tests/Lexer.test.cpp:55-69`
 
-  use ulua_ast::records::{lexeme::Type, location::Location, position::Position};
+  use ulua_ast::records::{location::Location, position::Position};
 
   use super::TestLexer;
 
@@ -164,7 +163,7 @@ mod multiline_comment_with_lexeme_in_and_after {
 mod test_broken_escape_tolerant {
   //! Source: `tests/Lexer.test.cpp:71-81`
 
-  use ulua_ast::records::{lexeme::Type, location::Location, position::Position};
+  use ulua_ast::records::{location::Location, position::Position};
 
   use super::TestLexer;
 
@@ -185,7 +184,7 @@ mod test_broken_escape_tolerant {
 mod test_big_delimiters {
   //! Source: `tests/Lexer.test.cpp:83-97`
 
-  use ulua_ast::records::{lexeme::Type, location::Location, position::Position};
+  use ulua_ast::records::{location::Location, position::Position};
 
   use super::TestLexer;
 
@@ -204,8 +203,6 @@ mod test_big_delimiters {
 
 mod lookahead {
   //! Source: `tests/Lexer.test.cpp:99-139`
-
-  use ulua_ast::records::lexeme::Type;
 
   use super::TestLexer;
 
@@ -251,8 +248,6 @@ mod lookahead {
 mod string_interpolation_basic {
   //! Source: `tests/Lexer.test.cpp:141-158`
 
-  use ulua_ast::records::lexeme::Type;
-
   use super::TestLexer;
 
   #[test]
@@ -274,8 +269,6 @@ mod string_interpolation_basic {
 
 mod string_interpolation_full {
   //! Source: `tests/Lexer.test.cpp:160-188`
-
-  use ulua_ast::records::lexeme::Type;
 
   use super::TestLexer;
 
@@ -310,8 +303,6 @@ mod string_interpolation_full {
 mod string_interpolation_double_brace {
   //! Source: `tests/Lexer.test.cpp:190-206`
 
-  use ulua_ast::records::lexeme::Type;
-
   use super::{TestLexer, payload};
 
   #[test]
@@ -333,8 +324,6 @@ mod string_interpolation_double_brace {
 mod string_interpolation_double_but_unmatched_brace {
   //! Source: `tests/Lexer.test.cpp:208-220`
 
-  use ulua_ast::records::lexeme::Type;
-
   use super::TestLexer;
 
   #[test]
@@ -355,8 +344,6 @@ mod string_interpolation_double_but_unmatched_brace {
 mod string_interpolation_unmatched_brace {
   //! Source: `tests/Lexer.test.cpp:222-236`
 
-  use ulua_ast::records::lexeme::Type;
-
   use super::TestLexer;
 
   #[test]
@@ -376,8 +363,6 @@ mod string_interpolation_unmatched_brace {
 mod string_interpolation_with_unicode_escape {
   //! Source: `tests/Lexer.test.cpp:238-247`
 
-  use ulua_ast::records::lexeme::Type;
-
   use super::TestLexer;
 
   #[test]
@@ -392,7 +377,7 @@ mod string_interpolation_with_unicode_escape {
 mod single_quoted_string {
   //! Source: `tests/Lexer.test.cpp:249-259`
 
-  use ulua_ast::records::lexeme::{QuoteStyle, Type};
+  use ulua_ast::records::lexeme::QuoteStyle;
 
   use super::TestLexer;
 
@@ -409,7 +394,7 @@ mod single_quoted_string {
 mod double_quoted_string {
   //! Source: `tests/Lexer.test.cpp:261-271`
 
-  use ulua_ast::records::lexeme::{QuoteStyle, Type};
+  use ulua_ast::records::lexeme::QuoteStyle;
 
   use super::TestLexer;
 
@@ -426,8 +411,6 @@ mod double_quoted_string {
 mod lexer_determines_string_block_depth_0 {
   //! Source: `tests/Lexer.test.cpp:273-283`
 
-  use ulua_ast::records::lexeme::Type;
-
   use super::TestLexer;
 
   #[test]
@@ -442,8 +425,6 @@ mod lexer_determines_string_block_depth_0 {
 
 mod lexer_determines_string_block_depth_0_multiline_1 {
   //! Source: `tests/Lexer.test.cpp:285-297`
-
-  use ulua_ast::records::lexeme::Type;
 
   use super::TestLexer;
 
@@ -460,8 +441,6 @@ mod lexer_determines_string_block_depth_0_multiline_1 {
 mod lexer_determines_string_block_depth_0_multiline_2 {
   //! Source: `tests/Lexer.test.cpp:299-312`
 
-  use ulua_ast::records::lexeme::Type;
-
   use super::TestLexer;
 
   #[test]
@@ -476,8 +455,6 @@ mod lexer_determines_string_block_depth_0_multiline_2 {
 
 mod lexer_determines_string_block_depth_0_multiline_3 {
   //! Source: `tests/Lexer.test.cpp:314-326`
-
-  use ulua_ast::records::lexeme::Type;
 
   use super::TestLexer;
 
@@ -494,8 +471,6 @@ mod lexer_determines_string_block_depth_0_multiline_3 {
 mod lexer_determines_string_block_depth_1 {
   //! Source: `tests/Lexer.test.cpp:328-338`
 
-  use ulua_ast::records::lexeme::Type;
-
   use super::TestLexer;
 
   #[test]
@@ -510,8 +485,6 @@ mod lexer_determines_string_block_depth_1 {
 
 mod lexer_determines_string_block_depth_2 {
   //! Source: `tests/Lexer.test.cpp:340-350`
-
-  use ulua_ast::records::lexeme::Type;
 
   use super::TestLexer;
 
@@ -528,8 +501,6 @@ mod lexer_determines_string_block_depth_2 {
 mod lexer_determines_string_block_depth_2_multiline_1 {
   //! Source: `tests/Lexer.test.cpp:352-363`
 
-  use ulua_ast::records::lexeme::Type;
-
   use super::TestLexer;
 
   #[test]
@@ -544,8 +515,6 @@ mod lexer_determines_string_block_depth_2_multiline_1 {
 
 mod lexer_determines_string_block_depth_2_multiline_2 {
   //! Source: `tests/Lexer.test.cpp:365-377`
-
-  use ulua_ast::records::lexeme::Type;
 
   use super::TestLexer;
 
@@ -562,8 +531,6 @@ mod lexer_determines_string_block_depth_2_multiline_2 {
 mod lexer_determines_string_block_depth_2_multiline_3 {
   //! Source: `tests/Lexer.test.cpp:379-391`
 
-  use ulua_ast::records::lexeme::Type;
-
   use super::TestLexer;
 
   #[test]
@@ -578,8 +545,6 @@ mod lexer_determines_string_block_depth_2_multiline_3 {
 
 mod lexer_determines_comment_block_depth_0 {
   //! Source: `tests/Lexer.test.cpp:394-404`
-
-  use ulua_ast::records::lexeme::Type;
 
   use super::TestLexer;
 
@@ -599,8 +564,6 @@ mod lexer_determines_comment_block_depth_1 {
   //! C++ 两个用例重名（`lexer_determines_string_block_depth_1`，注释版在
   //! 406 行）；Rust mod 名不可重复，按实际被测类型改名为 comment 版。
 
-  use ulua_ast::records::lexeme::Type;
-
   use super::TestLexer;
 
   #[test]
@@ -617,8 +580,6 @@ mod lexer_determines_comment_block_depth_2 {
   //! Source: `tests/Lexer.test.cpp:418-428`
   //!
   //! 同上：C++ 重名用例（注释版在 418 行），Rust 侧改名去重。
-
-  use ulua_ast::records::lexeme::Type;
 
   use super::TestLexer;
 

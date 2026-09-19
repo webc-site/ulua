@@ -10,9 +10,10 @@
 use core::ptr::null_mut;
 
 use crate::{
+  enums::type_lexer::Type,
   functions::should_parse_type_pack::should_parse_type_pack,
   records::{
-    ast_name::AstName, ast_type::AstType, ast_type_pack::AstTypePack, lexeme::Type, parser::Parser,
+    ast_name::AstName, ast_type::AstType, ast_type_pack::AstTypePack, parser::Parser,
     position::Position, temp_vector::TempVector,
   },
   type_aliases::ast_argument_name::AstArgumentName,

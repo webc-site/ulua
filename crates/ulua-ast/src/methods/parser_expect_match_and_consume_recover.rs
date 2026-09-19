@@ -1,6 +1,9 @@
 use ulua_common::macros::luau_noinline::LUAU_NOINLINE;
 
-use crate::records::{lexeme::Type, match_lexeme::MatchLexeme, parser::Parser};
+use crate::{
+  enums::type_lexer::Type,
+  records::{match_lexeme::MatchLexeme, parser::Parser},
+};
 
 impl Parser {
   pub(crate) fn expect_match_and_consume_recover(

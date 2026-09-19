@@ -6,9 +6,12 @@ use ulua_common::{
   records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet},
 };
 
-use crate::records::{
-  allocator::Allocator, ast_name::AstName, ast_name_table::AstNameTable, function::Function,
-  lexeme::Type, lexer::Lexer, parse_options::ParseOptions, parser::Parser, position::Position,
+use crate::{
+  enums::type_lexer::Type,
+  records::{
+    allocator::Allocator, ast_name::AstName, ast_name_table::AstNameTable, function::Function,
+    lexer::Lexer, parse_options::ParseOptions, parser::Parser, position::Position,
+  },
 };
 
 const K_PARSE_NAME_ERROR: &str = "%error-id%";

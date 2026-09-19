@@ -1,7 +1,6 @@
-use crate::records::{
-  ast_expr_binary::AstExprBinaryOp as Op,
-  lexeme::{Lexeme, Type},
-  parser::Parser,
+use crate::{
+  enums::type_lexer::Type,
+  records::{ast_expr_binary::AstExprBinaryOp as Op, lexeme::Lexeme, parser::Parser},
 };
 
 // 单字符 token 型即字节码值；Type 派生结构相等，常量可直接作 match 模式臂。

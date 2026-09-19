@@ -1,6 +1,9 @@
 use core::ptr::null_mut;
 
-use crate::records::{ast_type::AstType, lexeme::Type, parser::Parser};
+use crate::{
+  enums::type_lexer::Type,
+  records::{ast_type::AstType, parser::Parser},
+};
 
 impl Parser {
   pub fn parse_optional_type(&mut self) -> *mut AstType {

@@ -1,4 +1,4 @@
-use crate::records::{lexeme::Type, parser::Parser};
+use crate::{enums::type_lexer::Type, records::parser::Parser};
 
 impl Parser {
   pub fn expect_and_consume_char(&mut self, value: char, context: &str) -> bool {

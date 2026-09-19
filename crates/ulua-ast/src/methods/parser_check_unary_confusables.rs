@@ -1,4 +1,7 @@
-use crate::records::{ast_expr_unary::AstExprUnaryOp, lexeme::Type, parser::Parser};
+use crate::{
+  enums::type_lexer::Type,
+  records::{ast_expr_unary::AstExprUnaryOp, parser::Parser},
+};
 
 impl Parser {
   pub fn check_unary_confusables(&mut self) -> Option<AstExprUnaryOp> {

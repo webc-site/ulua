@@ -3,7 +3,10 @@
 
 use core::ffi::c_char;
 
-use crate::records::{ast_name::AstName, ast_name_table::AstNameTable, entry::Entry, lexeme::Type};
+use crate::{
+  enums::type_lexer::Type,
+  records::{ast_name::AstName, ast_name_table::AstNameTable, entry::Entry},
+};
 
 impl AstNameTable {
   pub fn get_with_type(&self, name: *const c_char, length: usize) -> (AstName, Type) {

@@ -1,7 +1,6 @@
-use crate::records::{
-  ast_expr_binary::AstExprBinaryOp,
-  lexeme::{Lexeme, Type},
-  parser::Parser,
+use crate::{
+  enums::type_lexer::Type,
+  records::{ast_expr_binary::AstExprBinaryOp, lexeme::Lexeme, parser::Parser},
 };
 
 impl Parser {
