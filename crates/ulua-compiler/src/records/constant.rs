@@ -24,8 +24,10 @@ impl ConstantStr {
 /// 尺寸与原 `#[repr(C)]` 结构相同（24 字节），热路径按值拷贝无回退。
 /// 不派生 `PartialEq`：字符串相等须比较内容而非指针，统一走 `constants_equal`。
 #[derive(Clone, Copy, Debug)]
+#[derive(Default)]
 pub enum Constant {
   /// 未知 / 不可折叠
+  #[default]
   Unknown,
   Nil,
   Boolean(bool),
@@ -65,8 +67,3 @@ impl DenseDefault for Constant {
   }
 }
 
-impl Default for Constant {
-  fn default() -> Self {
-    Self::Unknown
-  }
-}

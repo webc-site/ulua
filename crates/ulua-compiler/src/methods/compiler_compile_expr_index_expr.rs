@@ -25,7 +25,7 @@ impl Compiler {
 
       match cv {
         // 整数下标 1..=256 走 GETTABLEN 快路径
-        Constant::Number(n) if n >= 1.0 && n <= 256.0 && (n as i32 as f64) == n => {
+        Constant::Number(n) if (1.0..=256.0).contains(&n) && (n as i32 as f64) == n => {
           let i = (n as i32 - 1) as u8;
           let rt = self.compile_expr_auto(expr_ref.expr, &mut rs);
           self.set_debug_line_location(&(*expr_ref.index).base.location);

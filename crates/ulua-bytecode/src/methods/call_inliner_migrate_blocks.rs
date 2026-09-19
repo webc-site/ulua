@@ -79,7 +79,11 @@ impl<'a> CallInliner<'a> {
             return false;
           }
           self.return_sites.push((caller_block_op, op));
-        } else {
+        } else if inst_op_code != LuauOpcode::LOP_PREPVARARGS {
+          // cpp `else if (inst.op != LOP_PREPVARARGS)`：被内联函数的 PREPVARARGS
+          // 携带的是 *被内联函数* 的 numparams，搬进调用方就成了非法指令
+          //（`validateInstructions` 断言 `LUAU_INSN_A == func.numparams` 会失败，
+          // VM 侧也会按错误的实参个数重排 L->top），必须整条丢弃。
           let caller_inst_op = self.map_inst_op(op);
           self.caller.blocks[caller_block_idx].append_instruction(caller_inst_op);
           self.caller.inst_op(caller_inst_op).block = caller_block_op;
