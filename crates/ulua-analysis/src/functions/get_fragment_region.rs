@@ -15,7 +15,7 @@ pub unsafe fn get_fragment_region(
   cursor_position: &Position,
 ) -> FragmentRegion {
   let mut nsf = NearestStatementFinder::new(*cursor_position);
-  ast_stat_block_visit(unsafe { &*root }, &mut nsf);
+  ast_stat_block_visit(unsafe { &mut *root }, &mut nsf);
 
   let parent = if !nsf.parent.is_null() {
     nsf.parent

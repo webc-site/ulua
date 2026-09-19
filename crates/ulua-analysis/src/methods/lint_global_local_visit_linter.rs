@@ -19,7 +19,7 @@ impl LintGlobalLocal {
     self
       .function_stack
       .push(FunctionInfo::function_info_ast(node));
-    unsafe { ast_stat_block_visit(&*node_body, self) };
+    unsafe { ast_stat_block_visit(&mut *node_body, self) };
     self.function_stack.pop();
     false
   }

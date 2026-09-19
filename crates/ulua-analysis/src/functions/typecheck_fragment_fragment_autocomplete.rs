@@ -153,11 +153,12 @@ pub unsafe fn typecheck_fragment_(
   reporter.report_waypoint(FragmentAutocompleteWaypoint::DfgBuildEnd);
 
   // requireTrace for the surrounding context. Erased on the way out (ScopedExit).
-  // SAFETY: root 指向 fragment 解析出的 AST（C++ 契约）。
+  // SAFETY: root 指向 fragment 解析出的 AST，此处独占（C++ 契约）；RequireTracer
+  // 按 cpp `AstStatBlock*` 非 const 语义取 `&mut`。
   let trace = unsafe {
     trace_requires(
       frontend.file_resolver_mut(),
-      &*root,
+      &mut *root,
       module_name.clone(),
       &limits,
     )
@@ -309,7 +310,7 @@ pub unsafe fn typecheck_fragment_(
       fresh_scope_ptr,
     )
   };
-  ast_stat_block_visit(unsafe { &*root }, &mut etv);
+  ast_stat_block_visit(unsafe { &mut *root }, &mut etv);
 
   // In frontend we would forbid internal types because this is just for autocomplete,
   // we don't actually care. We also don't even need to typecheck - just synthesize types

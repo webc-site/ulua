@@ -36,7 +36,7 @@ impl Frontend {
         Arc::as_ptr(root_scope) as *mut _,
       );
 
-      ast_stat_block_visit(&*source_module.root, &mut visitor);
+      ast_stat_block_visit(&mut *source_module.root, &mut visitor);
 
       if was_frozen {
         freeze(&mut (*module).internal_types);

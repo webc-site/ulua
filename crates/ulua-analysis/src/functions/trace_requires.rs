@@ -13,11 +13,12 @@ use crate::{
 };
 
 /// C++ `Luau::traceRequires`：`FileResolver*` 参数以 trait object 引用承载；
-/// C++ 侧的 `NotNull<AstStatBlock>` 裸指针收窄为借用，解引用责任留在调用方
-/// （AST arena 边界），因此本函数不再 `unsafe`。
+/// C++ 侧的 `AstStatBlock* root` 是非 const 指针（`AstNode::visit` 需要非 const
+/// `this`），这里收窄为 `&mut` 借用，解引用责任留在调用方（AST arena 边界），
+/// 因此本函数不再 `unsafe`。
 pub fn trace_requires(
   file_resolver: &mut dyn FileResolver,
-  root: &AstStatBlock,
+  root: &mut AstStatBlock,
   current_module_name: ModuleName,
   limits: &TypeCheckLimits,
 ) -> RequireTraceResult {

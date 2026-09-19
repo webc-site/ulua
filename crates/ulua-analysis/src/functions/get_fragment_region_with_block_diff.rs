@@ -21,7 +21,7 @@ pub unsafe fn get_fragment_region_with_block_diff(
   cursor_pos: &Position,
 ) -> FragmentRegion {
   let mut nsf = NearestStatementFinder::new(*cursor_pos);
-  ast_stat_block_visit(unsafe { &*fresh }, &mut nsf);
+  ast_stat_block_visit(unsafe { &mut *fresh }, &mut nsf);
 
   let parent = if !nsf.parent.is_null() {
     nsf.parent
@@ -38,7 +38,7 @@ pub unsafe fn get_fragment_region_with_block_diff(
   let mut lsf = NearestLikelyBlockFinder::new(parent);
   // C++ `stale->visit(&lsf)` — traverse the entire stale AST so the visitor
   // sees every nested block (e.g. the inner `do` block), not just the root.
-  ast_stat_block_visit(unsafe { &*stale }, &mut lsf);
+  ast_stat_block_visit(unsafe { &mut *stale }, &mut lsf);
 
   if let Some(same_block) = lsf.found
     && let Some(fd) = unsafe { block_diff_start(same_block, parent, nearest) }

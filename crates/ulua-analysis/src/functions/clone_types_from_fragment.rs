@@ -52,7 +52,7 @@ pub unsafe fn clone_types_from_fragment(
   LUAU_TIMETRACE_SCOPE!("Luau::cloneTypesFromFragment", "FragmentAutocomplete");
 
   let mut f = UsageFinder::new(dfg);
-  ast_stat_block_visit(unsafe { &*program }, &mut f);
+  ast_stat_block_visit(unsafe { &mut *program }, &mut f);
 
   let dest = unsafe { &mut *dest_arena };
   let stale = unsafe { &*stale_scope };
