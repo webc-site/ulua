@@ -8,7 +8,7 @@ use crate::{
   enums::{ir_block_kind::IrBlockKind, ir_cmd::IrCmd, ir_condition::IrCondition},
   macros::codegen_assert::CODEGEN_ASSERT,
   records::ir_builder::IrBuilder,
-  type_aliases::instruction_ir_translation::Instruction,
+  type_aliases::instruction_ir_builder::Instruction,
 };
 
 /// # Safety

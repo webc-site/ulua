@@ -10,7 +10,7 @@ use crate::{
   enums::ir_cmd::IrCmd,
   functions::is_userdata_bytecode_type::is_userdata_bytecode_type,
   records::{fallback_stream_scope::FallbackStreamScope, ir_builder::IrBuilder},
-  type_aliases::instruction_ir_translation::Instruction,
+  type_aliases::instruction_ir_builder::Instruction,
 };
 
 /// # Safety
