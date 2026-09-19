@@ -18,21 +18,13 @@ pub fn expand(tokens: TokenStream) -> TokenStream {
 
   let source_value = source.value();
   let defs_value = defs.as_ref().map(|defs| defs.value());
-  let result = if modules.is_empty() {
-    match &defs_value {
-      Some(defs) => ulua_rt::check_with_definitions(&source_value, defs),
-      None => ulua_rt::check(&source_value),
-    }
-  } else {
-    let root_module = modules_check::root_module_of(module.as_ref());
-    modules_check::check(
-      root_module,
-      &source_value,
-      &modules,
-      defs_value.as_deref(),
-      |lit| Ok(lit.value()),
-    )
-  };
+  let result = modules_check::check_dispatch(
+    module.as_ref(),
+    &source_value,
+    &modules,
+    defs_value.as_deref(),
+    |lit| Ok(lit.value()),
+  );
 
   if let Err(diagnostics) = result {
     return report::diagnostics_error(source.span(), &diagnostics);

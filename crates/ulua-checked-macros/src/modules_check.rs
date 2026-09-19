@@ -62,6 +62,29 @@ pub(crate) fn root_module_of(module: Option<&LitStr>) -> String {
   module.map_or_else(|| DEFAULT_MODULE.to_string(), |module| module.value())
 }
 
+/// inline / file 两种宏共用的派发：无模块映射且未指定根模块名时走单文件
+/// `check` / `check_with_definitions`，否则走 [`check`] 多模块流程；
+/// `load` 决定模块条目源文本来源（同 [`check`]）。
+pub(crate) fn check_dispatch<F>(
+  module: Option<&LitStr>,
+  source: &str,
+  entries: &[ModuleEntry],
+  defs: Option<&str>,
+  load: F,
+) -> Result<(), Vec<ulua_rt::TypeDiagnostic>>
+where
+  F: FnMut(&LitStr) -> Result<String, String>,
+{
+  if entries.is_empty() && module.is_none() {
+    return match defs {
+      Some(defs) => ulua_rt::check_with_definitions(source, defs),
+      None => ulua_rt::check(source),
+    };
+  }
+
+  check(root_module_of(module), source, entries, defs, load)
+}
+
 /// file 宏展开：`include_str!` 依赖顺序固定（const 绑定强制纳入 dep-info），
 /// 根文件表达式放最后作为宏的值。
 pub(crate) fn expand_include_strs(
