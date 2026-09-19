@@ -36,7 +36,9 @@ impl Parser {
       } else {
         Position::missing()
       };
-      self.attach_cst(body, |alloc| alloc.alloc(CstStatDo::new(stats_start, end_position)));
+      self.attach_cst(body, |alloc| {
+        alloc.alloc(CstStatDo::new(stats_start, end_position))
+      });
     }
 
     body as *mut AstStat

@@ -21,7 +21,14 @@ impl Constant {
   /// the slice is tied to `&self` rather than to the temporary `AstArray`.
   #[inline]
   pub fn get_string_bytes(&self) -> &[u8] {
-    self.as_str().bytes()
+    match self {
+      Constant::Str(s) => s.bytes(),
+      // 契约违例：非字符串常量取字节
+      _ => {
+        LUAU_ASSERT!(false);
+        &[]
+      }
+    }
   }
 
   /// 取出字符串载荷；非字符串常量属契约违例，断言拦截

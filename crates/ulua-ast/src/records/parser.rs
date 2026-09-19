@@ -9,7 +9,7 @@ use crate::{
     ast_expr_table::Item as AstExprTableItem, ast_generic_type::AstGenericType,
     ast_generic_type_pack::AstGenericTypePack, ast_local::AstLocal, ast_name::AstName,
     ast_node::AstNode, ast_stat::AstStat, ast_table_prop::AstTableProp, ast_type::AstType,
-    binding::Binding, comment::Comment, cst_expr_table::CstExprTableItem,
+    binding::Binding, comment::Comment, cst_expr_table::CstExprTableItem, cst_node::CstNode,
     cst_type_table::CstTypeTableItem, function::Function, hot_comment::HotComment, lexer::Lexer,
     location::Location, match_lexeme::MatchLexeme, parse_error::ParseError,
     parse_options::ParseOptions, position::Position,

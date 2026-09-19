@@ -97,10 +97,10 @@ impl Parser {
 
       self.attach_cst(node, |alloc| {
         alloc.alloc(CstExprCall::new(
-            Position::missing(),
-            Position::missing(),
-            AstArray::EMPTY,
-          ))
+          Position::missing(),
+          Position::missing(),
+          AstArray::EMPTY,
+        ))
       });
 
       node as *mut AstExpr
@@ -126,10 +126,10 @@ impl Parser {
 
       self.attach_cst(node, |alloc| {
         alloc.alloc(CstExprCall::new(
-            Position::missing(),
-            Position::missing(),
-            AstArray::EMPTY,
-          ))
+          Position::missing(),
+          Position::missing(),
+          AstArray::EMPTY,
+        ))
       });
 
       node as *mut AstExpr

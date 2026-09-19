@@ -3,9 +3,9 @@ use core::ptr::null_mut;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::records::{
-  ast_node::AstNode, ast_type_pack::AstTypePack, ast_type_pack_generic::AstTypePackGeneric,
-  ast_type_pack_variadic::AstTypePackVariadic, cst_node::CstNode,
-  cst_type_pack_generic::CstTypePackGeneric, lexeme::Type, location::Location, parser::Parser,
+  ast_type_pack::AstTypePack, ast_type_pack_generic::AstTypePackGeneric,
+  ast_type_pack_variadic::AstTypePackVariadic, cst_type_pack_generic::CstTypePackGeneric,
+  lexeme::Type, location::Location, parser::Parser,
 };
 
 impl Parser {
@@ -32,7 +32,9 @@ impl Parser {
           name.name,
         ))
       };
-      self.attach_cst(node, |alloc| alloc.alloc(CstTypePackGeneric::new(end.begin)));
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstTypePackGeneric::new(end.begin))
+      });
       node as *mut AstTypePack
     } else {
       LUAU_ASSERT!(false);

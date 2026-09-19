@@ -1,7 +1,6 @@
 use crate::records::{
-  ast_expr::AstExpr, ast_expr_type_assertion::AstExprTypeAssertion, ast_node::AstNode,
-  cst_expr_type_assertion::CstExprTypeAssertion, cst_node::CstNode, lexeme::Type,
-  location::Location, parser::Parser,
+  ast_expr::AstExpr, ast_expr_type_assertion::AstExprTypeAssertion,
+  cst_expr_type_assertion::CstExprTypeAssertion, lexeme::Type, location::Location, parser::Parser,
 };
 
 impl Parser {
@@ -22,7 +21,9 @@ impl Parser {
         ))
       };
 
-      self.attach_cst(node, |alloc| alloc.alloc(CstExprTypeAssertion::new(op_position)));
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstExprTypeAssertion::new(op_position))
+      });
 
       node as *mut AstExpr
     } else {

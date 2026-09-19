@@ -87,11 +87,11 @@ impl Parser {
 
       self.attach_cst(node, |alloc| {
         alloc.alloc(CstStatFor::new(
-            varname.colon_position,
-            equals_position,
-            end_comma_position,
-            step_comma_position,
-          ))
+          varname.colon_position,
+          equals_position,
+          end_comma_position,
+          step_comma_position,
+        ))
       });
 
       node as *mut AstStat

@@ -81,11 +81,11 @@ impl Parser {
 
       self.attach_cst(node, |alloc| {
         alloc.alloc(CstExprConstantInteger {
-            base: CstNode {
-              class_index: CstExprConstantInteger::CLASS_INDEX,
-            },
-            value: source_data,
-          })
+          base: CstNode {
+            class_index: CstExprConstantInteger::CLASS_INDEX,
+          },
+          value: source_data,
+        })
       });
 
       node as *mut AstExpr
@@ -114,11 +114,11 @@ impl Parser {
 
       self.attach_cst(node, |alloc| {
         alloc.alloc(CstExprConstantNumber {
-            base: CstNode {
-              class_index: CstExprConstantNumber::CLASS_INDEX,
-            },
-            value: source_data,
-          })
+          base: CstNode {
+            class_index: CstExprConstantNumber::CLASS_INDEX,
+          },
+          value: source_data,
+        })
       });
 
       node as *mut AstExpr

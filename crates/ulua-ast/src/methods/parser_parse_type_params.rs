@@ -5,9 +5,8 @@ use crate::{
   records::{
     ast_array::AstArray, ast_node::AstNode, ast_type::AstType, ast_type_group::AstTypeGroup,
     ast_type_or_pack::AstTypeOrPack, ast_type_pack_explicit::AstTypePackExplicit,
-    cst_node::CstNode, cst_type_group::CstTypeGroup, cst_type_pack_explicit::CstTypePackExplicit,
-    lexeme::Type, match_lexeme::MatchLexeme, parser::Parser, position::Position,
-    temp_vector::TempVector,
+    cst_type_group::CstTypeGroup, cst_type_pack_explicit::CstTypePackExplicit, lexeme::Type,
+    match_lexeme::MatchLexeme, parser::Parser, position::Position, temp_vector::TempVector,
   },
   rtti::{ast_node_as, cst_node_as},
 };
@@ -77,8 +76,9 @@ impl Parser {
                   unsafe { cst_node_as::<CstTypePackExplicit>(*cst_node) };
                 if !cst_explicit_type_pack.is_null() {
                   let close_pos = unsafe { (*cst_explicit_type_pack).close_parentheses_position };
-                  self
-                    .attach_cst(type_group, |alloc| alloc.alloc(CstTypeGroup::new(close_pos)));
+                  self.attach_cst(type_group, |alloc| {
+                    alloc.alloc(CstTypeGroup::new(close_pos))
+                  });
                 }
               }
 

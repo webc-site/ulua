@@ -1,7 +1,6 @@
 use crate::records::{
-  ast_node::AstNode, ast_stat::AstStat, ast_stat_repeat::AstStatRepeat, cst_node::CstNode,
-  cst_stat_repeat::CstStatRepeat, lexeme::Type, location::Location, match_lexeme::MatchLexeme,
-  parser::Parser, position::Position,
+  ast_stat::AstStat, ast_stat_repeat::AstStatRepeat, cst_stat_repeat::CstStatRepeat, lexeme::Type,
+  location::Location, match_lexeme::MatchLexeme, parser::Parser, position::Position,
 };
 
 impl Parser {
@@ -43,7 +42,9 @@ impl Parser {
       ))
     };
 
-    self.attach_cst(node, |alloc| alloc.alloc(CstStatRepeat::new(until_position)));
+    self.attach_cst(node, |alloc| {
+      alloc.alloc(CstStatRepeat::new(until_position))
+    });
 
     node as *mut AstStat
   }

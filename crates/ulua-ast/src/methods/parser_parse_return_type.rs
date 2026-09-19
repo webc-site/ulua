@@ -11,10 +11,10 @@ use ulua_common::{
 use crate::{
   functions::should_parse_type_pack::should_parse_type_pack,
   records::{
-    ast_array::AstArray, ast_node::AstNode, ast_type::AstType, ast_type_function::AstTypeFunction,
+    ast_array::AstArray, ast_type::AstType, ast_type_function::AstTypeFunction,
     ast_type_group::AstTypeGroup, ast_type_intersection::AstTypeIntersection,
     ast_type_list::AstTypeList, ast_type_pack::AstTypePack,
-    ast_type_pack_explicit::AstTypePackExplicit, ast_type_union::AstTypeUnion, cst_node::CstNode,
+    ast_type_pack_explicit::AstTypePackExplicit, ast_type_union::AstTypeUnion,
     cst_type_function::CstTypeFunction, cst_type_group::CstTypeGroup,
     cst_type_pack_explicit::CstTypePackExplicit, lexeme::Type, location::Location,
     match_lexeme::MatchLexeme, parser::Parser, position::Position, temp_vector::TempVector,

@@ -13,7 +13,6 @@ use crate::{
     },
     ast_node::AstNode,
     cst_expr_table::{CstExprTable, CstExprTableItem},
-    cst_node::CstNode,
     lexeme::Type,
     location::Location,
     match_lexeme::MatchLexeme,
@@ -173,7 +172,9 @@ impl Parser {
 
     if self.options.store_cst_data {
       let cst_items_array = self.copy_temp_vector_t(&cst_items);
-      self.attach_cst(node, |alloc| alloc.alloc(CstExprTable::new(cst_items_array)));
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstExprTable::new(cst_items_array))
+      });
     }
 
     node as *mut AstExpr

@@ -1,8 +1,8 @@
 use crate::{
   functions::is_expr_l_value::is_expr_l_value,
   records::{
-    ast_expr::AstExpr, ast_expr_binary::AstExprBinaryOp, ast_node::AstNode, ast_stat::AstStat,
-    ast_stat_compound_assign::AstStatCompoundAssign, cst_node::CstNode,
+    ast_expr::AstExpr, ast_expr_binary::AstExprBinaryOp, ast_stat::AstStat,
+    ast_stat_compound_assign::AstStatCompoundAssign,
     cst_stat_compound_assign::CstStatCompoundAssign, location::Location, parser::Parser,
   },
 };
@@ -36,7 +36,9 @@ impl Parser {
       ))
     };
 
-    self.attach_cst(node, |alloc| alloc.alloc(CstStatCompoundAssign::new(op_position)));
+    self.attach_cst(node, |alloc| {
+      alloc.alloc(CstStatCompoundAssign::new(op_position))
+    });
 
     node as *mut AstStat
   }

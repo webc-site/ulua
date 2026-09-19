@@ -6,7 +6,6 @@ use crate::{
   records::{
     ast_array::AstArray,
     ast_name::AstName,
-    ast_node::AstNode,
     ast_table_indexer::AstTableIndexer,
     ast_table_prop::AstTableProp,
     ast_type::AstType,
@@ -268,8 +267,9 @@ impl Parser {
 
     if self.options.store_cst_data {
       let cst_items_array = self.copy_temp_vector_t(&cst_items);
-      self
-        .attach_cst(node, |alloc| alloc.alloc(CstTypeTable::new(cst_items_array, is_array)));
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstTypeTable::new(cst_items_array, is_array))
+      });
     }
 
     node as *mut AstType

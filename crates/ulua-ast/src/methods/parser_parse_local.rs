@@ -4,10 +4,10 @@ use crate::{
   enums::type_lexer::Type,
   functions::is_enough_values::is_enough_values,
   records::{
-    ast_array::AstArray, ast_attr::AstAttr, ast_node::AstNode, ast_stat::AstStat,
-    ast_stat_local::AstStatLocal, ast_stat_local_function::AstStatLocalFunction, cst_node::CstNode,
-    cst_stat_local::CstStatLocal, cst_stat_local_function::CstStatLocalFunction,
-    location::Location, parser::Parser, position::Position, temp_vector::TempVector,
+    ast_array::AstArray, ast_attr::AstAttr, ast_stat::AstStat, ast_stat_local::AstStatLocal,
+    ast_stat_local_function::AstStatLocalFunction, cst_stat_local::CstStatLocal,
+    cst_stat_local_function::CstStatLocalFunction, location::Location, parser::Parser,
+    position::Position, temp_vector::TempVector,
   },
 };
 
@@ -61,9 +61,9 @@ impl Parser {
 
       self.attach_cst(node, |alloc| {
         alloc.alloc(CstStatLocalFunction::new(
-            keyword_position,
-            function_keyword_position,
-          ))
+          keyword_position,
+          function_keyword_position,
+        ))
       });
 
       node as *mut AstStat
@@ -141,13 +141,17 @@ impl Parser {
         ))
       };
 
-      self.attach_cst(node, |alloc| {
-        alloc.alloc(CstStatLocal::new(
-            self.extract_annotation_colon_positions(&names),
+      if self.options.store_cst_data {
+        let names_colon_positions = self.extract_annotation_colon_positions(&names);
+        let values_comma_array = self.copy_temp_vector_t(&values_comma_positions);
+        self.attach_cst(node, |alloc| {
+          alloc.alloc(CstStatLocal::new(
+            names_colon_positions,
             vars_comma_positions,
-            self.copy_temp_vector_t(&values_comma_positions),
+            values_comma_array,
           ))
-      });
+        });
+      }
 
       // const 声明必然值不够时（如 `const foo`、`const bar, baz = 42`）报错，
       // 但声明本身仍合法，按原样返回节点。

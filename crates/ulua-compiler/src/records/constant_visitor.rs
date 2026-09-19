@@ -256,8 +256,8 @@ impl<'a> ConstantVisitor<'a> {
         if !item.key.is_null() {
           let key_val = self.analyze(item.key);
 
-          if let (Constant::Str { len, .. }, _) = (&key_val, &value_val)
-            && *len != 0
+          if let (Constant::Str(s), _) = (&key_val, &value_val)
+            && s.len != 0
             && !value_val.is_unknown()
             && !matches!(value_val, Constant::Table(_))
           {

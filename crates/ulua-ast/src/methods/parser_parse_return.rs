@@ -1,9 +1,9 @@
 use ulua_common::fflag::LuauExportValueSyntax;
 
 use crate::records::{
-  ast_array::AstArray, ast_expr::AstExpr, ast_node::AstNode, ast_stat::AstStat,
-  ast_stat_return::AstStatReturn, cst_node::CstNode, cst_stat_return::CstStatReturn, lexeme::Type,
-  location::Location, parser::Parser, temp_vector::TempVector,
+  ast_array::AstArray, ast_expr::AstExpr, ast_stat::AstStat, ast_stat_return::AstStatReturn,
+  cst_stat_return::CstStatReturn, lexeme::Type, location::Location, parser::Parser,
+  temp_vector::TempVector,
 };
 
 impl Parser {
@@ -41,7 +41,9 @@ impl Parser {
 
     if self.options.store_cst_data {
       let comma_positions_array = self.copy_temp_vector_t(&comma_positions);
-      self.attach_cst(node, |alloc| alloc.alloc(CstStatReturn::new(comma_positions_array)));
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstStatReturn::new(comma_positions_array))
+      });
     }
 
     if LuauExportValueSyntax.get() && self.function_stack.len() == 1 {

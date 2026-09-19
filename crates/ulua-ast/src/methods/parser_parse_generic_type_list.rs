@@ -124,9 +124,9 @@ impl Parser {
             };
             self.attach_cst(node, |alloc| {
               alloc.alloc(CstGenericTypePack::new(
-                  ellipsis_position,
-                  Position::missing(),
-                ))
+                ellipsis_position,
+                Position::missing(),
+              ))
             });
             name_packs.push_back(node);
           }

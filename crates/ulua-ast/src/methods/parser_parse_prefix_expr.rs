@@ -40,7 +40,9 @@ impl Parser {
         } else {
           Position::missing()
         };
-        self.attach_cst(expr_group, |alloc| alloc.alloc(CstExprGroup::new(close_pos)));
+        self.attach_cst(expr_group, |alloc| {
+          alloc.alloc(CstExprGroup::new(close_pos))
+        });
       }
 
       expr_group as *mut AstExpr

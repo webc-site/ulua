@@ -23,6 +23,7 @@ use crate::{
   records::{
     compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
     compiler::{Compiler, K_MAX_AD_INDEX},
+    constant::Constant,
   },
 };
 

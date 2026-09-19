@@ -59,13 +59,13 @@ impl Parser {
 
       self.attach_cst(node, |alloc| {
         alloc.alloc(CstExprConstantString {
-            base: CstNode {
-              class_index: CstExprConstantString::CLASS_INDEX,
-            },
-            source_string: original_string,
-            quote_style: full_style,
-            block_depth,
-          })
+          base: CstNode {
+            class_index: CstExprConstantString::CLASS_INDEX,
+          },
+          source_string: original_string,
+          quote_style: full_style,
+          block_depth,
+        })
       });
 
       node as *mut AstExpr

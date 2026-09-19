@@ -15,12 +15,11 @@ impl Parser {
     attributes: &AstArray<*mut AstAttr>,
   ) -> AstTypeOrPack {
     use crate::records::{
-      ast_node::AstNode, ast_type::AstType, ast_type_function::AstTypeFunction,
-      ast_type_group::AstTypeGroup, ast_type_list::AstTypeList, ast_type_pack::AstTypePack,
-      ast_type_pack_explicit::AstTypePackExplicit, cst_node::CstNode,
-      cst_type_function::CstTypeFunction, cst_type_group::CstTypeGroup,
-      cst_type_pack_explicit::CstTypePackExplicit, lexeme::Type, match_lexeme::MatchLexeme,
-      position::Position, temp_vector::TempVector,
+      ast_type::AstType, ast_type_function::AstTypeFunction, ast_type_group::AstTypeGroup,
+      ast_type_list::AstTypeList, ast_type_pack::AstTypePack,
+      ast_type_pack_explicit::AstTypePackExplicit, cst_type_function::CstTypeFunction,
+      cst_type_group::CstTypeGroup, cst_type_pack_explicit::CstTypePackExplicit, lexeme::Type,
+      match_lexeme::MatchLexeme, position::Position, temp_vector::TempVector,
     };
 
     self.increment_recursion_counter("type annotation");

@@ -1,7 +1,6 @@
 use crate::records::{
-  ast_expr::AstExpr, ast_expr_index_expr::AstExprIndexExpr, ast_node::AstNode,
-  cst_expr_index_expr::CstExprIndexExpr, cst_node::CstNode, location::Location,
-  match_lexeme::MatchLexeme, parser::Parser, position::Position,
+  ast_expr::AstExpr, ast_expr_index_expr::AstExprIndexExpr, cst_expr_index_expr::CstExprIndexExpr,
+  location::Location, match_lexeme::MatchLexeme, parser::Parser, position::Position,
 };
 
 impl Parser {
@@ -26,13 +25,13 @@ impl Parser {
 
     self.attach_cst(expr, |alloc| {
       alloc.alloc(CstExprIndexExpr::new(
-          match_bracket.position,
-          if closing_bracket_found {
-            close_bracket_position
-          } else {
-            Position::missing()
-          },
-        ))
+        match_bracket.position,
+        if closing_bracket_found {
+          close_bracket_position
+        } else {
+          Position::missing()
+        },
+      ))
     });
 
     expr as *mut AstExpr

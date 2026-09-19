@@ -3,8 +3,8 @@ use core::ptr::NonNull;
 use ulua_common::{fint::LuauTypeLengthLimit, macros::luau_assert::LUAU_ASSERT};
 
 use crate::records::{
-  ast_node::AstNode, ast_type::AstType, ast_type_intersection::AstTypeIntersection,
-  ast_type_optional::AstTypeOptional, ast_type_union::AstTypeUnion, cst_node::CstNode,
+  ast_type::AstType, ast_type_intersection::AstTypeIntersection,
+  ast_type_optional::AstTypeOptional, ast_type_union::AstTypeUnion,
   cst_type_intersection::CstTypeIntersection, cst_type_union::CstTypeUnion, lexeme::Type,
   location::Location, parse_error::ParseError, parser::Parser, position::Position,
   temp_vector::TempVector,
@@ -126,12 +126,12 @@ impl Parser {
       let node = unsafe {
         (*self.allocator).alloc(AstTypeUnion::new(location, self.copy_temp_vector_t(&parts)))
       };
-      self.attach_cst(node, |alloc| {
-        alloc.alloc(CstTypeUnion::new(
-            leading_position,
-            self.copy_temp_vector_t(&separator_positions),
-          ))
-      });
+      if self.options.store_cst_data {
+        let separators = self.copy_temp_vector_t(&separator_positions);
+        self.attach_cst(node, |alloc| {
+          alloc.alloc(CstTypeUnion::new(leading_position, separators))
+        });
+      }
       return node as *mut AstType;
     }
 
@@ -142,12 +142,12 @@ impl Parser {
           self.copy_temp_vector_t(&parts),
         ))
       };
-      self.attach_cst(node, |alloc| {
-        alloc.alloc(CstTypeIntersection::new(
-            leading_position,
-            self.copy_temp_vector_t(&separator_positions),
-          ))
-      });
+      if self.options.store_cst_data {
+        let separators = self.copy_temp_vector_t(&separator_positions);
+        self.attach_cst(node, |alloc| {
+          alloc.alloc(CstTypeIntersection::new(leading_position, separators))
+        });
+      }
       return node as *mut AstType;
     }
 
