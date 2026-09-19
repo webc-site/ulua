@@ -111,8 +111,8 @@ pub mod _inner {
     LuauIndentTypeMismatchMaxTypeLength,
     10
   );
-  // VM/src/lfunc.cpp
-  crate::LUAU_FASTINTVARIABLE!(LUAU_INLINE_HITS_THRESHOLD, LuauInlineHitsThreshold, 3);
+  // VM/src/lfunc.cpp:10（`LUAU_FASTINTVARIABLE(LuauInlineHitsThreshold, 32)`）
+  crate::LUAU_FASTINTVARIABLE!(LUAU_INLINE_HITS_THRESHOLD, LuauInlineHitsThreshold, 32);
   // Analysis/src/NonStrictTypeChecker.cpp
   crate::LUAU_FASTINTVARIABLE!(
     LUAU_NON_STRICT_TYPE_CHECKER_RECURSION_LIMIT,
