@@ -5,11 +5,13 @@ use ulua_vm::type_aliases::t_value::TValue;
 use crate::{
   enums::kind_a_64::KindA64,
   macros::codegen_assert::CODEGEN_ASSERT,
-  records::{assembly_builder_a_64::AssemblyBuilderA64, register_a_64::RegisterA64},
+  records::{
+    assembly_builder_a_64::{AssemblyBuilderA64, K_MAX_IMMEDIATE},
+    register_a_64::RegisterA64,
+  },
   type_aliases::mem::mem,
 };
 
-const K_MAX_IMMEDIATE: usize = (1 << 12) - 1;
 const K_TEMP_SLOTS: u32 = 1;
 const S_TEMPORARY_DATA: i32 = 9 * 8;
 

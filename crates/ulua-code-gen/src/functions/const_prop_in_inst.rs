@@ -15,18 +15,22 @@ use crate::{
   enums::{ir_cmd::IrCmd, ir_const_kind::IrConstKind, ir_op_kind::IrOpKind},
   fflag::LUAU_CODEGEN_SUBSTITUTE_REPLACEMENTS,
   functions::{
-    compare_ir_utils::compare_f64_f64_ir_condition,
-    compare_ir_utils_alt_b::compare_i32_i32_ir_condition,
-    compare_ir_utils_alt_c::compare_i64_i64_ir_condition, condition_op::condition_op,
-    fold_constants::fold_constants, handle_builtin_effects::handle_builtin_effects, is_gco::is_gco,
+    compare_ir_utils::{compare_f64_f64_ir_condition, compare_int},
+    condition_op::condition_op,
+    fold_constants::fold_constants,
+    handle_builtin_effects::handle_builtin_effects,
+    is_gco::is_gco,
     kill_ir_utils::kill_ir_function_ir_inst_at,
     produces_dirty_high_register_bits::produces_dirty_high_register_bits,
     replace_ir_utils::replace_ir_function_ir_op_ir_op,
     replace_ir_utils_alt_b::replace_ir_function_ir_block_u32_ir_inst,
-    safe_integer_constant::safe_integer_constant, substitute::substitute_at,
+    safe_integer_constant::safe_integer_constant,
+    substitute::substitute_at,
     substitute_with_truncated_uint::substitute_with_truncated_uint_at,
-    try_get_operand_tag::try_get_operand_tag, try_get_tag_for_typename::try_get_tag_for_typename,
-    vm_const_op::vm_const_op, vm_reg_op::vm_reg_op,
+    try_get_operand_tag::try_get_operand_tag,
+    try_get_tag_for_typename::try_get_tag_for_typename,
+    vm_const_op::vm_const_op,
+    vm_reg_op::vm_reg_op,
   },
   macros::{
     codegen_assert::CODEGEN_ASSERT, has_op_c::HAS_OP_C, op_a::op_a, op_a_ref::op_a_ref, op_b::op_b,
@@ -1232,8 +1236,7 @@ pub fn const_prop_in_inst(
       });
 
       if let (Some(value_a), Some(value_b)) = (value_a, value_b) {
-        let target = if compare_i32_i32_ir_condition(value_a, value_b, condition_op(op_c_ref(inst)))
-        {
+        let target = if compare_int(value_a, value_b, condition_op(op_c_ref(inst))) {
           op_d_ref(inst)
         } else {
           op_e_ref(inst)
@@ -1256,8 +1259,7 @@ pub fn const_prop_in_inst(
       });
 
       if let (Some(value_a), Some(value_b)) = (value_a, value_b) {
-        let target = if compare_i64_i64_ir_condition(value_a, value_b, condition_op(op_c_ref(inst)))
-        {
+        let target = if compare_int(value_a, value_b, condition_op(op_c_ref(inst))) {
           op_d_ref(inst)
         } else {
           op_e_ref(inst)

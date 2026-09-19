@@ -2,6 +2,12 @@ use crate::{enums::ir_block_kind::IrBlockKind, records::label::Label};
 
 pub const K_BLOCK_NO_START_PC: u32 = !0u32;
 
+/// `IrBlock::flags` 位掩码，对应 cpp/CodeGen/include/Luau/IrData.h 的
+/// `kBlockFlagSafeEnvCheck` / `kBlockFlagSafeEnvClear` / `kBlockFlagEntryArgCheck`。
+pub(crate) const K_BLOCK_FLAG_SAFE_ENV_CHECK: u8 = 1 << 0;
+pub(crate) const K_BLOCK_FLAG_SAFE_ENV_CLEAR: u8 = 1 << 1;
+pub(crate) const K_BLOCK_FLAG_ENTRY_ARG_CHECK: u8 = 1 << 2;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[repr(C)]
 pub struct IrBlock {

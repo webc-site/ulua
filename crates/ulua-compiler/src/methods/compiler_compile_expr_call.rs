@@ -28,6 +28,12 @@ use crate::{
 impl Compiler {
   /// # Safety
   /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
+  ///
+  /// 未移植：cpp/Compiler/src/Compiler.cpp:1484-1556 的 `pcall`/`xpcall` fastpcall 下推
+  /// （`FFlag::LuauCompileFastpcall` 开启时改发 `LOP_FASTPCALL`）。该旗标默认关闭
+  /// （与 cpp 一致），但 ulua-bytecode 会按它抬高字节码版本
+  /// （`bytecode_builder_get_version.rs:37`），所以开启后只会得到「版本抬高、仍发普通 CALL」
+  /// 的字节码；补齐下推前不要打开该旗标。
   pub unsafe fn compile_expr_call(
     &mut self,
     expr: *mut AstExprCall,
