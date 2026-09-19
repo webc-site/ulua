@@ -1,6 +1,5 @@
 use alloc::{rc::Rc, vec::Vec};
 use core::mem::take;
-use std::collections::HashMap;
 
 use ulua_common::{macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet};
 
@@ -11,7 +10,11 @@ use crate::{
     build_queue_item::BuildQueueItem, build_queue_work_state::BuildQueueWorkState,
     frontend::Frontend, frontend_options::FrontendOptions,
   },
-  type_aliases::{frontend_callbacks::TaskQueue, module_name_type::ModuleName},
+  type_aliases::{
+    collections::{HashMap, HashMapExt},
+    frontend_callbacks::TaskQueue,
+    module_name_type::ModuleName,
+  },
 };
 
 impl Frontend {
@@ -82,7 +85,8 @@ impl Frontend {
     // 先只读地收集每个模块指向的「脏依赖」下标，再统一写回，避免同时持有两处借用。
     let dirty_deps: Vec<Vec<usize>> = build_queue_items
       .iter()
-      .map(|item| {
+      .enumerate()
+      .map(|(i, item)| {
         item
           .source_node
           .require_set
@@ -93,7 +97,15 @@ impl Frontend {
               .get(*dep)
               .is_some_and(|node| node.has_dirty_module(frontend_options.for_autocomplete))
           })
-          .map(|dep| module_name_to_queue[dep])
+          // cpp Frontend.cpp:724-726：依赖须已入构建队列且非自身才计为脏依赖
+          // （上游 else 分支的非 const operator[] 缺键默认插 0 属已知缺陷，
+          // 端口采 find 语义，绝不 panic 也不误挂槽 0）。
+          .filter_map(|dep| {
+            module_name_to_queue
+              .get(dep)
+              .copied()
+              .filter(|&pos| pos != i)
+          })
           .collect()
       })
       .collect();

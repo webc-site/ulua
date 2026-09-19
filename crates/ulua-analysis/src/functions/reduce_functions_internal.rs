@@ -63,8 +63,7 @@ pub fn reduce_functions_internal(
     };
   }
 
-  // TypeReductionReentrancyGuard _{ctx->normalizer->sharedState};
-  // RAII: sets reentrant_type_reduction = true now, resets to false on scope exit.
+  // TypeReductionReentrancyGuard 的 Drop 负责复位（cpp 析构语义），unwind 安全。
   let _guard = unsafe {
     TypeReductionReentrancyGuard::type_reduction_reentrancy_guard_not_null_unifier_shared_state(
       shared_state,
@@ -86,15 +85,6 @@ pub fn reduce_functions_internal(
           TypeErrorData::CodeTooComplex(CodeTooComplex::default()),
         ));
       break;
-    }
-  }
-
-  // The Rust `TypeReductionReentrancyGuard` has no `Drop` impl yet, so mirror
-  // the C++ destructor (`sharedState->reentrantTypeReduction = false`) here at
-  // scope exit to preserve the RAII semantics faithfully.
-  unsafe {
-    if !shared_state.is_null() {
-      (*shared_state).reentrant_type_reduction = false;
     }
   }
 
