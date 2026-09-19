@@ -24,7 +24,7 @@ fn data_str(data: &[u8], pos: u32) -> &str {
     return "";
   }
   let slice = &data[pos..];
-  let len = slice.iter().position(|&b| b == 0).unwrap_or(slice.len());
+  let len = memchr::memchr(0, slice).unwrap_or(slice.len());
   from_utf8(&slice[..len]).unwrap_or("")
 }
 

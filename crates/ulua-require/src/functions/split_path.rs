@@ -5,7 +5,7 @@ pub(crate) const PATH_SEPARATOR_ALT: u8 = b'\\';
 
 /// 对应 cpp `splitPath`：按首个分隔符切分，无分隔符时第二段为空。
 pub fn split_path(path: &[u8]) -> (&[u8], &[u8]) {
-  match path.iter().position(|&b| b == PATH_SEPARATOR) {
+  match memchr::memchr(PATH_SEPARATOR, path) {
     Some(pos) => (&path[..pos], &path[pos + 1..]),
     None => (path, &[]),
   }

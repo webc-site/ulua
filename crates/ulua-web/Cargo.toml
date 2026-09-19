@@ -18,6 +18,7 @@ console_error_panic_hook = { version = "0.1", optional = true }
 ulua-analysis = { path = "../ulua-analysis", version = "0.1.2" }
 ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
 ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.2" }
+ulua-cli-lib = { path = "../ulua-cli-lib", version = "0.1.2" }
 ulua-common = { path = "../ulua-common", version = "0.1.2" }
 ulua-compiler = { path = "../ulua-compiler", version = "0.1.2" }
 ulua-config = { path = "../ulua-config", version = "0.1.2" }

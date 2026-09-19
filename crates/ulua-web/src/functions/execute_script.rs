@@ -10,11 +10,10 @@
 use core::{cell::RefCell, ffi::c_char};
 use std::ffi::CString;
 
+use ulua_cli_lib::records::lua_state_guard::LuaStateGuard;
 use ulua_common::set_luau_bool_flags;
 use ulua_vm::{
-  functions::{
-    lua_close::lua_close, lua_l_newstate::lua_l_newstate, lua_l_sandboxthread::lua_l_sandboxthread,
-  },
+  functions::{lua_l_newstate::lua_l_newstate, lua_l_sandboxthread::lua_l_sandboxthread},
   type_aliases::lua_state::lua_State,
 };
 
@@ -44,7 +43,8 @@ pub unsafe extern "C-unwind" fn execute_script(source: *const c_char) -> *const 
 
   // create new state + setup state + sandbox thread + run code,
   // 直至 unique_ptr 析构 (lua_close) —— unsafe 范围收敛到 VM 调用序列
-  let l: *mut lua_State = lua_l_newstate();
+  let global_state = LuaStateGuard(lua_l_newstate());
+  let l: *mut lua_State = global_state.0;
 
   // unique_ptr<lua_State, lua_close> globalState(luaL_newstate(), lua_close)：
   // cpp 直接把可能为 null 的状态交给 setupState，这里改为显式回报错误，
@@ -63,12 +63,7 @@ pub unsafe extern "C-unwind" fn execute_script(source: *const c_char) -> *const 
     // run code + collect error
     // cstr_cow：合法 UTF-8 时零拷贝；原 `str::from_utf8_unchecked` 在非
     // UTF-8 输入下是 UB，已修复。
-    let result = run_code(l, &source_str);
-
-    // unique_ptr destructor: lua_close(l)
-    lua_close(l);
-
-    result
+    run_code(l, &source_str)
   };
 
   RESULT.with(|r| cache_result(r, result))

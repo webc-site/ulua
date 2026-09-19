@@ -711,6 +711,7 @@ dependencies = [
  "indexmap",
  "libc",
  "mach2",
+ "memchr",
  "smallvec",
  "windows-sys",
 ]
@@ -856,6 +857,7 @@ dependencies = [
 name = "ulua-require"
 version = "0.1.2"
 dependencies = [
+ "memchr",
  "ulua-ast",
  "ulua-bytecode",
  "ulua-common",
@@ -924,6 +926,7 @@ dependencies = [
  "ulua-analysis",
  "ulua-ast",
  "ulua-bytecode",
+ "ulua-cli-lib",
  "ulua-common",
  "ulua-compiler",
  "ulua-config",

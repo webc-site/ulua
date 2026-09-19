@@ -27,13 +27,14 @@ use alloc::string::{String, ToString};
 use core::{cell::RefCell, ffi::c_int, mem};
 use std::panic;
 
+use ulua_cli_lib::records::lua_state_guard::LuaStateGuard;
 use ulua_common::set_luau_bool_flags;
 use ulua_vm::{
   functions::{
-    install_lua_exception_panic_hook::install_lua_exception_panic_hook, lua_close::lua_close,
-    lua_gettop::lua_gettop, lua_l_newstate::lua_l_newstate, lua_l_openlibs::lua_l_openlibs,
-    lua_l_sandbox::lua_l_sandbox, lua_l_sandboxthread::lua_l_sandboxthread,
-    lua_l_tolstring::lua_l_tolstring, lua_pushcclosurek::lua_pushcclosurek,
+    install_lua_exception_panic_hook::install_lua_exception_panic_hook, lua_gettop::lua_gettop,
+    lua_l_newstate::lua_l_newstate, lua_l_openlibs::lua_l_openlibs, lua_l_sandbox::lua_l_sandbox,
+    lua_l_sandboxthread::lua_l_sandboxthread, lua_l_tolstring::lua_l_tolstring,
+    lua_pushcclosurek::lua_pushcclosurek,
   },
   macros::{lua_pop::lua_pop, lua_setglobal::lua_setglobal},
   records::lua_exception::lua_exception,
@@ -184,7 +185,8 @@ pub fn run(source: &str) -> RunResult {
   // Reset the capture Buffer for this run.
   PRINT_BUFFER.with(|b| b.borrow_mut().clear());
 
-  let l: *mut lua_State = lua_l_newstate();
+  let global_state = LuaStateGuard(lua_l_newstate());
+  let l: *mut lua_State = global_state.0;
   if l.is_null() {
     return RunResult {
       output: String::new(),
@@ -204,10 +206,7 @@ pub fn run(source: &str) -> RunResult {
     lua_l_sandbox(l);
     lua_l_sandboxthread(l);
 
-    let error = run_code(l, source);
-
-    lua_close(l);
-    error
+    run_code(l, source)
   };
 
   let output = PRINT_BUFFER.with(|b| mem::take(&mut *b.borrow_mut()));

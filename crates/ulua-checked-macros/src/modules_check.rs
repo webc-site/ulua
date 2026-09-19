@@ -36,11 +36,16 @@ pub(crate) fn check(
 ) -> Result<(), Vec<ulua_rt::TypeDiagnostic>> {
   let mut modules = Vec::with_capacity(entries.len() + 1);
   modules.push((root_module.clone(), root_source.to_string()));
+  let mut seen = std::collections::HashSet::new();
+  seen.insert(root_module.as_str());
 
   for entry in entries {
     let name = entry.name.value();
     if name == root_module {
       return Err(diag(&root_module, "module map duplicates the root module"));
+    }
+    if !seen.insert(name.as_str()) {
+      return Err(diag(&name, "duplicate module name in module map"));
     }
     let source = load(&entry.source_or_path).map_err(|message| diag(&name, &message))?;
     modules.push((name, source));

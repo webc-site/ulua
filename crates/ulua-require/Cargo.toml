@@ -13,6 +13,7 @@ categories = ["development-tools"]
 crate-type = ["rlib"]
 
 [dependencies]
+memchr = "2.8.3"
 ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
 ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.2" }
 ulua-common = { path = "../ulua-common", version = "0.1.2" }

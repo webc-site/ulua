@@ -16,15 +16,19 @@ const BUF_LEN: usize = 4096;
 /// 返回指针在下一次调用前有效（与上游同义），故不按线程拆分。
 static mut BUF: [c_char; BUF_LEN] = [0; BUF_LEN];
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-/// Write `s` into `buf` as a NUL-terminated C string, truncating if needed
-/// (the pure-Rust stand-in for the original `snprintf` calls, which have no
-/// symbol to bind on `wasm32-unknown-unknown` and trapped in the browser).
-unsafe fn write_c_str(buf: &mut [c_char], s: &str) {
+/// Write the concatenation of `parts` into `buf` as a NUL-terminated C string,
+/// truncating if needed (the pure-Rust stand-in for the original `snprintf`
+/// calls, which have no symbol to bind on `wasm32-unknown-unknown` and trapped
+/// in the browser). 数字段由 `itoa` 格式化后作为 part 传入，避免每帧 `format!`
+/// 堆分配。
+unsafe fn write_c_str(buf: &mut [c_char], parts: &[&str]) {
   unsafe {
-    let n = s.len().min(buf.len() - 1);
-    copy_nonoverlapping(s.as_ptr() as *const c_char, buf.as_mut_ptr(), n);
+    let mut n = 0;
+    for part in parts {
+      let take = part.len().min(buf.len() - 1 - n);
+      copy_nonoverlapping(part.as_ptr() as *const c_char, buf.as_mut_ptr().add(n), take);
+      n += take;
+    }
     buf[n] = 0;
   }
 }

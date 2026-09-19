@@ -891,7 +891,7 @@ impl FromLua for Error {
       // Any other Lua value converts to a runtime error carrying its
       // string form (mirrors mlua's `convert::<Error>`).
       Value::String(s) => Error::RuntimeError(s.to_string_lossy()),
-      other => Error::RuntimeError(other.to_string().unwrap_or_default()),
+      other => Error::RuntimeError(other.to_string()?),
     })
   }
 }

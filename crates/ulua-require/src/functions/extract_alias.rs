@@ -9,7 +9,7 @@ pub fn extract_alias(path: &[u8]) -> &[u8] {
     path
   };
 
-  match rest.iter().position(|&b| b == PATH_SEPARATOR) {
+  match memchr::memchr(PATH_SEPARATOR, rest) {
     Some(pos) => &rest[..pos],
     None => rest,
   }

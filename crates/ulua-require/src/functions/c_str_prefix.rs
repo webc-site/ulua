@@ -9,7 +9,7 @@ const INLINE_BUFFER_SIZE: usize = 128;
 /// 对应 cpp `std::string::c_str()` 的字节视图：按首个 NUL 截断。
 /// 返回切片保证不含 NUL（Lua 字符串是字节串，非 UTF-8）。
 pub(crate) fn c_str_prefix(s: &[u8]) -> &[u8] {
-  let end = s.iter().position(|&b| b == 0).unwrap_or(s.len());
+  let end = memchr::memchr(0, s).unwrap_or(s.len());
   &s[..end]
 }
 

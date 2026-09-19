@@ -2873,7 +2873,7 @@ fn conformance_native_userdata() {
       conformance_native_userdata_setup::conformance_native_userdata_setup,
       default_codegen_options::default_codegen_options, run_conformance::run_conformance,
     },
-    methods::lowering_fixture_initialize_codegen::{
+    functions::codegen_ir_hook_callbacks::{
       userdata_access_bytecode_type_callback, userdata_access_callback,
       userdata_metamethod_bytecode_type_callback, userdata_metamethod_callback,
       userdata_namecall_bytecode_type_callback, userdata_namecall_callback,
@@ -3562,7 +3562,7 @@ fn conformance_vector() {
       conformance_vector_setup::conformance_vector_setup,
       default_codegen_options::default_codegen_options, run_conformance::run_conformance,
     },
-    methods::lowering_fixture_initialize_codegen::{
+    functions::codegen_ir_hook_callbacks::{
       vector_access_bytecode_type_callback, vector_access_callback,
       vector_namecall_bytecode_type_callback, vector_namecall_callback,
     },

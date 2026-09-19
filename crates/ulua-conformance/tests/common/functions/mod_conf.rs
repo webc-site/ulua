@@ -13,6 +13,8 @@ pub mod c_alloc;
 pub mod c_yielding_iterator;
 #[path = "c_yielding_iterator_continuation.rs"]
 pub mod c_yielding_iterator_continuation;
+#[path = "codegen_ir_hook_callbacks.rs"]
+pub mod codegen_ir_hook_callbacks;
 #[path = "conformance_api_atoms_useratom.rs"]
 pub mod conformance_api_atoms_useratom;
 #[path = "conformance_api_calls_check_not_yieldable.rs"]

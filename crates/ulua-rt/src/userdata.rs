@@ -845,7 +845,7 @@ fn build_userdata_metatable(
       match &user_newindex {
         Some(f) => f.call::<()>((ud, key, val)),
         None => {
-          let name = key.to_string().unwrap_or_default();
+          let name = key.to_string()?;
           Err(Error::RuntimeError(format!(
             "attempt to set unknown field '{name}' on userdata"
           )))
