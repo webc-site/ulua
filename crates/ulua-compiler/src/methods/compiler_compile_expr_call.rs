@@ -14,7 +14,6 @@ use ulua_common::{
 };
 
 use crate::{
-  enums::type_constant_folding::Type::Number,
   functions::{
     get_builtin::get_builtin, get_builtin_info::get_builtin_info, sref_compiler::sref_ast_name,
   },
@@ -22,6 +21,7 @@ use crate::{
     builtin_info::BuiltinInfo,
     compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT, ERR_EXCEEDED_JUMP_DISTANCE_LIMIT},
     compiler::Compiler,
+    constant::Constant,
   },
 };
 
@@ -163,15 +163,13 @@ impl Compiler {
       {
         let fc = self.get_constant(*expr_ref.args.data.add(1));
         let wc = self.get_constant(*expr_ref.args.data.add(2));
-        let fi = if fc.r#type == Number {
-          fc.data.value_number as i32
-        } else {
-          -1
+        let fi = match fc {
+          Constant::Number(n) => n as i32,
+          _ => -1,
         };
-        let wi = if wc.r#type == Number {
-          wc.data.value_number as i32
-        } else {
-          -1
+        let wi = match wc {
+          Constant::Number(n) => n as i32,
+          _ => -1,
         };
         // Widen the add: `fi`/`wi` are folded user constants and `fi + wi`
         // overflows `int` for huge fields (UB in C++; panic w/ overflow-checks).

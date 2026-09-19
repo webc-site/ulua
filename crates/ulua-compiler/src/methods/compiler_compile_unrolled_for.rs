@@ -3,14 +3,14 @@ use core::ptr::null_mut;
 use ulua_ast::records::{ast_node::AstNode, ast_stat::AstStat, ast_stat_for::AstStatFor};
 
 use crate::{
-  enums::{type_compiler::Type as LoopJumpType, type_constant_folding::Type},
+  enums::type_compiler::Type as LoopJumpType,
   functions::{
     undo_changes_constant_folding::undo_changes_expr,
     undo_changes_constant_folding_alt_b::undo_changes_local,
   },
   records::{
     compiler::Compiler,
-    constant::{Constant, ConstantData},
+    constant::Constant,
     r#loop::Loop,
     loop_jump::LoopJump,
   },
@@ -41,13 +41,8 @@ impl Compiler {
       self.local_changes.clear();
 
       for iv in 0..trip_count {
-        *self.locstants.get_or_insert(stat_ref.var) = Constant {
-          r#type: Type::Number,
-          string_length: 0,
-          data: ConstantData {
-            value_number: from + f64::from(iv) * step,
-          },
-        };
+        *self.locstants.get_or_insert(stat_ref.var) =
+          Constant::Number(from + f64::from(iv) * step);
 
         self.fold_constants(stat_ref.body as *mut AstNode, iv == 0);
 
@@ -81,7 +76,7 @@ impl Compiler {
 
       self.loops.pop();
 
-      self.locstants.get_or_insert(stat_ref.var).r#type = Type::Unknown;
+      *self.locstants.get_or_insert(stat_ref.var) = Constant::Unknown;
 
       undo_changes_expr(&mut self.constants, &self.expr_changes);
       undo_changes_local(&mut self.locstants, &self.local_changes);

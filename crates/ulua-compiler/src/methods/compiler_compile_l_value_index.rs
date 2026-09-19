@@ -2,9 +2,9 @@ use ulua_ast::records::ast_expr::AstExpr;
 use ulua_bytecode::records::string_ref::StringRef;
 
 use crate::{
-  enums::{kind::Kind, type_constant_folding::Type},
+  enums::kind::Kind,
   functions::sref_compiler_alt_c::sref_ast_array_c_char,
-  records::{compiler::Compiler, l_value::LValue, reg_scope::RegScope},
+  records::{compiler::Compiler, constant::Constant, l_value::LValue, reg_scope::RegScope},
 };
 
 impl Compiler {
@@ -18,22 +18,23 @@ impl Compiler {
   ) -> LValue {
     unsafe {
       let cv = self.get_constant(index);
-      if cv.r#type == Type::Number && {
-        let value_number = cv.data.value_number;
-        (1.0..=256.0).contains(&value_number) && (value_number as i32) as f64 == value_number
-      } {
-        let value_number = cv.data.value_number;
-        LValue {
-          kind: Kind::IndexNumber,
-          reg,
-          upval: 0,
-          index: 0,
-          number: (value_number as i32 - 1) as u8,
-          name: StringRef::default(),
-          location: (*index).base.location,
+      match cv {
+        // 整数下标 1..=256 走 IndexNumber 快路径
+        Constant::Number(value_number)
+          if (1.0..=256.0).contains(&value_number)
+            && (value_number as i32) as f64 == value_number =>
+        {
+          LValue {
+            kind: Kind::IndexNumber,
+            reg,
+            upval: 0,
+            index: 0,
+            number: (value_number as i32 - 1) as u8,
+            name: StringRef::default(),
+            location: (*index).base.location,
+          }
         }
-      } else if cv.r#type == Type::String {
-        LValue {
+        Constant::Str(_) => LValue {
           kind: Kind::IndexName,
           reg,
           upval: 0,
@@ -41,9 +42,8 @@ impl Compiler {
           number: 0,
           name: sref_ast_array_c_char(cv.get_string()),
           location: (*index).base.location,
-        }
-      } else {
-        LValue {
+        },
+        _ => LValue {
           kind: Kind::IndexExpr,
           reg,
           upval: 0,
@@ -51,7 +51,7 @@ impl Compiler {
           number: 0,
           name: StringRef::default(),
           location: (*index).base.location,
-        }
+        },
       }
     }
   }

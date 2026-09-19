@@ -48,7 +48,9 @@ pub(crate) unsafe fn lua_v_doarithimpl(
         TMS::TmSub => return set_vec_binop(ra, vb, vc, |a, b| a - b),
         TMS::TmMul => return set_vec_binop(ra, vb, vc, |a, b| a * b),
         TMS::TmDiv => return set_vec_binop(ra, vb, vc, |a, b| a / b),
-        TMS::TmIDiv => return set_vec_binop(ra, vb, vc, |a, b| luai_numidiv(a as f64, b as f64) as f32),
+        TMS::TmIDiv => {
+          return set_vec_binop(ra, vb, vc, |a, b| luai_numidiv(a as f64, b as f64) as f32)
+        }
         // 一元取负：第二个通道指针不会被 `f` 读取，复用 vb
         TMS::TmUnm => return set_vec_binop(ra, vb, vb, |a, _| -a),
         _ => {}

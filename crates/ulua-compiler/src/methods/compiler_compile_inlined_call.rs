@@ -10,14 +10,13 @@ use ulua_ast::{
 use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_assert::LUAU_ASSERT};
 
 use crate::{
-  enums::type_constant_folding::Type,
   functions::{
     analyze_builtins::analyze_builtins, undo_changes_constant_folding::undo_changes_expr,
     undo_changes_constant_folding_alt_b::undo_changes_local,
   },
   records::{
     compiler::Compiler,
-    constant::{Constant, ConstantData},
+    constant::Constant,
     inline_arg::InlineArg,
     inline_frame::InlineFrame,
   },
@@ -25,15 +24,6 @@ use crate::{
 
 const K_INVALID_REG: u8 = 255;
 const K_DEFAULT_ALLOC_PC: u32 = !0u32;
-
-/// Type::Unknown 占位常量（值域无意义，对齐 C++ `{Constant::Type_Unknown}`）
-fn unknown_constant() -> Constant {
-  Constant {
-    r#type: Type::Unknown,
-    string_length: 0,
-    data: ConstantData { value_number: 0.0 },
-  }
-}
 
 impl Compiler {
   /// # Safety
@@ -90,7 +80,7 @@ impl Compiler {
             args.push(InlineArg {
               local,
               reg: reg + offset as u8,
-              value: unknown_constant(),
+              value: Constant::Unknown,
               allocpc,
               init: null_mut(),
             });
@@ -108,7 +98,7 @@ impl Compiler {
           args.push(InlineArg {
             local: var,
             reg,
-            value: unknown_constant(),
+            value: Constant::Unknown,
             allocpc,
             init: null_mut(),
           });
@@ -117,19 +107,11 @@ impl Compiler {
           args.push(InlineArg {
             local: var,
             reg: K_INVALID_REG,
-            value: Constant {
-              r#type: Type::Nil,
-              string_length: 0,
-              data: ConstantData { value_number: 0.0 },
-            },
+            value: Constant::Nil,
             allocpc: K_DEFAULT_ALLOC_PC,
             init: null_mut(),
           });
-        } else if let Some(cv) = self
-          .constants
-          .find(&arg)
-          .filter(|cv| cv.r#type != Type::Unknown)
-        {
+        } else if let Some(cv) = self.constants.find(&arg).filter(|cv| !cv.is_unknown()) {
           // since the argument is not mutated, we can simply fold the value into the expressions that need it
           args.push(InlineArg {
             local: var,
@@ -160,7 +142,7 @@ impl Compiler {
             args.push(InlineArg {
               local: var,
               reg: reg as u8,
-              value: unknown_constant(),
+              value: Constant::Unknown,
               allocpc: K_DEFAULT_ALLOC_PC,
               init: lv.map_or(null_mut(), |(_, init)| init),
             });
@@ -171,7 +153,7 @@ impl Compiler {
             args.push(InlineArg {
               local: var,
               reg: temp,
-              value: unknown_constant(),
+              value: Constant::Unknown,
               allocpc,
               init: arg,
             });
@@ -189,7 +171,7 @@ impl Compiler {
       // apply all evaluated arguments to the compiler state
       // note: locals use current startpc for debug info, although some of them have been computed earlier; this is similar to compileStatLocal
       for arg in &args {
-        if arg.value.r#type == Type::Unknown {
+        if arg.value.is_unknown() {
           self.push_local(arg.local, arg.reg, arg.allocpc);
           if !arg.init.is_null()
             && let Some(lv) = self.variables.find_mut(&arg.local)
@@ -282,7 +264,7 @@ impl Compiler {
       // clean up constant state for future inlining attempts
       for &local in func_args {
         if let Some(var) = self.locstants.find_mut(&local) {
-          var.r#type = Type::Unknown;
+          *var = Constant::Unknown;
         }
         if let Some(lv) = self.variables.find_mut(&local) {
           lv.init = null_mut();

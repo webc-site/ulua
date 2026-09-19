@@ -69,13 +69,10 @@ impl Compiler {
       if array_size == 0 && hash_size > 0 {
         for item in expr_ref.items.iter() {
           LUAU_ASSERT!(!item.key.is_null());
-          if let Some(ckey) = self.constants.find(&item.key)
-            && ckey.r#type == Type::Number
+          if let Some(Constant::Number(val)) = self.constants.find(&item.key)
+            && *val == (index_size + 1) as f64
           {
-            let val = ckey.data.value_number;
-            if val == (index_size + 1) as f64 {
-              index_size += 1;
-            }
+            index_size += 1;
           }
         }
         if hash_size == record_size + index_size {

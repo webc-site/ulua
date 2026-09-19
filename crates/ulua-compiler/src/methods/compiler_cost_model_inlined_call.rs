@@ -5,15 +5,11 @@ use ulua_ast::records::{
 };
 
 use crate::{
-  enums::type_constant_folding::Type,
   functions::{
     cost_model::model_cost, undo_changes_constant_folding::undo_changes_expr,
     undo_changes_constant_folding_alt_b::undo_changes_local,
   },
-  records::{
-    compiler::Compiler,
-    constant::{Constant, ConstantData},
-  },
+  records::{compiler::Compiler, constant::Constant},
 };
 
 impl Compiler {
@@ -47,13 +43,9 @@ impl Compiler {
         }
 
         if arg.is_null() {
-          *self.locstants.get_or_insert(var) = Constant {
-            r#type: Type::Nil,
-            string_length: 0,
-            data: ConstantData::default(),
-          };
+          *self.locstants.get_or_insert(var) = Constant::Nil;
         } else if let Some(cv) = self.constants.find(&arg)
-          && cv.r#type != Type::Unknown
+          && !cv.is_unknown()
         {
           *self.locstants.get_or_insert(var) = *cv;
         }
@@ -74,7 +66,7 @@ impl Compiler {
 
       for &arg in func_ref.args.iter() {
         if let Some(var) = self.locstants.find_mut(&arg) {
-          var.r#type = Type::Unknown;
+          *var = Constant::Unknown;
         }
       }
 
