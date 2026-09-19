@@ -68,7 +68,9 @@ impl Parser {
             let (args, args_location, _expr_location) = self.parse_call_list(null_mut());
 
             for &arg in args.iter() {
-              if !is_constant_literal(arg) && !is_literal_table(arg) {
+              // SAFETY: parse_call_list 的实参由 arena 分配，元素恒非空
+              let arg_expr = unsafe { &*arg };
+              if !is_constant_literal(arg_expr) && !is_literal_table(arg_expr) {
                 self.report(
                   args_location,
                   format_args!("Only literals can be passed as arguments for attributes"),
