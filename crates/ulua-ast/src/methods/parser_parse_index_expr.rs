@@ -24,9 +24,8 @@ impl Parser {
       ))
     };
 
-    if self.options.store_cst_data {
-      let cst_node = unsafe {
-        (*self.allocator).alloc(CstExprIndexExpr::new(
+    self.attach_cst(expr, |alloc| {
+      alloc.alloc(CstExprIndexExpr::new(
           match_bracket.position,
           if closing_bracket_found {
             close_bracket_position
@@ -34,11 +33,7 @@ impl Parser {
             Position::missing()
           },
         ))
-      };
-      self
-        .cst_node_map
-        .try_insert(expr as *mut AstNode, cst_node as *mut CstNode);
-    }
+    });
 
     expr as *mut AstExpr
   }

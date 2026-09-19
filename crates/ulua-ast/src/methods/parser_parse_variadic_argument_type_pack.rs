@@ -16,12 +16,7 @@ impl Parser {
           name.name,
         ))
       };
-      if self.options.store_cst_data {
-        let cst_node = unsafe { (*self.allocator).alloc(CstTypePackGeneric::new(end.begin)) };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-      }
+      self.attach_cst(node, |alloc| alloc.alloc(CstTypePackGeneric::new(end.begin)));
       node as *mut AstTypePack
     } else {
       let variadic_annotation = self.parse_type(false);

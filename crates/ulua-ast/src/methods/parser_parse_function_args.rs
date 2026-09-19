@@ -95,18 +95,13 @@ impl Parser {
         ))
       };
 
-      if self.options.store_cst_data {
-        let cst_node = unsafe {
-          (*self.allocator).alloc(CstExprCall::new(
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstExprCall::new(
             Position::missing(),
             Position::missing(),
             AstArray::EMPTY,
           ))
-        };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-      }
+      });
 
       node as *mut AstExpr
     } else if self.lexer.current().r#type == Type::RAW_STRING
@@ -129,18 +124,13 @@ impl Parser {
         ))
       };
 
-      if self.options.store_cst_data {
-        let cst_node = unsafe {
-          (*self.allocator).alloc(CstExprCall::new(
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstExprCall::new(
             Position::missing(),
             Position::missing(),
             AstArray::EMPTY,
           ))
-        };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-      }
+      });
 
       node as *mut AstExpr
     } else {

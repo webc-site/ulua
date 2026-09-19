@@ -126,17 +126,12 @@ impl Parser {
       let node = unsafe {
         (*self.allocator).alloc(AstTypeUnion::new(location, self.copy_temp_vector_t(&parts)))
       };
-      if self.options.store_cst_data {
-        let cst_node = unsafe {
-          (*self.allocator).alloc(CstTypeUnion::new(
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstTypeUnion::new(
             leading_position,
             self.copy_temp_vector_t(&separator_positions),
           ))
-        };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-      }
+      });
       return node as *mut AstType;
     }
 
@@ -147,17 +142,12 @@ impl Parser {
           self.copy_temp_vector_t(&parts),
         ))
       };
-      if self.options.store_cst_data {
-        let cst_node = unsafe {
-          (*self.allocator).alloc(CstTypeIntersection::new(
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstTypeIntersection::new(
             leading_position,
             self.copy_temp_vector_t(&separator_positions),
           ))
-        };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-      }
+      });
       return node as *mut AstType;
     }
 

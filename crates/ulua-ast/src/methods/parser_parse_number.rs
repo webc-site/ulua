@@ -79,19 +79,14 @@ impl Parser {
         })
       };
 
-      if self.options.store_cst_data {
-        let cst_node = unsafe {
-          (*self.allocator).alloc(CstExprConstantInteger {
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstExprConstantInteger {
             base: CstNode {
               class_index: CstExprConstantInteger::CLASS_INDEX,
             },
             value: source_data,
           })
-        };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-      }
+      });
 
       node as *mut AstExpr
     } else {
@@ -117,19 +112,14 @@ impl Parser {
         })
       };
 
-      if self.options.store_cst_data {
-        let cst_node = unsafe {
-          (*self.allocator).alloc(CstExprConstantNumber {
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstExprConstantNumber {
             base: CstNode {
               class_index: CstExprConstantNumber::CLASS_INDEX,
             },
             value: source_data,
           })
-        };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-      }
+      });
 
       node as *mut AstExpr
     }

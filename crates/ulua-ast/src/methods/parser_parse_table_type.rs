@@ -268,11 +268,8 @@ impl Parser {
 
     if self.options.store_cst_data {
       let cst_items_array = self.copy_temp_vector_t(&cst_items);
-      let cst_node =
-        unsafe { (*self.allocator).alloc(CstTypeTable::new(cst_items_array, is_array)) };
       self
-        .cst_node_map
-        .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
+        .attach_cst(node, |alloc| alloc.alloc(CstTypeTable::new(cst_items_array, is_array)));
     }
 
     node as *mut AstType

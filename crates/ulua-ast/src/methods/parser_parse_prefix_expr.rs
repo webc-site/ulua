@@ -1,9 +1,8 @@
 use crate::{
   enums::type_lexer::Type,
   records::{
-    ast_expr::AstExpr, ast_expr_group::AstExprGroup, ast_node::AstNode,
-    cst_expr_group::CstExprGroup, cst_node::CstNode, location::Location, match_lexeme::MatchLexeme,
-    parser::Parser, position::Position,
+    ast_expr::AstExpr, ast_expr_group::AstExprGroup, cst_expr_group::CstExprGroup,
+    location::Location, match_lexeme::MatchLexeme, parser::Parser, position::Position,
   },
 };
 
@@ -41,10 +40,7 @@ impl Parser {
         } else {
           Position::missing()
         };
-        let cst_node = unsafe { (*self.allocator).alloc(CstExprGroup::new(close_pos)) };
-        self
-          .cst_node_map
-          .try_insert(expr_group as *mut AstNode, cst_node as *mut CstNode);
+        self.attach_cst(expr_group, |alloc| alloc.alloc(CstExprGroup::new(close_pos)));
       }
 
       expr_group as *mut AstExpr

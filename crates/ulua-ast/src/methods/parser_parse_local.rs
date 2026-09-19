@@ -59,17 +59,12 @@ impl Parser {
         (*self.allocator).alloc(AstStatLocalFunction::new(location, var, body, is_const))
       };
 
-      if self.options.store_cst_data {
-        let cst_node = unsafe {
-          (*self.allocator).alloc(CstStatLocalFunction::new(
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstStatLocalFunction::new(
             keyword_position,
             function_keyword_position,
           ))
-        };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-      }
+      });
 
       node as *mut AstStat
     } else {
@@ -146,18 +141,13 @@ impl Parser {
         ))
       };
 
-      if self.options.store_cst_data {
-        let cst_node = unsafe {
-          (*self.allocator).alloc(CstStatLocal::new(
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstStatLocal::new(
             self.extract_annotation_colon_positions(&names),
             vars_comma_positions,
             self.copy_temp_vector_t(&values_comma_positions),
           ))
-        };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-      }
+      });
 
       // const 声明必然值不够时（如 `const foo`、`const bar, baz = 42`）报错，
       // 但声明本身仍合法，按原样返回节点。

@@ -105,18 +105,13 @@ impl Parser {
         let node = unsafe {
           (*self.allocator).alloc(AstTypeSingletonString::new(start, value)) as *mut AstType
         };
-        if self.options.store_cst_data {
-          let cst_node = unsafe {
-            (*self.allocator).alloc(CstTypeSingletonString::new(
+        self.attach_cst(node, |alloc| {
+          alloc.alloc(CstTypeSingletonString::new(
               original_string,
               style,
               block_depth,
             ))
-          };
-          self
-            .cst_node_map
-            .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-        }
+        });
         return AstTypeOrPack {
           r#type: node,
           type_pack: null_mut(),
@@ -190,9 +185,8 @@ impl Parser {
             expr,
           )) as *mut AstType
         };
-        if self.options.store_cst_data {
-          let cst_node = unsafe {
-            (*self.allocator).alloc(CstTypeTypeof::new(
+        self.attach_cst(node, |alloc| {
+          alloc.alloc(CstTypeTypeof::new(
               if open_paren_found {
                 typeof_begin.location.begin
               } else {
@@ -204,11 +198,7 @@ impl Parser {
                 Position::missing()
               },
             ))
-          };
-          self
-            .cst_node_map
-            .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-        }
+        });
         return AstTypeOrPack {
           r#type: node,
           type_pack: null_mut(),
@@ -247,19 +237,14 @@ impl Parser {
           parameters,
         )) as *mut AstType
       };
-      if self.options.store_cst_data {
-        let cst_node = unsafe {
-          (*self.allocator).alloc(CstTypeReference::new(
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstTypeReference::new(
             prefix_point_position,
             parameters_opening_position,
             self.copy_temp_vector_t(&parameters_comma_positions),
             parameters_closing_position,
           ))
-        };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-      }
+      });
       return AstTypeOrPack {
         r#type: node,
         type_pack: null_mut(),

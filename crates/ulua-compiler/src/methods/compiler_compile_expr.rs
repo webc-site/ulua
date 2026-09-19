@@ -17,7 +17,6 @@ use ulua_bytecode::methods::bytecode_builder_get_string_hash::bytecode_builder_g
 use ulua_common::{enums::luau_opcode::LuauOpcode, fflag, macros::luau_assert::LUAU_ASSERT};
 
 use crate::{
-  enums::type_constant_folding::Type,
   functions::{sref_compiler::sref_ast_name, sref_compiler_alt_c::sref_ast_array_c_char},
   records::{
     compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},

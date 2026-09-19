@@ -1,6 +1,6 @@
 use crate::records::{
-  ast_node::AstNode, ast_stat::AstStat, cst_node::CstNode, cst_stat_do::CstStatDo, lexeme::Type,
-  match_lexeme::MatchLexeme, parser::Parser, position::Position,
+  ast_stat::AstStat, cst_stat_do::CstStatDo, lexeme::Type, match_lexeme::MatchLexeme,
+  parser::Parser, position::Position,
 };
 
 impl Parser {
@@ -36,10 +36,7 @@ impl Parser {
       } else {
         Position::missing()
       };
-      let cst_node = unsafe { (*self.allocator).alloc(CstStatDo::new(stats_start, end_position)) };
-      self
-        .cst_node_map
-        .try_insert(body as *mut AstNode, cst_node as *mut CstNode);
+      self.attach_cst(body, |alloc| alloc.alloc(CstStatDo::new(stats_start, end_position)));
     }
 
     body as *mut AstStat

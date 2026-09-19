@@ -85,19 +85,14 @@ impl Parser {
         ))
       };
 
-      if self.options.store_cst_data {
-        let cst_node = unsafe {
-          (*self.allocator).alloc(CstStatFor::new(
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstStatFor::new(
             varname.colon_position,
             equals_position,
             end_comma_position,
             step_comma_position,
           ))
-        };
-        self
-          .cst_node_map
-          .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-      }
+      });
 
       node as *mut AstStat
     } else {

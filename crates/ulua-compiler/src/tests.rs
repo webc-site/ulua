@@ -10,7 +10,6 @@ use ulua_ast::records::{
 use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
 
 use crate::{
-  enums::type_constant_folding::Type,
   functions::{
     bit_32::bit32, cbool::cbool, cnum::cnum, compute_cost::compute_cost,
     cstring_builtin_folding::cstring_str, cvector::cvector, escape_and_append::escape_and_append,
@@ -33,6 +32,30 @@ macro_rules! string_table {
     let names = AstNameTable::new(&mut allocator);
     (allocator, names)
   }};
+}
+
+/// 取出 Number 载荷；变体不符即测试失败
+fn as_number(c: Constant) -> f64 {
+  match c {
+    Constant::Number(v) => v,
+    other => panic!("expect Number, got {other:?}"),
+  }
+}
+
+/// 取出 Boolean 载荷；变体不符即测试失败
+fn as_boolean(c: Constant) -> bool {
+  match c {
+    Constant::Boolean(v) => v,
+    other => panic!("expect Boolean, got {other:?}"),
+  }
+}
+
+/// 取出 Vector 载荷；变体不符即测试失败
+fn as_vector(c: Constant) -> [f32; 4] {
+  match c {
+    Constant::Vector(v) => v,
+    other => panic!("expect Vector, got {other:?}"),
+  }
 }
 
 /// C++ `BytecodeBuilder::getImportId` 重载：各 id 占 10 位，前缀 1/2/3
@@ -114,10 +137,8 @@ fn encode_hash_size_is_log2_plus_one() {
 fn folds_number_arithmetic() {
   let (_alloc, mut names) = string_table!();
 
-  let mut fold = |op, la: Constant, ra: Constant| {
-    let result = fold_binary(op, &la, &ra, &mut names);
-    unsafe { result.data.value_number }
-  };
+  let mut fold =
+    |op, la: Constant, ra: Constant| as_number(fold_binary(op, &la, &ra, &mut names));
 
   assert_eq!(fold(AstExprBinaryOp::Add, cnum(1.5), cnum(2.25)), 3.75);
   assert_eq!(fold(AstExprBinaryOp::Sub, cnum(1.5), cnum(2.25)), -0.75);
@@ -133,11 +154,8 @@ fn folds_number_arithmetic() {
 fn folds_number_compare() {
   let (_alloc, mut names) = string_table!();
 
-  let mut fold = |op, la: Constant, ra: Constant| {
-    let result = fold_binary(op, &la, &ra, &mut names);
-    assert_eq!(result.r#type, Type::Boolean);
-    unsafe { result.data.value_boolean }
-  };
+  let mut fold =
+    |op, la: Constant, ra: Constant| as_boolean(fold_binary(op, &la, &ra, &mut names));
 
   assert!(fold(AstExprBinaryOp::CompareLt, cnum(1.0), cnum(2.0)));
   assert!(!fold(AstExprBinaryOp::CompareLt, cnum(2.0), cnum(1.0)));
@@ -154,17 +172,16 @@ fn folds_and_or_operands() {
   let (_alloc, mut names) = string_table!();
 
   let and_num = fold_binary(AstExprBinaryOp::And, &cnum(1.0), &cnum(2.0), &mut names);
-  assert_eq!(unsafe { and_num.data.value_number }, 2.0); // la 为真 → ra
+  assert_eq!(as_number(and_num), 2.0); // la 为真 → ra
 
   let and_false = fold_binary(AstExprBinaryOp::And, &cbool(false), &cnum(2.0), &mut names);
-  assert_eq!(and_false.r#type, Type::Boolean); // la 为假 → la
-  assert!(!unsafe { and_false.data.value_boolean });
+  assert!(!as_boolean(and_false)); // la 为假 → la
 
   let or_true = fold_binary(AstExprBinaryOp::Or, &cnum(0.0), &cnum(2.0), &mut names);
-  assert_eq!(unsafe { or_true.data.value_number }, 0.0); // la 为真 → la
+  assert_eq!(as_number(or_true), 0.0); // la 为真 → la
 
   let or_false = fold_binary(AstExprBinaryOp::Or, &cbool(false), &cnum(2.0), &mut names);
-  assert_eq!(unsafe { or_false.data.value_number }, 2.0); // la 为假 → ra
+  assert_eq!(as_number(or_false), 2.0); // la 为假 → ra
 }
 
 /// C++ foldBinary：向量四分量加法（含 w 分量）
@@ -175,13 +192,7 @@ fn folds_vector_add_all_components() {
   let ra = cvector(5.0, 6.0, 7.0, 8.0);
   let result = fold_binary(AstExprBinaryOp::Add, &la, &ra, &mut names);
 
-  assert_eq!(result.r#type, Type::Vector);
-  unsafe {
-    assert_eq!(result.data.value_vector[0], 6.0);
-    assert_eq!(result.data.value_vector[1], 8.0);
-    assert_eq!(result.data.value_vector[2], 10.0);
-    assert_eq!(result.data.value_vector[3], 12.0);
-  }
+  assert_eq!(as_vector(result), [6.0, 8.0, 10.0, 12.0], "四分量逐项相加");
 }
 
 /// C++ foldBinary：标量×向量（num-vec 分支）
@@ -191,13 +202,7 @@ fn folds_vector_scalar_mul() {
   let v = cvector(1.0, 2.0, 4.0, 0.0);
   let result = fold_binary(AstExprBinaryOp::Mul, &cnum(2.0), &v, &mut names);
 
-  assert_eq!(result.r#type, Type::Vector);
-  unsafe {
-    assert_eq!(result.data.value_vector[0], 2.0);
-    assert_eq!(result.data.value_vector[1], 4.0);
-    assert_eq!(result.data.value_vector[2], 8.0);
-    assert_eq!(result.data.value_vector[3], 0.0);
-  }
+  assert_eq!(as_vector(result), [2.0, 4.0, 8.0, 0.0]);
 }
 
 /// C++ foldBinary：向量×向量乘法，w 分量结果与 had_w 语义
@@ -208,13 +213,7 @@ fn folds_vector_mul_keeps_w_semantics() {
   let la = cvector(1.0, 2.0, 3.0, 1.0);
   let ra = cvector(2.0, 3.0, 4.0, 2.0);
   let result = fold_binary(AstExprBinaryOp::Mul, &la, &ra, &mut names);
-  assert_eq!(result.r#type, Type::Vector);
-  unsafe {
-    assert_eq!(result.data.value_vector[0], 2.0);
-    assert_eq!(result.data.value_vector[1], 6.0);
-    assert_eq!(result.data.value_vector[2], 12.0);
-    assert_eq!(result.data.value_vector[3], 2.0);
-  }
+  assert_eq!(as_vector(result), [2.0, 6.0, 12.0, 2.0]);
 }
 
 /// C++ foldBinary：字符串拼接，带长度上限
@@ -228,43 +227,36 @@ fn folds_string_concat() {
     &cstring_str("cd"),
     &mut names,
   );
-  assert_eq!(result.r#type, Type::String);
-  assert_eq!(result.string_length, 4);
+  let Constant::Str(s) = result else {
+    panic!("expect Str, got {result:?}");
+  };
+  assert_eq!(s.len, 4);
   assert_eq!(result.get_string_bytes(), b"abcd");
 
   // 超过 4096 上限不折叠
   let big_bytes = "x".repeat(4097); // 缓冲须存活到断言结束
   let big = cstring_str(&big_bytes);
   let result = fold_binary(AstExprBinaryOp::Concat, &big, &cstring_str("y"), &mut names);
-  assert_eq!(result.r#type, Type::Unknown);
+  assert!(result.is_unknown());
 }
 
 /// C++ foldUnary：Not/Minus/Len
 #[test]
 fn folds_unary_ops() {
   let not_true = fold_unary(AstExprUnaryOp::Not, &cbool(true));
-  assert_eq!(not_true.r#type, Type::Boolean);
-  assert!(!unsafe { not_true.data.value_boolean });
+  assert!(!as_boolean(not_true));
 
   let not_num = fold_unary(AstExprUnaryOp::Not, &cnum(0.0));
-  assert_eq!(not_num.r#type, Type::Boolean);
-  assert!(!unsafe { not_num.data.value_boolean }); // 非nil非false为真
+  assert!(!as_boolean(not_num)); // 非nil非false为真
 
   let minus = fold_unary(AstExprUnaryOp::Minus, &cnum(3.5));
-  assert_eq!(minus.r#type, Type::Number);
-  assert_eq!(unsafe { minus.data.value_number }, -3.5);
+  assert_eq!(as_number(minus), -3.5);
 
   let minus_vec = fold_unary(AstExprUnaryOp::Minus, &cvector(1.0, -2.0, 3.0, 0.0));
-  assert_eq!(minus_vec.r#type, Type::Vector);
-  unsafe {
-    assert_eq!(minus_vec.data.value_vector[0], -1.0);
-    assert_eq!(minus_vec.data.value_vector[1], 2.0);
-    assert_eq!(minus_vec.data.value_vector[2], -3.0);
-  }
+  assert_eq!(as_vector(minus_vec)[..3], [-1.0, 2.0, -3.0]);
 
   let len = fold_unary(AstExprUnaryOp::Len, &cstring_str("abc"));
-  assert_eq!(len.r#type, Type::Number);
-  assert_eq!(unsafe { len.data.value_number }, 3.0);
+  assert_eq!(as_number(len), 3.0);
 }
 
 /// C++ recordConstant：覆写已有常量前必须写入 change log，否则
@@ -326,5 +318,5 @@ fn record_constant_logs_overwrite_for_undo() {
 
   undo_changes_expr(visitor.constants, &expr_log);
   let restored = visitor.constants.find(&key).copied().unwrap();
-  assert_eq!(unsafe { restored.data.value_number }, 42.0);
+  assert_eq!(as_number(restored), 42.0);
 }

@@ -64,11 +64,9 @@ impl Parser {
     };
 
     if self.options.store_cst_data {
-      let cst_node =
-        unsafe { (*self.allocator).alloc(CstStatFunction::new(match_function.location.begin)) };
-      self
-        .cst_node_map
-        .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
+      self.attach_cst(node, |alloc| {
+        alloc.alloc(CstStatFunction::new(match_function.location.begin))
+      });
     }
 
     node

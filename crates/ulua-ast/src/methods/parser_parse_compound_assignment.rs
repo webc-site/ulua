@@ -36,12 +36,7 @@ impl Parser {
       ))
     };
 
-    if self.options.store_cst_data {
-      let cst_node = unsafe { (*self.allocator).alloc(CstStatCompoundAssign::new(op_position)) };
-      self
-        .cst_node_map
-        .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-    }
+    self.attach_cst(node, |alloc| alloc.alloc(CstStatCompoundAssign::new(op_position)));
 
     node as *mut AstStat
   }

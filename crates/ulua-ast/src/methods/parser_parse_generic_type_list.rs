@@ -77,15 +77,9 @@ impl Parser {
                   type_pack,
                 ))
               };
-              if self.options.store_cst_data {
-                let cst_node = unsafe {
-                  (*self.allocator)
-                    .alloc(CstGenericTypePack::new(ellipsis_position, equals_position))
-                };
-                self
-                  .cst_node_map
-                  .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-              }
+              self.attach_cst(node, |alloc| {
+                alloc.alloc(CstGenericTypePack::new(ellipsis_position, equals_position))
+              });
               name_packs.push_back(node);
             } else {
               let type_or_pack = self.parse_simple_type_or_pack();
@@ -108,15 +102,9 @@ impl Parser {
                   type_pack,
                 ))
               };
-              if self.options.store_cst_data {
-                let cst_node = unsafe {
-                  (*self.allocator)
-                    .alloc(CstGenericTypePack::new(ellipsis_position, equals_position))
-                };
-                self
-                  .cst_node_map
-                  .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-              }
+              self.attach_cst(node, |alloc| {
+                alloc.alloc(CstGenericTypePack::new(ellipsis_position, equals_position))
+              });
               name_packs.push_back(node);
             }
           } else {
@@ -134,17 +122,12 @@ impl Parser {
                 null_mut(),
               ))
             };
-            if self.options.store_cst_data {
-              let cst_node = unsafe {
-                (*self.allocator).alloc(CstGenericTypePack::new(
+            self.attach_cst(node, |alloc| {
+              alloc.alloc(CstGenericTypePack::new(
                   ellipsis_position,
                   Position::missing(),
                 ))
-              };
-              self
-                .cst_node_map
-                .try_insert(node as *mut AstNode, cst_node as *mut CstNode);
-            }
+            });
             name_packs.push_back(node);
           }
         } else {

@@ -19,7 +19,6 @@ use ulua_common::{
 };
 
 use crate::{
-  enums::type_constant_folding::Type,
   functions::sref_compiler_alt_c::sref_ast_array_c_char,
   records::{
     compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},

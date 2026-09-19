@@ -2,9 +2,9 @@ use core::{f64::consts::PI, slice::from_raw_parts};
 
 use ulua_ast::records::ast_name_table::AstNameTable;
 use ulua_common::enums::luau_builtin_function::{LuauBuiltinFunction, *};
+use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  enums::type_constant_folding::Type,
   functions::{
     bit_32::bit32,
     cbool::cbool,
@@ -55,17 +55,22 @@ fn ldexp(x: f64, e: i32) -> f64 {
   y * f64::from_bits(((e + 1023) as u64) << 52)
 }
 
-/// 读取数值常量：union 字段访问的 unsafe 集中在此一处，
-/// 调用方（下述 match 各臂）均已按 C++ 前置条件校验 `type == Number`。
+/// 读取数值常量：调用方（下述 match 各臂）均已按 C++ 前置条件校验 `Number`。
 #[inline]
 fn num(c: &Constant) -> f64 {
-  unsafe { c.data.value_number }
+  match c {
+    Constant::Number(v) => *v,
+    _ => {
+      LUAU_ASSERT!(false);
+      0.0
+    }
+  }
 }
 
 /// 恰好 `n` 个参数且全部为 Number（对应 C++ `count == n && args[i].type == Number` 链）。
 #[inline]
 fn all_num(args: &[Constant], n: usize) -> bool {
-  args.len() == n && args.iter().all(|a| a.r#type == Type::Number)
+  args.len() == n && args.iter().all(|a| matches!(a, Constant::Number(_)))
 }
 
 /// # Safety
@@ -190,11 +195,11 @@ pub unsafe fn fold_builtin(
     }
 
     LBF_MATH_MAX => {
-      if count >= 1 && args[0].r#type == Type::Number {
+      if count >= 1 && matches!(args[0], Constant::Number(_)) {
         // 折叠手写 max：NaN 语义须与 C++ `(a > r) ? a : r` 一致
         let mut r = num(&args[0]);
         for arg in &args[1..count] {
-          if arg.r#type != Type::Number {
+          if !matches!(arg, Constant::Number(_)) {
             return cvar();
           }
           let a = num(arg);
@@ -205,11 +210,11 @@ pub unsafe fn fold_builtin(
     }
 
     LBF_MATH_MIN => {
-      if count >= 1 && args[0].r#type == Type::Number {
+      if count >= 1 && matches!(args[0], Constant::Number(_)) {
         // 折叠手写 min：NaN 语义须与 C++ `(a < r) ? a : r` 一致
         let mut r = num(&args[0]);
         for arg in &args[1..count] {
-          if arg.r#type != Type::Number {
+          if !matches!(arg, Constant::Number(_)) {
             return cvar();
           }
           let a = num(arg);
@@ -272,10 +277,10 @@ pub unsafe fn fold_builtin(
     }
 
     LBF_BIT32_BAND => {
-      if count >= 1 && args[0].r#type == Type::Number {
+      if count >= 1 && matches!(args[0], Constant::Number(_)) {
         let mut r = bit32(num(&args[0]));
         for arg in &args[1..count] {
-          if arg.r#type != Type::Number {
+          if !matches!(arg, Constant::Number(_)) {
             return cvar();
           }
           r &= bit32(num(arg));
@@ -291,10 +296,10 @@ pub unsafe fn fold_builtin(
     }
 
     LBF_BIT32_BOR => {
-      if count >= 1 && args[0].r#type == Type::Number {
+      if count >= 1 && matches!(args[0], Constant::Number(_)) {
         let mut r = bit32(num(&args[0]));
         for arg in &args[1..count] {
-          if arg.r#type != Type::Number {
+          if !matches!(arg, Constant::Number(_)) {
             return cvar();
           }
           r |= bit32(num(arg));
@@ -304,10 +309,10 @@ pub unsafe fn fold_builtin(
     }
 
     LBF_BIT32_BXOR => {
-      if count >= 1 && args[0].r#type == Type::Number {
+      if count >= 1 && matches!(args[0], Constant::Number(_)) {
         let mut r = bit32(num(&args[0]));
         for arg in &args[1..count] {
-          if arg.r#type != Type::Number {
+          if !matches!(arg, Constant::Number(_)) {
             return cvar();
           }
           r ^= bit32(num(arg));
@@ -317,10 +322,10 @@ pub unsafe fn fold_builtin(
     }
 
     LBF_BIT32_BTEST => {
-      if count >= 1 && args[0].r#type == Type::Number {
+      if count >= 1 && matches!(args[0], Constant::Number(_)) {
         let mut r = bit32(num(&args[0]));
         for arg in &args[1..count] {
-          if arg.r#type != Type::Number {
+          if !matches!(arg, Constant::Number(_)) {
             return cvar();
           }
           r &= bit32(num(arg));
@@ -331,9 +336,9 @@ pub unsafe fn fold_builtin(
 
     LBF_BIT32_EXTRACT => {
       if count >= 2
-        && args[0].r#type == Type::Number
-        && args[1].r#type == Type::Number
-        && (count == 2 || args[2].r#type == Type::Number)
+        && matches!(args[0], Constant::Number(_))
+        && matches!(args[1], Constant::Number(_))
+        && (count == 2 || matches!(args[2], Constant::Number(_)))
       {
         let u = bit32(num(&args[0]));
         let f = num(&args[1]) as i32;
@@ -366,10 +371,10 @@ pub unsafe fn fold_builtin(
 
     LBF_BIT32_REPLACE => {
       if count >= 3
-        && args[0].r#type == Type::Number
-        && args[1].r#type == Type::Number
-        && args[2].r#type == Type::Number
-        && (count == 3 || args[3].r#type == Type::Number)
+        && matches!(args[0], Constant::Number(_))
+        && matches!(args[1], Constant::Number(_))
+        && matches!(args[2], Constant::Number(_))
+        && (count == 3 || matches!(args[3], Constant::Number(_)))
       {
         let n = bit32(num(&args[0]));
         let v = bit32(num(&args[1]));
@@ -402,18 +407,18 @@ pub unsafe fn fold_builtin(
     }
 
     LBF_TYPE => {
-      if count == 1 && args[0].r#type != Type::Unknown {
+      if count == 1 && !args[0].is_unknown() {
         return ctype(&args[0]);
       }
     }
 
     LBF_STRING_BYTE => {
-      if count == 1 && args[0].r#type == Type::String {
+      if count == 1 && matches!(args[0], Constant::Str(_)) {
         let s = args[0].get_string_bytes();
         if let Some(&b) = s.first() {
           return cnum(b as f64);
         }
-      } else if count == 2 && args[0].r#type == Type::String && args[1].r#type == Type::Number {
+      } else if count == 2 && matches!(args[0], Constant::Str(_)) && matches!(args[1], Constant::Number(_)) {
         let i = num(&args[1]) as i32;
         let s = args[0].get_string_bytes();
         if i > 0
@@ -428,7 +433,7 @@ pub unsafe fn fold_builtin(
       if count < K_STRING_CHAR_FOLD_LIMIT {
         let mut buf = [0u8; K_STRING_CHAR_FOLD_LIMIT];
         for (i, arg) in args.iter().enumerate() {
-          if arg.r#type != Type::Number {
+          if !matches!(arg, Constant::Number(_)) {
             return cvar();
           }
           let ch = num(arg) as i32;
@@ -453,20 +458,22 @@ pub unsafe fn fold_builtin(
     }
 
     LBF_STRING_LEN => {
-      if count == 1 && args[0].r#type == Type::String {
-        return cnum(args[0].string_length as f64);
+      if count == 1
+        && let Constant::Str(s) = &args[0]
+      {
+        return cnum(f64::from(s.len));
       }
     }
 
     LBF_TYPEOF => {
-      if count == 1 && args[0].r#type != Type::Unknown {
+      if count == 1 && !args[0].is_unknown() {
         return ctypeof(&args[0]);
       }
     }
 
     LBF_STRING_SUB => {
-      if count >= 2 && args[0].r#type == Type::String && args[1].r#type == Type::Number {
-        if count >= 3 && args[2].r#type != Type::Number {
+      if count >= 2 && matches!(args[0], Constant::Str(_)) && matches!(args[1], Constant::Number(_)) {
+        if count >= 3 && !matches!(args[2], Constant::Number(_)) {
           return cvar();
         }
         let str_bytes = args[0].get_string_bytes();
@@ -531,12 +538,12 @@ pub unsafe fn fold_builtin(
     }
 
     LBF_VECTOR => {
-      if count >= 2 && args[0].r#type == Type::Number && args[1].r#type == Type::Number {
+      if count >= 2 && matches!(args[0], Constant::Number(_)) && matches!(args[1], Constant::Number(_)) {
         if count == 2 {
           return cvector(num(&args[0]), num(&args[1]), 0.0, 0.0);
-        } else if count == 3 && args[2].r#type == Type::Number {
+        } else if count == 3 && matches!(args[2], Constant::Number(_)) {
           return cvector(num(&args[0]), num(&args[1]), num(&args[2]), 0.0);
-        } else if count == 4 && args[2].r#type == Type::Number && args[3].r#type == Type::Number {
+        } else if count == 4 && matches!(args[2], Constant::Number(_)) && matches!(args[3], Constant::Number(_)) {
           return cvector(num(&args[0]), num(&args[1]), num(&args[2]), num(&args[3]));
         }
       }
