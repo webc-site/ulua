@@ -13,14 +13,14 @@ use ulua_cli_lib::{
     get_source_files::get_source_files_from_slice, parse_level_arg::parse_level_arg,
     set_luau_flags_flags_alt_b::set_luau_flags, time_trace_unsupported::time_trace_unsupported,
   },
-  records::global_options::{reset_to_defaults, set_debug_level, set_optimization_level},
+  records::{
+    global_options::{reset_to_defaults, set_debug_level, set_optimization_level},
+    lua_state_guard::LuaStateGuard,
+  },
 };
 use ulua_code_gen::functions::is_supported::is_supported;
 use ulua_common::fflag::DebugLuauTimeTracing;
-use ulua_vm::{
-  functions::{lua_close::lua_close, lua_l_newstate::lua_l_newstate},
-  type_aliases::lua_state::lua_State,
-};
+use ulua_vm::{functions::lua_l_newstate::lua_l_newstate, type_aliases::lua_state::lua_State};
 
 use crate::functions::{
   counters_dump::counters_dump, counters_init::counters_init, coverage_dump::coverage_dump,
@@ -143,7 +143,9 @@ pub fn repl_main(args: &[impl AsRef<str>]) -> i32 {
     }
     0
   } else {
-    let l: *mut lua_State = lua_l_newstate();
+    // cpp Repl.cpp:844 `unique_ptr<lua_State, void (*)(lua_State*)>` —— 由守卫关闭
+    let global_state = LuaStateGuard(lua_l_newstate());
+    let l: *mut lua_State = global_state.0;
 
     unsafe {
       setup_state(l);
@@ -183,10 +185,7 @@ pub fn repl_main(args: &[impl AsRef<str>]) -> i32 {
       counters_dump("callgrind.out");
     }
 
-    unsafe {
-      lua_close(l);
-    }
-
+    // 守卫在块尾 drop → lua_close，早于任何 return/panic 逃逸
     if failed != 0 { 1 } else { 0 }
   }
 }

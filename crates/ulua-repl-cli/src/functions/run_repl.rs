@@ -1,9 +1,8 @@
 use core::{ffi::c_int, ptr::null_mut, sync::atomic::Ordering};
 
+use ulua_cli_lib::records::lua_state_guard::LuaStateGuard;
 use ulua_vm::{
-  functions::{
-    lua_close::lua_close, lua_l_newstate::lua_l_newstate, lua_l_sandboxthread::lua_l_sandboxthread,
-  },
+  functions::{lua_l_newstate::lua_l_newstate, lua_l_sandboxthread::lua_l_sandboxthread},
   type_aliases::lua_state::lua_State,
 };
 
@@ -19,8 +18,9 @@ use crate::functions::{
 // arm Ctrl-C handling, sandbox the thread and run the interactive loop.
 pub unsafe fn run_repl() {
   unsafe {
-    let global_state = lua_l_newstate();
-    let l: *mut lua_State = global_state;
+    // cpp Repl.cpp:553 `unique_ptr<lua_State, void (*)(lua_State*)>` —— 守卫负责关闭
+    let global_state = LuaStateGuard(lua_l_newstate());
+    let l: *mut lua_State = global_state.0;
 
     setup_state(l);
 
@@ -31,9 +31,9 @@ pub unsafe fn run_repl() {
     lua_l_sandboxthread(l);
     run_repl_impl(l);
 
-    // C++ wraps the state in a unique_ptr<lua_State, lua_close>; close it here.
+    // cpp 只在 unique_ptr 析构处关闭；这里先把全局信号处理引用的状态摘掉，
+    // 再由守卫在作用域退出时 lua_close（panic/unwind 路径同样生效）。
     REPL_STATE.store(null_mut(), Ordering::SeqCst);
-    lua_close(global_state);
   }
 }
 
