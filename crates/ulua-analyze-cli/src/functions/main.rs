@@ -118,16 +118,17 @@ fn run() -> i32 {
   let mut config_resolver = CliConfigResolver::new(mode);
 
   // Frontend frontend(solverMode, &fileResolver, &configResolver, frontendOptions);
+  // 两个解析器都是 main 的局部变量，地址不随 `frontend` 移动；构造函数已把它们存进
+  // `file_resolver` / `config_resolver` 字段（frontend_frontend_frontend.rs），
+  // 因此无需在构造后再写一次。`&raw mut` 只取地址、不派生 `&mut`，避免与
+  // `frontend` 内部的长期裸指针互相失效。
   let mut frontend = Frontend::frontend_solver_mode_file_resolver_config_resolver_frontend_options(
     solver_mode,
-    &mut file_resolver as *mut dyn FileResolver,
-    &mut config_resolver.base,
+    &raw mut file_resolver as *mut dyn FileResolver,
+    &raw mut config_resolver.base,
     frontend_options,
   );
-  // Re-establish the resolver pointers and the self-referential pointers now that
-  // `frontend` lives at a stable address (mirrors the project's wiring convention).
-  frontend.file_resolver = &mut file_resolver as *mut dyn FileResolver;
-  frontend.config_resolver = &mut config_resolver.base;
+  // 自引用指针（builtinTypes/moduleResolver(this)）由 wire_self_pointers 负责。
   unsafe {
     frontend.wire_self_pointers();
   }
