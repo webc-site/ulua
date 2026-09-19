@@ -1,6 +1,4 @@
-use crate::{
-  records::{ir_builder::IrBuilder, ir_const::IrConst, ir_op::IrOp},
-};
+use crate::records::{ir_builder::IrBuilder, ir_const::IrConst, ir_op::IrOp};
 
 impl IrBuilder {
   pub fn const_uint(&mut self, value: u32) -> IrOp {

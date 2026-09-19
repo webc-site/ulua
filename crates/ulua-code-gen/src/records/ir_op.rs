@@ -17,7 +17,10 @@ impl IrOp {
   pub fn kind(&self) -> IrOpKind {
     // KIND_MASK = 0xF 允许 0..=15，而 IrOpKind 仅 0..=9：非法值兜底为 None，避免构造非法 discriminant
     let raw = self.kind_and_index & Self::KIND_MASK;
-    debug_assert!(raw <= Self::KIND_MAX, "IrOp kind 掩码值 {raw} 超出 IrOpKind 范围");
+    debug_assert!(
+      raw <= Self::KIND_MAX,
+      "IrOp kind 掩码值 {raw} 超出 IrOpKind 范围"
+    );
     match raw {
       0 => IrOpKind::None,
       1 => IrOpKind::Undef,

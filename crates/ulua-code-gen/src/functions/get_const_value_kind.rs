@@ -1,7 +1,4 @@
-use crate::{
-  enums::ir_value_kind::IrValueKind,
-  records::ir_const::IrConst,
-};
+use crate::{enums::ir_value_kind::IrValueKind, records::ir_const::IrConst};
 
 pub fn get_const_value_kind(constant: &IrConst) -> IrValueKind {
   match constant {

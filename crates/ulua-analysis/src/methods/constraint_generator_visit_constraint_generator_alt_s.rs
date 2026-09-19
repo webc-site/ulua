@@ -20,9 +20,7 @@ use crate::{
     generalization_constraint::GeneralizationConstraint, property_type::Property,
     table_type::TableType,
   },
-  type_aliases::{
-    constraint_v::ConstraintV, scope_ptr_type::ScopePtr, type_variant::TypeVariant,
-  },
+  type_aliases::{constraint_v::ConstraintV, scope_ptr_type::ScopePtr, type_variant::TypeVariant},
 };
 fn ast_name_to_string(name: AstName) -> String {
   name.as_str_or_empty().to_string()
