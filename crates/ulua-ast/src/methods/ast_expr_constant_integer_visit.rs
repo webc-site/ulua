@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl AstVisitable for AstExprConstantInteger {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    visitor.visit_expr_constant_integer(self as *const Self as *mut c_void);
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    visitor.visit_expr_constant_integer(self as *mut Self as *mut c_void);
   }
 }

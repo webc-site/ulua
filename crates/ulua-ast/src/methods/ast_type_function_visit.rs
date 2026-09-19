@@ -7,8 +7,8 @@ use crate::{
 };
 
 impl AstVisitable for AstTypeFunction {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    if visitor.visit_type_function(self as *const Self as *mut c_void) {
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    if visitor.visit_type_function(self as *mut Self as *mut c_void) {
       unsafe {
         visit_type_list(visitor, &self.arg_types);
 

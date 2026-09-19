@@ -285,6 +285,7 @@ pub mod parser_expect_match_end_and_consume_fail_with_lookahead;
 pub mod parser_extract_annotation_colon_positions;
 pub mod parser_extract_string_details;
 pub mod parser_function_function;
+pub mod parser_guarded_parse;
 pub mod parser_increment_recursion_counter;
 pub mod parser_local_local;
 pub mod parser_match_lexeme_match_lexeme;

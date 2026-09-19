@@ -47,14 +47,17 @@ impl<T> AstArray<T> {
 }
 
 impl<T> AstArray<*mut T> {
-  /// 节点指针数组的可变引用迭代器：元素裸指针逐个解引用为 `&mut T`
-  /// （cpp `for (auto o : a->generics)` 遍历指针形态的安全对应）。
+  /// 节点指针数组的**只读**遍历：元素裸指针逐个解引用为 `&T`
+  /// （cpp `for (auto o : a->generics)` 读取形态的安全对应）。
   ///
-  /// 前提（visualize 打印器遍历场景成立）：元素均指向 arena 存活节点，同一
-  /// 节点的 `&mut` 生命周期互不重叠——arena 独占所有权，逐个用完即弃。
+  /// 这里刻意不产出 `&mut T`：`&self` 的共享借用下造可变引用是 noalias UB。
+  /// 真正需要写穿节点的调用点请直接用元素指针（`iter()` 给出 `&*mut T`），
+  /// 在自带的 `// SAFETY:` 注释下写入，或走 `rtti::ast_node_try_as_mut`。
   #[inline]
-  pub fn iter_mut_nodes(&self) -> impl Iterator<Item = &'_ mut T> {
-    self.as_slice().iter().map(|&p| unsafe { &mut *p })
+  pub fn iter_nodes(&self) -> impl Iterator<Item = &T> {
+    self.as_slice().iter().map(|&p|
+      // SAFETY: 元素由 arena 写入，指向存活节点；只取共享引用，不写。
+      unsafe { &*p })
   }
 }
 

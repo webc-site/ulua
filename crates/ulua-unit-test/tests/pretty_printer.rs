@@ -1006,7 +1006,6 @@ end
     let mut names = AstNameTable::new(&mut allocator);
     let parse_result = Parser::parse(
       example,
-      example.len(),
       &mut names,
       &mut allocator,
       parse_options,
@@ -1668,7 +1667,6 @@ mod pretty_printer_pretty_print_ast_stat_block_overload {
     let mut names = AstNameTable::new(&mut allocator);
     let result = Parser::parse(
       code,
-      code.len(),
       &mut names,
       &mut allocator,
       ParseOptions::default(),
@@ -1822,7 +1820,6 @@ mod pretty_printer_pretty_print_error_expr {
     let mut names = AstNameTable::new(&mut allocator);
     let parse_result = Parser::parse(
       code,
-      code.len(),
       &mut names,
       &mut allocator,
       ParseOptions::default(),
@@ -1855,7 +1852,6 @@ mod pretty_printer_pretty_print_error_stat {
     let mut names = AstNameTable::new(&mut allocator);
     let parse_result = Parser::parse(
       code,
-      code.len(),
       &mut names,
       &mut allocator,
       ParseOptions::default(),
@@ -1888,7 +1884,6 @@ mod pretty_printer_pretty_print_error_type {
     let mut names = AstNameTable::new(&mut allocator);
     let parse_result = Parser::parse(
       code,
-      code.len(),
       &mut names,
       &mut allocator,
       ParseOptions::default(),
@@ -1942,7 +1937,6 @@ mod pretty_printer_pretty_print_explicit_type_instantiations {
     let mut names = AstNameTable::new(&mut allocator);
     let parse_result = Parser::parse(
       code,
-      code.len(),
       &mut names,
       &mut allocator,
       ParseOptions::default(),
@@ -3135,7 +3129,6 @@ mod pretty_printer_pretty_print_to_string {
     let mut names = AstNameTable::new(&mut allocator);
     let parse_result = Parser::parse(
       code,
-      code.len(),
       &mut names,
       &mut allocator,
       ParseOptions::default(),
@@ -4068,7 +4061,6 @@ mod pretty_printer_roundtrip_generic_types {
 
     let parse_result = Parser::parse(
       code,
-      code.len(),
       &mut names,
       &mut allocator,
       ParseOptions::default(),
@@ -4108,7 +4100,6 @@ mod pretty_printer_roundtrip_types {
 
     let parse_result = Parser::parse(
       code,
-      code.len(),
       &mut names,
       &mut allocator,
       ParseOptions::default(),

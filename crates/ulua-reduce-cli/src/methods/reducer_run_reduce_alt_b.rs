@@ -25,7 +25,6 @@ impl Reducer {
     // 无需再 rebind。
     self.parse_result = Parser::parse(
       source,
-      source.len(),
       &mut self.name_table,
       &mut self.allocator,
       self.parse_options.clone(),

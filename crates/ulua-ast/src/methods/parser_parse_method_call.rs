@@ -47,7 +47,7 @@ impl Parser {
 
     if self.options.store_cst_data {
       // SAFETY: lookup_cst_node_mut 收口判型与下转，映射值指向 arena 存活节点
-      match self.lookup_cst_node_mut::<CstExprCall>(expr as *mut AstNode) {
+      match self.lookup_cst_node_mut::<CstExprCall>(unsafe { &mut *expr.cast::<AstNode>() }) {
         Some(cst_node) => cst_node.explicit_types = cst_type_arguments,
         None => ulua_common::LUAU_ASSERT!(false),
       }
@@ -55,7 +55,9 @@ impl Parser {
 
     if !expr.is_null() && !type_arguments.is_empty() {
       // SAFETY: expr 判空后指向 arena 存活节点，ast_node_try_as_mut 合并判型下转
-      if let Some(call) = unsafe { ast_node_try_as_mut::<AstExprCall>(expr as *mut AstNode) } {
+      if let Some(call) =
+        unsafe { ast_node_try_as_mut::<AstExprCall>(&mut *expr.cast::<AstNode>()) }
+      {
         call.type_arguments = type_arguments;
       }
     }

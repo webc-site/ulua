@@ -19,7 +19,6 @@ impl FragmentAutocompleteFixtureImpl {
     let parse_result = unsafe {
       Parser::parse(
         document.as_str(),
-        document.len(),
         names,
         &mut *allocator,
         parse_options,

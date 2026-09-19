@@ -19,7 +19,6 @@ pub fn parse_and_compile(src: &str, optimization_level: i32) -> Option<BytecodeB
   let mut names = AstNameTable::new(&mut allocator);
   let result = Parser::parse(
     src,
-    src.len(),
     &mut names,
     &mut allocator,
     ParseOptions::default(),

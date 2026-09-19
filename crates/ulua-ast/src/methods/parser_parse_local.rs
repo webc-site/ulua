@@ -161,7 +161,7 @@ impl Parser {
 
       // const 声明必然值不够时（如 `const foo`、`const bar, baz = 42`）报错，
       // 但声明本身仍合法，按原样返回节点。
-      if is_const && !is_enough_values(&mut values, vars.size()) {
+      if is_const && !is_enough_values(&values, vars.size()) {
         self.report(
           unsafe { (*node).base.base.location },
           format_args!("Missing initializer in const declaration"),

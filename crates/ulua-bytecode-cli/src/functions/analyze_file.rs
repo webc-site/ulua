@@ -50,7 +50,6 @@ pub fn analyze_file(
   let parse_options = ParseOptions::default();
   let parse_result = Parser::parse(
     source.as_str(),
-    source.len(),
     &mut names,
     &mut allocator,
     parse_options,

@@ -6,8 +6,8 @@ use crate::{
 };
 
 impl AstVisitable for AstExprGlobal {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    if visitor.visit_expr_global(self as *const Self as *mut c_void) {
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    if visitor.visit_expr_global(self as *mut Self as *mut c_void) {
       // AstExprGlobal has no children to recurse into (it only contains an AstName which is a value type).
     }
   }

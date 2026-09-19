@@ -19,7 +19,6 @@ pub fn parse_source_for_module(
 
   let parse_result = Parser::parse(
     source,
-    source.len(),
     Arc::get_mut(&mut source_module.names)
       .expect("SourceModule names must be uniquely owned while parsing"),
     Arc::get_mut(&mut source_module.allocator)

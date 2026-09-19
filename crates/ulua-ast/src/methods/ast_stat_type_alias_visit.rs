@@ -6,8 +6,8 @@ use crate::{
 };
 
 impl AstVisitable for AstStatTypeAlias {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    if visitor.visit_stat_type_alias(self as *const Self as *mut c_void) {
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    if visitor.visit_stat_type_alias(self as *mut Self as *mut c_void) {
       for &el in self.generics.iter() {
         unsafe {
           ast_node_visit(el as *mut AstNode, visitor);

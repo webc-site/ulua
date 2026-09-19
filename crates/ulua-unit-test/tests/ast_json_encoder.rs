@@ -108,7 +108,6 @@ mod ast_json_encoder_encode_ast_expr_error {
     let src = "a = ";
     let parse_result = Parser::parse(
       src,
-      src.len(),
       &mut fixture.names,
       &mut fixture.allocator,
       ParseOptions::default(),

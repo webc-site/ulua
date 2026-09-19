@@ -26,7 +26,6 @@ fn with_block<R>(src: &str, f: impl FnOnce(*mut AstStatBlock) -> R) -> R {
   let mut names = AstNameTable::new(&mut allocator);
   let result = Parser::parse(
     src,
-    src.len(),
     &mut names,
     &mut allocator,
     ParseOptions::default(),

@@ -52,7 +52,6 @@ pub unsafe fn parse_fragment(
   let parse_result = unsafe {
     Parser::parse(
       fragment_source,
-      parse_length,
       &mut *names,
       &mut fragment_alloc,
       parse_options,

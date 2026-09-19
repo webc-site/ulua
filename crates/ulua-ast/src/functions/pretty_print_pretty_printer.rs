@@ -32,7 +32,7 @@ pub(crate) fn pretty_print_impl(
   {
     let mut printer = Printer::new(&mut writer, cst_node_map);
     printer.write_types = write_types;
-    printer.visualize_block_ast_stat_block(block);
+    printer.visualize_block_ast_stat_block(&*block);
   }
 
   // 直接接管 writer 内部缓冲，省一次整串拷贝。fixup 后的字符串值可含
@@ -121,7 +121,6 @@ mod tests {
     let source = "print(\"\\xff\\x02\")";
     let parse_result = Parser::parse(
       source,
-      source.len(),
       &mut names,
       &mut allocator,
       // store_cst_data = false：无 CST 时走 StringWriter::string 路径。

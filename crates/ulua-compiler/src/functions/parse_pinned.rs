@@ -19,7 +19,6 @@ where
   let mut names = AstNameTable::new(&mut allocator);
   let result = Parser::parse(
     source,
-    source.as_ref().len(),
     &mut names,
     &mut allocator,
     parse_options.clone(),

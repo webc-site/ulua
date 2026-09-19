@@ -2,7 +2,7 @@ use core::ptr::null_mut;
 
 use ulua_ast::records::{
   ast_expr::AstExpr, ast_expr_index_name::AstExprIndexName, ast_expr_local::AstExprLocal,
-  ast_expr_table::AstExprTable, item_ast::ItemKind,
+  ast_expr_table::AstExprTable, ast_expr_table::ItemKind,
 };
 
 use crate::{

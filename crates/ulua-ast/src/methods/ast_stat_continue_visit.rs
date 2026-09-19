@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl AstVisitable for AstStatContinue {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    visitor.visit_stat_continue(self as *const Self as *mut c_void);
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    visitor.visit_stat_continue(self as *mut Self as *mut c_void);
   }
 }

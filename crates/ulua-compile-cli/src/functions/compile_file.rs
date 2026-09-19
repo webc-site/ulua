@@ -120,7 +120,6 @@ pub fn compile_file(
 
     let parse_result = Parser::parse(
       source.as_str(),
-      source.len(),
       &mut names,
       &mut allocator,
       parse_options,

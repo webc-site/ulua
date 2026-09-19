@@ -12,7 +12,6 @@ impl JsonEncoderFixture {
 
     Parser::parse(
       src,
-      src.len(),
       &mut self.names,
       &mut self.allocator,
       options,

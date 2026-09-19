@@ -1,22 +1,14 @@
-use core::{mem::replace, ptr::null_mut};
-use std::{
-  mem::take,
-  panic::{AssertUnwindSafe, catch_unwind, resume_unwind},
-};
+use core::ptr::null_mut;
 
-use ulua_common::{
-  macros::luau_timetrace_scope::LUAU_TIMETRACE_SCOPE, records::dense_hash_map::DenseHashMap,
-};
-
-use crate::{
-  functions::install_parse_error_panic_hook::install_parse_error_panic_hook,
-  records::{
-    allocator::Allocator, ast_name_table::AstNameTable, lexeme::Type, parse_error::ParseError,
-    parse_node_result::ParseNodeResult, parse_options::ParseOptions, parser::Parser,
-  },
+use crate::records::{
+  allocator::Allocator, ast_name_table::AstNameTable, lexeme::Type, parse_error::ParseError,
+  parse_node_result::ParseNodeResult, parse_options::ParseOptions, parser::Parser,
 };
 
 impl Parser {
+  /// cpp 模板 `Parser::runParse(buffer, bufferSize, ..., F f)`
+  /// （`Ast/src/Parser.cpp:248`）：单节点形态的解析入口。
+  ///
   /// `buffer` 为原始源码字节，长度即 `buffer.len()`（无独立的 size 参数）。
   pub fn run_parse<Node, F>(
     buffer: &[u8],
@@ -28,69 +20,17 @@ impl Parser {
   where
     F: FnOnce(&mut Parser) -> *mut Node,
   {
-    LUAU_TIMETRACE_SCOPE!("Parser::parse", "Parser");
-
-    // Silence the default panic-hook noise for the parser's exception-
-    // emulation unwinds (a caught `ParseError` is a normal syntax/limit
-    // error, not a crash).
-    install_parse_error_panic_hook();
-
-    let mut p = Parser::new(buffer, names, allocator as *mut Allocator, options);
-
-    // C++ try-catch is mapped to a result-like handling of ParseError panics if they occur,
-    // but the source uses a catch-block for fatal errors. In Luau's Parser, ParseError
-    // is often thrown via a panic-like mechanism in Rust or handled via explicit checks.
-    // Following the C++ logic:
-    let result = catch_unwind(AssertUnwindSafe(|| {
-      let expr = f(&mut p);
-      let current_lexeme = p.lexer.current();
-
-      let mut lines = current_lexeme.location.end.line;
-      if !buffer.is_empty() && buffer[buffer.len() - 1] != b'\n' {
-        lines += 1;
-      }
-
+    Self::guarded_parse(buffer, names, allocator, options, f, |p, root| {
+      // cpp: `Lexeme eof = p.lexer.next(); if (eof.type != Lexeme::Eof) { expr = nullptr; parseErrors.push_back(...); }`
       let eof = p.lexer.next_lexeme();
-      let mut root = expr;
 
       if eof.r#type != Type::EOF {
-        root = null_mut();
         p.parse_errors
           .push(ParseError::new(eof.location, "Expected end of file".into()));
+        return null_mut();
       }
 
-      ParseNodeResult {
-        root,
-        lines: lines as usize,
-        hotcomments: take(&mut p.hotcomments),
-        errors: take(&mut p.parse_errors),
-        comment_locations: take(&mut p.comment_locations),
-        cst_node_map: replace(&mut p.cst_node_map, DenseHashMap::new(null_mut())),
-      }
-    }));
-
-    match result {
-      Ok(res) => res,
-      Err(payload) => {
-        // If it's a ParseError (the C++ catch (ParseError& err) case)
-        // downcast 按值取回 Box<ParseError>，直接移动进错误表，省一次 clone
-        match payload.downcast::<ParseError>() {
-          Ok(err) => {
-            p.parse_errors.push(*err);
-
-            ParseNodeResult {
-              root: null_mut(),
-              lines: 0,
-              hotcomments: Vec::new(),
-              errors: take(&mut p.parse_errors),
-              comment_locations: Vec::new(),
-              cst_node_map: replace(&mut p.cst_node_map, DenseHashMap::new(null_mut())),
-            }
-          }
-          // Re-panic if it's not a ParseError
-          Err(payload) => resume_unwind(payload),
-        }
-      }
-    }
+      root
+    })
   }
 }

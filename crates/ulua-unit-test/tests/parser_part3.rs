@@ -287,7 +287,6 @@ fn parser_incomplete_method_call() {
   let mut names = AstNameTable::new(&mut allocator);
   let result = Parser::parse(
     source,
-    source.len(),
     &mut names,
     &mut allocator,
     ParseOptions::new(),
@@ -325,7 +324,6 @@ fn parser_incomplete_method_call_2() {
   let mut names = AstNameTable::new(&mut allocator);
   let result = Parser::parse(
     source,
-    source.len(),
     &mut names,
     &mut allocator,
     ParseOptions::new(),

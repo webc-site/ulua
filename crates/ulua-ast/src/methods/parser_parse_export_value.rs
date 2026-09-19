@@ -32,9 +32,11 @@ impl Parser {
       let local_stat = unsafe { &mut *local_stat };
       local_stat.is_exported = true;
 
-      // vars 为节点指针数组：iter_mut_nodes 逐个解引用为 &mut AstLocal，
-      // 判重、报错与 is_exported 写入全走安全代码
-      for local in local_stat.vars.iter_mut_nodes() {
+      // cpp: `for (AstLocal* local : statLocal->vars) { ...; local->isExported = true; }`
+      // —— 判重/报错按只读借用取值（iter_nodes），唯一的写入 `is_exported` 沿
+      // cpp 的指针形态经元素裸指针完成：从共享借用造 &mut 是 noalias UB。
+      for &local_ptr in local_stat.vars.iter_nodes_ptr() {
+        let local = unsafe { &*local_ptr };
         if !self.check_duplicate_export_value(local.name, local.location) {
           let stats = self.copy_initializer_list_t(&[stat]);
           return self.report_stat_error(
@@ -45,11 +47,13 @@ impl Parser {
           ) as *mut AstStat;
         }
 
-        local.is_exported = true;
+        // SAFETY: 元素指向 arena 存活的 AstLocal，解析期该 arena 独占
+        unsafe { (*local_ptr).is_exported = true };
       }
 
       if self.options.store_cst_data {
-        let cst_stat_local = self.lookup_cst_node_mut::<CstStatLocal>(stat as *mut AstNode);
+        let cst_stat_local =
+          self.lookup_cst_node_mut::<CstStatLocal>(&mut local_stat.base.base);
         LUAU_ASSERT!(cst_stat_local.is_some());
         if let Some(cst_stat_local) = cst_stat_local {
           cst_stat_local.declaration_keyword_position = keyword_position;

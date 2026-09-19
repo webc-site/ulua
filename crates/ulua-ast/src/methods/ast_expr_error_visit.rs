@@ -6,8 +6,8 @@ use crate::{
 };
 
 impl AstVisitable for AstExprError {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    if visitor.visit_expr_error(self as *const Self as *mut c_void) {
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    if visitor.visit_expr_error(self as *mut Self as *mut c_void) {
       for &expression in self.expressions.iter() {
         // SAFETY: ast_expr_visit 接收 arena 中存活节点的裸指针。
         unsafe { ast_expr_visit(expression, visitor) };

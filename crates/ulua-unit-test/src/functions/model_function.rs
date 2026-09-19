@@ -13,7 +13,6 @@ pub fn model_function(source: &str) -> u64 {
   let mut names = AstNameTable::new(&mut allocator);
   let result = Parser::parse(
     source,
-    source.len(),
     &mut names,
     &mut allocator,
     ParseOptions::default(),

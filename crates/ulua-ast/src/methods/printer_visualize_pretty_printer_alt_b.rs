@@ -5,7 +5,7 @@
 //! 判空与字段读取全部走安全代码。
 //!
 //! 节点子指针不再在调用点解引用：直接传裸指针给 `visualize_*`（`IntoNodePtr`
-//! 归一）；`AstArray<*mut T>` 遍历统一走 `iter_mut_nodes`。
+//! 归一）；`AstArray<*mut T>` 遍历统一走 `iter_nodes`。
 
 use ulua_common::functions::format_g::format_g;
 
@@ -62,12 +62,14 @@ impl<'a, W: Writer> Printer<'a, W> {
       return;
     }
 
-    let node = expr as *mut AstNode;
     // SAFETY: expr 指向 arena 中存活的 AstExpr 派生节点
-    let expr_ref = unsafe { &mut *expr };
+    let expr_ref = unsafe { &*expr };
+    // cpp 侧 `AstNode* node = expr` 的只读形态：下转与 CST 查表都以共享借用为
+    // 入参（打印器只写 Writer，从不写节点）。
+    let node = &expr_ref.base;
     self.advance(expr_ref.base.location.begin);
 
-    if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprGroup>(node) } {
+    if let Some(a) = ast_node_try_as::<AstExprGroup>(node) {
       self.writer.symbol("(");
       self.visualize_ast_expr(a.expr);
 
@@ -80,9 +82,9 @@ impl<'a, W: Writer> Printer<'a, W> {
       }
     } else if ast_node_is::<AstExprConstantNil>(node) {
       self.writer.keyword("nil");
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprConstantBool>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprConstantBool>(node) {
       self.writer.keyword(if a.value { "true" } else { "false" });
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprConstantNumber>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprConstantNumber>(node) {
       if let Some(cst_node) = self.lookup_cst_node::<CstExprConstantNumber>(node) {
         // 数字源文本直切片（非 fixup 产物）；literal 走字节通道。
         self.writer.literal(cst_node.value.as_bytes());
@@ -101,7 +103,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       } else {
         self.writer.literal(format_g(a.value, 17).as_bytes());
       }
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprConstantInteger>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprConstantInteger>(node) {
       if let Some(cst_node) = self.lookup_cst_node::<CstExprConstantInteger>(node) {
         // 数字源文本直切片（非 fixup 产物）；literal 走字节通道。
         self.writer.literal(cst_node.value.as_bytes());
@@ -115,7 +117,7 @@ impl<'a, W: Writer> Printer<'a, W> {
           .writer
           .literal(format!("0x{:x}i", a.value as u64).as_bytes());
       }
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprConstantString>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprConstantString>(node) {
       if let Some(cst_node) = self.lookup_cst_node::<CstExprConstantString>(node) {
         // 源文本直切片（引号内原文，非 fixup 产物）。
         self.writer.source_string(
@@ -128,14 +130,14 @@ impl<'a, W: Writer> Printer<'a, W> {
         // UTF-8），必须走字节通道（cpp `std::string_view` 直写语义）。
         self.writer.string(a.value.as_bytes());
       }
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprLocal>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprLocal>(node) {
       // SAFETY: local 指向 arena 存活的 AstLocal
       self.writer.identifier(unsafe { &*a.local }.name.as_bytes());
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprGlobal>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprGlobal>(node) {
       self.writer.identifier(a.name.as_bytes());
     } else if ast_node_is::<AstExprVarargs>(node) {
       self.writer.symbol("...");
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprCall>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprCall>(node) {
       self.visualize_ast_expr(a.func);
 
       let cst_node = self.lookup_cst_node::<CstExprCall>(node);
@@ -160,7 +162,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       }
 
       self.maybe_advance_or_symbol(cst_node.map(|cst| &cst.close_parens), ")");
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprIndexName>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprIndexName>(node) {
       self.visualize_ast_expr(a.expr);
       self.advance(a.op_position);
       // 单字符编码进栈缓冲，免 String 堆分配（cpp `std::string(1, a->op)`）
@@ -170,7 +172,7 @@ impl<'a, W: Writer> Printer<'a, W> {
         .symbol((a.op as u8 as char).encode_utf8(&mut opbuf));
       self.advance(a.index_location.begin);
       self.writer.write(a.index.as_bytes());
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprIndexExpr>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprIndexExpr>(node) {
       let cst_node = self.lookup_cst_node::<CstExprIndexExpr>(node);
       self.visualize_ast_expr(a.expr);
 
@@ -179,13 +181,13 @@ impl<'a, W: Writer> Printer<'a, W> {
       self.visualize_ast_expr(a.index);
 
       self.maybe_advance_or_symbol(cst_node.map(|cst| &cst.close_bracket_position), "]");
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprFunction>(node) } {
-      for attr in a.attributes.iter_mut_nodes() {
+    } else if let Some(a) = ast_node_try_as::<AstExprFunction>(node) {
+      for attr in a.attributes.iter_nodes() {
         self.visualize_attribute(attr);
       }
       self.writer.keyword("function");
       self.visualize_function_body(a);
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprTable>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprTable>(node) {
       self.writer.symbol("{");
 
       let cst_node = self.lookup_cst_node::<CstExprTable>(node);
@@ -260,7 +262,7 @@ impl<'a, W: Writer> Printer<'a, W> {
         }
 
         // SAFETY: value 指向 arena 存活的 AstExpr
-        let value = unsafe { &mut *item.value };
+        let value = unsafe { &*item.value };
         self.advance(value.base.location.begin);
         self.visualize_ast_expr(value);
 
@@ -288,7 +290,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       self.advance(end_pos);
       self.writer.symbol("}");
       self.advance(expr_ref.base.location.end);
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprUnary>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprUnary>(node) {
       if let Some(cst_node) = self.lookup_cst_node::<CstExprOp>(node) {
         self.advance(cst_node.op_position);
       }
@@ -299,7 +301,7 @@ impl<'a, W: Writer> Printer<'a, W> {
         AstExprUnaryOp::Len => self.writer.symbol("#"),
       }
       self.visualize_ast_expr(a.expr);
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprBinary>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprBinary>(node) {
       self.visualize_ast_expr(a.left);
 
       if let Some(cst_node) = self.lookup_cst_node::<CstExprOp>(node) {
@@ -336,7 +338,7 @@ impl<'a, W: Writer> Printer<'a, W> {
 
       self.writer.symbol(to_str(a.op));
       self.visualize_ast_expr(a.right);
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprTypeAssertion>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprTypeAssertion>(node) {
       self.visualize_ast_expr(a.expr);
 
       if self.write_types {
@@ -352,10 +354,10 @@ impl<'a, W: Writer> Printer<'a, W> {
         self.writer.symbol("::");
         self.visualize_type_annotation(a.annotation);
       }
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprIfElse>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprIfElse>(node) {
       self.writer.keyword("if");
       self.visualize_else_if_expr(a);
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprInterpString>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprInterpString>(node) {
       let cst_node = self.lookup_cst_node::<CstExprInterpString>(node);
 
       self.writer.symbol("`");
@@ -394,7 +396,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       }
 
       self.writer.symbol("`");
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprError>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprError>(node) {
       self.writer.symbol("(error-expr");
 
       for (i, &expression) in a.expressions.iter().enumerate() {
@@ -403,7 +405,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       }
 
       self.writer.symbol(")");
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstExprInstantiate>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstExprInstantiate>(node) {
       self.visualize_ast_expr(a.expr);
 
       if self.write_types {

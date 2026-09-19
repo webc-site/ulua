@@ -25,7 +25,7 @@ pub fn pretty_print_string_view_parse_options_bool_bool(
   // 宿主一旦移动即悬垂（同 ulua-compiler tests.rs string_table! 先例）。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let parse_result = Parser::parse(source, source.len(), &mut names, &mut allocator, options);
+  let parse_result = Parser::parse(source, &mut names, &mut allocator, options);
 
   let has_errors = !parse_result.errors.is_empty();
 

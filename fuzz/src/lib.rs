@@ -747,7 +747,6 @@ fn split_top_level_statements(src: &str) -> Vec<String> {
   let mut names = AstNameTable::new(&mut allocator);
   let parse_result = Parser::parse(
     src,
-    src.len(),
     &mut names,
     &mut allocator,
     ParseOptions::default(),

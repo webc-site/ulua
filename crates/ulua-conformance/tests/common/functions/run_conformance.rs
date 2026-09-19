@@ -103,7 +103,6 @@ fn validate_bytecode_graph(source: &str, opts: &LuaCompileOptions) {
   let mut names = AstNameTable::new(&mut allocator);
   let parse_result = Parser::parse(
     source,
-    source.len(),
     &mut names,
     &mut allocator,
     ParseOptions::default(),

@@ -11,7 +11,6 @@ use ulua::ast::records::{
 fn parse(source: &str, names: &mut AstNameTable, allocator: &mut Allocator) -> ParseResult {
   Parser::parse(
     source,
-    source.len(),
     names,
     allocator,
     ParseOptions::default(),

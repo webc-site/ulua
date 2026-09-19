@@ -6,8 +6,8 @@ use crate::{
 };
 
 impl AstVisitable for AstStatIf {
-  fn visit<V: AstVisitor + ?Sized>(&self, visitor: &mut V) {
-    if visitor.visit_stat_if(self as *const Self as *mut c_void) {
+  fn visit<V: AstVisitor + ?Sized>(&mut self, visitor: &mut V) {
+    if visitor.visit_stat_if(self as *mut Self as *mut c_void) {
       unsafe {
         ast_expr_visit(self.condition, visitor);
         ast_stat_visit(self.thenbody as *mut _, visitor);

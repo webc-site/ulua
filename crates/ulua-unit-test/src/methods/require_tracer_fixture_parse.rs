@@ -19,7 +19,6 @@ pub fn require_tracer_fixture_parse<'a>(
 
   let result = Parser::parse(
     source,
-    source.len(),
     names,
     allocator,
     ParseOptions::default(),

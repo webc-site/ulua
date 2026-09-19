@@ -27,16 +27,14 @@ pub unsafe fn to_string_ast_node(node: *mut AstNode) -> String {
 
   let stat_node = node_ref.as_stat_const();
   if !stat_node.is_null() {
-    let stat_node_mut = unsafe { &mut *(stat_node as *mut AstStat) };
-    printer.visualize_ast_stat(stat_node_mut);
+    // 打印器只写 Writer，节点全程共享借用（不再从共享借用造 &mut）
+    printer.visualize_ast_stat(unsafe { &*stat_node });
   } else {
     let expr_node = node_ref.as_expr_const();
     if !expr_node.is_null() {
-      let expr_node_mut = unsafe { &mut *(expr_node as *mut AstExpr) };
-      printer.visualize_ast_expr(expr_node_mut);
+      printer.visualize_ast_expr(unsafe { &*expr_node });
     } else {
-      let type_node = unsafe { &mut *node_ref.as_type() };
-      printer.visualize_type_annotation(type_node);
+      printer.visualize_type_annotation(unsafe { &*node_ref.as_type() });
     }
   }
 

@@ -6,7 +6,7 @@
 //!
 //! 节点子指针不再在调用点解引用：直接传裸指针给 `visualize_*`（`IntoNodePtr`
 //! 归一），unsafe 收口在被调函数入口；`AstArray<*mut T>` 遍历统一走
-//! `iter_mut_nodes`；块体末尾的 `advance(body.end)` 提前读为局部值（visualize
+//! `iter_nodes`；块体末尾的 `advance(body.end)` 提前读为局部值（visualize
 //! 只写 writer，AST 不可变，读取与副作用无依赖）。
 
 use ulua_common::{LUAU_ASSERT, fflag, records::variant::Variant2};
@@ -60,17 +60,19 @@ use crate::{
     printer::{IntoNodePtr, Printer},
     writer::Writer,
   },
-  rtti::{ast_node_is, ast_node_try_as_mut},
+  rtti::{ast_node_is, ast_node_try_as},
 };
 
 impl<'a, W: Writer> Printer<'a, W> {
   pub fn visualize_ast_stat<S: IntoNodePtr<AstStat>>(&mut self, program: S) {
     // SAFETY: program 指向 arena 中存活的 AstStat 派生节点
-    let program = unsafe { &mut *program.into_node_ptr() };
-    let node = &mut program.base as *mut AstNode;
+    let program = unsafe { &*program.into_node_ptr() };
+    // cpp 侧 `AstNode* node = program` 的只读形态：下转与 CST 查表都以共享借用
+    // 为入参（打印器只写 Writer，从不写节点）。
+    let node = &program.base;
     self.advance(program.base.location.begin);
 
-    if let Some(block) = unsafe { ast_node_try_as_mut::<AstStatBlock>(node) } {
+    if let Some(block) = ast_node_try_as::<AstStatBlock>(node) {
       if let Some(cst) = self.lookup_cst_node::<CstStatDo>(node) {
         self.writer.keyword("do");
         self.advance(cst.stats_start_position);
@@ -85,14 +87,14 @@ impl<'a, W: Writer> Printer<'a, W> {
         self.advance(block.base.base.location.end);
         self.write_end(&program.base.location);
       }
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatIf>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatIf>(node) {
       self.writer.keyword("if");
       self.visualize_else_if(a);
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatWhile>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatWhile>(node) {
       self.writer.keyword("while");
       self.visualize_ast_expr(a.condition);
       self.visualize_do_block(a.do_location, a.body);
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatRepeat>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatRepeat>(node) {
       self.writer.keyword("repeat");
       self.visualize_block_ast_stat_block(a.body);
       match self.lookup_cst_node::<CstStatRepeat>(node) {
@@ -108,7 +110,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       self.writer.keyword("break");
     } else if ast_node_is::<AstStatContinue>(node) {
       self.writer.keyword("continue");
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatReturn>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatReturn>(node) {
       self.writer.keyword("return");
       let mut comma = CommaSeparatorInserter::new(
         self
@@ -119,9 +121,9 @@ impl<'a, W: Writer> Printer<'a, W> {
         comma.operator_call(self.writer);
         self.visualize_ast_expr(expr);
       }
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatExpr>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatExpr>(node) {
       self.visualize_ast_expr(a.expr);
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatLocal>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatLocal>(node) {
       let cst_node = self.lookup_cst_node::<CstStatLocal>(node);
       if fflag::LuauExportValueSyntax.get() && a.is_exported {
         self.writer.keyword("export");
@@ -151,7 +153,7 @@ impl<'a, W: Writer> Printer<'a, W> {
         value_comma.operator_call(self.writer);
         self.visualize_ast_expr(value);
       }
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatFor>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatFor>(node) {
       let cst_node = self.lookup_cst_node::<CstStatFor>(node);
       self.writer.keyword("for");
       self.visualize_ast_local_position(
@@ -174,7 +176,7 @@ impl<'a, W: Writer> Printer<'a, W> {
         self.visualize_ast_expr(a.step);
       }
       self.visualize_do_block(a.do_location, a.body);
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatForIn>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatForIn>(node) {
       let cst_node = self.lookup_cst_node::<CstStatForIn>(node);
       self.writer.keyword("for");
       let mut var_comma = CommaSeparatorInserter::new(
@@ -202,7 +204,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       self.visualize_block_ast_stat_block(a.body);
       self.advance(body_end);
       self.writer.keyword("end");
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatAssign>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatAssign>(node) {
       let cst_node = self.lookup_cst_node::<CstStatAssign>(node);
       let mut var_comma = CommaSeparatorInserter::new(
         cst_node.map_or(EMPTY_POSITIONS, |cst| cst.vars_comma_positions.as_slice()),
@@ -225,7 +227,7 @@ impl<'a, W: Writer> Printer<'a, W> {
         value_comma.operator_call(self.writer);
         self.visualize_ast_expr(value);
       }
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatCompoundAssign>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatCompoundAssign>(node) {
       let cst_node = self.lookup_cst_node::<CstStatCompoundAssign>(node);
       self.visualize_ast_expr(a.var);
       if let Some(cst) = cst_node {
@@ -257,10 +259,10 @@ impl<'a, W: Writer> Printer<'a, W> {
         self.writer.symbol(symbol);
       }
       self.visualize_ast_expr(a.value);
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatFunction>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatFunction>(node) {
       // SAFETY: func 指向 arena 存活的 AstExprFunction
-      let func = unsafe { &mut *a.func };
-      for attr in func.attributes.iter_mut_nodes() {
+      let func = unsafe { &*a.func };
+      for attr in func.attributes.iter_nodes() {
         self.visualize_attribute(attr);
       }
       if let Some(cst) = self.lookup_cst_node::<CstStatFunction>(node) {
@@ -269,10 +271,10 @@ impl<'a, W: Writer> Printer<'a, W> {
       self.writer.keyword("function");
       self.visualize_ast_expr(a.name);
       self.visualize_function_body(func);
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatLocalFunction>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatLocalFunction>(node) {
       // SAFETY: func 指向 arena 存活的 AstExprFunction
-      let func = unsafe { &mut *a.func };
-      for attr in func.attributes.iter_mut_nodes() {
+      let func = unsafe { &*a.func };
+      for attr in func.attributes.iter_nodes() {
         self.visualize_attribute(attr);
       }
       let cst_node = self.lookup_cst_node::<CstStatLocalFunction>(node);
@@ -296,7 +298,7 @@ impl<'a, W: Writer> Printer<'a, W> {
       self.advance(name.location.begin);
       self.writer.identifier(name.name.as_bytes());
       self.visualize_function_body(func);
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatTypeAlias>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatTypeAlias>(node) {
       if self.write_types {
         let cst_node = self.lookup_cst_node::<CstStatTypeAlias>(node);
         if a.exported {
@@ -316,12 +318,12 @@ impl<'a, W: Writer> Printer<'a, W> {
           let mut comma = CommaSeparatorInserter::new(cst_node.map_or(EMPTY_POSITIONS, |cst| {
             cst.generics_comma_positions.as_slice()
           }));
-          for o in a.generics.iter_mut_nodes() {
+          for o in a.generics.iter_nodes() {
             comma.operator_call(self.writer);
             self.writer.advance(&o.base.location.begin);
             self.writer.identifier(o.name.as_bytes());
             if !o.default_value.is_null() {
-              if let Some(cst) = self.lookup_cst_node::<CstGenericType>(&mut o.base) {
+              if let Some(cst) = self.lookup_cst_node::<CstGenericType>(&o.base) {
                 self.advance(cst.default_equals_position);
               } else {
                 // SAFETY: default_value 指向 arena 存活的 AstType
@@ -333,10 +335,10 @@ impl<'a, W: Writer> Printer<'a, W> {
               self.visualize_type_annotation(o.default_value);
             }
           }
-          for o in a.generic_packs.iter_mut_nodes() {
+          for o in a.generic_packs.iter_nodes() {
             comma.operator_call(self.writer);
             let generic_type_pack_cst_node =
-              self.lookup_cst_node::<CstGenericTypePack>(&mut o.base);
+              self.lookup_cst_node::<CstGenericTypePack>(&o.base);
             self.writer.advance(&o.base.location.begin);
             self.writer.identifier(o.name.as_bytes());
             if let Some(cst) = generic_type_pack_cst_node {
@@ -374,7 +376,7 @@ impl<'a, W: Writer> Printer<'a, W> {
         }
         self.visualize_type_annotation(a.type_ptr);
       }
-    } else if let Some(t) = unsafe { ast_node_try_as_mut::<AstStatTypeFunction>(node) } {
+    } else if let Some(t) = ast_node_try_as::<AstStatTypeFunction>(node) {
       if self.write_types {
         let cst_node = self.lookup_cst_node::<CstStatTypeFunction>(node);
         if t.exported {
@@ -394,7 +396,7 @@ impl<'a, W: Writer> Printer<'a, W> {
         self.writer.identifier(t.name.as_bytes());
         self.visualize_function_body(t.body);
       }
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatError>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatError>(node) {
       self.writer.symbol("(error-stat");
       let no_statements = a.statements.is_empty();
       for (i, &expression) in a.expressions.iter().enumerate() {
@@ -411,13 +413,13 @@ impl<'a, W: Writer> Printer<'a, W> {
         self.visualize_ast_stat(statement);
       }
       self.writer.symbol(")");
-    } else if let Some(a) = unsafe { ast_node_try_as_mut::<AstStatDeclareGlobal>(node) } {
+    } else if let Some(a) = ast_node_try_as::<AstStatDeclareGlobal>(node) {
       self.writer.keyword("declare");
       self.advance(a.name_location.begin);
       self.writer.identifier(a.name.as_bytes());
       self.writer.symbol(":");
       self.visualize_type_annotation(a.type_);
-    } else if let Some(c) = unsafe { ast_node_try_as_mut::<AstStatClass>(node) } {
+    } else if let Some(c) = ast_node_try_as::<AstStatClass>(node) {
       if fflag::DebugLuauUserDefinedClasses.get() {
         self.writer.keyword("class");
         // SAFETY: name 指向 arena 存活的 AstName 表项（此处为 AstLocal 名字）
@@ -493,7 +495,7 @@ impl<'a, W: Writer> Printer<'a, W> {
     var_comma: &mut CommaSeparatorInserter,
     colon_positions: Option<&[Position]>,
   ) {
-    for (i, var) in vars.iter_mut_nodes().enumerate() {
+    for (i, var) in vars.iter_nodes().enumerate() {
       var_comma.operator_call(self.writer);
       // vars 与 colon_positions 成对构造（解析器保证等长，cpp 同处有断言）；
       // 越界仅解析器 bug，退化 missing（cpp 侧 `data[i]` 同样依赖该不变式）。

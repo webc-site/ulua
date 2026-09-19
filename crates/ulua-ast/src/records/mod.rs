@@ -127,7 +127,6 @@ pub mod entry_hash;
 pub mod fragment_parse_resume_settings;
 pub mod function;
 pub mod hot_comment;
-pub mod item_ast;
 pub mod lexeme;
 pub mod lexer;
 pub mod local;
