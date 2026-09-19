@@ -66,3 +66,19 @@ fn eval_reports_runtime_error() {
     "error message should mention boom: {err}"
   );
 }
+
+/// cpp `setupState`（Repl.cpp:230）在 openlibs 后调用 `luaL_sandbox`：库表与
+/// 真 `_G` 上锁，运行中的脚本改不动标准库。
+#[test]
+fn eval_runs_in_a_sandboxed_state() {
+  eval("assert(not pcall(function() math.bogus_field = 1 end), 'library table must be read-only')")
+    .expect("sandbox check should pass");
+}
+
+/// `luaL_sandboxthread`（runRepl:566）给宿主 state 一张 __index 指向真 `_G` 的
+/// 可写代理全局表：脚本能写新全局，但写入只活在代理表里，不污染已上锁的真 `_G`。
+#[test]
+fn eval_thread_writes_go_to_the_private_env() {
+  eval("x = 1; assert(x == 1)").expect("thread-local global write should work");
+  eval("assert(_G.x == nil)").expect("write must not leak into the real _G");
+}
