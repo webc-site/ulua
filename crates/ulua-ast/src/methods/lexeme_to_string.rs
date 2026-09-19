@@ -21,6 +21,12 @@ const K_RESERVED: [&str; 21] = [
   "nil", "not", "or", "repeat", "return", "then", "true", "until", "while",
 ];
 
+// `K_RESERVED[index]` 的下标由 `RESERVED_BEGIN..RESERVED_END_TOKEN` 区间推出，
+// 表长与该区间必须严格相等，否则插值串/保留字分支会越界 panic。编译期钉死，
+// 避免枚举或表被单边修改后漂移（cpp 侧靠 `kReserved` 数组同序手工维护）。
+const _: () =
+  assert!(K_RESERVED.len() == (Type::RESERVED_END_TOKEN.0 - Type::RESERVED_BEGIN.0) as usize);
+
 impl Lexeme {
   /// STRING/NUMBER/COMMENT 族词素的字节负载（源缓冲中的原始切片，**不保证**
   /// UTF-8：`"\xFF"` 之类的字面量按 cpp 词法器就是逐字节存的）；空指针返回
