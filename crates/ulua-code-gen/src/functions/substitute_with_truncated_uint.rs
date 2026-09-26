@@ -5,7 +5,6 @@ use crate::{
     replace_ir_utils::replace_ir_function_ir_block_u32_ir_inst, substitute::substitute_at,
   },
   records::{ir_function::IrFunction, ir_inst::IrInst, ir_op::IrOp},
-  type_aliases::ir_ops::IrOps,
 };
 
 /// 索引化变体：只借 `&mut function`，消除调用方为绕过重叠借用引入的裸指针 unsafe。
@@ -25,13 +24,7 @@ pub fn substitute_with_truncated_uint_at(
     && produces_dirty_high_register_bits(function.instructions[op.index() as usize].cmd);
 
   if dirty {
-    let mut ops = IrOps::new();
-    ops.push(op);
-    let replacement = IrInst {
-      cmd: IrCmd::TruncateUint,
-      ops,
-      ..Default::default()
-    };
+    let replacement = IrInst::ir_inst_new(IrCmd::TruncateUint, &[op]);
     replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, replacement);
 
     true

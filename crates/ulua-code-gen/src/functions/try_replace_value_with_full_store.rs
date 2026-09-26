@@ -12,19 +12,11 @@ use crate::{
     },
     store_reg_info::StoreRegInfo,
   },
-  type_aliases::ir_ops::IrOps,
 };
 
+/// `StoreSplitTvalue(target, tag, value)` 替换指令的三操作数构造
 fn make_split(target_op: IrOp, tag_op: IrOp, value_op: IrOp) -> IrInst {
-  let mut ops = IrOps::new();
-  ops.push_back(target_op);
-  ops.push_back(tag_op);
-  ops.push_back(value_op);
-  IrInst {
-    cmd: IrCmd::StoreSplitTvalue,
-    ops,
-    ..IrInst::default()
-  }
+  IrInst::ir_inst_new(IrCmd::StoreSplitTvalue, &[target_op, tag_op, value_op])
 }
 
 /// tvalue 侧三分支（StoreSplitTvalue/StoreVector/StoreTvalue 常量 tag）共用的提交尾：

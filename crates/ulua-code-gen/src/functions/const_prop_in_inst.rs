@@ -50,19 +50,6 @@ use crate::{
   type_aliases::ir_ops::IrOps,
 };
 
-fn const_prop_make_inst(cmd: IrCmd, ops: &[IrOp]) -> IrInst {
-  let mut ir_ops = IrOps::new();
-  for &op in ops {
-    ir_ops.push(op);
-  }
-
-  IrInst {
-    cmd,
-    ops: ir_ops,
-    ..IrInst::default()
-  }
-}
-
 /// 当前指令只读视图：以索引即时定位，避免与 `function` 的整体借用重叠。
 #[inline]
 fn cur_ref(function: &IrFunction, index: u32) -> &IrInst {
@@ -84,18 +71,11 @@ fn emit_int_arith(
   a: IrOp,
   b: IrOp,
 ) {
-  let mut ops = IrOps::new();
-  ops.push(a);
-  ops.push(b);
   replace_ir_function_ir_block_u32_ir_inst(
     function,
     block_idx,
     index,
-    IrInst {
-      cmd,
-      ops,
-      ..IrInst::default()
-    },
+    IrInst::ir_inst_new(cmd, &[a, b]),
   );
 }
 
@@ -114,7 +94,7 @@ fn replace_with_jump(function: &mut IrFunction, block_idx: u32, index: u32, targ
     function,
     block_idx,
     index,
-    const_prop_make_inst(IrCmd::JUMP, &[target]),
+    IrInst::ir_inst_new(IrCmd::JUMP, &[target]),
   );
 }
 
@@ -154,7 +134,7 @@ fn substitute_with(
     function,
     block_idx,
     index,
-    const_prop_make_inst(cmd, ops),
+    IrInst::ir_inst_new(cmd, ops),
   );
 
   if LuauCodegenSubstituteReplacements.get() {
@@ -380,7 +360,7 @@ pub fn const_prop_in_inst(
               function,
               block_idx,
               index,
-              const_prop_make_inst(IrCmd::LoadTvalue, &[source, offset, tag_op]),
+              IrInst::ir_inst_new(IrCmd::LoadTvalue, &[source, offset, tag_op]),
             );
           }
         }
@@ -483,19 +463,14 @@ pub fn const_prop_in_inst(
             }
           }
 
-          let mut ops = IrOps::new();
-          ops.push(IrOp::ir_op_ir_op_kind_u32(IrOpKind::Inst, prev_idx));
-          ops.push(function.const_int(map, component as i32));
+          let prev = IrOp::ir_op_ir_op_kind_u32(IrOpKind::Inst, prev_idx);
+          let offset = function.const_int(map, component as i32);
 
           replace_ir_function_ir_block_u32_ir_inst(
             function,
             block_idx,
             index,
-            IrInst {
-              cmd: IrCmd::ExtractVec,
-              ops,
-              ..IrInst::default()
-            },
+            IrInst::ir_inst_new(IrCmd::ExtractVec, &[prev, offset]),
           );
 
           state.substitute_or_record(&mut function.instructions[index as usize], index);
@@ -676,18 +651,7 @@ pub fn const_prop_in_inst(
           replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, replacement);
 
           if target.kind() == IrOpKind::VmReg && active_load_value != !0u32 {
-            let reg = vm_reg_op(target) as usize;
-            let versioned_reg = IrOp::ir_op_ir_op_kind_u32(
-              IrOpKind::VmReg,
-              (reg as u32) | (state.regs[reg].version << 8),
-            );
-            let mut ops = IrOps::new();
-            ops.push(versioned_reg);
-            let key = IrInst {
-              cmd: active_load_cmd,
-              ops,
-              ..IrInst::default()
-            };
+            let key = state.versioned_vm_reg_load_ir_cmd_ir_op(active_load_cmd, target);
             *state.value_map.get_or_insert(key) = active_load_value;
           }
 
@@ -1113,7 +1077,7 @@ pub fn const_prop_in_inst(
             function,
             block_idx,
             index,
-            const_prop_make_inst(IrCmd::UintToFloat, &[src_source]),
+            IrInst::ir_inst_new(IrCmd::UintToFloat, &[src_source]),
           );
 
           if LuauCodegenSubstituteReplacements.get() {
@@ -1189,7 +1153,7 @@ pub fn const_prop_in_inst(
         )
       {
         let tag_op = function.const_tag(map, tag);
-        let replacement = const_prop_make_inst(
+        let replacement = IrInst::ir_inst_new(
           IrCmd::CmpTag,
           &[source, tag_op, op_e_ref(cur_ref(function, index))],
         );
@@ -1203,7 +1167,7 @@ pub fn const_prop_in_inst(
       let cur_b = op_b_ref(cur_ref(function, index));
       if let Some((source, tag)) = type_name_tag_comparison(function, cur_a, cur_b) {
         let tag_op = function.const_tag(map, tag);
-        let replacement = const_prop_make_inst(
+        let replacement = IrInst::ir_inst_new(
           IrCmd::JumpEqTag,
           &[
             source,
@@ -1538,7 +1502,7 @@ pub fn const_prop_in_inst(
               function,
               block_idx,
               index,
-              const_prop_make_inst(IrCmd::CheckNodeValue, &[cur_a, cur_c]),
+              IrInst::ir_inst_new(IrCmd::CheckNodeValue, &[cur_a, cur_c]),
             );
           }
 

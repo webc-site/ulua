@@ -40,7 +40,6 @@ use crate::{
     register_link::RegisterLink,
   },
   traits::tag_access::TagAccess,
-  type_aliases::ir_ops::IrOps,
 };
 
 #[derive(Debug)]
@@ -352,18 +351,7 @@ impl ConstPropState {
       return;
     }
 
-    let mut versioned_reg = store_reg;
-    versioned_reg = IrOp::ir_op_ir_op_kind_u32(
-      IrOpKind::VmReg,
-      (vm_reg_op(versioned_reg) as u32) | (self.regs[reg].version << 8),
-    );
-    let mut ops = IrOps::new();
-    ops.push(versioned_reg);
-    let key = IrInst {
-      cmd: load_cmd,
-      ops,
-      ..IrInst::default()
-    };
+    let key = self.versioned_vm_reg_load_ir_cmd_ir_op(load_cmd, store_reg);
     *self.value_map.get_or_insert(key) = stored_value.index();
   }
 
@@ -611,17 +599,7 @@ impl ConstPropState {
   pub fn get_previous_versioned_load_index(&mut self, cmd: IrCmd, vm_reg: IrOp) -> Option<u32> {
     CODEGEN_ASSERT!(vm_reg.kind() == IrOpKind::VmReg);
 
-    let reg = vm_reg_op(vm_reg) as usize;
-    let mut ops = IrOps::new();
-    ops.push(IrOp::ir_op_ir_op_kind_u32(
-      IrOpKind::VmReg,
-      (vm_reg_op(vm_reg) as u32) | (self.regs[reg].version << 8),
-    ));
-    let versioned_load = IrInst {
-      cmd,
-      ops,
-      ..IrInst::default()
-    };
+    let versioned_load = self.versioned_vm_reg_load_ir_cmd_ir_op(cmd, vm_reg);
 
     let prev_idx = *self.value_map.find(&versioned_load)?;
 
@@ -1332,18 +1310,12 @@ impl ConstPropState {
             return false;
           }
           let offset = self.build_mut().const_int(extra_offset);
-          let mut ops = IrOps::new();
-          ops.push(prev_index_op);
-          ops.push(offset);
+          let repl = IrInst::ir_inst_new(IrCmd::AddInt, &[prev_index_op, offset]);
           replace_ir_function_ir_block_u32_ir_inst(
             self.function_mut(),
             block_idx,
             curr_index_op.index(),
-            IrInst {
-              cmd: IrCmd::AddInt,
-              ops,
-              ..IrInst::default()
-            },
+            repl,
           );
         }
 
@@ -1411,14 +1383,7 @@ impl ConstPropState {
     let version = self.regs[vm_reg_op(op) as usize].version;
     op = IrOp::ir_op_ir_op_kind_u32(IrOpKind::VmReg, (vm_reg_op(op) as u32) | (version << 8));
 
-    let mut ops = IrOps::new();
-    ops.push(op);
-
-    IrInst {
-      cmd: load_cmd,
-      ops,
-      ..IrInst::default()
-    }
+    IrInst::ir_inst_new(load_cmd, &[op])
   }
 
   pub fn versioned_vm_reg_load_ir_cmd_ir_op_ir_op(

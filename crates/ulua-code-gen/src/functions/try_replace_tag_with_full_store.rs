@@ -13,20 +13,7 @@ use crate::{
     },
     store_reg_info::StoreRegInfo,
   },
-  type_aliases::ir_ops::IrOps,
 };
-
-fn make_inst(cmd: IrCmd, ops_slice: &[IrOp]) -> IrInst {
-  let mut ops = IrOps::new();
-  for op in ops_slice {
-    ops.push_back(*op);
-  }
-  IrInst {
-    cmd,
-    ops,
-    ..IrInst::default()
-  }
-}
 
 /// StoreVector 重放：从旧 store 取 xyz 三通道，与目标槽位、新 tag 组成五元 repl
 /// （两处重放块逐字重复的收拢；原位替换由调用点的 replace 完成）。
@@ -40,7 +27,7 @@ fn make_vector_repl(
   let prev_value_x = function.instructions[prev_inst_idx].ops[1];
   let prev_value_y = function.instructions[prev_inst_idx].ops[2];
   let prev_value_z = function.instructions[prev_inst_idx].ops[3];
-  make_inst(
+  IrInst::ir_inst_new(
     IrCmd::StoreVector,
     &[target_op, prev_value_x, prev_value_y, prev_value_z, tag_op],
   )
@@ -93,7 +80,8 @@ pub fn try_replace_tag_with_full_store(
         replace_ir_function_ir_block_u32_ir_inst(function, block_idx, inst_index, repl);
       } else {
         let prev_value_op = function.instructions[reg_info.value_inst_idx as usize].ops[1];
-        let repl = make_inst(IrCmd::StoreSplitTvalue, &[target_op, tag_op, prev_value_op]);
+        let repl =
+          IrInst::ir_inst_new(IrCmd::StoreSplitTvalue, &[target_op, tag_op, prev_value_op]);
         replace_ir_function_ir_block_u32_ir_inst(function, block_idx, inst_index, repl);
       }
     }
@@ -121,7 +109,8 @@ pub fn try_replace_tag_with_full_store(
       // 若存的是 'nil'，保留 'STORE_TAG Rn, tnil'，因为它写入的是完整 TValue
       if tag != nil {
         let prev_value_op = function.instructions[reg_info.tvalue_inst_idx as usize].ops[2];
-        let repl = make_inst(IrCmd::StoreSplitTvalue, &[target_op, tag_op, prev_value_op]);
+        let repl =
+          IrInst::ir_inst_new(IrCmd::StoreSplitTvalue, &[target_op, tag_op, prev_value_op]);
         replace_ir_function_ir_block_u32_ir_inst(function, block_idx, inst_index, repl);
       }
 
