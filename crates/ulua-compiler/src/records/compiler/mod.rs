@@ -4,13 +4,10 @@ use core::{
   ptr::{NonNull, null_mut},
 };
 
-use ulua_ast::{
-  records::{
-    ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_expr_function::AstExprFunction,
-    ast_expr_table::AstExprTable, ast_local::AstLocal, ast_name::AstName,
-    ast_name_table::AstNameTable, ast_node::AstNode, location::Location,
-  },
-  rtti::{AstNodeClass, ast_node_try_as},
+use ulua_ast::records::{
+  ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_expr_function::AstExprFunction,
+  ast_expr_table::AstExprTable, ast_local::AstLocal, ast_name::AstName,
+  ast_name_table::AstNameTable, location::Location,
 };
 use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
 use ulua_common::{
@@ -256,12 +253,6 @@ impl Compiler {
   }
 }
 
+
 /// 百分比基准（cpp 成本模型 `costPercent` 的 100）：for 展开与内联调用判定共用。
 pub(crate) const K_COST_PERCENT_SCALE: i32 = 100;
-
-/// RTTI 下转共享实现：class-index 命中与下转是同一判定，失败分支不可达。
-/// `expr`/`stat` 两族分发循环都要用，原两份逐字重复的本地副本坍缩到这里。
-#[inline]
-pub(crate) fn node_downcast<T: AstNodeClass>(node: &AstNode) -> &T {
-  ast_node_try_as::<T>(node).expect("类索引命中与 RTTI 下转同一判定，此分支不可达")
-}
