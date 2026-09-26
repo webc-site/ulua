@@ -37,4 +37,21 @@ impl AstNode {
       None
     }
   }
+
+  /// 将通用 AST 节点下转为具体表达式引用枚举。若节点不属于 `AstExpr` 家族，返回 `None`。
+  #[inline]
+  pub fn try_as_expr_ref(&self) -> Option<crate::enums::ast_expr_ref::AstExprRef<'_>> {
+    self.as_expr_const().and_then(AstExpr::try_as_expr_ref)
+  }
+
+  /// 将通用 AST 节点下转为具体表达式引用枚举。
+  ///
+  /// # Panics
+  /// 若节点不属于 `AstExpr` 家族，触发 panic。
+  #[inline]
+  pub fn as_expr_ref(&self) -> crate::enums::ast_expr_ref::AstExprRef<'_> {
+    self
+      .try_as_expr_ref()
+      .expect("AstNode class_index 必须为合法的表达式节点类型")
+  }
 }

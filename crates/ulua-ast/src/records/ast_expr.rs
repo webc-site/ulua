@@ -26,3 +26,17 @@ impl AstExpr {
     AstExprRef::try_from_expr(self)
   }
 }
+
+impl crate::records::node_handle::Node<AstExpr> {
+  /// 将表达式句柄下转为具体引用枚举。
+  #[inline]
+  pub fn as_expr_ref(&self) -> AstExprRef<'_> {
+    self.get().as_expr_ref()
+  }
+
+  /// 尝试将表达式句柄下转为具体引用枚举。若动态类型不是合法表达式，返回 `None`。
+  #[inline]
+  pub fn try_as_expr_ref(&self) -> Option<AstExprRef<'_>> {
+    self.get().try_as_expr_ref()
+  }
+}
