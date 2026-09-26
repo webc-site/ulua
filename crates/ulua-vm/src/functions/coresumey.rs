@@ -3,7 +3,10 @@ use crate::{
     auxresume::auxresume, coresumefinish::coresumefinish, interrupt_thread::interrupt_thread,
     lua_tothread::lua_tothread,
   },
-  macros::{co_status_break::CO_STATUS_BREAK, lua_l_argexpected::luaL_argexpected},
+  macros::{
+    co_status_break::CO_STATUS_BREAK, lua_l_argexpected::luaL_argexpected,
+    lua_lib_fn::lua_lib_fn,
+  },
   records::lua_state::LuaState,
 };
 
@@ -12,7 +15,7 @@ use crate::{
 /// NULL 抛错回退），返回的协程 `co` 非空且存活；narg=`(*l).top-(*l).base`-1（须 ≥0，索引 2 起为传入恢复实参）；
 /// `auxresume`/`interrupt_thread`/`coresumefinish` 可再入 Lua、抛错、扩栈与触发 GC。
 /// cpp VM/src/lcorolib.cpp:218
-pub(crate) unsafe extern "C-unwind" fn coresumey(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn coresumey(l: *mut LuaState) -> i32 {
   unsafe {
     let co = lua_tothread(l, 1);
     luaL_argexpected!(l, co.is_some(), 1, "thread");
@@ -27,3 +30,5 @@ pub(crate) unsafe extern "C-unwind" fn coresumey(l: *mut LuaState) -> i32 {
     coresumefinish(l, r)
   }
 }
+
+lua_lib_fn!(pub(crate) fn coresumey, coresumey_arm);

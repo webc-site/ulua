@@ -13,7 +13,7 @@ use crate::{
   },
   macros::{
     lua_errerrmsg::LUA_ERRERRMSG, lua_l_argexpected::luaL_argexpected, lua_l_error::luaL_error,
-    lua_memerrmsg::LUA_MEMERRMSG,
+    lua_lib_fn::lua_lib_fn, lua_memerrmsg::LUA_MEMERRMSG,
   },
   records::lua_state::LuaState,
 };
@@ -21,7 +21,7 @@ use crate::{
 /// # Safety
 ///
 /// `l` must be a valid pointer to a live `LuaState`.
-pub(crate) unsafe extern "C-unwind" fn coclose(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn coclose(l: *mut LuaState) -> i32 {
   // Safety: 契约保证 `L1` 为可关闭的非 main 协程存活状态，close 错误路径经 `L`（或 L1）报错、块内不改 main 线程栈
   unsafe {
     let co = lua_tothread(l, 1);
@@ -58,3 +58,5 @@ pub(crate) unsafe extern "C-unwind" fn coclose(l: *mut LuaState) -> i32 {
     }
   }
 }
+
+lua_lib_fn!(pub(crate) fn coclose, coclose_arm);
