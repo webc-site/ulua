@@ -5,7 +5,7 @@ use crate::{
     save_block_exit_state::save_block_exit_state,
     setup_block_entry_state_optimize_const_prop::setup_block_entry_state_ir_builder_ir_function_ir_block_const_prop_state,
   },
-  macros::{codegen_assert::CODEGEN_ASSERT, op_a_ref::op_a_ref},
+  macros::{codegen_assert::CODEGEN_ASSERT, ir_operand::op_a_ref},
   records::{
     const_prop_state::ConstPropState, ir_block::K_BLOCK_FLAG_SAFE_ENV_CHECK,
     ir_builder::ConstantMap, ir_function::IrFunction,

@@ -2,8 +2,9 @@ use crate::{
   enums::{ir_cmd::IrCmd, ir_op_kind::IrOpKind},
   functions::vm_reg_op::vm_reg_op,
   macros::{
-    codegen_assert::CODEGEN_ASSERT, op_a_ref::op_a_ref, op_b_ref::op_b_ref, op_c_ref::op_c_ref,
-    op_d_ref::op_d_ref, op_e_ref::op_e_ref, op_f_ref::op_f_ref, op_g_ref::op_g_ref,
+    codegen_assert::CODEGEN_ASSERT,
+    ir_operand::{op_a_ref, op_c_ref, op_d_ref, op_e_ref, op_f_ref, op_g_ref},
+    op_b_ref::op_b_ref,
   },
   records::{
     block_vm_reg_live_in_computation::BlockVmRegLiveInComputation, ir_block::IrBlock,
