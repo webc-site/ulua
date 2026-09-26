@@ -1,8 +1,10 @@
 use crate::macros::{
-  dw_reg_x_64_rax::DW_REG_X64_RAX, dw_reg_x_64_rbp::DW_REG_X64_RBP,
-  dw_reg_x_64_rbx::DW_REG_X64_RBX, dw_reg_x_64_rcx::DW_REG_X64_RCX,
-  dw_reg_x_64_rdi::DW_REG_X64_RDI, dw_reg_x_64_rdx::DW_REG_X64_RDX,
-  dw_reg_x_64_rsi::DW_REG_X64_RSI, dw_reg_x_64_rsp::DW_REG_X64_RSP,
+  dwarf_reg::{
+    DW_REG_X64_RAX, DW_REG_X64_RBX, DW_REG_X64_RCX, DW_REG_X64_RDI, DW_REG_X64_RDX,
+    DW_REG_X64_RSI,
+  },
+  dw_reg_x_64_rbp::DW_REG_X64_RBP,
+  dw_reg_x_64_rsp::DW_REG_X64_RSP,
 };
 
 pub fn reg_index_to_dw_reg_x_64(index: u8) -> i32 {
