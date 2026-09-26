@@ -34,12 +34,8 @@ impl Frontend {
     arena: &mut TypeArena,
     source: &str,
   ) -> TypeId {
-    let parse_result = Parser::parse_type_source(
-      source,
-      name_table,
-      allocator,
-      ParseOptions::default(),
-    );
+    let parse_result =
+      Parser::parse_type_source(source, name_table, allocator, ParseOptions::default());
 
     if parse_result.root.is_null() {
       ice_handler.ice_string("Frontend::parseType was given an unparseable type");

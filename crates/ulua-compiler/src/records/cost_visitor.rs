@@ -110,18 +110,14 @@ impl<'a> CostVisitor<'a> {
 
         cost
       }
-      AstExprRef::Unary(expr) => {
-        Cost::fold(
-          &self.model(expr.expr.into()),
-          &Cost::new(0, Cost::K_LITERAL),
-        )
-      }
-      AstExprRef::Binary(expr) => {
-        Cost::fold(
-          &self.model(expr.left.into()),
-          &self.model(expr.right.into()),
-        )
-      }
+      AstExprRef::Unary(expr) => Cost::fold(
+        &self.model(expr.expr.into()),
+        &Cost::new(0, Cost::K_LITERAL),
+      ),
+      AstExprRef::Binary(expr) => Cost::fold(
+        &self.model(expr.left.into()),
+        &self.model(expr.right.into()),
+      ),
       AstExprRef::TypeAssertion(expr) => self.model(expr.expr.into()),
       AstExprRef::IfElse(expr) => self
         .model(expr.condition.into())

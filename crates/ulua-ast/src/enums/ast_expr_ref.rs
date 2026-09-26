@@ -1,29 +1,16 @@
 use crate::{
   records::{
-    ast_expr::AstExpr,
-    ast_expr_binary::AstExprBinary,
-    ast_expr_call::AstExprCall,
-    ast_expr_constant_bool::AstExprConstantBool,
-    ast_expr_constant_integer::AstExprConstantInteger,
-    ast_expr_constant_nil::AstExprConstantNil,
-    ast_expr_constant_number::AstExprConstantNumber,
-    ast_expr_constant_string::AstExprConstantString,
-    ast_expr_error::AstExprError,
-    ast_expr_function::AstExprFunction,
-    ast_expr_global::AstExprGlobal,
-    ast_expr_group::AstExprGroup,
-    ast_expr_if_else::AstExprIfElse,
-    ast_expr_index_expr::AstExprIndexExpr,
-    ast_expr_index_name::AstExprIndexName,
-    ast_expr_instantiate::AstExprInstantiate,
-    ast_expr_interp_string::AstExprInterpString,
-    ast_expr_local::AstExprLocal,
-    ast_expr_table::AstExprTable,
-    ast_expr_type_assertion::AstExprTypeAssertion,
-    ast_expr_unary::AstExprUnary,
-    ast_expr_varargs::AstExprVarargs,
-    ast_node::AstNode,
-    location::Location,
+    ast_expr::AstExpr, ast_expr_binary::AstExprBinary, ast_expr_call::AstExprCall,
+    ast_expr_constant_bool::AstExprConstantBool, ast_expr_constant_integer::AstExprConstantInteger,
+    ast_expr_constant_nil::AstExprConstantNil, ast_expr_constant_number::AstExprConstantNumber,
+    ast_expr_constant_string::AstExprConstantString, ast_expr_error::AstExprError,
+    ast_expr_function::AstExprFunction, ast_expr_global::AstExprGlobal,
+    ast_expr_group::AstExprGroup, ast_expr_if_else::AstExprIfElse,
+    ast_expr_index_expr::AstExprIndexExpr, ast_expr_index_name::AstExprIndexName,
+    ast_expr_instantiate::AstExprInstantiate, ast_expr_interp_string::AstExprInterpString,
+    ast_expr_local::AstExprLocal, ast_expr_table::AstExprTable,
+    ast_expr_type_assertion::AstExprTypeAssertion, ast_expr_unary::AstExprUnary,
+    ast_expr_varargs::AstExprVarargs, ast_node::AstNode, location::Location,
   },
   rtti::{AstNodeClass, AstNodeView, ast_node_as_unchecked},
 };
@@ -68,9 +55,9 @@ impl<'a> AstExprRef<'a> {
       AstExprConstantBool::CLASS_INDEX => {
         Some(Self::ConstantBool(unsafe { ast_node_as_unchecked(expr) }))
       }
-      AstExprConstantInteger::CLASS_INDEX => {
-        Some(Self::ConstantInteger(unsafe { ast_node_as_unchecked(expr) }))
-      }
+      AstExprConstantInteger::CLASS_INDEX => Some(Self::ConstantInteger(unsafe {
+        ast_node_as_unchecked(expr)
+      })),
       AstExprConstantNil::CLASS_INDEX => {
         Some(Self::ConstantNil(unsafe { ast_node_as_unchecked(expr) }))
       }
@@ -85,8 +72,12 @@ impl<'a> AstExprRef<'a> {
       AstExprGlobal::CLASS_INDEX => Some(Self::Global(unsafe { ast_node_as_unchecked(expr) })),
       AstExprGroup::CLASS_INDEX => Some(Self::Group(unsafe { ast_node_as_unchecked(expr) })),
       AstExprIfElse::CLASS_INDEX => Some(Self::IfElse(unsafe { ast_node_as_unchecked(expr) })),
-      AstExprIndexExpr::CLASS_INDEX => Some(Self::IndexExpr(unsafe { ast_node_as_unchecked(expr) })),
-      AstExprIndexName::CLASS_INDEX => Some(Self::IndexName(unsafe { ast_node_as_unchecked(expr) })),
+      AstExprIndexExpr::CLASS_INDEX => {
+        Some(Self::IndexExpr(unsafe { ast_node_as_unchecked(expr) }))
+      }
+      AstExprIndexName::CLASS_INDEX => {
+        Some(Self::IndexName(unsafe { ast_node_as_unchecked(expr) }))
+      }
       AstExprInstantiate::CLASS_INDEX => {
         Some(Self::Instantiate(unsafe { ast_node_as_unchecked(expr) }))
       }

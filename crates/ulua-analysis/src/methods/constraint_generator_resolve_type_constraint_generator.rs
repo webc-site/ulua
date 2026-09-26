@@ -82,15 +82,13 @@ impl ConstraintGenerator {
           )
         }
       }
-      AstTypeRef::Function(fn_node) => {
-        self.resolve_function_type(
-          &sp,
-          ty,
-          fn_node,
-          in_type_arguments,
-          replace_error_with_fresh,
-        )
-      }
+      AstTypeRef::Function(fn_node) => self.resolve_function_type(
+        &sp,
+        ty,
+        fn_node,
+        in_type_arguments,
+        replace_error_with_fresh,
+      ),
       AstTypeRef::Typeof(tof) => {
         // SAFETY: tof.expr 是存活类型节点名下的 arena 子表达式，只取共享引用递归。
         self.check_expr(&sp, unsafe { &*tof.expr }).ty

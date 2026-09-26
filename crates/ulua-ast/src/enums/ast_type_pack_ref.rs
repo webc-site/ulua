@@ -1,10 +1,7 @@
 use crate::{
   records::{
-    ast_node::AstNode,
-    ast_type_pack::AstTypePack,
-    ast_type_pack_explicit::AstTypePackExplicit,
-    ast_type_pack_generic::AstTypePackGeneric,
-    ast_type_pack_variadic::AstTypePackVariadic,
+    ast_node::AstNode, ast_type_pack::AstTypePack, ast_type_pack_explicit::AstTypePackExplicit,
+    ast_type_pack_generic::AstTypePackGeneric, ast_type_pack_variadic::AstTypePackVariadic,
     location::Location,
   },
   rtti::{AstNodeClass, AstNodeView, ast_node_as_unchecked},

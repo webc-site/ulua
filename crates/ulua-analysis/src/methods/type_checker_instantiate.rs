@@ -28,9 +28,8 @@ impl TypeChecker {
 
     // reusableInstantiation.resetState(log, &currentModule->internalTypes, builtinTypes, scope->level, /*scope*/ nullptr);
     unsafe {
-      let arena = Handle::from_mut(
-        &mut (*(arc_as_mut(self.expect_current_module()))).internal_types,
-      );
+      let arena =
+        Handle::from_mut(&mut (*(arc_as_mut(self.expect_current_module()))).internal_types);
       self.reusable_instantiation.reset_state(
         log,
         arena,

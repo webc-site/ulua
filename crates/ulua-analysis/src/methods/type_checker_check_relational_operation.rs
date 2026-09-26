@@ -123,10 +123,7 @@ impl TypeChecker {
           // eg it is okay to compare string? == number? because the two types
           // have nil in common, but string == number is not allowed.
           // SAFETY: current_module 在类型检查期间独占；as_ptr 转 *mut 供本调用可变访问。
-          let arena = unsafe {
-            &mut (*arc_as_mut(self.expect_current_module()))
-              .internal_types
-          };
+          let arena = unsafe { &mut (*arc_as_mut(self.expect_current_module())).internal_types };
           let eq_test_result = are_eq_comparable(arena, &mut self.normalizer, lhs_type, rhs_type);
           let eq_test_result = match eq_test_result {
             Some(ok) => ok,

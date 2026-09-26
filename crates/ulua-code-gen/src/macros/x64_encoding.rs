@@ -3,8 +3,7 @@
 //! （r7-macros98 合并票：逐字保真自原一文件一宏碎片，宏体/函数体未改动。）
 
 use crate::{
-  enums::size_x_64::SizeX64,
-  functions::get_scale_encoding::get_scale_encoding,
+  enums::size_x_64::SizeX64, functions::get_scale_encoding::get_scale_encoding,
   records::register_x_64::RegisterX64,
 };
 

@@ -150,9 +150,7 @@ impl NonStrictTypeChecker {
       AstStatRef::LocalFunction(_) => {
         self.visit_ast_stat_local_function(stat.cast::<AstStatLocalFunction>())
       }
-      AstStatRef::TypeAlias(_) => {
-        self.visit_ast_stat_type_alias(stat.cast::<AstStatTypeAlias>())
-      }
+      AstStatRef::TypeAlias(_) => self.visit_ast_stat_type_alias(stat.cast::<AstStatTypeAlias>()),
       AstStatRef::TypeFunction(_) => {
         self.visit_ast_stat_type_function(stat.cast::<AstStatTypeFunction>());
         NonStrictContext::new()

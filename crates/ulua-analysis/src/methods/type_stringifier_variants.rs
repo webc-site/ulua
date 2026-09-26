@@ -727,7 +727,12 @@ impl TypeStringifier {
       // drain 单次完成同一动作）。
       let elem = ElementResult {
         str: take(&mut self.st().result_mut().name),
-        spans: self.st().result_mut().type_spans.drain(saved_spans_size..).collect(),
+        spans: self
+          .st()
+          .result_mut()
+          .type_spans
+          .drain(saved_spans_size..)
+          .collect(),
       };
 
       results_length += elem.str.len();

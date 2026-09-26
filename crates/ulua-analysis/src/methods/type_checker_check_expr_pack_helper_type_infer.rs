@@ -194,11 +194,7 @@ impl TypeChecker {
       // 裸句柄写 Module 的 astOriginalCallTypes/astTypes 两张映射，`&mut`
       // 借出被本块包裹、块尾即归还，无并存别名。语义对应 C++
       // TypeInfer.cpp:4574 `currentModule->astOriginalCallTypes[expr.func]`。
-      let module = unsafe {
-        &mut *(arc_as_mut(
-          self.expect_current_module(),
-        ))
-      };
+      let module = unsafe { &mut *(arc_as_mut(self.expect_current_module())) };
       *module
         .ast_original_call_types
         .get_or_insert(expr.func as *const AstNode) = follow_type::follow(function_type);

@@ -220,9 +220,7 @@ fn are_equal_optional_pack(
   match (lhs.as_pack_opt(), rhs.as_pack_opt()) {
     (None, None) => true,
     (Some(l), Some(r)) => {
-      are_equal_are_equal_state_type_function_type_pack_var_type_function_type_pack_var(
-        seen, l, r,
-      )
+      are_equal_are_equal_state_type_function_type_pack_var_type_function_type_pack_var(seen, l, r)
     }
     _ => false,
   }

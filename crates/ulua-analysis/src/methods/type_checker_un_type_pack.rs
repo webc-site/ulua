@@ -35,9 +35,7 @@ impl TypeChecker {
       CountMismatchContext::Arg,
     );
     unsafe {
-      (*(arc_as_mut(
-          self.expect_current_module(),
-        )))
+      (*(arc_as_mut(self.expect_current_module())))
         .errors
         .truncate(old_errors_size)
     };

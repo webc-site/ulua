@@ -60,9 +60,7 @@ impl TypeChecker {
     let key = function as *const AstExprFunction as *const AstExpr;
     // SAFETY: current_module 在类型检查期间独占使用（C++ 直接改 module->astTypes 同义）；
     // Arc::as_ptr 转 *mut 仅供此处插入，单线程无别名。
-    let module = unsafe {
-      &mut *(arc_as_mut(self.expect_current_module()))
-    };
+    let module = unsafe { &mut *(arc_as_mut(self.expect_current_module())) };
     if module.ast_types.find(&key).is_none() {
       *module.ast_types.get_or_insert(key) = ty;
     }

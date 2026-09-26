@@ -1,19 +1,11 @@
 use crate::{
   records::{
-    ast_node::AstNode,
-    ast_type::AstType,
-    ast_type_error::AstTypeError,
-    ast_type_function::AstTypeFunction,
-    ast_type_group::AstTypeGroup,
-    ast_type_intersection::AstTypeIntersection,
-    ast_type_optional::AstTypeOptional,
-    ast_type_reference::AstTypeReference,
-    ast_type_singleton_bool::AstTypeSingletonBool,
-    ast_type_singleton_string::AstTypeSingletonString,
-    ast_type_table::AstTypeTable,
-    ast_type_typeof::AstTypeTypeof,
-    ast_type_union::AstTypeUnion,
-    location::Location,
+    ast_node::AstNode, ast_type::AstType, ast_type_error::AstTypeError,
+    ast_type_function::AstTypeFunction, ast_type_group::AstTypeGroup,
+    ast_type_intersection::AstTypeIntersection, ast_type_optional::AstTypeOptional,
+    ast_type_reference::AstTypeReference, ast_type_singleton_bool::AstTypeSingletonBool,
+    ast_type_singleton_string::AstTypeSingletonString, ast_type_table::AstTypeTable,
+    ast_type_typeof::AstTypeTypeof, ast_type_union::AstTypeUnion, location::Location,
   },
   rtti::{AstNodeClass, AstNodeView, ast_node_as_unchecked},
 };
@@ -43,13 +35,9 @@ impl<'a> AstTypeRef<'a> {
   #[inline]
   pub fn try_from_type(ty: &'a AstType) -> Option<Self> {
     match ty.base.class_index {
-      AstTypeReference::CLASS_INDEX => {
-        Some(Self::Reference(unsafe { ast_node_as_unchecked(ty) }))
-      }
+      AstTypeReference::CLASS_INDEX => Some(Self::Reference(unsafe { ast_node_as_unchecked(ty) })),
       AstTypeTable::CLASS_INDEX => Some(Self::Table(unsafe { ast_node_as_unchecked(ty) })),
-      AstTypeFunction::CLASS_INDEX => {
-        Some(Self::Function(unsafe { ast_node_as_unchecked(ty) }))
-      }
+      AstTypeFunction::CLASS_INDEX => Some(Self::Function(unsafe { ast_node_as_unchecked(ty) })),
       AstTypeTypeof::CLASS_INDEX => Some(Self::Typeof(unsafe { ast_node_as_unchecked(ty) })),
       AstTypeUnion::CLASS_INDEX => Some(Self::Union(unsafe { ast_node_as_unchecked(ty) })),
       AstTypeIntersection::CLASS_INDEX => {
@@ -62,9 +50,7 @@ impl<'a> AstTypeRef<'a> {
       AstTypeSingletonString::CLASS_INDEX => {
         Some(Self::SingletonString(unsafe { ast_node_as_unchecked(ty) }))
       }
-      AstTypeOptional::CLASS_INDEX => {
-        Some(Self::Optional(unsafe { ast_node_as_unchecked(ty) }))
-      }
+      AstTypeOptional::CLASS_INDEX => Some(Self::Optional(unsafe { ast_node_as_unchecked(ty) })),
       AstTypeError::CLASS_INDEX => Some(Self::Error(unsafe { ast_node_as_unchecked(ty) })),
       _ => None,
     }
