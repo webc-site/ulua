@@ -8,12 +8,13 @@ use crate::{
     str_split::str_split_arm, str_sub::str_sub_arm, str_unpack::str_unpack_arm,
     str_upper::str_upper_arm,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn luaopen_string(l: *mut LuaState) -> i32 {
+pub unsafe fn luaopen_string(l: *mut LuaState) -> i32 {
   unsafe {
     // Faithful port of the `strlib[]` registration array in lstrlib.cpp:
     // {name, func} pairs ending in a {NULL, NULL} sentinel; lua_l_register
@@ -44,3 +45,5 @@ pub unsafe extern "C-unwind" fn luaopen_string(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn luaopen_string, luaopen_string_arm);

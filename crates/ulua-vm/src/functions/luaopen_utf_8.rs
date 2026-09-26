@@ -6,6 +6,7 @@ use crate::{
     lua_l_register::lua_l_register, lua_pushlstring::lua_pushlstring, lua_setfield::lua_setfield,
     utfchar::utfchar_arm, utflen::utflen_arm,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
 
@@ -19,7 +20,7 @@ static FUNCS: [LuaLReg; 5] = [
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn luaopen_utf_8(l: *mut LuaState) -> i32 {
+pub unsafe fn luaopen_utf_8(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_register(l, c"utf8".as_ptr(), &FUNCS);
 
@@ -34,3 +35,5 @@ pub unsafe extern "C-unwind" fn luaopen_utf_8(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn luaopen_utf_8, luaopen_utf_8_arm);

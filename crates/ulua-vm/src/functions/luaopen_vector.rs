@@ -18,7 +18,7 @@ use crate::{
     vector_normalize::vector_normalize_arm,
     vector_shared::{vector_abs, vector_ceil, vector_floor, vector_max, vector_min, vector_sign},
   },
-  macros::lua_vector_size::LUA_VECTOR_SIZE,
+  macros::{lua_lib_fn::lua_lib_fn, lua_vector_size::LUA_VECTOR_SIZE},
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
 
@@ -41,7 +41,7 @@ static VECTOR_FUNCS: [LuaLReg; 14] = [
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe extern "C-unwind" fn luaopen_vector(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn luaopen_vector(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_register(l, c"vector".as_ptr(), &VECTOR_FUNCS);
 
@@ -62,3 +62,5 @@ pub(crate) unsafe extern "C-unwind" fn luaopen_vector(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn luaopen_vector, luaopen_vector_arm);

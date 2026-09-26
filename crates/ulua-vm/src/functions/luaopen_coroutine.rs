@@ -5,12 +5,13 @@ use crate::{
     coyieldable::coyieldable, lua_l_register::lua_l_register, lua_pushcclosurek::lua_pushcclosurek,
     lua_setfield::lua_setfield,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe extern "C-unwind" fn luaopen_coroutine(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn luaopen_coroutine(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_register(l, c"coroutine".as_ptr(), &CO_FUNCS);
 
@@ -27,6 +28,7 @@ pub(crate) unsafe extern "C-unwind" fn luaopen_coroutine(l: *mut LuaState) -> i3
   }
 }
 
+lua_lib_fn!(pub(crate) fn luaopen_coroutine, luaopen_coroutine_arm);
 static CO_FUNCS: [LuaLReg; 7] = [
   LuaLReg::new(b"create", cocreate),
   LuaLReg::new(b"running", corunning),

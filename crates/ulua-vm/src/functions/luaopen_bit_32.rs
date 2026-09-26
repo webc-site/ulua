@@ -5,13 +5,14 @@ use crate::{
     b_or::b_or_arm, b_replace::b_replace_arm, b_rrot::b_rrot_arm, b_rshift::b_rshift_arm,
     b_swap::b_swap_arm, b_test::b_test_arm, b_xor::b_xor_arm, lua_l_register::lua_l_register,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
 
 /// # Safety
 /// `l` 须为存活 LuaState 且栈顶之上留 1 空槽（`lua_l_register` push 库表并作为返回值），处于可分配/GC 的受保护帧；
 /// `bitlib` 是本地栈数组，含 NUL 名终止项，`.as_ptr()` 在 `lua_l_register` 调用期内存活。cpp/VM/src/lbitlib.cpp:241 luaopen_bit32。
-pub unsafe extern "C-unwind" fn luaopen_bit32(l: *mut LuaState) -> i32 {
+pub unsafe fn luaopen_bit32(l: *mut LuaState) -> i32 {
   unsafe {
     // Faithful port of bitlib[] in lbitlib.cpp (Lua name -> b_* `_arm` 边界臂).
     let bitlib: [LuaLReg; 15] = [
@@ -37,3 +38,5 @@ pub unsafe extern "C-unwind" fn luaopen_bit32(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn luaopen_bit32, luaopen_bit32_arm);

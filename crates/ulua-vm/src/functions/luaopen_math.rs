@@ -16,8 +16,8 @@ use crate::{
     math_sqrt::math_sqrt, math_tan::math_tan, math_tanh::math_tanh, pcg_32_seed::pcg_32_seed,
   },
   macros::{
-    luau_e::LUAU_E, luau_nan::LUAU_NAN, luau_phi::LUAU_PHI, luau_pi::LUAU_PI,
-    luau_sqrt_2::LUAU_SQRT2, luau_tau::LUAU_TAU,
+    lua_lib_fn::lua_lib_fn, luau_e::LUAU_E, luau_nan::LUAU_NAN, luau_phi::LUAU_PHI,
+    luau_pi::LUAU_PI, luau_sqrt_2::LUAU_SQRT2, luau_tau::LUAU_TAU,
   },
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
@@ -64,7 +64,7 @@ static MATH_FUNCS: [LuaLReg; 37] = [
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn luaopen_math(l: *mut LuaState) -> i32 {
+pub unsafe fn luaopen_math(l: *mut LuaState) -> i32 {
   unsafe {
     let mut seed = lua_encodepointer(l, l as usize) as u64;
     seed ^= 0;
@@ -90,3 +90,5 @@ pub unsafe extern "C-unwind" fn luaopen_math(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn luaopen_math, luaopen_math_arm);

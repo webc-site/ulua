@@ -11,6 +11,7 @@ use crate::{
     buffer_writeinteger::buffer_writeinteger, buffer_writelong::buffer_writelong_arm,
     buffer_writestring::buffer_writestring_arm, lua_l_register::lua_l_register,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
 
@@ -126,7 +127,7 @@ static BUFFER_LIB: [LuaLReg; 28] = join::<28>(&BUFFER_BASE, &INTEGER_TAIL);
 /// `l` 须为存活 LuaState 且栈顶之上至少留 1 个空槽（`lua_l_register` 会 push 库表并作为返回值）；
 /// 须在可分配/GC 的受保护帧内调用。
 /// cpp/VM/src/lbuflib.cpp:433 luaopen_buffer。
-pub unsafe extern "C-unwind" fn luaopen_buffer(l: *mut LuaState) -> i32 {
+pub unsafe fn luaopen_buffer(l: *mut LuaState) -> i32 {
   unsafe {
     let buffer_lib: &[LuaLReg] = if fflag::LuauIntegerLibrary.get() {
       &BUFFER_LIB
@@ -138,3 +139,5 @@ pub unsafe extern "C-unwind" fn luaopen_buffer(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn luaopen_buffer, luaopen_buffer_arm);

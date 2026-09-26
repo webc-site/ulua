@@ -15,6 +15,7 @@ use crate::{
     int_64_urem::int64_urem, lua_l_register::lua_l_register,
     lua_pushinteger_64::lua_pushinteger_64, lua_setfield::lua_setfield,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
 
@@ -22,7 +23,7 @@ use crate::{
 /// `l` 须为存活 LuaState 且栈顶之上留足空槽（`lua_l_register` push 库表、随后 push+`lua_setfield` 各占一次临时），
 /// 须在可分配/GC 的受保护帧内调用；`INT64LIB` 是静态 null 终止数组，`.as_ptr()` 指向其首项。
 /// cpp/VM/src/lintlib.cpp:603 luaopen_integer。
-pub(crate) unsafe extern "C-unwind" fn luaopen_integer(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn luaopen_integer(l: *mut LuaState) -> i32 {
   unsafe {
     // Register the integer library functions
     // Note: int64lib is defined in lintlib.cpp; in this translation context we use the local static.
@@ -40,6 +41,7 @@ pub(crate) unsafe extern "C-unwind" fn luaopen_integer(l: *mut LuaState) -> i32 
   }
 }
 
+lua_lib_fn!(pub(crate) fn luaopen_integer, luaopen_integer_arm);
 // cpp lintlib.cpp `int64lib` 注册表（39 项，顺序与 C++ 一致）。
 static INT64LIB: [LuaLReg; 39] = [
   LuaLReg::new(b"create", int64_create_arm),

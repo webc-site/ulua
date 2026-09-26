@@ -8,7 +8,9 @@ use crate::{
     tisfrozen::tisfrozen_arm, tmove::tmove_arm, tpack::tpack_arm, tremove::tremove_arm,
     tsort::tsort_arm, tunpack::tunpack_arm,
   },
-  macros::{lua_pushcfunction::LUA_PUSHCFUNCTION, lua_setglobal::lua_setglobal},
+  macros::{
+    lua_lib_fn::lua_lib_fn, lua_pushcfunction::LUA_PUSHCFUNCTION, lua_setglobal::lua_setglobal,
+  },
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
 
@@ -36,7 +38,7 @@ static TAB_FUNCS: [LuaLReg; 17] = [
 /// `l` 须为存活 LuaState 且栈顶之上留足空槽（`lua_l_register` push 库表；`LUA_PUSHCFUNCTION` push cfunction 后
 /// `lua_setglobal` 消费之），须在可分配/GC 的受保护帧内调用。
 /// cpp/VM/src/ltablib.cpp:694 luaopen_table。
-pub unsafe extern "C-unwind" fn luaopen_table(l: *mut LuaState) -> i32 {
+pub unsafe fn luaopen_table(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_register(l, c"table".as_ptr(), &TAB_FUNCS);
 
@@ -46,3 +48,5 @@ pub unsafe extern "C-unwind" fn luaopen_table(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn luaopen_table, luaopen_table_arm);
