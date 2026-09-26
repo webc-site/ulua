@@ -2882,15 +2882,13 @@ impl TypeChecker2 {
     // SAFETY: find_innermost_scope 至少返回模块作用域，此处判空兜底 C++ NotNull；
     // Scope 实体归 module.scopes 持有，is_invalid_type_alias 只读递归检查。
     let scope = self.find_innermost_scope(stat.base.base.location);
-    if !scope.is_null() {
-      let name = stat.name;
-      let name_str = name.as_str_or_empty().to_string();
-      if let Some(loc) = unsafe { (*scope).is_invalid_type_alias(&name_str) } {
-        self.report_error_type_error_data_location(
-          TypeErrorData::RecursiveRestraintViolation(RecursiveRestraintViolation::default()),
-          &loc,
-        );
-      }
+    if !scope.is_null()
+      && let Some(loc) = unsafe { (*scope).is_invalid_type_alias(stat.name.as_str_or_empty()) }
+    {
+      self.report_error_type_error_data_location(
+        TypeErrorData::RecursiveRestraintViolation(RecursiveRestraintViolation::default()),
+        &loc,
+      );
     }
 
     // generics/generic_packs 是别名声明泛型参数表（arena 数组），只读遍历登记符号。
