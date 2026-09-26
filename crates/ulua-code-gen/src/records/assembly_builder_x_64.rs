@@ -20,9 +20,11 @@ use crate::{
     write_unaligned::{writef_32, writef_64, writeu_16, writeu_32, writeu_64},
   },
   macros::{
-    avx_3_1::avx_3_1, avx_3_2::avx_3_2, avx_3_3::avx_3_3, codegen_assert::CODEGEN_ASSERT,
-    mod_rm::mod_rm, op_plus_cc::op_plus_cc, op_plus_reg::op_plus_reg, rex_b::rex_b,
-    rex_force::rex_force, rex_r::rex_r, rex_w_bit::REX_W_BIT, rex_x::rex_x, sib::sib,
+    codegen_assert::CODEGEN_ASSERT,
+    x64_encoding::{
+      avx_3_1, avx_3_2, avx_3_3, mod_rm, op_plus_cc, op_plus_reg, rex_b, rex_force, rex_r,
+      REX_W_BIT, rex_x, sib,
+    },
   },
   records::{
     avx_op_encoding::AvxOpEncoding, binary_op_encoding::BinaryOpEncoding, label::Label,
