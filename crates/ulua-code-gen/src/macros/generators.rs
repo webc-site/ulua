@@ -134,8 +134,6 @@ macro_rules! shared_ptr_accessors {
   };
 }
 
-pub use shared_ptr_accessors;
-
 /// x64 常量池四兄弟（`i32`/`f32`/`i64`/`f64`）的公共骨架，收口 4×46 行逐字重复的
 /// RIP 相对常量发射逻辑（对照 cpp：`AssemblyBuilderX64.cpp` 的同名四函数）。
 ///

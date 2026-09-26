@@ -46,8 +46,6 @@ macro_rules! a64_arg_impls {
   };
 }
 
-pub use a64_arg_impls;
-
 // A64 `placeR1` 单源浮点臂坍缩骨架（对照 cpp `AssemblyBuilderA64.cpp` 各
 // `placeR1(name, dst, src, op)` 三点段）。
 //
@@ -92,8 +90,6 @@ macro_rules! a64_r1_impls {
     )+
   };
 }
-
-pub use a64_r1_impls;
 
 // builtin 公共骨架坍缩宏（对照 cpp `IrTranslateBuiltins.cpp` 顶部的 static 助手段）。
 //
@@ -182,10 +178,7 @@ macro_rules! builtin_store_impls {
     )+
   };
 }
-
-pub use builtin_check_impls;
 pub use builtin_load_impls;
-pub use builtin_store_impls;
 
 /// x64 AVX 助记符表坍缩骨架（对照 cpp：`AssemblyBuilderX64.cpp` 各 `placeAvx(...)`
 /// 单行转发体）。
@@ -277,7 +270,4 @@ macro_rules! x64_avx_rm_rev_impls {
     }
   };
 }
-
-pub use x64_avx_rm_impls;
 pub use x64_avx_rm_rev_impls;
-pub use x64_avx_rrm_impls;
