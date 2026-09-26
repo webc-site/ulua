@@ -28,7 +28,7 @@ pub unsafe extern "C-unwind" fn conformance_debugger_setup(l: *mut LuaState) {
   // Safety: `l` 存活；单步开关取本用例的原子状态位（只写 0/1）。
   unsafe {
     lua_singlestep(
-      l,
+      &mut *l,
       if CONFORMANCE_DEBUGGER_STATE.singlestep.load(Ordering::SeqCst) {
         1
       } else {

@@ -2,8 +2,9 @@
 //! 由 `functions/` 下各壳文件以一次宏调用实例化；`functions/mod.rs` 仅保留模块声明注册表。
 //! 每族宏的 `# Safety` 契约与 `// Safety:` 理由只在本文件书写一次，成员文件不得复述契约文本。
 
-/// 单参 `(l) -> c_int` 通用 C ABI 导出壳模板：72 个同形透传壳（`LuaState`/`LuaState`
-/// 为同一类型别名，仅源拼写差异）单源生成，与 `lua_v_doarithimpl.rs` 的
+/// 单参 `(l) -> c_int` 通用 C ABI 导出壳模板：71 个同形透传壳（`LuaState`/`LuaState`
+/// 为同一类型别名，仅源拼写差异；`lua_isthreadreset` 已随 vm 侧 B 档前移退役为
+/// 显式壳，见 `functions/lua_isthreadreset.rs`）单源生成，与 `lua_v_doarithimpl.rs` 的
 /// `arith_tm_exports!` 先例同构。与手写逐壳的差异仅在文本层：透传目标在 doc 契约中
 /// 以 `ulua_vm::functions::` 全路径书写；体内 `// Safety:` 理由注释转通用表述。
 /// 导出符号名、签名与 rustdoc 逐参数契约语义与逐字节手写版一致。
@@ -234,11 +235,12 @@ macro_rules! capi_shell_check_opt {
 
 /// `(l, <c_int 值型参数>) -> c_int`（以及无返回值 `unit` 尾缀形态）导出壳模板：
 /// coresumefinish / lua_g_hasnative / lua_g_isnative / lua_isstring / lua_type /
-/// str_find_aux（返回 c_int）与 lua_settop / lua_setuserdatametatable /
-/// lua_singlestep（无返回值）共 9 枚同形透传壳共用（第二参数名 r/level/idx/find/
-/// tag/enabled 与导出符号名以入参给出——`lua_g_isnative` 的符号是
+/// str_find_aux（返回 c_int）与 lua_settop / lua_setuserdatametatable 共 8 枚
+/// 同形透传壳共用（第二参数名 r/level/idx/find/
+/// tag 与导出符号名以入参给出——`lua_g_isnative` 的符号是
 /// `ulua_luaG_isnative`，与函数名不同形，故符号一律走字面量，同
-/// capi_shell_tkeyval! 先例）。与手写逐壳的差异仅在文本层：体内 `// Safety:` 理由
+/// capi_shell_tkeyval! 先例；`lua_singlestep` 已随 vm 侧 B 档前移退役为显式壳，
+/// 见 `functions/lua_singlestep.rs`）。与手写逐壳的差异仅在文本层：体内 `// Safety:` 理由
 /// 注释逐壳点名的参数（如「find 均为值型参数」）统一为不点名表述；`/// # Safety`
 /// 契约逐字不变。
 macro_rules! capi_shell_l_int {

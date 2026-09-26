@@ -466,10 +466,9 @@ arith_tm_exports! {
         'functions/lua_setuserdatametatable.rs', 'capi_shell_l_int',
         'capi_shell_l_int!(\n  lua_setuserdatametatable,\n  lua_setuserdatametatable,\n  "ulua_lua_setuserdatametatable",\n  tag,\n  unit\n);',
     ),
-    'functions/lua_singlestep.rs': _macro_shell(
-        'functions/lua_singlestep.rs', 'capi_shell_l_int',
-        'capi_shell_l_int!(lua_singlestep, lua_singlestep, "ulua_lua_singlestep", enabled, unit);',
-    ),
+    # functions/lua_singlestep.rs 已随 vm 侧 B 档前移（&mut LuaState 接收者）从
+    # capi_shell_l_int! 退役为显式壳（r7-gtd，先例 lua_status/lua_setthreaddata/lua_l_checkudata），
+    # 不再是宏收口壳，故移出本登记表；文件为手写单源，重跑不触碰。
     # capi_shell_barrier_voidptr!：`(l, <不透明指针>, v: *mut c_void) -> ()` GC 屏障族
     'functions/lua_c_barrierf.rs': _macro_shell(
         'functions/lua_c_barrierf.rs', 'capi_shell_barrier_voidptr',

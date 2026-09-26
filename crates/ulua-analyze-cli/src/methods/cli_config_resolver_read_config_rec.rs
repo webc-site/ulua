@@ -55,7 +55,7 @@ use crate::records::{
 pub(crate) unsafe extern "C-unwind" fn luau_config_interrupt(l: *mut LuaState, _gc: c_int) {
   // Safety: 依函数 `# Safety` 契约，`l` 合法；线程数据槽只可能挂
   // `*mut LuauConfigInterruptInfo` 或 null，故下方判空成立。
-  let info = unsafe { lua_getthreaddata(l) as *const LuauConfigInterruptInfo };
+  let info = unsafe { lua_getthreaddata(&*l) as *const LuauConfigInterruptInfo };
   if info.is_null() {
     // cpp 原版直接解引用，行为收敛为 no-op。
     return;
