@@ -1,6 +1,5 @@
 //! DWARF x64 常量族（寄存器编号 + CFA 操作码；C++ DWARF2 编号/操作码表对偶）。
-//! RBP/RSP/RA 与 A64 LR/SP 因黑名单消费方（records/unwind_builder_dwarf_2.rs）
-//! 的模块路径锁定，保留在原独立文件中。
+//! A64 LR/SP 与 x64 RA/RBP/RSP 已自单碎片迁回（r7-useline 票面 A：use 行白名单收口）。
 
 pub const DW_REG_X64_RAX: i32 = 0;
 pub const DW_REG_X64_RDX: i32 = 1;
@@ -8,6 +7,11 @@ pub const DW_REG_X64_RCX: i32 = 2;
 pub const DW_REG_X64_RBX: i32 = 3;
 pub const DW_REG_X64_RSI: i32 = 4;
 pub const DW_REG_X64_RDI: i32 = 5;
+pub const DW_REG_X64_RBP: i32 = 6;
+pub const DW_REG_X64_RSP: i32 = 7;
+pub const DW_REG_X64_RA: i32 = 16;
+pub const DW_REG_A64_LR: i32 = 30;
+pub const DW_REG_A64_SP: i32 = 31;
 
 // DWARF CFA 指令操作码族（UnwindBuilderDwarf2.cpp #define 对偶；macros98 purge 前
 // dw_cf_a_* 单源在此复位，值与 purge 前逐字相同）。

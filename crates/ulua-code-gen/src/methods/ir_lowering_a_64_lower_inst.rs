@@ -34,10 +34,7 @@ use crate::{
   },
   macros::{
     codegen_assert::{CODEGEN_ASSERT, unsupported_instruction_form},
-    has_op_b::HAS_OP_B,
-    has_op_c::HAS_OP_C,
-    has_op_d::HAS_OP_D,
-    has_op_e::HAS_OP_E,
+    ir_operand::{HAS_OP_B, HAS_OP_C, HAS_OP_D, HAS_OP_E},
   },
   records::{
     address_a_64::AddressA64,

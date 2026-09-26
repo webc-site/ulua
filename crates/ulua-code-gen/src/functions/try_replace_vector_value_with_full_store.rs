@@ -1,7 +1,7 @@
 use crate::{
   enums::{ir_cmd::IrCmd, ir_op_kind::IrOpKind},
   functions::replace_ir_utils::replace_ir_function_ir_op_ir_op_at,
-  macros::{codegen_assert::CODEGEN_ASSERT, has_op_d::HAS_OP_D, has_op_e::HAS_OP_E},
+  macros::{codegen_assert::CODEGEN_ASSERT, ir_operand::{HAS_OP_D, HAS_OP_E}},
   records::{
     ir_function::IrFunction,
     ir_op::IrOp,

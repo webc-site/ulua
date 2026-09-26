@@ -59,7 +59,7 @@ LUAU_NOINLINE! {
 /// cpp `LUAU_ASSERT` 中 `expr` 为假的那一半：上报失败并回答"是否还要断点"。
 ///
 /// `expression_with_nul` / `file_with_nul` 由宏以 `concat!(..., "\0")` 生成，
-/// 带结尾 NUL。这一约定用 [`cbytes_or_invalid`] 校验后以 NUL 结尾字节切片
+/// 带结尾 NUL。这一约定用 `cbytes_or_invalid` 校验后以 NUL 结尾字节切片
 /// （不满足即回退 `b"<invalid expr>\0"` / `b"<invalid file>\0"` 占位常量）
 /// 表达，指针位点只剩 `.as_ptr().cast()`，
 /// 不再引入 `CStr` 类型。

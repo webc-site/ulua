@@ -125,3 +125,48 @@ pub fn opt_op_d_ref(inst: &IrInst) -> IrOp {
     IrOp { kind_and_index: 0 }
   }
 }
+
+// HAS_OP_x 操作数存在性宏族（r7-useline 票面 A：自 has_op_b/c/d/e.rs 碎片迁回，
+// 宏体逐字保真，黑名单消费方仅改 use 路径）。
+
+/// Source: `CodeGen/include/Luau/IrData.h:1218` (hand-ported)
+// #define HAS_OP_B(inst) (1 < (inst).ops.size() && (inst).ops[1].kind() != IrOpKind::None)
+#[macro_export]
+macro_rules! HAS_OP_B {
+  ($inst:expr) => {
+    1 < ($inst).ops.size() as usize
+      && ($inst).ops[1].kind() != $crate::enums::ir_op_kind::IrOpKind::None
+  };
+}
+
+/// Source: `CodeGen/include/Luau/IrData.h:1219` (hand-ported)
+// #define HAS_OP_C(inst) (2 < (inst).ops.size() && (inst).ops[2].kind() != IrOpKind::None)
+#[macro_export]
+macro_rules! HAS_OP_C {
+  ($inst:expr) => {
+    2 < ($inst).ops.size() as usize
+      && ($inst).ops[2].kind() != $crate::enums::ir_op_kind::IrOpKind::None
+  };
+}
+
+/// Source: `CodeGen/include/Luau/IrData.h:1220` (hand-ported)
+// #define HAS_OP_D(inst) (3 < (inst).ops.size() && (inst).ops[3].kind() != IrOpKind::None)
+#[macro_export]
+macro_rules! HAS_OP_D {
+  ($inst:expr) => {
+    3 < ($inst).ops.size() as usize
+      && ($inst).ops[3].kind() != $crate::enums::ir_op_kind::IrOpKind::None
+  };
+}
+
+/// Source: `CodeGen/include/Luau/IrData.h:1221` (hand-ported)
+// #define HAS_OP_E(inst) (4 < (inst).ops.size() && (inst).ops[4].kind() != IrOpKind::None)
+#[macro_export]
+macro_rules! HAS_OP_E {
+  ($inst:expr) => {
+    4 < ($inst).ops.size() as usize
+      && ($inst).ops[4].kind() != $crate::enums::ir_op_kind::IrOpKind::None
+  };
+}
+
+pub use {HAS_OP_B, HAS_OP_C, HAS_OP_D, HAS_OP_E};
