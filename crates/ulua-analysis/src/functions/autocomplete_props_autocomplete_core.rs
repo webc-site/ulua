@@ -12,7 +12,7 @@ use crate::{
     begin_type::begin_union_type, check_type_correct_kind::check_type_correct_kind,
     check_type_match::check_type_match, first::first, follow_type,
     get_paren_recommendation::get_paren_recommendation, get_singleton_type::get_singleton_type,
-    get_type, is_prim::is_nil,
+    get_type, is_prim::is_nil, magic_names::K_ERROR_ID_STR,
   },
   records::{
     arena_handle::Handle, autocomplete_entry::AutocompleteEntry, builtin_types::BuiltinTypes,
@@ -27,8 +27,6 @@ use crate::{
     props_type::Props, type_id::TypeId,
   },
 };
-
-const K_PARSE_NAME_ERROR: &str = "%error-id%";
 
 /// C++ `isSkippableTypeInUnion`（AutocompleteCore.cpp:325-329）：
 /// nil / ErrorType / NeverType 在 union 求交集中可跳过。
@@ -208,7 +206,7 @@ pub(crate) fn autocomplete_props(ctx: &AutocompletePropsCtx<'_>, step: Autocompl
       // We are walking up the class hierarchy, so if we encounter a property
       // that we have already populated, it takes precedence over the
       // property we found just now.
-      if !result.contains_key(name) && name != K_PARSE_NAME_ERROR {
+      if !result.contains_key(name) && name != K_ERROR_ID_STR {
         let type_id: TypeId = if let Some(ty) = prop.read_ty {
           follow_type::follow(ty)
         } else {

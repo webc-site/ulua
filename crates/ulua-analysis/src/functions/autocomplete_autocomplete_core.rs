@@ -64,6 +64,7 @@ use crate::{
     follow_type, get_type,
     is_identifier::is_identifier,
     is_simple_interpolated_string::is_simple_interpolated_string,
+    magic_names::K_ERROR_ID,
     make_anonymous_autofilled::make_anonymous_autofilled,
     string_part_of_interp_string::string_part_of_interp_string,
   },
@@ -88,15 +89,12 @@ const K_HOT_COMMENTS: [&str; 6] = [
 ];
 // C++ `kKnownAttributes` (AutocompleteCore.cpp:45).
 const K_KNOWN_ATTRIBUTES: [&str; 3] = ["checked", "deprecated", "native"];
-// C++ `kParseNameError` (ParseResult.h). AstName 由词法器 intern，必为合法
-// ASCII/UTF-8，用字节串比较即可，免去 CStr 的 unsafe。
-const K_PARSE_NAME_ERROR_BYTES: &[u8] = b"%error-id%";
 // C++ `kGeneratedAnonymousFunctionEntryName` (AutocompleteTypes.h:92).
 const K_GENERATED_ANONYMOUS_FUNCTION_ENTRY_NAME: &str = "function (anonymous autofilled)";
 
 fn is_parse_name_error_name(name: AstName) -> bool {
-  // 空名 → as_bytes 空切片，必不等于非空常量。
-  name.as_bytes() == K_PARSE_NAME_ERROR_BYTES
+  // 空名 → as_bytes 空切片，必不等于非空常量。门面 @6a42362 收口 kParseNameError。
+  name.as_bytes() == K_ERROR_ID
 }
 
 /// 对照 C++ `Remove keys that are already completed`：把 items 中已写成
