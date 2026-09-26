@@ -30,10 +30,15 @@ const root_dir = import.meta.dirname,
       type: "boolean",
       describe: "运行整个 workspace 所有包的测试（默认）",
     })
-    .example("$0", "运行 workspace 全部测试与 JIT 一致性测试")
+    .option("status-level", {
+      type: "string",
+      describe: "显示测试状态的详细级别（默认 pass 显示各测试耗时，可选 fail, slow, all 等）",
+    })
+    .example("$0", "运行 workspace 全部测试（默认流式输出每个测试及耗时）")
     .example("$0 -p ulua-vm", "仅运行指定包测试")
     .example("$0 -p ulua-conformance", "运行 conformance 包（包含 JIT 一致性测试）")
     .example("$0 -- -E 'test(conformance)'", "透传 nextest 过滤器参数（或直接传 -E）")
+    .example("$0 --status-level fail", "仅在测试失败时输出状态")
     .help()
     .alias("h", "help")
     .version(false)
@@ -57,7 +62,7 @@ const runTest = async (sub_dir, extra_li, env = {}) => {
       CARGO_TARGET_DIR: target_dir,
       ...env,
     },
-  })`cargo nextest run --target-dir ${target_dir} --status-level fail ${extra_li}`;
+  })`cargo nextest run --target-dir ${target_dir} ${extra_li}`;
 },
 main = async () => {
   // 1. 运行测试集（解释执行模式）
