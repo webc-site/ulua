@@ -126,6 +126,7 @@ pub mod lua_l_opt;
 pub mod lua_l_optstring;
 pub mod lua_l_typeerror;
 pub mod lua_lib_arm;
+pub mod lua_lib_fn;
 pub mod lua_lutag_limit;
 pub mod lua_m_arraysize;
 pub mod lua_m_freearray;
