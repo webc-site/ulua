@@ -59,7 +59,6 @@ version = "0.1.2"
 [features]
 default = ["std"]
 std = []
-luau_assert = ["ulua-common/luau_assert"]
 
 [target."cfg(windows)".dependencies.windows-sys]
 version = "0.61"

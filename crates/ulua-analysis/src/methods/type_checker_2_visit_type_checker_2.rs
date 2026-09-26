@@ -220,7 +220,7 @@ impl TypeChecker2 {
   /// 的 `LUAU_ENABLE_ASSERT` 块）：推导类型与期望内建类型必须满足子类型关系。
   /// `expected_first` 复刻 cpp 实参顺序差异：nil 传 `(actual, expected)`，
   /// number/integer 传 `(expected, inferred)`。
-  #[cfg(any(debug_assertions, feature = "luau_assert"))]
+  #[cfg(debug_assertions)]
   fn assert_constant_subtype(
     &mut self,
     base: &AstExpr,
@@ -279,13 +279,13 @@ impl TypeChecker2 {
   }
 
   pub fn visit_expr_constant_nil(&mut self, expr: &AstExprConstantNil) {
-    #[cfg(any(debug_assertions, feature = "luau_assert"))]
+    #[cfg(debug_assertions)]
     {
       // builtin_types 为 Handle 只读句柄，断言块内无裸指针操作。
       let expected_type = self.builtin_types.get().nil_type;
       self.assert_constant_subtype(&expr.base, expected_type, false);
     }
-    #[cfg(not(any(debug_assertions, feature = "luau_assert")))]
+    #[cfg(not(debug_assertions))]
     let _ = expr;
   }
 
@@ -303,22 +303,22 @@ impl TypeChecker2 {
   }
 
   pub(crate) fn visit_expr_constant_number(&mut self, expr: &AstExprConstantNumber) {
-    #[cfg(any(debug_assertions, feature = "luau_assert"))]
+    #[cfg(debug_assertions)]
     {
       let expected_type = self.builtin_types.get().number_type;
       self.assert_constant_subtype(&expr.base, expected_type, true);
     }
-    #[cfg(not(any(debug_assertions, feature = "luau_assert")))]
+    #[cfg(not(debug_assertions))]
     let _ = expr;
   }
 
   pub(crate) fn visit_expr_constant_integer(&mut self, expr: &AstExprConstantInteger) {
-    #[cfg(any(debug_assertions, feature = "luau_assert"))]
+    #[cfg(debug_assertions)]
     {
       let expected_type = self.builtin_types.get().integer_type;
       self.assert_constant_subtype(&expr.base, expected_type, true);
     }
-    #[cfg(not(any(debug_assertions, feature = "luau_assert")))]
+    #[cfg(not(debug_assertions))]
     let _ = expr;
   }
 

@@ -27,7 +27,6 @@ default = ["std"]
 std = []
 # `std` 有 cfg(feature = "std") 消费点（functions/assert_call_handler.rs），保留；
 # 曾有的 native/cli/native-codegen/wasm 空特性零 cfg 门控、零下游转发，删之。
-luau_assert = []
 luau_enable_time_trace = []
 
 
