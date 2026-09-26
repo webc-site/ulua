@@ -431,17 +431,39 @@ where
   /// 后取高 `log2(capacity)` 位。信息经乘法上移，高位散射质量不依赖调用方的哈希
   /// 函数（顺序整数键也能均匀散开）。容量是 2 的幂；仅在探测路径调用（容量非 0）。
   fn do_hash(&self, key: &K) -> usize {
+    self.scatter(self.hasher.hash(key))
+  }
+
+  /// `doHash` 的"既定哈希值 → 起始桶号"后半段（散射与取高位）：从 `do_hash` 拆出，
+  /// 供 `_str` 借用视图查询口以预计算哈希复用同一桶号算式，杜绝两份实现漂移。
+  #[inline]
+  fn scatter(&self, hash: usize) -> usize {
     debug_assert!(!self.data.is_empty());
     let shift = HASH_SHIFT_BASE - self.data.len().trailing_zeros();
-    ((self.hasher.hash(key) as u64).wrapping_mul(FIBONACCI_CONSTANT) >> shift) as usize
+    ((hash as u64).wrapping_mul(FIBONACCI_CONSTANT) >> shift) as usize
   }
 
   /// cpp `getBucket`（DenseHash.h:619-641）：返回 `(槽位, 是否命中)`——未命中时
   /// 给出探测链上的第一个空槽。`count < capacity` 保证线性探测必然遇到空槽。
   fn bucket_of(&self, key: &K) -> (usize, bool) {
+    let bucket = self.do_hash(key);
+    self.scan_from(bucket, |stored| self.eq.eq(stored, key))
+  }
+
+  /// `bucket_of` 的线性探测主体，桶内比较换成闭包 `matches`。
+  ///
+  /// 借用视图查询口（`*_str`）复用本函数的契约（调用方义务，非本函数可校验）：
+  /// - `start_bucket` 必须是查询键哈希经 [`scatter`](Self::scatter) 的产物，且该
+  ///   哈希与表内 `H`  functor 对"同内容 owned 键"的输出逐位一致；
+  /// - `matches(stored)` 必须与 `E::eq(stored, 查询键)` 对每个占用槽逐位一致。
+  ///
+  /// 两条契约对默认 `DenseHashDefault<String>`/`DenseEqDefault<String>` 成立
+  /// （见 `dense_hash_map.rs`/`dense_hash_set.rs` 的专化 impl 文档），故定制
+  /// functor 的容器拿不到借用口。
+  fn scan_from(&self, start_bucket: usize, matches: impl Fn(&K) -> bool) -> (usize, bool) {
     debug_assert!(self.count < self.data.len());
     let hashmod = self.data.len() - 1;
-    let mut bucket = self.do_hash(key);
+    let mut bucket = start_bucket;
     loop {
       if !self.used.contains(bucket) {
         return (bucket, false);
@@ -449,7 +471,7 @@ where
       // Safety: bucket 由 do_hash 取高 log2(len) 位后按 `& hashmod` 递增回绕，
       // 恒落在 [0, capacity) == [0, data.len())，故 get_unchecked 索引界内。
       let slot = unsafe { self.data.get_unchecked(bucket) };
-      if self.eq.eq(Iface::get_key(slot), key) {
+      if matches(Iface::get_key(slot)) {
         return (bucket, true);
       }
       bucket = (bucket + 1) & hashmod;
@@ -477,12 +499,33 @@ where
     found.then_some(bucket)
   }
 
+  /// `find` 的借用视图核（`*_str` 查询口专用）：以预计算哈希 `hash` 起探、以
+  /// `matches` 做桶内比较，命中返回槽号。契约见 [`scan_from`](Self::scan_from)。
+  pub(crate) fn find_by_view(&self, hash: usize, matches: impl Fn(&K) -> bool) -> Option<usize> {
+    if self.count == 0 {
+      return None;
+    }
+    let (bucket, found) = self.scan_from(self.scatter(hash), matches);
+    found.then_some(bucket)
+  }
+
   /// cpp `erase`（DenseHash.h:414-422）。
   pub(crate) fn erase(&mut self, key: &K) {
     if self.count == 0 {
       return;
     }
     let (bucket, found) = self.bucket_of(key);
+    if found {
+      self.do_erase(bucket);
+    }
+  }
+
+  /// `erase` 的借用视图核（`erase_str` 专用），契约同 [`find_by_view`](Self::find_by_view)。
+  pub(crate) fn erase_by_view(&mut self, hash: usize, matches: impl Fn(&K) -> bool) {
+    if self.count == 0 {
+      return;
+    }
+    let (bucket, found) = self.scan_from(self.scatter(hash), matches);
     if found {
       self.do_erase(bucket);
     }

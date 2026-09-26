@@ -21,7 +21,7 @@ use crate::{
     },
     iterator::MutIterator,
   },
-  type_aliases::dense_hash_default::DenseHashDefault,
+  type_aliases::dense_hash_default::{DenseHashDefault, dense_hash_of},
 };
 
 type MapImpl<K, V, H, E> = DenseHashTable<K, (K, V), ItemInterfaceMap<K, V>, H, E>;
@@ -205,6 +205,76 @@ where
     IterMut {
       impl_: self.impl_.iter_mut(),
     }
+  }
+}
+
+/// `String` 键 + 默认 functor 的 `&str` 借用视图查询口（r7-rc-4 形状口）。
+///
+/// 动机：`find/get/contains/erase` 只收 `&K`（即 `&String`），下游（analysis
+/// 24+ 站点）为查询被迫 `String::from(&str)` 现场分配堆键。本组口零克隆、零
+/// 临时分配：预计算 `&str` 哈希后直接进与 owned 口同一张探测核
+/// （[`DenseHashTable::find_by_view`]/[`erase_by_view`]）。
+///
+/// 为何专化到 `K = String` + 默认 `DenseHashDefault`/`DenseEqDefault`，而非
+/// `where K: Borrow<str>` 泛型口：借用口成立的**全部**前提是哈希与等值两条路径
+/// 对 `String`/`str` 逐位一致，且该性质只在默认 functor 下可证——
+/// - hash：std 的 `impl Hash for String` 是对 `impl Hash for str` 的纯转发，
+///   两者经 [`dense_hash_of`] 喂入同一字节流（含空串、内含 NUL、多字节 UTF-8、
+///   超长键；`tests/dense_hash.rs` 双口等价用例钉死，wasm32 的 `usize` 截断也同路径）；
+/// - eq：`DenseEqDefault<String>` 走 `String == String`，与 `stored.as_str() == key`
+///   同为字节相等，逐位一致。
+///
+/// 定制 functor（任意非默认 `H`/`E`）可能持有仅对 `&String` 成立的语义，泛型口
+/// 会静默破坏其命中判定，故本票刻意不给——这也是比 `Borrow<str>` 泛型更保守的
+/// 选型理由：默认参数是全部 String 键消费点的现状，泛型口则是把未验证的组合
+/// 放进类型系统。既有 `&String` 口一行不改，全部消费者零破坏。
+///
+/// [`erase_by_view`]: DenseHashTable::erase_by_view
+impl<V: DenseDefault> DenseHashMap<String, V, DenseHashDefault<String>, DenseEqDefault<String>> {
+  /// `find` 的 `&str` 借用口。Reference: `DenseHash.h:854-859`。
+  pub fn find_str(&self, key: &str) -> Option<&V> {
+    self
+      .impl_
+      .find_by_view(dense_hash_of(key), |stored| stored.as_str() == key)
+      .map(|idx| &self.impl_.data[idx].1)
+  }
+
+  /// std-style alias for generated Rust that spelled C++ `find` as `get`.
+  pub fn get_str(&self, key: &str) -> Option<&V> {
+    self.find_str(key)
+  }
+
+  /// `find_mut` 的 `&str` 借用口。Reference: `DenseHash.h:862-867`。
+  pub fn find_mut_str(&mut self, key: &str) -> Option<&mut V> {
+    let idx = self
+      .impl_
+      .find_by_view(dense_hash_of(key), |stored| stored.as_str() == key)?;
+    Some(&mut self.impl_.data[idx].1)
+  }
+
+  /// std-style alias for `find_mut_str`.
+  pub fn get_mut_str(&mut self, key: &str) -> Option<&mut V> {
+    self.find_mut_str(key)
+  }
+
+  /// `contains` 的 `&str` 借用口。Reference: `DenseHash.h:869-872`。
+  pub fn contains_str(&self, key: &str) -> bool {
+    self
+      .impl_
+      .find_by_view(dense_hash_of(key), |stored| stored.as_str() == key)
+      .is_some()
+  }
+
+  /// std-style alias for `contains_str`。
+  pub fn contains_key_str(&self, key: &str) -> bool {
+    self.contains_str(key)
+  }
+
+  /// `erase` 的 `&str` 借用口。Reference: `DenseHash.h:874-877`。
+  pub fn erase_str(&mut self, key: &str) {
+    self
+      .impl_
+      .erase_by_view(dense_hash_of(key), |stored| stored.as_str() == key);
   }
 }
 

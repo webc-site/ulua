@@ -16,7 +16,7 @@ use crate::{
       DenseDefault, DenseEq, DenseEqDefault, DenseHashTable, DenseHasher, ItemInterfaceSet,
     },
   },
-  type_aliases::dense_hash_default::DenseHashDefault,
+  type_aliases::dense_hash_default::{DenseHashDefault, dense_hash_of},
 };
 
 type SetImpl<K, H, E> = DenseHashTable<K, K, ItemInterfaceSet<K>, H, E>;
@@ -142,6 +142,51 @@ where
   /// `begin()/end()` iteration, yielding `&Key`.
   pub fn iter(&self) -> ConstIterator<'_, K> {
     self.impl_.iter()
+  }
+}
+
+/// `String` 元素 + 默认 functor 的 `&str` 借用视图查询口（r7-rc-4 形状口），
+/// 与 [`DenseHashMap`](crate::records::dense_hash_map::DenseHashMap) 的同名口
+/// 同一论证：hash 经 [`dense_hash_of`] 对 `String`/`str` 逐位一致，eq 为字节
+/// 相等；定制 functor 容器刻意不给（详见 dense_hash_map.rs 专化 impl 文档）。
+/// 既有 `&String` 口一行不改。
+///
+/// [`dense_hash_of`]: crate::type_aliases::dense_hash_default::dense_hash_of
+impl DenseHashSet<String, DenseHashDefault<String>, DenseEqDefault<String>> {
+  /// `find` 的 `&str` 借用口。Reference: `DenseHash.h:760-763`。
+  pub fn find_str(&self, key: &str) -> Option<&String> {
+    self
+      .impl_
+      .find_by_view(dense_hash_of(key), |stored| stored.as_str() == key)
+      .map(|idx| &self.impl_.data[idx])
+  }
+
+  /// std-style alias for generated Rust that spelled C++ `find` as `get`.
+  pub fn get_str(&self, key: &str) -> Option<&String> {
+    self.find_str(key)
+  }
+
+  /// `find_mut` 的 `&str` 借用口。
+  pub fn find_mut_str(&mut self, key: &str) -> Option<&mut String> {
+    let idx = self
+      .impl_
+      .find_by_view(dense_hash_of(key), |stored| stored.as_str() == key)?;
+    Some(&mut self.impl_.data[idx])
+  }
+
+  /// `contains` 的 `&str` 借用口。Reference: `DenseHash.h:765-768`。
+  pub fn contains_str(&self, key: &str) -> bool {
+    self
+      .impl_
+      .find_by_view(dense_hash_of(key), |stored| stored.as_str() == key)
+      .is_some()
+  }
+
+  /// `erase` 的 `&str` 借用口。Reference: `DenseHash.h:770-773`。
+  pub fn erase_str(&mut self, key: &str) {
+    self
+      .impl_
+      .erase_by_view(dense_hash_of(key), |stored| stored.as_str() == key);
   }
 }
 
