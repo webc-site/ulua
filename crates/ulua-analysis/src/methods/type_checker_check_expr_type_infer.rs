@@ -9,32 +9,23 @@ use core::{
 };
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   functions::to_string_ast::to_str,
   records::{
     ast_expr::AstExpr,
     ast_expr_binary::{AstExprBinary, AstExprBinaryOp},
-    ast_expr_call::AstExprCall,
-    ast_expr_constant_bool::AstExprConstantBool,
-    ast_expr_constant_integer::AstExprConstantInteger,
-    ast_expr_constant_nil::AstExprConstantNil,
-    ast_expr_constant_number::AstExprConstantNumber,
     ast_expr_constant_string::AstExprConstantString,
-    ast_expr_error::AstExprError,
     ast_expr_function::AstExprFunction,
     ast_expr_global::AstExprGlobal,
-    ast_expr_group::AstExprGroup,
     ast_expr_if_else::AstExprIfElse,
-    ast_expr_index_expr::AstExprIndexExpr,
     ast_expr_index_name::AstExprIndexName,
     ast_expr_instantiate::AstExprInstantiate,
     ast_expr_interp_string::AstExprInterpString,
-    ast_expr_local::AstExprLocal,
-    ast_expr_table::{AstExprTable, ItemKind},
+    ast_expr_table::ItemKind,
     ast_expr_type_assertion::AstExprTypeAssertion,
     ast_expr_unary::{AstExprUnary, AstExprUnaryOp},
-    ast_expr_varargs::AstExprVarargs,
   },
-  rtti::{AstNodeClass, ast_node_as_unchecked, ast_node_try_as_ptr},
+  rtti::ast_node_try_as_ptr,
 };
 use ulua_common::{
   fflag, fint, macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet,
@@ -103,9 +94,8 @@ impl TypeChecker {
       return WithPredicate::with_predicate_t(self.error_recovery_type_scope_ptr(scope));
     }
 
-    let mut result = match expr.base.class_index {
-      AstExprGroup::CLASS_INDEX => {
-        let group = unsafe { ast_node_as_unchecked::<AstExprGroup>(expr) };
+    let mut result = match expr.as_expr_ref() {
+      AstExprRef::Group(group) => {
         self.check_expr(
           scope,
           // expr 已句柄化：get() 只读借用出自存活 &AstExpr（AST arena 节点）。
@@ -114,9 +104,8 @@ impl TypeChecker {
           false,
         )
       }
-      AstExprConstantNil::CLASS_INDEX => WithPredicate::with_predicate_t(self.nil_type),
-      AstExprConstantBool::CLASS_INDEX => {
-        let bool_expr = unsafe { ast_node_as_unchecked::<AstExprConstantBool>(expr) };
+      AstExprRef::ConstantNil(_) => WithPredicate::with_predicate_t(self.nil_type),
+      AstExprRef::ConstantBool(bool_expr) => {
         let use_singleton = force_singleton || expected_type.is_some_and(maybe_singleton);
         WithPredicate::with_predicate_t(if use_singleton {
           self.singleton_type_bool(bool_expr.value)
@@ -124,8 +113,7 @@ impl TypeChecker {
           self.boolean_type
         })
       }
-      AstExprConstantString::CLASS_INDEX => {
-        let string_expr = unsafe { ast_node_as_unchecked::<AstExprConstantString>(expr) };
+      AstExprRef::ConstantString(string_expr) => {
         let use_singleton = force_singleton || expected_type.is_some_and(maybe_singleton);
         if use_singleton {
           let bytes = string_expr.value.as_bytes();
@@ -136,10 +124,9 @@ impl TypeChecker {
           WithPredicate::with_predicate_t(self.string_type)
         }
       }
-      AstExprConstantNumber::CLASS_INDEX => WithPredicate::with_predicate_t(self.number_type),
-      AstExprConstantInteger::CLASS_INDEX => WithPredicate::with_predicate_t(self.integer_type),
-      AstExprLocal::CLASS_INDEX => {
-        let local_expr = unsafe { ast_node_as_unchecked::<AstExprLocal>(expr) };
+      AstExprRef::ConstantNumber(_) => WithPredicate::with_predicate_t(self.number_type),
+      AstExprRef::ConstantInteger(_) => WithPredicate::with_predicate_t(self.integer_type),
+      AstExprRef::Local(local_expr) => {
         let lvalue = try_get_l_value(&local_expr.base);
         if let Some(lvalue) = lvalue {
           if let Some(ty) = self.resolve_l_value_scope_ptr_l_value(scope.clone(), &lvalue) {
@@ -168,11 +155,8 @@ impl TypeChecker {
           WithPredicate::with_predicate_t(self.error_recovery_type_scope_ptr(scope))
         }
       }
-      AstExprGlobal::CLASS_INDEX => self.check_expr_global(scope, unsafe {
-        ast_node_as_unchecked::<AstExprGlobal>(expr)
-      }),
-      AstExprVarargs::CLASS_INDEX => {
-        let varargs_expr = unsafe { ast_node_as_unchecked::<AstExprVarargs>(expr) };
+      AstExprRef::Global(global_expr) => self.check_expr_global(scope, global_expr),
+      AstExprRef::Varargs(varargs_expr) => {
         // SAFETY: follow_type_pack_id 为 unsafe 函数，pack 句柄有效。
         let vararg_pack =
           follow_type_pack::follow(self.check_expr_pack(scope, &varargs_expr.base).r#type);
@@ -212,8 +196,7 @@ impl TypeChecker {
           WithPredicate::with_predicate_t(self.error_recovery_type_scope_ptr(scope))
         }
       }
-      AstExprCall::CLASS_INDEX => {
-        let call_expr = unsafe { ast_node_as_unchecked::<AstExprCall>(expr) };
+      AstExprRef::Call(call_expr) => {
         let pack_result = self.check_expr_pack(scope, &call_expr.base);
         // SAFETY: follow_type_pack_id 为 unsafe 函数，pack 句柄有效。
         let ret_pack = follow_type_pack::follow(pack_result.r#type);
@@ -258,11 +241,8 @@ impl TypeChecker {
           )
         }
       }
-      AstExprIndexName::CLASS_INDEX => self.check_expr_index_name(scope, unsafe {
-        ast_node_as_unchecked::<AstExprIndexName>(expr)
-      }),
-      AstExprIndexExpr::CLASS_INDEX => {
-        let index_expr = unsafe { ast_node_as_unchecked::<AstExprIndexExpr>(expr) };
+      AstExprRef::IndexName(index_name) => self.check_expr_index_name(scope, index_name),
+      AstExprRef::IndexExpr(index_expr) => {
         let ty = self.check_l_value(scope, &index_expr.base, ValueContext::RValue);
         if let Some(lvalue) = try_get_l_value(&index_expr.base) {
           if let Some(refined_ty) = self.resolve_l_value_scope_ptr_l_value(scope.clone(), &lvalue) {
@@ -280,13 +260,12 @@ impl TypeChecker {
           WithPredicate::with_predicate_t(ty)
         }
       }
-      AstExprFunction::CLASS_INDEX => self.check_expr_function(
+      AstExprRef::Function(function) => self.check_expr_function(
         scope,
-        unsafe { ast_node_as_unchecked::<AstExprFunction>(expr) },
+        function,
         expected_type,
       ),
-      AstExprTable::CLASS_INDEX => {
-        let table_expr = unsafe { ast_node_as_unchecked::<AstExprTable>(expr) };
+      AstExprRef::Table(table_expr) => {
         // SAFETY: 与函数入口同法——&mut 临时借用物化为 self.check_recursion_count 的裸指针，
         // 非空/对齐；_table_rc 存活期间不再产生对该字段的其他借用，Drop 时恢复计数。
         let _table_rc = RecursionCounter::recursion_counter_i32(&mut self.check_recursion_count);
@@ -414,19 +393,14 @@ impl TypeChecker {
           expected_type,
         ))
       }
-      AstExprUnary::CLASS_INDEX => self.check_expr_unary(scope, unsafe {
-        ast_node_as_unchecked::<AstExprUnary>(expr)
-      }),
-      AstExprBinary::CLASS_INDEX => self.check_expr_binary(
+      AstExprRef::Unary(unary) => self.check_expr_unary(scope, unary),
+      AstExprRef::Binary(binary) => self.check_expr_binary(
         scope,
-        unsafe { ast_node_as_unchecked::<AstExprBinary>(expr) },
+        binary,
         expected_type,
       ),
-      AstExprTypeAssertion::CLASS_INDEX => self.check_expr_type_assertion(scope, unsafe {
-        ast_node_as_unchecked::<AstExprTypeAssertion>(expr)
-      }),
-      AstExprError::CLASS_INDEX => {
-        let error_expr = unsafe { ast_node_as_unchecked::<AstExprError>(expr) };
+      AstExprRef::TypeAssertion(type_assertion) => self.check_expr_type_assertion(scope, type_assertion),
+      AstExprRef::Error(error_expr) => {
         // SAFETY: current_module 在类型检查期间独占（C++ 直接读改 module->errors 同义）。
         let old_size = unsafe {
           (*(arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"))))
@@ -445,21 +419,13 @@ impl TypeChecker {
         }
         WithPredicate::with_predicate_t(self.error_recovery_type_scope_ptr(scope))
       }
-      AstExprIfElse::CLASS_INDEX => self.check_expr_if_else(
+      AstExprRef::IfElse(if_else) => self.check_expr_if_else(
         scope,
-        unsafe { ast_node_as_unchecked::<AstExprIfElse>(expr) },
+        if_else,
         expected_type,
       ),
-      AstExprInterpString::CLASS_INDEX => self.check_expr_interp_string(scope, unsafe {
-        ast_node_as_unchecked::<AstExprInterpString>(expr)
-      }),
-      AstExprInstantiate::CLASS_INDEX => self.check_expr_instantiate(scope, unsafe {
-        ast_node_as_unchecked::<AstExprInstantiate>(expr)
-      }),
-      _ => {
-        self.ice_string_location("Unhandled AstExpr", &expr.base.location);
-        WithPredicate::with_predicate_t(self.error_recovery_type_scope_ptr(scope))
-      }
+      AstExprRef::InterpString(interp_string) => self.check_expr_interp_string(scope, interp_string),
+      AstExprRef::Instantiate(instantiate) => self.check_expr_instantiate(scope, instantiate),
     };
 
     result.r#type = follow_type::follow(result.r#type);

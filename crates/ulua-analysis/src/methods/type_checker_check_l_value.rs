@@ -1,11 +1,4 @@
-use ulua_ast::{
-  records::{
-    ast_expr::AstExpr, ast_expr_error::AstExprError, ast_expr_global::AstExprGlobal,
-    ast_expr_index_expr::AstExprIndexExpr, ast_expr_index_name::AstExprIndexName,
-    ast_expr_local::AstExprLocal,
-  },
-  rtti::{AstNodeClass, ast_node_as_unchecked},
-};
+use ulua_ast::{enums::ast_expr_ref::AstExprRef, records::ast_expr::AstExpr};
 
 use crate::{
   enums::value_context::ValueContext,
@@ -16,29 +9,24 @@ use crate::{
 impl TypeChecker {
   // cpp TypeInfer.cpp:3476 checkLValueBinding 的多路分发
   pub fn check_l_value(&mut self, scope: &ScopePtr, expr: &AstExpr, ctx: ValueContext) -> TypeId {
-    match expr.base.class_index {
-      AstExprLocal::CLASS_INDEX => {
-        let local: &AstExprLocal = unsafe { ast_node_as_unchecked(&expr.base) };
+    match expr.as_expr_ref() {
+      AstExprRef::Local(local) => {
         self.check_l_value_binding_scope_ptr_ast_expr_local(scope, local)
       }
-      AstExprGlobal::CLASS_INDEX => {
-        let global: &AstExprGlobal = unsafe { ast_node_as_unchecked(&expr.base) };
+      AstExprRef::Global(global) => {
         self.check_l_value_binding_scope_ptr_ast_expr_global(scope, global)
       }
-      AstExprIndexName::CLASS_INDEX => {
-        let index_name: &AstExprIndexName = unsafe { ast_node_as_unchecked(&expr.base) };
+      AstExprRef::IndexName(index_name) => {
         self
           .check_l_value_binding_scope_ptr_ast_expr_index_name_value_context(scope, index_name, ctx)
       }
-      AstExprIndexExpr::CLASS_INDEX => {
-        let index_expr: &AstExprIndexExpr = unsafe { ast_node_as_unchecked(&expr.base) };
+      AstExprRef::IndexExpr(index_expr) => {
         self
           .check_l_value_binding_scope_ptr_ast_expr_index_expr_value_context(scope, index_expr, ctx)
       }
-      AstExprError::CLASS_INDEX => {
-        let error: &AstExprError = unsafe { ast_node_as_unchecked(&expr.base) };
-        for &sub_expr in error.expressions.as_slice() {
-          self.check_expr(scope, unsafe { &*sub_expr }, None, false);
+      AstExprRef::Error(error) => {
+        for sub_expr in error.expressions.iter_nodes() {
+          self.check_expr(scope, sub_expr, None, false);
         }
         self.error_recovery_type_scope_ptr(scope)
       }

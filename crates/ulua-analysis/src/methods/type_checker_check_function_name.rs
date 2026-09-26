@@ -2,11 +2,8 @@ use alloc::string::String;
 use core::ptr::null;
 
 use ulua_ast::{
-  records::{
-    ast_expr::AstExpr, ast_expr_error::AstExprError, ast_expr_global::AstExprGlobal,
-    ast_expr_index_name::AstExprIndexName, ast_expr_local::AstExprLocal, location::Location,
-  },
-  rtti::{AstNodeClass, ast_node_as_unchecked},
+  enums::ast_expr_ref::AstExprRef,
+  records::{ast_expr::AstExpr, location::Location},
 };
 
 use crate::{
@@ -25,11 +22,8 @@ impl TypeChecker {
     fun_name: &AstExpr,
     level: TypeLevel,
   ) -> TypeId {
-    let node = &fun_name.base;
-
-    match node.class_index {
-      AstExprGlobal::CLASS_INDEX => {
-        let global_name: &AstExprGlobal = unsafe { ast_node_as_unchecked(node) };
+    match fun_name.as_expr_ref() {
+      AstExprRef::Global(global_name) => {
         let module_scope = self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some").get_module_scope();
         let name = Symbol::from_global(global_name.name);
         if module_scope.bindings.contains_key(&name) {
@@ -63,8 +57,7 @@ impl TypeChecker {
           ty
         }
       }
-      AstExprLocal::CLASS_INDEX => {
-        let local_name: &AstExprLocal = unsafe { ast_node_as_unchecked(node) };
+      AstExprRef::Local(local_name) => {
         let name = Symbol::from_local(local_name.local.as_ptr());
         let scope_ptr = arc_as_mut(scope);
         // Binding& binding = scope->bindings[name];  — default-constructs (typeId == nullptr) if absent.
@@ -96,8 +89,7 @@ impl TypeChecker {
         }
         binding.type_id
       }
-      AstExprIndexName::CLASS_INDEX => {
-        let index_name: &AstExprIndexName = unsafe { ast_node_as_unchecked(node) };
+      AstExprRef::IndexName(index_name) => {
         let lhs_type = self
           .check_expr(
             scope,
@@ -145,7 +137,7 @@ impl TypeChecker {
         property.location = Some(index_location_clone(&index_name.index_location));
         property.type_deprecated()
       }
-      AstExprError::CLASS_INDEX => self.error_recovery_type_scope_ptr(scope),
+      AstExprRef::Error(_) => self.error_recovery_type_scope_ptr(scope),
       _ => {
         self.ice_string_location("Unexpected AST node type", &fun_name.base.location);
         self.error_recovery_type_scope_ptr(scope)
