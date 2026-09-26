@@ -1,13 +1,13 @@
 use crate::{
   functions::lua_rawcheckstack::lua_rawcheckstack,
-  macros::{setbvalue::setbvalue, setobj_2_s::setobj_2_s},
+  macros::{lua_lib_fn::lua_cont_fn, setbvalue::setbvalue, setobj_2_s::setobj_2_s},
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// `l` 须为存活 `LuaState` 且 `status` 为被保护调用返回的 `LUA_OK`/错误码。
 /// cpp `lbaselib.cpp:358`。
-pub(crate) unsafe extern "C-unwind" fn lua_b_xpcallcont(l: *mut LuaState, status: i32) -> i32 {
+pub(crate) unsafe fn lua_b_xpcallcont(l: *mut LuaState, status: i32) -> i32 {
   unsafe {
     if status == 0 {
       let base = (*l).base;
@@ -25,3 +25,5 @@ pub(crate) unsafe extern "C-unwind" fn lua_b_xpcallcont(l: *mut LuaState, status
     }
   }
 }
+
+lua_cont_fn!(pub(crate) fn lua_b_xpcallcont, lua_b_xpcallcont_arm);

@@ -1,6 +1,6 @@
 use crate::{
   functions::{
-    coclose::coclose, cocreate::cocreate, coresumecont::coresumecont, coresumey::coresumey,
+    coclose::coclose, cocreate::cocreate, coresumecont::coresumecont_arm, coresumey::coresumey,
     corunning::corunning, costatus::costatus, cowrap::cowrap, coyield::coyield,
     coyieldable::coyieldable, lua_l_register::lua_l_register, lua_pushcclosurek::lua_pushcclosurek,
     lua_setfield::lua_setfield,
@@ -19,7 +19,7 @@ pub(crate) unsafe extern "C-unwind" fn luaopen_coroutine(l: *mut LuaState) -> i3
       Some(coresumey),
       c"resume".as_ptr(),
       0,
-      Some(coresumecont),
+      Some(coresumecont_arm),
     );
     lua_setfield(l, -2, c"resume".as_ptr());
 

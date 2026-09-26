@@ -4,7 +4,7 @@ use crate::{
     auxresumecont::auxresumecont, auxwrapfinish::auxwrapfinish, interrupt_thread::interrupt_thread,
     lua_tothread::lua_tothread,
   },
-  macros::lua_upvalueindex::lua_upvalueindex,
+  macros::{lua_lib_fn::lua_cont_fn, lua_upvalueindex::lua_upvalueindex},
   records::lua_state::LuaState,
 };
 
@@ -13,7 +13,7 @@ use crate::{
 /// （`lua_tothread` 读该槽并解引用返回的 `*co`），`co` 非空由建立续体的 `auxwrapy` 保证。转调
 /// `interrupt_thread`/`auxresumecont`/`auxwrapfinish` 可抛错/可 GC，须在受保护帧。
 /// cpp/VM/src/lcorolib.cpp:312 auxwrapcont。
-pub(crate) unsafe extern "C-unwind" fn auxwrapcont(l: *mut LuaState, _status: i32) -> i32 {
+pub(crate) unsafe fn auxwrapcont(l: *mut LuaState, _status: i32) -> i32 {
   unsafe {
     let co = lua_tothread(l, lua_upvalueindex(1))
       .expect("auxwrapy 建立续体时 upvalue1 为 thread，契约保证非空");
@@ -26,3 +26,5 @@ pub(crate) unsafe extern "C-unwind" fn auxwrapcont(l: *mut LuaState, _status: i3
     auxwrapfinish(l, r)
   }
 }
+
+lua_cont_fn!(pub(crate) fn auxwrapcont, auxwrapcont_arm);

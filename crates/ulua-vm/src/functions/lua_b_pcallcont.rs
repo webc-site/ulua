@@ -2,13 +2,13 @@ use core::ptr::copy;
 
 use crate::{
   functions::lua_rawcheckstack::lua_rawcheckstack,
-  macros::{setbvalue::setbvalue, setobj_2_s::setobj_2_s},
+  macros::{lua_lib_fn::lua_cont_fn, setbvalue::setbvalue, setobj_2_s::setobj_2_s},
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe extern "C-unwind" fn lua_b_pcallcont(l: *mut LuaState, status: i32) -> i32 {
+pub(crate) unsafe fn lua_b_pcallcont(l: *mut LuaState, status: i32) -> i32 {
   unsafe {
     lua_rawcheckstack(l, 1);
     if status == 0 {
@@ -30,3 +30,5 @@ pub(crate) unsafe extern "C-unwind" fn lua_b_pcallcont(l: *mut LuaState, status:
     }
   }
 }
+
+lua_cont_fn!(pub(crate) fn lua_b_pcallcont, lua_b_pcallcont_arm);
