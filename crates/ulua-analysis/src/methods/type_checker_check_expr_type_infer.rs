@@ -626,12 +626,9 @@ impl TypeChecker {
         }
 
         if type_could_have_metatable(operand_type) {
-          if let Some(fnt) = self.find_metatable_entry(
-            operand_type,
-            "__unm".to_string(),
-            &expr.base.base.location,
-            true,
-          ) {
+          if let Some(fnt) =
+            self.find_metatable_entry(operand_type, "__unm", &expr.base.base.location, true)
+          {
             let actual_function_type =
               self.instantiate(scope, fnt, expr.base.base.location, null());
             let arguments = self.add_type_pack_initializer_list_type_id(&[operand_type]);
@@ -689,12 +686,8 @@ impl TypeChecker {
         let mut seen: DenseHashSet<TypeId> = DenseHashSet::default();
 
         if type_could_have_metatable(operand_type)
-          && let Some(fnt) = self.find_metatable_entry(
-            operand_type,
-            "__len".to_string(),
-            &expr.base.base.location,
-            true,
-          )
+          && let Some(fnt) =
+            self.find_metatable_entry(operand_type, "__len", &expr.base.base.location, true)
         {
           let actual_function_type = self.instantiate(scope, fnt, expr.base.base.location, null());
           let arguments = self.add_type_pack_initializer_list_type_id(&[operand_type]);

@@ -893,12 +893,7 @@ impl TypeChecker {
 
     // if (std::optional<TypeId> iterMM = findMetatableEntry(iterTy, "__iter", firstValue->location, /* addErrors= */ true))
     if self
-      .find_metatable_entry(
-        iter_ty,
-        String::from("__iter"),
-        &first_value_ref.base.location,
-        true,
-      )
+      .find_metatable_entry(iter_ty, "__iter", &first_value_ref.base.location, true)
       .is_some()
     {
       // if __iter metamethod is present, it will be called and the results are going to be called as if they are functions

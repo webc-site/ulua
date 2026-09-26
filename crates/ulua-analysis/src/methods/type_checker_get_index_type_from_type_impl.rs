@@ -42,12 +42,7 @@ impl TypeChecker {
     self.tablify(ty);
 
     if is_string(ty) {
-      let mt_index = self.find_metatable_entry(
-        self.string_type,
-        String::from("__index"),
-        location,
-        add_errors,
-      );
+      let mt_index = self.find_metatable_entry(self.string_type, "__index", location, add_errors);
       LUAU_ASSERT!(mt_index.is_some());
       // 紧邻 LUAU_ASSERT 蕴含 Some。
       ty = mt_index.expect("紧邻 LUAU_ASSERT(mt_index.is_some()) 蕴含");
