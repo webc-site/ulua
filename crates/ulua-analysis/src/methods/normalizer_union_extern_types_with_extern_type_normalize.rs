@@ -61,12 +61,9 @@ impl Normalizer {
       // insert it, to capture the presence of this particular subtype.
       if is_subclass_type_id_type_id(there, here_ty) {
         // 对齐 cpp `TypeIds& hereNegations = heres.externTypes.at(hereTy)`：
-        // 必须原地修改 map 内的 negations，克隆会导致 erase 全部丢失。
-        // SAFETY: ordering 与 extern_types 由 push_pair 成对维护，必有条目。
-        let here_negations = heres
-          .extern_types
-          .get_mut(&here_ty)
-          .expect("SAFETY 注：ordering 与 extern_types 由 push_pair 成对维护，必有条目");
+        // 必须原地修改 map 内的 negations（经 `negations_mut`），克隆会导致
+        // erase 全部丢失。成对登记不变式同样由访问器统一保证。
+        let here_negations = heres.negations_mut(here_ty);
         let mut n_idx = 0;
         while n_idx < here_negations.order.len() {
           let here_negation = here_negations.order[n_idx];
@@ -102,14 +99,8 @@ impl Normalizer {
       // need to replace the existing class with the incoming class,
       // preserving the relevant negations.
       else if is_subclass_type_id_type_id(here_ty, there) {
-        // SAFETY: 同上，ordering 条目必有对应 negations。
-        let negations = heres
-          .extern_types
-          .get(&here_ty)
-          .cloned()
-          .expect("SAFETY 注：同上，ordering 条目必有对应 negations");
-        heres.ordering.remove(idx);
-        heres.extern_types.remove(&here_ty);
+        let negations = heres.negations(here_ty).clone();
+        heres.remove_cluster_at(idx);
 
         heres.push_pair(there, negations);
         return;

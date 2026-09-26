@@ -19,20 +19,16 @@ impl Normalizer {
     }
 
     for &there_ty in &theres.ordering {
-      // 成对登记不变式：`ordering` 是 `extern_types` 键的拓扑面列表，逐元素
-      // 已登记于 extern_types，get 必命中。
-      let there_negations = theres
-        .extern_types
-        .get(&there_ty)
-        .expect("ordering 元素必已成对登记于 extern_types")
-        .clone();
+      // 成对登记不变式经 `negations` 访问器统一保证。
+      let there_negations = theres.negations(there_ty).clone();
 
       let mut idx = 0;
       while idx < heres.ordering.len() {
         let here_ty = heres.ordering[idx];
 
         if is_subclass_type_id_type_id(there_ty, here_ty) {
-          let mut negations = heres.extern_types.remove(&here_ty).unwrap_or_default();
+          // 成对移除该 cluster 并取其 negations，修剪合并后以 `there_ty` 重新登记。
+          let mut negations = heres.remove_cluster_at(idx);
 
           for n_ty in negations.order.clone() {
             if !is_subclass_type_id_type_id(n_ty, there_ty) {
@@ -42,7 +38,6 @@ impl Normalizer {
 
           self.union_extern_types_type_ids_type_ids(&mut negations, &there_negations);
 
-          heres.ordering.remove(idx);
           heres.push_pair(there_ty, negations);
           break;
         } else if is_subclass_type_id_type_id(here_ty, there_ty) {
@@ -51,8 +46,7 @@ impl Normalizer {
           let mut erased_here = false;
           for n_ty in negations.order.clone() {
             if is_subclass_type_id_type_id(here_ty, n_ty) {
-              heres.extern_types.remove(&here_ty);
-              heres.ordering.remove(idx);
+              heres.remove_cluster_at(idx);
               erased_here = true;
               break;
             }
@@ -63,21 +57,18 @@ impl Normalizer {
           }
 
           if !erased_here {
-            if let Some(mut here_negations) = heres.extern_types.remove(&here_ty) {
-              self.union_extern_types_type_ids_type_ids(&mut here_negations, &negations);
-              heres.extern_types.insert(here_ty, here_negations);
+            if let Some(here_negations) = heres.extern_types.get_mut(&here_ty) {
+              self.union_extern_types_type_ids_type_ids(here_negations, &negations);
             }
             idx += 1;
           }
         } else if here_ty == there_ty {
-          if let Some(mut here_negations) = heres.extern_types.remove(&here_ty) {
-            self.union_extern_types_type_ids_type_ids(&mut here_negations, &there_negations);
-            heres.extern_types.insert(here_ty, here_negations);
+          if let Some(here_negations) = heres.extern_types.get_mut(&here_ty) {
+            self.union_extern_types_type_ids_type_ids(here_negations, &there_negations);
           }
           break;
         } else {
-          heres.ordering.remove(idx);
-          heres.extern_types.remove(&here_ty);
+          heres.remove_cluster_at(idx);
         }
       }
     }
