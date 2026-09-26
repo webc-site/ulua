@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 use core::ptr::{from_mut, null, null_mut};
 
 use ulua_ast::{
+  enums::ast_type_ref::AstTypeRef,
   methods::ast_stat_block_visit::ast_stat_block_visit,
   records::{
     ast_expr::AstExpr,
@@ -24,7 +25,6 @@ use ulua_ast::{
     ast_expr_unary::{AstExprUnary, AstExprUnaryOp},
     ast_local::AstLocal,
     ast_name::AstName,
-    ast_node::AstNode,
     ast_stat::AstStat,
     ast_stat_block::AstStatBlock,
     ast_stat_for::AstStatFor,
@@ -36,7 +36,6 @@ use ulua_ast::{
     ast_table_indexer::AstTableIndexer,
     ast_type::AstType,
     ast_type_pack_explicit::AstTypePackExplicit,
-    ast_type_reference::AstTypeReference,
     ast_type_table::AstTypeTable,
     ast_visitor::AstVisitor,
   },
@@ -129,8 +128,7 @@ impl TypeMapVisitor<'_, '_> {
   }
 
   /// 对应 cpp 旧版 `resolveAliases`（无展开循环的弃用路径）：判空早退，
-  /// `AstType` 经首字段基址重合上转 `&AstNode`（repr(C) 前缀约定），
-  /// 别名解析失败一律回落原 `ty`。
+  /// 经 `as_type_ref` 安全模式匹配解析别名，解析失败一律回落原 `ty`。
   ///
   /// 注：若把签名收口为 `unsafe fn`，clippy `not_unsafe_ptr_arg_deref` 会沿
   /// `record_resolved_type_* → visit_types`（安全 AstVisitor hook）无界传染，
@@ -141,20 +139,18 @@ impl TypeMapVisitor<'_, '_> {
     }
 
     // Safety: 约定 ty 指向 arena 存活节点（调用方均由类型图保证）；
-    // `ty.cast::<AstNode>()` 为向上转型（repr(C) 首字段 base 重合）。
-    let base_node = unsafe { &*ty.cast::<AstNode>() };
-    // ast_node_try_as 为 safe 门面：只读 class index 校验，命中即动态类型 AstTypeReference。
-    let resolved = match ast_node_try_as::<AstTypeReference>(base_node) {
+    // 经 as_type_ref 安全模式匹配判断具体类型。
+    let resolved = match unsafe { (&*ty.cast::<AstType>()).as_type_ref() } {
       // 带 prefix 的限定引用（如 `pkg.Type`）不是裸别名，原样返回
-      Some(ref_node) if ref_node.prefix.is_some() => Some(ty),
-      Some(ref_node) => match self.type_aliases.find(&ref_node.name) {
+      AstTypeRef::Reference(ref_node) if ref_node.prefix.is_some() => Some(ty),
+      AstTypeRef::Reference(ref_node) => match self.type_aliases.find(&ref_node.name) {
         // alias 由 push_type_aliases 建档，指向 arena 存活 AstStatTypeAlias；
         // 建档为 null 视为无法解析，回落原 ty。
         // Safety: 守卫已判非空，解引用仅读 type_ptr 字段。
         Some(&alias) if !alias.is_null() => Some(unsafe { (&*alias).type_ptr.cast_const() }),
         _ => None,
       },
-      None => None,
+      _ => None,
     };
 
     resolved.unwrap_or(ty)
@@ -172,9 +168,12 @@ impl TypeMapVisitor<'_, '_> {
         .resolved_exprs
         .find(&expr.into())
         .copied()
-        // 类型图值槽可空（cpp 亦存 null）：判空后基址上转，null 视为无表类型。
+        // 类型图值槽可空（cpp 亦存 null）：判空后安全下转，null 视为无表类型。
         .filter(|type_ptr| !type_ptr.is_null())
-        .and_then(|type_ptr| ast_node_try_as::<AstTypeTable>(&*type_ptr.cast::<AstNode>()))
+        .and_then(|type_ptr| match (&*type_ptr.cast::<AstType>()).as_type_ref() {
+          AstTypeRef::Table(tbl) => Some(tbl),
+          _ => None,
+        })
     }
   }
 
