@@ -9,7 +9,7 @@ use crate::{
   },
   macros::{
     lua_emptystr::LUA_EMPTYSTR, lua_isfunction::lua_isfunction, lua_l_argcheck::luaL_argcheck,
-    lua_l_argerror::luaL_argerror, lua_l_checkstring::luaL_checkstring,
+    lua_l_argerror::luaL_argerror, lua_l_checkstring::luaL_checkstring, lua_lib_fn::lua_lib_fn,
     lua_tointeger::lua_tointeger,
   },
   records::{lua_debug::LuaDebug, lua_state::LuaState},
@@ -19,7 +19,7 @@ use crate::{
 /// `l` 须为存活 `LuaState`；`getthread` 取回的 `l1` 须为存活线程，`l!=l1` 时先 `rawcheckstack(l1,1)`
 /// 预留槽；栈 `arg+1` 为 level 数或函数、`arg+2` 为 NUL 结尾选项串（`luaL_checkstring`），
 /// `lua_getinfo` 可写 `ar` 并可抛错，须在受保护帧内调用。cpp `ldblib.cpp:25`。
-pub(crate) unsafe extern "C-unwind" fn db_info(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn db_info(l: *mut LuaState) -> i32 {
   unsafe {
     let (l1, arg) = getthread(l);
     let mut l1top: i32 = 0;
@@ -114,3 +114,5 @@ pub(crate) unsafe extern "C-unwind" fn db_info(l: *mut LuaState) -> i32 {
     results
   }
 }
+
+lua_lib_fn!(pub(crate) fn db_info, db_info_arm);

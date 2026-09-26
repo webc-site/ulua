@@ -1,12 +1,14 @@
 use crate::{
-  functions::{db_info::db_info, db_traceback::db_traceback, lua_l_register::lua_l_register},
+  functions::{
+    db_info::db_info_arm, db_traceback::db_traceback_arm, lua_l_register::lua_l_register,
+  },
   macros::lua_lib_fn::lua_lib_fn,
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
 
 static DBLIB: [LuaLReg; 2] = [
-  LuaLReg::new(b"info", db_info),
-  LuaLReg::new(b"traceback", db_traceback),
+  LuaLReg::new(b"info", db_info_arm),
+  LuaLReg::new(b"traceback", db_traceback_arm),
 ];
 
 /// # Safety
