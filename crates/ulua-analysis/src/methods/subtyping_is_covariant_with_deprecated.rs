@@ -1,30 +1,16 @@
-use alloc::{string::ToString, vec::Vec};
+use alloc::vec::Vec;
 
 use ulua_common::fflag;
 
 use crate::{
-  enums::{
-    subtyping_suppression_policy::SubtypingSuppressionPolicy, table_state::TableState,
-    type_field::TypeField,
-  },
+  enums::{subtyping_suppression_policy::SubtypingSuppressionPolicy, table_state::TableState},
+  methods::subtyping_path_components::{index_result_component, path_property},
   records::{
-    property_type::Property, property_type_path::Property as PathProperty, scope::Scope,
-    subtyping::Subtyping, subtyping_environment::SubtypingEnvironment,
-    subtyping_result::SubtypingResult, table_type::TableType,
+    property_type::Property, scope::Scope, subtyping::Subtyping,
+    subtyping_environment::SubtypingEnvironment, subtyping_result::SubtypingResult,
+    table_type::TableType,
   },
-  type_aliases::component::Component,
 };
-
-fn path_property(name: &str, is_read: bool) -> Component {
-  Component::Property(PathProperty {
-    name: name.to_string(),
-    is_read,
-  })
-}
-
-fn index_result_component() -> Component {
-  Component::TypeField(TypeField::IndexResult)
-}
 
 impl Subtyping {
   pub fn is_covariant_with_deprecated(

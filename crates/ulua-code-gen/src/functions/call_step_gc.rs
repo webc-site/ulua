@@ -4,12 +4,12 @@ use ulua_vm::records::{global_state::global_State, lua_state::LuaState};
 
 use crate::{
   enums::{condition_x_64::ConditionX64, size_x_64::SizeX64},
-  functions::call_vm_helper::call_vm_helper,
+  functions::{call_vm_helper::call_vm_helper, mem_x_64::mem},
   records::{
     assembly_builder_x_64::AssemblyBuilderX64, emit_common_x_64::R_STATE,
     ir_data::K_INVALID_INST_IDX, ir_op::IrOp, ir_reg_alloc_x_64::IrRegAllocX64, label::Label,
-    native_context::NativeContext, operand_x_64::OperandX64, register_x_64::RegisterX64,
-    scoped_reg_x_64::ScopedRegX64, scoped_spills::ScopedSpills,
+    native_context::NativeContext, operand_x_64::OperandX64, scoped_reg_x_64::ScopedRegX64,
+    scoped_spills::ScopedSpills,
   },
 };
 
@@ -59,8 +59,4 @@ pub fn call_step_gc(regs: &mut IrRegAllocX64, build: &mut AssemblyBuilderX64) {
   }
 
   build.set_label_label(&mut skip);
-}
-
-fn mem(size: SizeX64, base: RegisterX64, disp: i32) -> OperandX64 {
-  OperandX64::mem(size, RegisterX64::NOREG, 1, base, disp)
 }

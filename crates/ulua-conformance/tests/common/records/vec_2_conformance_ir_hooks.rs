@@ -6,7 +6,10 @@ use ulua_code_gen::{
 };
 use ulua_vm::enums::lua_type::LuaType;
 
-use crate::common::{enums::userdata_kind::UserdataKind, records::userdata_tags::K_TAG_VEC2};
+use crate::common::{
+  enums::userdata_kind::UserdataKind, functions::check_userdata_tag::check_userdata_tag,
+  records::userdata_tags::K_TAG_VEC2,
+};
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 #[repr(C)]
 pub struct Vec2 {
@@ -25,9 +28,7 @@ impl Vec2 {
 
   #[inline]
   pub fn check_tag(build: &mut IrBuilder, udata: IrOp, pcpos: i32) {
-    let tag = build.const_int(Self::TAG);
-    let exit = build.vm_exit(pcpos as u32);
-    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CheckUserdataTag, udata, tag, exit);
+    check_userdata_tag(build, udata, pcpos, Self::TAG);
   }
 
   #[inline]

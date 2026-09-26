@@ -1,4 +1,5 @@
 use crate::{
+  macros::substitution_entry::substitution_entry,
   records::{
     anyification::Anyification, arena_handle::Handle, builtin_types::BuiltinTypes,
     internal_error_reporter::InternalErrorReporter, substitution::Substitution,
@@ -102,15 +103,7 @@ impl Anyification {
     };
   }
 
-  pub fn substitute_type_id(&mut self, ty: TypeId) -> Option<TypeId> {
-    self.install_substitution_vtable();
-    self.base.substitute_type_id(ty)
-  }
-
-  pub fn substitute_type_pack_id(&mut self, tp: TypePackId) -> Option<TypePackId> {
-    self.install_substitution_vtable();
-    self.base.substitute_type_pack_id(tp)
-  }
+  substitution_entry!(id, pack);
 
   /// 兼容旧 cpp 镜像签名（`Anyification(TypeArena*, NotNull<Scope>, BuiltinTypes*,
   /// InternalErrorReporter*, TypeId, TypePackId)`）：`scope`/`ice_handler` 在

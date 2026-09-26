@@ -5,7 +5,35 @@ use ulua_common::functions::c_slice::c_slice;
 
 use crate::{records::builtin_types::BuiltinTypes, type_aliases::type_id::TypeId};
 
+/// 数字类转换符集（cpp `BuiltinDefinitions.cpp:627` 的 `cdiouxXeEfgGqs*`）。
 const K_OPTIONS: &[u8] = b"cdiouxXeEfgGqs*";
+
+/// `K_OPTIONS` 的编译期位掩码（集合内字节均 < 0x80，u128 即全覆盖）。
+///
+/// 实测代码生成：15 项常量切片的 `contains` 不会被 LLVM 折叠为位测试，
+/// 仍生成逐字节内存循环；位掩码把成员判定降为单次 128 位移位与。
+/// 形态参照 ulua-vm `nospecials` 的 `SPECIAL_MASK` 先例。
+const K_OPTIONS_MASK: u128 = build_options_mask();
+
+const fn build_options_mask() -> u128 {
+  let mut mask = 0u128;
+  let mut i = 0;
+  while i < K_OPTIONS.len() {
+    mask |= 1u128 << K_OPTIONS[i];
+    i += 1;
+  }
+  mask
+}
+
+/// 成员判定：`>= 0x80` 恒非成员（集合内均为 ASCII），短路后移位量必 < 128。
+#[inline]
+const fn is_number_option(b: u8) -> bool {
+  b < 0x80 && (K_OPTIONS_MASK >> b) & 1 != 0
+}
+
+// 定表自检：掩码恰由 K_OPTIONS 的 15 个互异字节构成（popcount 相等 ⇔ 无缺项、
+// 无重复、无杂位），漂表或漂掩码即编译失败。
+const _: () = assert!(K_OPTIONS_MASK.count_ones() == K_OPTIONS.len() as u32);
 
 /// 逐字节扫描格式串，等价 C++ `parseFormatString`（BuiltinDefinitions.cpp:627）。
 pub fn parse_format_string_bytes(
@@ -42,7 +70,7 @@ pub fn parse_format_string_bytes(
       builtin_types.string_type
     } else if c == b'*' {
       builtin_types.unknown_type
-    } else if K_OPTIONS.contains(&c) {
+    } else if is_number_option(c) {
       builtin_types.number_type
     } else {
       builtin_types.error_recovery_type(builtin_types.any_type)

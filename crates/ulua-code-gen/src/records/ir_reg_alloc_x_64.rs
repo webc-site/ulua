@@ -17,7 +17,8 @@ use crate::{
     luau_constant_tag::luau_constant_tag, luau_constant_value::luau_constant_value,
     luau_reg::luau_reg, luau_reg_tag::luau_reg_tag, luau_reg_value::luau_reg_value,
     luau_reg_value_int::luau_reg_value_int, luau_reg_value_int_64::luau_reg_value_int_64,
-    qword_reg::qword_reg, update_last_use_locations_in_block::update_last_use_locations_in_block,
+    mem_x_64::mem, qword_reg::qword_reg,
+    update_last_use_locations_in_block::update_last_use_locations_in_block,
     vm_const_op::vm_const_op, vm_reg_op::vm_reg_op,
   },
   macros::codegen_assert::CODEGEN_ASSERT,
@@ -941,10 +942,6 @@ impl IrRegAllocX64 {
 pub(crate) const S_TEMPORARY_SLOT: i32 = 64;
 
 pub(crate) const S_SPILL_AREA: i32 = 72;
-
-pub(crate) fn mem(size: SizeX64, base: RegisterX64, disp: i32) -> OperandX64 {
-  OperandX64::mem(size, RegisterX64::NOREG, 1, base, disp)
-}
 
 pub(crate) fn temp_qword() -> OperandX64 {
   mem(SizeX64::Qword, RegisterX64::RSP, S_TEMPORARY_SLOT)

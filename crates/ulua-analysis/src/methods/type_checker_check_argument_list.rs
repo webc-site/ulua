@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
 
 use ulua_ast::records::{ast_expr::AstExpr, location::Location};
 use ulua_common::fflag;
@@ -29,6 +29,37 @@ use crate::{
     type_error_data::TypeErrorData, type_id::TypeId, type_pack_id::TypePackId,
   },
 };
+
+/// `CountMismatch(Arg)` 上报单源：cpp `checkArgumentList` 两处同形构造合一。
+/// 调用点差异（错误 span 来源、actual 语义、is_variadic）全部入参化。
+fn report_count_mismatch(
+  state: &mut Unifier,
+  fun_name: &AstExpr,
+  param_pack: TypePackId,
+  location: Location,
+  actual: usize,
+  is_variadic: bool,
+) {
+  // Safety: `get_parameter_extents` 为 `unsafe fn`（契约：`log`/`tp` 在其
+  // 存活期内有效）。`&state.log` 借自本次调用独占的 `&mut Unifier` 存活
+  // 字段，同步调用内独占有效；`param_pack` 是消解会话期 arena 驻留包
+  // 节点，仅只读遍历计数（cpp `getParameterExtents` 同款入参形态）。
+  let (min_params, opt_max_params) =
+    unsafe { get_parameter_extents(&state.log as *const _, param_pack, false) };
+  let function = get_function_name_as_string(fun_name).unwrap_or_default();
+  state.report_error_location_type_error_data(
+    location,
+    TypeErrorData::CountMismatch(CountMismatch {
+      expected: min_params,
+      maximum: opt_max_params,
+      actual,
+      context: CountMismatchContext::Arg,
+      is_variadic,
+      function,
+    }),
+  );
+}
+
 impl TypeChecker {
   pub(crate) fn check_argument_list(
     &mut self,
@@ -64,47 +95,6 @@ impl TypeChecker {
         } else {
           false
         }
-      }};
-    }
-
-    // reportCountMismatchError lambda
-    macro_rules! report_count_mismatch_error {
-      () => {{
-        // For this case, we want the error span to cover every errant extra parameter
-        let mut location = state.location;
-        if !arg_locations.is_empty() {
-          location = Location::new(
-            state.location.begin,
-            arg_locations[arg_locations.len() - 1].end,
-          );
-        }
-
-        let mut name_path = alloc::string::String::new();
-
-        if let Some(path) = get_function_name_as_string(fun_name) {
-          name_path = path;
-        }
-
-        let (min_params, opt_max_params) =
-          // Safety: `get_parameter_extents` 为 `unsafe fn`（契约：`log`/`tp` 在其
-          // 存活期内有效）。`&state.log as *const _` 借自本函数持有 `&mut
-          // Unifier` 的存活字段，本次同步调用内独占有效；`param_pack` 是消解
-          // 会话期 arena 驻留包节点，仅只读遍历计数（cpp
-          // `getParameterExtents` 同款入参形态）。
-          unsafe { get_parameter_extents(&state.log as *const _, param_pack, false) };
-        // 纯计数：直接用 std Iterator::count 等价替代三件套循环
-        let actual = begin_no_log(arg_pack).count();
-        state.report_error_location_type_error_data(
-          location,
-          TypeErrorData::CountMismatch(CountMismatch {
-            expected: min_params,
-            maximum: opt_max_params,
-            actual,
-            context: CountMismatchContext::Arg,
-            is_variadic: false,
-            function: name_path,
-          }),
-        );
       }};
     }
 
@@ -244,31 +234,16 @@ impl TypeChecker {
           if is_optional(t) || !state.log.txn_log_get_mutable::<ErrorType, _>(t).is_null() {
             // ok
           } else {
-            // Safety: 同 report_count_mismatch_error 宏内证成——`&state.log`
-            // 借自本函数持有的 `&mut Unifier` 活对象、同步调用内独占有效，
-            // `param_pack` 为会话期 arena 驻留包节点，只读遍历计数。
-            let (min_params, opt_max_params) =
-              unsafe { get_parameter_extents(&state.log as *const _, param_pack, false) };
-
             let tail = flatten(param_pack, &state.log).1;
             let is_variadic_flag = tail.is_some_and(is_variadic);
 
-            let mut name_path = String::new();
-
-            if let Some(path) = get_function_name_as_string(fun_name) {
-              name_path = path;
-            }
-
-            state.report_error_location_type_error_data(
+            report_count_mismatch(
+              state,
+              fun_name,
+              param_pack,
               fun_name.base.location,
-              TypeErrorData::CountMismatch(CountMismatch {
-                expected: min_params,
-                maximum: opt_max_params,
-                actual: param_index,
-                context: CountMismatchContext::Arg,
-                is_variadic: is_variadic_flag,
-                function: name_path,
-              }),
+              param_index,
+              is_variadic_flag,
             );
             return;
           }
@@ -295,7 +270,15 @@ impl TypeChecker {
               return;
             }
           }
-          report_count_mismatch_error!();
+
+          // For this case, we want the error span to cover every errant extra parameter
+          let mut location = state.location;
+          if let Some(last_arg) = arg_locations.last() {
+            location = Location::new(state.location.begin, last_arg.end);
+          }
+          // 纯计数：直接用 std Iterator::count 等价替代三件套循环
+          let actual = begin_no_log(arg_pack).count();
+          report_count_mismatch(state, fun_name, param_pack, location, actual, false);
           return;
         }
         // 上方 `tail().is_none()` 分支含 return 早退，此处 tail 恒 Some。
@@ -393,7 +376,14 @@ impl TypeChecker {
           .txn_log_get_mutable::<GenericTypePack, TypePackId>(tail)
           .is_null()
         {
-          report_count_mismatch_error!();
+          // For this case, we want the error span to cover every errant extra parameter
+          let mut location = state.location;
+          if let Some(last_arg) = arg_locations.last() {
+            location = Location::new(state.location.begin, last_arg.end);
+          }
+          // 纯计数：直接用 std Iterator::count 等价替代三件套循环
+          let actual = begin_no_log(arg_pack).count();
+          report_count_mismatch(state, fun_name, param_pack, location, actual, false);
           return;
         }
       } else {

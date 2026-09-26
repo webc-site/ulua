@@ -53,10 +53,9 @@ impl TypeChecker {
         if let Some(tail) = args_tail {
           let tail = follow_type_pack::follow(tail);
           if let Some(vtp) = get_type_pack::get::<VariadicTypePack>(tail) {
-            let mut index = args_head.len().saturating_sub(start);
-            while index < argument_count {
+            // 尾元铺到 argument_count 槽位为止（对齐 C++ `while (index < argumentCount)`）
+            for index in args_head.len().saturating_sub(start)..argument_count {
               assign_option(index, vtp.ty);
-              index += 1;
             }
           }
         }

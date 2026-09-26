@@ -12,9 +12,10 @@ use crate::{
     get_full_stack_size::{K_STACK_ALIGN, get_full_stack_size},
     get_non_vol_xmm_storage_size::get_non_vol_xmm_storage_size,
     get_xmm_register_count::get_xmm_register_count,
+    mem_x_64::mem,
     s_closure::s_closure,
     s_code::s_code,
-    unwind_header_ops::as_impl_mut,
+    unwind_header_ops::{as_impl_mut, unwind_finish_function, unwind_start_function},
   },
   records::{
     assembly_builder_x_64::AssemblyBuilderX64,
@@ -30,9 +31,6 @@ use crate::{
 
 const K_WINDOWS_FIRST_NON_VOL_XMM_REG: u8 = 6;
 const K_FULL_BLOCK_FUNCTION: u32 = 0xffff_ffff;
-fn mem(size: SizeX64, base: RegisterX64, disp: i32) -> OperandX64 {
-  OperandX64::mem(size, RegisterX64::NOREG, 1, base, disp)
-}
 
 fn set_fresh_label(build: &mut AssemblyBuilderX64) -> Label {
   let mut label = Label::default();
@@ -42,12 +40,6 @@ fn set_fresh_label(build: &mut AssemblyBuilderX64) -> Label {
 
 // `UnwindBuilder` 与平台实现共享 repr(C) 前缀布局，向下转型统一走 `as_impl_mut`
 // （cpp 基类指针转换的移植形态）。
-fn unwind_start_function(unwind: &mut UnwindBuilder) {
-  // Safety: `unwind` 由 code-gen 上下文构造点保证指向本平台具体 unwind 实现对象，`UnwindBuilder`
-  // 与实现共享 `repr(C)` 前缀布局 → 基址重合，向下转型类型正确；`&mut` 借自调用栈唯一入口，无别名。
-  unsafe { as_impl_mut(unwind) }.start_function();
-}
-
 fn unwind_prologue_x_64(
   unwind: &mut UnwindBuilder,
   prologue_size: u32,
@@ -65,12 +57,6 @@ fn unwind_prologue_x_64(
     gpr,
     simd,
   );
-}
-
-fn unwind_finish_function(unwind: &mut UnwindBuilder, begin_offset: u32, end_offset: u32) {
-  // Safety: 同上——`unwind` 由上下文构造点保证指向本平台具体 unwind 实现，`repr(C)` 前缀基址重合，
-  // 下转类型正确；该 `&mut` 为唯一借用，无别名冲突。
-  unsafe { as_impl_mut(unwind) }.finish_function(begin_offset, end_offset);
 }
 
 pub fn build_entry_function(

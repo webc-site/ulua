@@ -60,7 +60,6 @@ pub mod nonthrowing;
 pub mod normalize_state_offsets;
 pub mod nth;
 pub mod null_callback_autocomplete_test;
-pub mod null_callback_fragment_autocomplete_test;
 pub mod obscure_throw_case;
 pub mod parse_and_compile;
 pub mod path_expr_to_module_name_fixture;

@@ -1,4 +1,5 @@
 use crate::{
+  macros::substitution_entry::substitution_entry,
   records::{
     apply_mapped_generics::ApplyMappedGenerics, arena_handle::Handle, builtin_types::BuiltinTypes,
     internal_error_reporter::InternalErrorReporter, subtyping_environment::SubtypingEnvironment,
@@ -134,15 +135,5 @@ impl ApplyMappedGenerics {
     };
   }
 
-  /// Inherited `Substitution::substitute(TypeId)` with override dispatch wired.
-  pub fn substitute_type_id(&mut self, ty: TypeId) -> Option<TypeId> {
-    self.install_substitution_vtable();
-    self.base.substitute_type_id(ty)
-  }
-
-  /// Inherited `Substitution::substitute(TypePackId)` with override dispatch wired.
-  pub fn substitute_type_pack_id(&mut self, tp: TypePackId) -> Option<TypePackId> {
-    self.install_substitution_vtable();
-    self.base.substitute_type_pack_id(tp)
-  }
+  substitution_entry!(id, pack);
 }

@@ -129,16 +129,8 @@ impl Lua {
       "C" => DebugWhat::C,
       _ => DebugWhat::Unknown,
     };
-    let current_line = if ar.currentline >= 0 {
-      Some(ar.currentline as i64)
-    } else {
-      None
-    };
-    let line_defined = if ar.linedefined > 0 {
-      Some(ar.linedefined as i64)
-    } else {
-      None
-    };
+    let current_line = (ar.currentline >= 0).then_some(ar.currentline as i64);
+    let line_defined = (ar.linedefined > 0).then_some(ar.linedefined as i64);
     Some(Debug {
       name: debug_cstr(ar.name),
       what,

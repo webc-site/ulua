@@ -244,6 +244,7 @@ pub mod mark_dead_stores_in_block;
 pub mod mark_dead_stores_in_block_chain;
 pub mod mark_dead_stores_in_block_chains;
 pub mod mark_dead_stores_in_inst;
+pub mod mem_x_64;
 pub mod new_userdata;
 pub mod nvalue;
 pub mod on_close_state;

@@ -1,11 +1,10 @@
 use core::mem::{offset_of, size_of};
 
-use ulua_code_gen::{
-  enums::ir_cmd::IrCmd,
-  records::{ir_builder::IrBuilder, ir_op::IrOp},
-};
+use ulua_code_gen::records::{ir_builder::IrBuilder, ir_op::IrOp};
 
-use crate::common::records::userdata_tags::K_TAG_VERTEX;
+use crate::common::{
+  functions::check_userdata_tag::check_userdata_tag, records::userdata_tags::K_TAG_VERTEX,
+};
 
 #[repr(C)]
 #[derive(Debug, Copy, Clone, PartialEq, Default)]
@@ -36,8 +35,6 @@ impl Vertex {
 
   #[inline]
   pub fn check_tag(build: &mut IrBuilder, udata: IrOp, pcpos: i32) {
-    let tag = build.const_int(Self::TAG);
-    let exit = build.vm_exit(pcpos as u32);
-    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CheckUserdataTag, udata, tag, exit);
+    check_userdata_tag(build, udata, pcpos, Self::TAG);
   }
 }

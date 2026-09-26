@@ -16,8 +16,8 @@ use crate::{
   enums::{condition_x_64::ConditionX64, size_x_64::SizeX64},
   functions::{
     emit_update_base_emit_common_x_64::emit_update_base, luau_reg::luau_reg,
-    luau_reg_address::luau_reg_address, luau_reg_tag::luau_reg_tag, s_closure::s_closure,
-    s_code::s_code,
+    luau_reg_address::luau_reg_address, luau_reg_tag::luau_reg_tag, mem_x_64::mem,
+    s_closure::s_closure, s_code::s_code,
   },
   records::{
     assembly_builder_x_64::AssemblyBuilderX64,
@@ -325,10 +325,6 @@ pub fn emit_inst_call(
 }
 
 const K_TVALUE_SIZE_LOG2: i32 = 4;
-
-fn mem(size: SizeX64, base: RegisterX64, disp: i32) -> OperandX64 {
-  OperandX64::mem(size, RegisterX64::NOREG, 1, base, disp)
-}
 
 fn native_context_slot(disp: i32) -> OperandX64 {
   mem(SizeX64::Qword, R_NATIVE_CONTEXT, disp)

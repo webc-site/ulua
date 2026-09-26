@@ -14,12 +14,13 @@ use ulua_bytecode::{
 };
 use ulua_common::enums::luau_opcode::LuauOpcode;
 
+#[path = "common/leak_bytes.rs"]
+mod leak_bytes_support;
+
+use leak_bytes_support::leak_bytes;
+
 /// 含非法起始字节、孤立续字节与内嵌 NUL 的字节串。
 const ILLEGAL: &[u8] = b"\xff\xfe\x80not-utf8\x00end";
-
-fn leak_bytes(bytes: &'static [u8]) -> &'static [u8] {
-  Box::leak(bytes.to_vec().into_boxed_slice())
-}
 
 #[test]
 fn invalid_utf8_string_constant_roundtrips_byte_for_byte() {

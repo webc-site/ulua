@@ -26,10 +26,12 @@ use crate::{
     subsumes_scope::subsumes,
   },
   methods::{
-    path_builder_build::PathBuilderBuild, path_builder_mt::PathBuilderMt,
+    path_builder_build::PathBuilderBuild,
+    path_builder_mt::PathBuilderMt,
     subtyping_bind_generic::dense_hash_map_find_no_default,
     subtyping_is_covariant_with_super_tail::SuperTailCovariantArgs,
     subtyping_is_sub_tail_covariant_with::SubTailCovariantArgs,
+    subtyping_path_components::{index_result_component, path_property},
   },
   records::{
     any_type::AnyType,
@@ -1462,17 +1464,6 @@ impl Subtyping {
   ) -> SubtypingResult {
     SubtypingResult::from_is_subtype(sub_singleton == super_singleton)
   }
-}
-
-fn path_property(name: &str, is_read: bool) -> Component {
-  Component::Property(PathProperty {
-    name: name.to_string(),
-    is_read,
-  })
-}
-
-fn index_result_component() -> Component {
-  Component::TypeField(TypeField::IndexResult)
 }
 
 /// C++ local `auto record = [&](SubtypingResult subResult) { ... }`

@@ -1,31 +1,15 @@
+//! cpp `SubtypingResult& with_sub_component(Component)`——同形核心见
+//! [`crate::functions::prepend_reasoning_component`]（与
+//! `with_super_component` 仅路径侧不同）。
 use crate::{
-  enums::subtyping_variance::SubtypingVariance,
-  functions::merge_reasonings::k_empty_reasoning,
-  records::{
-    path::Path, subtyping_reasoning::SubtypingReasoning, subtyping_result::SubtypingResult,
-  },
-  type_aliases::{component::Component, subtyping_reasonings::SubtypingReasonings},
+  functions::prepend_reasoning_component::{ReasoningSide, prepend_component},
+  records::subtyping_result::SubtypingResult,
+  type_aliases::component::Component,
 };
 
 impl SubtypingResult {
   pub fn with_sub_component(&mut self, component: Component) -> &mut Self {
-    if self.reasoning.empty() {
-      self.reasoning.insert(SubtypingReasoning {
-        sub_path: Path::from_component(component),
-        super_path: Path::default(),
-        variance: SubtypingVariance::Covariant,
-        is_property_modifier_violation: false,
-      });
-    } else {
-      let mut updated = SubtypingReasonings::new(k_empty_reasoning());
-      for r in self.reasoning.iter() {
-        let mut r = r.clone();
-        r.sub_path = r.sub_path.push_front(component.clone());
-        updated.insert(r);
-      }
-      self.reasoning = updated;
-    }
-
+    prepend_component(&mut self.reasoning, component, ReasoningSide::Sub);
     self
   }
 }

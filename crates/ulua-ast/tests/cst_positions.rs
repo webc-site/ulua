@@ -36,10 +36,10 @@ impl FlagGuard {
   }
 }
 
-/// 位置字面量简写（location.rs 同款）。
-fn p(line: u32, column: u32) -> Position {
-  Position { line, column }
-}
+#[path = "common/pos.rs"]
+mod pos_util;
+
+use pos_util::p;
 
 impl Drop for FlagGuard {
   fn drop(&mut self) {

@@ -57,6 +57,7 @@ use crate::{
       write_json_emitter_bool, write_json_emitter_f64, write_json_emitter_string_view,
     },
   },
+  macros::write_json_int_impl::impl_write_json_int,
   records::{json_emitter::JsonEmitter, object_emitter::ObjectEmitter},
 };
 
@@ -89,17 +90,19 @@ impl WriteJson for f64 {
   }
 }
 
-macro_rules! write_json_int {
-    ($($t:ty),*) => {$(
-        impl WriteJson for $t {
-            fn write_json(&self, emitter: &mut JsonEmitter) {
-                emitter.write_raw_string_view(&self.to_string());
-            }
-        }
-    )*};
-}
 // NB: no i8/u8 — C++ `char` writes as a one-char STRING, not a JSON integer.
-write_json_int!(i32, u32, i64, u64, usize, isize, i16, u16);
+impl_write_json_int!(
+  WriteJson,
+  JsonEmitter,
+  i32,
+  u32,
+  i64,
+  u64,
+  usize,
+  isize,
+  i16,
+  u16
+);
 
 // --- string overloads (write(JsonEmitter&, std::string_view / std::string)) ---
 
