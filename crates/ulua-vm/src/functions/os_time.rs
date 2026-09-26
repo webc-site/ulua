@@ -1,3 +1,5 @@
+use coarsetime::Clock;
+
 use crate::{
   enums::lua_type::LuaType,
   functions::{
@@ -18,7 +20,7 @@ use crate::{
 /// 整秒截断与 C `time` 的取整语义一致；全目标纯 Rust（wasm32 经
 /// `wasm-bindgen` 读宿主时钟，不再依赖旧的固定时刻 shim）。
 pub(crate) fn now_epoch_seconds() -> TimeT {
-  coarsetime::Clock::now_since_epoch().as_f64() as TimeT
+  Clock::now_since_epoch().as_f64() as TimeT
 }
 
 /// # Safety

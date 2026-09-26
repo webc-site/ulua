@@ -4,7 +4,10 @@
 
 use std::{cmp::Ordering, ffi::c_void, rc::Rc, result::Result as StdResult};
 
-use serde::de::{self, IntoDeserializer};
+use serde::{
+  Deserializer as SerdeDeserializer,
+  de::{self, IntoDeserializer},
+};
 
 use super::{Visited, VisitedSet};
 use crate::{
@@ -645,7 +648,7 @@ impl<'de> de::VariantAccess<'de> for VariantDeserializer {
     V: de::Visitor<'de>,
   {
     self.with_value("tuple variant", |de| {
-      serde::Deserializer::deserialize_seq(de, visitor)
+      SerdeDeserializer::deserialize_seq(de, visitor)
     })
   }
 
@@ -654,7 +657,7 @@ impl<'de> de::VariantAccess<'de> for VariantDeserializer {
     V: de::Visitor<'de>,
   {
     self.with_value("struct variant", |de| {
-      serde::Deserializer::deserialize_map(de, visitor)
+      SerdeDeserializer::deserialize_map(de, visitor)
     })
   }
 }

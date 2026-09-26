@@ -5,7 +5,7 @@
 
 use std::cell::RefCell;
 
-use ulua_rt::Lua;
+use ulua_rt::{Checker, Lua};
 
 #[cfg(not(feature = "afl-runtime"))]
 include!("standalone.rs");
@@ -20,8 +20,8 @@ thread_local! {
     // (Cross-input state-bleed is a different property, covered by ulua-rt's
     // `checker_does_not_bleed_state_across_reuse` test.) `Checker::check` does not
     // catch_unwind, so a checker panic surfaces to AFL as a crash — also desirable.
-    static CHECKER_A: RefCell<ulua_rt::Checker> = RefCell::new(ulua_rt::Checker::new());
-    static CHECKER_B: RefCell<ulua_rt::Checker> = RefCell::new(ulua_rt::Checker::new());
+    static CHECKER_A: RefCell<ulua_rt::Checker> = RefCell::new(Checker::new());
+    static CHECKER_B: RefCell<ulua_rt::Checker> = RefCell::new(Checker::new());
 }
 
 fn check_two(src: &str) -> (String, String) {

@@ -4,6 +4,7 @@
 
 use std::string::{String, ToString};
 
+use itoa::Buffer;
 use ulua_analysis::{
   enums::solver_mode::SolverMode,
   functions::{freeze::freeze, to_string_error::to_string_type_error, unfreeze::unfreeze},
@@ -117,7 +118,7 @@ impl DemoFrontend {
       }
       // std::to_string(err.location.begin.line + 1)
       // itoa 栈缓冲直拼，免 `to_string()` 的堆分配；十进制输出与 `core::fmt` 逐字节一致
-      out.push_str(itoa::Buffer::new().format(err.location.begin.line + 1));
+      out.push_str(Buffer::new().format(err.location.begin.line + 1));
       out.push_str(": ");
       // Luau::to_string(err)
       out.push_str(&to_string_type_error(err));

@@ -1,4 +1,4 @@
-use core::mem::size_of;
+use core::mem::{offset_of, size_of};
 
 use ulua_common::macros::{luau_assert::LUAU_ASSERT, luau_noinline::LUAU_NOINLINE};
 
@@ -38,7 +38,7 @@ LUAU_NOINLINE! {
             K_SMALL_PAGE_SIZE
         };
         let block_size = size_of_class + if store_metadata { K_BLOCK_HEADER } else { 0 };
-        let block_count = (page_size - core::mem::offset_of!(lua_Page, data) as i32) / block_size;
+        let block_count = (page_size - offset_of!(lua_Page, data) as i32) / block_size;
 
         let page = newpage(l, pageset, page_size, block_size, block_count);
 

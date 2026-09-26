@@ -1,8 +1,4 @@
-use core::{
-  fmt,
-  ops::Deref,
-  slice::from_raw_parts,
-};
+use core::{fmt, ops::Deref, slice::from_raw_parts};
 
 use crate::{
   enums::luau_opcode::LuauOpcode,

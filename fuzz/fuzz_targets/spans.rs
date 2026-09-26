@@ -8,11 +8,13 @@
 
 use std::cell::RefCell;
 
+use ulua_rt::Checker;
+
 #[cfg(not(feature = "afl-runtime"))]
 include!("standalone.rs");
 
 thread_local! {
-    static CHECKER: RefCell<ulua_rt::Checker> = RefCell::new(ulua_rt::Checker::new());
+    static CHECKER: RefCell<ulua_rt::Checker> = RefCell::new(Checker::new());
 }
 
 fn exercise_input(data: &[u8]) {

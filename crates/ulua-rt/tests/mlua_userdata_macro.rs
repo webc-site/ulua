@@ -33,7 +33,7 @@
 
 #![cfg(feature = "macros")]
 
-use ulua_rt::{FromLua as _, IntoLua as _, Lua, Result, UserData, Value};
+use ulua_rt::{Error, FromLua as _, IntoLua as _, Lua, Result, UserData, Value};
 
 // `#[derive(UserData)]` over named fields. Mirrors the *field* portion of
 // mlua's `Rectangle`: `length`/`width` are default get+set, `version` is a
@@ -201,7 +201,7 @@ fn test_from_lua_derive() -> Result<()> {
   // Wrong-type conversion produces a `FromLuaConversionError`.
   let err = MyValue::from_lua(Value::Integer(7), &lua).unwrap_err();
   assert!(
-    matches!(&err, ulua_rt::Error::FromLuaConversionError { to, .. } if to == "MyValue"),
+    matches!(&err, Error::FromLuaConversionError { to, .. } if to == "MyValue"),
     "expected FromLuaConversionError to MyValue, got {err:?}"
   );
 

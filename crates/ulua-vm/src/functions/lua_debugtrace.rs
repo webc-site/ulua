@@ -2,6 +2,7 @@
 
 use core::{cell::UnsafeCell, ffi::c_char, mem::zeroed, ptr::copy_nonoverlapping};
 
+use itoa::Buffer;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
@@ -72,7 +73,7 @@ pub unsafe fn lua_debugtrace(l: *mut LuaState) -> *const c_char {
 
         if ar.currentline > 0 {
           let mut line: [c_char; 32] = [0; 32];
-          let mut num = itoa::Buffer::new();
+          let mut num = Buffer::new();
           write_c_str(&mut line, &[":", num.format(ar.currentline)]);
 
           offset = append(buf_ptr, BUF_LEN, offset, line.as_ptr());
@@ -87,7 +88,7 @@ pub unsafe fn lua_debugtrace(l: *mut LuaState) -> *const c_char {
 
         if depth > LIMIT1 + LIMIT2 && level == LIMIT1 - 1 {
           let mut skip: [c_char; 32] = [0; 32];
-          let mut num = itoa::Buffer::new();
+          let mut num = Buffer::new();
           write_c_str(
             &mut skip,
             &["... (+", num.format(depth - LIMIT1 - LIMIT2), " frames)\n"],

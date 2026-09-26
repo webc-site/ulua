@@ -6,6 +6,7 @@ use core::{
   sync::atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
+use itoa::Buffer;
 use ulua_common::functions::c_str::cstr_cow;
 use ulua_vm::{
   functions::{lua_callbacks::lua_callbacks, lua_getinfo::lua_getinfo},
@@ -153,7 +154,7 @@ unsafe fn collect_stack(l: *mut LuaState, gc: i32, stack: &mut String) {
     stack.push(',');
     if ar.linedefined > 0 {
       // 数字转串走 itoa 栈缓冲（采样热路径，免 core::fmt 开销），产物逐字节一致
-      stack.push_str(itoa::Buffer::new().format(ar.linedefined));
+      stack.push_str(Buffer::new().format(ar.linedefined));
     }
   }
 }

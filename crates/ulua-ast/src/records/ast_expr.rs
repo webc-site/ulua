@@ -5,7 +5,10 @@
 //! `AstNode` subobject at offset 0 so the RTTI pointer casts in [`crate::rtti`]
 //! are sound.
 
-use crate::{enums::ast_expr_ref::AstExprRef, records::ast_node::AstNode};
+use crate::{
+  enums::ast_expr_ref::AstExprRef,
+  records::{ast_node::AstNode, node_handle::Node},
+};
 
 #[repr(C)]
 #[derive(Debug, Clone)]
@@ -27,7 +30,7 @@ impl AstExpr {
   }
 }
 
-impl crate::records::node_handle::Node<AstExpr> {
+impl Node<AstExpr> {
   /// 将表达式句柄下转为具体引用枚举。
   #[inline]
   pub fn as_expr_ref(&self) -> AstExprRef<'_> {

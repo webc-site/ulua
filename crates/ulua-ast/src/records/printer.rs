@@ -12,6 +12,7 @@ use core::{
   ptr::{from_ref, null},
 };
 
+use itoa::Buffer;
 use ulua_common::{
   fflag, functions::format_g::format_g, macros::luau_assert::LUAU_ASSERT,
   records::variant::Variant2,
@@ -461,7 +462,7 @@ impl<'a, W: Writer> Printer<'a, W> {
           self.writer.literal("0/0".as_bytes());
         } else if Self::printer_is_integerish(a.value) {
           // itoa 栈上缓冲直写，免 String 堆分配
-          let mut buf = itoa::Buffer::new();
+          let mut buf = Buffer::new();
           self.writer.literal(buf.format(a.value as i32).as_bytes());
         } else {
           self.writer.literal(format_g(a.value, 17).as_bytes());
@@ -476,7 +477,7 @@ impl<'a, W: Writer> Printer<'a, W> {
           // cpp `snprintf(buffer, "%lldi")`：栈上字符数组拼接。itoa 本身无分配
           // （内联 Buffer），只需把它的字节抄进栈数组再补 'i'，避免 `format!`
           // 的 String 堆分配。i64::MAX 十进制 19 位 + 'i'，24 足够。
-          let mut buf = itoa::Buffer::new();
+          let mut buf = Buffer::new();
           let digits = buf.format(a.value).as_bytes();
           let mut out = [0u8; 24];
           out[..digits.len()].copy_from_slice(digits);

@@ -1,5 +1,7 @@
 use core::{ffi::c_char, mem::zeroed};
 
+use itoa::Buffer;
+
 use crate::{
   functions::{
     cstr_bytes, lua_getinfo::lua_getinfo, lua_l_addchar::lua_l_addchar,
@@ -27,7 +29,7 @@ pub unsafe fn lua_l_traceback(l: *mut LuaState, l1: *mut LuaState, msg: Option<&
     /// `buf` 必须指向存活且已由 `lua_l_buffinit` 初始化的 `LuaLStrbuf`；
     /// `lua_l_addlstring` 会经其可写游标追加 itoa 输出。
     unsafe fn addsignednum(buf: &mut LuaLStrbuf, n: i32) {
-      let mut digits = itoa::Buffer::new();
+      let mut digits = Buffer::new();
       let s = digits.format(n);
       unsafe { lua_l_addlstring(buf, s.as_bytes()) };
     }

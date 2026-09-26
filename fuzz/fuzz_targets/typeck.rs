@@ -6,6 +6,8 @@
 
 use std::{cell::RefCell, str::from_utf8};
 
+use ulua_rt::Checker;
+
 #[cfg(not(feature = "afl-runtime"))]
 include!("standalone.rs");
 
@@ -15,7 +17,7 @@ thread_local! {
     // definition file every call, which dominated throughput (~50 exec/s); the
     // reusable Checker drops the per-input cost to just parsing + checking the
     // input (orders of magnitude faster).
-    static CHECKER: RefCell<ulua_rt::Checker> = RefCell::new(ulua_rt::Checker::new());
+    static CHECKER: RefCell<ulua_rt::Checker> = RefCell::new(Checker::new());
 }
 
 fn exercise_input(data: &[u8]) {

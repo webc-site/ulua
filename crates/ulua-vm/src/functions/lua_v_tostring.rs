@@ -1,5 +1,6 @@
 use core::{ffi::c_char, slice::from_raw_parts};
 
+use itoa::Buffer;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
@@ -45,7 +46,7 @@ pub(crate) unsafe fn lua_v_tostring(l: *mut LuaState, obj: StkId) -> i32 {
 
     // 整数值 double 快路径：itoa 直出十进制，跳过 schubfach 全流程
     if let Some(v) = lua_v_int_fast(n) {
-      let mut b = itoa::Buffer::new();
+      let mut b = Buffer::new();
       let s = b.format(v);
       setsvalue!(l, obj, lua_s_newlstr(l, s.as_bytes()));
       return 1;
@@ -71,6 +72,8 @@ pub(crate) unsafe fn lua_v_tostring(l: *mut LuaState, obj: StkId) -> i32 {
 #[cfg(test)]
 mod tests {
   use core::ffi;
+
+  use itoa::Buffer;
 
   use super::{TWO_POW_53_F64, lua_v_int_fast};
   use crate::functions::luai_num_2_str::luai_num2str_buf;
@@ -119,7 +122,7 @@ mod tests {
     for n in vals {
       // 快路径命中时，itoa 输出必须与 luai_num2str 逐字节一致
       if let Some(v) = lua_v_int_fast(n) {
-        assert_eq!(itoa::Buffer::new().format(v), luau_str(n), "n={n:?}");
+        assert_eq!(Buffer::new().format(v), luau_str(n), "n={n:?}");
       }
     }
     // 边界契约：-0.0 / 超出 2^53 / 非整数值不进快路径

@@ -9,6 +9,7 @@
 use core::ptr::{null, null_mut};
 use std::string::String;
 
+use itoa::Buffer;
 use ulua_ast::records::parse_options::ParseOptions;
 use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
 use ulua_common::functions::c_str::cstr_cow;
@@ -78,7 +79,7 @@ pub unsafe fn run_code(l: *mut LuaState, source: &str) -> String {
         prefixed.push_str(&unsafe { cstr_cow(ar.short_src) });
         prefixed.push(':');
         // itoa 栈缓冲直拼，免 `to_string()` 的堆分配；与 `core::fmt` 逐字节一致
-        prefixed.push_str(itoa::Buffer::new().format(ar.currentline));
+        prefixed.push_str(Buffer::new().format(ar.currentline));
         prefixed.push_str(": ");
         prefixed.push_str(&error);
         error = prefixed;

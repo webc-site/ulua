@@ -10,8 +10,10 @@ use std::{
   time::Instant,
 };
 
+use ulua_rt::Checker;
+
 thread_local! {
-    static CHECKER: RefCell<ulua_rt::Checker> = RefCell::new(ulua_rt::Checker::new());
+    static CHECKER: RefCell<ulua_rt::Checker> = RefCell::new(Checker::new());
 }
 
 fn main() {

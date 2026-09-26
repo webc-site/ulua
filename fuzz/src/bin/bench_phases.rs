@@ -10,10 +10,10 @@ use std::{
   time::{Duration, Instant},
 };
 
-use ulua_rt::{Error, Lua, Result, VmState};
+use ulua_rt::{Checker, Error, Lua, Result, VmState};
 
 thread_local! {
-    static CHECKER: RefCell<ulua_rt::Checker> = RefCell::new(ulua_rt::Checker::new());
+    static CHECKER: RefCell<ulua_rt::Checker> = RefCell::new(Checker::new());
 }
 
 fn rng(seed: &mut u64) -> [u8; 96] {

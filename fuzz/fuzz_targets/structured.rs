@@ -7,6 +7,8 @@
 
 use std::cell::RefCell;
 
+use ulua_rt::Checker;
+
 #[cfg(not(feature = "afl-runtime"))]
 include!("standalone.rs");
 
@@ -19,7 +21,7 @@ thread_local! {
     // compile+run below). Reusing a Checker registers the builtins once, so the
     // per-input analysis cost drops to just parsing+checking the program. A faster
     // target explores more inputs per wall-clock second — i.e. finds more bugs.
-    static CHECKER: RefCell<ulua_rt::Checker> = RefCell::new(ulua_rt::Checker::new());
+    static CHECKER: RefCell<ulua_rt::Checker> = RefCell::new(Checker::new());
 }
 
 fn exercise_input(data: &[u8]) {
