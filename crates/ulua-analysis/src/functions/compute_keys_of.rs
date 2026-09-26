@@ -51,7 +51,7 @@ pub fn compute_keys_of(
     if !is_raw {
       let mut dummy = Vec::new();
       if let Some(mm_type) = find_metatable_entry(
-        Handle::from_ptr(ctx.builtins.as_ptr()),
+        Handle::from_ref(ctx.builtins()),
         &mut dummy,
         ty,
         "__index",
@@ -74,7 +74,7 @@ pub fn compute_keys_of(
     if extern_ty.metatable.is_some() && !is_raw {
       let mut dummy = Vec::new();
       if let Some(mm_type) = find_metatable_entry(
-        Handle::from_ptr(ctx.builtins.as_ptr()),
+        Handle::from_ref(ctx.builtins()),
         &mut dummy,
         ty,
         "__index",

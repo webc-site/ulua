@@ -33,15 +33,8 @@ pub(crate) unsafe fn reduce_and_or_type_function(
   is_or: bool,
   ice_msg: &str,
 ) -> TypeFunctionReductionResult {
-  // Safety: `ctx` 由 TypeFunctionReducer 从 NonNull 锚定的 TypeFunctionContext
-  // 物化、整次 reduce 步进期间独占存活；本函数只共享读取其字段
-  // （ice/builtins/arena/solver 句柄值），降级为只读借用。
-  let ctx_ref = &*ctx;
   if type_params.len() != 2 || !pack_params.is_empty() {
-    // Safety: `ctx_ref.ice` 是 NonNull<InternalErrorReporter>（构造 ctx 时
-    // 接线、随检查会话存活，NonNull 不变量排除空指针）；`as_ptr()` 后仅调用
-    // 其 ice_string 上报错误分支（直译 C++ `ctx->ice->ice(...)`）。
-    unsafe { (*ctx_ref.ice.as_ptr()).ice_string(ice_msg) };
+    ctx.ice().ice_string(ice_msg);
     LUAU_ASSERT!(false);
   }
 
@@ -63,9 +56,8 @@ pub(crate) unsafe fn reduce_and_or_type_function(
       is_blocked_or_unsolved_type(ty)
     } else {
       // Safety: `is_pending` 内部对 `solver` 走 `Option::as_mut` 判空（对应 C++
-      // 可空 `ConstraintSolver*`），非空时指向检查会话存活的 solver；`ctx_ref`
-      // 由函数头证得有效，其 `solver` 字段是按值取出的句柄，仅在本调用内使用。
-      unsafe { is_pending(ty, ctx_ref.solver) }
+      // 可空 `ConstraintSolver*`），非空时指向检查会话存活的 solver。
+      unsafe { is_pending(ty, ctx.solver) }
     }
   };
   if unresolved(lhs_ty) {
@@ -76,26 +68,20 @@ pub(crate) unsafe fn reduce_and_or_type_function(
 
   // And evaluates to a boolean if the LHS is falsy, and the RHS type if LHS is truthy.
   // or 对偶：lhs 过滤 truthy 后与 rhs 取并。
-  // Safety: `builtins`/`arena` 为 NonNull 字段——构造 TypeFunctionContext 时接线
-  // 的内建类型表与类型 arena，比本次 reduce 长寿且非空；`as_ref()` 只共享读
-  // `falsy_type`/`truthy_type`（Copy 句柄），`as_ptr()` 仅把同源非空指针交给安全的
-  // simplify_intersection 重新借用，与 C++ `TypeSimplifier::simplifyIntersection`
-  // 同调用，无并存 `&mut`。
-  let filtered_lhs = unsafe {
-    simplify_intersection(
-      Handle::from_nonnull(ctx_ref.builtins),
-      Handle::from_nonnull(ctx_ref.arena),
-      lhs_ty,
-      if is_or {
-        ctx_ref.builtins.as_ref().truthy_type
-      } else {
-        ctx_ref.builtins.as_ref().falsy_type
-      },
-    )
+  let filter_ty = if is_or {
+    ctx.builtins().truthy_type
+  } else {
+    ctx.builtins().falsy_type
   };
+  let filtered_lhs = simplify_intersection(
+    Handle::from_ref(ctx.builtins()),
+    Handle::from_mut(ctx.arena_mut()),
+    lhs_ty,
+    filter_ty,
+  );
   let overall_result = simplify_union(
-    Handle::from_nonnull(ctx_ref.builtins),
-    Handle::from_nonnull(ctx_ref.arena),
+    Handle::from_ref(ctx.builtins()),
+    Handle::from_mut(ctx.arena_mut()),
     rhs_ty,
     filtered_lhs.result,
   );

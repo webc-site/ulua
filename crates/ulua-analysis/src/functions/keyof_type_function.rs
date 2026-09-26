@@ -21,7 +21,5 @@ pub unsafe fn keyof_type_function(
     LUAU_ASSERT!(false);
   }
 
-  // Safety: keyof_function_impl 的契约（ctx 为独占存活借用、切片元素为存活
-  // arena 句柄）由本函数 fn 级契约原样承接，借用降级为只读下传。
-  unsafe { keyof_function_impl(type_params, pack_params, ctx, false) }
+  keyof_function_impl(type_params, pack_params, ctx, false)
 }

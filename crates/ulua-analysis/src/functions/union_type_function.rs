@@ -20,69 +20,69 @@ pub unsafe fn union_type_function(
   pack_params: &[TypePackId],
   ctx: &mut TypeFunctionContext,
 ) -> TypeFunctionReductionResult {
-  unsafe {
-    if !pack_params.is_empty() {
-      (*ctx.ice.as_ptr()).ice_string(
-                "union type function: encountered a type function instance without the required argument structure",
-            );
-      LUAU_ASSERT!(false);
+  if !pack_params.is_empty() {
+    ctx.ice().ice_string(
+      "union type function: encountered a type function instance without the required argument structure",
+    );
+    LUAU_ASSERT!(false);
+  }
+
+  if type_params.len() == 1 {
+    return TypeFunctionReductionResult::reduction(follow_type::follow(type_params[0]));
+  }
+
+  let mut options = Vec::new();
+  let mut blocking_types = Vec::new();
+  let mut worklist = type_params.to_vec();
+
+  while let Some(ty) = worklist.pop() {
+    let ty = follow_type::follow(ty);
+
+    if let Some(union_ty) = get_type::get::<UnionType>(ty).as_ref() {
+      worklist.extend(union_ty.options.iter().copied());
+      continue;
     }
 
-    if type_params.len() == 1 {
-      return TypeFunctionReductionResult::reduction(follow_type::follow(type_params[0]));
-    }
-
-    let mut options = Vec::new();
-    let mut blocking_types = Vec::new();
-    let mut worklist = type_params.to_vec();
-
-    while let Some(ty) = worklist.pop() {
-      let ty = follow_type::follow(ty);
-
-      if let Some(union_ty) = get_type::get::<UnionType>(ty).as_ref() {
-        worklist.extend(union_ty.options.iter().copied());
-        continue;
-      }
-
-      if let Some(type_function_instance) = get_type::get::<TypeFunctionInstanceType>(ty).as_ref() {
-        let function = type_function_instance.function.as_ref();
-        if function.name == ctx.builtins.as_ref().type_functions.union_func.name {
-          worklist.extend(type_function_instance.type_arguments.iter().copied());
-          continue;
-        }
-
-        options.push(ty);
-        blocking_types.push(ty);
+    if let Some(type_function_instance) = get_type::get::<TypeFunctionInstanceType>(ty).as_ref() {
+      // Safety: `function` is a valid NonNull pointer to a TypeFunction that outlives reduction.
+      let function = unsafe { type_function_instance.function.as_ref() };
+      if function.name == ctx.builtins().type_functions.union_func.name {
+        worklist.extend(type_function_instance.type_arguments.iter().copied());
         continue;
       }
 
       options.push(ty);
-      if is_pending(ty, ctx.solver) {
-        blocking_types.push(ty);
-      }
+      blocking_types.push(ty);
+      continue;
     }
 
-    if !blocking_types.is_empty() {
-      return TypeFunctionReductionResult::no_reduction(blocking_types);
+    options.push(ty);
+    // Safety: is_pending expects valid or null solver pointer
+    if unsafe { is_pending(ty, ctx.solver) } {
+      blocking_types.push(ty);
     }
-
-    let mut result_ty = ctx.builtins.as_ref().never_type;
-    for ty in options {
-      let simplified = simplify_union(
-        Handle::from_nonnull(ctx.builtins),
-        Handle::from_nonnull(ctx.arena),
-        result_ty,
-        ty,
-      );
-      if !simplified.blocked_types.empty() {
-        return TypeFunctionReductionResult::no_reduction(
-          simplified.blocked_types.iter().copied().collect(),
-        );
-      }
-
-      result_ty = simplified.result;
-    }
-
-    TypeFunctionReductionResult::reduction(result_ty)
   }
+
+  if !blocking_types.is_empty() {
+    return TypeFunctionReductionResult::no_reduction(blocking_types);
+  }
+
+  let mut result_ty = ctx.builtins().never_type;
+  for ty in options {
+    let simplified = simplify_union(
+      Handle::from_ref(ctx.builtins()),
+      Handle::from_mut(ctx.arena_mut()),
+      result_ty,
+      ty,
+    );
+    if !simplified.blocked_types.empty() {
+      return TypeFunctionReductionResult::no_reduction(
+        simplified.blocked_types.iter().copied().collect(),
+      );
+    }
+
+    result_ty = simplified.result;
+  }
+
+  TypeFunctionReductionResult::reduction(result_ty)
 }

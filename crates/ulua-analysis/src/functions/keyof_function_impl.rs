@@ -25,23 +25,16 @@ use crate::{
 ///   别名，各 arena 节点随会话存活（不变量 2）。
 /// - `is_raw`：纯 bool 标志（rawkeyof 时为 true，`compute_keys_of` 据此跳过
 ///   `__index` 元表链），无指针侧契约。
-pub unsafe fn keyof_function_impl(
+pub fn keyof_function_impl(
   type_params: &[TypeId],
   pack_params: &[TypePackId],
-  ctx: &TypeFunctionContext,
+  ctx: &mut TypeFunctionContext,
   is_raw: bool,
 ) -> TypeFunctionReductionResult {
-  // Safety: `ctx` 依函数级契约为整段归约内存活的只读借用；后续字段句柄与
-  // 传给 `compute_keys_of` 的引用都由此派生。
-  let ctx_ref = ctx;
   if type_params.len() != 1 || !pack_params.is_empty() {
-    unsafe {
-      // Safety: `ice` 是 NonNull<InternalErrorReporter>，as_ptr 取回的裸指针指向求解会话
-      // 持有的存活报告器；`ice_string(&self, …)` 只读其元数据构造消息并 panic 发散。
-      (*ctx_ref.ice.as_ptr()).ice_string(
-                "keyof type function: encountered a type function instance without the required argument structure",
-            )
-    };
+    ctx.ice().ice_string(
+      "keyof type function: encountered a type function instance without the required argument structure",
+    );
     LUAU_ASSERT!(false);
   }
 
@@ -55,10 +48,7 @@ pub unsafe fn keyof_function_impl(
   };
 
   let operand_ty = follow_type::follow(type_params[0]);
-  // Safety: `normalizer` 为 NonNull<Normalizer>，as_ptr 后取 `&mut` 调 try_normalize
-  // （写其内部归一化缓存），可变借用止于本语句，返回独立 `Arc<NormalizedType>`；
-  // 失败返回 None 对应 cpp 空 shared_ptr 的短路分支。
-  let Some(norm_ty) = (unsafe { (*ctx_ref.normalizer.as_ptr()).try_normalize(operand_ty) }) else {
+  let Some(norm_ty) = ctx.normalizer_mut().try_normalize(operand_ty) else {
     return make_result(None, Reduction::MaybeOk);
   };
 
@@ -81,11 +71,9 @@ pub unsafe fn keyof_function_impl(
       return make_result(None, Reduction::Erroneous);
     };
 
-    if !compute_keys_of(first, &mut keys, &mut seen, is_raw, ctx_ref) {
+    if !compute_keys_of(first, &mut keys, &mut seen, is_raw, ctx) {
       return make_result(
-        // Safety: `builtins` 为 NonNull<BuiltinTypes>，指向会话期存活的内置类型表；
-        // as_ref 后只读 string_type（Copy TypeId），共享借用瞬态有效。
-        Some(unsafe { ctx_ref.builtins.as_ref().string_type }),
+        Some(ctx.builtins().string_type),
         Reduction::MaybeOk,
       );
     }
@@ -93,7 +81,7 @@ pub unsafe fn keyof_function_impl(
     for extern_ty in extern_types {
       seen.clear();
       let mut local_keys = BTreeSet::new();
-      if compute_keys_of(extern_ty, &mut local_keys, &mut seen, is_raw, ctx_ref) {
+      if compute_keys_of(extern_ty, &mut local_keys, &mut seen, is_raw, ctx) {
         keys.retain(|key| local_keys.contains(key));
       }
     }
@@ -108,10 +96,9 @@ pub unsafe fn keyof_function_impl(
       return make_result(None, Reduction::Erroneous);
     };
 
-    if !compute_keys_of(first, &mut keys, &mut seen, is_raw, ctx_ref) {
+    if !compute_keys_of(first, &mut keys, &mut seen, is_raw, ctx) {
       return make_result(
-        // Safety: 第二个首表失败分支，仍是对会话存活 builtins 表的瞬态只读 Copy 取值。
-        Some(unsafe { ctx_ref.builtins.as_ref().string_type }),
+        Some(ctx.builtins().string_type),
         Reduction::MaybeOk,
       );
     }
@@ -119,7 +106,7 @@ pub unsafe fn keyof_function_impl(
     for table in tables {
       seen.clear();
       let mut local_keys = BTreeSet::new();
-      if compute_keys_of(table, &mut local_keys, &mut seen, is_raw, ctx_ref) {
+      if compute_keys_of(table, &mut local_keys, &mut seen, is_raw, ctx) {
         keys.retain(|key| local_keys.contains(key));
       }
     }
@@ -127,22 +114,16 @@ pub unsafe fn keyof_function_impl(
 
   if keys.is_empty() {
     return make_result(
-      // Safety: 空键集归约为 never：读取会话存活 builtins 表的 Copy 字段，瞬态共享借用。
-      Some(unsafe { ctx_ref.builtins.as_ref().never_type }),
+      Some(ctx.builtins().never_type),
       Reduction::MaybeOk,
     );
   }
 
   let mut singletons = Vec::new();
   for key in keys {
-    // Safety: `arena` 为 NonNull<TypeArena>，as_ptr 后取 `&mut` 逐键追加
-    // SingletonType(StringSingleton)；可变借用止于本语句，循环迭代间顺序无并存，
-    // 单线程独占驱动下无其它 arena 借用。
-    singletons.push(unsafe {
-      (*ctx_ref.arena.as_ptr()).add_type(SingletonType::new(SingletonVariant::V1(
-        StringSingleton::new(key),
-      )))
-    });
+    singletons.push(ctx.arena_mut().add_type(SingletonType::new(SingletonVariant::V1(
+      StringSingleton::new(key),
+    ))));
   }
 
   if singletons.len() == 1 {
@@ -150,13 +131,9 @@ pub unsafe fn keyof_function_impl(
   }
 
   make_result(
-    // Safety: 同上，向 arena 追加 UnionType（options 移入 singletons）；可变借用止于
-    // 本表达式语句，此刻无并存 arena 借用。
-    Some(unsafe {
-      (*ctx_ref.arena.as_ptr()).add_type(UnionType {
-        options: singletons,
-      })
-    }),
+    Some(ctx.arena_mut().add_type(UnionType {
+      options: singletons,
+    })),
     Reduction::MaybeOk,
   )
 }

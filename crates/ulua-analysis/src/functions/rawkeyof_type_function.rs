@@ -19,8 +19,5 @@ pub(crate) fn rawkeyof_type_function(
     LUAU_ASSERT!(false);
   }
 
-  // Safety: keyof_function_impl 的 fn 级契约（ctx 指向本次调用独占存活的
-  // TypeFunctionContext、切片元素为存活 arena 句柄）由分派器帧保证，此处把
-  // 独占借用降级为只读下传，不并存第二可变别名。
-  unsafe { keyof_function_impl(type_params, pack_params, ctx, true) }
+  keyof_function_impl(type_params, pack_params, ctx, true)
 }
