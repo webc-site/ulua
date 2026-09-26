@@ -1,4 +1,4 @@
-use ulua_common::macros::luau_unlikely::LUAU_UNLIKELY;
+use ulua_common::macros::luau_assert::LUAU_UNLIKELY;
 
 use crate::records::{ir_inst::IrInst, ir_op::IrOp};
 

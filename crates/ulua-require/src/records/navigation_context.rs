@@ -169,8 +169,9 @@ unsafe fn init_config_thread_data(
   };
 
   timer.start(timeout);
-  // Safety: 地址只是经 VM 的线程数据槽转手，写权限由 Cell 提供。
-  unsafe { lua_setthreaddata(l, from_ref(timer).cast::<c_void>().cast_mut()) };
+  // Safety: `l` 按契约在本次调用窗口内独占驱动，`&mut *l` 排他引用重建前提成立；
+  // 地址只是经 VM 的线程数据槽转手，写权限由 Cell 提供。
+  unsafe { lua_setthreaddata(&mut *l, from_ref(timer).cast::<c_void>().cast_mut()) };
 }
 
 /// 配置执行超时文案（cpp `luauConfigInterrupt` 的唯一错误消息）。

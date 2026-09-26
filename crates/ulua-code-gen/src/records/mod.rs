@@ -70,6 +70,8 @@ pub mod native_context;
 pub mod native_fn;
 pub mod native_module;
 pub mod native_module_ref;
+pub mod native_proto_bytecode_id_equal;
+pub mod native_proto_bytecode_id_less;
 pub mod native_proto_exec_data_header;
 pub mod node_slot_state;
 pub mod numbered_instruction;

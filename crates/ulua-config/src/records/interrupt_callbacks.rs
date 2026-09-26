@@ -36,8 +36,9 @@ impl Debug for ConfigInitCallback {
 /// 的 lightuserdata 挂入线程数据槽，本函数不解引用（其存活期由挂接方的
 /// 配置执行窗口契约保证）。
 pub unsafe fn attach_threaddata_init(l: *mut LuaState, userdata: *mut c_void) {
-  // Safety: 契约保证 l 有效；userdata 只转手存储，与 cpp 原版同义。
-  unsafe { lua_setthreaddata(l, userdata) };
+  // Safety: 契约保证 l 为存活且本窗口内独占驱动的 `LuaState`，`&mut *l` 排他引用
+  // 重建前提成立；userdata 只转手存储，与 cpp 原版同义。
+  unsafe { lua_setthreaddata(&mut *l, userdata) };
 }
 
 /// 配置执行回调对（对应 C++ `LuauConfigInterrupt` 的 init/中断函数对）。

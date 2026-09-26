@@ -48,7 +48,9 @@ impl TypeFunctionRuntime {
       let vm_l = l as *mut lua_state::LuaState;
 
       // lua_setthreaddata(l, this);
-      lua_setthreaddata(vm_l, (self as *mut TypeFunctionRuntime).cast());
+      // Safety: `vm_l` 是本帧新建、尚无其它引用的存活 `LuaState`，`&mut *vm_l` 排他
+      // 引用重建前提成立；`self` 地址只转手存入线程数据槽，不解引用。
+      lua_setthreaddata(&mut *vm_l, (self as *mut TypeFunctionRuntime).cast());
 
       // setTypeFunctionEnvironment(l);
       set_type_function_environment(l);
