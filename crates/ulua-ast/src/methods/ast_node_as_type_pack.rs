@@ -25,7 +25,9 @@ impl AstNode {
   pub fn as_type_pack_const(&self) -> Option<&AstTypePack> {
     if is_type_pack_class(self.class_index) {
       // Safety: 同 as_expr_const——判型命中 + repr(C) 基址重合 + 借用存活。
-      Some(unsafe { NonNull::new_unchecked(from_ref(self).cast::<AstTypePack>().cast_mut()).as_ref() })
+      Some(unsafe {
+        NonNull::new_unchecked(from_ref(self).cast::<AstTypePack>().cast_mut()).as_ref()
+      })
     } else {
       None
     }
@@ -34,7 +36,9 @@ impl AstNode {
   /// 尝试将通用 AST 节点下转为具体类型包引用枚举。若节点不属于 `AstTypePack` 家族，返回 `None`。
   #[inline]
   pub fn try_as_pack_ref(&self) -> Option<AstTypePackRef<'_>> {
-    self.as_type_pack_const().and_then(AstTypePack::try_as_pack_ref)
+    self
+      .as_type_pack_const()
+      .and_then(AstTypePack::try_as_pack_ref)
   }
 
   /// 将通用 AST 节点下转为具体类型包引用枚举。

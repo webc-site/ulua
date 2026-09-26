@@ -13,12 +13,20 @@ const K_POW_10_TABLE_MAX: i32 = 324;
 /// 注意：K_POW_10_TABLE 是 Grisu 192-bit 魔数，不可机械推导，保持手抄不动。
 const fn build_k_pow_5_table() -> [u64; 16] {
   let (mut t, mut k, mut pow5) = ([0u64; 16], 0usize, 1u64);
-  while k < 16 { t[k] = pow5 << pow5.leading_zeros(); pow5 *= 5; k += 1; }
+  while k < 16 {
+    t[k] = pow5 << pow5.leading_zeros();
+    pow5 *= 5;
+    k += 1;
+  }
   t
 }
 const K_POW_5_TABLE: [u64; 16] = build_k_pow_5_table();
-const _: () = assert!(K_POW_5_TABLE[0] == 0x8000000000000000 && K_POW_5_TABLE[1] == 0xa000000000000000
-  && K_POW_5_TABLE[8] == 0xbebc200000000000 && K_POW_5_TABLE[15] == 0xe35fa931a0000000);
+const _: () = assert!(
+  K_POW_5_TABLE[0] == 0x8000000000000000
+    && K_POW_5_TABLE[1] == 0xa000000000000000
+    && K_POW_5_TABLE[8] == 0xbebc200000000000
+    && K_POW_5_TABLE[15] == 0xe35fa931a0000000
+);
 
 const K_POW_10_TABLE: [[u64; 3]; 39] = [
   [0xff77b1fcbebcdc4f, 0x25e8e89c13bb0f7b, 0x333443443333443b],

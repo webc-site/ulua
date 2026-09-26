@@ -261,9 +261,30 @@ pub(crate) fn register_builtin_globals(
       // __add/__sub 只取向量×向量重载（cpp 同），其余为标量重载交集；
       // 分配次序与原实现逐个对应，arena 句柄序不变。
       let handlers = [
-        ("__add", make_function(arena, Some(vector_ty), vec![vector_ty], vec![vector_ty], false)),
-        ("__sub", make_function(arena, Some(vector_ty), vec![vector_ty], vec![vector_ty], false)),
-        ("__unm", make_function(arena, Some(vector_ty), Vec::new(), vec![vector_ty], false)),
+        (
+          "__add",
+          make_function(
+            arena,
+            Some(vector_ty),
+            vec![vector_ty],
+            vec![vector_ty],
+            false,
+          ),
+        ),
+        (
+          "__sub",
+          make_function(
+            arena,
+            Some(vector_ty),
+            vec![vector_ty],
+            vec![vector_ty],
+            false,
+          ),
+        ),
+        (
+          "__unm",
+          make_function(arena, Some(vector_ty), Vec::new(), vec![vector_ty], false),
+        ),
         ("__mul", vector_binop(arena)),
         ("__div", vector_binop(arena)),
         ("__idiv", vector_binop(arena)),

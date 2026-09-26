@@ -596,8 +596,7 @@ impl ConstraintSolver {
       let mut itf = InfiniteTypeFinder::infinite_type_finder_infinite_type_finder(
         self,
         &signature,
-        NonNull::new(constraint.scope)
-          .expect(nc::CONSTRAINT_SCOPE),
+        NonNull::new(constraint.scope).expect(nc::CONSTRAINT_SCOPE),
       );
       itf.run_type_id(target);
 
@@ -664,8 +663,7 @@ impl ConstraintSolver {
 
     if get_type::get::<TypeFunctionInstanceType>(follow_type::follow(tf.r#type())).is_some() {
       self.push_constraint(
-        NonNull::new(constraint.scope)
-          .expect(nc::CONSTRAINT_SCOPE),
+        NonNull::new(constraint.scope).expect(nc::CONSTRAINT_SCOPE),
         constraint.location,
         ConstraintV::Reduce(ReduceConstraint { ty: tf.r#type() }),
       );
@@ -731,8 +729,7 @@ impl ConstraintSolver {
     let mut itf = InfiniteTypeFinder::infinite_type_finder_infinite_type_finder(
       self,
       &signature,
-      NonNull::new(constraint.scope)
-        .expect(nc::CONSTRAINT_SCOPE),
+      NonNull::new(constraint.scope).expect(nc::CONSTRAINT_SCOPE),
     );
     itf.run_type_id(tf.r#type());
 
@@ -770,8 +767,7 @@ impl ConstraintSolver {
 
     if fflag::LuauIterativeInstantiationQueuer.get() {
       let mut queuer = InstantiationQueuer::new(
-        NonNull::new(constraint.scope)
-          .expect(nc::CONSTRAINT_SCOPE),
+        NonNull::new(constraint.scope).expect(nc::CONSTRAINT_SCOPE),
         &constraint.location,
         self as *mut ConstraintSolver,
       );
@@ -1344,8 +1340,7 @@ impl ConstraintSolver {
     .head;
     let (arg_pack_head, _) = flatten_type_pack_id(args_pack);
 
-    let subtyping =
-      NonNull::new(self.subtyping).expect(nc::SUBTYPING);
+    let subtyping = NonNull::new(self.subtyping).expect(nc::SUBTYPING);
 
     // 统一上界：原 break 条件只依赖 i，可提前算出可处理长度
     let bound = args_slice
@@ -1363,8 +1358,7 @@ impl ConstraintSolver {
         NonNull::new(c.ast_expected_types as *mut DenseHashMap<*const AstExpr, TypeId>)
           .expect("cpp pushTypeInto 次参为 NotNull：约束生成器为本约束接线非空 ast_expected_types"),
         NonNull::new(self as *mut ConstraintSolver).expect(nc::SELF_AS_PTR),
-        NonNull::new(constraint as *const Constraint as *mut Constraint)
-          .expect(nc::CONSTRAINT_REF),
+        NonNull::new(constraint as *const Constraint as *mut Constraint).expect(nc::CONSTRAINT_REF),
         NonNull::new(&mut generic_types_and_packs as *mut DenseHashSet<*const ()>)
           .expect(nc::LOCAL_MUT_AS_PTR),
         NonNull::new(&mut u2 as *mut Unifier2).expect(nc::LOCAL_MUT_AS_PTR),
@@ -1376,8 +1370,7 @@ impl ConstraintSolver {
       if !force && !result.incomplete_types.is_empty() {
         for incomplete in &result.incomplete_types {
           let addition = self.push_constraint(
-            NonNull::new(constraint.scope)
-              .expect(nc::CONSTRAINT_SCOPE),
+            NonNull::new(constraint.scope).expect(nc::CONSTRAINT_SCOPE),
             constraint.location,
             ConstraintV::PushType(PushTypeConstraint {
               expected_type: incomplete.expected_type,
@@ -1395,8 +1388,7 @@ impl ConstraintSolver {
     let incomplete_subtypes = u2.incomplete_subtypes.clone();
     for c_item in incomplete_subtypes {
       let addition = self.push_constraint(
-        NonNull::new(constraint.scope)
-          .expect(nc::CONSTRAINT_SCOPE),
+        NonNull::new(constraint.scope).expect(nc::CONSTRAINT_SCOPE),
         constraint.location,
         c_item,
       );
@@ -1986,8 +1978,7 @@ impl ConstraintSolver {
     let mut context = TypeFunctionContext::from_solver(
       NonNull::new(self as *mut ConstraintSolver).expect(nc::SELF_AS_PTR),
       NonNull::new(scope).expect(nc::SCOPE_IS_CONSTRAINT_SCOPE),
-      NonNull::new(constraint as *const Constraint as *mut Constraint)
-        .expect(nc::CONSTRAINT_REF),
+      NonNull::new(constraint as *const Constraint as *mut Constraint).expect(nc::CONSTRAINT_REF),
       NonNull::new(self.subtyping).expect(nc::SUBTYPING),
     );
     let mut result = reduce_type_functions(ty, location, &mut context, force);
@@ -2065,8 +2056,7 @@ impl ConstraintSolver {
     let mut context = TypeFunctionContext::from_solver(
       NonNull::new(self as *mut ConstraintSolver).expect(nc::SELF_AS_PTR),
       NonNull::new(scope).expect(nc::SCOPE_IS_CONSTRAINT_SCOPE),
-      NonNull::new(constraint as *const Constraint as *mut Constraint)
-        .expect(nc::CONSTRAINT_REF),
+      NonNull::new(constraint as *const Constraint as *mut Constraint).expect(nc::CONSTRAINT_REF),
       NonNull::new(self.subtyping).expect(nc::SUBTYPING),
     );
     let result = reduce_type_functions_tp(tp, location, &mut context, force);
@@ -2324,8 +2314,7 @@ impl ConstraintSolver {
             &mut self.uninhabited_type_functions as *mut DenseHashSet<*const ()>,
         );
 
-    let subtyping =
-      NonNull::new(self.subtyping).expect(nc::SUBTYPING);
+    let subtyping = NonNull::new(self.subtyping).expect(nc::SUBTYPING);
 
     // NOTE: If we don't do this check up front, we almost immediately start
     // spawning tons of push type constraints. It's pretty important.
@@ -2343,8 +2332,7 @@ impl ConstraintSolver {
       NonNull::new(c.ast_expected_types as *mut DenseHashMap<*const AstExpr, TypeId>)
         .expect("cpp pushTypeInto 次参为 NotNull：约束生成器为本约束接线非空 ast_expected_types"),
       NonNull::new(self as *mut ConstraintSolver).expect(nc::SELF_AS_PTR),
-      NonNull::new(constraint as *const Constraint as *mut Constraint)
-        .expect(nc::CONSTRAINT_REF),
+      NonNull::new(constraint as *const Constraint as *mut Constraint).expect(nc::CONSTRAINT_REF),
       NonNull::new(&mut empty as *mut DenseHashSet<*const ()>).expect(nc::LOCAL_MUT_AS_PTR),
       NonNull::new(&mut u2 as *mut Unifier2).expect(nc::LOCAL_MUT_AS_PTR),
       subtyping,
@@ -2360,8 +2348,7 @@ impl ConstraintSolver {
 
     for incomplete in &result.incomplete_types {
       let addition = self.push_constraint(
-        NonNull::new(constraint.scope)
-          .expect(nc::CONSTRAINT_SCOPE),
+        NonNull::new(constraint.scope).expect(nc::CONSTRAINT_SCOPE),
         constraint.location,
         ConstraintV::PushType(PushTypeConstraint {
           expected_type: incomplete.expected_type,

@@ -441,9 +441,7 @@ impl TypeChecker {
           _ => self.add_type(&IntersectionType { parts }),
         }
       }
-      AstTypeRef::SingletonBool(singleton_bool) => {
-        self.singleton_type_bool(singleton_bool.value)
-      }
+      AstTypeRef::SingletonBool(singleton_bool) => self.singleton_type_bool(singleton_bool.value),
       AstTypeRef::SingletonString(singleton_string) => {
         let bytes: Vec<u8> = singleton_string.value.as_bytes().to_vec();
         let value = String::from_utf8_lossy(&bytes).into_owned();

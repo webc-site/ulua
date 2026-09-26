@@ -201,9 +201,7 @@ impl TypeChecker {
 
     let class_name: Name = declared_extern_type.name.as_str_or_empty().to_string();
 
-    let module_name = self.expect_current_module()
-        .name
-        .clone();
+    let module_name = self.expect_current_module().name.clone();
 
     let scope_level = scope.level;
     let scope_raw = scope.as_ref() as *const Scope as *mut Scope;
@@ -214,9 +212,7 @@ impl TypeChecker {
     // 永不移动，`add_type` 的 `&mut` 独占短借用随本语句归还，返回的 ExternType
     // 节点驻留 arena。
     let class_ty: TypeId = unsafe {
-      (*(arc_as_mut(
-          self.expect_current_module(),
-        )))
+      (*(arc_as_mut(self.expect_current_module())))
         .internal_types
         .add_type(ExternType {
           name: class_name.clone(),
@@ -236,9 +232,7 @@ impl TypeChecker {
     // TableType，前一借用已随上一语句结束，时序不重叠。`scope_raw` 仅作身份
     // 句柄存入 TableType，本调用期间不解引用。
     let meta_ty: TypeId = unsafe {
-      (*(arc_as_mut(
-          self.expect_current_module(),
-        )))
+      (*(arc_as_mut(self.expect_current_module())))
         .internal_types
         .add_type(TableType::table_type_table_state_type_level_scope(
           TableState::Sealed,

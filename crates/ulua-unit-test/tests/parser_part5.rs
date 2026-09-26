@@ -577,12 +577,7 @@ fn parser_parse_type_name() {
   let mut names = AstNameTable::new(&mut allocator);
 
   let result: ParseNodeResult<AstType> =
-    Parser::parse_type_source(
-      code,
-      &mut names,
-      &mut allocator,
-      ParseOptions::new(),
-    );
+    Parser::parse_type_source(code, &mut names, &mut allocator, ParseOptions::new());
 
   assert!(result.errors.is_empty());
   let root = result.root.as_ref_opt().expect("根类型必须存在");

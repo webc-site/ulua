@@ -55,9 +55,7 @@ impl TypeChecker {
     let mut inverse_logs: Vec<TxnLog> = Vec::new();
 
     // SAFETY: current_module 在类型检查期间独占使用（C++ 直接改 module->astTypes 同义）。
-    let module = unsafe {
-      &mut *(arc_as_mut(self.expect_current_module()))
-    };
+    let module = unsafe { &mut *(arc_as_mut(self.expect_current_module())) };
 
     for (i, &expr) in expr_slice.iter().enumerate() {
       let expected_type: Option<TypeId> = expected_types.get(i).copied().flatten();

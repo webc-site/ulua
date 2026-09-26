@@ -1718,11 +1718,7 @@ impl TypeChecker {
 
     let module_raw = arc_as_mut(self.expect_current_module());
     let defn = FunctionDefinition {
-      definition_module_name: Some(
-        self.expect_current_module()
-          .name
-          .clone(),
-      ),
+      definition_module_name: Some(self.expect_current_module().name.clone()),
       definition_location: global.base.base.location,
       vararg_location: if global.vararg {
         Some(global.vararg_location)

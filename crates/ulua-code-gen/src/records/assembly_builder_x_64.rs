@@ -22,8 +22,8 @@ use crate::{
   macros::{
     codegen_assert::CODEGEN_ASSERT,
     x64_encoding::{
-      avx_3_1, avx_3_2, avx_3_3, mod_rm, op_plus_cc, op_plus_reg, rex_b, rex_force, rex_r,
-      REX_W_BIT, rex_x, sib,
+      REX_W_BIT, avx_3_1, avx_3_2, avx_3_3, mod_rm, op_plus_cc, op_plus_reg, rex_b, rex_force,
+      rex_r, rex_x, sib,
     },
   },
   records::{

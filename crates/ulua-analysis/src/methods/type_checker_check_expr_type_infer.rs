@@ -260,11 +260,7 @@ impl TypeChecker {
           WithPredicate::with_predicate_t(ty)
         }
       }
-      AstExprRef::Function(function) => self.check_expr_function(
-        scope,
-        function,
-        expected_type,
-      ),
+      AstExprRef::Function(function) => self.check_expr_function(scope, function, expected_type),
       AstExprRef::Table(table_expr) => {
         // SAFETY: 与函数入口同法——&mut 临时借用物化为 self.check_recursion_count 的裸指针，
         // 非空/对齐；_table_rc 存活期间不再产生对该字段的其他借用，Drop 时恢复计数。
@@ -394,12 +390,10 @@ impl TypeChecker {
         ))
       }
       AstExprRef::Unary(unary) => self.check_expr_unary(scope, unary),
-      AstExprRef::Binary(binary) => self.check_expr_binary(
-        scope,
-        binary,
-        expected_type,
-      ),
-      AstExprRef::TypeAssertion(type_assertion) => self.check_expr_type_assertion(scope, type_assertion),
+      AstExprRef::Binary(binary) => self.check_expr_binary(scope, binary, expected_type),
+      AstExprRef::TypeAssertion(type_assertion) => {
+        self.check_expr_type_assertion(scope, type_assertion)
+      }
       AstExprRef::Error(error_expr) => {
         // SAFETY: current_module 在类型检查期间独占（C++ 直接读改 module->errors 同义）。
         let old_size = unsafe {
@@ -419,12 +413,10 @@ impl TypeChecker {
         }
         WithPredicate::with_predicate_t(self.error_recovery_type_scope_ptr(scope))
       }
-      AstExprRef::IfElse(if_else) => self.check_expr_if_else(
-        scope,
-        if_else,
-        expected_type,
-      ),
-      AstExprRef::InterpString(interp_string) => self.check_expr_interp_string(scope, interp_string),
+      AstExprRef::IfElse(if_else) => self.check_expr_if_else(scope, if_else, expected_type),
+      AstExprRef::InterpString(interp_string) => {
+        self.check_expr_interp_string(scope, interp_string)
+      }
       AstExprRef::Instantiate(instantiate) => self.check_expr_instantiate(scope, instantiate),
     };
 

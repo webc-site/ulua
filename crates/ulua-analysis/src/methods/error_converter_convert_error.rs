@@ -9,10 +9,10 @@ use crate::{
   functions::{
     begin_type::begin_union_type,
     follow_type,
-    sep_join::SepWriter,
     get_definition_module_name::get_definition_module_name,
     get_table_type::get_table_type,
     get_type,
+    sep_join::SepWriter,
     to_human_readable_index::to_human_readable_index,
     to_string_detailed_to_string::to_string_detailed,
     to_string_error::to_string_type_error_type_error_to_string_options,
@@ -1104,10 +1104,16 @@ impl<'a> ErrorConverter<'a> {
       {
         let mut writer = SepWriter::new(&mut name, ", ");
         for param in &e.type_fun.type_params {
-          writer.push(&to_string_type_id_to_string_options_mut(param.ty, opts.clone()));
+          writer.push(&to_string_type_id_to_string_options_mut(
+            param.ty,
+            opts.clone(),
+          ));
         }
         for param in &e.type_fun.type_pack_params {
-          writer.push(&to_string_type_pack_id_to_string_options_mut(param.tp, opts.clone()));
+          writer.push(&to_string_type_pack_id_to_string_options_mut(
+            param.tp,
+            opts.clone(),
+          ));
         }
       }
       name.push('>');

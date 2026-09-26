@@ -72,10 +72,7 @@ pub fn keyof_function_impl(
     };
 
     if !compute_keys_of(first, &mut keys, &mut seen, is_raw, ctx) {
-      return make_result(
-        Some(ctx.builtins().string_type),
-        Reduction::MaybeOk,
-      );
+      return make_result(Some(ctx.builtins().string_type), Reduction::MaybeOk);
     }
 
     for extern_ty in extern_types {
@@ -97,10 +94,7 @@ pub fn keyof_function_impl(
     };
 
     if !compute_keys_of(first, &mut keys, &mut seen, is_raw, ctx) {
-      return make_result(
-        Some(ctx.builtins().string_type),
-        Reduction::MaybeOk,
-      );
+      return make_result(Some(ctx.builtins().string_type), Reduction::MaybeOk);
     }
 
     for table in tables {
@@ -113,17 +107,18 @@ pub fn keyof_function_impl(
   }
 
   if keys.is_empty() {
-    return make_result(
-      Some(ctx.builtins().never_type),
-      Reduction::MaybeOk,
-    );
+    return make_result(Some(ctx.builtins().never_type), Reduction::MaybeOk);
   }
 
   let mut singletons = Vec::new();
   for key in keys {
-    singletons.push(ctx.arena_mut().add_type(SingletonType::new(SingletonVariant::V1(
-      StringSingleton::new(key),
-    ))));
+    singletons.push(
+      ctx
+        .arena_mut()
+        .add_type(SingletonType::new(SingletonVariant::V1(
+          StringSingleton::new(key),
+        ))),
+    );
   }
 
   if singletons.len() == 1 {
