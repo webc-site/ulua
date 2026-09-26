@@ -1,6 +1,6 @@
 // A64 placeR1 单源浮点表与 cpp 逐格对账。
 // 权威源：cpp/CodeGen/src/AssemblyBuilderA64.cpp（下称 AB）。
-// 行 token 与生成体同源（见 crate::macros::a64_r1_impls），本测试锁定
+// 行 token 与生成体同源（见 crate::macros::impl_tables 的 a64_r1_impls 段），本测试锁定
 // 「表 = cpp 位串」，即「生成函数发射 = cpp 发射」。
 
 use ulua_code_gen::methods::assembly_builder_a_64_r1_table::A64_R1_ROWS;

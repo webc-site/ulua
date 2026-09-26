@@ -1,6 +1,6 @@
 // builtin 三对骨架（load/check/store）宏表与 cpp 逐格对账。
 // 权威源：cpp/CodeGen/src/IrTranslateBuiltins.cpp（下称 ITB）。
-// 行 token 与生成体同源（见 crate::macros::builtin_linearop_impls），
+// 行 token 与生成体同源（见 crate::macros::impl_tables 的 builtin_linearop_impls 段），
 // 本测试锁定「表 = cpp 语义」，即「生成函数 = cpp 语义」。
 
 use ulua_code_gen::{
