@@ -26,7 +26,6 @@ use crate::{
     bc_imm::BcImm,
     bc_op::BcOp,
     bc_op_hash::BcOpHash,
-    bc_phi::BcPhi,
     block_producers::{BlockProducers, PRODUCER_SENTINEL},
     bytecode_builder::K_INVALID_REG,
     loop_info::LoopInfo,
@@ -249,6 +248,57 @@ impl<'a, 'f> BytecodeGraphParser<'a, 'f> {
   }
 }
 
+// ── 前驱生产者搜索的共用样板（find_producer / find_forward_producer_in_range 两族递归） ──
+
+/// 前驱边 `(kind, target)` 快照：递归每层只消费这两个 Copy 字段，快照成栈上
+/// SmallVector 后即释放 `func` 借用，深层递归可继续独占（避免整条边表的堆 clone）。
+fn snapshot_predecessor_edges(
+  func: &BcFunction<'_>,
+  block: BcOp,
+) -> SmallVector<(BcBlockEdgeKind, BcOp), 4> {
+  func.blocks[block.index as usize]
+    .predecessors
+    .iter()
+    .map(|e| (e.kind, e.target))
+    .collect()
+}
+
+impl<'a, 'f> BytecodeGraphParser<'a, 'f> {
+  /// 吸收一次递归命中到汇合候选集：Phi 结果展开为其全部操作数（先快照 Copy
+  /// 句柄再逐个去重吸收），非 Phi 结果原样去重吸收——两族前驱递归里逐字重复的
+  /// 展开段收口于此。
+  fn absorb_producer_result(&mut self, op: BcOp, results: &mut SmallVector<BcOp, 4>) {
+    if op.kind == BcOpKind::Phi {
+      let projections: SmallVector<BcOp, 4> = self.func.phi_op(op).ops.iter().copied().collect();
+      for proj in projections {
+        if !results.contains(&proj) {
+          results.push_back(proj);
+        }
+      }
+    } else if !results.contains(&op) {
+      results.push_back(op);
+    }
+  }
+
+  /// 前驱汇合尾段：候选为空返回 `None`、单条原样返回、多条新建归属块 `owner`
+  /// 的 Phi（操作数即去重后的候选集，对齐 cpp `makePhi(block, reg)`）。
+  fn merge_producer_results(&mut self, owner: BcOp, results: SmallVector<BcOp, 4>) -> Option<BcOp> {
+    match results.as_slice() {
+      [] => None,
+      [only] => Some(*only),
+      _ => {
+        let res = self.func.add_phi();
+        self.func.block_op(owner).phis.push(res);
+        let phi = self.func.phi_op(res);
+        for &op in &results {
+          phi.ops.push_back(op);
+        }
+        Some(res)
+      }
+    }
+  }
+}
+
 // ── abs-r139：并自 `methods/bytecode_graph_parser_find_forward_producer_in_range_visited.rs` ──
 impl<'a, 'f> BytecodeGraphParser<'a, 'f> {
   pub(crate) fn find_forward_producer_in_range_visited(
@@ -284,15 +334,7 @@ impl<'a, 'f> BytecodeGraphParser<'a, 'f> {
       return Some(block_producers.multi_return);
     }
 
-    // 循环体只消费 kind/target 两个 Copy 字段：快照成栈上 SmallVector，
-    // 避免每层递归整条 predecessors Vec 的堆 clone（同 find_producer_visited 约定）
-    let predecessors: SmallVector<(BcBlockEdgeKind, BcOp), 4> = self
-      .func
-      .block_op(range_end)
-      .predecessors
-      .iter()
-      .map(|e| (e.kind, e.target))
-      .collect();
+    let predecessors = snapshot_predecessor_edges(self.func, range_end);
 
     // 栈上暂存前驱汇合值：块前驱通常仅 1~2 个，SmallVector 零堆分配
     let mut results: SmallVector<BcOp, 4> = SmallVector::new();
@@ -307,36 +349,11 @@ impl<'a, 'f> BytecodeGraphParser<'a, 'f> {
       if let Some(op) =
         self.find_forward_producer_in_range_visited(range_start, pred, start_op, reg, visited)
       {
-        if op.kind == BcOpKind::Phi {
-          let phi: &mut BcPhi = self.func.phi_op(op);
-          for &proj in &phi.ops {
-            if !results.contains(&proj) {
-              results.push_back(proj);
-            }
-          }
-        } else if !results.contains(&op) {
-          results.push_back(op);
-        }
+        self.absorb_producer_result(op, &mut results);
       }
     }
 
-    if results.is_empty() {
-      return None;
-    }
-
-    if results.len() == 1 {
-      return Some(results[0]);
-    }
-
-    let res = self.func.add_phi();
-    // phi 归属于合并发生的目标块（对齐 cpp `makePhi(block, reg)`）
-    self.func.block_op(range_end).phis.push(res);
-    let phi: &mut BcPhi = self.func.phi_op(res);
-    for op in &results {
-      phi.ops.push_back(*op);
-    }
-
-    Some(res)
+    self.merge_producer_results(range_end, results)
   }
 }
 
@@ -387,58 +404,23 @@ impl<'a, 'f> BytecodeGraphParser<'a, 'f> {
       ));
     }
 
-    // BcOp does not implement Ord, so we use a Vec and deduplicate manually to mimic std::unordered_set behavior
-    // while avoiding the Ord requirement of BTreeSet.
-    let mut results: Vec<BcOp> = Vec::new();
+    // 候选集手工去重吸收（BcOp 无 Ord，语义对齐 cpp 的 unordered_set 归并）；
+    // 前驱快照与汇合尾段与 forward 族共用样板。
+    let predecessors = snapshot_predecessor_edges(self.func, block);
+    let mut results: SmallVector<BcOp, 4> = SmallVector::new();
 
-    // 循环体只消费 kind/target 两个 Copy 字段：快照成栈上 SmallVector，
-    // 避免每层递归整条 predecessors Vec 的堆 clone（绕 &mut self 借用只需此快照）
-    let predecessors: SmallVector<(BcBlockEdgeKind, BcOp), 4> = self
-      .func
-      .block_op(block)
-      .predecessors
-      .iter()
-      .map(|e| (e.kind, e.target))
-      .collect();
-
-    for (ctrl, pred) in predecessors.iter().copied() {
+    for &(ctrl, pred) in predecessors.iter() {
       if ctrl == BcBlockEdgeKind::Loop || visited.contains(&pred) {
         continue;
       }
       LUAU_ASSERT!(block != pred);
 
       if let Some(op) = self.find_producer_visited(pred, reg, visited) {
-        if op.kind == BcOpKind::Phi {
-          let phi = self.func.phi_op(op);
-          for &proj in &phi.ops {
-            if !results.contains(&proj) {
-              results.push(proj);
-            }
-          }
-        } else {
-          if !results.contains(&op) {
-            results.push(op);
-          }
-        }
+        self.absorb_producer_result(op, &mut results);
       }
     }
 
-    if results.is_empty() {
-      return None;
-    }
-
-    let res = if results.len() == 1 {
-      results[0]
-    } else {
-      let res = self.func.add_phi();
-      // phi 归属于发起合并的块（对齐 cpp `makePhi(block, reg)`）
-      self.func.block_op(block).phis.push(res);
-      let phi = self.func.phi_op(res);
-      for op in results {
-        phi.ops.push_back(op);
-      }
-      res
-    };
+    let res = self.merge_producer_results(block, results)?;
 
     let block_producers = &mut self.producers[block.index as usize];
     block_producers.cached.insert(reg, res);
