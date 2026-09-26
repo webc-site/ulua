@@ -3,14 +3,16 @@ use crate::{
     lua_l_checkinteger_64::lua_l_checkinteger_64, lua_l_optinteger_64::lua_l_optinteger_64,
     lua_pushinteger_64::lua_pushinteger_64,
   },
-  macros::{lua_l_argcheck::luaL_argcheck, lua_l_error::luaL_error, mask_64::mask64},
+  macros::{
+    lua_l_argcheck::luaL_argcheck, lua_l_error::luaL_error, lua_lib_fn::lua_lib_fn, mask_64::mask64,
+  },
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// `l` 必须指向当前 int64 binary32 调用的存活 `lua_State`，实参 1..=3 可读且栈顶留有结果空间。
 /// cpp lintlib.cpp `int64_replace`：把 r 的低 w 位写入 n 的第 f 位起字段。
-pub unsafe extern "C-unwind" fn int64_replace(l: *mut LuaState) -> i32 {
+pub unsafe fn int64_replace(l: *mut LuaState) -> i32 {
   // Safety: 契约保证 `l` 为存活调用帧且实参 1..=3 可读可替换槽匹配，块内仅数值替换与压栈
   unsafe {
     let n = lua_l_checkinteger_64(l, 1);
@@ -44,3 +46,5 @@ pub unsafe extern "C-unwind" fn int64_replace(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn int64_replace, int64_replace_arm);
