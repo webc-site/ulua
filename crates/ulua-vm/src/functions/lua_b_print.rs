@@ -2,7 +2,7 @@ use crate::{
   functions::{
     lua_gettop::lua_gettop, lua_l_tolstring::lua_l_tolstring_ref, writestring::writestring,
   },
-  macros::lua_pop::lua_pop,
+  macros::{lua_lib_fn::lua_lib_fn, lua_pop::lua_pop},
   records::lua_state::LuaState,
 };
 
@@ -11,7 +11,7 @@ use crate::{
 /// `l` 必须是正在执行的 C 函数帧的存活 `LuaState`：逐槽 `lua_l_tolstring_ref` 串化可回跑
 /// `__tostring`、可分配、可抛错（须在受保护帧内调入），转换结果压栈后随即 `lua_pop` 回收；
 /// stdout 写入本身不感知 VM。cpp `lbaselib.cpp:23` print。
-pub unsafe extern "C-unwind" fn lua_b_print(l: *mut LuaState) -> i32 {
+pub unsafe fn lua_b_print(l: *mut LuaState) -> i32 {
   unsafe {
     let n = lua_gettop(l);
     for i in 1..=n {
@@ -28,3 +28,5 @@ pub unsafe extern "C-unwind" fn lua_b_print(l: *mut LuaState) -> i32 {
   }
   0
 }
+
+lua_lib_fn!(pub fn lua_b_print, lua_b_print_arm);

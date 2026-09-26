@@ -6,7 +6,7 @@ use crate::{
     lua_gettop::lua_gettop, lua_l_checkinteger::lua_l_checkinteger,
     lua_pushinteger::lua_pushinteger, lua_type::lua_type,
   },
-  macros::{lua_l_argcheck::luaL_argcheck, lua_tostring::lua_tostring},
+  macros::{lua_l_argcheck::luaL_argcheck, lua_lib_fn::lua_lib_fn, lua_tostring::lua_tostring},
   records::lua_state::LuaState,
 };
 
@@ -15,7 +15,7 @@ use crate::{
 /// `lua_tostring` 读其首字节判 '#'（该串槽存活）；否则 `lua_l_checkinteger(l,1)` 要求可转整数，
 /// `luaL_argcheck` 校验归一化下标 1≤i 越界即抛错回退；走 '#' 分支时 `lua_pushinteger` 需 `(*l).top` 后 ≥1 空槽。
 /// cpp VM/src/lbaselib.cpp:265
-pub(crate) unsafe extern "C-unwind" fn lua_b_select(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn lua_b_select(l: *mut LuaState) -> i32 {
   unsafe {
     let n = lua_gettop(l);
     let first_type = lua_type(l, 1);
@@ -41,3 +41,5 @@ pub(crate) unsafe extern "C-unwind" fn lua_b_select(l: *mut LuaState) -> i32 {
     n - i
   }
 }
+
+lua_lib_fn!(pub(crate) fn lua_b_select, lua_b_select_arm);

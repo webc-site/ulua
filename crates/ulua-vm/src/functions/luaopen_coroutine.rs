@@ -1,10 +1,9 @@
 use crate::{
   functions::{
     coclose::coclose_arm, cocreate::cocreate_arm, coresumecont::coresumecont_arm,
-    coresumey::coresumey_arm, corunning::corunning_arm, costatus::costatus_arm,
-    cowrap::cowrap_arm, coyield::coyield_arm, coyieldable::coyieldable_arm,
-    lua_l_register::lua_l_register, lua_pushcclosurek::lua_pushcclosurek,
-    lua_setfield::lua_setfield,
+    coresumey::coresumey_arm, corunning::corunning_arm, costatus::costatus_arm, cowrap::cowrap_arm,
+    coyield::coyield_arm, coyieldable::coyieldable_arm, lua_l_register::lua_l_register,
+    lua_pushcclosurek::lua_pushcclosurek, lua_setfield::lua_setfield,
   },
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };

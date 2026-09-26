@@ -1,7 +1,5 @@
 use crate::{
-  functions::lua_yield::lua_yield,
-  macros::lua_lib_fn::lua_lib_fn,
-  records::lua_state::LuaState,
+  functions::lua_yield::lua_yield, macros::lua_lib_fn::lua_lib_fn, records::lua_state::LuaState,
 };
 
 /// # Safety

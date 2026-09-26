@@ -4,8 +4,7 @@ use crate::{
     lua_tothread::lua_tothread,
   },
   macros::{
-    co_status_break::CO_STATUS_BREAK, lua_l_argexpected::luaL_argexpected,
-    lua_lib_fn::lua_lib_fn,
+    co_status_break::CO_STATUS_BREAK, lua_l_argexpected::luaL_argexpected, lua_lib_fn::lua_lib_fn,
   },
   records::lua_state::LuaState,
 };

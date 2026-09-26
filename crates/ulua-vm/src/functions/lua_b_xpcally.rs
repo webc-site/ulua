@@ -4,7 +4,7 @@ use crate::{
     lua_gettop::lua_gettop, lua_l_checktype::lua_l_checktype,
     lua_pcallyieldable::lua_pcallyieldable, lua_pushvalue::lua_pushvalue, lua_replace::lua_replace,
   },
-  macros::lua_multret::LUA_MULTRET,
+  macros::{lua_lib_fn::lua_lib_fn, lua_multret::LUA_MULTRET},
   records::lua_state::LuaState,
 };
 
@@ -13,7 +13,7 @@ use crate::{
 /// 索引 1 为被调函数、其后为实参；`lua_pushvalue`/`lua_replace` 交换 1、2 槽（各槽须存活）；随后
 /// `lua_pcall`（errfunc=1、LUA_MULTRET 变长返回）可再入 Lua、抛错、扩栈与触发 GC，调用侧须承接展开。
 /// cpp VM/src/lbaselib.cpp:344
-pub(crate) unsafe extern "C-unwind" fn lua_b_xpcally(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn lua_b_xpcally(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_checktype(l, 2, LuaType::Function as i32);
 
@@ -27,3 +27,5 @@ pub(crate) unsafe extern "C-unwind" fn lua_b_xpcally(l: *mut LuaState) -> i32 {
     lua_pcallyieldable(l, lua_gettop(l) - 2, LUA_MULTRET, 1)
   }
 }
+
+lua_lib_fn!(pub(crate) fn lua_b_xpcally, lua_b_xpcally_arm);

@@ -7,7 +7,9 @@ use crate::{
     lua_l_checkany::lua_l_checkany, lua_l_optinteger::lua_l_optinteger, lua_pushnil::lua_pushnil,
     lua_pushnumber::lua_pushnumber, lua_tonumberx::lua_tonumberx,
   },
-  macros::{lua_l_argcheck::luaL_argcheck, lua_l_checkstring::luaL_checkstring},
+  macros::{
+    lua_l_argcheck::luaL_argcheck, lua_l_checkstring::luaL_checkstring, lua_lib_fn::lua_lib_fn,
+  },
   records::lua_state::LuaState,
 };
 
@@ -15,7 +17,7 @@ use crate::{
 /// `l` 须为存活 `LuaState`；栈 index 1 为待转值、index 2 为可选进制（`luaL_optinteger`/`checkany`/
 /// `checkstring` 读槽，进制越界经 `luaL_argcheck` 抛错）；base16 分支把 index 1 的 NUL 结尾 C 串交给
 /// `rust_strtoull`，须在受保护帧内调用。cpp `lbaselib.cpp:39`。
-pub(crate) unsafe extern "C-unwind" fn lua_b_tonumber(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn lua_b_tonumber(l: *mut LuaState) -> i32 {
   unsafe {
     let base = lua_l_optinteger(l, 2, 10);
 
@@ -51,3 +53,5 @@ pub(crate) unsafe extern "C-unwind" fn lua_b_tonumber(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn lua_b_tonumber, lua_b_tonumber_arm);
