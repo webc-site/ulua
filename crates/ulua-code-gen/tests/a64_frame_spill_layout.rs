@@ -108,19 +108,15 @@ fn q_spill_slots_stay_inside_frame_and_boundary() {
 #[cfg(target_arch = "aarch64")]
 #[test]
 fn deep_arithmetic_chain_compiles_for_a64() {
-  use core::{
-    ffi::{c_char, c_void},
-    ptr::null_mut,
-    slice,
-  };
-
+  use ulua_ast::records::parse_options::ParseOptions;
+  use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
   use ulua_code_gen::{
     enums::code_gen_compilation_result::CodeGenCompilationResult,
     functions::{compile_internal::compile_internal, luau_codegen_create::luau_codegen_create},
     records::{compilation_options::CompilationOptions, compilation_stats::CompilationStats},
   };
   use ulua_common::functions::c_str::cstr_cow;
-  use ulua_compiler::functions::luau_compile::luau_compile;
+  use ulua_compiler::{functions::compile::compile, records::compile_options::CompileOptions};
   use ulua_vm::{
     functions::{
       lua_a_toobject::lua_a_toobject, lua_close::lua_close, lua_l_newstate::lua_l_newstate,
@@ -153,40 +149,26 @@ fn deep_arithmetic_chain_compiles_for_a64() {
 
   let expected = chain(1) + chain(2) * 2 + chain(3) * 3 + chain(4) * 4 + 5 + 6 + 7 + 8;
 
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
-
   let l = lua_l_newstate();
   assert!(!l.is_null());
 
   // 契约: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 由本用例 lua_l_newstate 创建，至末尾 lua_close
-  // 相位前全程存活不关闭；各裸指针皆在本用例作用域内即时取得（'static 字面量 as_ptr、
-  // luau_compile 返回或 &mut 再借用），使用前不释放、各 free 为其唯一释放点。
-  // 本次拆分仅收窄原 74 行巨型块的 unsafe 词法范围并把纯安全语句（局部初始化、断言）
-  // 移出块外，语句执行顺序与拆分前逐字一致。
+  // 相位前全程存活不关闭；字节码产物为本帧拥有的 `Vec<u8>`（原 luau_compile/free
+  // 契约已随 safe 入口消除），各裸指针皆在本用例作用域内即时取得（'static 字面量
+  // as_ptr、&mut 再借用），无手动释放点。
   // Safety: 见契约；luau_codegen_create 挂接 codegen 后端至刚创建未关闭的 `l`。
   unsafe { luau_codegen_create(l) };
 
   // 相位一：首次编译 + 加载，先以解释器执行，校验期望值（同式 chain 与本端 IEEE 语义一致）
-  let mut size = 0usize;
-  // Safety: 见契约；`source` 为 'static 字面量，as_ptr/len 描述其全部字节，size 为出参槽。
-  let bytecode = unsafe {
-    luau_compile(
-      source.as_ptr() as *const c_char,
-      source.len(),
-      null_mut(),
-      &mut size,
-    )
-  };
-  assert!(!bytecode.is_null(), "luau_compile failed");
-  // Safety: 见契约；刚返回的非空 `bytecode` 起 `size` 字节为有效可读缓冲区，至本相位
-  // 末尾 free 前保持存活；仅在此 C 边界把裸指针物化为切片。
-  let bytecode = unsafe { slice::from_raw_parts(bytecode as *const u8, size) };
-  // Safety: 见契约；`l` 存活，chunkname 字面量与 bytecode 均为借用期内有效引用。
-  let load_result = unsafe { luau_load(l, "=a64_frame_test", bytecode, 0) };
-  // Safety: 见契约；bytecode 底层内存由本相位 luau_compile 分配且未释放，本处为其唯一 free 点。
-  unsafe { free(bytecode.as_ptr() as *mut c_void) };
+  let bytecode = compile(
+    source,
+    &CompileOptions::default(),
+    &ParseOptions::default(),
+    NoopEncoder,
+  );
+  // Safety: 见契约；`l` 存活，chunkname 字面量与 bytecode（本帧 Vec<u8> 借用）
+  // 均为借用期内有效引用。
+  let load_result = unsafe { luau_load(l, "=a64_frame_test", &bytecode, 0) };
   assert_eq!(load_result, 0, "luau_load failed");
 
   // Safety: 见契约；`l` 存活且栈顶为主闭包，0 入参 1 返回值。
@@ -201,24 +183,15 @@ fn deep_arithmetic_chain_compiles_for_a64() {
   assert_eq!(unsafe { lua_tonumber!(l, -1) }, expected as f64);
 
   // 相位二：重新加载并走真实 A64 后端编译整个函数（main chunk 带 LPF_NATIVE_COLD 被跳过，p 编译）
-  let mut size = 0usize;
-  // Safety: 见契约；同相位一，`source` 为 'static 字面量。
-  let bytecode = unsafe {
-    luau_compile(
-      source.as_ptr() as *const c_char,
-      source.len(),
-      null_mut(),
-      &mut size,
-    )
-  };
-  assert!(!bytecode.is_null());
-  // Safety: 见契约；新分配的 `bytecode` 起 `size` 字节有效，至本相位末尾 free 前存活。
-  let bytecode = unsafe { slice::from_raw_parts(bytecode as *const u8, size) };
-  // Safety: 见契约；`l` 存活，入参引用均在借用期内有效。
-  let load_result = unsafe { luau_load(l, "=a64_frame_test", bytecode, 0) };
+  let bytecode = compile(
+    source,
+    &CompileOptions::default(),
+    &ParseOptions::default(),
+    NoopEncoder,
+  );
+  // Safety: 见契约；`l` 存活，入参引用（本帧 Vec<u8> 与字面量借用）均在借用期内有效。
+  let load_result = unsafe { luau_load(l, "=a64_frame_test", &bytecode, 0) };
   assert_eq!(load_result, 0, "luau_load (2nd) failed");
-  // Safety: 见契约；本相位唯一 free 点，紧接 load 断言之后（失败即 panic，不重复释放）。
-  unsafe { free(bytecode.as_ptr() as *mut c_void) };
 
   // 相位三：codegen 编译全部原型并校验统计
   let options = CompilationOptions::default();

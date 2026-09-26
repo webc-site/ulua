@@ -1312,6 +1312,8 @@ name = "ulua-code-gen"
 version = "0.1.2"
 dependencies = [
  "strum",
+ "ulua-ast",
+ "ulua-bytecode",
  "ulua-common",
  "ulua-compiler",
  "ulua-vm",

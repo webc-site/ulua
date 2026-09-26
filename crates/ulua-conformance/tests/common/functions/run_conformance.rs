@@ -308,7 +308,7 @@ pub fn run_conformance(
 
   // cpp `Conformance.test.cpp:377`：`lua_CompileOptions opts = options ? *options
   // : defaultOptions();`（按值取用，不改动调用方的对象）。
-  let options = options.copied().unwrap_or_else(default_compile_options);
+  let mut options = options.copied().unwrap_or_else(default_compile_options);
 
   // cpp `Conformance.test.cpp:386`：`CompilationOptions nativeOpts =
   // codegenOptions ? *codegenOptions : defaultCodegenOptions();`（同样按值取用）。
@@ -348,14 +348,15 @@ pub fn run_conformance(
   safe_api::setfield(l, -1, b"_G\0");
 
   // cpp 在 `luau_compile` 前做 bytecode graph 往返验证（`cpp/tests/Conformance.test.cpp:379`）。
-  // 源与 `luau_compile` 一致按 unchecked UTF-8 透传（`luau_compile.rs:40`），
+  // 源与编译入口（`compile`，经 `safe_api::load_source`）一致按 unchecked UTF-8
+  // 透传（原 `luau_compile.rs:40` 语义），
   // literals/pm/sort 等含非 UTF-8 原始字节。`validate_bytecode_graph` 是 safe fn，
   // 只编译 `source`、不触碰 `l`。
   validate_bytecode_graph(&source, &options);
 
   // 加载结果 `load_result` 上提给下方分支——与 cpp 一致，非零加载**不中止**，
   // 交由后续分支走受控的错误路径（故不能改用会在失败时 panic 的 compile_and_load 门面）。
-  let load_result = safe_api::load_source(l, &chunkname, &source, &options);
+  let load_result = safe_api::load_source(l, &chunkname, &source, &mut options);
 
   // 主编译结果交安全断言辅助核对（`assert_codegen_result`）。
   if load_result == 0 && codegen() && !skip_codegen && luau_codegen_supported() != 0 {

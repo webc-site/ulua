@@ -32,9 +32,7 @@ use ulua_code_gen::{
   },
   type_aliases::{module_id::ModuleId, native_proto_exec_data_ptr::NativeProtoExecDataPtr},
 };
-use ulua_compiler::{
-  functions::compile::compile, records::compile_options::CompileOptions,
-};
+use ulua_compiler::{functions::compile::compile, records::compile_options::CompileOptions};
 use ulua_vm::{functions::luau_load::luau_load, records::lua_state::LuaState};
 
 /// 可空切片 → `(ptr, len)` 哨兵收口：空切片译成 `(null, 0)`，与旧写法逐字同形。
@@ -209,7 +207,9 @@ pub fn codegen_create_shared(l: *mut LuaState, ctx: *mut SharedCodeGenContext) {
   unsafe { create(l, ctx) }
 }
 
-/// `compile`（默认选项）：返回拥有所有权的字节码。
+/// safe `compile`（缺省选项，对应 cpp `luau_compile(source, size, nullptr, &size)`）
+/// → owned [`Vec<u8>`]：cpp 的 malloc/free 所有权契约在 Rust 端由产物所有权消解，
+/// 不留悬垂缓冲。
 pub fn compile_bytecode(source: &[u8]) -> Vec<u8> {
   compile(
     source,
