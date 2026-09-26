@@ -203,13 +203,13 @@ impl DataFlowGraphBuilder {
     // expr 已句柄化恒非空；arena_ref 为既有指针门面，经 as_ptr 桥接（判空 panic 分支类型端不可达）。
     let parent_expr = arena_ref(i.expr.as_ptr(), "AstExprIndexName.expr");
     let parent = self.visit_expr(parent_expr);
-    let index = String::from(i.index.as_str_or_empty());
+    let index = i.index.as_str_or_empty();
     // SAFETY: parent.def 由 visit_expr 产图不变量给出为存活 Def arena 的合法
     // DefId（非空）；parent.parent 是允许为 null 的前缀 refinement key，
     // lookup 的契约正要求此形态——与 cpp `lookup(parentDef, index, loc)` 同前提。
     let def =
-      unsafe { self.lookup_def_id_string_location(parent.def, &index, i.base.base.location) };
-    let key = self.key_arena.get_mut().node(parent.parent, def, &index);
+      unsafe { self.lookup_def_id_string_location(parent.def, index, i.base.base.location) };
+    let key = self.key_arena.get_mut().node(parent.parent, def, index);
 
     DataFlowResult { def, parent: key }
   }
@@ -224,7 +224,7 @@ impl DataFlowGraphBuilder {
     self.visit_expr(index_expr);
 
     if let AstExprRef::ConstantString(string) = index_expr.as_expr_ref() {
-      let index = String::from_utf8_lossy(string.value.as_bytes()).into_owned();
+      let index = String::from_utf8_lossy(string.value.as_bytes());
       // SAFETY: 同 visit_expr_index_name——parent.def/parent.parent 满足 lookup
       // 的合法 DefId/可空前缀键契约。
       let def =
