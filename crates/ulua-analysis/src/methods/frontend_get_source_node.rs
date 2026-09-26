@@ -2,9 +2,7 @@ use alloc::{string::String, sync::Arc, vec::Vec};
 
 use ulua_common::{
   fflag,
-  macros::{
-    luau_timetrace_argument::LUAU_TIMETRACE_ARGUMENT, luau_timetrace_scope::LUAU_TIMETRACE_SCOPE,
-  },
+  macros::luau_timetrace_scope::{LUAU_TIMETRACE_ARGUMENT, LUAU_TIMETRACE_SCOPE},
 };
 use ulua_config::records::config::Config;
 

@@ -3,8 +3,8 @@ use core::ptr::null_mut;
 
 use ulua_common::{
   macros::{
-    luau_assert::LUAU_ASSERT, luau_timetrace_argument::LUAU_TIMETRACE_ARGUMENT,
-    luau_timetrace_scope::LUAU_TIMETRACE_SCOPE,
+    luau_assert::LUAU_ASSERT,
+    luau_timetrace_scope::{LUAU_TIMETRACE_ARGUMENT, LUAU_TIMETRACE_SCOPE},
   },
   records::dense_hash_map::DenseHashMap,
 };

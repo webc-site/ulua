@@ -16,5 +16,4 @@ pub mod luau_insn_e;
 pub mod luau_insn_fbslot_sealed;
 pub mod luau_insn_op;
 pub mod luau_noinline;
-pub mod luau_timetrace_argument;
 pub mod luau_timetrace_scope;
