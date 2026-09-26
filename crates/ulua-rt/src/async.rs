@@ -468,7 +468,7 @@ where
   // 运行区间即「state 存活期覆盖句柄及其克隆」。
   let lua = Lua::from_borrowed(state);
   // Safety: 共用前置——`lua_gettop` 只读当前栈深，故 `1..=nargs` 是有效槽位，正是
-  // `collect_stack_args` 的函数头前提；转换失败在同一块内发散（`raise` 不返回）。
+  // `collect_stack_args` 的头注释前提；转换失败在同一块内发散（`raise` 不返回）。
   let args = unsafe {
     match collect_stack_args(&lua, lua_gettop(state)) {
       Ok(a) => a,
@@ -594,7 +594,7 @@ where
 
   match poll {
     Poll::Pending => unsafe { report_pending(&lua) },
-    Poll::Ready(result) => unsafe { report_ready(&lua, result) },
+    Poll::Ready(result) => report_ready(&lua, result),
   }
 }
 
@@ -639,12 +639,13 @@ unsafe fn report_pending(lua: &Lua) -> c_int {
 /// `nres < 3` 走快路径（计数 + 至多两个结果，循环读作 `res`/`res2`）；否则把结果
 /// 打包成序列表，由循环 `unpack` 展开。
 ///
-/// # Safety
-/// `lua` 必须是 `poll_c` 刚在受保护 C 边界内由该 state `from_borrowed` 出的借用句柄
+/// `lua` 须为 `poll_c` 在受保护 C 边界内由该 state `from_borrowed` 出的借用句柄
 /// （受保护边界内、由当前线程驱动）；poller 的 C 帧留有 LUA_MINSTACK 头寸，本
 /// 函数最多净压两层。结果的 `IntoLua` 转换在 `catch_unwind` 内进行，任何失败都以
-/// `raise_lua_error` 发散，不留半压的结果。
-unsafe fn report_ready<R: IntoLuaMulti>(lua: &Lua, result: Result<R>) -> c_int {
+/// `raise_lua_error` 发散，不留半压的结果。栈操作全部经带契约的 safe 门面，
+/// 本函数自身无 unsafe 操作、是 safe fn（上述调用序前提是使用约定而非
+/// 内存安全前置条件）。
+fn report_ready<R: IntoLuaMulti>(lua: &Lua, result: Result<R>) -> c_int {
   let state = lua.state();
   let results = match result {
     Ok(r) => {

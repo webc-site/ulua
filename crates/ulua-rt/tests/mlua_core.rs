@@ -1191,7 +1191,7 @@ fn test_load_mode_deferred() -> Result<()> {
   // source (it compiles internally) and has no binary-bytecode load path; its
   // `set_mode` is a no-op for signature parity. We pin the text-eval behavior
   // that ulua-rt *does* back, and that `ChunkMode` exists.
-  let lua = unsafe { Lua::unsafe_new() };
+  let lua = Lua::unsafe_new();
   assert_eq!(
     lua.load("1 + 1").set_mode(ChunkMode::Text).eval::<i32>()?,
     2

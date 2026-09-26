@@ -282,7 +282,7 @@ where
   // 4. Pull the arguments off the stack into a MultiValue. They occupy
   //    stack indices 1..=nargs.
   // Safety: `state` 存活，`lua_gettop` 只读当前栈深——`1..=nargs` 因而是有效槽位，
-  // 正是 `collect_stack_args` 的函数头前提；转换失败在同一块内由 `raise_lua_error`
+  // 正是 `collect_stack_args` 的头注释前提；转换失败在同一块内由 `raise_lua_error`
   // （共用前置）发散收敛。
   let args = unsafe {
     let nargs = lua_gettop(state);
@@ -350,12 +350,10 @@ where
 /// first conversion error). Shared by the sync trampoline and the async
 /// `get_future` closure.
 ///
-/// # Safety
-/// `1..=nargs` 必须是 `lua` 栈上的有效槽位（调用方是刚拿到 `lua_gettop` 的
-/// trampoline）。
-pub(crate) unsafe fn collect_stack_args(lua: &Lua, nargs: c_int) -> Result<MultiValue> {
-  // Safety: 落实本函数 `# Safety` 契约——调用方传刚取的 `lua_gettop`，`1..=nargs`
-  // 恒为有效槽位；`value_from_stack` 对有效索引只读。
+/// `1..=nargs` 应为 `lua` 栈上的有效槽位（调用方传刚取的 `lua_gettop`）；
+/// 越界索引由 `value_from_stack` 读取门面归为转换错误，不致 UB，故本函数
+/// 无前置条件、是 safe fn。
+pub(crate) fn collect_stack_args(lua: &Lua, nargs: c_int) -> Result<MultiValue> {
   (1..=nargs).map(|i| lua.value_from_stack(i)).collect()
 }
 
