@@ -5,7 +5,7 @@
 //!
 //! cpp 构造函数把 `this` 登记进全局表并取回 threadId；Rust 里 `ThreadContext`
 //! 是可移动的值（TLS 实例的地址并不稳定），登记自身指针当场就会悬垂，
-//! 因此全局侧只登记 `create_thread` 分配的线程 id（见 [`ThreadContext::new`]）。
+//! 因此全局侧只登记 `create_thread` 分配的线程 id（见 `ThreadContext::new`）。
 //! C++ `~ThreadContext() { if (!events.empty()) flushEvents(); releaseThread(*globalContext, this); }`
 //! 对应 [`Drop`]。
 

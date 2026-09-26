@@ -8,7 +8,7 @@
 //! `thread_local` 包装内（会话/线程边界不变），为后续把注册表从 `thread_local`
 //! 提升为会话实体的并发化铺路。
 //!
-//! # 槽位形态 [`Slot`]
+//! # 槽位形态 `Slot`
 //! * `Slot::Ptr(*const T)`：节点由外部宿主（arena bump 块、solver 的
 //!   `Vec<Box<T>>` 等）保活，注册表只抄地址；
 //! * `Slot::Shared(Arc<T>)`：注册表收取 Arc 强引用保活（`Scope` 形态），

@@ -22,7 +22,7 @@
 //!   `find` 返回 `Item*`，这里返回槽号，由 map/set 包装层换算成引用，避免把别名规则
 //!   外泄给调用方（§2 裸指针收口）。
 //! - cpp `clear(size_t thresholdToDestroy = 32)` 的增长阈值实参在 Rust 侧落成常量
-//!   [`K_THRESHOLD_TO_DESTROY`]：全仓 cpp 调用点（含 `tests/`）无一处传入非默认值，
+//!   `K_THRESHOLD_TO_DESTROY`：全仓 cpp 调用点（含 `tests/`）无一处传入非默认值，
 //!   故省略参数不改变任何可观察行为。
 
 use alloc::{
