@@ -52,4 +52,5 @@ macro_rules! lua_cont_fn {
   };
 }
 
-pub use {lua_cont_fn, lua_lib_fn};
+pub use lua_cont_fn;
+pub use lua_lib_fn;
