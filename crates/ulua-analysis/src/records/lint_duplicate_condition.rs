@@ -166,7 +166,10 @@ impl<'ctx> LintDuplicateCondition<'ctx> {
     let Some(expr_ref) = (unsafe { expr.as_ref() }) else {
       return true;
     };
-    if !matches!(expr_ref.false_expr.get().as_expr_ref(), AstExprRef::IfElse(_)) {
+    if !matches!(
+      expr_ref.false_expr.get().as_expr_ref(),
+      AstExprRef::IfElse(_)
+    ) {
       return true;
     }
     let mut conditions = Vec::with_capacity(2);

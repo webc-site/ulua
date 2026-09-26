@@ -1982,7 +1982,10 @@ impl TypeChecker2 {
       let value: Option<&AstExpr> =
         unsafe { values.as_slice().get(i).copied().and_then(|p| p.as_ref()) };
       let is_pack = value.is_some_and(|value| {
-        matches!(value.as_expr_ref(), AstExprRef::Call(_) | AstExprRef::Varargs(_))
+        matches!(
+          value.as_expr_ref(),
+          AstExprRef::Call(_) | AstExprRef::Varargs(_)
+        )
       });
 
       if let Some(value) = value {

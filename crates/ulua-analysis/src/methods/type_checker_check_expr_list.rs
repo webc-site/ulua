@@ -58,8 +58,10 @@ impl TypeChecker {
 
       // SAFETY: expr 指向 AST arena 节点。
       let expr_ref = unsafe { &*expr };
-      let is_call_or_varargs =
-        matches!(expr_ref.as_expr_ref(), AstExprRef::Call(_) | AstExprRef::Varargs(_));
+      let is_call_or_varargs = matches!(
+        expr_ref.as_expr_ref(),
+        AstExprRef::Call(_) | AstExprRef::Varargs(_)
+      );
 
       if i == last_index && is_call_or_varargs {
         let result = self.check_expr_pack(scope, expr_ref);
