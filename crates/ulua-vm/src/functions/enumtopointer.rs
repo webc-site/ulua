@@ -2,17 +2,17 @@ use core::ffi::c_void;
 
 use crate::records::gc_object::GCObject;
 
+/// GC 枚举的对象地址序列化（cpp `VM/src/lgcdebug.cpp:754` `enumtopointer`）。
+///
+/// B 档契约前移（参照 `abs_index`/`isyielded` 先例）：原 `*mut GCObject` 存活契约
+/// 改由 `&mut` 接收者的引用有效性规则在调用点承载。UserData 分支经安全门面
+/// `as_udata_mut`（tag 匹配后才触碰 union 分支）只取创建时登记的载荷指针值，
+/// 其余类型返回自身地址；全程不解引用返回值——它仅作序列化地址上报。
 #[inline]
-/// # Safety
-/// `gco` 须为存活 GCObject；若类型为 UserData，则 `u.data` 必须是创建时登记的
-/// 有效载荷指针。返回值仅作序列化地址、本函数不解引用。违反则读出悬垂指针值。cpp lgcdebug.cpp:754。
-pub(crate) unsafe fn enumtopointer(gco: *mut GCObject) -> *mut c_void {
-  // Safety: 契约保证 `gco` 存活；UserData 分支仅取其 data 字段值，不解引用
-  unsafe {
-    if let Some(u) = (*gco).as_udata_mut() {
-      u.data.as_mut_ptr() as *mut c_void
-    } else {
-      gco as *mut c_void
-    }
+pub(crate) fn enumtopointer(gco: &mut GCObject) -> *mut c_void {
+  if let Some(u) = gco.as_udata_mut() {
+    u.data.as_mut_ptr() as *mut c_void
+  } else {
+    gco as *mut GCObject as *mut c_void
   }
 }

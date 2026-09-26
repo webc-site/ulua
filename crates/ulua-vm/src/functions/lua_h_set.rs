@@ -21,7 +21,7 @@ pub unsafe fn lua_h_set(l: *mut LuaState, t: *mut LuaTable, key: *const TValue) 
   // Safety: 契约保证 `t` 为存活 LuaTable、key 可读，块内节点查找与插入仅落在 sizenode/dummynode 规则界内
   unsafe {
     let p = lua_h_get(t, key);
-    invalidate_tmcache(t);
+    invalidate_tmcache(&mut *t);
 
     if p != LUA_O_NILOBJECT {
       p as *mut TValue

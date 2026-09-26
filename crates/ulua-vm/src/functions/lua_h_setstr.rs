@@ -27,7 +27,7 @@ use crate::{
 pub unsafe fn lua_h_setstr(l: *mut LuaState, t: *mut LuaTable, key: *mut tstring) -> *mut TValue {
   unsafe {
     let p = lua_h_getstr(t, key);
-    invalidate_tmcache(t);
+    invalidate_tmcache(&mut *t);
 
     if p != LUA_O_NILOBJECT {
       p as *mut TValue

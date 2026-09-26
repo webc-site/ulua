@@ -1,12 +1,10 @@
 use crate::records::lua_table::LuaTable;
 
-/// # Safety
+/// 清表元方法缺席缓存（cpp `invalidateTMcache(t)`）。
 ///
-/// `t` must point to a valid, properly aligned `LuaTable`.
+/// B 档契约前移（参照 `abs_index`/`isyielded` 先例）：`tmcache` 为普通 `u8` 字段，
+/// 清零写不需 unsafe；原 `t` 存活/对齐契约改由 `&mut` 接收者在调用点承载。
 #[inline(always)]
-pub(crate) unsafe fn invalidate_tmcache(t: *mut LuaTable) {
-  // Safety: 契约保证 `t` 指向存活 `LuaTable`，此处仅将其 `tmcache` 字段清零
-  unsafe {
-    (*t).tmcache = 0;
-  }
+pub(crate) fn invalidate_tmcache(t: &mut LuaTable) {
+  t.tmcache = 0;
 }

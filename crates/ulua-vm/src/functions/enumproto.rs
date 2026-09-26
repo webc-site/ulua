@@ -65,7 +65,7 @@ pub(crate) unsafe fn enumproto(ctx: *mut EnumContext, p: *mut Proto) {
         if let Some(edge_cb) = ctx_ref.edge {
           edge_cb(
             ctx_ref.context,
-            enumtopointer(p_gco),
+            enumtopointer(&mut *p_gco),
             p_ref.execdata,
             edge_name(EDGE_NATIVE),
           );

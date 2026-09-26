@@ -26,8 +26,8 @@ pub(crate) unsafe fn enumedge(
     if let Some(edge_fn) = ctx_ref.edge {
       edge_fn(
         ctx_ref.context,
-        enumtopointer(from),
-        enumtopointer(to),
+        enumtopointer(&mut *from),
+        enumtopointer(&mut *to),
         edgename,
       );
     }
