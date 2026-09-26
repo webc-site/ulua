@@ -25,7 +25,7 @@ thread_local! {
 /// 对应 cpp `Counters.cpp` 的 `void countersInit(LuaState* L)`。
 pub(crate) fn counters_init(l: *mut LuaState) {
   // Safety: `l` 指向存活的 `LuaState`（repl_main 以守卫持有 VM 状态）。
-  let main_thread = unsafe { lua_mainthread(l) };
+  let main_thread = unsafe { lua_mainthread(&*l) };
   G_COUNTERS.with(|counters| {
     counters.borrow_mut().l = node_opt(main_thread);
   });

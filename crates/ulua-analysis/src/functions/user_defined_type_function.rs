@@ -115,7 +115,7 @@ unsafe extern "C-unwind" fn user_defined_type_function_interrupt(
   // `limits`/`ice` 两个字段做超时与取消判定，不写任何共享状态；panic 只用于按
   // C++ 抛 TimeLimitError/UserCancelError 的语义展开出 VM。
   unsafe {
-    let main = lua_mainthread(l);
+    let main = lua_mainthread(&*l);
     let data = lua_getthreaddata(main);
     let ctx = data as *const TypeFunctionRuntime;
 
