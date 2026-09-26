@@ -3,6 +3,7 @@ use crate::{
     lua_l_checknumber::lua_l_checknumber, lua_pushinteger::lua_pushinteger,
     lua_pushnumber::lua_pushnumber,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
 };
 
@@ -14,7 +15,7 @@ const SUBNORMAL_EXPONENT_ADJUST: i32 = 54;
 /// # Safety
 /// `l` 须为存活 LuaState 并处于本 C 函数受保护帧：栈 1 号位经 `lua_l_checknumber` 强制为数字（非数字抛错），
 /// 随后 `lua_pushnumber`/`lua_pushinteger` 各写一槽（返回两值）。cpp/VM/src/lmathlib.cpp:190 math_frexp。
-pub unsafe extern "C-unwind" fn math_frexp(l: *mut LuaState) -> i32 {
+pub unsafe fn math_frexp(l: *mut LuaState) -> i32 {
   unsafe {
     let (m, e) = frexp(lua_l_checknumber(l, 1));
     lua_pushnumber(l, m);
@@ -47,3 +48,5 @@ fn frexp(x: f64) -> (f64, i32) {
   let res_bits = bits & (1 << 63) | (0x3fe << 52) | mantissa_bits;
   (f64::from_bits(res_bits), (exponent - 1022))
 }
+
+lua_lib_fn!(pub fn math_frexp, math_frexp_arm);

@@ -1,5 +1,6 @@
 use crate::{
   functions::{lua_l_checknumber::lua_l_checknumber, lua_pushnumber::lua_pushnumber},
+  macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
 };
 
@@ -8,7 +9,7 @@ const SIGN_BIT_MASK: u64 = 1 << 63;
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn math_modf(l: *mut LuaState) -> i32 {
+pub unsafe fn math_modf(l: *mut LuaState) -> i32 {
   unsafe {
     // C `modf(x, &ip)`：整数部分入 ip，小数部分为返回值；cpp 先推 ip 再推 fp。
     let (fp, ip) = modf(lua_l_checknumber(l, 1));
@@ -55,3 +56,5 @@ fn signed_zero(x: f64) -> f64 {
 // 经公开快速调用面覆盖：modf_writes_integer_then_fraction（±3.5/0.5 分数保号）、
 // modf_of_infinite_keeps_signed_zero_fraction、modf_of_nan_yields_nan_pair、
 // modf_of_zero_keeps_sign、modf_of_integral_and_wide_values_is_exact。
+
+lua_lib_fn!(pub fn math_modf, math_modf_arm);
