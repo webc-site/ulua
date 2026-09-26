@@ -45,10 +45,7 @@ use crate::{
     log_2::{ceillog2, log2},
     printable_string_constant::printable_string_constant,
   },
-  macros::{
-    vconst::VCONST, vconstany::VCONSTANY, vjump::VJUMP, vreg::VREG, vregrange::VREGRANGE,
-    vupval::VUPVAL,
-  },
+  macros::v_inst_accessors::{VCONST, VCONSTANY, VJUMP, VREG, VREGRANGE, VUPVAL},
   methods::bytecode_builder_get_string_hash::{
     bytecode_builder_get_string_hash, bytecode_builder_get_string_hash_slice,
   },
