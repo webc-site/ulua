@@ -17,7 +17,9 @@ use crate::{
     lua_l_register::lua_l_register, lua_pushcclosurek::lua_pushcclosurek,
     lua_pushlstring::lua_pushlstring, lua_pushvalue::lua_pushvalue, lua_setfield::lua_setfield,
   },
-  macros::{lua_globalsindex::LUA_GLOBALSINDEX, lua_setglobal::lua_setglobal},
+  macros::{
+    lua_globalsindex::LUA_GLOBALSINDEX, lua_lib_fn::lua_lib_fn, lua_setglobal::lua_setglobal,
+  },
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
 
@@ -45,7 +47,7 @@ static BASE_FUNCS: [LuaLReg; 19] = [
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn luaopen_base(l: *mut LuaState) -> i32 {
+pub unsafe fn luaopen_base(l: *mut LuaState) -> i32 {
   unsafe {
     lua_pushvalue(l, LUA_GLOBALSINDEX);
     lua_setglobal(l, c"_G".as_ptr());
@@ -88,3 +90,5 @@ pub unsafe extern "C-unwind" fn luaopen_base(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn luaopen_base, luaopen_base_arm);

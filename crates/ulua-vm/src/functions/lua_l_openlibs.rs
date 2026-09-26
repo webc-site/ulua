@@ -6,12 +6,13 @@ use ulua_common::fflag;
 
 use crate::{
   functions::{
-    lua_call::lua_call, lua_pushlstring::lua_pushlstring, luaopen_base::luaopen_base,
-    luaopen_bit_32::luaopen_bit32, luaopen_buffer::luaopen_buffer, luaopen_class::luaopen_class,
-    luaopen_coroutine::luaopen_coroutine, luaopen_debug::luaopen_debug,
-    luaopen_integer::luaopen_integer, luaopen_math::luaopen_math, luaopen_os::luaopen_os,
-    luaopen_string::luaopen_string, luaopen_table::luaopen_table, luaopen_utf_8::luaopen_utf_8,
-    luaopen_vector::luaopen_vector,
+    lua_call::lua_call, lua_pushlstring::lua_pushlstring, luaopen_base::luaopen_base_arm,
+    luaopen_bit_32::luaopen_bit32_arm, luaopen_buffer::luaopen_buffer_arm,
+    luaopen_class::luaopen_class_arm, luaopen_coroutine::luaopen_coroutine_arm,
+    luaopen_debug::luaopen_debug_arm, luaopen_integer::luaopen_integer_arm,
+    luaopen_math::luaopen_math_arm, luaopen_os::luaopen_os_arm, luaopen_string::luaopen_string_arm,
+    luaopen_table::luaopen_table_arm, luaopen_utf_8::luaopen_utf_8_arm,
+    luaopen_vector::luaopen_vector_arm,
   },
   macros::lua_pushcfunction::LUA_PUSHCFUNCTION,
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
@@ -21,18 +22,18 @@ use crate::{
 /// 受 `LuauIntegerLibrary` fflag 门控——关闭时只注册前 [`LUALIBS_BASE_LEN`] 项
 /// （等价原 `lualibs_nointeger` 表），开启时全部注册。
 const LUALIBS: [LuaLReg; 12] = [
-  LuaLReg::new(b"", luaopen_base),
-  LuaLReg::new(b"coroutine", luaopen_coroutine),
-  LuaLReg::new(b"table", luaopen_table),
-  LuaLReg::new(b"os", luaopen_os),
-  LuaLReg::new(b"string", luaopen_string),
-  LuaLReg::new(b"math", luaopen_math),
-  LuaLReg::new(b"debug", luaopen_debug),
-  LuaLReg::new(b"utf8", luaopen_utf_8),
-  LuaLReg::new(b"bit32", luaopen_bit32),
-  LuaLReg::new(b"buffer", luaopen_buffer),
-  LuaLReg::new(b"vector", luaopen_vector),
-  LuaLReg::new(b"integer", luaopen_integer),
+  LuaLReg::new(b"", luaopen_base_arm),
+  LuaLReg::new(b"coroutine", luaopen_coroutine_arm),
+  LuaLReg::new(b"table", luaopen_table_arm),
+  LuaLReg::new(b"os", luaopen_os_arm),
+  LuaLReg::new(b"string", luaopen_string_arm),
+  LuaLReg::new(b"math", luaopen_math_arm),
+  LuaLReg::new(b"debug", luaopen_debug_arm),
+  LuaLReg::new(b"utf8", luaopen_utf_8_arm),
+  LuaLReg::new(b"bit32", luaopen_bit32_arm),
+  LuaLReg::new(b"buffer", luaopen_buffer_arm),
+  LuaLReg::new(b"vector", luaopen_vector_arm),
+  LuaLReg::new(b"integer", luaopen_integer_arm),
 ];
 /// integer 门控关闭时的注册面（不含末位 integer 条目）。
 const LUALIBS_BASE_LEN: usize = 11;
@@ -59,7 +60,7 @@ pub unsafe fn lua_l_openlibs(l: *mut LuaState) {
     }
 
     if fflag::DebugLuauUserDefinedClassesRuntime.get() {
-      LUA_PUSHCFUNCTION(l, Some(luaopen_class), null());
+      LUA_PUSHCFUNCTION(l, Some(luaopen_class_arm), null());
       lua_pushlstring(l, b"class".as_ptr().cast(), 5);
       lua_call(l, 1, 0);
     }
