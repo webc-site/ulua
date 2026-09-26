@@ -10,6 +10,10 @@
 /// intern，必为合法 ASCII/UTF-8，用字节串比较即可，免去 `CStr` 的 unsafe。
 pub(crate) const K_ERROR_ID: &[u8] = b"%error-id%";
 
+/// [`K_ERROR_ID`] 的 `&str` 配对形态：比较对象为 Rust 字符串切片/owned String 的
+/// 站点用之；字节内容与 [`K_ERROR_ID`] 逐字相同。
+pub(crate) const K_ERROR_ID_STR: &str = "%error-id%";
+
 /// `typeof`：内建类型查询运算符，不是合法的 type alias / 类型函数名。
 pub(crate) const K_TYPEOF: &[u8] = b"typeof";
 
@@ -28,6 +32,10 @@ pub(crate) const LUAU_BLOCKED_TYPE: &str = "_luau_blocked_type";
 /// cpp `kLuauForceConstraintSolvingIncomplete`：强制上报「求解不完整」错误。
 pub(crate) const LUAU_FORCE_CONSTRAINT_SOLVING_INCOMPLETE: &str =
   "_luau_force_constraint_solving_incomplete";
+
+/// cpp `AutocompleteCore.cpp` 的自动补全专用 ICE 触发变量名（由
+/// `DebugLuauMagicVariableNames` 开关放行的 local/global 表达式）。
+pub(crate) const LUAU_AUTOCOMPLETE_ICE: &str = "_luau_autocomplete_ice";
 
 /// `&[u8]` 等值的 `const fn` 版本：切片的 `PartialEq` 不能在常量上下文调用，
 /// 故手写等长 + 逐字节比较，语义与 `==` 完全一致。

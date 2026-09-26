@@ -1,8 +1,11 @@
 use alloc::string::String;
 
-use crate::records::{
-  cannot_extend_table::CannotExtendTable, duplicate_type_definition::DuplicateTypeDefinition,
-  unknown_property::UnknownProperty,
+use crate::{
+  functions::magic_names::K_ERROR_ID_STR,
+  records::{
+    cannot_extend_table::CannotExtendTable, duplicate_type_definition::DuplicateTypeDefinition,
+    unknown_property::UnknownProperty,
+  },
 };
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -13,7 +16,7 @@ pub struct InvalidNameChecker {
 impl InvalidNameChecker {
   pub fn new() -> Self {
     Self {
-      invalid_name: "%error-id%".to_owned(),
+      invalid_name: K_ERROR_ID_STR.to_owned(),
     }
   }
 }

@@ -25,7 +25,7 @@ use crate::{
     function_is_expected_at::function_is_expected_at,
     get_paren_recommendation::get_paren_recommendation, is_being_defined::is_being_defined,
     is_binding_legal_at_current_position::is_binding_legal_at_current_position,
-    to_string_symbol::to_string_symbol,
+    magic_names::LUAU_AUTOCOMPLETE_ICE, to_string_symbol::to_string_symbol,
   },
   records::{
     arena_handle::Handle, autocomplete_entry::AutocompleteEntry,
@@ -58,18 +58,18 @@ pub(crate) fn autocomplete_expression(
     // 节点；`ast_node_try_as_ptr` 按 class_index 判型，命中即合法下转为只读借用。
     // local 槽已句柄化恒非空：.get() 安全借用只读 name。
     if let Some(local) = unsafe { ast_node_try_as_ptr::<AstExprLocal>(node) }
-      && local.local.get().name == "_luau_autocomplete_ice"
+      && local.local.get().name == LUAU_AUTOCOMPLETE_ICE
     {
       ice.ice_string_location(
-        "_luau_autocomplete_ice encountered",
+        &format!("{LUAU_AUTOCOMPLETE_ICE} encountered"),
         &local.base.base.location,
       );
     }
     if let Some(global) = unsafe { ast_node_try_as_ptr::<AstExprGlobal>(node) }
-      && global.name == "_luau_autocomplete_ice"
+      && global.name == LUAU_AUTOCOMPLETE_ICE
     {
       ice.ice_string_location(
-        "_luau_autocomplete_ice encountered",
+        &format!("{LUAU_AUTOCOMPLETE_ICE} encountered"),
         &global.base.base.location,
       );
     }
