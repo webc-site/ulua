@@ -14,9 +14,10 @@ use crate::{
   },
   macros::{
     classvalue::classvalue, getstr::getstr, lua_c_barrier::lua_c_barrier, lua_c_init::luaC_init,
-    lua_d_checkstack::luaD_checkstack, lua_l_error::luaL_error, lua_m_newarray::luaM_newarray,
-    setclassvalue::setclassvalue, setclvalue::setclvalue, setnilvalue::setnilvalue, setobj::setobj,
-    setobj_2_s::setobj_2_s, setobjectvalue::setobjectvalue, setsvalue::setsvalue,
+    lua_d_checkstack::luaD_checkstack, lua_l_error::luaL_error, lua_lib_fn::lua_lib_fn,
+    lua_m_newarray::luaM_newarray, setclassvalue::setclassvalue, setclvalue::setclvalue,
+    setnilvalue::setnilvalue, setobj::setobj, setobj_2_s::setobj_2_s,
+    setobjectvalue::setobjectvalue, setsvalue::setsvalue,
   },
   records::{
     lua_state::LuaState, lua_table::LuaTable, luau_class::LuauClass, luau_object::LuauObject,
@@ -29,7 +30,7 @@ use crate::{
 /// 仅作为 C 闭包入口经 luau_precall 调用：`(*l).ci` 须为该闭包的存活帧且闭包 upval[0] 为类值、
 /// `(*l).base..(*l).top` 为可读参数窗口；栈尾空间由内部 luaD_checkstack 扩容保证，`lua_d_call`
 /// 可能抛错，须在受保护帧内。cpp lclass.cpp:374 `luaR_constructobject`
-pub(crate) unsafe extern "C-unwind" fn lua_r_constructobject(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn lua_r_constructobject(l: *mut LuaState) -> i32 {
   unsafe {
     let cl = (*(*(*l).ci).func).as_closure_ptr();
     let classobject = classvalue!(&(*cl).inner.c.upvals[0]);
@@ -87,11 +88,13 @@ pub(crate) unsafe extern "C-unwind" fn lua_r_constructobject(l: *mut LuaState) -
   }
 }
 
+lua_lib_fn!(pub(crate) fn lua_r_constructobject, lua_r_constructobject_arm);
+
 /// # Safety
 /// 同经 C 闭包调用约定：`(*l).ci`.func 为该闭包且 upval[0] 为类值、`(*l).base..base+2` 可读
 /// （首参须是本类的 Object 实例，否则走抛错路径）、栈顶另有 ≥1 空闲槽承接 `lua_v_gettable` 临时值；
 /// 各抛错路径经 `luaL_error` 不返回，须在受保护帧内。cpp lclass.cpp:421 `luaR_defaultcreateobject`
-pub(crate) unsafe extern "C-unwind" fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
   unsafe {
     let cl = (*(*(*l).ci).func).as_closure_ptr();
     let classobject = classvalue!(&(*cl).inner.c.upvals[0]);
@@ -159,6 +162,8 @@ pub(crate) unsafe extern "C-unwind" fn lua_r_defaultcreateobject(l: *mut LuaStat
   }
 }
 
+lua_lib_fn!(pub(crate) fn lua_r_defaultcreateobject, lua_r_defaultcreateobject_arm);
+
 /// # Safety
 /// 调用方须保证：`l` 存活且处于受保护帧（建闭包/新串可触发 GC 与抛错）；`classobject` 为
 /// staticmembers 与 memberstooffset 均已初始化的存活类（若 `new`/`__init` 已注册，其偏移须落在
@@ -173,7 +178,7 @@ pub(crate) unsafe fn lua_r_setupconstructor(
     let new_key = lua_s_newlstr(l, b"new");
     let constructor = lua_f_new_cclosure(l, 1, env);
     let ctor_c = &mut (*constructor).inner.c;
-    ctor_c.f = Some(lua_r_constructobject);
+    ctor_c.f = Some(lua_r_constructobject_arm);
     ctor_c.debugname = c"luaR_constructobject".as_ptr();
     setclassvalue!(l, &mut ctor_c.upvals[0], classobject);
     ctor_c.cont = None;
@@ -199,7 +204,7 @@ pub(crate) unsafe fn lua_r_setupconstructor(
 
     let default_ctor = lua_f_new_cclosure(l, 1, env);
     let default_ctor_c = &mut (*default_ctor).inner.c;
-    default_ctor_c.f = Some(lua_r_defaultcreateobject);
+    default_ctor_c.f = Some(lua_r_defaultcreateobject_arm);
     default_ctor_c.debugname = c"luaR_defaultcreateobject".as_ptr();
     setclassvalue!(l, &mut default_ctor_c.upvals[0], classobject);
     default_ctor_c.cont = None;

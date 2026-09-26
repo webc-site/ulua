@@ -6,7 +6,7 @@ use crate::{
     lua_l_buffinit::lua_l_buffinit, lua_l_pushresult::lua_l_pushresult,
     lua_pushlstring::lua_pushlstring,
   },
-  macros::utf_8_buffsz::UTF8BUFFSZ,
+  macros::{lua_lib_fn::lua_lib_fn, utf_8_buffsz::UTF8BUFFSZ},
   records::{lua_l_strbuf::LuaLStrbuf, lua_state::LuaState},
 };
 
@@ -15,7 +15,7 @@ use crate::{
 /// `l` 必须是正在执行的 utf8 库 C 函数帧的存活 `LuaState`：栈槽 #1..top 为整数码点
 /// （`buffutfchar` 逐个校验），串构造经 `lua_l_buffinit`/`lua_l_pushresult` 的栈与 GC
 /// 协议，返回值即结果串在栈上的槽数。cpp lutf8lib.cpp:162 `utfchar`。
-pub unsafe extern "C-unwind" fn utfchar(l: *mut LuaState) -> i32 {
+pub unsafe fn utfchar(l: *mut LuaState) -> i32 {
   unsafe {
     let mut buff = [0 as c_char; UTF8BUFFSZ];
 
@@ -39,3 +39,5 @@ pub unsafe extern "C-unwind" fn utfchar(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn utfchar, utfchar_arm);

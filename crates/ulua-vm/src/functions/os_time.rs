@@ -10,7 +10,7 @@ use crate::{
     lua_settop::lua_settop,
     os_timegm::os_timegm,
   },
-  macros::lua_isnoneornil::lua_isnoneornil,
+  macros::{lua_isnoneornil::lua_isnoneornil, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
 };
 
@@ -26,7 +26,7 @@ pub(crate) fn now_epoch_seconds() -> TimeT {
 /// `luaL_checktype(l,1,TABLE)` 要求为表否则抛错回退，`lua_settop(l,1)` 截顶后经 getfield/getboolfield 读表字段
 /// 到本地 `Tm`（不回写表）；末尾 `lua_pushnil`/`lua_pushnumber` 需 `(*l).top` 后 ≥1 空槽；可触发 GC。
 /// cpp VM/src/loslib.cpp:179
-pub unsafe extern "C-unwind" fn os_time(l: *mut LuaState) -> i32 {
+pub unsafe fn os_time(l: *mut LuaState) -> i32 {
   unsafe {
     let t: i64 = if lua_isnoneornil!(l, 1) {
       now_epoch_seconds()
@@ -59,3 +59,5 @@ pub unsafe extern "C-unwind" fn os_time(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn os_time, os_time_arm);

@@ -6,14 +6,14 @@ use crate::{
     lua_l_checkinteger::lua_l_checkinteger, lua_l_checkunsigned::lua_l_checkunsigned,
     lua_l_optinteger::lua_l_optinteger,
   },
-  macros::isoutofbounds::isoutofbounds,
+  macros::{isoutofbounds::isoutofbounds, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
 };
 
 /// # Safety
 ///
 /// `l` 必须指向本次 buffer 库调用的存活 `LuaState`，索引/长度实参按约定可读，栈顶有压入结果的余量。
-pub(crate) unsafe extern "C-unwind" fn buffer_fill(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn buffer_fill(l: *mut LuaState) -> i32 {
   // Safety: 契约保证填充区间经 argcheck 落在 buffer 数据界内，memset 仅触达该界
   unsafe {
     let mut len: usize = 0;
@@ -39,3 +39,5 @@ pub(crate) unsafe extern "C-unwind" fn buffer_fill(l: *mut LuaState) -> i32 {
     0
   }
 }
+
+lua_lib_fn!(pub(crate) fn buffer_fill, buffer_fill_arm);

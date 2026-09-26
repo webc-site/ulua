@@ -6,13 +6,13 @@ use crate::{
     lua_pushinteger::lua_pushinteger, lua_pushnil::lua_pushnil, u_posrelat::u_posrelat,
     utf_8_decode::utf_8_decode,
   },
-  macros::lua_l_argcheck::luaL_argcheck,
+  macros::{lua_l_argcheck::luaL_argcheck, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn utflen(l: *mut LuaState) -> i32 {
+pub unsafe fn utflen(l: *mut LuaState) -> i32 {
   unsafe {
     let mut n: i32 = 0;
     let mut len: usize = 0;
@@ -52,3 +52,5 @@ pub unsafe extern "C-unwind" fn utflen(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn utflen, utflen_arm);

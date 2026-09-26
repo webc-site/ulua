@@ -6,7 +6,7 @@ use crate::{
     lua_l_optinteger::lua_l_optinteger, lua_pushinteger::lua_pushinteger, lua_pushnil::lua_pushnil,
     u_posrelat::u_posrelat, utf_8_decode::is_cont_byte,
   },
-  macros::{lua_l_argcheck::luaL_argcheck, lua_l_error::luaL_error},
+  macros::{lua_l_argcheck::luaL_argcheck, lua_l_error::luaL_error, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
 };
 
@@ -14,7 +14,7 @@ use crate::{
 /// `l` 须为存活 `LuaState` 且栈 index 1 为字符串（`luaL_checklstring` 返回覆盖 `[0,len]`
 /// 含终止 NUL 的数据指针）；index 2/3 为整数，越界或初位为续字节会经 `luaL_argcheck`/`luaL_error`
 /// 抛错，须在受保护帧内调用。cpp `lutf8lib.cpp:191`。
-pub unsafe extern "C-unwind" fn byteoffset(l: *mut LuaState) -> i32 {
+pub unsafe fn byteoffset(l: *mut LuaState) -> i32 {
   unsafe {
     let mut len: usize = 0;
     let s = lua_l_checklstring(l, 1, &mut len);
@@ -74,3 +74,5 @@ pub unsafe extern "C-unwind" fn byteoffset(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn byteoffset, byteoffset_arm);

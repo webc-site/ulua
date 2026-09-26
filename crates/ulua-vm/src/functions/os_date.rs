@@ -33,7 +33,8 @@ use crate::{
   },
   macros::{
     lua_isnoneornil::lua_isnoneornil, lua_l_addchar::lua_l_addchar, lua_l_argerror::luaL_argerror,
-    lua_l_optstring::luaL_optstring, lua_strftimeoptions::LUA_STRFTIMEOPTIONS,
+    lua_l_optstring::luaL_optstring, lua_lib_fn::lua_lib_fn,
+    lua_strftimeoptions::LUA_STRFTIMEOPTIONS,
   },
   records::{lua_l_strbuf::LuaLStrbuf, lua_state::LuaState},
 };
@@ -65,7 +66,7 @@ fn os_gmtime_r<'a>(timep: &TimeT, result: &'a mut Tm) -> Option<&'a mut Tm> {
 /// 时间取值/分解为纯 Rust（`now_epoch_seconds`/`os_gmtime_r`/`localtime_r`，超范围返回 None → pushnil），
 /// `localtime_r` 的区缩写经 `zone` 出参移交本帧持有，`tm_zone` 指针的读取（渲染循环）均在其存活期内；
 /// `lua_createtable`/`lua_l_buffinit`/`lua_l_pushresult` 可分配/GC/抛错。cpp/VM/src/loslib.cpp:112 os_date。
-pub(crate) unsafe extern "C-unwind" fn os_date(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn os_date(l: *mut LuaState) -> i32 {
   unsafe {
     let s: *const c_char = luaL_optstring!(l, 1, FMT_DEFAULT.as_ptr().cast());
     let t: TimeT = if lua_isnoneornil!(l, 2) {
@@ -135,3 +136,5 @@ pub(crate) unsafe extern "C-unwind" fn os_date(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn os_date, os_date_arm);

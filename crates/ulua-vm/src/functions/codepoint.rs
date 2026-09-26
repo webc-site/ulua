@@ -6,13 +6,13 @@ use crate::{
     lua_l_optinteger::lua_l_optinteger, lua_pushinteger::lua_pushinteger, u_posrelat::u_posrelat,
     utf_8_decode::utf_8_decode,
   },
-  macros::{lua_l_argcheck::luaL_argcheck, lua_l_error::luaL_error},
+  macros::{lua_l_argcheck::luaL_argcheck, lua_l_error::luaL_error, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn codepoint(l: *mut LuaState) -> i32 {
+pub unsafe fn codepoint(l: *mut LuaState) -> i32 {
   unsafe {
     let mut len: usize = 0;
     let s = lua_l_checklstring(l, 1, &mut len);
@@ -56,3 +56,5 @@ pub unsafe extern "C-unwind" fn codepoint(l: *mut LuaState) -> i32 {
     n
   }
 }
+
+lua_lib_fn!(pub fn codepoint, codepoint_arm);

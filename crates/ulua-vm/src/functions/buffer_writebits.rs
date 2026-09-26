@@ -8,13 +8,14 @@ use crate::{
     lua_l_checknumber::lua_l_checknumber,
     lua_l_checkunsigned::lua_l_checkunsigned,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
 };
 
 /// # Safety
 ///
 /// `l` 必须指向本次 buffer 库调用的存活 `LuaState`，索引/长度实参按约定可读，栈顶有压入结果的余量。
-pub(crate) unsafe extern "C-unwind" fn buffer_writebits(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn buffer_writebits(l: *mut LuaState) -> i32 {
   // Safety: 契约保证写入区间落在 buffer 数据界内且先经清零，越界路径走报错
   unsafe {
     let (buf, len) = buffer_data(l, 1);
@@ -41,3 +42,5 @@ pub(crate) unsafe extern "C-unwind" fn buffer_writebits(l: *mut LuaState) -> i32
     0
   }
 }
+
+lua_lib_fn!(pub(crate) fn buffer_writebits, buffer_writebits_arm);

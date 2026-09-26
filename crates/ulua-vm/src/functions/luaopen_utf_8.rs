@@ -2,19 +2,19 @@ use core::ffi::c_char;
 
 use crate::{
   functions::{
-    byteoffset::byteoffset, codepoint::codepoint, iter_codes::iter_codes,
+    byteoffset::byteoffset_arm, codepoint::codepoint_arm, iter_codes::iter_codes_arm,
     lua_l_register::lua_l_register, lua_pushlstring::lua_pushlstring, lua_setfield::lua_setfield,
-    utfchar::utfchar, utflen::utflen,
+    utfchar::utfchar_arm, utflen::utflen_arm,
   },
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
 
 static FUNCS: [LuaLReg; 5] = [
-  LuaLReg::new(b"offset", byteoffset),
-  LuaLReg::new(b"codepoint", codepoint),
-  LuaLReg::new(b"char", utfchar),
-  LuaLReg::new(b"len", utflen),
-  LuaLReg::new(b"codes", iter_codes),
+  LuaLReg::new(b"offset", byteoffset_arm),
+  LuaLReg::new(b"codepoint", codepoint_arm),
+  LuaLReg::new(b"char", utfchar_arm),
+  LuaLReg::new(b"len", utflen_arm),
+  LuaLReg::new(b"codes", iter_codes_arm),
 ];
 
 /// # Safety
