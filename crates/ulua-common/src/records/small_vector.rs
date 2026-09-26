@@ -89,14 +89,6 @@ impl<T, const N: usize> SmallVector<T, N> {
     self.0.push(value);
   }
 
-  /// `emplace_back` collapses to `push_back` of the constructed value; Rust has
-  /// no in-place variadic construction, and the move is free.
-  #[inline]
-  pub fn emplace_back(&mut self, value: T) -> &mut T {
-    self.0.push(value);
-    self.0.last_mut().expect("push_back 保证非空")
-  }
-
   #[inline]
   pub fn pop_back(&mut self) {
     assert!(!self.0.is_empty());

@@ -9,7 +9,7 @@
 //!
 //! cpp 的 `AstNode::asAttr()` 虚链没有对应导出：基类实现恒返回 nullptr，只有
 //! `AstAttr` 自己 override 返回 `this`（Ast.h:186/235），本仓属性判定一律走
-//! `has_attribute` → `has_attribute_in_array`，恒 null 的下转只会误导调用方。
+//! `has_attribute_in_array`，恒 null 的下转只会误导调用方。
 
 use crate::records::{ast_expr::AstExpr, ast_name::AstName, ast_node::AstNode, node_handle::Nodes};
 

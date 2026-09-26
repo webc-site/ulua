@@ -109,14 +109,6 @@ fn test_instruction_slice_conversions() {
   assert_eq!(insn_slice.len(), 4);
   assert_eq!(insn_slice[0].raw(), 0x11);
   assert_eq!(insn_slice[3].raw(), 0x44);
-
-  let raw_slice = Instruction::as_raw_slice(insn_slice);
-  assert_eq!(raw_slice, &raw_data);
-
-  let mut raw_mut: [u32; 2] = [10, 20];
-  let insn_mut = Instruction::from_slice_mut(&mut raw_mut);
-  insn_mut[0] = Instruction(100);
-  assert_eq!(raw_mut[0], 100);
 }
 
 #[test]

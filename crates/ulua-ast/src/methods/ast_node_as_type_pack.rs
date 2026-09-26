@@ -1,4 +1,4 @@
-use core::ptr::{NonNull, from_mut, from_ref};
+use core::ptr::{NonNull, from_ref};
 
 use crate::{
   enums::ast_type_pack_ref::AstTypePackRef,
@@ -7,18 +7,6 @@ use crate::{
 };
 
 impl AstNode {
-  /// cpp `AstNode::asTypePack()`：命中 `AstTypePack` 家族则给出类型包视图，否则 `None`。
-  /// 形态取舍与 [`Self::as_expr`] 一致。
-  #[inline]
-  pub fn as_type_pack(&mut self) -> Option<NonNull<AstTypePack>> {
-    if is_type_pack_class(self.class_index) {
-      // Safety: class_index 命中 + #[repr(C)] 单继承 ⇒ 偏移 0 即存活 AstTypePack；非空。
-      Some(unsafe { NonNull::new_unchecked(from_mut(self).cast::<AstTypePack>()) })
-    } else {
-      None
-    }
-  }
-
   /// cpp `const AstNode::asTypePack() const`：只读判别下转，安全形态
   /// `Option<&AstTypePack>`（论证同 [`Self::as_expr_const`]）。
   #[inline]

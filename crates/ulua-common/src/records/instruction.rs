@@ -1,7 +1,7 @@
 use core::{
   fmt,
   ops::Deref,
-  slice::{from_raw_parts, from_raw_parts_mut},
+  slice::from_raw_parts,
 };
 
 use crate::{
@@ -166,27 +166,6 @@ impl Instruction {
   pub fn from_slice(slice: &[u32]) -> &[Self] {
     // SAFETY: Instruction 是 #[repr(transparent)] 包装 u32，内存对齐与布局完全相同。
     unsafe { from_raw_parts(slice.as_ptr() as *const Self, slice.len()) }
-  }
-
-  /// 将底层裸 `u32` 可变切片零成本转换为 `Instruction` 可变切片视图。
-  #[inline(always)]
-  pub fn from_slice_mut(slice: &mut [u32]) -> &mut [Self] {
-    // SAFETY: Instruction 是 #[repr(transparent)] 包装 u32，内存对齐与布局完全相同。
-    unsafe { from_raw_parts_mut(slice.as_mut_ptr() as *mut Self, slice.len()) }
-  }
-
-  /// 将 `Instruction` 切片零成本转换为底层裸 `u32` 切片视图。
-  #[inline(always)]
-  pub fn as_raw_slice(slice: &[Self]) -> &[u32] {
-    // SAFETY: Instruction 是 #[repr(transparent)] 包装 u32，内存对齐与布局完全相同。
-    unsafe { from_raw_parts(slice.as_ptr() as *const u32, slice.len()) }
-  }
-
-  /// 将 `Instruction` 可变切片零成本转换为底层裸 `u32` 可变切片视图。
-  #[inline(always)]
-  pub fn as_raw_slice_mut(slice: &mut [Self]) -> &mut [u32] {
-    // SAFETY: Instruction 是 #[repr(transparent)] 包装 u32，内存对齐与布局完全相同。
-    unsafe { from_raw_parts_mut(slice.as_mut_ptr() as *mut u32, slice.len()) }
   }
 }
 

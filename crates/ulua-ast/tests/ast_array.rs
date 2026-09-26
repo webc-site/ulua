@@ -46,7 +46,10 @@ fn test_ast_array_deref_and_index() {
   assert_eq!(sum, 150);
 
   // 可变引用 DerefMut 与 IndexMut
-  let mut mut_arr = AstArray::from_mut_slice(&mut data);
+  let mut mut_arr = AstArray {
+    data: data.as_mut_ptr(),
+    size: data.len(),
+  };
   mut_arr[0] = 99;
   mut_arr[2] = 88;
   assert_eq!(mut_arr[0], 99);
