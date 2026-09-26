@@ -16,7 +16,8 @@ use crate::{
     lua_pushnil::lua_pushnil, packint::packint,
   },
   macros::{
-    lua_l_argcheck::luaL_argcheck, lua_l_checkstring::luaL_checkstring, maxintsize::MAXINTSIZE,
+    lua_l_argcheck::luaL_argcheck, lua_l_checkstring::luaL_checkstring, lua_lib_fn::lua_lib_fn,
+    maxintsize::MAXINTSIZE,
   },
   records::{ftypes::Ftypes, header::Header, lua_l_strbuf::LuaLStrbuf, lua_state::LuaState},
 };
@@ -25,7 +26,7 @@ pub const LUAL_PACKPADBYTE: u8 = 0x00;
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe extern "C-unwind" fn str_pack(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn str_pack(l: *mut LuaState) -> i32 {
   unsafe {
     let mut b = LuaLStrbuf::new();
     let mut h = Header::default();
@@ -142,3 +143,5 @@ pub(crate) unsafe extern "C-unwind" fn str_pack(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn str_pack, str_pack_arm);

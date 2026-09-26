@@ -32,7 +32,10 @@ use crate::{
     lua_l_pushresult::lua_l_pushresult,
     scanformat::{MAX_FORMAT_SPEC_SCAN, scan_format_spec},
   },
-  macros::{l_esc::L_ESC, lua_isinteger_64::lua_isinteger_64, lua_l_error::luaL_error},
+  macros::{
+    l_esc::L_ESC, lua_isinteger_64::lua_isinteger_64, lua_l_error::luaL_error,
+    lua_lib_fn::lua_lib_fn,
+  },
   records::{lua_l_strbuf::LuaLStrbuf, lua_state::LuaState},
 };
 
@@ -43,7 +46,7 @@ const DIRECT_APPEND_MIN_LEN: usize = 100;
 /// # Safety
 /// 格式串由 `lua_l_checklstring` 取得：指向 GC 堆上存活字符串的 `sfl` 字节；
 /// Luau 字符串不会被移动或压缩，循环期间栈增长/参数读取不使其悬垂。
-pub(crate) unsafe extern "C-unwind" fn str_format(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn str_format(l: *mut LuaState) -> i32 {
   // Safety: 契约保证 l 存活——checklstring 取 GC 堆字符串字节、buffinit/pushresult 在其栈上操作
   unsafe {
     let top = lua_gettop(l);
@@ -159,3 +162,5 @@ pub(crate) unsafe extern "C-unwind" fn str_format(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn str_format, str_format_arm);

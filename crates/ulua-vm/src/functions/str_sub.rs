@@ -3,13 +3,13 @@ use crate::{
     lua_l_checkinteger::lua_l_checkinteger, lua_l_checklstring::lua_l_checklstring,
     lua_l_optinteger::lua_l_optinteger, lua_pushlstring::lua_pushlstring, posrelat::posrelat,
   },
-  macros::lua_pushliteral::lua_pushliteral,
+  macros::{lua_lib_fn::lua_lib_fn, lua_pushliteral::lua_pushliteral},
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn str_sub(l: *mut LuaState) -> i32 {
+pub unsafe fn str_sub(l: *mut LuaState) -> i32 {
   unsafe {
     let mut len: usize = 0;
     let s = lua_l_checklstring(l, 1, &mut len);
@@ -31,3 +31,5 @@ pub unsafe extern "C-unwind" fn str_sub(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn str_sub, str_sub_arm);

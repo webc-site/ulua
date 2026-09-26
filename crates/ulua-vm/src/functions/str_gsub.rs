@@ -16,7 +16,7 @@ use crate::{
     lua_pushinteger::lua_pushinteger, lua_type::lua_type, r#match::match_item,
     prepstate::prepstate, reprepstate::reprepstate,
   },
-  macros::lua_l_argexpected::luaL_argexpected,
+  macros::{lua_l_argexpected::luaL_argexpected, lua_lib_fn::lua_lib_fn},
   records::{lua_l_strbuf::LuaLStrbuf, lua_state::LuaState, match_state::MatchState},
 };
 
@@ -26,7 +26,7 @@ use crate::{
 /// （`luaL_argexpected` 闸门后为 string/number/function/table）、#4 为替换上限；
 /// 累加器 `b` 由本帧 `lua_l_buffinit` 登记，匹配过程可抛错与触发 GC。
 /// cpp lstrlib.cpp:831 `str_gsub`。
-pub(crate) unsafe extern "C-unwind" fn str_gsub(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn str_gsub(l: *mut LuaState) -> i32 {
   unsafe {
     let src = lua_l_checklstring_ref(l, 1);
     let pat = lua_l_checklstring_ref(l, 2);
@@ -92,3 +92,5 @@ pub(crate) unsafe extern "C-unwind" fn str_gsub(l: *mut LuaState) -> i32 {
     2
   }
 }
+
+lua_lib_fn!(pub(crate) fn str_gsub, str_gsub_arm);

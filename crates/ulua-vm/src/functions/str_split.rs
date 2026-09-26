@@ -5,7 +5,7 @@ use crate::{
     lua_createtable::lua_createtable, lua_l_checklstring::lua_l_checklstring,
     lua_pushinteger::lua_pushinteger, lua_pushlstring::lua_pushlstring, lua_settable::lua_settable,
   },
-  macros::lua_isnoneornil::lua_isnoneornil,
+  macros::{lua_isnoneornil::lua_isnoneornil, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
 };
 
@@ -14,7 +14,7 @@ const SEP_COMMA: &[u8] = b",";
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn str_split(l: *mut LuaState) -> i32 {
+pub unsafe fn str_split(l: *mut LuaState) -> i32 {
   unsafe {
     let mut haystack_len: usize = 0;
     let haystack = lua_l_checklstring(l, 1, &mut haystack_len);
@@ -68,3 +68,5 @@ pub unsafe extern "C-unwind" fn str_split(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn str_split, str_split_arm);

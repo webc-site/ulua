@@ -5,7 +5,8 @@ use crate::{
     lua_pushinteger::lua_pushinteger,
   },
   macros::{
-    lua_l_argcheck::luaL_argcheck, lua_l_checkstring::luaL_checkstring, maxssize::MAXSSIZE,
+    lua_l_argcheck::luaL_argcheck, lua_l_checkstring::luaL_checkstring, lua_lib_fn::lua_lib_fn,
+    maxssize::MAXSSIZE,
   },
   records::{header::Header, lua_state::LuaState},
 };
@@ -13,7 +14,7 @@ use crate::{
 /// # Safety
 ///
 /// `l` must point to a valid, properly initialized `LuaState`.
-pub(crate) unsafe extern "C-unwind" fn str_packsize(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn str_packsize(l: *mut LuaState) -> i32 {
   // Safety: 契约保证 `l` 存活且格式串实参为可读串数据，getdetails/getnum 解析仅在该串界内推进
   unsafe {
     let mut h = Header::default();
@@ -47,3 +48,5 @@ pub(crate) unsafe extern "C-unwind" fn str_packsize(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn str_packsize, str_packsize_arm);

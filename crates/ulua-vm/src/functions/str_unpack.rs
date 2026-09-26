@@ -13,7 +13,9 @@ use crate::{
     lua_pushinteger::lua_pushinteger, lua_pushlstring::lua_pushlstring,
     lua_pushnumber::lua_pushnumber, posrelat::posrelat, unpackint::unpackint,
   },
-  macros::{lua_l_argcheck::luaL_argcheck, lua_l_checkstring::luaL_checkstring},
+  macros::{
+    lua_l_argcheck::luaL_argcheck, lua_l_checkstring::luaL_checkstring, lua_lib_fn::lua_lib_fn,
+  },
   records::{ftypes::Ftypes, header::Header, lua_state::LuaState},
 };
 
@@ -23,7 +25,7 @@ use crate::{
 /// `lua_l_checklstring` 契约在本次调用全程存活（循环内 push 不挪动 GC 串），各 `unpackint`
 /// 窗口在 `luaL_argcheck` 的剩余量校验后按 `pos`/`size` 切出；结果逐项压栈经
 /// `lua_l_checkstack` 保余量。cpp lstrlib.cpp:1562 `str_unpack`。
-pub(crate) unsafe extern "C-unwind" fn str_unpack(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn str_unpack(l: *mut LuaState) -> i32 {
   unsafe {
     let mut h = Header::default();
     let mut fmt = FmtCursor::from_ptr(luaL_checkstring!(l, 1));
@@ -132,3 +134,5 @@ pub(crate) unsafe extern "C-unwind" fn str_unpack(l: *mut LuaState) -> i32 {
     n + 1
   }
 }
+
+lua_lib_fn!(pub(crate) fn str_unpack, str_unpack_arm);
