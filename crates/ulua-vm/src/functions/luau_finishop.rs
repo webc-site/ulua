@@ -4,9 +4,7 @@ use ulua_common::{
   enums::luau_opcode::LuauOpcode,
   macros::{
     luau_assert::{LUAU_ASSERT, LUAU_UNREACHABLE},
-    luau_insn_a::luau_insn_a,
-    luau_insn_d::luau_insn_d,
-    luau_insn_op::luau_insn_op,
+    luau_insn_ops::{luau_insn_a, luau_insn_d, luau_insn_op},
   },
 };
 

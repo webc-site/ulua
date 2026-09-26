@@ -1,4 +1,4 @@
-use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_insn_op::luau_insn_op};
+use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_insn_ops::luau_insn_op};
 
 use crate::{
   functions::{c_slice, lua_g_getline::lua_g_getline},
