@@ -8,10 +8,10 @@ use alloc::string::String;
 
 use ulua_common::records::dense_hash_set::DenseHashSet;
 
-use crate::records::generic_type_visitor::GenericTypeVisitor;
+use crate::records::{generic_type_visitor::GenericTypeVisitor, visit_key::VisitKey};
 #[derive(Debug, Clone)]
 pub struct TypeOnceVisitor {
-  pub base: GenericTypeVisitor<DenseHashSet<*mut ()>>,
+  pub base: GenericTypeVisitor<DenseHashSet<VisitKey>>,
 }
 
 impl TypeOnceVisitor {

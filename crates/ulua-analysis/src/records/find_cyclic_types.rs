@@ -19,6 +19,7 @@ use crate::{
     set::Set,
     table_type::TableType,
     type_visitor::TypeVisitor,
+    visit_key::VisitKey,
   },
   type_aliases::{collections::HashSet, type_id::TypeId, type_pack_id::TypePackId},
 };
@@ -64,7 +65,7 @@ impl FindCyclicTypes {
 }
 
 impl GenericTypeVisitorTrait for FindCyclicTypes {
-  type Seen = HashSet<*mut ()>;
+  type Seen = HashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

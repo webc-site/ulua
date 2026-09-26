@@ -42,11 +42,12 @@ use crate::{
     type_function_reduction_result::TypeFunctionReductionResult,
     union_type::UnionType,
     unknown_type::UnknownType,
+    visit_key::VisitKey,
   },
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
 impl GenericTypeVisitorTrait for ContainsRefinableType {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base
@@ -80,7 +81,7 @@ impl GenericTypeVisitorTrait for ContainsRefinableType {
 }
 
 impl GenericTypeVisitorTrait for FindRefinementBlockers {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

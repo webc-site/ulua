@@ -14,6 +14,7 @@ use crate::{
     type_ids::TypeIds,
     type_once_visitor::TypeOnceVisitor,
     union_type::UnionType,
+    visit_key::VisitKey,
   },
   type_aliases::type_id::TypeId,
 };
@@ -79,7 +80,7 @@ impl Default for FindAllUnionMembers {
 }
 
 impl GenericTypeVisitorTrait for FindAllUnionMembers {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

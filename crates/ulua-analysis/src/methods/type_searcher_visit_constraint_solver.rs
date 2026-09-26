@@ -5,6 +5,7 @@ use crate::{
     function_type::FunctionType,
     generic_type_visitor::{GenericTypeVisitor, GenericTypeVisitorTrait},
     type_searcher::TypeSearcher,
+    visit_key::VisitKey,
   },
   type_aliases::{collections::HashSet, type_id::TypeId},
 };
@@ -44,7 +45,7 @@ impl TypeSearcher {
 }
 
 impl GenericTypeVisitorTrait for TypeSearcher {
-  type Seen = HashSet<*mut ()>;
+  type Seen = HashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

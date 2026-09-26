@@ -23,11 +23,12 @@ use crate::{
     type_function_instance_type_pack::TypeFunctionInstanceTypePack,
     type_function_reduction_guess_result::TypeFunctionReductionGuessResult,
     type_function_reduction_guesser::TypeFunctionReductionGuesser,
+    visit_key::VisitKey,
   },
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
 impl GenericTypeVisitorTrait for InstanceCollector2 {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

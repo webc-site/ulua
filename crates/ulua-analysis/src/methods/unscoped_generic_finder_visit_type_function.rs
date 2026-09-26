@@ -8,12 +8,13 @@ use crate::{
     generic_type_pack::GenericTypePack,
     generic_type_visitor::{GenericTypeVisitor, GenericTypeVisitorTrait},
     unscoped_generic_finder::UnscopedGenericFinder,
+    visit_key::VisitKey,
   },
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
 
 impl GenericTypeVisitorTrait for UnscopedGenericFinder {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

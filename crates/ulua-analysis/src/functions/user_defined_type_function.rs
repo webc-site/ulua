@@ -70,6 +70,7 @@ use crate::{
     type_function_runtime_builder_state::TypeFunctionRuntimeBuilderState,
     type_function_type::TypeFunctionType,
     user_cancel_error::UserCancelError,
+    visit_key::VisitKey,
   },
   type_aliases::{
     lua_state::LuaState, type_function_type_id::TypeFunctionTypeId, type_id::TypeId,
@@ -77,7 +78,7 @@ use crate::{
   },
 };
 impl GenericTypeVisitorTrait for FindUserTypeFunctionBlockers<'_> {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

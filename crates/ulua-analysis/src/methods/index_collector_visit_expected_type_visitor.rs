@@ -10,12 +10,13 @@ use crate::{
     string_singleton::StringSingleton,
     table_type::TableType,
     union_type::UnionType,
+    visit_key::VisitKey,
   },
   type_aliases::{singleton_variant::SingletonVariant, type_id::TypeId},
 };
 
 impl GenericTypeVisitorTrait for IndexCollector {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

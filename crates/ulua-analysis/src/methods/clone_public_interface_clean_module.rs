@@ -20,12 +20,13 @@ use crate::{
     pending_expansion_type::PendingExpansionType,
     table_type::TableType,
     type_level::TypeLevel,
+    visit_key::VisitKey,
   },
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
 
 impl GenericTypeVisitorTrait for GenericTypeFinder {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

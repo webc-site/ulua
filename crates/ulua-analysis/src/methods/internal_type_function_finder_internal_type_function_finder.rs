@@ -15,6 +15,7 @@ use crate::{
     type_function_instance_type::TypeFunctionInstanceType,
     type_function_instance_type_pack::TypeFunctionInstanceTypePack,
     type_once_visitor::TypeOnceVisitor,
+    visit_key::VisitKey,
   },
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
@@ -39,7 +40,7 @@ impl InternalTypeFunctionFinder {
 }
 
 impl GenericTypeVisitorTrait for TypeFunctionFinder {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base
@@ -67,7 +68,7 @@ impl GenericTypeVisitorTrait for TypeFunctionFinder {
 }
 
 impl GenericTypeVisitorTrait for InternalTypeFunctionFinder {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

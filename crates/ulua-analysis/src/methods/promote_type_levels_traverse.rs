@@ -24,6 +24,7 @@ use crate::{
     table_type::TableType,
     r#type::Type,
     type_pack_var::TypePackVar,
+    visit_key::VisitKey,
   },
   type_aliases::{
     bound_type::BoundType, bound_type_pack::BoundTypePack, type_id::TypeId,
@@ -31,7 +32,7 @@ use crate::{
   },
 };
 impl GenericTypeVisitorTrait for PromoteTypeLevels {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base
