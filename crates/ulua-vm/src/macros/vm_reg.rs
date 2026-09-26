@@ -1,5 +1,8 @@
 //! 解释器热路径的寄存器窗口寻址封装（cpp `RA()` 族宏的 Rust 对应）。
 //!
+//! See also: ulua-code-gen `functions/vm_reg_op.rs`（形似义异：IR 操作数编号提取，
+//! 与本宏无关，勿合并）。
+//!
 //! # Safety（由展开点 unsafe 上下文承担）
 //! `l`/`base` 满足 `luau_execute` 入口契约：base 指向存活栈且 base..(*l).top 为
 //! 当前帧寄存器窗口；`i` 为字节码 A/B 字段（u8，已由 LUAU_ASSERT 校验
