@@ -3,12 +3,13 @@ use crate::{
     lua_l_checknumber::lua_l_checknumber, lua_l_optnumber::lua_l_optnumber,
     lua_pushnumber::lua_pushnumber,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn os_difftime(l: *mut LuaState) -> i32 {
+pub unsafe fn os_difftime(l: *mut LuaState) -> i32 {
   unsafe {
     let t1 = lua_l_checknumber(l, 1);
     let t2 = lua_l_optnumber(l, 2, 0.0);
@@ -25,3 +26,5 @@ pub unsafe extern "C-unwind" fn os_difftime(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn os_difftime, os_difftime_arm);

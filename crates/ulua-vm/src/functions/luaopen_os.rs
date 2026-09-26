@@ -1,7 +1,7 @@
 use crate::{
   functions::{
-    lua_l_register::lua_l_register, os_clock::os_clock, os_date::os_date, os_difftime::os_difftime,
-    os_time::os_time,
+    lua_l_register::lua_l_register, os_clock::os_clock_arm, os_date::os_date_arm,
+    os_difftime::os_difftime_arm, os_time::os_time_arm,
   },
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
@@ -12,10 +12,10 @@ pub(crate) unsafe extern "C-unwind" fn luaopen_os(l: *mut LuaState) -> i32 {
   unsafe {
     // Faithful port of syslib[] in loslib.cpp.
     let syslib: [LuaLReg; 4] = [
-      LuaLReg::new(b"clock", os_clock),
-      LuaLReg::new(b"date", os_date),
-      LuaLReg::new(b"difftime", os_difftime),
-      LuaLReg::new(b"time", os_time),
+      LuaLReg::new(b"clock", os_clock_arm),
+      LuaLReg::new(b"date", os_date_arm),
+      LuaLReg::new(b"difftime", os_difftime_arm),
+      LuaLReg::new(b"time", os_time_arm),
     ];
 
     lua_l_register(l, c"os".as_ptr(), &syslib);
