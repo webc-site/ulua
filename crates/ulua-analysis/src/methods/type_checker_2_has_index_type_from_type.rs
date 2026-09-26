@@ -5,7 +5,6 @@
 /// The shared `records::property_type::PropertyType` slot was repurposed as an
 /// alias of `Property` (read/write types), so the result type of
 /// `hasIndexTypeFromType` is defined locally to match the reference exactly.
-use alloc::string::String;
 use alloc::vec::Vec;
 
 use ulua_ast::records::location::Location;
@@ -55,7 +54,7 @@ impl TypeChecker2 {
   pub fn has_index_type_from_type(
     &mut self,
     ty: TypeId,
-    prop: &String,
+    prop: &str,
     context: ValueContext,
     location: &Location,
     seen: &mut DenseHashSet<TypeId>,
@@ -102,7 +101,7 @@ impl TypeChecker2 {
         Handle::from_ptr(self.builtin_types.as_ptr()),
         errors,
         ty,
-        prop.as_str(),
+        prop,
         context,
         *location,
         /* useNewSolver */ true,
@@ -121,7 +120,7 @@ impl TypeChecker2 {
           (*self.module)
             .internal_types
             .add_type(SingletonType::new(SingletonVariant::V1(
-              StringSingleton::new(prop.clone()),
+              StringSingleton::new(prop.to_owned()),
             )))
         };
         // SAFETY: 同上。

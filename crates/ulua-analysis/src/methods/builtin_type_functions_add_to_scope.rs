@@ -26,7 +26,7 @@ impl BuiltinTypeFunctions {
       let t = arena
         .get_mut()
         .add_type(GenericType::generic_type_name_polarity(
-          &"T".to_string(),
+          "T",
           Polarity::Negative,
         ));
       let generic_t = GenericTypeDefinition {
@@ -54,13 +54,13 @@ impl BuiltinTypeFunctions {
       let t = arena
         .get_mut()
         .add_type(GenericType::generic_type_name_polarity(
-          &"T".to_string(),
+          "T",
           Polarity::Negative,
         ));
       let u = arena
         .get_mut()
         .add_type(GenericType::generic_type_name_polarity(
-          &"U".to_string(),
+          "U",
           Polarity::Negative,
         ));
       let generic_t = GenericTypeDefinition {
@@ -92,13 +92,13 @@ impl BuiltinTypeFunctions {
       let t = arena
         .get_mut()
         .add_type(GenericType::generic_type_name_polarity(
-          &"T".to_string(),
+          "T",
           Polarity::Negative,
         ));
       let u = arena
         .get_mut()
         .add_type(GenericType::generic_type_name_polarity(
-          &"U".to_string(),
+          "U",
           Polarity::Negative,
         ));
       let generic_t = GenericTypeDefinition {

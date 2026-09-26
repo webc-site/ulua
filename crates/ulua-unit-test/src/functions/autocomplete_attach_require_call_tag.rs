@@ -13,7 +13,7 @@ pub fn autocomplete_attach_require_call_tag(frontend: &mut Frontend) {
 
   let require = globals
     .global_scope()
-    .linear_search_for_binding(&String::from("require"), true)
+    .linear_search_for_binding("require", true)
     .expect("expected require binding");
 
   unfreeze(globals.global_types_mut());

@@ -1,5 +1,3 @@
-use alloc::string::String;
-
 use ulua_analysis::type_aliases::type_id::TypeId;
 
 use crate::records::fixture::Fixture;
@@ -20,8 +18,7 @@ impl Fixture {
     }
 
     let scope = module.get_module_scope();
-    // 依赖 Scope::lookup_type 接收 &Name(=String)
-    let type_fun = scope.lookup_type(&String::from(name))?;
+    let type_fun = scope.lookup_type(name)?;
     Some(type_fun.r#type())
   }
 }

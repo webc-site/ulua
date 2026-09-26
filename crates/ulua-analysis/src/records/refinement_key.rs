@@ -29,7 +29,7 @@ impl RefinementKey {
     self.def
   }
 
-  pub fn prop_name(&self) -> Option<&String> {
-    self.prop_name.as_ref()
+  pub fn prop_name(&self) -> Option<&str> {
+    self.prop_name.as_deref()
   }
 }

@@ -1,6 +1,5 @@
 //! Source: `Analysis/src/ConstraintGenerator.cpp:3223-3279` (hand-ported)
 //! C++ `Inference ConstraintGenerator::checkIndexName(scope, key, indexee, index, indexLocation)`.
-use alloc::string::String;
 use core::ptr::null;
 
 use ulua_ast::records::{ast_expr::AstExpr, location::Location};
@@ -25,7 +24,7 @@ impl ConstraintGenerator {
     scope: &ScopePtr,
     key: *const RefinementKey,
     indexee: *mut AstExpr,
-    index: &String,
+    index: &str,
     index_location: Location,
   ) -> Inference {
     unsafe {
@@ -55,7 +54,7 @@ impl ConstraintGenerator {
         result = read_ty;
       }
 
-      if let Some(cached_has_prop_result) = self.prop_index_pairs_seen.find(&(obj, index.clone())) {
+      if let Some(cached_has_prop_result) = self.prop_index_pairs_seen.find(&(obj, index.to_owned())) {
         result = *cached_has_prop_result;
       }
 
@@ -68,7 +67,7 @@ impl ConstraintGenerator {
           ConstraintV::HasProp(HasPropConstraint {
             result_type: result,
             subject_type: obj,
-            prop: index.clone(),
+            prop: index.to_owned(),
             context: ValueContext::RValue,
             in_conditional: in_conditional(self.type_context),
             suppress_simplification: false,
@@ -81,7 +80,7 @@ impl ConstraintGenerator {
         blocked.set_owner(c as *const _);
         *self
           .prop_index_pairs_seen
-          .get_or_insert((obj, index.clone())) = result;
+          .get_or_insert((obj, index.to_owned())) = result;
       }
 
       if !key.is_null() {
