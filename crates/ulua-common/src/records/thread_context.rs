@@ -25,6 +25,12 @@ use crate::{
 /// cpp `#if defined(LUAU_ENABLE_TIME_TRACE)`：整套打点机制的总开关。
 /// 关闭时 `LUAU_TIMETRACE_*` 宏展开为空（cpp 的 `#else` 分支），本模块的运行时
 /// 逻辑也一律不触发。`cfg!` 是编译期常量，相关分支会被直接优化掉。
+///
+/// 启用方式速记（详单见 [`crate::macros::luau_timetrace_scope`] 模块头）：
+/// 编译面 `--features ulua-common/luau_enable_time_trace`（默认全 workspace 关）；
+/// 运行面 FFlag `fflag::DebugLuauTimeTracing` 经 CLI `--timetrace` 或
+/// `--fflags=DebugLuauTimeTracing` 置位——rt 的 `set_luau_bool_flags(true)` 整体
+/// 点亮只认 `Luau*` 前缀，不会误点该旗。
 pub(crate) const ENABLED: bool = cfg!(feature = "luau_enable_time_trace");
 
 /// cpp `struct ThreadContext`（`TimeTrace.h:66-136`）：整套打点机制的线程事件
