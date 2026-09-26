@@ -6,14 +6,13 @@ use crate::{
   records::global_state::global_State,
 };
 
-/// # Safety
+/// GC 增量期是否须维持「黑不指白」不变式（cpp `lgc.h` `keepinvariant`）。
 ///
-/// `g` must point to a valid `global_State`.
+/// B 档契约前移（参照 `abs_index`/`isyielded` 先例）：原 `*const global_State`
+/// 存活契约改由 `&` 接收者的引用有效性规则在调用点承载；被调体只读一个普通
+/// `gcstate` 字段（非 union 成员），全 safe。
 #[inline(always)]
-pub(crate) unsafe fn keepinvariant(g: *const global_State) -> bool {
-  // Safety: 契约保证 `g` 指向存活 `global_State`，此处仅读 `gcstate` 字段
-  unsafe {
-    let gcstate = (*g).gcstate as i32;
-    matches!(gcstate, GCSPROPAGATE | GCSPROPAGATEAGAIN | GCSATOMIC)
-  }
+pub(crate) const fn keepinvariant(g: &global_State) -> bool {
+  let gcstate = g.gcstate as i32;
+  matches!(gcstate, GCSPROPAGATE | GCSPROPAGATEAGAIN | GCSATOMIC)
 }

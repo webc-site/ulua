@@ -20,7 +20,7 @@ pub unsafe fn lua_c_upvalclosed(l: *mut LuaState, uv: *mut UpVal) {
     LUAU_ASSERT!(!upisopen!(uv)); // upvalue was closed but needs GC state fixup
 
     if isgray!(o) {
-      if keepinvariant(g) {
+      if keepinvariant(&*g) {
         gray2black!(o); // closed upvalues need barrier
         lua_c_barrier!(l, uv, (*uv).v);
       } else {

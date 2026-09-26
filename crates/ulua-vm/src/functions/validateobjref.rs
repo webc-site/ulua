@@ -11,7 +11,7 @@ pub(crate) unsafe fn validateobjref(g: *mut global_State, f: *mut GCObject, t: *
   unsafe {
     LUAU_ASSERT!(!isdead!(g, t));
 
-    if keepinvariant(g) {
+    if keepinvariant(&*g) {
       // 增量式基本不变量：黑色对象不可指向白色对象
       LUAU_ASSERT!(!(isblack!(f) && iswhite!(t)));
     }

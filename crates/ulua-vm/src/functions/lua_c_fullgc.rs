@@ -21,7 +21,7 @@ pub unsafe fn lua_c_fullgc(l: *mut LuaState) {
   unsafe {
     let g = (*l).global;
 
-    if keepinvariant(g) {
+    if keepinvariant(&*g) {
       (*g).sweepgcopage = (*g).allgcopages;
       (*g).gray = null_mut();
       (*g).grayagain = null_mut();

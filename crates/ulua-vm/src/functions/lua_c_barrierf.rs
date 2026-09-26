@@ -22,7 +22,7 @@ pub unsafe fn lua_c_barrierf(l: *mut LuaState, o: *mut GCObject, v: *mut GCObjec
     LUAU_ASSERT!(isblack!(o) && iswhite!(v) && !isdead!(g, v) && !isdead!(g, o));
     LUAU_ASSERT!((*g).gcstate as i32 != GCSPAUSE);
     // must keep invariant?
-    if keepinvariant(g) {
+    if keepinvariant(&*g) {
       reallymarkobject(g, v); // restore invariant
     } else {
       // don't mind
