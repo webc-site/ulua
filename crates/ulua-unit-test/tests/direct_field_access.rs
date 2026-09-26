@@ -9,20 +9,21 @@
 //!   并以 `Mutex` 让用到它的用例串行（同一进程内 nextest 并行跑线程，
 //!   与 C++ 单测试进程串行语义对齐）。
 //! - C++ 的 `std::unique_ptr<LuaState, lua_close>` 镜像为 `StateGuard`。
-//! - `Luau::compile` + `luau_load` 组合镜像为 `luau_compile` + `luau_load`。
+//! - `Luau::compile` + `luau_load` 组合镜像为 safe `compile` + `luau_load`。
 //! - 各 C 回调（createVec2 / handler 等）按 conformance 同款拆为
 //!   `extern "C-unwind"` 自由函数。
 
 use core::{
-  ffi::{c_char, c_int, c_void},
+  ffi::{c_int, c_void},
   mem::size_of,
-  ptr::{NonNull, null_mut},
-  slice::from_raw_parts,
+  ptr::NonNull,
   sync::atomic::{AtomicI32, Ordering},
 };
 use std::sync::{Mutex, MutexGuard};
 
-use ulua_compiler::functions::luau_compile::luau_compile;
+use ulua_ast::records::parse_options::ParseOptions;
+use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
+use ulua_compiler::{functions::compile::compile, records::compile_options::CompileOptions};
 use ulua_vm::{
   enums::lua_status::LuaStatus,
   functions::{
@@ -103,10 +104,6 @@ impl Drop for StateGuard {
   }
 }
 
-unsafe extern "C" {
-  fn free(ptr: *mut c_void);
-}
-
 /// cpp `lua_pushcfunction + lua_setglobal` 成对样板的 (c) 类 vm C-API 最小收口。
 ///
 /// Safety: `l` 须为存活 LuaState；`name` 为调用帧内有效的 NUL 结尾 C 串名；
@@ -127,29 +124,16 @@ fn push_global(
 ///
 /// `l` 按调用方契约须为 `luaL_newstate` 产出的存活状态。
 fn run_code(l: *mut LuaState, source: &str) -> c_int {
-  let mut bytecode_size = 0usize;
-  // Safety: luau_compile 为 C API——source.as_ptr()/len 恒为合法 UTF-8 缓冲
-  //（空串时 as_ptr 仍对齐有效、按长度 0 读取），options 传 null 表默认选项
-  //（callee 契约容忍），outsize 指向本帧可写局部。
-  let bytecode = unsafe {
-    luau_compile(
-      source.as_ptr() as *const c_char,
-      source.len(),
-      null_mut(),
-      &mut bytecode_size,
-    )
-  };
+  let bytecode = compile(
+    source,
+    &CompileOptions::default(),
+    &ParseOptions::default(),
+    NoopEncoder,
+  );
 
-  // Safety: luau_compile 交付的缓冲区 bytecode_size 个字节可读；切片最后一次使用
-  // 在 luau_load 内（载入即消化），free 排在其后，无 use-after-free。
-  let load_status = unsafe {
-    let bytes = from_raw_parts(bytecode.cast::<u8>(), bytecode_size);
-    luau_load(l, "test", bytes, 0)
-  };
-
-  // Safety: bytecode 是 luau_compile 交出的分配器块，两分支均在使用完毕后
-  // 一次性 free（与原逐分支 free 时序等价）。
-  unsafe { free(bytecode.cast::<c_void>()) };
+  // Safety: `l` 按本函数契约为存活状态；chunkname 是字面量、`bytecode` 为本帧
+  // 拥有的 Vec<u8>，载入即消化，无悬垂。
+  let load_status = unsafe { luau_load(l, "test", &bytecode, 0) };
 
   if load_status != 0 {
     return -1; // load failed

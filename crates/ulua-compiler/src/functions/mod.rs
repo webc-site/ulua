@@ -34,7 +34,6 @@ pub mod is_constant;
 pub mod is_generic;
 pub mod is_matching_global;
 pub mod is_matching_global_member;
-pub mod luau_compile;
 pub mod model_cost_cost_model;
 pub mod parallel_add_sat;
 pub mod parallel_mul_sat;

@@ -1,10 +1,9 @@
-use core::{ffi::c_int, slice::from_raw_parts};
+use core::ffi::c_int;
 
 use ulua_ast::records::parse_options::ParseOptions;
 use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
-use ulua_compiler::{
-  functions::compile::compile, records::compile_options::CompileOptions,
-};
+use ulua_common::functions::c_slice::c_slice;
+use ulua_compiler::{functions::compile::compile, records::compile_options::CompileOptions};
 use ulua_vm::{
   functions::{
     lua_insert::lua_insert, lua_l_checklstring::lua_l_checklstring, lua_pushnil::lua_pushnil,
@@ -31,8 +30,11 @@ pub unsafe extern "C-unwind" fn lua_loadstring(l: *mut LuaState) -> c_int {
   // Safety: `l` 存活；把加载环境切回非沙箱（loadstring 需读全局）。
   unsafe { lua_setsafeenv(l, LUA_ENVIRONINDEX, 0) };
 
-  // Safety: `source`/`len` 是刚校验的合法字节区间。
-  let source_bytes = unsafe { from_raw_parts(source.cast::<u8>(), len) };
+  // 对应 cpp `std::string(source, len)`：源码按原始字节交给按字节工作的编译器，
+  // 不要求 UTF-8。cpp 的 malloc/free 所有权契约在 Rust 端由 owned Vec 消解。
+  // Safety: `source`/`len` 是 lua_l_checklstring 刚校验的合法字节区间，且在本行
+  // 复制进 `Vec<u8>` 前存活。
+  let source_bytes = unsafe { c_slice(source.cast::<u8>(), len) };
   let bytecode = compile(
     source_bytes,
     &CompileOptions::default(),
@@ -40,9 +42,11 @@ pub unsafe extern "C-unwind" fn lua_loadstring(l: *mut LuaState) -> c_int {
     NoopEncoder,
   );
 
+  // C 边界转换：`chunkname` 是栈上 VM 串（cpp `luau_load` 亦按 strlen 取用，
+  // 内部 NUL 截断语义一致）。
   // Safety: 上一段保证 `chunkname` 为 NUL 结尾串（lossy 只用于传给 luau_load 的名称）。
   let chunkname = unsafe { cstr_text(chunkname) };
-  // Safety: `l` 存活；`bytecode` 为安全生成的字节码，加载结果非零不 panic（cpp 语义）。
+  // Safety: `l` 存活；`bytecode` 为本帧拥有的合法切片，加载结果非零不 panic（cpp 语义）。
   let result = unsafe { luau_load(l, &chunkname, &bytecode, 0) };
 
   if result == 0 {

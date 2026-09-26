@@ -16,7 +16,7 @@ use core::{
 };
 
 use ulua_ast::records::parse_options::ParseOptions;
-use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
+use ulua_bytecode::records::{bytecode_builder::BytecodeBuilder, bytecode_encoder::NoopEncoder};
 use ulua_code_gen::{
   enums::{
     host_metamethod::HostMetamethod, include_cfg_info::IncludeCfgInfo,
@@ -34,11 +34,11 @@ use ulua_code_gen::{
     ir_builder::IrBuilder, ir_op::IrOp,
   },
 };
-use ulua_common::functions::c_str::{cstr_bytes, with_c_str};
+use ulua_common::functions::c_str::cstr_bytes;
 use ulua_compiler::{
   functions::{
+    compile::compile,
     compile_or_throw_compiler::compile_or_throw_bytecode_builder_string_compile_options_parse_options,
-    luau_compile::luau_compile,
     set_compile_constant::{
       set_compile_constant_boolean, set_compile_constant_nil, set_compile_constant_number,
       set_compile_constant_string, set_compile_constant_vector,
@@ -1233,7 +1233,7 @@ impl LoweringFixture {
     }
   }
 
-  /// 经 C ABI `luau_compile` 编译源码后取 IR 文本。
+  /// 经 safe 入口 `compile`（原 C ABI `luau_compile` 镜像的等价 Rust 形态）编译源码后取 IR 文本。
   pub fn get_codegen_assembly_using_c_api(
     &mut self,
     source: &str,
@@ -1244,7 +1244,7 @@ impl LoweringFixture {
     self.compilation_options_c.debug_level = debug_level;
     self.compilation_options_c.type_info_level = 1;
 
-    let mut compile_options = CompileOptions {
+    let compile_options = CompileOptions {
       optimization_level: 2,
       debug_level,
       type_info_level: 1,
@@ -1260,31 +1260,14 @@ impl LoweringFixture {
       disabled_builtins: null(),
     };
 
-    let mut bytecode_size = 0usize;
-    let bytecode = with_c_str(source.as_bytes(), |source_ptr| unsafe {
-      // Safety: luau_compile C ABI 契约：with_c_str 交出的源码指针补有 NUL 且仅闭包
-      // 调用期内存活（luau_compile 在本次调用内按 source.len() 消费，返回独立的
-      // malloc 字节码缓冲，指针不外泄）；&mut 本地选项/输出地址均合法可写。
-      // §10 评估（保留）：luau_compile 是 cpp luacode.h 的 C ABI 镜像入口，
-      // 形参即 *const c_char（无 &[u8]/&str Rust 原生形参可直传），callee 在本次
-      // 调用内完成复制；本 fixture 的职责恰是走该 C ABI 表面与 cpp oracle 对照。
-      luau_compile(
-        source_ptr,
-        source.len(),
-        &mut compile_options,
-        &mut bytecode_size,
-      )
-    });
-    assert!(!bytecode.is_null());
+    let bytecode = compile(
+      source.as_bytes(),
+      &compile_options,
+      &ParseOptions::default(),
+      NoopEncoder,
+    );
 
-    // Safety: bytecode 为 luau_compile 交付的 malloc 缓冲（上行断言非空、size
-    // 配对界内），物化切片的借用止于下方 load_state 消费点；C 边界：裸缓冲 +
-    // 长度只在此处物化为切片。
-    let bytes = unsafe { from_raw_parts(bytecode.cast::<u8>(), bytecode_size) };
-    let (state, load_result) = self.load_state(bytes);
-    // Safety: C free 契约：bytecode 为 malloc 块且未释放过——load_state 已消费
-    // 完毕，此处为唯一释放点；cast 保地址（malloc 满足任何 align）。
-    unsafe { libc_free(bytecode.cast()) };
+    let (state, load_result) = self.load_state(&bytecode);
     assert_eq!(load_result, 0, "Failed to load bytecode");
 
     let codegen_options = configure_codegen_options(USERDATA_RUN_TYPES.as_ptr());
@@ -1310,14 +1293,4 @@ impl LoweringFixture {
 
     assembly[..bytecode_start].to_string()
   }
-}
-
-unsafe extern "C" {
-  fn free(ptr: *mut c_void);
-}
-
-#[inline]
-unsafe fn libc_free(ptr: *mut c_void) {
-  // Safety: C ABI free 契约：调用方（本文件 luau_compile 路径）传 malloc 交付且未释放的缓冲（行 1266），或经行 1258 判空保证；free(NULL) 无操作语义兜住边界，单次释放。
-  unsafe { free(ptr) }
 }

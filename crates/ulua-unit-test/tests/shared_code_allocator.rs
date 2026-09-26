@@ -2,7 +2,7 @@
 //! 每个用例的输入→期望输出与 cpp oracle 逐条一致。
 //!
 //! 放置于 `ulua-unit-test/tests/` 而非 `ulua-code-gen/tests/` 的理由：
-//! `SharedAllocation` 用例依赖 `ulua-compiler`（luau_compile）与 `ulua-vm`
+//! `SharedAllocation` 用例依赖 `ulua-compiler`（compile）与 `ulua-vm`
 //! （luaL_newstate / luau_load），`ulua-unit-test` 已统一依赖上述 crate，
 //! 无需为 `ulua-code-gen` 新增 dev-dependencies；且既有移植测试
 //! （`code_allocator.rs` 等）均集中于此。
@@ -21,8 +21,8 @@
 //! unsafe 收口说明：`SharedCodeAllocator` 的 `(指针, 长度)` 入参与
 //! `NativeModuleRef` 裸句柄由各安全封装助手（`get_or_insert`、`make_proto`、
 //! `module_of` 等）统一物化；合理保留的 `unsafe` 仅在真实 C ABI 边界
-//! （`luau_compile` / `luau_load` / `lua_close` / `create` / `compile_internal`、
-//! libc `free`）与跨 reset 的模块裸句柄投影处。
+//! （`luau_load` / `lua_close` / `create` / `compile_internal`）
+//! 与跨 reset 的模块裸句柄投影处。
 
 use core::ptr::null;
 
@@ -686,12 +686,10 @@ fn anonymous_module_lifetime() {
 
 mod shared_allocation {
   //! cpp TEST_CASE("SharedAllocation")（源 410-459 行）。
-  use core::{
-    ffi::{c_char, c_void},
-    ptr::{NonNull, null_mut},
-    slice::from_raw_parts,
-  };
+  use core::ptr::NonNull;
 
+  use ulua_ast::records::parse_options::ParseOptions;
+  use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
   use ulua_code_gen::{
     enums::{code_gen_compilation_result::CodeGenCompilationResult, code_gen_flags::CodeGenFlags},
     functions::{
@@ -706,17 +704,16 @@ mod shared_allocation {
     },
     type_aliases::unique_shared_code_gen_context::UniqueSharedCodeGenContext,
   };
-  use ulua_compiler::functions::luau_compile::luau_compile;
+  // 本模块已有镜像 cpp codegen `compile` 的本地 `fn compile`，编译器入口改名引入。
+  use ulua_compiler::{
+    functions::compile::compile as compile_bytecode, records::compile_options::CompileOptions,
+  };
   use ulua_vm::{
     functions::{lua_close::lua_close, lua_l_newstate::lua_l_newstate, luau_load::luau_load},
     records::lua_state::LuaState,
   };
 
   use super::{ModuleId, module_id};
-
-  unsafe extern "C" {
-    fn free(ptr: *mut c_void);
-  }
 
   /// 对应 cpp `std::unique_ptr<LuaState, void (*)(LuaState*)>` 的 RAII 包装。
   struct StateRef(NonNull<LuaState>);
@@ -797,27 +794,17 @@ mod shared_allocation {
         function sub(x, y) return x - y end
     "#;
 
-    let mut bytecode_size = 0_usize;
-    // Safety: luau_compile C ABI：源指针/长度来自本帧存活 str，其余为合法的
-    // (null, null) 可选参数；返回 malloc 缓冲，判空后配对使用与释放。
-    let bytecode = unsafe {
-      luau_compile(
-        source.as_ptr() as *const c_char,
-        source.len(),
-        null_mut(),
-        &mut bytecode_size,
-      )
-    };
-    assert!(!bytecode.is_null());
+    let bytecode = compile_bytecode(
+      source,
+      &CompileOptions::default(),
+      &ParseOptions::default(),
+      NoopEncoder,
+    );
 
-    // C 边界：luau_compile 的裸缓冲 + 长度出参在此物化为切片，
-    // 两次 load 共用后 free（cpp `std::string` + `bytecode.reset()` 同形态）。
-    // Safety: 上方已断言 bytecode 非空且 bytecode_size 界内，free 在最后一次使用之后。
-    let bytecode_slice = unsafe { from_raw_parts(bytecode.cast::<u8>(), bytecode_size) };
-    let load_result1 = unsafe { luau_load(l1, "=Functions", bytecode_slice, 0) };
-    let load_result2 = unsafe { luau_load(l2, "=Functions", bytecode_slice, 0) };
-    // Safety: bytecode 为 luau_compile 交付的 malloc 缓冲，本行是唯一释放点。
-    unsafe { free(bytecode as *mut c_void) };
+    // cpp `std::string bytecode` 同形态：本帧拥有的 Vec<u8>，两次 load 共用，
+    // 出作用域自动回收，无裸缓冲与手动释放。
+    let load_result1 = unsafe { luau_load(l1, "=Functions", &bytecode, 0) };
+    let load_result2 = unsafe { luau_load(l2, "=Functions", &bytecode, 0) };
 
     assert_eq!(0, load_result1);
     assert_eq!(0, load_result2);

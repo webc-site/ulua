@@ -156,8 +156,8 @@ return f, object
     ..Default::default()
   };
 
-  // Safety: `cl` 是上段 lua_newthread 派生的存活子线程；compile_and_load 门面在其自有
-  // C 边界物化 luau_compile 裸缓冲并 luau_load 到 cl，失败即中止（LuaStatus::Ok==0）。
+  // compile_and_load 门面以 owned Vec<u8> 编译产物 luau_load 到 cl，
+  // 失败即中止（LuaStatus::Ok==0）。
   unsafe {
     compile_and_load(cl, source, "=GCDump", Some(&mut copts));
   }

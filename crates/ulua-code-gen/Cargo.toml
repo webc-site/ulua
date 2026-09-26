@@ -19,6 +19,8 @@ ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
 
 # 集成测试需要真实源码→字节码管线（a64_frame_spill_layout 的端到端 JIT 用例）
 [dev-dependencies]
+ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.2" }
 ulua-compiler = { path = "../ulua-compiler", version = "0.1.2" }
 
 
@@ -28,10 +30,10 @@ ulua-compiler = { path = "../ulua-compiler", version = "0.1.2" }
 # crate was referenced but never declared (E0433: cannot find crate `windows`).
 [target.'cfg(windows)'.dependencies]
 windows-sys = { version = "0.61", features = [
-  "Win32_Foundation",
-  "Win32_System_Memory",
-  "Win32_System_Threading",
-  "Win32_System_Diagnostics_Debug",
+    "Win32_Foundation",
+    "Win32_System_Memory",
+    "Win32_System_Threading",
+    "Win32_System_Diagnostics_Debug",
 ] }
 
 

@@ -29,9 +29,7 @@ use ulua_code_gen::{
   records::{compilation_options::CompilationOptions, compilation_result::CompilationResult},
 };
 use ulua_common::functions::c_str::cstr_bytes;
-use ulua_compiler::{
-  functions::compile::compile, records::compile_options::CompileOptions,
-};
+use ulua_compiler::{functions::compile::compile, records::compile_options::CompileOptions};
 use ulua_vm::{
   enums::lua_type::LuaType,
   functions::{
@@ -84,9 +82,7 @@ use ulua_vm::{
   },
 };
 
-use crate::common::functions::{
-  cpcall_test::cpcall_test, cstr::cstr, cstr_text::diagnostic_text,
-};
+use crate::common::functions::{cpcall_test::cpcall_test, cstr::cstr, cstr_text::diagnostic_text};
 
 /// C ABI 状态句柄别名；仅在本门面内部被解引用（每函数恰一次 `unsafe`）。
 pub type L = *mut LuaState;
@@ -246,10 +242,12 @@ pub fn resumeerror(l: L) -> c_int {
 // ---------------------------------------------------------------------------
 
 /// `compile` → `luau_load` 的一次性整链收口：编译 `source`（按
-/// 原始字节透传，允许非 UTF-8）为字节码并加载进 `l`，返回 `luau_load` 的状态码。
-pub fn load_source(l: L, chunkname: &str, source: &[u8], options: &CompileOptions) -> c_int {
+/// 原始字节透传，允许非 UTF-8）为字节码并加载进 `l`，返回 `luau_load` 的状态码；
+/// 编译产物为本帧 owned `Vec<u8>`（cpp 的 malloc/free 契约在 Rust 端消解），
+/// 不留悬垂缓冲。
+pub fn load_source(l: L, chunkname: &str, source: &[u8], options: &mut CompileOptions) -> c_int {
   let bytecode = compile(source, options, &ParseOptions::default(), NoopEncoder);
-  // Safety: `l` 存活；`chunkname`/`&bytecode` 为合法借用。
+  // Safety: `l` 存活；`chunkname` 为合法借用，`bytecode` 为本帧拥有的合法切片。
   unsafe { luau_load(l, chunkname, &bytecode, 0) }
 }
 

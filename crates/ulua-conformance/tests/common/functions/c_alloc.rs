@@ -1,5 +1,5 @@
-//! libc `free`/`realloc` 薄封装：conformance 各测试 allocator 与
-//! `luau_compile` 字节码缓冲释放共用一份 extern 声明（原先散落 5 处）。
+//! libc `free`/`realloc` 薄封装：conformance 各测试 allocator 共用一份
+//! extern 声明（原先散落多处）。
 
 use core::ffi::c_void;
 
