@@ -5888,10 +5888,9 @@ fn fragment_autocomplete_respects_frontend_options() {
   //
   // C++ `DOES_NOT_PASS_NEW_SOLVER_GUARD()` =>
   // `ScopedFastFlag{FFlag::DebugLuauForceOldSolver, !FFlag::DebugLuauForceAllNewSolverTests}`.
-  let _guard = ScopedFastFlag::new(
-    &fflag::DebugLuauForceOldSolver,
-    !fflag::DebugLuauForceAllNewSolverTests.get(),
-  );
+  // 上游旗标 `DebugLuauForceAllNewSolverTests` 已按 r7 deadcode 仲裁摘除（全仓无任何路径置
+  // true，恒 false），故 `!false` 内联为常量 `true`：本用例始终钉在 old solver 下跑。
+  let _guard = ScopedFastFlag::new(&fflag::DebugLuauForceOldSolver, true);
 
   let source = String::from(
     r#"
