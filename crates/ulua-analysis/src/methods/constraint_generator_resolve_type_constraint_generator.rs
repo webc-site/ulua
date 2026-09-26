@@ -1,18 +1,7 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
 use core::{mem::ManuallyDrop, ptr::NonNull, str::from_utf8};
 
-use ulua_ast::{
-  records::{
-    ast_node::AstNode, ast_type::AstType, ast_type_error::AstTypeError,
-    ast_type_function::AstTypeFunction, ast_type_group::AstTypeGroup,
-    ast_type_intersection::AstTypeIntersection, ast_type_optional::AstTypeOptional,
-    ast_type_reference::AstTypeReference, ast_type_singleton_bool::AstTypeSingletonBool,
-    ast_type_singleton_string::AstTypeSingletonString, ast_type_table::AstTypeTable,
-    ast_type_typeof::AstTypeTypeof, ast_type_union::AstTypeUnion,
-  },
-  rtti::{AstNodeClass, ast_node_as_unchecked},
-};
-use ulua_common::macros::luau_assert::LUAU_ASSERT;
+use ulua_ast::{enums::ast_type_ref::AstTypeRef, records::ast_type::AstType};
 
 use crate::{
   enums::polarity::Polarity,
@@ -57,19 +46,17 @@ impl ConstraintGenerator {
     let sp = ManuallyDrop::new(unsafe { Arc::from_raw(scope as *const Scope) });
 
     // SAFETY: 调用方契约保证 ty 非空且指向 arena 存活节点；本函数对其只读，
-    // 一次裸解引用换得 &AstNode，后续下转与字段读取全部走安全引用。
-    let node: &AstNode = unsafe { &*(ty as *const AstNode) };
+    // 一次裸解引用换得 &AstType，后续下转与字段读取全部走安全模式匹配。
+    let node: &AstType = unsafe { &*ty };
     // SAFETY: builtin_types 指向存活内建单例，此处只读取常量 TypeId。
     let bt = self.builtin_types.get();
-    let result: TypeId = match node.class_index {
-      AstTypeReference::CLASS_INDEX => {
+    let result: TypeId = match node.as_type_ref() {
+      AstTypeRef::Reference(ref_) => {
         // callee 仍按 cpp 契约收 *mut 参数；引用派生指针指向同一 place。
-        let ref_: &AstTypeReference = unsafe { ast_node_as_unchecked(node) };
         let ref_ptr = NonNull::from(ref_).as_ptr();
         // Safety: 满足 resolve_reference_type 的 # Safety 契约——ty 与 ref_ptr 由
-        // class_index 命中确认，指向同一处 parse arena 存活的
-        // AstTypeReference（repr(C) 首字段基址重合，非空同址）；&sp 借用 ManuallyDrop
-        // 出的存活 Arc<Scope>，仅作 &ScopePtr 读取。
+        // 模式匹配确认，指向同一处 parse arena 存活的 AstTypeReference；&sp 借用
+        // ManuallyDrop 出的存活 Arc<Scope>，仅作 &ScopePtr 读取。
         unsafe {
           self.resolve_reference_type(
             &sp,
@@ -80,12 +67,11 @@ impl ConstraintGenerator {
           )
         }
       }
-      AstTypeTable::CLASS_INDEX => {
-        let tab: &AstTypeTable = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::Table(tab) => {
         let tab_ptr = NonNull::from(tab).as_ptr();
-        // Safety: 满足 resolve_table_type 的形参契约——tab 与 ty 由 class_index
-        // 命中确认，同一存活 parse arena 节点、同址非空；scope 为调用方
-        // arc_as_mut 派生的存活 Arc<Scope> 写句柄（与上方 Arc::from_raw 同一来源）。
+        // Safety: 满足 resolve_table_type 的形参契约——tab 与 ty 由模式匹配确认，
+        // 同一存活 parse arena 节点、同址非空；scope 为调用方 arc_as_mut 派生的
+        // 存活 Arc<Scope> 写句柄（与上方 Arc::from_raw 同一来源）。
         unsafe {
           self.resolve_table_type(
             scope,
@@ -96,8 +82,7 @@ impl ConstraintGenerator {
           )
         }
       }
-      AstTypeFunction::CLASS_INDEX => {
-        let fn_node: &AstTypeFunction = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::Function(fn_node) => {
         self.resolve_function_type(
           &sp,
           ty,
@@ -106,14 +91,12 @@ impl ConstraintGenerator {
           replace_error_with_fresh,
         )
       }
-      AstTypeTypeof::CLASS_INDEX => {
-        let tof: &AstTypeTypeof = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::Typeof(tof) => {
         // SAFETY: tof.expr 是存活类型节点名下的 arena 子表达式，只取共享引用递归。
         self.check_expr(&sp, unsafe { &*tof.expr }).ty
       }
-      AstTypeOptional::CLASS_INDEX => bt.nil_type,
-      AstTypeUnion::CLASS_INDEX => {
-        let union_annotation: &AstTypeUnion = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::Optional(_) => bt.nil_type,
+      AstTypeRef::Union(union_annotation) => {
         if union_annotation.types.size == 1 {
           self.resolve_type_inner(
             scope,
@@ -131,8 +114,7 @@ impl ConstraintGenerator {
           self.arena.get_mut().add_type(UnionType { options: parts })
         }
       }
-      AstTypeIntersection::CLASS_INDEX => {
-        let intersection_annotation: &AstTypeIntersection = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::Intersection(intersection_annotation) => {
         if intersection_annotation.types.size == 1 {
           self.resolve_type_inner(
             scope,
@@ -150,23 +132,20 @@ impl ConstraintGenerator {
           self.arena.get_mut().add_type(IntersectionType { parts })
         }
       }
-      AstTypeGroup::CLASS_INDEX => {
-        let type_group_annotation: &AstTypeGroup = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::Group(type_group_annotation) => {
         self.resolve_type_inner(scope, type_group_annotation.type_, in_type_arguments, false)
       }
-      AstTypeSingletonBool::CLASS_INDEX => {
-        let bool_annotation: &AstTypeSingletonBool = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::SingletonBool(bool_annotation) => {
         if bool_annotation.value {
           bt.true_type
         } else {
           bt.false_type
         }
       }
-      AstTypeSingletonString::CLASS_INDEX => {
-        let string_annotation: &AstTypeSingletonString = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::SingletonString(string_annotation) => {
         let s: String = String::from(from_utf8(string_annotation.value.as_bytes()).unwrap_or(""));
         // Safety: self.arena.as_ptr() 构造时接线、非空且存活于整个解析；string_annotation 是
-        // class_index 命中的 & 引用（同址节点），其 value 仅在此处只读拷贝进 arena。
+        // 安全引用的存活节点，其 value 仅在此处只读拷贝进 arena。
         self
           .arena
           .get_mut()
@@ -174,16 +153,12 @@ impl ConstraintGenerator {
             StringSingleton::new(s),
           )))
       }
-      AstTypeError::CLASS_INDEX => {
+      AstTypeRef::Error(_) => {
         if replace_error_with_fresh {
           self.fresh_type(&sp, self.polarity)
         } else {
           bt.error_type
         }
-      }
-      _ => {
-        LUAU_ASSERT!(false);
-        bt.error_type
       }
     };
 

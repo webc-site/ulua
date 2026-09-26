@@ -1,6 +1,7 @@
 use core::ptr::{NonNull, from_mut, from_ref};
 
 use crate::{
+  enums::ast_type_ref::AstTypeRef,
   records::{ast_node::AstNode, ast_type::AstType},
   rtti::is_type_class,
 };
@@ -28,5 +29,22 @@ impl AstNode {
     } else {
       None
     }
+  }
+
+  /// 尝试将通用 AST 节点下转为具体类型引用枚举。若节点不属于 `AstType` 家族，返回 `None`。
+  #[inline]
+  pub fn try_as_type_ref(&self) -> Option<AstTypeRef<'_>> {
+    self.as_type_const().and_then(AstType::try_as_type_ref)
+  }
+
+  /// 将通用 AST 节点下转为具体类型引用枚举。
+  ///
+  /// # Panics
+  /// 若节点不属于 `AstType` 家族，触发 panic。
+  #[inline]
+  pub fn as_type_ref(&self) -> AstTypeRef<'_> {
+    self
+      .try_as_type_ref()
+      .expect("AstNode class_index 必须为合法的类型注解节点类型")
   }
 }

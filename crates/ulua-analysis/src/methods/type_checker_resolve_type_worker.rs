@@ -6,17 +6,8 @@ use alloc::{
 use core::{mem::take, ptr::null_mut};
 
 use ulua_ast::{
-  enums::ast_table_access::AstTableAccess,
-  records::{
-    ast_attr::AstAttrType, ast_type::AstType, ast_type_error::AstTypeError,
-    ast_type_function::AstTypeFunction, ast_type_group::AstTypeGroup,
-    ast_type_intersection::AstTypeIntersection, ast_type_optional::AstTypeOptional,
-    ast_type_or_pack::AstTypeOrPack, ast_type_reference::AstTypeReference,
-    ast_type_singleton_bool::AstTypeSingletonBool,
-    ast_type_singleton_string::AstTypeSingletonString, ast_type_table::AstTypeTable,
-    ast_type_typeof::AstTypeTypeof, ast_type_union::AstTypeUnion,
-  },
-  rtti::{AstNodeClass, ast_node_as_unchecked},
+  enums::{ast_table_access::AstTableAccess, ast_type_ref::AstTypeRef},
+  records::{ast_attr::AstAttrType, ast_type::AstType, ast_type_or_pack::AstTypeOrPack},
 };
 
 use crate::{
@@ -48,19 +39,17 @@ use crate::{
 };
 impl TypeChecker {
   pub fn resolve_type_worker(&mut self, scope: ScopePtr, annotation: &AstType) -> TypeId {
-    let node = &annotation.base;
+    let node = annotation;
 
-    match node.class_index {
-      AstTypeGroup::CLASS_INDEX => {
+    match node.as_type_ref() {
+      AstTypeRef::Group(group) => {
         // Safety: AstTypeGroup.type_ 由 parser 构造 `( T )` 分组时以非空 arena
         // 节点写入（C++ AstTypeGroup 构造参数恒有效），且指向 SourceModule
         // 持有的 AST arena；借用只存活于本次 resolve 调用，仅读不写。
-        let group: &AstTypeGroup = unsafe { ast_node_as_unchecked(node) };
         self.resolve_type(scope, unsafe { &*group.type_ })
       }
-      AstTypeError::CLASS_INDEX => self.error_recovery_type_scope_ptr(&scope),
-      AstTypeReference::CLASS_INDEX => {
-        let reference: &AstTypeReference = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::Error(_) => self.error_recovery_type_scope_ptr(&scope),
+      AstTypeRef::Reference(reference) => {
         let name: Name = reference.name.as_str_or_empty().to_string();
 
         let alias = if let Some(prefix) = reference.prefix {
@@ -260,9 +249,8 @@ impl TypeChecker {
 
         self.error_recovery_type_scope_ptr(&scope)
       }
-      AstTypeOptional::CLASS_INDEX => self.nil_type,
-      AstTypeTable::CLASS_INDEX => {
-        let table: &AstTypeTable = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::Optional(_) => self.nil_type,
+      AstTypeRef::Table(table) => {
         let mut props = Props::default();
 
         for prop in table.props.iter() {
@@ -350,8 +338,7 @@ impl TypeChecker {
           );
         self.add_type(&table_ty)
       }
-      AstTypeFunction::CLASS_INDEX => {
-        let func: &AstTypeFunction = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::Function(func) => {
         let func_scope = self.child_scope(&scope, &func.base.base.location);
         // Safety: `arc_as_mut` 惯用法——func_scope 是 child_scope 刚新建、由本
         // 绑定独占持有的 Arc<Scope>，至少活过本块；检查器单线程运行，写入时
@@ -409,18 +396,16 @@ impl TypeChecker {
 
         self.add_type(&ftv)
       }
-      AstTypeTypeof::CLASS_INDEX => {
-        // Safety: AstTypeTypeof.expr 由 parser 构造 `typeof (expr)` 时以非空
+      AstTypeRef::Typeof(type_of) => {
+        // Safety: type_of.expr 由 parser 构造 `typeof (expr)` 时以非空
         // arena 节点写入（文法保证括号内必有表达式，无判空路径，与 C++
         // `get<AstTypeTypeof>(annotation)->expr` 直接解引用同构）；checkExpr
         // 只读取该表达式节点。
-        let type_of: &AstTypeTypeof = unsafe { ast_node_as_unchecked(node) };
         self
           .check_expr(&scope, unsafe { &*type_of.expr }, None, false)
           .r#type
       }
-      AstTypeUnion::CLASS_INDEX => {
-        let union: &AstTypeUnion = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::Union(union) => {
         let mut parts = Vec::new();
 
         for part in union.types.iter() {
@@ -439,8 +424,7 @@ impl TypeChecker {
           _ => self.add_type(&UnionType { options: reduced }),
         }
       }
-      AstTypeIntersection::CLASS_INDEX => {
-        let intersection: &AstTypeIntersection = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::Intersection(intersection) => {
         let mut parts = Vec::new();
 
         for part in intersection.types.iter() {
@@ -457,17 +441,14 @@ impl TypeChecker {
           _ => self.add_type(&IntersectionType { parts }),
         }
       }
-      AstTypeSingletonBool::CLASS_INDEX => {
-        let singleton_bool: &AstTypeSingletonBool = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::SingletonBool(singleton_bool) => {
         self.singleton_type_bool(singleton_bool.value)
       }
-      AstTypeSingletonString::CLASS_INDEX => {
-        let singleton_string: &AstTypeSingletonString = unsafe { ast_node_as_unchecked(node) };
+      AstTypeRef::SingletonString(singleton_string) => {
         let bytes: Vec<u8> = singleton_string.value.as_bytes().to_vec();
         let value = String::from_utf8_lossy(&bytes).into_owned();
         self.singleton_type_string(value)
       }
-      _ => self.error_recovery_type_scope_ptr(&scope),
     }
   }
 }
