@@ -16,10 +16,16 @@ const _: () = {
   // 编译期不变式：上面的 binary_search_by 依赖严格升序（cpp 侧靠生成流程保证）。
   // 表被单边增删会静默给出错误骨架/漏报，这里用 const assert 把契约钉死，
   // 严格升序同时排除重复码点导致的 lower_bound 语义差。
-  let mut i = 1;
-  while i < K_CONFUSABLES.len() {
-    assert!(K_CONFUSABLES[i - 1].codepoint < K_CONFUSABLES[i].codepoint);
-    i += 1;
+  // 相邻对校验：const 上下文暂无 windows(2)/zip 可用，用 split_first 游标
+  // 前进（消除 i-1 下标形态），prev 携带前一元素，逐对按原顺序断言。
+  let mut prev: Option<u32> = None;
+  let mut rest = K_CONFUSABLES;
+  while let Some((cur, tail)) = rest.split_first() {
+    if let Some(prev_cp) = prev {
+      assert!(prev_cp < cur.codepoint);
+    }
+    prev = Some(cur.codepoint);
+    rest = tail;
   }
 };
 const K_CONFUSABLES: &[Confusable] = &[
