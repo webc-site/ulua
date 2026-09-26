@@ -1,5 +1,8 @@
 //! JIT 慢路径的 VM 帧门面（review.md §2「把 unsafe 关进有契约的最小边界」）。
 //!
+//! See also: `crates/ulua-vm/src/records/vm_frame.rs`——解释器侧同名 `VmFrame` 门面
+//! （`luau_execute` 栈槽视图）。两者形似义异（JIT 慢路径 vs 解释器主循环），勿合并。
+//!
 //! 生成码经 `extern "C-unwind"` 回调进入 `execute*`/`call*` 系列慢路径时，参数是
 //! `(*mut LuaState, *const Instruction, StkId base, *mut TValue k)` 这组裸地址——它们与
 //! ulua-vm 的指针式 ABI 一起构成本 crate 的 VM 边界。本类型在边界处一次性收下这些地址，
@@ -47,7 +50,7 @@ use ulua_vm::{
     lua_c_barriert::luaC_barriert, lua_c_check_gc::lua_c_check_gc, setclvalue::setclvalue,
     sethvalue::sethvalue, setnilvalue::setnilvalue, setnvalue::setnvalue, setobj::setobj,
     setobj_2_s::setobj_2_s, setobj_2_t::setobj2t, stacklimitreached::stacklimitreached,
-    ttype::ttype,
+    ttype::ttype, vm_kv::VM_KV, vm_patch_c::vm_patch_c, vm_protect_pc::vm_protect_pc,
   },
   records::{
     closure::Closure, lua_node::LuaNode, lua_table::LuaTable, proto::Proto, t_string::tstring,
@@ -57,8 +60,7 @@ use ulua_vm::{
 };
 
 use crate::{
-  functions::vm_kv::vm_kv,
-  macros::vm_frame_support::{define_vm_frame_accessor, vm_patch_c, vm_protect_pc},
+  macros::vm_frame_support::define_vm_frame_accessor,
   type_aliases::{instruction_ir_builder::Instruction, lua_state::LuaState},
 };
 
@@ -664,11 +666,11 @@ impl VmFrame {
     unsafe { vm_patch_c(pc, slot) };
   }
 
-  /// 常量表第 `i` 个 kv 常量地址（cpp `vmKV`）。
+  /// 常量表第 `i` 个 kv 常量地址（cpp `vmKV`，单源于 ulua-vm `VM_KV!`）。
   #[inline]
   pub(crate) fn kv(&self, i: u32, cl: *mut Closure, k: *mut TValue) -> *mut TValue {
     // Safety: 类型不变量 + 调用点契约——i 为合法 AUX 常量下标，cl/k 为活闭包/常量表。
-    unsafe { vm_kv(i, cl, k) }
+    unsafe { VM_KV!(i, cl, k) }
   }
 
   /// `luaV_gettable`（可能经元方法；调用点须在 protect 内）。

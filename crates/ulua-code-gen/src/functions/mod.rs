@@ -399,7 +399,6 @@ pub mod visit_fde_entries;
 pub mod visit_vm_reg_defs_uses_ir_visit_use_def;
 pub mod vm_const_op;
 pub mod vm_exit_op;
-pub mod vm_kv;
 pub mod vm_reg_op;
 pub mod vm_upvalue_op;
 pub mod with_compilation_stats;
