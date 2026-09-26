@@ -8,24 +8,17 @@ use crate::{
 const K_POW_10_TABLE_MIN: i32 = -292;
 const K_POW_10_TABLE_MAX: i32 = 324;
 
-const K_POW_5_TABLE: [u64; 16] = [
-  0x8000000000000000,
-  0xa000000000000000,
-  0xc800000000000000,
-  0xfa00000000000000,
-  0x9c40000000000000,
-  0xc350000000000000,
-  0xf424000000000000,
-  0x9896800000000000,
-  0xbebc200000000000,
-  0xee6b280000000000,
-  0x9502f90000000000,
-  0xba43b74000000000,
-  0xe8d4a51000000000,
-  0x9184e72a00000000,
-  0xb5e620f480000000,
-  0xe35fa931a0000000,
-];
+/// K_POW_5_TABLE 改为编译期生成：每项为 5^k 左对齐到 u64 高位（pow5 << pow5.leading_zeros()），
+/// 逐位等价于原手抄表（改动时曾全表编译期比对验证），抽样断言兜底防漂移。
+/// 注意：K_POW_10_TABLE 是 Grisu 192-bit 魔数，不可机械推导，保持手抄不动。
+const fn build_k_pow_5_table() -> [u64; 16] {
+  let (mut t, mut k, mut pow5) = ([0u64; 16], 0usize, 1u64);
+  while k < 16 { t[k] = pow5 << pow5.leading_zeros(); pow5 *= 5; k += 1; }
+  t
+}
+const K_POW_5_TABLE: [u64; 16] = build_k_pow_5_table();
+const _: () = assert!(K_POW_5_TABLE[0] == 0x8000000000000000 && K_POW_5_TABLE[1] == 0xa000000000000000
+  && K_POW_5_TABLE[8] == 0xbebc200000000000 && K_POW_5_TABLE[15] == 0xe35fa931a0000000);
 
 const K_POW_10_TABLE: [[u64; 3]; 39] = [
   [0xff77b1fcbebcdc4f, 0x25e8e89c13bb0f7b, 0x333443443333443b],
