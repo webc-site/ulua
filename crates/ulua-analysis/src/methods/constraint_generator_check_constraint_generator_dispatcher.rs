@@ -198,5 +198,3 @@ impl ConstraintGenerator {
     result
   }
 }
-
-pub(crate) use crate::functions::ast_node_downcast::ast_node_downcast as expr_downcast;

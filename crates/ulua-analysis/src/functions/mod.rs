@@ -30,7 +30,6 @@ pub mod assert_invariant;
 pub mod assert_reasoning_valid_subtyping;
 pub mod assign_cycle_names;
 pub mod assign_prop_documentation_symbols;
-pub mod ast_node_downcast;
 pub mod attach_magic_function;
 pub mod attach_require_magic;
 pub mod attach_tag_type;

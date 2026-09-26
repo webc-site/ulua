@@ -2,17 +2,15 @@ use alloc::string::String;
 use core::str::from_utf8;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
     ast_expr::AstExpr, ast_expr_constant_string::AstExprConstantString,
-    ast_expr_error::AstExprError, ast_expr_global::AstExprGlobal,
-    ast_expr_index_expr::AstExprIndexExpr, ast_expr_index_name::AstExprIndexName,
-    ast_expr_local::AstExprLocal, ast_node::AstNode,
+    ast_expr_global::AstExprGlobal, ast_expr_index_expr::AstExprIndexExpr,
+    ast_expr_index_name::AstExprIndexName, ast_expr_local::AstExprLocal,
   },
-  rtti::{AstNodeClass, ast_node_try_as_ptr},
+  rtti::ast_node_try_as_ptr,
 };
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
-
-use super::constraint_generator_check_constraint_generator_dispatcher::expr_downcast;
 use crate::{
   enums::value::Value,
   functions::{
@@ -41,22 +39,21 @@ impl ConstraintGenerator {
     // 直接 static_cast 亦假定成功），故 `expr_downcast` 的 expect 为逻辑不可达
     // 分支；家族类索引互斥由 rtti 的 rtti_indices_unique 测试保证，臂序无关
     // 语义，与原 ast_node_is 链序一致（Local→Global→IndexName→IndexExpr→Error）。
-    let node: &AstNode = &expr.base;
-    match node.class_index {
-      AstExprLocal::CLASS_INDEX => self.visit_l_value_local(scope, expr_downcast(node), rhs_type),
-      AstExprGlobal::CLASS_INDEX => self.visit_l_value_global(scope, expr_downcast(node), rhs_type),
-      AstExprIndexName::CLASS_INDEX => {
-        self.visit_l_value_index_name(scope, expr_downcast(node), rhs_type)
+    match expr.as_expr_ref() {
+      AstExprRef::Local(local) => self.visit_l_value_local(scope, local, rhs_type),
+      AstExprRef::Global(global) => self.visit_l_value_global(scope, global, rhs_type),
+      AstExprRef::IndexName(index_name) => {
+        self.visit_l_value_index_name(scope, index_name, rhs_type)
       }
-      AstExprIndexExpr::CLASS_INDEX => {
-        self.visit_l_value_index_expr(scope, expr_downcast(node), rhs_type)
+      AstExprRef::IndexExpr(index_expr) => {
+        self.visit_l_value_index_expr(scope, index_expr, rhs_type)
       }
-      AstExprError::CLASS_INDEX => {
+      AstExprRef::Error(err) => {
         // If we end up with some kind of error expression in an lvalue
         // position, at least go and check the expressions so that when
         // we visit them later, there aren't any invalid assumptions.
         // （cpp:3891-3897 range-for；iter_nodes 只读遍历 arena 保活子表达式）
-        for sub_expr in expr_downcast::<AstExprError>(node).expressions.iter_nodes() {
+        for sub_expr in err.expressions.iter_nodes() {
           self.check_expr(scope, sub_expr);
         }
       }
