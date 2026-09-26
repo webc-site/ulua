@@ -10,7 +10,7 @@ use crate::{
     lua_setfield::lua_setfield,
     lua_setmetatable::lua_setmetatable,
     lua_setreadonly::lua_setreadonly,
-    vector_index::vector_index,
+    vector_index::vector_index_arm,
   },
   macros::{
     lua_pop::lua_pop, lua_pushcfunction::LUA_PUSHCFUNCTION, lua_vector_size::LUA_VECTOR_SIZE,
@@ -39,7 +39,7 @@ pub(crate) unsafe fn createmetatable(l: *mut LuaState) {
     lua_setmetatable(l, -2); // set vector metatable
     lua_pop(l, 1); // pop dummy vector
 
-    LUA_PUSHCFUNCTION(l, Some(vector_index), null());
+    LUA_PUSHCFUNCTION(l, Some(vector_index_arm), null());
 
     lua_setfield(l, -2, TM_INDEX.as_ptr().cast());
 
