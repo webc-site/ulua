@@ -6,6 +6,10 @@ use core::{
 };
 
 use ulua_ast::{
+  enums::{
+    ast_expr_ref::AstExprRef, ast_stat_ref::AstStatRef, ast_type_pack_ref::AstTypePackRef,
+    ast_type_ref::AstTypeRef,
+  },
   functions::to_string_ast::to_str_binary as to_str,
   records::{
     ast_class_method::AstClassMethod,
@@ -59,7 +63,6 @@ use ulua_ast::{
     ast_stat_while::AstStatWhile,
     ast_type::AstType,
     ast_type_function::AstTypeFunction,
-    ast_type_group::AstTypeGroup,
     ast_type_intersection::AstTypeIntersection,
     ast_type_list::AstTypeList,
     ast_type_or_pack::AstTypeOrPack,
@@ -73,7 +76,7 @@ use ulua_ast::{
     ast_type_union::AstTypeUnion,
     location::Location,
   },
-  rtti::{AstNodeClass, AstNodePtr, ast_node_is, ast_node_is_ptr, ast_node_try_as},
+  rtti::{AstNodePtr, ast_node_is, ast_node_is_ptr, ast_node_try_as},
 };
 use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet};
 
@@ -83,7 +86,6 @@ use crate::{
     op_kind::OpKind, type_context::TypeContext, value::Value, value_context::ValueContext,
   },
   functions::{
-    ast_node_downcast::ast_node_downcast as node_downcast,
     begin_type::{begin_intersection_type, begin_union_type},
     begin_type_pack::begin,
     end_type_pack::end,
@@ -175,39 +177,35 @@ use crate::{
 const NO_TXN_LOG: *mut TxnLog = null_mut();
 
 impl TypeChecker2 {
-  /// 语句 RTTI 分发（cpp `visit(AstStat*)`）：`class_index` 精确匹配 +
-  /// [`node_downcast`] 换引用，未命中类别保持原 LUAU_ASSERT 行为。
+  /// 语句 RTTI 分发（cpp `visit(AstStat*)`）：通过安全的 [`AstStatRef`] 模式匹配具体语句类型。
   pub fn visit_stat(&mut self, stat: &AstStat) {
     let node = &stat.base;
     // SAFETY: push_stack 只按指针身份查 ast_scopes 并压/弹栈帧；从存活节点
     // 引用派生的裸指针满足其身份键契约（cpp pushStack(fn) 同构）。
     let _pusher = self.push_stack((node as *const AstNode).cast_mut());
-    match node.class_index {
-      AstStatBlock::CLASS_INDEX => self.visit_stat_block(node_downcast(node)),
-      AstStatIf::CLASS_INDEX => self.visit_stat_if(node_downcast(node)),
-      AstStatWhile::CLASS_INDEX => self.visit_stat_while(node_downcast(node)),
-      AstStatRepeat::CLASS_INDEX => self.visit_stat_repeat(node_downcast(node)),
-      AstStatBreak::CLASS_INDEX => self.visit_stat_break(node_downcast(node)),
-      AstStatContinue::CLASS_INDEX => self.visit_stat_continue(node_downcast(node)),
-      AstStatReturn::CLASS_INDEX => self.visit_stat_return(node_downcast(node)),
-      AstStatExpr::CLASS_INDEX => self.visit_stat_expr(node_downcast(node)),
-      AstStatLocal::CLASS_INDEX => self.visit_stat_local(node_downcast(node)),
-      AstStatFor::CLASS_INDEX => self.visit_stat_for(node_downcast(node)),
-      AstStatForIn::CLASS_INDEX => self.visit_stat_for_in(node_downcast(node)),
-      AstStatAssign::CLASS_INDEX => self.visit_stat_assign(node_downcast(node)),
-      AstStatCompoundAssign::CLASS_INDEX => self.visit_stat_compound_assign(node_downcast(node)),
-      AstStatFunction::CLASS_INDEX => self.visit_stat_function(node_downcast(node)),
-      AstStatLocalFunction::CLASS_INDEX => self.visit_stat_local_function(node_downcast(node)),
-      AstStatTypeAlias::CLASS_INDEX => self.visit_stat_type_alias(node_downcast(node)),
-      AstStatTypeFunction::CLASS_INDEX => self.visit_stat_type_function(node_downcast(node)),
-      AstStatDeclareFunction::CLASS_INDEX => self.visit_stat_declare_function(node_downcast(node)),
-      AstStatDeclareGlobal::CLASS_INDEX => self.visit_stat_declare_global(node_downcast(node)),
-      AstStatDeclareExternType::CLASS_INDEX => {
-        self.visit_stat_declare_extern_type(node_downcast(node))
-      }
-      AstStatClass::CLASS_INDEX => self.visit_stat_class(node_downcast(node)),
-      AstStatError::CLASS_INDEX => self.visit_stat_error(node_downcast(node)),
-      _ => LUAU_ASSERT!(false, "TypeChecker2 encountered an unknown node type"),
+    match stat.as_stat_ref() {
+      AstStatRef::Block(stat) => self.visit_stat_block(stat),
+      AstStatRef::If(stat) => self.visit_stat_if(stat),
+      AstStatRef::While(stat) => self.visit_stat_while(stat),
+      AstStatRef::Repeat(stat) => self.visit_stat_repeat(stat),
+      AstStatRef::Break(stat) => self.visit_stat_break(stat),
+      AstStatRef::Continue(stat) => self.visit_stat_continue(stat),
+      AstStatRef::Return(stat) => self.visit_stat_return(stat),
+      AstStatRef::Expr(stat) => self.visit_stat_expr(stat),
+      AstStatRef::Local(stat) => self.visit_stat_local(stat),
+      AstStatRef::For(stat) => self.visit_stat_for(stat),
+      AstStatRef::ForIn(stat) => self.visit_stat_for_in(stat),
+      AstStatRef::Assign(stat) => self.visit_stat_assign(stat),
+      AstStatRef::CompoundAssign(stat) => self.visit_stat_compound_assign(stat),
+      AstStatRef::Function(stat) => self.visit_stat_function(stat),
+      AstStatRef::LocalFunction(stat) => self.visit_stat_local_function(stat),
+      AstStatRef::TypeAlias(stat) => self.visit_stat_type_alias(stat),
+      AstStatRef::TypeFunction(stat) => self.visit_stat_type_function(stat),
+      AstStatRef::DeclareFunction(stat) => self.visit_stat_declare_function(stat),
+      AstStatRef::DeclareGlobal(stat) => self.visit_stat_declare_global(stat),
+      AstStatRef::DeclareExternType(stat) => self.visit_stat_declare_extern_type(stat),
+      AstStatRef::DeclareClass(stat) => self.visit_stat_class(stat),
+      AstStatRef::Error(stat) => self.visit_stat_error(stat),
     }
   }
 
@@ -1515,8 +1513,8 @@ impl TypeChecker2 {
     }
   }
 
-  /// 类型标注 RTTI 分发（cpp `visit(AstType*)`）：`class_index` 精确匹配 +
-  /// [`node_downcast`]；未命中类别保持原有的静默跳过行为。
+  /// 类型标注 RTTI 分发（cpp `visit(AstType*)`）：通过安全的 [`AstTypeRef`] 模式匹配具体类型注解；
+  /// 未处理类别保持原有的静默跳过行为。
   pub fn visit_type(&mut self, ty: &AstType) {
     // SAFETY: ast_resolved_types 以指针身份查表（C++ module->astResolvedTypes.find
     // 同构），不解引用键；module_ref() 访问器收口 NotNull 解引用契约。
@@ -1529,16 +1527,14 @@ impl TypeChecker2 {
       self.check_for_type_function_inhabitance(follow_type::follow(resolved_ty), ty.base.location);
     }
 
-    let node = &ty.base;
-    match node.class_index {
-      AstTypeReference::CLASS_INDEX => self.visit_type_reference(node_downcast(node)),
-      AstTypeTable::CLASS_INDEX => self.visit_type_table(node_downcast(node)),
-      AstTypeFunction::CLASS_INDEX => self.visit_type_function(node_downcast(node)),
-      AstTypeTypeof::CLASS_INDEX => self.visit_type_typeof(node_downcast(node)),
-      AstTypeUnion::CLASS_INDEX => self.visit_type_union(node_downcast(node)),
-      AstTypeIntersection::CLASS_INDEX => self.visit_type_intersection(node_downcast(node)),
-      AstTypeGroup::CLASS_INDEX => {
-        let group = node_downcast::<AstTypeGroup>(node);
+    match ty.as_type_ref() {
+      AstTypeRef::Reference(ty) => self.visit_type_reference(ty),
+      AstTypeRef::Table(ty) => self.visit_type_table(ty),
+      AstTypeRef::Function(ty) => self.visit_type_function(ty),
+      AstTypeRef::Typeof(ty) => self.visit_type_typeof(ty),
+      AstTypeRef::Union(ty) => self.visit_type_union(ty),
+      AstTypeRef::Intersection(ty) => self.visit_type_intersection(ty),
+      AstTypeRef::Group(group) => {
         // SAFETY: group.type_ 是括号类型标注的 arena 子指针（parser 必建）。
         self.visit_type(unsafe { &*group.type_ });
       }
@@ -1778,16 +1774,14 @@ impl TypeChecker2 {
   }
 
   /// 类型包 RTTI 分发（cpp `visit(AstTypePack*)`）：null 早退以 `Option` 编码，
-  /// 未知类别保持原有静默跳过。
+  /// 通过安全的 [`AstTypePackRef`] 模式匹配具体类型包。
   pub fn visit_type_pack(&mut self, pack: Option<&AstTypePack>) {
     let Some(pack) = pack else { return };
 
-    let node = &pack.base;
-    match node.class_index {
-      AstTypePackExplicit::CLASS_INDEX => self.visit_type_pack_explicit(node_downcast(node)),
-      AstTypePackVariadic::CLASS_INDEX => self.visit_type_pack_variadic(node_downcast(node)),
-      AstTypePackGeneric::CLASS_INDEX => self.visit_type_pack_generic(node_downcast(node)),
-      _ => {}
+    match pack.as_pack_ref() {
+      AstTypePackRef::Explicit(pack) => self.visit_type_pack_explicit(pack),
+      AstTypePackRef::Variadic(pack) => self.visit_type_pack_variadic(pack),
+      AstTypePackRef::Generic(pack) => self.visit_type_pack_generic(pack),
     }
   }
 
@@ -2980,60 +2974,54 @@ impl TypeChecker2 {
     }
   }
 
-  /// 表达式 RTTI 分发（cpp `visit(AstExpr*, ValueContext)`）：`class_index`
-  /// 精确匹配 + [`node_downcast`]；未知类别保持原有的断言 + panic 行为。
+  /// 表达式 RTTI 分发（cpp `visit(AstExpr*, ValueContext)`）：通过安全的
+  /// [`AstExprRef`] 模式匹配具体表达式类型。
   pub fn visit_expr(&mut self, expr: &AstExpr, context: ValueContext) {
     let node = &expr.base;
     // SAFETY: push_stack 只按指针身份查 ast_scopes 并压/弹栈帧；AstNode 是
     // #[repr(C)] 各节点的 0 号字段，从存活 &AstExpr 反推的裸指针同址有效。
     let _pusher = self.push_stack((node as *const AstNode).cast_mut());
 
-    match node.class_index {
-      AstExprGroup::CLASS_INDEX => self.visit_expr_group(node_downcast(node), context),
-      AstExprConstantNil::CLASS_INDEX => self.visit_expr_constant_nil(node_downcast(node)),
-      AstExprConstantBool::CLASS_INDEX => {
-        self.visit_expr_constant_bool(node_downcast(node));
+    match expr.as_expr_ref() {
+      AstExprRef::Group(expr) => self.visit_expr_group(expr, context),
+      AstExprRef::ConstantNil(expr) => self.visit_expr_constant_nil(expr),
+      AstExprRef::ConstantBool(expr) => {
+        self.visit_expr_constant_bool(expr);
       }
-      AstExprConstantNumber::CLASS_INDEX => {
-        self.visit_expr_constant_number(node_downcast(node));
+      AstExprRef::ConstantNumber(expr) => {
+        self.visit_expr_constant_number(expr);
       }
-      AstExprConstantInteger::CLASS_INDEX => {
-        self.visit_expr_constant_integer(node_downcast(node));
+      AstExprRef::ConstantInteger(expr) => {
+        self.visit_expr_constant_integer(expr);
       }
-      AstExprConstantString::CLASS_INDEX => {
-        self.visit_expr_constant_string(node_downcast(node));
+      AstExprRef::ConstantString(expr) => {
+        self.visit_expr_constant_string(expr);
       }
-      AstExprLocal::CLASS_INDEX => self.visit_expr_local(node_downcast(node)),
-      AstExprGlobal::CLASS_INDEX => self.visit_expr_global(node_downcast(node)),
-      AstExprVarargs::CLASS_INDEX => self.visit_expr_varargs(node_downcast(node)),
-      AstExprCall::CLASS_INDEX => self.visit_expr_call(node_downcast(node)),
-      AstExprIndexName::CLASS_INDEX => {
-        self.visit_expr_index_name(node_downcast(node), context);
+      AstExprRef::Local(expr) => self.visit_expr_local(expr),
+      AstExprRef::Global(expr) => self.visit_expr_global(expr),
+      AstExprRef::Varargs(expr) => self.visit_expr_varargs(expr),
+      AstExprRef::Call(expr) => self.visit_expr_call(expr),
+      AstExprRef::IndexName(expr) => {
+        self.visit_expr_index_name(expr, context);
       }
-      AstExprIndexExpr::CLASS_INDEX => {
-        self.visit_expr_index_expr(node_downcast(node), context);
+      AstExprRef::IndexExpr(expr) => {
+        self.visit_expr_index_expr(expr, context);
       }
-      AstExprFunction::CLASS_INDEX => self.visit_expr_function(node_downcast(node)),
-      AstExprTable::CLASS_INDEX => self.visit_expr_table(node_downcast(node)),
-      AstExprUnary::CLASS_INDEX => self.visit_expr_unary(node_downcast(node)),
-      AstExprBinary::CLASS_INDEX => {
+      AstExprRef::Function(expr) => self.visit_expr_function(expr),
+      AstExprRef::Table(expr) => self.visit_expr_table(expr),
+      AstExprRef::Unary(expr) => self.visit_expr_unary(expr),
+      AstExprRef::Binary(expr) => {
         // override_key 传 None——对应 C++ `visit(expr, nullptr)` 默认实参，
         // 仅复合赋值调用点会带键（见 visit_stat_compound_assign）。
-        self.visit_expr_binary(node_downcast(node), None);
+        self.visit_expr_binary(expr, None);
       }
-      AstExprTypeAssertion::CLASS_INDEX => {
-        self.visit_expr_type_assertion(node_downcast(node));
+      AstExprRef::TypeAssertion(expr) => {
+        self.visit_expr_type_assertion(expr);
       }
-      AstExprIfElse::CLASS_INDEX => self.visit_expr_if_else(node_downcast(node)),
-      AstExprInstantiate::CLASS_INDEX => self.visit_expr_instantiate(node_downcast(node)),
-      AstExprInterpString::CLASS_INDEX => self.visit_expr_interp_string(node_downcast(node)),
-      AstExprError::CLASS_INDEX => self.visit_expr_error(node_downcast(node)),
-      _ => {
-        LUAU_ASSERT!(false);
-        // 不变式：上方 match 已穷尽 AstExpr 全部 class_index（与 cpp visitExpr 分派同构），
-        // 新增 AST 变体未接分派才会到此——属绝对不可触发的一致性哨兵。
-        unreachable!("TypeChecker2 visitExpr 已穷尽全部 AstExpr 变体，兜底支不可达");
-      }
+      AstExprRef::IfElse(expr) => self.visit_expr_if_else(expr),
+      AstExprRef::Instantiate(expr) => self.visit_expr_instantiate(expr),
+      AstExprRef::InterpString(expr) => self.visit_expr_interp_string(expr),
+      AstExprRef::Error(expr) => self.visit_expr_error(expr),
     }
   }
 }
