@@ -27,6 +27,10 @@ ulua-require = { path = "../ulua-require", version = "0.1.2" }
 ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
 rustyline = "18"
 itoa = "1.0.18"
+# SIGINT/Ctrl-C 注册门面（替代本 crate 内 libc signal / kernel32
+# SetConsoleCtrlHandler 的裸 extern 声明）：handler 仍在信号上下文执行，
+# 只做 async-signal-safe 的原子读写，语义与原 signal() 一致。
+signal-hook-registry = "1.4"
 
 # 旧 [features] 段的 default/std/wasm 为零消费点空特性（无 cfg 门控、无
 # 下游转发），删除虚假 no_std 特性面（对齐 ulua-bytecode 先例）。
