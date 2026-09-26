@@ -2,7 +2,7 @@ use crate::{
   functions::{
     lua_gettop::lua_gettop, lua_l_checknumber::lua_l_checknumber, vector_shared::vector_push,
   },
-  macros::lua_vector_size::LUA_VECTOR_SIZE,
+  macros::{lua_lib_fn::lua_lib_fn, lua_vector_size::LUA_VECTOR_SIZE},
   records::lua_state::LuaState,
 };
 
@@ -11,7 +11,7 @@ use crate::{
 /// `lua_l_checknumber` 抛错回退），索引 3、4 可选（count≥3/≥4 时才 checknumber，否则补 0.0）；`lua_pushvector`
 /// 需 `(*l).top` 后 ≥1 空槽；可触发 GC。
 /// cpp VM/src/lveclib.cpp:10
-pub(crate) unsafe extern "C-unwind" fn vector_create(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn vector_create(l: *mut LuaState) -> i32 {
   // Safety: 契约保证各索引为数值实参，新 vector 由 `lua_pushvector*` 内部扩栈后压入
   unsafe {
     let count = lua_gettop(l);
@@ -35,3 +35,5 @@ pub(crate) unsafe extern "C-unwind" fn vector_create(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn vector_create, vector_create_arm);
