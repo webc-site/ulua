@@ -2,34 +2,32 @@ use alloc::{collections::btree_map::Entry, string::String, sync::Arc, vec::Vec};
 use core::ptr::null;
 
 use ulua_ast::{
-  enums::{ast_table_access::AstTableAccess, mode::Mode},
+  enums::{ast_stat_ref::AstStatRef, ast_table_access::AstTableAccess, mode::Mode},
   records::{
     ast_array::AstArray, ast_expr::AstExpr, ast_expr_binary::AstExprBinary,
     ast_expr_call::AstExprCall, ast_expr_global::AstExprGlobal,
     ast_expr_index_expr::AstExprIndexExpr, ast_expr_index_name::AstExprIndexName,
     ast_expr_local::AstExprLocal, ast_expr_table::AstExprTable, ast_local::AstLocal,
     ast_stat::AstStat, ast_stat_assign::AstStatAssign, ast_stat_block::AstStatBlock,
-    ast_stat_break::AstStatBreak, ast_stat_class::AstStatClass,
-    ast_stat_compound_assign::AstStatCompoundAssign, ast_stat_continue::AstStatContinue,
+    ast_stat_compound_assign::AstStatCompoundAssign,
     ast_stat_declare_extern_type::AstStatDeclareExternType,
     ast_stat_declare_function::AstStatDeclareFunction,
     ast_stat_declare_global::AstStatDeclareGlobal, ast_stat_error::AstStatError,
-    ast_stat_expr::AstStatExpr, ast_stat_for::AstStatFor, ast_stat_for_in::AstStatForIn,
+    ast_stat_for::AstStatFor, ast_stat_for_in::AstStatForIn,
     ast_stat_function::AstStatFunction, ast_stat_if::AstStatIf, ast_stat_local::AstStatLocal,
     ast_stat_local_function::AstStatLocalFunction, ast_stat_repeat::AstStatRepeat,
     ast_stat_return::AstStatReturn, ast_stat_type_alias::AstStatTypeAlias,
     ast_stat_type_function::AstStatTypeFunction, ast_stat_while::AstStatWhile,
     ast_type_or_pack::AstTypeOrPack, location::Location, position::Position,
   },
-  rtti::{AstNodeClass, ast_node_is, ast_node_try_as, ast_node_try_as_ptr},
+  rtti::{ast_node_is, ast_node_try_as, ast_node_try_as_ptr},
 };
 use ulua_common::fflag;
 
 use crate::{
   enums::{control_flow::ControlFlow, table_state::TableState, value_context::ValueContext},
   functions::{
-    arc_as_mut::arc_as_mut, as_mutable_type_pack::as_mutable_type_pack,
-    ast_node_downcast::ast_node_downcast as stat_downcast, begin_type_pack::begin,
+    arc_as_mut::arc_as_mut, as_mutable_type_pack::as_mutable_type_pack, begin_type_pack::begin,
     end_type_pack::end, first::first, flatten_type_pack::flatten_type_pack_id, follow_type,
     follow_type_pack, get_mutable_table_type::get_mutable_table_type, get_mutable_type,
     get_mutable_type_pack, get_table_type::get_table_type, get_type, get_type_pack,
@@ -91,75 +89,39 @@ impl TypeChecker {
   }
 
   pub fn check_stat(&mut self, scope: &ScopePtr, program: &AstStat) -> ControlFlow {
-    // AstStat 以 base 字段内嵌 AstNode（repr(C) 单继承），分发只读类索引。
-    let node = &program.base;
-
-    // match 臂的类索引与 `ast_node_try_as` 判定完全同一（cpp `as<T>()` 命中后
-    // 亦直接 static_cast），下转必然成功，expect 为逻辑不可达分支；类索引互斥
-    // 由 rtti 测试保证。原 if-let 链顺序不携带语义（各臂类互斥），保持行为。
-    match node.class_index {
-      AstStatBlock::CLASS_INDEX => {
-        self.check_stat_block(scope, stat_downcast::<AstStatBlock>(node))
-      }
-      AstStatIf::CLASS_INDEX => self.check_stat_if(scope, stat_downcast::<AstStatIf>(node)),
-      AstStatWhile::CLASS_INDEX => {
-        self.check_stat_while(scope, stat_downcast::<AstStatWhile>(node))
-      }
-      AstStatRepeat::CLASS_INDEX => {
-        self.check_stat_repeat(scope, stat_downcast::<AstStatRepeat>(node))
-      }
-      AstStatBreak::CLASS_INDEX => ControlFlow::Breaks,
-      AstStatContinue::CLASS_INDEX => ControlFlow::Continues,
-      AstStatReturn::CLASS_INDEX => {
-        self.check_stat_return(scope, stat_downcast::<AstStatReturn>(node))
-      }
-      AstStatExpr::CLASS_INDEX => {
-        let expr = stat_downcast::<AstStatExpr>(node);
+    match program.as_stat_ref() {
+      AstStatRef::Block(stat) => self.check_stat_block(scope, stat),
+      AstStatRef::If(stat) => self.check_stat_if(scope, stat),
+      AstStatRef::While(stat) => self.check_stat_while(scope, stat),
+      AstStatRef::Repeat(stat) => self.check_stat_repeat(scope, stat),
+      AstStatRef::Break(_) => ControlFlow::Breaks,
+      AstStatRef::Continue(_) => ControlFlow::Continues,
+      AstStatRef::Return(stat) => self.check_stat_return(scope, stat),
+      AstStatRef::Expr(stat) => {
         // expr 字段已句柄化（node_handle::Node）：`.get()` 即 arena 只读视图，
         // 原 unsafe 解引用与 parser 非空契约注释随类型一并消失。
-        self.check_expr_pack(scope, expr.expr.get());
+        self.check_expr_pack(scope, stat.expr.get());
         ControlFlow::None
       }
-      AstStatLocal::CLASS_INDEX => {
-        self.check_stat_local(scope, stat_downcast::<AstStatLocal>(node))
-      }
-      AstStatFor::CLASS_INDEX => self.check_stat_for(scope, stat_downcast::<AstStatFor>(node)),
-      AstStatForIn::CLASS_INDEX => {
-        self.check_stat_for_in(scope, stat_downcast::<AstStatForIn>(node))
-      }
-      AstStatAssign::CLASS_INDEX => {
-        self.check_stat_assign(scope, stat_downcast::<AstStatAssign>(node))
-      }
-      AstStatCompoundAssign::CLASS_INDEX => {
-        self.check_stat_compound_assign(scope, stat_downcast::<AstStatCompoundAssign>(node))
-      }
-      AstStatFunction::CLASS_INDEX | AstStatLocalFunction::CLASS_INDEX => {
+      AstStatRef::Local(stat) => self.check_stat_local(scope, stat),
+      AstStatRef::For(stat) => self.check_stat_for(scope, stat),
+      AstStatRef::ForIn(stat) => self.check_stat_for_in(scope, stat),
+      AstStatRef::Assign(stat) => self.check_stat_assign(scope, stat),
+      AstStatRef::CompoundAssign(stat) => self.check_stat_compound_assign(scope, stat),
+      AstStatRef::Function(_) | AstStatRef::LocalFunction(_) => {
         self.ice_string_location(
           "Should not be calling two-argument check() on a function statement",
           &program.base.location,
         );
         ControlFlow::None
       }
-      AstStatTypeAlias::CLASS_INDEX => {
-        self.check_stat_type_alias(scope, stat_downcast::<AstStatTypeAlias>(node))
-      }
-      AstStatTypeFunction::CLASS_INDEX => {
-        self.check_stat_type_function(scope, stat_downcast::<AstStatTypeFunction>(node))
-      }
-      AstStatDeclareGlobal::CLASS_INDEX => {
-        self.check_stat_declare_global(scope, stat_downcast::<AstStatDeclareGlobal>(node))
-      }
-      AstStatDeclareFunction::CLASS_INDEX => {
-        self.check_stat_declare_function(scope, stat_downcast::<AstStatDeclareFunction>(node))
-      }
-      AstStatDeclareExternType::CLASS_INDEX => {
-        self.check_stat_declare_extern_type(scope, stat_downcast::<AstStatDeclareExternType>(node))
-      }
-      AstStatError::CLASS_INDEX => {
-        self.check_stat_error(scope, stat_downcast::<AstStatError>(node))
-      }
-      AstStatClass::CLASS_INDEX if fflag::DebugLuauUserDefinedClasses.get() => {
-        let class_statement = stat_downcast::<AstStatClass>(node);
+      AstStatRef::TypeAlias(stat) => self.check_stat_type_alias(scope, stat),
+      AstStatRef::TypeFunction(stat) => self.check_stat_type_function(scope, stat),
+      AstStatRef::DeclareGlobal(stat) => self.check_stat_declare_global(scope, stat),
+      AstStatRef::DeclareFunction(stat) => self.check_stat_declare_function(scope, stat),
+      AstStatRef::DeclareExternType(stat) => self.check_stat_declare_extern_type(scope, stat),
+      AstStatRef::Error(stat) => self.check_stat_error(scope, stat),
+      AstStatRef::DeclareClass(class_statement) if fflag::DebugLuauUserDefinedClasses.get() => {
         // SAFETY: AstStatClass.name 由解析器保证非空（类声明必有名字节点）。
         self.report_error_location_type_error_data(
           unsafe { &(*class_statement.name).location },
@@ -169,7 +131,6 @@ impl TypeChecker {
         );
         ControlFlow::None
       }
-      // 原 if-let 链尾部的兜底：未知类型与 class-flag 关闭时均返回 None。
       _ => ControlFlow::None,
     }
   }

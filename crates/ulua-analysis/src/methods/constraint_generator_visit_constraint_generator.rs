@@ -6,16 +6,16 @@ use core::{
 };
 
 use ulua_ast::{
-  enums::ast_table_access::AstTableAccess,
+  enums::{ast_stat_ref::AstStatRef, ast_table_access::AstTableAccess},
   functions::optional_node::{slot_opt, slot_ref},
   records::{
     ast_attr::AstAttrType, ast_expr::AstExpr, ast_expr_call::AstExprCall,
     ast_expr_error::AstExprError, ast_expr_global::AstExprGlobal,
     ast_expr_index_name::AstExprIndexName, ast_expr_local::AstExprLocal,
     ast_expr_table::AstExprTable, ast_node::AstNode, ast_stat::AstStat,
-    ast_stat_assign::AstStatAssign, ast_stat_block::AstStatBlock, ast_stat_break::AstStatBreak,
+    ast_stat_assign::AstStatAssign, ast_stat_block::AstStatBlock,
     ast_stat_class::AstStatClass, ast_stat_compound_assign::AstStatCompoundAssign,
-    ast_stat_continue::AstStatContinue, ast_stat_declare_extern_type::AstStatDeclareExternType,
+    ast_stat_declare_extern_type::AstStatDeclareExternType,
     ast_stat_declare_function::AstStatDeclareFunction,
     ast_stat_declare_global::AstStatDeclareGlobal, ast_stat_error::AstStatError,
     ast_stat_expr::AstStatExpr, ast_stat_for::AstStatFor, ast_stat_for_in::AstStatForIn,
@@ -24,7 +24,7 @@ use ulua_ast::{
     ast_stat_return::AstStatReturn, ast_stat_type_alias::AstStatTypeAlias,
     ast_stat_type_function::AstStatTypeFunction, ast_stat_while::AstStatWhile, location::Location,
   },
-  rtti::{AstNodeClass, ast_node_is, ast_node_try_as},
+  rtti::{ast_node_is, ast_node_try_as},
 };
 use ulua_common::{dfint, fflag, functions::format::format, macros::luau_assert::LUAU_ASSERT};
 
@@ -43,7 +43,6 @@ use crate::{
       add_deprecated_dependency, bind_type, block_owner_at, chain_deprecated_dependencies,
       propagate_deprecated_attribute,
     },
-    ast_node_downcast::ast_node_downcast as stat_downcast,
     begin_type_pack::begin,
     checkpoint::checkpoint,
     does_call_error::does_call_error,
@@ -125,73 +124,32 @@ impl ConstraintGenerator {
       return ControlFlow::None;
     }
 
-    let node: &AstNode = &stat.base;
-
-    // match 臂的类索引与 `ast_node_try_as` 的判定完全同一（cpp `as<T>()` 命中后
-    // 直接 static_cast 亦假定成功），故下转必然成功，expect 为逻辑不可达分支；
-    // 家族类索引互斥由 rtti 的 rtti_indices_unique 测试保证，臂序无关语义。
-    match node.class_index {
-      AstStatBlock::CLASS_INDEX => {
-        self.visit_stat_block(scope, stat_downcast::<AstStatBlock>(node))
-      }
-      AstStatIf::CLASS_INDEX => self.visit_stat_if(scope, stat_downcast::<AstStatIf>(node)),
-      AstStatWhile::CLASS_INDEX => {
-        self.visit_stat_while(scope, stat_downcast::<AstStatWhile>(node))
-      }
-      AstStatRepeat::CLASS_INDEX => {
-        self.visit_stat_repeat(scope, stat_downcast::<AstStatRepeat>(node))
-      }
-      AstStatBreak::CLASS_INDEX => ControlFlow::Breaks,
-      AstStatContinue::CLASS_INDEX => ControlFlow::Continues,
-      AstStatReturn::CLASS_INDEX => {
-        self.visit_stat_return(scope.clone(), stat_downcast::<AstStatReturn>(node))
-      }
-      AstStatExpr::CLASS_INDEX => self.visit_stat_expr(scope, stat_downcast::<AstStatExpr>(node)),
-      AstStatLocal::CLASS_INDEX => {
-        self.visit_stat_local(scope, stat_downcast::<AstStatLocal>(node))
-      }
-      AstStatFor::CLASS_INDEX => self.visit_stat_for(scope, stat_downcast::<AstStatFor>(node)),
-      AstStatForIn::CLASS_INDEX => {
-        self.visit_stat_for_in(scope, stat_downcast::<AstStatForIn>(node))
-      }
-      AstStatAssign::CLASS_INDEX => {
-        self.visit_stat_assign(scope, stat_downcast::<AstStatAssign>(node))
-      }
-      AstStatCompoundAssign::CLASS_INDEX => {
-        self.visit_stat_compound_assign(scope, stat_downcast::<AstStatCompoundAssign>(node))
-      }
-      AstStatFunction::CLASS_INDEX => {
-        self.visit_stat_function(scope, stat_downcast::<AstStatFunction>(node))
-      }
-      AstStatLocalFunction::CLASS_INDEX => {
-        self.visit_stat_local_function(scope, stat_downcast::<AstStatLocalFunction>(node))
-      }
-      AstStatTypeAlias::CLASS_INDEX => {
-        self.visit_stat_type_alias(scope, stat_downcast::<AstStatTypeAlias>(node))
-      }
-      AstStatTypeFunction::CLASS_INDEX => {
-        self.visit_stat_type_function(scope, stat_downcast::<AstStatTypeFunction>(node))
-      }
-      AstStatDeclareGlobal::CLASS_INDEX => {
-        self.visit_stat_declare_global(scope, stat_downcast::<AstStatDeclareGlobal>(node))
-      }
-      AstStatDeclareFunction::CLASS_INDEX => {
-        self.visit_stat_declare_function(scope, stat_downcast::<AstStatDeclareFunction>(node))
-      }
-      AstStatDeclareExternType::CLASS_INDEX => {
-        self.visit_stat_declare_extern_type(scope, stat_downcast::<AstStatDeclareExternType>(node))
-      }
-      AstStatClass::CLASS_INDEX => {
+    match stat.as_stat_ref() {
+      AstStatRef::Block(stat) => self.visit_stat_block(scope, stat),
+      AstStatRef::If(stat) => self.visit_stat_if(scope, stat),
+      AstStatRef::While(stat) => self.visit_stat_while(scope, stat),
+      AstStatRef::Repeat(stat) => self.visit_stat_repeat(scope, stat),
+      AstStatRef::Break(_) => ControlFlow::Breaks,
+      AstStatRef::Continue(_) => ControlFlow::Continues,
+      AstStatRef::Return(stat) => self.visit_stat_return(scope.clone(), stat),
+      AstStatRef::Expr(stat) => self.visit_stat_expr(scope, stat),
+      AstStatRef::Local(stat) => self.visit_stat_local(scope, stat),
+      AstStatRef::For(stat) => self.visit_stat_for(scope, stat),
+      AstStatRef::ForIn(stat) => self.visit_stat_for_in(scope, stat),
+      AstStatRef::Assign(stat) => self.visit_stat_assign(scope, stat),
+      AstStatRef::CompoundAssign(stat) => self.visit_stat_compound_assign(scope, stat),
+      AstStatRef::Function(stat) => self.visit_stat_function(scope, stat),
+      AstStatRef::LocalFunction(stat) => self.visit_stat_local_function(scope, stat),
+      AstStatRef::TypeAlias(stat) => self.visit_stat_type_alias(scope, stat),
+      AstStatRef::TypeFunction(stat) => self.visit_stat_type_function(scope, stat),
+      AstStatRef::DeclareGlobal(stat) => self.visit_stat_declare_global(scope, stat),
+      AstStatRef::DeclareFunction(stat) => self.visit_stat_declare_function(scope, stat),
+      AstStatRef::DeclareExternType(stat) => self.visit_stat_declare_extern_type(scope, stat),
+      AstStatRef::DeclareClass(stat) => {
         LUAU_ASSERT!(fflag::DebugLuauUserDefinedClasses.get());
-        self.visit_stat_class(scope, stat_downcast::<AstStatClass>(node))
+        self.visit_stat_class(scope, stat)
       }
-      AstStatError::CLASS_INDEX => {
-        self.visit_stat_error(scope, stat_downcast::<AstStatError>(node))
-      }
-      _ => {
-        LUAU_ASSERT!(false, "Internal error: Unknown AstStat type");
-        ControlFlow::None
-      }
+      AstStatRef::Error(stat) => self.visit_stat_error(scope, stat),
     }
   }
 
