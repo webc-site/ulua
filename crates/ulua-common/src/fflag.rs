@@ -3,6 +3,24 @@
 //! C++ 的 `FFlag::Name` 对应 `crate::fflag::Name.get()`。
 //! Rust 模块不像 C++ 命名空间可开放，故按 crate 聚合 ——
 //! 见 `crate::macros::luau_fastflagvariable`。
+//!
+//! ## 保留裁定与可达性判据（audit-deadcode B1 仲裁落档）
+//!
+//! 默认 `false` 的旗标**不可**按「默认 false ⇒ 死臂」删除。可达性判据是
+//! 三面运行时可达，**任一面可达即保留**：
+//! 1. rt 建 VM 批量点亮：`set_luau_bool_flags(true)`（定义于
+//!    `records/f_value.rs`，`crates/ulua-rt/src/state.rs` 等入口 call_once 触发），
+//!    谓词 [`crate::functions::is_default_enabled_flag`] 只认 `Luau*` 前缀且排除实验性
+//!    旗标——`Debug*` 前缀**不会**被 rt 点亮，也不存在其他批量误点 `Debug*` 的
+//!    路径（CLI 裸 `--fflags=true` 的排除谓词同样跳过非 `Luau*`，见
+//!    `ulua-cli-lib/src/functions/set_luau_flags_flags.rs`）。
+//! 2. CLI `--fflags=Name[=bool]` 按名点亮（含 `Debug*`），消费全量注册表。
+//! 3. CLI 专用开关（如 `--timetrace` 点亮 `DebugLuauTimeTracing`）。
+//!
+//! 已拆除的例外仅两族（先例见 git log `r7-dc-flag4`）：
+//! `DebugLuauForce{Non,}StrictMode` 对与 `ForceAll{New,Old}SolverTests` 守卫族
+//! ——三面皆零可达路径的时代遗留标记。再遇「默认 false 疑似死臂」候选，
+//! 先按上述三面逐一核可达性，勿直接删。
 
 pub mod _inner {
   // CodeGen/src/IrRegAllocA64.cpp
