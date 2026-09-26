@@ -9,7 +9,7 @@ use ulua_vm::{
 };
 
 use crate::{
-  functions::unwind_header_ops::as_impl_mut,
+  functions::unwind_header_ops::{as_impl_mut, unwind_finish_function, unwind_start_function},
   records::{
     assembly_builder_a_64::AssemblyBuilderA64, emit_common_a_64,
     entry_locations_code_gen_a_64::EntryLocations, register_a_64::RegisterA64,
@@ -29,12 +29,6 @@ const K_FULL_BLOCK_FUNCTION: u32 = 0xffff_ffff;
 // `CodeGenA64.cpp:292-294` 以 `kFullBlockFunction` 覆盖整块），空实现使 JIT 帧完全没有展开信息，
 // 任何在原生帧之上抛出的 `lua_exception`（VM 的 longjmp 仿真）都会让 `_Unwind_RaiseException`
 // 以 `_URC_END_OF_STACK`(5) 返回，std 随即 `failed to initiate panic, error 5` 直接 abort。
-fn unwind_start_function(unwind: &mut UnwindBuilder) {
-  // Safety: `unwind` 由 code-gen 上下文构造点保证指向本平台具体 unwind 实现对象，`UnwindBuilder`
-  // 与实现共享 `repr(C)` 前缀布局 → 基址重合，向下转型类型正确；`&mut` 借自调用栈唯一入口，无别名。
-  unsafe { as_impl_mut(unwind) }.start_function();
-}
-
 fn unwind_prologue_a_64(
   unwind: &mut UnwindBuilder,
   prologue_size: u32,
@@ -43,11 +37,6 @@ fn unwind_prologue_a_64(
 ) {
   // Safety: 同 `unwind_start_function`——下转类型正确且该 `&mut` 借用为此刻唯一持有者。
   unsafe { as_impl_mut(unwind) }.prologue_a_64(prologue_size, stack_size, regs);
-}
-
-fn unwind_finish_function(unwind: &mut UnwindBuilder, begin_offset: u32, end_offset: u32) {
-  // Safety: 同 `unwind_start_function`——下转类型正确且该 `&mut` 借用为此刻唯一持有者。
-  unsafe { as_impl_mut(unwind) }.finish_function(begin_offset, end_offset);
 }
 
 const SP: RegisterA64 = RegisterA64 { bits: (31 << 3) };

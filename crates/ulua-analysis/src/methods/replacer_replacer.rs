@@ -1,6 +1,7 @@
 use ulua_common::{macros::luau_assert::LUAU_ASSERT, records::dense_hash_map::DenseHashMap};
 
 use crate::{
+  macros::substitution_entry::substitution_entry,
   records::{
     arena_handle::Handle, replacer::Replacer, substitution::Substitution,
     tarjan::SubstitutionVtable, txn_log::TxnLog, type_arena::TypeArena,
@@ -98,13 +99,5 @@ impl Replacer {
     };
   }
 
-  pub fn substitute_type_id(&mut self, ty: TypeId) -> Option<TypeId> {
-    self.install_substitution_vtable();
-    self.base.substitute_type_id(ty)
-  }
-
-  pub fn substitute_type_pack_id(&mut self, tp: TypePackId) -> Option<TypePackId> {
-    self.install_substitution_vtable();
-    self.base.substitute_type_pack_id(tp)
-  }
+  substitution_entry!(id, pack);
 }

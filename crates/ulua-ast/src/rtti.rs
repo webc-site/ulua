@@ -311,6 +311,87 @@ macro_rules! impl_cst_node_new {
   };
 }
 
+/// AST 只读引用判别枚举（`AstExprRef`/`AstStatRef`/`AstTypeRef`/`AstTypePackRef`
+/// 四件套）的整装生成器：enum + `try_from_*`/`from_*` + `as_ast_node` +
+/// `location` + `From<&Base>` + `AstNodeView`。四个枚举此前逐份手抄同一段
+/// per-variant 样板（判型臂逐条 `CLASS_INDEX =>`、上转臂逐条 `n.as_ast_node()`），
+/// 收口于此单一来源；variant 表仍由各调用点显式给出（与 `ast_node_table`
+/// 分工不同：Ref 枚举的 variant 命名可与记录类型名解耦，如
+/// `DeclareClass(AstStatClass)`）。
+///
+/// 类型/路径经 `$crate` 全路径展开，调用点仅需将各 variant 的记录类型名置于
+/// 作用域。`$ty` 的下转安全性沿用 [`ast_node_as_unchecked`] 的既有契约：
+/// `class_index` 命中即动态类型为 `$ty`，repr(C) 首字段基址重合。
+macro_rules! define_ast_ref_enum {
+  (
+    $(#[$doc:meta])*
+    $name:ident<'a> : $base:ident ;
+    try $try_from:ident , from $from:ident , expect $panic:literal ;
+    variants { $($variant:ident ($ty:ident)),+ $(,)? }
+  ) => {
+    $(#[$doc])*
+    #[derive(Debug, Clone, Copy)]
+    pub enum $name<'a> {
+      $($variant(&'a $ty)),+
+    }
+
+    impl<'a> $name<'a> {
+      /// 尝试从基类引用构建具体判别枚举。
+      /// 若 `class_index` 不属于已知节点类型，返回 `None`。
+      #[inline]
+      pub fn $try_from(node: &'a $base) -> Option<Self> {
+        match node.base.class_index {
+          $(
+            <$ty as $crate::rtti::AstNodeClass>::CLASS_INDEX => {
+              Some(Self::$variant(unsafe { $crate::rtti::ast_node_as_unchecked(node) }))
+            }
+          )+
+          _ => None,
+        }
+      }
+
+      /// 从基类引用构建具体判别枚举。
+      ///
+      /// # Panics
+      /// 若 `node.base.class_index` 不属于已知节点类型，触发 panic。
+      #[inline]
+      pub fn $from(node: &'a $base) -> Self {
+        Self::$try_from(node).expect($panic)
+      }
+
+      /// 获取该节点的基类 `AstNode` 引用。
+      #[inline]
+      pub fn as_ast_node(&self) -> &'a $crate::records::ast_node::AstNode {
+        match *self {
+          $(Self::$variant(n) => $crate::rtti::AstNodeView::as_ast_node(n)),+
+        }
+      }
+
+      /// 获取该节点的源码位置。
+      #[inline]
+      pub fn location(&self) -> $crate::records::location::Location {
+        self.as_ast_node().location
+      }
+    }
+
+    impl<'a> From<&'a $base> for $name<'a> {
+      #[inline]
+      fn from(node: &'a $base) -> Self {
+        Self::$from(node)
+      }
+    }
+
+    impl $crate::rtti::AstNodeView for $name<'_> {
+      #[inline]
+      fn as_ast_node(&self) -> &$crate::records::ast_node::AstNode {
+        self.as_ast_node()
+      }
+    }
+  };
+}
+
+pub(crate) use define_ast_ref_enum;
+
 /// 本模块唯一的共享引用类型改写核心（cpp `static_cast<T*>(this)` 的收口点）。
 ///
 /// # Safety

@@ -18,11 +18,12 @@ use ulua_bytecode::{
 };
 use ulua_common::enums::luau_opcode::LuauOpcode;
 
-const FIELD_NAME: &[u8] = b"field";
+#[path = "common/leak_bytes.rs"]
+mod leak_bytes_support;
 
-fn leak_bytes(bytes: &'static [u8]) -> &'static [u8] {
-  Box::leak(bytes.to_vec().into_boxed_slice())
-}
+use leak_bytes_support::leak_bytes;
+
+const FIELD_NAME: &[u8] = b"field";
 
 /// 在图里找唯一使用 `op` 的指令。
 fn find_inst<'a>(graph: &'a BcFunction<'a>, op: LuauOpcode) -> &'a BcInst {

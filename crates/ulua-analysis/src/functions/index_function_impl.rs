@@ -9,7 +9,7 @@
 //! `index<Person, "name">` => `Person` is the indexee and `"name"` is the indexer.
 use alloc::{vec, vec::Vec};
 
-use ulua_ast::records::{location::Location, position::Position};
+use ulua_ast::records::location::Location;
 use ulua_common::{macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet};
 
 use crate::{
@@ -25,13 +25,6 @@ use crate::{
   },
   type_aliases::{error_vec::ErrorVec, type_id::TypeId, type_pack_id::TypePackId},
 };
-fn empty_location() -> Location {
-  Location::new(
-    Position { line: 0, column: 0 },
-    Position { line: 0, column: 0 },
-  )
-}
-
 /// C++ overload `bool tblIndexInto(TypeId indexer, TypeId indexee,
 /// DenseHashSet<TypeId>& result, NotNull<TypeFunctionContext> ctx, bool isRaw)`
 /// (BuiltinTypeFunctions.cpp:2068-2072): seeds an empty seen-set and delegates to
@@ -205,7 +198,7 @@ pub unsafe fn index_function_impl(
           &mut dummy,
           extern_type_iter,
           "__index",
-          empty_location(),
+          Location::default(),
         );
         let mm_type = match mm_type {
           Some(mm) => mm,

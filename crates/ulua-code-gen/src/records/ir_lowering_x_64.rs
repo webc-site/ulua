@@ -30,7 +30,7 @@ use crate::{
     jump_if_truthy::jump_if_truthy, luau_constant_tag::luau_constant_tag,
     luau_constant_value::luau_constant_value, luau_reg_tag::luau_reg_tag,
     luau_reg_value::luau_reg_value, luau_reg_value_int::luau_reg_value_int,
-    luau_reg_value_int_64::luau_reg_value_int_64, predecessors::predecessors,
+    luau_reg_value_int_64::luau_reg_value_int_64, mem_x_64::mem, predecessors::predecessors,
     produces_dirty_high_register_bits::produces_dirty_high_register_bits, qword_reg::qword_reg,
     s_closure::s_closure, vm_const_op::vm_const_op, vm_exit_op::vm_exit_op, vm_reg_op::vm_reg_op,
   },
@@ -1083,10 +1083,6 @@ impl IrLoweringX64 {
 
     self.vector_and_mask
   }
-}
-
-fn mem(size: SizeX64, base: RegisterX64, disp: i32) -> OperandX64 {
-  OperandX64::mem(size, RegisterX64::NOREG, 1, base, disp)
 }
 
 const K_VM_EXIT_ENTRY_GUARD_PC: u32 = (1u32 << 28) - 1;

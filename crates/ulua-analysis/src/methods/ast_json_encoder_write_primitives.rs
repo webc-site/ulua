@@ -3,11 +3,13 @@
 //! overloading: a `WriteJson` trait + a generic `write(prop_name, value)`.
 //! PROP!(emitter, node, prop) expands to `emitter.write("prop", &node.prop)`.
 
-use alloc::{format, string::String};
+use alloc::string::String;
 
 use ulua_ast::records::ast_name::AstName;
 
-use crate::records::ast_json_encoder::AstJsonEncoder;
+use crate::{
+  macros::write_json_int_impl::impl_write_json_int, records::ast_json_encoder::AstJsonEncoder,
+};
 
 pub trait WriteJson {
   fn write_json(&self, enc: &mut AstJsonEncoder);
@@ -39,20 +41,21 @@ impl WriteJson for f64 {
   }
 }
 
-macro_rules! write_json_int {
-    ($($t:ty),*) => {$(
-        impl WriteJson for $t {
-            fn write_json(&self, enc: &mut AstJsonEncoder) {
-                let s = format!("{}", self);
-                enc.write_raw_string_view(&s);
-            }
-        }
-    )*};
-}
-// NB: no i8/u8 here -- C++ `char` writes as a one-char STRING (write(char),
+// NB: no i8/u8 -- C++ `char` writes as a one-char STRING (write(char),
 // AstJsonEncoder.cpp:156) and AstArray<char> as a string; c_char resolves to
 // i8 or u8 per target, so neither may be a JSON integer.
-write_json_int!(i32, i64, u32, u64, usize, isize, u16, i16);
+impl_write_json_int!(
+  WriteJson,
+  AstJsonEncoder,
+  i32,
+  i64,
+  u32,
+  u64,
+  usize,
+  isize,
+  u16,
+  i16
+);
 
 impl WriteJson for str {
   fn write_json(&self, enc: &mut AstJsonEncoder) {

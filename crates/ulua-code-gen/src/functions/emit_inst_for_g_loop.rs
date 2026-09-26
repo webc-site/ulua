@@ -8,7 +8,7 @@ use crate::{
   enums::{condition_x_64::ConditionX64, size_x_64::SizeX64},
   functions::{
     luau_reg_address::luau_reg_address, luau_reg_tag::luau_reg_tag, luau_reg_value::luau_reg_value,
-    set_luau_reg::set_luau_reg,
+    mem_x_64::mem, set_luau_reg::set_luau_reg,
   },
   macros::codegen_assert::CODEGEN_ASSERT,
   records::{
@@ -160,10 +160,6 @@ pub fn emit_inst_for_g_loop(
 }
 
 const K_TVALUE_SIZE_LOG2: i32 = 4;
-
-fn mem(size: SizeX64, base: RegisterX64, disp: i32) -> OperandX64 {
-  OperandX64::mem(size, RegisterX64::NOREG, 1, base, disp)
-}
 
 fn native_context_slot(disp: i32) -> OperandX64 {
   mem(SizeX64::Qword, R_NATIVE_CONTEXT, disp)

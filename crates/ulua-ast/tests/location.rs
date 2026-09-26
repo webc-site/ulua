@@ -7,16 +7,10 @@
 
 use ulua_ast::records::{location::Location, position::Position};
 
-fn p(line: u32, column: u32) -> Position {
-  Position { line, column }
-}
+#[path = "common/loc.rs"]
+mod loc_util;
 
-fn loc(bl: u32, bc: u32, el: u32, ec: u32) -> Location {
-  Location {
-    begin: p(bl, bc),
-    end: p(el, ec),
-  }
-}
+use loc_util::{loc, p};
 
 #[test]
 fn default_location_is_all_zero() {

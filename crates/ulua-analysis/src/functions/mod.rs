@@ -408,6 +408,7 @@ pub mod propagate_deprecated_attribute_to_constraint;
 pub mod prune;
 pub mod prune_unnecessary_generics;
 pub mod ptr;
+pub mod push_module_scope;
 pub mod push_string;
 pub mod push_table_indexer;
 pub mod push_type;

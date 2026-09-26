@@ -16,7 +16,7 @@ use ulua_ast::{
     ast_expr_constant_number::AstExprConstantNumber, ast_local::AstLocal,
     ast_name_table::AstNameTable, ast_node::AstNode, ast_stat_block::AstStatBlock,
     ast_stat_local::AstStatLocal, location::Location, node_handle::Nodes,
-    parse_options::ParseOptions, parser::Parser, position::Position,
+    parse_options::ParseOptions, parser::Parser,
   },
   rtti::{AstNodeClass, AstNodeView, ast_node_try_as, ast_node_try_as_ptr},
 };
@@ -38,16 +38,10 @@ fn with_block<R>(src: &str, f: impl FnOnce(&AstStatBlock) -> R) -> R {
   f(unsafe { &*result.root })
 }
 
-fn p(line: u32, column: u32) -> Position {
-  Position { line, column }
-}
+#[path = "common/loc.rs"]
+mod loc_util;
 
-fn loc(bl: u32, bc: u32, el: u32, ec: u32) -> Location {
-  Location {
-    begin: p(bl, bc),
-    end: p(el, ec),
-  }
-}
+use loc_util::{loc, p};
 
 /// 取 location 对应源码子串（cpp `stringAtLocation` 的单行简化版）。
 fn text_at(src: &str, location: Location) -> &str {

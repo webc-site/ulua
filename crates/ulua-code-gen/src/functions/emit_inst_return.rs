@@ -8,7 +8,9 @@ use ulua_vm::{
 
 use crate::{
   enums::{condition_x_64::ConditionX64, size_x_64::SizeX64},
-  functions::{dword_reg::dword_reg, luau_reg::luau_reg, luau_reg_address::luau_reg_address},
+  functions::{
+    dword_reg::dword_reg, luau_reg::luau_reg, luau_reg_address::luau_reg_address, mem_x_64::mem,
+  },
   records::{
     assembly_builder_x_64::AssemblyBuilderX64,
     emit_common_x_64::{R_BASE, R_STATE},
@@ -124,8 +126,4 @@ pub fn emit_inst_return(
     build.set_label_label(&mut exit_value_loop);
     build.jmp_label(&mut helpers.return_);
   }
-}
-
-fn mem(size: SizeX64, base: RegisterX64, disp: i32) -> OperandX64 {
-  OperandX64::mem(size, RegisterX64::NOREG, 1, base, disp)
 }

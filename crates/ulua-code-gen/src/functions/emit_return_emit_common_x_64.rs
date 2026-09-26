@@ -15,7 +15,7 @@ use ulua_vm::{
 
 use crate::{
   enums::{condition_x_64::ConditionX64, size_x_64::SizeX64},
-  functions::{dword_reg::dword_reg, s_closure::s_closure, s_code::s_code},
+  functions::{dword_reg::dword_reg, mem_x_64::mem, s_closure::s_closure, s_code::s_code},
   records::{
     assembly_builder_x_64::AssemblyBuilderX64,
     emit_common_x_64::{R_CONSTANTS, R_STATE},
@@ -26,9 +26,6 @@ use crate::{
   },
 };
 // C++ EmitCommonX64.h: `constexpr RegisterX64 rConstants = r12;`
-fn mem(size: SizeX64, base: RegisterX64, disp: i32) -> OperandX64 {
-  OperandX64::mem(size, RegisterX64::NOREG, 1, base, disp)
-}
 
 pub fn emit_return(build: &mut AssemblyBuilderX64, helpers: &mut ModuleHelpers) {
   // 输入：结果在 rdi，写入值个数在 ecx

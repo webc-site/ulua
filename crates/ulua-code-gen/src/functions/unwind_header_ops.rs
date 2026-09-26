@@ -44,3 +44,28 @@ pub(crate) unsafe fn set_begin_offset(unwind: &mut UnwindBuilder, begin_offset: 
   // Safety: 同上——透传 `as_impl_mut` 契约,`unwind` 指向具体实现对象。
   unsafe { as_impl_mut(unwind) }.set_begin_offset(begin_offset);
 }
+
+/// cpp 基类虚调用 `unwind.startFunction()`：A64/X64 入口函数构建两侧同款壳，
+/// 原先两文件各抄一份，收口于此。
+///
+/// # Safety
+/// 见 [`as_impl_mut`]。
+pub(crate) fn unwind_start_function(unwind: &mut UnwindBuilder) {
+  // Safety: `unwind` 由 code-gen 上下文构造点保证指向本平台具体 unwind 实现对象，
+  // `UnwindBuilder` 与实现共享 `repr(C)` 前缀布局 → 基址重合，向下转型类型正确；
+  // `&mut` 借自调用栈唯一入口，无别名。
+  unsafe { as_impl_mut(unwind) }.start_function();
+}
+
+/// cpp 基类虚调用 `unwind.finishFunction(beginOffset, endOffset)`（A64/X64 同款壳）。
+///
+/// # Safety
+/// 见 [`as_impl_mut`]。
+pub(crate) fn unwind_finish_function(
+  unwind: &mut UnwindBuilder,
+  begin_offset: u32,
+  end_offset: u32,
+) {
+  // Safety: 同 `unwind_start_function`——下转类型正确且该 `&mut` 借用为此刻唯一持有者。
+  unsafe { as_impl_mut(unwind) }.finish_function(begin_offset, end_offset);
+}

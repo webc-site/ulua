@@ -15,6 +15,8 @@ pub mod c_alloc;
 pub mod c_yielding_iterator;
 #[path = "c_yielding_iterator_continuation.rs"]
 pub mod c_yielding_iterator_continuation;
+#[path = "check_userdata_tag.rs"]
+pub mod check_userdata_tag;
 #[path = "codegen_ir_hook_callbacks.rs"]
 pub mod codegen_ir_hook_callbacks;
 #[path = "cold_codegen_run.rs"]

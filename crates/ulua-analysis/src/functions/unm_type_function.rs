@@ -1,6 +1,6 @@
 use alloc::vec;
 
-use ulua_ast::records::{location::Location, position::Position};
+use ulua_ast::records::location::Location;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
@@ -15,13 +15,6 @@ use crate::{
   },
   type_aliases::{error_vec::ErrorVec, type_id::TypeId, type_pack_id::TypePackId},
 };
-fn empty_location() -> Location {
-  Location::new(
-    Position { line: 0, column: 0 },
-    Position { line: 0, column: 0 },
-  )
-}
-
 /// # Safety
 /// 逐参数契约（对照 cpp `unmTypeFunction`，BuiltinTypeFunctions.cpp:297）：
 /// - `instance`：本 type function 的实例类型 Id；与 follow 后的操作数做自指比较以截断
@@ -107,7 +100,7 @@ pub unsafe fn unm_type_function(
     &mut dummy,
     operand_ty,
     "__unm",
-    empty_location(),
+    Location::default(),
   );
   // 双写合一：`is_none()` 早退与块后 `unwrap()` 收为 let-else，Some 直接绑定。
   let Some(mm_type) = mm_type else {
@@ -130,7 +123,7 @@ pub unsafe fn unm_type_function(
     // 读取 Copy 的 location 字段；其指向当前约束，随求解会话存活，只读访问。
     unsafe { (*ctx_ref.constraint).location }
   } else {
-    empty_location()
+    Location::default()
   };
 
   // Safety: 调 unsafe fn `solve_function_call`，其 ctx 为指向会话有效上下文的只读再借用；

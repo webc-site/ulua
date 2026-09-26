@@ -3,6 +3,7 @@
 //! `Substitution` with `ctx->arena`, then stores `ctx` and `needle`.
 
 use crate::{
+  macros::substitution_entry::substitution_entry,
   records::{
     arena_handle::Handle, refine_type_scrubber::RefineTypeScrubber, substitution::Substitution,
     tarjan::SubstitutionVtable, txn_log::TxnLog, type_function_context::TypeFunctionContext,
@@ -111,8 +112,5 @@ impl RefineTypeScrubber {
     };
   }
 
-  pub fn substitute_type_id(&mut self, ty: TypeId) -> Option<TypeId> {
-    self.install_substitution_vtable();
-    self.base.substitute_type_id(ty)
-  }
+  substitution_entry!(id);
 }

@@ -21,7 +21,6 @@ use ulua_ast::{
     ast_name_table::AstNameTable,
     lexeme::{Lexeme, QuoteStyle},
     lexer::Lexer,
-    location::Location,
     position::Position,
   },
 };
@@ -40,18 +39,10 @@ fn with_lexer<R>(input: &[u8], f: impl FnOnce(&mut Lexer) -> R) -> R {
   f(&mut lexer)
 }
 
-fn loc(bl: u32, bc: u32, el: u32, ec: u32) -> Location {
-  Location {
-    begin: Position {
-      line: bl,
-      column: bc,
-    },
-    end: Position {
-      line: el,
-      column: ec,
-    },
-  }
-}
+#[path = "common/loc.rs"]
+mod loc_util;
+
+use loc_util::loc;
 
 /// A single-character token's type (`':'`, `'{'`, ...): the char's code point.
 fn ch(c: u8) -> Type {
