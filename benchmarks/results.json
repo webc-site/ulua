@@ -1,0 +1,225 @@
+{
+  "timestamp": "2026-09-26T18:49:36.53478849Z",
+  "platform": "Pure Rust In-Memory (No Process Overhead)",
+  "environment": {
+    "os": "Ubuntu 24.04",
+    "arch": "aarch64",
+    "cpu": "Neoverse-N2",
+    "cores": 4,
+    "ram_gb": 16,
+    "summary": "Ubuntu 24.04 (aarch64) · Neoverse-N2 (4核) · 16GB 内存"
+  },
+  "runs": 3,
+  "benchmarks": [
+    {
+      "id": "binarytrees",
+      "name": "binarytrees",
+      "unit": "ms"
+    },
+    {
+      "id": "fib",
+      "name": "fib",
+      "unit": "ms"
+    },
+    {
+      "id": "mandel",
+      "name": "mandel",
+      "unit": "ms"
+    },
+    {
+      "id": "matmul",
+      "name": "matmul",
+      "unit": "ms"
+    },
+    {
+      "id": "nbody",
+      "name": "nbody",
+      "unit": "ms"
+    },
+    {
+      "id": "spectralnorm",
+      "name": "spectralnorm",
+      "unit": "ms"
+    },
+    {
+      "id": "strings",
+      "name": "strings",
+      "unit": "ms"
+    },
+    {
+      "id": "tablesort",
+      "name": "tablesort",
+      "unit": "ms"
+    }
+  ],
+  "engines": [
+    {
+      "id": "ulua",
+      "key": "ulua",
+      "label": "ulua",
+      "lang": "Luau (纯 Rust)",
+      "mode": "interp",
+      "color": "#0969da",
+      "is_ulua": true,
+      "is_reference": false
+    },
+    {
+      "id": "ulua_jit",
+      "key": "ulua-jit",
+      "label": "ulua (JIT)",
+      "lang": "Luau (纯 Rust)",
+      "mode": "jit",
+      "color": "#0284c7",
+      "is_ulua": true,
+      "is_reference": false
+    },
+    {
+      "id": "mlua_luau",
+      "key": "mlua/luau",
+      "label": "mlua/luau",
+      "lang": "Luau (C++)",
+      "mode": "interp",
+      "color": "#1f883d",
+      "is_ulua": false,
+      "is_reference": false
+    },
+    {
+      "id": "mlua_luau_jit",
+      "key": "mlua/luau-jit",
+      "label": "mlua/luau (JIT)",
+      "lang": "Luau (C++)",
+      "mode": "jit",
+      "color": "#d97706",
+      "is_ulua": false,
+      "is_reference": false
+    },
+    {
+      "id": "mlua_luajit",
+      "key": "mlua/luajit",
+      "label": "LuaJIT (JIT)",
+      "lang": "LuaJIT 2.1",
+      "mode": "jit",
+      "color": "#8250df",
+      "is_ulua": false,
+      "is_reference": true
+    },
+    {
+      "id": "mlua_luajit_interp",
+      "key": "mlua/luajit-interp",
+      "label": "LuaJIT (解释)",
+      "lang": "LuaJIT 2.1",
+      "mode": "interp",
+      "color": "#6366f1",
+      "is_ulua": false,
+      "is_reference": true
+    },
+    {
+      "id": "mlua_lua54",
+      "key": "mlua/lua5.4",
+      "label": "Lua 5.4",
+      "lang": "Lua 5.4",
+      "mode": "interp",
+      "color": "#64748b",
+      "is_ulua": false,
+      "is_reference": true
+    }
+  ],
+  "data": {
+    "binarytrees": {
+      "mlua/luau": 171.2,
+      "mlua/luau-jit": 125.5,
+      "ulua": 145.0,
+      "ulua-jit": 114.4
+    },
+    "fib": {
+      "mlua/luau": 278.4,
+      "mlua/luau-jit": 153.1,
+      "ulua": 280.9,
+      "ulua-jit": 171.3
+    },
+    "mandel": {
+      "mlua/luau": 359.4,
+      "mlua/luau-jit": 63.8,
+      "ulua": 570.7,
+      "ulua-jit": 63.1
+    },
+    "matmul": {
+      "mlua/luau": 703.5,
+      "mlua/luau-jit": 236.1,
+      "ulua": 797.5,
+      "ulua-jit": 235.3
+    },
+    "nbody": {
+      "mlua/luau": 931.2,
+      "mlua/luau-jit": 917.4,
+      "ulua": 1047.0,
+      "ulua-jit": 1035.1
+    },
+    "spectralnorm": {
+      "mlua/luau": 2047.2,
+      "mlua/luau-jit": 761.8,
+      "ulua": 2252.9,
+      "ulua-jit": 824.8
+    },
+    "strings": {
+      "mlua/luau": 130.8,
+      "mlua/luau-jit": 130.8,
+      "ulua": 117.6,
+      "ulua-jit": 117.0
+    },
+    "tablesort": {
+      "mlua/luau": 21.4,
+      "mlua/luau-jit": 18.5,
+      "ulua": 18.3,
+      "ulua-jit": 16.6
+    }
+  },
+  "reference": {
+    "binarytrees": {
+      "mlua/lua5.4": 141.6,
+      "mlua/luajit": 48.5,
+      "mlua/luajit-interp": 120.5
+    },
+    "fib": {
+      "mlua/lua5.4": 143.6,
+      "mlua/luajit": 45.1,
+      "mlua/luajit-interp": 109.0
+    },
+    "mandel": {
+      "mlua/lua5.4": 341.1,
+      "mlua/luajit": 38.2,
+      "mlua/luajit-interp": 345.2
+    },
+    "matmul": {
+      "mlua/lua5.4": 434.2,
+      "mlua/luajit": 41.2,
+      "mlua/luajit-interp": 250.0
+    },
+    "nbody": {
+      "mlua/lua5.4": 734.6,
+      "mlua/luajit": 52.4,
+      "mlua/luajit-interp": 490.8
+    },
+    "spectralnorm": {
+      "mlua/lua5.4": 1689.7,
+      "mlua/luajit": 41.6,
+      "mlua/luajit-interp": 1850.0
+    },
+    "strings": {
+      "mlua/lua5.4": 92.7,
+      "mlua/luajit": 44.7,
+      "mlua/luajit-interp": 105.3
+    },
+    "tablesort": {
+      "mlua/lua5.4": 58.5,
+      "mlua/luajit": 44.5,
+      "mlua/luajit-interp": 52.0
+    }
+  },
+  "geomean_vs_ulua": {
+    "mlua/luau": 0.95,
+    "mlua/luau-jit": 0.52,
+    "ulua": 1.0,
+    "ulua-jit": 0.52
+  }
+}
