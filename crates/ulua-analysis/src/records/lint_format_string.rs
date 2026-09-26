@@ -25,6 +25,51 @@ pub struct LintFormatString<'ctx> {
   pub(crate) context: LintContextHandle<'ctx>,
 }
 
+/// 256 位字节集位图门面：本文件的字符集全部为编译期固定字面量，经 `const fn`
+/// 在编译期构建一次并提为 `const`，把原先每次调用都线性扫描 `&[u8] contains(&b)`
+/// （每字符 O(集大小)）的运行时开销降为 O(1) 位测试。风格参照 ulua-ast
+/// `char_classifier` 的编译期分类表先例；位图化仅替换成员判定，`|b' '` 大小写
+/// 折叠臂语义逐字保留。
+#[derive(Debug, Clone, Copy)]
+pub struct CharSet([u64; 4]);
+
+impl CharSet {
+  /// 由字节字面量集构建位图（const 求值的 while 循环，重复元素幂等无害，
+  /// 产物落 rodata，无运行时初始化）。
+  const fn of(bytes: &[u8]) -> Self {
+    let mut words = [0u64; 4];
+    let mut i = 0;
+    while i < bytes.len() {
+      let b = bytes[i];
+      words[(b >> 6) as usize] |= 1u64 << (b & 63);
+      i += 1;
+    }
+    Self(words)
+  }
+
+  /// 成员判定：按字节高 6 位选字、低 6 位定位，单次位测试。
+  #[inline]
+  const fn has(self, b: u8) -> bool {
+    (self.0[(b >> 6) as usize] >> (b & 63)) & 1 != 0
+  }
+}
+
+/// `check_date_format` 合法日期格式符集（原局部绑定 `options`）。
+const K_DATE_OPTIONS: CharSet = CharSet::of(b"aAbBcdHIjmMpSUwWxXyYzZ");
+/// `check_string_format` 标志位集（原局部绑定 `flags`）。
+const K_FORMAT_FLAGS: CharSet = CharSet::of(b"-+ #0");
+/// `check_string_format` 转换符集（原局部绑定 `options`）。
+const K_FORMAT_OPTIONS: CharSet = CharSet::of(b"cdiouxXeEfgGqs*");
+/// `string.match` 模式 `%` 转义魔字符集（原局部绑定 `magic`）。
+const K_MAGIC_CHARS: CharSet = CharSet::of(b"^$()%.[]*+-?)");
+/// `string.match` 字符类小写集；上位类经 `|b' '` 折叠到小写后查本集
+/// （原局部绑定 `classes`）。
+const K_CLASSES: CharSet = CharSet::of(b"acdglpsuwxz");
+/// `string.pack` 合法说明符+空格集（原局部绑定 `options`）。
+const K_PACK_OPTIONS: CharSet = CharSet::of(b"<>!=bBhHlLjJTiIfdnczsxX ");
+/// `string.pack` 无长度说明符集，`X` 后禁止项（原局部绑定 `unsized_opts`）。
+const K_PACK_UNSIZED_OPTS: CharSet = CharSet::of(b"<>!zX ");
+
 impl<'ctx> AstVisitor for LintFormatString<'ctx> {
   fn visit_expr_call(&mut self, node: &mut AstExprCall) -> bool {
     self.match_call(node);
@@ -35,7 +80,6 @@ impl<'ctx> AstVisitor for LintFormatString<'ctx> {
 // —— 原 methods/lint_format_string_check_date_format.rs ——
 impl<'ctx> LintFormatString<'ctx> {
   pub fn check_date_format(&self, data: &[u8]) -> Option<&'static str> {
-    let options = b"aAbBcdHIjmMpSUwWxXyYzZ";
     let size = data.len();
     let mut i = 0;
     while i < size {
@@ -46,7 +90,7 @@ impl<'ctx> LintFormatString<'ctx> {
           return Some("unfinished replacement");
         }
         let next_ch = data[i];
-        if next_ch != b'%' && !options.contains(&next_ch) {
+        if next_ch != b'%' && !K_DATE_OPTIONS.has(next_ch) {
           return Some("unexpected replacement character; must be a date format specifier or %");
         }
       }
@@ -62,8 +106,6 @@ impl<'ctx> LintFormatString<'ctx> {
 // —— 原 methods/lint_format_string_check_string_format.rs ——
 impl<'ctx> LintFormatString<'ctx> {
   pub fn check_string_format(&self, data: &[u8]) -> Option<&'static str> {
-    let flags = b"-+ #0";
-    let options = b"cdiouxXeEfgGqs*";
     let size = data.len();
     let mut i = 0;
     while i < size {
@@ -74,7 +116,7 @@ impl<'ctx> LintFormatString<'ctx> {
           i += 1;
           continue;
         }
-        while i < size && flags.contains(&data[i]) {
+        while i < size && K_FORMAT_FLAGS.has(data[i]) {
           i += 1;
         }
         if i < size && self.is_digit(data[i]) {
@@ -95,7 +137,7 @@ impl<'ctx> LintFormatString<'ctx> {
         if i == size {
           return Some("unfinished format specifier");
         }
-        if !options.contains(&data[i]) {
+        if !K_FORMAT_OPTIONS.has(data[i]) {
           return Some("invalid format specifier: must be a string format specifier or %");
         }
       }
@@ -109,8 +151,6 @@ impl<'ctx> LintFormatString<'ctx> {
 impl<'ctx> LintFormatString<'ctx> {
   #[inline]
   pub fn check_string_match(&self, data: &[u8]) -> Result<i32, &'static str> {
-    let magic = b"^$()%.[]*+-?)";
-    let classes = b"acdglpsuwxz";
     let size = data.len();
     let mut open_captures: Vec<i32> = Vec::new();
     let mut total_captures: i32 = 0;
@@ -148,13 +188,13 @@ impl<'ctx> LintFormatString<'ctx> {
             // we can parse the set with the regular logic
           } else {
             // lower case lookup - upper case for every character class is defined as its inverse
-            if !classes.contains(&(ch | b' ')) {
+            if !K_CLASSES.has(ch | b' ') {
               return Err("invalid character class, must refer to a defined class or its inverse");
             }
           }
         } else {
           // technically % can escape any non-alphanumeric character but this is error-prone
-          if !magic.contains(&ch) {
+          if !K_MAGIC_CHARS.has(ch) {
             return Err("expected a magic character after %");
           }
         }
@@ -178,7 +218,8 @@ impl<'ctx> LintFormatString<'ctx> {
         if j == size {
           return Err("expected ] at the end of the string to close a set");
         }
-        if let Some(error) = self.check_string_match_set(&data[i + 1..j], magic, classes) {
+        if let Some(error) = self.check_string_match_set(&data[i + 1..j], K_MAGIC_CHARS, K_CLASSES)
+        {
           return Err(error);
         }
         debug_assert!(data[j] == b']');
@@ -207,8 +248,8 @@ impl<'ctx> LintFormatString<'ctx> {
   pub fn check_string_match_set(
     &self,
     data: &[u8],
-    magic: &[u8],
-    classes: &[u8],
+    magic: CharSet,
+    classes: CharSet,
   ) -> Option<&'static str> {
     let size = data.len();
     let mut i = 0;
@@ -224,12 +265,12 @@ impl<'ctx> LintFormatString<'ctx> {
           return Some("sets can not contain capture references");
         } else if self.is_alpha(next_ch) {
           // lower case lookup - upper case for every character class is defined as its inverse
-          if !classes.contains(&(next_ch | b' ')) {
+          if !classes.has(next_ch | b' ') {
             return Some("invalid character class, must refer to a defined class or its inverse");
           }
         } else {
           // technically % can escape any non-alphanumeric character but this is error-prone
-          if !magic.contains(&next_ch) {
+          if !magic.has(next_ch) {
             return Some("expected a magic character after %");
           }
         }
@@ -249,19 +290,17 @@ impl<'ctx> LintFormatString<'ctx> {
 impl<'ctx> LintFormatString<'ctx> {
   #[inline]
   pub fn check_string_pack(&self, data: &[u8], fixed: bool) -> Option<&'static str> {
-    let options = b"<>!=bBhHlLjJTiIfdnczsxX ";
-    let unsized_opts = b"<>!zX ";
     let size = data.len();
     let mut i = 0;
     while i < size {
       let ch = data[i];
-      if !options.contains(&ch) {
+      if !K_PACK_OPTIONS.has(ch) {
         return Some("unexpected character; must be a pack specifier or space");
       }
       if ch == b'c' && (i + 1 == size || !self.is_digit(data[i + 1])) {
         return Some("fixed-sized string format must specify the size");
       }
-      if ch == b'X' && (i + 1 == size || unsized_opts.contains(&data[i + 1])) {
+      if ch == b'X' && (i + 1 == size || K_PACK_UNSIZED_OPTS.has(data[i + 1])) {
         return Some("X must be followed by a size specifier");
       }
       if fixed && matches!(ch, b'z' | b's') {
