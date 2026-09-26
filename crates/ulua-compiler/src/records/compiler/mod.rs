@@ -253,6 +253,5 @@ impl Compiler {
   }
 }
 
-
 /// 百分比基准（cpp 成本模型 `costPercent` 的 100）：for 展开与内联调用判定共用。
 pub(crate) const K_COST_PERCENT_SCALE: i32 = 100;
