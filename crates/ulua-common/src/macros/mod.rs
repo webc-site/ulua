@@ -1,11 +1,8 @@
+pub mod fast_flags;
 pub mod luau_assert;
 pub mod luau_assertenabled;
 pub mod luau_big_endian;
 pub mod luau_debugbreak;
-pub mod luau_dynamic_fastflagvariable;
-pub mod luau_dynamic_fastintvariable;
-pub mod luau_fastflagvariable;
-pub mod luau_fastintvariable;
 pub mod luau_insn_a;
 pub mod luau_insn_aux_a;
 pub mod luau_insn_aux_b;
