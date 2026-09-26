@@ -1,12 +1,9 @@
 use ulua_common::fflag;
 
 use crate::{
+  enums::ast_expr_ref::AstExprRef,
   functions::optional_node::slot_opt,
-  records::{
-    ast_expr::AstExpr, ast_expr_global::AstExprGlobal, ast_expr_index_expr::AstExprIndexExpr,
-    ast_expr_index_name::AstExprIndexName, ast_expr_local::AstExprLocal, parser::Parser,
-  },
-  rtti::{AstNodeClass, ast_node_as_unchecked},
+  records::{ast_expr::AstExpr, parser::Parser},
 };
 
 impl Parser {
@@ -19,17 +16,12 @@ impl Parser {
       return false;
     };
 
-    let node = &expr_ref.base;
-    match node.class_index {
-      AstExprLocal::CLASS_INDEX => {
-        let local: &AstExprLocal = unsafe { ast_node_as_unchecked(node) };
-        // local 槽已句柄化恒非空：.get() 安全借用，判空折叠随类型消失。
-        !local.local.get().is_const
-      }
-      AstExprGlobal::CLASS_INDEX => {
+    match expr_ref.as_expr_ref() {
+      AstExprRef::Local(local) => !local.local.get().is_const,
+      AstExprRef::Global(_) => {
         !(fflag::DebugLuauUserDefinedClasses.get() && self.get_matching_class(expr).is_some())
       }
-      AstExprIndexName::CLASS_INDEX | AstExprIndexExpr::CLASS_INDEX => true,
+      AstExprRef::IndexName(_) | AstExprRef::IndexExpr(_) => true,
       _ => false,
     }
   }
