@@ -6,21 +6,27 @@
 //! forwards to `strftime`, which `wasm32-unknown-unknown` cannot bind — no libc
 //! — so the rendering is implemented natively for every target; see
 //! `strftime_directive` for the C-locale / timezone policy). The broken-down
-//! time still comes from `time`/`gmtime_r`/`localtime_r`, which the wasm build
-//! shims in `ulua-common::wasm_libc` (fixed clock, local == UTC).
+//! time is pure Rust on every target: UTC via `jiff` civil decomposition and
+//! local time via [`localtime_r`] (`jiff::tz::TimeZone::system()`; on
+//! `wasm32-unknown-unknown` there is no zone database and `system()` falls
+//! back to UTC, as did the former `ulua-common::wasm_libc` shims, since
+//! removed). The current clock reads through [`now_epoch_seconds`]
+//! (`coarsetime`).
 
-use core::{ffi::c_char, ptr::null_mut};
+use alloc::ffi::CString;
+use core::ffi::c_char;
 
 use crate::{
   functions::{
     cstr_bytes,
-    localtime_r::{TimeT, Tm, localtime_r},
+    localtime_r::{TimeT, Tm, ZONE_UTC, fill_civil, localtime_r},
     lua_createtable::lua_createtable,
     lua_l_addlstring::lua_l_addlstring,
     lua_l_buffinit::lua_l_buffinit,
     lua_l_checknumber::lua_l_checknumber,
     lua_l_pushresult::lua_l_pushresult,
     lua_pushnil::lua_pushnil,
+    os_time::now_epoch_seconds,
     setboolfield::setboolfield,
     setfield::setfield,
     strftime_directive::strftime_directive,
@@ -35,49 +41,35 @@ use crate::{
 /// NUL 结尾字节串（`*const c_char` 契约调用点 `.as_ptr().cast()`；§10 不引入 `CStr`/`c"…"`）。
 const FMT_DEFAULT: &[u8] = b"%c\0";
 
-unsafe extern "C" {
-  fn time(t: *mut TimeT) -> TimeT;
-}
-
-/// `gmtime_r` wrapper：把 `timep` 按 UTC 分解写入 `result`；平台失败返回 `None`。
-///
-/// 图依赖的 `gmtime_r` 会无条件调用 Windows 的 `gmtime_s`，故在此直接声明
-/// 平台正确的符号，把 unsafe 关进最小 FFI 边界。
+/// `gmtime_r` 的纯 Rust 替代（jiff civil 分解）：把 `timep` 按 UTC 分解写入
+/// `result`；超出 jiff 可表示范围（约 ±1 万年，对齐 libc 的 EOVERFLOW→NULL
+/// 契约）返回 `None`。UTC 无偏移、恒非 DST，`tm_zone` 直指静态 `"UTC"`
+/// （与旧 wasm shim 和 glibc `gmtime_r` 同值）。
 fn os_gmtime_r<'a>(timep: &TimeT, result: &'a mut Tm) -> Option<&'a mut Tm> {
-  #[cfg(target_os = "windows")]
-  let ok = {
-    unsafe extern "C" {
-      // `gmtime_s` is inline in MSVC's <time.h>; link the real UCRT export
-      // `_gmtime64_s` (__time64_t = i64) instead.
-      fn _gmtime64_s(result: *mut Tm, timep: *const TimeT) -> i32;
-    }
-    // Safety: `timep`/`result` 为存活可读/可写 Rust 引用，按 UCRT C 签名传其地址
-    unsafe { _gmtime64_s(result, timep) == 0 }
-  };
-  #[cfg(not(target_os = "windows"))]
-  let ok = {
-    unsafe extern "C" {
-      fn gmtime_r(timep: *const TimeT, result: *mut Tm) -> *mut Tm;
-    }
-    // Safety: `timep`/`result` 为存活可读/可写 Rust 引用，按 glibc C 签名传其地址；
-    // 成功时原地写回并返回 `result`，失败返回 null
-    unsafe { !gmtime_r(timep, result).is_null() }
-  };
+  use jiff::{Timestamp, tz::TimeZone};
 
-  if ok { Some(result) } else { None }
+  let ts = Timestamp::from_second(*timep).ok()?;
+  fill_civil(ts.to_zoned(TimeZone::UTC).datetime(), result);
+  result.tm_isdst = 0;
+  #[cfg(not(target_os = "windows"))]
+  {
+    result.tm_gmtoff = 0;
+    result.tm_zone = ZONE_UTC.as_ptr().cast();
+  }
+  Some(result)
 }
 
 /// # Safety
 /// `l` 须为存活 LuaState 并处于 os.date 的受保护帧：栈 1 号位为可选格式串（`luaL_optstring!` 返回本帧存活的 NUL 结尾指针，
 /// 经 `cstr_bytes` 折成 `&[u8]`、首字节判 UTC 前缀），2 号位可选数字时间（`lua_isnoneornil`/`lua_l_checknumber`）；
-/// `time`/`localtime_r`/`os_gmtime_r` 为 libc FFI（写栈上 `tmv`，失败返回 None → pushnil），
+/// 时间取值/分解为纯 Rust（`now_epoch_seconds`/`os_gmtime_r`/`localtime_r`，超范围返回 None → pushnil），
+/// `localtime_r` 的区缩写经 `zone` 出参移交本帧持有，`tm_zone` 指针的读取（渲染循环）均在其存活期内；
 /// `lua_createtable`/`lua_l_buffinit`/`lua_l_pushresult` 可分配/GC/抛错。cpp/VM/src/loslib.cpp:112 os_date。
 pub(crate) unsafe extern "C-unwind" fn os_date(l: *mut LuaState) -> i32 {
   unsafe {
     let s: *const c_char = luaL_optstring!(l, 1, FMT_DEFAULT.as_ptr().cast());
     let t: TimeT = if lua_isnoneornil!(l, 2) {
-      // Safety: C `time` 接受 NULL 出参（仅取返回值），不写任何内存
-      time(null_mut())
+      now_epoch_seconds()
     } else {
       lua_l_checknumber(l, 2) as TimeT
     };
@@ -85,6 +77,8 @@ pub(crate) unsafe extern "C-unwind" fn os_date(l: *mut LuaState) -> i32 {
     // Safety: 契约保证 luaL_optstring 返回本帧存活的 NUL 结尾串，cstr_bytes 扫至 NUL 终止
     let mut fmt: &[u8] = cstr_bytes(s);
     let mut tmv: Tm = Tm::default();
+    // `tm_zone`（非 Windows 字段）可能指向此处堆缓冲；随本帧存活至渲染结束
+    let mut zone: Option<CString> = None;
     let stm: Option<&mut Tm>;
     if fmt.first() == Some(&b'!') {
       // UTC?
@@ -95,7 +89,7 @@ pub(crate) unsafe extern "C-unwind" fn os_date(l: *mut LuaState) -> i32 {
       stm = if t < 0 {
         None
       } else {
-        localtime_r(&t, &mut tmv)
+        localtime_r(&t, &mut tmv, &mut zone)
       };
     }
 

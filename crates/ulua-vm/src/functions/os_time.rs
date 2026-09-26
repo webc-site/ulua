@@ -1,5 +1,3 @@
-use core::ptr::null_mut;
-
 use crate::{
   enums::lua_type::LuaType,
   functions::{
@@ -16,19 +14,22 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-unsafe extern "C" {
-  fn time(t: *mut TimeT) -> TimeT;
+/// 挂钟 Unix 秒（替代 C `time(NULL)`）：`coarsetime` 的粗粒度缓存时钟，
+/// 整秒截断与 C `time` 的取整语义一致；全目标纯 Rust（wasm32 经
+/// `wasm-bindgen` 读宿主时钟，不再依赖旧的固定时刻 shim）。
+pub(crate) fn now_epoch_seconds() -> TimeT {
+  coarsetime::Clock::now_since_epoch().as_f64() as TimeT
 }
 
 /// # Safety
-/// `l` 须为存活 `LuaState` 且处于受保护帧：索引 1 可空（`lua_isnoneornil` 走 `time(NULL)`），否则
+/// `l` 须为存活 `LuaState` 且处于受保护帧：索引 1 可空（`lua_isnoneornil` 走 [`now_epoch_seconds`]），否则
 /// `luaL_checktype(l,1,TABLE)` 要求为表否则抛错回退，`lua_settop(l,1)` 截顶后经 getfield/getboolfield 读表字段
 /// 到本地 `Tm`（不回写表）；末尾 `lua_pushnil`/`lua_pushnumber` 需 `(*l).top` 后 ≥1 空槽；可触发 GC。
 /// cpp VM/src/loslib.cpp:179
 pub unsafe extern "C-unwind" fn os_time(l: *mut LuaState) -> i32 {
   unsafe {
     let t: i64 = if lua_isnoneornil!(l, 1) {
-      time(null_mut())
+      now_epoch_seconds()
     } else {
       let mut ts = Tm::default();
 
