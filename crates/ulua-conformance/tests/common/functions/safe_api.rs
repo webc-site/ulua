@@ -413,8 +413,8 @@ pub fn isnumber(l: L, idx: c_int) -> c_int {
 
 /// `lua_status`。
 pub fn status(l: L) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_status(l) }
+  // Safety: `l` 存活（模块级契约），`&*l` 只读引用重建前提成立。
+  unsafe { lua_status(&*l) }
 }
 
 /// `lua_equal`（C 侧 0/1）。

@@ -150,8 +150,9 @@ impl<'lua> CoWindow<'lua> {
   #[inline]
   fn status(&self) -> c_int {
     // Safety: `co` 随 `'lua` 关联的 `Lua` 的 `XRc<LuaInner>` 与 `Thread` 的注册表
-    // 引用共同锚定存活；`lua_status` 只读协程一字段，不压弹栈、不触发 GC、不抛错。
-    unsafe { lua_status(self.co_ptr()) }
+    // 引用共同锚定存活，`&*self.co_ptr()` 满足本帧只读引用重建前提；`lua_status`
+    // 只读协程一字段，不压弹栈、不触发 GC、不抛错。
+    unsafe { lua_status(&*self.co_ptr()) }
   }
 
   /// `lua_costatus(parent, co)`：co 相对 parent 的角色码（只读）。
