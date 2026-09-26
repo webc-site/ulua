@@ -76,7 +76,7 @@ use ulua_ast::{
     ast_type_union::AstTypeUnion,
     location::Location,
   },
-  rtti::{AstNodePtr, ast_node_is, ast_node_is_ptr, ast_node_try_as},
+  rtti::{AstNodePtr, ast_node_is_ptr, ast_node_try_as},
 };
 use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet};
 
@@ -948,8 +948,7 @@ impl TypeChecker2 {
       }
       AstExprUnaryOp::Minus => {
         // A negated integer literal is folded into one constant by the compiler, so it never negates anything.
-        // SAFETY: operand 是上面一元操作数的 arena 借用；ast_node_is 走 RTTI 头只读探测。
-        if ast_node_is::<AstExprConstantInteger>(operand) {
+        if matches!(operand.as_expr_ref(), AstExprRef::ConstantInteger(_)) {
           self.test_is_subtype_type_id_type_id_location(
             operand_type,
             self.builtin_types_ref().integer_type,
@@ -1983,7 +1982,7 @@ impl TypeChecker2 {
       let value: Option<&AstExpr> =
         unsafe { values.as_slice().get(i).copied().and_then(|p| p.as_ref()) };
       let is_pack = value.is_some_and(|value| {
-        ast_node_is::<AstExprCall>(value) || ast_node_is::<AstExprVarargs>(value)
+        matches!(value.as_expr_ref(), AstExprRef::Call(_) | AstExprRef::Varargs(_))
       });
 
       if let Some(value) = value {

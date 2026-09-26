@@ -7,13 +7,12 @@
 use alloc::string::String;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
     ast_class_method::AstClassMethod, ast_class_property::AstClassProperty,
-    ast_expr_constant_string::AstExprConstantString, ast_expr_index_expr::AstExprIndexExpr,
-    ast_expr_index_name::AstExprIndexName, ast_expr_local::AstExprLocal,
     ast_stat_assign::AstStatAssign, ast_stat_class::AstStatClass, ast_type::AstType,
   },
-  rtti::{ast_node_is, ast_node_try_as},
+  rtti::ast_node_try_as,
   visit::{ast_expr_visit, ast_stat_visit},
 };
 use ulua_common::{LUAU_ASSERT, fflag, records::dense_hash_set::DenseHashSet};
@@ -115,28 +114,25 @@ impl TypeChecker2 {
 
           // 再登记哪些字段已初始化。
           for var in assignment.vars.iter() {
-            let var = *var;
-            if ast_node_is::<AstExprIndexName>(&*var) {
-              let index_name = &*(var.cast::<AstExprIndexName>());
-              if ast_node_is::<AstExprLocal>(&*index_name.expr)
-                && (index_name.expr.cast::<AstExprLocal>()).local.as_ptr() == self_local
-              {
-                uninitialized_fields.erase(&String::from(index_name.index.as_str_or_empty()));
+            let var = &**var;
+            match var.as_expr_ref() {
+              AstExprRef::IndexName(index_name) => {
+                if let AstExprRef::Local(local) = index_name.expr.as_expr_ref()
+                  && local.local.as_ptr() == self_local
+                {
+                  uninitialized_fields.erase(&String::from(index_name.index.as_str_or_empty()));
+                }
               }
-            } else if ast_node_is::<AstExprIndexExpr>(&*var) {
-              let index_expr = &*(var.cast::<AstExprIndexExpr>());
-              if !ast_node_is::<AstExprLocal>(&*index_expr.expr)
-                || (index_expr.expr.cast::<AstExprLocal>()).local.as_ptr() != self_local
-              {
-                continue;
+              AstExprRef::IndexExpr(index_expr) => {
+                if let AstExprRef::Local(local) = index_expr.expr.as_expr_ref()
+                  && local.local.as_ptr() == self_local
+                  && let AstExprRef::ConstantString(str_expr) = index_expr.index.as_expr_ref()
+                {
+                  let key = String::from_utf8_lossy(str_expr.value.as_bytes()).into_owned();
+                  uninitialized_fields.erase(&key);
+                }
               }
-
-              if let Some(str_expr) =
-                ast_node_try_as::<AstExprConstantString>(&index_expr.index.base)
-              {
-                let key = String::from_utf8_lossy(str_expr.value.as_bytes()).into_owned();
-                uninitialized_fields.erase(&key);
-              }
+              _ => {}
             }
           }
         } else {

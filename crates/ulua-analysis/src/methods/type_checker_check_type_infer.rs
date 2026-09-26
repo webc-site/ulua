@@ -2,7 +2,10 @@ use alloc::{collections::btree_map::Entry, string::String, sync::Arc, vec::Vec};
 use core::ptr::null;
 
 use ulua_ast::{
-  enums::{ast_stat_ref::AstStatRef, ast_table_access::AstTableAccess, mode::Mode},
+  enums::{
+    ast_expr_ref::AstExprRef, ast_stat_ref::AstStatRef, ast_table_access::AstTableAccess,
+    mode::Mode,
+  },
   records::{
     ast_array::AstArray, ast_expr::AstExpr, ast_expr_binary::AstExprBinary,
     ast_expr_call::AstExprCall, ast_expr_global::AstExprGlobal,
@@ -20,7 +23,7 @@ use ulua_ast::{
     ast_stat_type_function::AstStatTypeFunction, ast_stat_while::AstStatWhile,
     ast_type_or_pack::AstTypeOrPack, location::Location, position::Position,
   },
-  rtti::{ast_node_is, ast_node_try_as, ast_node_try_as_ptr},
+  rtti::{ast_node_try_as, ast_node_try_as_ptr},
 };
 use ulua_common::fflag;
 
@@ -356,8 +359,8 @@ impl TypeChecker {
     let value_nodes: Vec<&AstExpr> = assign.values.iter_nodes().collect();
 
     for (i, dest_ref) in assign.vars.iter_nodes().enumerate() {
-      let is_local = ast_node_is::<AstExprLocal>(dest_ref);
-      let is_global = ast_node_is::<AstExprGlobal>(dest_ref);
+      let is_local = matches!(dest_ref.as_expr_ref(), AstExprRef::Local(_));
+      let is_global = matches!(dest_ref.as_expr_ref(), AstExprRef::Global(_));
 
       let left: TypeId = if is_local || is_global {
         self.check_l_value(scope, dest_ref, ValueContext::LValue)

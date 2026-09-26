@@ -1,12 +1,8 @@
 use alloc::vec::Vec;
 
 use ulua_ast::{
-  records::{
-    ast_array::AstArray, ast_expr::AstExpr, ast_expr_call::AstExprCall,
-    ast_expr_constant_nil::AstExprConstantNil, ast_expr_varargs::AstExprVarargs,
-    location::Location,
-  },
-  rtti::ast_node_is,
+  enums::ast_expr_ref::AstExprRef,
+  records::{ast_array::AstArray, ast_expr::AstExpr, location::Location},
 };
 use ulua_common::fflag;
 
@@ -63,7 +59,7 @@ impl TypeChecker {
       // SAFETY: expr 指向 AST arena 节点。
       let expr_ref = unsafe { &*expr };
       let is_call_or_varargs =
-        ast_node_is::<AstExprCall>(expr_ref) || ast_node_is::<AstExprVarargs>(expr_ref);
+        matches!(expr_ref.as_expr_ref(), AstExprRef::Call(_) | AstExprRef::Varargs(_));
 
       if i == last_index && is_call_or_varargs {
         let result = self.check_expr_pack(scope, expr_ref);
@@ -100,7 +96,7 @@ impl TypeChecker {
           continue;
         }
 
-        let is_constant_nil = ast_node_is::<AstExprConstantNil>(expr_ref);
+        let is_constant_nil = matches!(expr_ref.as_expr_ref(), AstExprRef::ConstantNil(_));
         let mut actual_type = if substitute_free_for_nil && is_constant_nil {
           self.fresh_type_scope_ptr(scope.clone())
         } else {
