@@ -4,7 +4,7 @@ use crate::{
     is_non_terminating_jump::is_non_terminating_jump,
     require_variadic_sequence::require_variadic_sequence,
   },
-  macros::{codegen_assert::CODEGEN_ASSERT, op_a::op_a},
+  macros::{codegen_assert::CODEGEN_ASSERT, ir_operand::op_a},
   records::{
     ir_block::IrBlock, ir_inst::IrInst, ir_to_string_context::IrToStringContext,
     register_set::RegisterSet,

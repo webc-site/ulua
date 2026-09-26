@@ -1,13 +1,18 @@
 //! IR 操作数访问器族：C++ `OP_x`/`OPT_OP_x` 宏的 Rust 对偶
 //! （按值/只读形态，越界缺省语义逐字保真）。
-//! （r7-macros98 合并票：仅搬家不改货；op_a、op_b_ref 因黑名单消费方
-//! `optimize_memory_operands_x_64_*` 的模块路径锁定，暂留独立文件。）
+//! （r7-macros98 合并票：仅搬家不改货。）
 
 use crate::{
   enums::ir_op_kind::IrOpKind,
   functions::get_op_ir_data::get_op_mut,
   records::{ir_inst::IrInst, ir_op::IrOp},
 };
+
+/// C++ 的 `OP_A(inst)`——指令的第一个操作数。
+#[inline]
+pub fn op_a(inst: &mut IrInst) -> IrOp {
+  *get_op_mut(inst, 0)
+}
 
 /// C++ `OP_A` 只读形态：越界时返回缺省操作数
 /// （`op_a` 引用版越界时 resize 原指令，只读调用点不应有此副作用）
@@ -23,6 +28,17 @@ pub fn op_a_ref(inst: &IrInst) -> IrOp {
 #[inline]
 pub fn op_b(mut inst: IrInst) -> IrOp {
   *get_op_mut(&mut inst, 1)
+}
+
+/// C++ `OP_B` 只读形态：越界时返回缺省操作数
+/// （按值版 `op_b` 克隆体上的 resize 外部不可见，故语义等价）
+#[inline]
+pub fn op_b_ref(inst: &IrInst) -> IrOp {
+  if 1 < inst.ops.size() {
+    inst.ops[1]
+  } else {
+    IrOp::default()
+  }
 }
 
 /// C++ `OP_C` 只读形态：越界时返回缺省操作数

@@ -31,10 +31,9 @@ use crate::{
   macros::{
     codegen_assert::CODEGEN_ASSERT, has_op_c::HAS_OP_C,
     ir_operand::{
-      op_a_ref, op_b, op_c_ref, op_d_ref, op_e_ref, op_f_ref, op_g_ref, opt_op_b_ref, opt_op_c_ref,
-      opt_op_d_ref,
+      op_a, op_a_ref, op_b, op_b_ref, op_c_ref, op_d_ref, op_e_ref, op_f_ref, op_g_ref,
+      opt_op_b_ref, opt_op_c_ref, opt_op_d_ref,
     },
-    op_a::op_a, op_b_ref::op_b_ref,
   },
   records::{
     array_value_entry::ArrayValueEntry,

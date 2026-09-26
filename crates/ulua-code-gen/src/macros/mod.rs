@@ -13,7 +13,5 @@ pub mod has_op_d;
 pub mod has_op_e;
 pub mod impl_tables;
 pub mod ir_operand;
-pub mod op_a;
-pub mod op_b_ref;
 pub mod vm_frame_support;
 pub mod x64_encoding;
