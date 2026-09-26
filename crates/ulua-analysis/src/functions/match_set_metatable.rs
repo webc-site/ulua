@@ -1,20 +1,20 @@
-use ulua_ast::{
-  records::{ast_expr_call::AstExprCall, ast_expr_global::AstExprGlobal},
-  rtti::ast_node_try_as_ptr,
-};
+use ulua_ast::{enums::ast_expr_ref::AstExprRef, records::ast_expr_call::AstExprCall};
+
 pub fn match_set_metatable(call: &AstExprCall) -> bool {
   if call.args.len() != 2 {
     return false;
   }
 
-  // Safety: `call.func` 为 AstExprCall 的子表达式指针（parser 保证非空，指向 arena
-  // 存活 repr(C) 节点）；`ast_node_try_as_ptr` 先判空再按 class_index 甄别，null/未
-  // 命中返回 None 且从不解引用，命中即返回存活 AstExprGlobal 的只读借用，arena 于
-  // `call` 借用期内地址不移动。全程只读、单线程。
-  let Some(func) = (unsafe { ast_node_try_as_ptr::<AstExprGlobal>(call.func) }) else {
+  // Safety: `call.func` 指向 arena 存活 AstExpr 节点或为 null；
+  // as_ref 先判空，as_expr_ref 基于 repr(C) 基类 class_index 安全模式匹配具体枚举，全程只读、单线程。
+  let Some(func) = (unsafe { call.func.as_ref() }) else {
     return false;
   };
 
-  // AstName::as_bytes 容忍 null（空名 → 空切片，必然不匹配）。
-  func.name.as_bytes() == b"setmetatable"
+  if let AstExprRef::Global(global) = func.as_expr_ref() {
+    // AstName::as_bytes 容忍 null（空名 → 空切片，必然不匹配）。
+    return global.name.as_bytes() == b"setmetatable";
+  }
+
+  false
 }
