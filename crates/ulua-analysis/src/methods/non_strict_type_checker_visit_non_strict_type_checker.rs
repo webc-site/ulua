@@ -6,6 +6,7 @@ use core::ptr::{NonNull, null_mut};
 use std::option::Option;
 
 use ulua_ast::{
+  enums::{ast_expr_ref::AstExprRef, ast_stat_ref::AstStatRef},
   records::{
     ast_array::AstArray,
     ast_expr::AstExpr,
@@ -116,66 +117,50 @@ impl NonStrictTypeChecker {
     // 存活节点；仅此处一次裸解引用换得 &AstNode，后续判别全部走安全引用。
     let node = unsafe { &*stat.cast::<AstNode>() };
     let _pusher = self.push_stack(stat.cast::<AstNode>());
-    match node.class_index {
-      AstStatBlock::CLASS_INDEX => self.visit_ast_stat_block(stat.cast::<AstStatBlock>()),
-      AstStatIf::CLASS_INDEX => self.visit_ast_stat_if(stat.cast::<AstStatIf>()),
-      AstStatWhile::CLASS_INDEX => self.visit_ast_stat_while(stat.cast::<AstStatWhile>()),
-      AstStatRepeat::CLASS_INDEX => self.visit_ast_stat_repeat(stat.cast::<AstStatRepeat>()),
-      AstStatBreak::CLASS_INDEX => {
+    match node.as_stat_ref() {
+      AstStatRef::Block(_) => self.visit_ast_stat_block(stat.cast::<AstStatBlock>()),
+      AstStatRef::If(_) => self.visit_ast_stat_if(stat.cast::<AstStatIf>()),
+      AstStatRef::While(_) => self.visit_ast_stat_while(stat.cast::<AstStatWhile>()),
+      AstStatRef::Repeat(_) => self.visit_ast_stat_repeat(stat.cast::<AstStatRepeat>()),
+      AstStatRef::Break(_) => {
         self.visit_ast_stat_break(stat.cast::<AstStatBreak>());
         NonStrictContext::new()
       }
-      AstStatContinue::CLASS_INDEX => {
+      AstStatRef::Continue(_) => {
         self.visit_ast_stat_continue(stat.cast::<AstStatContinue>());
         NonStrictContext::new()
       }
-      AstStatReturn::CLASS_INDEX => self.visit_ast_stat_return(stat.cast::<AstStatReturn>()),
-      AstStatExpr::CLASS_INDEX => self.visit_ast_stat_expr(stat.cast::<AstStatExpr>()),
-      AstStatLocal::CLASS_INDEX => self.visit_ast_stat_local(stat.cast::<AstStatLocal>()),
-      AstStatFor::CLASS_INDEX => self.visit_ast_stat_for(stat.cast::<AstStatFor>()),
-      AstStatForIn::CLASS_INDEX => self.visit_ast_stat_for_in(stat.cast::<AstStatForIn>()),
-      AstStatAssign::CLASS_INDEX => self.visit_ast_stat_assign(stat.cast::<AstStatAssign>()),
-      AstStatCompoundAssign::CLASS_INDEX => {
+      AstStatRef::Return(_) => self.visit_ast_stat_return(stat.cast::<AstStatReturn>()),
+      AstStatRef::Expr(_) => self.visit_ast_stat_expr(stat.cast::<AstStatExpr>()),
+      AstStatRef::Local(_) => self.visit_ast_stat_local(stat.cast::<AstStatLocal>()),
+      AstStatRef::For(_) => self.visit_ast_stat_for(stat.cast::<AstStatFor>()),
+      AstStatRef::ForIn(_) => self.visit_ast_stat_for_in(stat.cast::<AstStatForIn>()),
+      AstStatRef::Assign(_) => self.visit_ast_stat_assign(stat.cast::<AstStatAssign>()),
+      AstStatRef::CompoundAssign(_) => {
         self.visit_ast_stat_compound_assign(stat.cast::<AstStatCompoundAssign>())
       }
-      AstStatFunction::CLASS_INDEX => self.visit_ast_stat_function(stat.cast::<AstStatFunction>()),
-      AstStatLocalFunction::CLASS_INDEX => {
+      AstStatRef::Function(_) => self.visit_ast_stat_function(stat.cast::<AstStatFunction>()),
+      AstStatRef::LocalFunction(_) => {
         self.visit_ast_stat_local_function(stat.cast::<AstStatLocalFunction>())
       }
-      AstStatTypeAlias::CLASS_INDEX => {
+      AstStatRef::TypeAlias(_) => {
         self.visit_ast_stat_type_alias(stat.cast::<AstStatTypeAlias>())
       }
-      AstStatTypeFunction::CLASS_INDEX => {
+      AstStatRef::TypeFunction(_) => {
         self.visit_ast_stat_type_function(stat.cast::<AstStatTypeFunction>());
         NonStrictContext::new()
       }
-      AstStatDeclareFunction::CLASS_INDEX => {
+      AstStatRef::DeclareFunction(_) => {
         self.visit_ast_stat_declare_function(stat.cast::<AstStatDeclareFunction>())
       }
-      AstStatDeclareGlobal::CLASS_INDEX => {
+      AstStatRef::DeclareGlobal(_) => {
         self.visit_ast_stat_declare_global(stat.cast::<AstStatDeclareGlobal>())
       }
-      AstStatDeclareExternType::CLASS_INDEX => {
+      AstStatRef::DeclareExternType(_) => {
         self.visit_ast_stat_declare_extern_type(stat.cast::<AstStatDeclareExternType>())
       }
-      AstStatClass::CLASS_INDEX => {
-        // SAFETY: node.class_index 已经确认为 AstStatClass::CLASS_INDEX
-        self.visit_ast_stat_class(unsafe { ast_node_as_unchecked::<AstStatClass>(node) })
-      }
-      AstStatError::CLASS_INDEX => self.visit_ast_stat_error(stat.cast::<AstStatError>()),
-      _ => {
-        LUAU_ASSERT!(
-          false,
-          "NonStrictTypeChecker encountered an unknown statement type"
-        );
-        // SAFETY: ice 字段在构造期由 C++ NotNull<InternalErrorReporter> 注入，
-        // 指向外层检查器上下文持有的报告器，生命周期覆盖整次分析，解引用无别名写。
-        self
-          .ice
-          .get()
-          .ice_string("NonStrictTypeChecker encountered an unknown statement type");
-        NonStrictContext::new()
-      }
+      AstStatRef::DeclareClass(cls) => self.visit_ast_stat_class(cls),
+      AstStatRef::Error(_) => self.visit_ast_stat_error(stat.cast::<AstStatError>()),
     }
   }
 
@@ -1374,75 +1359,50 @@ impl NonStrictTypeChecker {
     // visit_ast_stat_*）传入，恒为 arena 存活且非空的节点——cpp 侧同一指针直接
     // `expr->as<T>()`（NonStrictTypeChecker.cpp:546-604）作相同非空前提；
     // 检查阶段 AST 只读无写别名。此处为分派链唯一的裸解引用收口点：物化
-    // `&AstNode` 后，class_index 读取与各子类下转全部走安全门面。
+    // `&AstNode` 后，as_expr_ref 读取与各子类下转全部走安全门面。
     let node = unsafe { &*expr.as_ast_node() };
-    match node.class_index {
-      AstExprGroup::CLASS_INDEX => {
-        let group = unsafe { ast_node_as_unchecked::<AstExprGroup>(node) };
-        self.visit_ast_expr_group_value_context(group, context)
-      }
-      AstExprConstantNil::CLASS_INDEX => {
+    match node.as_expr_ref() {
+      AstExprRef::Group(group) => self.visit_ast_expr_group_value_context(group, context),
+      AstExprRef::ConstantNil(_) => {
         self.visit_ast_expr_constant_nil(expr.cast::<AstExprConstantNil>())
       }
-      AstExprConstantBool::CLASS_INDEX => {
+      AstExprRef::ConstantBool(_) => {
         self.visit_ast_expr_constant_bool(expr.cast::<AstExprConstantBool>())
       }
-      AstExprConstantNumber::CLASS_INDEX => {
+      AstExprRef::ConstantNumber(_) => {
         self.visit_ast_expr_constant_number(expr.cast::<AstExprConstantNumber>())
       }
-      AstExprConstantInteger::CLASS_INDEX => {
+      AstExprRef::ConstantInteger(_) => {
         self.visit_ast_expr_constant_integer(expr.cast::<AstExprConstantInteger>())
       }
-      AstExprConstantString::CLASS_INDEX => {
+      AstExprRef::ConstantString(_) => {
         self.visit_ast_expr_constant_string(expr.cast::<AstExprConstantString>())
       }
-      AstExprLocal::CLASS_INDEX => {
+      AstExprRef::Local(_) => {
         self.visit_ast_expr_local_value_context(expr.cast::<AstExprLocal>(), context)
       }
-      AstExprGlobal::CLASS_INDEX => {
-        let global = unsafe { ast_node_as_unchecked::<AstExprGlobal>(node) };
-        self.visit_ast_expr_global_value_context(global, context)
-      }
-      AstExprVarargs::CLASS_INDEX => self.visit_ast_expr_varargs(expr.cast::<AstExprVarargs>()),
-      AstExprCall::CLASS_INDEX => {
-        // SAFETY: class_index 命中 AstExprCall，&mut 引用仅存活于本次实参求值，
-        // expr 指向 arena 存活节点；检查阶段 AST 只读，无并发别名写。
-        self.visit_ast_expr_call(unsafe { &mut *(expr.cast::<AstExprCall>()) })
-      }
-      AstExprIndexName::CLASS_INDEX => {
-        let index_name = unsafe { ast_node_as_unchecked::<AstExprIndexName>(node) };
+      AstExprRef::Global(global) => self.visit_ast_expr_global_value_context(global, context),
+      AstExprRef::Varargs(_) => self.visit_ast_expr_varargs(expr.cast::<AstExprVarargs>()),
+      AstExprRef::Call(call) => self.visit_ast_expr_call(call),
+      AstExprRef::IndexName(index_name) => {
         self.visit_ast_expr_index_name_value_context(index_name, context)
       }
-      AstExprIndexExpr::CLASS_INDEX => {
-        let index_expr = unsafe { ast_node_as_unchecked::<AstExprIndexExpr>(node) };
+      AstExprRef::IndexExpr(index_expr) => {
         self.visit_ast_expr_index_expr_value_context(index_expr, context)
       }
-      AstExprFunction::CLASS_INDEX => self.visit_ast_expr_function(expr.cast::<AstExprFunction>()),
-      AstExprTable::CLASS_INDEX => self.visit_ast_expr_table(expr.cast::<AstExprTable>()),
-      AstExprUnary::CLASS_INDEX => self.visit_ast_expr_unary(expr.cast::<AstExprUnary>()),
-      AstExprBinary::CLASS_INDEX => self.visit_ast_expr_binary(expr.cast::<AstExprBinary>()),
-      AstExprTypeAssertion::CLASS_INDEX => {
+      AstExprRef::Function(_) => self.visit_ast_expr_function(expr.cast::<AstExprFunction>()),
+      AstExprRef::Table(_) => self.visit_ast_expr_table(expr.cast::<AstExprTable>()),
+      AstExprRef::Unary(_) => self.visit_ast_expr_unary(expr.cast::<AstExprUnary>()),
+      AstExprRef::Binary(_) => self.visit_ast_expr_binary(expr.cast::<AstExprBinary>()),
+      AstExprRef::TypeAssertion(_) => {
         self.visit_ast_expr_type_assertion(expr.cast::<AstExprTypeAssertion>())
       }
-      AstExprIfElse::CLASS_INDEX => self.visit_ast_expr_if_else(expr.cast::<AstExprIfElse>()),
-      AstExprInterpString::CLASS_INDEX => {
+      AstExprRef::IfElse(_) => self.visit_ast_expr_if_else(expr.cast::<AstExprIfElse>()),
+      AstExprRef::InterpString(_) => {
         self.visit_ast_expr_interp_string(expr.cast::<AstExprInterpString>())
       }
-      AstExprError::CLASS_INDEX => self.visit_ast_expr_error(expr.cast::<AstExprError>()),
-      AstExprInstantiate::CLASS_INDEX => {
-        let instantiate = unsafe { ast_node_as_unchecked::<AstExprInstantiate>(node) };
-        self.visit_ast_expr_instantiate(instantiate)
-      }
-      _ => {
-        LUAU_ASSERT!(false);
-        // SAFETY: ice 字段为构造期注入的 NotNull 报告器，指向外层上下文持有、
-        // 覆盖本次分析全程的 InternalErrorReporter。
-        self
-          .ice
-          .get()
-          .ice_string("NonStrictTypeChecker encountered an unknown expression type");
-        NonStrictContext::new()
-      }
+      AstExprRef::Error(_) => self.visit_ast_expr_error(expr.cast::<AstExprError>()),
+      AstExprRef::Instantiate(instantiate) => self.visit_ast_expr_instantiate(instantiate),
     }
   }
 
