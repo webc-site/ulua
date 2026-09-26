@@ -55,11 +55,10 @@ pub fn lint_comments(context: &mut LintContext, hotcomments: &[HotComment]) {
 
           // kWarningNames（LinterConfig.h）偏移 1 跳过 "Unknown"：由 `Code::iter()` +
           // `get_name` 推导（声明序与旧 ALL 表逐项等价），新增 lint 不再需要手动同步此表。仅在未知规则的冷路径执行。
-          let warning_names: Vec<&'static str> =
-            Code::iter().skip(1).map(LintWarning::get_name).collect();
-
-          // skip Unknown
-          if let Some(suggestion) = fuzzy_match(rule, &warning_names) {
+          // 去容器化：候选流经 IntoIterator 直接消费，不再物化 Vec。
+          if let Some(suggestion) =
+            fuzzy_match(rule, Code::iter().skip(1).map(LintWarning::get_name))
+          {
             emit_warning(
               context,
               Code::CommentDirective,
@@ -142,7 +141,9 @@ pub fn lint_comments(context: &mut LintContext, hotcomments: &[HotComment]) {
           "native",
         ];
 
-        if let Some(suggestion) = fuzzy_match(first, &K_HOT_COMMENTS) {
+        // 注：`&K_HOT_COMMENTS` 的数组引用 IntoIterator Item 为 `&&str` 不敷签名，
+        // 故按值传 const 数组（Item 即 `&'static str`，无堆/栈物化差异）。
+        if let Some(suggestion) = fuzzy_match(first, K_HOT_COMMENTS) {
           emit_warning(
             context,
             Code::CommentDirective,
