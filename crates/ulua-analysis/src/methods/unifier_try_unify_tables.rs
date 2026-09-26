@@ -641,6 +641,6 @@ fn props_insert(t: *mut TableType, name: Name, prop: Property) {
 /// `!literalProperties || !literalProperties->contains(name)`（C++ Resetter 分支同款）。
 fn not_in_literal_properties(lp: *const LiteralProperties, name: &Name) -> bool {
   // Safety: 前置 `lp.is_null()` 短路后 lp 非空；目标由 unifier_try_unify_tables
-  // 的 fn 契约保证在调用期存活且不被改写，find 只读。
-  lp.is_null() || unsafe { (*lp).find(name).is_none() }
+  // 的 fn 契约保证在调用期存活且不被改写，find_str 只读（&str 借用口，r7-rc-4）。
+  lp.is_null() || unsafe { (*lp).find_str(name.as_str()).is_none() }
 }

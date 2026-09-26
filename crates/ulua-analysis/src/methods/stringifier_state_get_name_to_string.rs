@@ -26,7 +26,7 @@ impl StringifierState {
       // 试名改迭代器链：map 产候选、find 短路命中，与原 early-return 循环逐位等价。
       if let Some(candidate) = (0..MAX_GENERATED_NAME_ATTEMPTS)
         .map(|count| generate_name(self.used_names.size() + count))
-        .find(|candidate| !self.used_names.contains(candidate))
+        .find(|candidate| !self.used_names.contains_str(candidate.as_str()))
       {
         self.used_names.insert(candidate.clone());
         *opts.name_map.types.get_or_insert(ty) = candidate.clone();
@@ -56,7 +56,7 @@ impl StringifierState {
       let base = self.previous_name_index as usize;
       if let Some((count, candidate)) = (0..MAX_GENERATED_NAME_ATTEMPTS)
         .map(|count| (count, generate_name(base + count)))
-        .find(|(_, candidate)| !self.used_names.contains(candidate))
+        .find(|(_, candidate)| !self.used_names.contains_str(candidate.as_str()))
       {
         self.previous_name_index += count as i32;
         self.used_names.insert(candidate.clone());

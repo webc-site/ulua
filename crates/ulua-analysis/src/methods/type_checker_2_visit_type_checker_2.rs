@@ -352,20 +352,22 @@ impl TypeChecker2 {
         "check 入口已压入模块根 scope，visit 全程栈恒非空（cpp TypeChecker2 stack 不变式）",
       );
       let name = expr.name;
-      let name_string = name.as_str_or_empty().to_string();
 
       if scope
         .get()
         .lookup_symbol(Symbol::from_global(name))
         .is_none()
       {
+        let name_string = name.as_str_or_empty().to_string();
         self.report_error_type_error_data_location(
           UnknownSymbol::new(name_string, Context::Binding).into(),
           &expr.base.base.location,
         );
-      } else if scope.get().should_warn_global(name_string.clone())
-        && !self.warned_globals.contains(&name_string)
+      } else if scope.get().should_warn_global(name.as_str_or_empty())
+        && !self.warned_globals.contains_str(name.as_str_or_empty())
       {
+        // 仅在真正上报时才物化键（should_warn_global/warned_globals 查询零分配，见 r7-rc-4 借用口）。
+        let name_string = name.as_str_or_empty().to_string();
         self.report_error_type_error_data_location(
           UnknownSymbol::new(name_string.clone(), Context::Binding).into(),
           &expr.base.base.location,

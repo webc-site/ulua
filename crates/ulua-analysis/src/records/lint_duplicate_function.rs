@@ -103,11 +103,17 @@ impl<'ctx> LintDuplicateFunction<'ctx> {
     }
     let mut other_location = None;
     {
-      let defn = self.defns.get_or_insert(String::from(name));
-      if defn.end.line == 0 && defn.end.column == 0 {
-        *defn = location;
+      // 查询走 &str 借用口（r7-rc-4）：同名函数重复登记（热路径）零分配，
+      // 仅缺席插入时才物化键；语义与原 get_or_insert(String::from(name)) 逐位等价
+      // （新键值即 Location::default() 全零，与原置零判定 *defn = location 同形）。
+      if let Some(defn) = self.defns.get_mut_str(name) {
+        if defn.end.line == 0 && defn.end.column == 0 {
+          *defn = location;
+        } else {
+          other_location = Some(*defn);
+        }
       } else {
-        other_location = Some(*defn);
+        self.defns.insert(String::from(name), location);
       }
     }
     if let Some(defn) = other_location {
