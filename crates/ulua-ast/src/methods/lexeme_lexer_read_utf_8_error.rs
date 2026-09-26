@@ -2,11 +2,7 @@
 
 use crate::{
   enums::type_lexer::Type,
-  records::{
-    lexeme::{Lexeme, LexemeData},
-    lexer::Lexer,
-    location::Location,
-  },
+  records::{lexeme::Lexeme, lexer::Lexer, location::Location},
 };
 
 impl Lexer {
@@ -40,7 +36,7 @@ impl Lexer {
     }
 
     let mut result = Lexeme::new(Location::new(start, self.position()), Type::BROKEN_UNICODE);
-    result.data = LexemeData { codepoint };
+    result.data.codepoint = codepoint;
     result
   }
 }

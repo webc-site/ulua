@@ -37,7 +37,7 @@ pub struct Lexer {
 }
 
 // Safety: Lexer 的裸指针字段仅剩 `names`（指向本身声明 Send+Sync 的 AstNameTable）
-// 与 `lexeme` 内 `LexemeData` 联合体臂（只读源缓冲/名表驻留串的地址值，二者均比
+// 与 `lexeme` 内 `LexemeData::data` 指针字段（只读源缓冲/名表驻留串的地址值，二者均比
 // Lexer 长寿，见上契约）；其余全是切片引用/Location/计数器/Vec 等 plain data。跨
 // 线程 move 只转移这两个引用目标，而它们在各自文档契约下本可移动，故 Send 成立。
 unsafe impl Send for Lexer {}

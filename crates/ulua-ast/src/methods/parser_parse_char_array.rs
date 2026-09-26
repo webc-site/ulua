@@ -22,9 +22,9 @@ impl Parser {
         || current_type == Type::INTERP_STRING_SIMPLE
     );
 
-    // Safety: 本函数仅对 QUOTED_STRING/RAW_STRING/INTERP_STRING_SIMPLE 词素调用（上方 assert 记录该不变量），
-    // 词法器对这些类型把字节指针写入 `Lexeme::data` 联合体的 `data` 成员，故 `data.data` 读的是活跃成员（对齐 cpp 联合体直读）。
-    let data_ptr = unsafe { current_lexeme.data.data };
+    // 本函数仅对 QUOTED_STRING/RAW_STRING/INTERP_STRING_SIMPLE 词素调用（上方 assert 记录该不变量），
+    // 词法器对这些类型把字节指针写入 `LexemeData::data` 字段（对齐 cpp 联合体 `data` 臂直读）。
+    let data_ptr = current_lexeme.data.data;
     let length = current_lexeme.get_length() as usize;
     // Safety: STRING/RAW/INTERP 词素的 data/length 由词法器成对写入，指向源缓冲
     // 内合法字节；空字面量退化为空切片。

@@ -556,13 +556,9 @@ fn assert_broken_unicode(lexer: &mut Lexer, codepoint: u32, location: Location) 
   assert_eq!(location, lexeme.location);
 }
 
-/// cpp `lexeme.codepoint`：union 活跃分支由 `type == BrokenUnicode` 决定。
-///
-/// # Safety
-/// `lexeme` 的词素类型为 `BROKEN_UNICODE`，此时 `data.codepoint` 为活跃分支。
+/// cpp `lexeme.codepoint`：具名字段 `codepoint`，读取由 `type == BrokenUnicode` 选型。
 fn codepoint_of(lexeme: &Lexeme) -> u32 {
-  // Safety: 见函数级 # Safety
-  unsafe { lexeme.data.codepoint }
+  lexeme.data.codepoint
 }
 
 /// cpp `TEST_CASE_FIXTURE(Fixture, "lex_broken_unicode")`。

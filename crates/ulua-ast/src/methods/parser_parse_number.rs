@@ -17,7 +17,7 @@ impl Parser {
   pub fn parse_number(&mut self) -> *mut AstExpr {
     // cpp `scratchData.assign(lexer.current().data, lexer.current().getLength())`：
     // NUMBER 词素的字节区间经全仓唯一切片门面 [`Lexeme::data_bytes`]
-    // （records/lexeme.rs，联合体位拷贝契约同处收口）取得，本文件不再裸建切片。
+    // （records/lexeme.rs，指针字段直读契约同处收口）取得，本文件不再裸建切片。
     // 行为 ⇔ 原「data 臂直读 + get_length」：本入口仅由 `parse_simple_expr` 在
     // `Type::NUMBER` 判定后调用（cpp Parser.cpp case Number 同款分发），NUMBER 在
     // 门面变体集内；词法器成对写入保证非空指针，理论空指针/空词素退化为空串 ⇔
