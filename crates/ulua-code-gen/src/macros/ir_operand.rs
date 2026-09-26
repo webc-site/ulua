@@ -169,4 +169,7 @@ macro_rules! HAS_OP_E {
   };
 }
 
-pub use {HAS_OP_B, HAS_OP_C, HAS_OP_D, HAS_OP_E};
+pub use HAS_OP_B;
+pub use HAS_OP_C;
+pub use HAS_OP_D;
+pub use HAS_OP_E;
