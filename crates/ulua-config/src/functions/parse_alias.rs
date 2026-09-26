@@ -20,10 +20,10 @@ pub(crate) fn parse_alias(
     return Err(ConfigError::MissingAliasOptions);
   };
 
-  // DenseHashMap<String, _> 查询需要 &String
-  let alias_key = String::from(alias_key);
-
-  if options.overwrite_aliases || !config.aliases.contains(&alias_key) {
+  // r7-rc-4 起 aliases 查询走 &str 借用口；键物化只发生在真正插入时（原
+  // 「DenseHashMap<String, _> 查询需要 &String」的提前 String::from hack 删除）。
+  if options.overwrite_aliases || !config.aliases.contains_str(alias_key) {
+    let alias_key = String::from(alias_key);
     if let Some(config_location) = &options.config_location {
       config.set_alias_with_location(alias_key, String::from(alias_value), config_location);
     } else {
