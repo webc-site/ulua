@@ -1,4 +1,5 @@
 use alloc::string::String;
+use core::cell::Ref;
 
 use ulua_analysis::records::{config_resolver::ConfigResolver, type_check_limits::TypeCheckLimits};
 use ulua_cli_lib::functions::get_parent_path::get_parent_path;
@@ -32,7 +33,7 @@ impl CliConfigResolver {
   /// C++ `const Config& getConfig(const ModuleName& name, const TypeCheckLimits& limits) const`
   /// (`CLI/src/Analyze.cpp:243-250`).
   ///
-  /// 逻辑 const、经 `UnsafeCell` 填充 `mutable` 的 configCache/configErrors
+  /// 逻辑 const、经 `UnsafeCell`/`RefCell` 填充 `mutable` 的 configCache/configErrors
   /// （见 [`CliConfigResolver`] 字段文档的单线程契约）。
   pub fn get_config(&self, name: &ModuleName, limits: &TypeCheckLimits) -> &Config {
     // std::optional<std::string> path = getParentPath(name);
@@ -47,12 +48,7 @@ impl CliConfigResolver {
   }
 
   /// C++ `const std::vector<std::pair<std::string, std::string>>& getConfigErrors() const`。
-  ///
-  /// # Safety（类型级契约）
-  /// resolver 单线程使用；读取时不得有其它借用正通过回调写这两个 cell。
-  /// CLI 在全部模块检查结束后调用，满足契约。
-  pub(crate) fn config_errors(&self) -> &[(String, String)] {
-    // Safety: 见方法文档；此处无重叠可变借用。
-    unsafe { &*self.config_errors.get() }
+  pub(crate) fn config_errors(&self) -> Ref<'_, [(String, String)]> {
+    Ref::map(self.config_errors.borrow(), |v| v.as_slice())
   }
 }

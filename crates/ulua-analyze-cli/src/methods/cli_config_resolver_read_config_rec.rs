@@ -83,7 +83,7 @@ impl CliConfigResolver {
   /// C++ `const Config& readConfigRec(const std::string& path, const TypeCheckLimits& limits) const`
   /// (`CLI/src/Analyze.cpp:252-320`).
   ///
-  /// 逻辑 const：缓存读写走 `UnsafeCell`（C++ `mutable`），单线程契约见
+  /// 逻辑 const：缓存读写走 `UnsafeCell`/`RefCell`（C++ `mutable`），单线程契约见
   /// [`CliConfigResolver`] 字段文档。
   pub(crate) fn read_config_rec(&self, path: &str, limits: &TypeCheckLimits) -> &Config {
     // auto it = configCache.find(path); if (it != configCache.end()) return it->second;
@@ -121,9 +121,10 @@ impl CliConfigResolver {
         "Both {} and {} files exist",
         K_CONFIG_NAME, K_LUAU_CONFIG_NAME
       );
-      // Safety: 单线程契约（`CliConfigResolver` 字段文档）；错误表仅在回调
-      // 栈帧内追加，无并存借用。
-      unsafe { &mut *self.config_errors.get() }.push((config_path.clone(), ambiguous_error));
+      self
+        .config_errors
+        .borrow_mut()
+        .push((config_path.clone(), ambiguous_error));
     } else if let Some(config_path) = config_path.as_ref() {
       // if (std::optional<std::string> contents = readFile(*configPath))
       if let Some(contents) = read_file(config_path) {
@@ -139,8 +140,10 @@ impl CliConfigResolver {
 
         // std::optional<std::string> error = parseConfig(*contents, result, opts);
         if let Err(error) = parse_config(&contents, &mut result, &opts) {
-          // Safety: 单线程契约同上；写窗口瞬时收敛，无并存借用。
-          unsafe { &mut *self.config_errors.get() }.push((config_path.clone(), error.to_string()));
+          self
+            .config_errors
+            .borrow_mut()
+            .push((config_path.clone(), error.to_string()));
         }
       }
     } else if let Some(luau_config_path) = luau_config_path.as_ref() {
@@ -179,8 +182,9 @@ impl CliConfigResolver {
         // std::optional<std::string> error = extractLuauConfig(*contents, result, aliasOpts, callbacks);
         if let Err(error) = extract_luau_config(&contents, &mut result, Some(alias_opts), callbacks)
         {
-          // Safety: 单线程契约同上；写窗口瞬时收敛，无并存借用。
-          unsafe { &mut *self.config_errors.get() }
+          self
+            .config_errors
+            .borrow_mut()
             .push((luau_config_path.clone(), error.to_string()));
         }
       }

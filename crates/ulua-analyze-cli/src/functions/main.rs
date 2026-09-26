@@ -248,7 +248,7 @@ pub fn run(args: &[String]) -> i32 {
   if !config_errors.is_empty() {
     failed += config_errors.len() as i32;
 
-    for (path, error) in config_errors {
+    for (path, error) in config_errors.iter() {
       eprintln!("{path}: {error}");
     }
   }

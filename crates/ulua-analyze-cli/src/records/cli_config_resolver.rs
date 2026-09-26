@@ -1,7 +1,7 @@
 //! Port of `CliConfigResolver`（`CLI/src/Analyze.cpp:231-321`）。
 
 use alloc::{string::String, vec::Vec};
-use core::cell::UnsafeCell;
+use core::cell::{RefCell, UnsafeCell};
 
 use ulua_analysis::{records::config_resolver::ConfigResolver, type_aliases::collections::HashMap};
 use ulua_config::records::config::Config;
@@ -19,8 +19,8 @@ use ulua_config::records::config::Config;
 /// - `mutable std::vector<std::pair<std::string, std::string>> configErrors;`
 ///
 /// `config_cache`/`config_errors` mirror C++ `mutable`：`getConfig` 逻辑 const
-/// 但填充缓存。用 `UnsafeCell` 表达内部可变（返回缓存内引用需要稳定地址，
-/// RefCell 的 borrow 无法跨返回存活）。
+/// 但填充缓存。`config_cache` 用 `UnsafeCell` 表达内部可变（返回缓存内引用需要稳定地址，
+/// RefCell 的 borrow 无法跨返回存活）；`config_errors` 使用 `RefCell` 表达内部可变。
 /// 契约与上游一致：resolver 单线程使用，回调期间无并发/重叠可变借用。
 #[repr(C)]
 #[derive(Debug)]
@@ -34,5 +34,5 @@ pub struct CliConfigResolver {
   /// `ulua-common/src/collections.rs`）：仅 get/insert，无迭代，
   /// 仅去掉 std 默认 SipHash。
   pub config_cache: UnsafeCell<HashMap<String, Box<Config>>>,
-  pub config_errors: UnsafeCell<Vec<(String, String)>>,
+  pub config_errors: RefCell<Vec<(String, String)>>,
 }

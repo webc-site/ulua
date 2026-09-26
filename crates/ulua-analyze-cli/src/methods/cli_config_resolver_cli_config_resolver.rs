@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use core::cell::UnsafeCell;
+use core::cell::{RefCell, UnsafeCell};
 
 use ulua_analysis::{records::config_resolver::ConfigResolver, type_aliases::collections::HashMap};
 use ulua_ast::enums::mode::Mode;
@@ -24,7 +24,7 @@ impl CliConfigResolver {
       },
       default_config,
       config_cache: UnsafeCell::new(HashMap::new()),
-      config_errors: UnsafeCell::new(Vec::new()),
+      config_errors: RefCell::new(Vec::new()),
     }
   }
 }
