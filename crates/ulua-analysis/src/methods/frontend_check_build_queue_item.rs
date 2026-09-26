@@ -2,7 +2,7 @@ use alloc::{string::String, vec::Vec};
 use core::mem::take;
 
 use ulua_ast::{enums::mode::Mode, records::ast_stat::AstStat};
-use ulua_common::{fflag, fint, macros::luau_timetrace_scope::LUAU_TIMETRACE_SCOPE};
+use ulua_common::{fint, macros::luau_timetrace_scope::LUAU_TIMETRACE_SCOPE};
 
 use crate::{
   enums::solver_mode::SolverMode,
@@ -26,13 +26,11 @@ impl Frontend {
     // that with raw pointers through the `Arc`.
     let source_node_ptr = arc_as_mut(&item.source_node);
 
-    let mode: Mode = if fflag::DebugLuauForceStrictMode.get() {
-      Mode::Strict
-    } else if fflag::DebugLuauForceNonStrictMode.get() {
-      Mode::Nonstrict
-    } else {
-      item.source_module.mode.unwrap_or(item.config.mode)
-    };
+    // 对应 cpp `Frontend.cpp` `checkBuildQueueItem`（1776-1783 `Mode mode;` 决策链）；
+    // 上游的两个调试旗标 `DebugLuauForceStrictMode` / `DebugLuauForceNonStrictMode` 已按
+    // r7 deadcode 仲裁摘除（全仓无任何路径置 true，恒 false 分支即下面的 `unwrap_or` 兜底）。
+    // 移植侧的 strict/nonstrict 由 Frontend 构造期写入的 `item.config.mode` 决定，行为等价。
+    let mode: Mode = item.source_module.mode.unwrap_or(item.config.mode);
 
     let source_module_ptr = arc_as_mut(&item.source_module);
     // Safety: 对应 cpp `moduleInfo.sourceModule->mode = {mode;}`（Frontend.cpp

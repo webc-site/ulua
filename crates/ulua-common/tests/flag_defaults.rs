@@ -66,7 +66,7 @@ macro_rules! rust_flags {
   };
 }
 
-/// 全表清单（186 条）。生成自四个模块的宏定义，顺序与源文件一致。
+/// 全表清单（182 条）。生成自四个模块的宏定义，顺序与源文件一致。
 fn rust_table() -> Vec<FlagEntry> {
   rust_flags! {
     // ---- fflag.rs ----
@@ -78,11 +78,7 @@ fn rust_table() -> Vec<FlagEntry> {
     fflag::DEBUG_LUAU_CHECK_NORMALIZE_INVARIANT => DebugLuauCheckNormalizeInvariant false,
     fflag::DEBUG_LUAU_DUMP_CFGJSON => DebugLuauDumpCFGJson false,
     fflag::DEBUG_LUAU_FORBID_INTERNAL_TYPES => DebugLuauForbidInternalTypes false,
-    fflag::DEBUG_LUAU_FORCE_ALL_NEW_SOLVER_TESTS => DebugLuauForceAllNewSolverTests false,
-    fflag::DEBUG_LUAU_FORCE_ALL_OLD_SOLVER_TESTS => DebugLuauForceAllOldSolverTests false,
-    fflag::DEBUG_LUAU_FORCE_NON_STRICT_MODE => DebugLuauForceNonStrictMode false,
     fflag::DEBUG_LUAU_FORCE_OLD_SOLVER => DebugLuauForceOldSolver false,
-    fflag::DEBUG_LUAU_FORCE_STRICT_MODE => DebugLuauForceStrictMode false,
     fflag::DEBUG_LUAU_FREEZE_ARENA => DebugLuauFreezeArena false,
     fflag::DEBUG_LUAU_LOG_BINDINGS => DebugLuauLogBindings false,
     fflag::DEBUG_LUAU_LOG_CFG => DebugLuauLogCFG false,

@@ -33,25 +33,8 @@ pub mod _inner {
     DEBUG_LUAU_FORBID_INTERNAL_TYPES,
     DebugLuauForbidInternalTypes
   );
-  // tests/Fixture.cpp
-  crate::LUAU_FASTFLAGVARIABLE!(
-    DEBUG_LUAU_FORCE_ALL_NEW_SOLVER_TESTS,
-    DebugLuauForceAllNewSolverTests
-  );
-  // tests/Fixture.cpp
-  crate::LUAU_FASTFLAGVARIABLE!(
-    DEBUG_LUAU_FORCE_ALL_OLD_SOLVER_TESTS,
-    DebugLuauForceAllOldSolverTests
-  );
-  // Analysis/src/Frontend.cpp
-  crate::LUAU_FASTFLAGVARIABLE!(
-    DEBUG_LUAU_FORCE_NON_STRICT_MODE,
-    DebugLuauForceNonStrictMode
-  );
   // Analysis/src/Frontend.cpp
   crate::LUAU_FASTFLAGVARIABLE!(DEBUG_LUAU_FORCE_OLD_SOLVER, DebugLuauForceOldSolver);
-  // Analysis/src/Frontend.cpp
-  crate::LUAU_FASTFLAGVARIABLE!(DEBUG_LUAU_FORCE_STRICT_MODE, DebugLuauForceStrictMode);
   // Analysis/src/TypeArena.cpp
   crate::LUAU_FASTFLAGVARIABLE!(DEBUG_LUAU_FREEZE_ARENA, DebugLuauFreezeArena);
   // Analysis/src/TypeInfer.cpp
@@ -486,11 +469,7 @@ pub(crate) fn register_flags() {
   _inner::DEBUG_LUAU_CHECK_NORMALIZE_INVARIANT.register();
   _inner::DEBUG_LUAU_DUMP_CFGJSON.register();
   _inner::DEBUG_LUAU_FORBID_INTERNAL_TYPES.register();
-  _inner::DEBUG_LUAU_FORCE_ALL_NEW_SOLVER_TESTS.register();
-  _inner::DEBUG_LUAU_FORCE_ALL_OLD_SOLVER_TESTS.register();
-  _inner::DEBUG_LUAU_FORCE_NON_STRICT_MODE.register();
   _inner::DEBUG_LUAU_FORCE_OLD_SOLVER.register();
-  _inner::DEBUG_LUAU_FORCE_STRICT_MODE.register();
   _inner::DEBUG_LUAU_FREEZE_ARENA.register();
   _inner::DEBUG_LUAU_LOG_BINDINGS.register();
   _inner::DEBUG_LUAU_LOG_CFG.register();
