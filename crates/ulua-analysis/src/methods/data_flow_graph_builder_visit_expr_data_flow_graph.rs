@@ -27,7 +27,7 @@ use ulua_ast::{
 };
 use ulua_common::{
   fflag,
-  macros::{luau_assert::LUAU_ASSERT, luau_unreachable::LUAU_UNREACHABLE},
+  macros::luau_assert::{LUAU_ASSERT, LUAU_UNREACHABLE},
 };
 
 use crate::{

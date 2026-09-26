@@ -13,7 +13,7 @@ use ulua_common::{
     assert_call_handler::assert_fail,
     assert_handler::{assert_handler, set_assert_handler},
   },
-  macros::{luau_assert::LUAU_ASSERT, luau_assertenabled::LUAU_ASSERTENABLED},
+  macros::luau_assert::{LUAU_ASSERT, LUAU_ASSERTENABLED},
 };
 
 /// `LUAU_ASSERT` 展开点的数量，用于确认宏确实把失败交给了处理器。

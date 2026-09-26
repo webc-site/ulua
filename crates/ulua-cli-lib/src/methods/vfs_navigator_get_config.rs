@@ -1,4 +1,4 @@
-use ulua_common::macros::{luau_assert::LUAU_ASSERT, luau_unreachable::LUAU_UNREACHABLE};
+use ulua_common::macros::luau_assert::{LUAU_ASSERT, LUAU_UNREACHABLE};
 
 use crate::{
   enums::config_status::ConfigStatus,

@@ -3,7 +3,7 @@ use core::mem::{offset_of, size_of};
 
 use ulua_common::{
   fflag,
-  macros::luau_unreachable::LUAU_UNREACHABLE,
+  macros::luau_assert::LUAU_UNREACHABLE,
   records::{dense_hash_map::DenseHashMap, small_vector::SmallVector},
 };
 use ulua_vm::{

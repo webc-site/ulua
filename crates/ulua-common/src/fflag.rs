@@ -2,7 +2,7 @@
 //! 全 crate 的 `LUAU_FASTFLAGVARIABLE(...)` 定义集中于此，
 //! C++ 的 `FFlag::Name` 对应 `crate::fflag::Name.get()`。
 //! Rust 模块不像 C++ 命名空间可开放，故按 crate 聚合 ——
-//! 见 `crate::macros::luau_fastflagvariable`。
+//! 见 [`crate::macros::fast_flags`]。
 //!
 //! ## 保留裁定与可达性判据（audit-deadcode B1 仲裁落档）
 //!

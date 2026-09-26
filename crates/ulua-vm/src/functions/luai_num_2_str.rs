@@ -1,7 +1,7 @@
 use alloc::{string::String, vec::Vec};
 use core::{ffi::c_char, slice};
 
-use ulua_common::macros::{luau_assert::LUAU_ASSERT, luau_unlikely::LUAU_UNLIKELY};
+use ulua_common::macros::luau_assert::{LUAU_ASSERT, LUAU_UNLIKELY};
 
 use crate::{
   functions::{

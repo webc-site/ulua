@@ -3,8 +3,10 @@ use core::{mem::size_of, ptr::addr_of};
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
   macros::{
-    luau_assert::LUAU_ASSERT, luau_insn_a::luau_insn_a, luau_insn_d::luau_insn_d,
-    luau_insn_op::luau_insn_op, luau_unreachable::LUAU_UNREACHABLE,
+    luau_assert::{LUAU_ASSERT, LUAU_UNREACHABLE},
+    luau_insn_a::luau_insn_a,
+    luau_insn_d::luau_insn_d,
+    luau_insn_op::luau_insn_op,
   },
 };
 

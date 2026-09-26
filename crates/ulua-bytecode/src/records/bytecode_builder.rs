@@ -28,7 +28,7 @@ use ulua_common::{
     is_jump_d::is_jump_d,
     is_skip_c::is_skip_c,
   },
-  macros::{luau_assert::LUAU_ASSERT, luau_assertenabled::LUAU_ASSERTENABLED},
+  macros::luau_assert::{LUAU_ASSERT, LUAU_ASSERTENABLED},
   records::{
     dense_hash_map::DenseHashMap, dense_hash_table::DenseEqDefault, instruction::Instruction,
     small_vector::SmallVector,

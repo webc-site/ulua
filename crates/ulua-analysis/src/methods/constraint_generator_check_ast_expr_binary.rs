@@ -1,7 +1,7 @@
 use alloc::vec::Vec;
 
 use ulua_ast::records::{ast_expr::AstExpr, ast_expr_binary::AstExprBinaryOp, location::Location};
-use ulua_common::macros::luau_unreachable::LUAU_UNREACHABLE;
+use ulua_common::macros::luau_assert::LUAU_UNREACHABLE;
 
 use crate::{
   records::{
