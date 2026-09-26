@@ -78,7 +78,6 @@ pub mod define_cfa_expression;
 pub mod define_cfa_expression_offset;
 pub mod define_saved_register_location;
 pub mod destroy_block_unwind_info;
-pub mod destroy_native_proto_exec_data;
 pub mod destroy_shared_code_gen_context;
 pub mod dom_children;
 pub mod dump;

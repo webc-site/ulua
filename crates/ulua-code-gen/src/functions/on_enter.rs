@@ -7,9 +7,8 @@ use crate::{
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 ///
-/// ABI 与 VM 的 `ecb.enter` 槽位一致（C++ `onEnter` 为 C ABI），可直接装入
-/// `lua_ExecutionCallbacks::enter`，无需 transmute。
-pub unsafe extern "C-unwind" fn on_enter(l: *mut LuaState, proto: *mut Proto) -> i32 {
+/// 仅被同文件 `on_enter_export` 转发调用；C ABI 由该导出壳承载，本体用 Rust ABI。
+pub unsafe fn on_enter(l: *mut LuaState, proto: *mut Proto) -> i32 {
   // Safety: l 为活 LuaState、proto 为其当前帧正在执行的活 Proto(VM 在 ecb.enter 处调用)。
   // 断言保证 execdata 非空、savedpc∈[code, code+sizecode), 故 pc_offset=savedpc-code 有界,
   // (*proto).execdata as *mut u32 指向 NativeProtoExecDataHeader 之后的指令偏移数组,

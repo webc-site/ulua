@@ -5,12 +5,10 @@ use crate::records::shared_code_gen_context::SharedCodeGenContext;
 
 /// # Safety
 ///
-/// 本函数仅 native 使用，执行手动内存释放。
+/// 本函数仅由 Rust 侧直接调用（如测试 Drop 守卫），执行手动内存释放。
 /// 调用方必须保证 `code_gen_context` 由匹配的分配函数创建，
 /// 且本调用之后不再使用它。
-pub unsafe extern "C-unwind" fn destroy_shared_code_gen_context(
-  code_gen_context: *const SharedCodeGenContext,
-) {
+pub unsafe fn destroy_shared_code_gen_context(code_gen_context: *const SharedCodeGenContext) {
   if !code_gen_context.is_null() {
     let ptr = code_gen_context as *mut SharedCodeGenContext;
     // Safety: 契约保证 code_gen_context 为匹配分配函数产出、此后不再使用的
