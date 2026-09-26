@@ -1,3 +1,5 @@
+#![deny(unsafe_code)]
+
 use ulua_common::{fflag::LuauTypeFunctionRobustness, records::variant::Variant2};
 
 use crate::{
@@ -21,7 +23,8 @@ use crate::{
     type_function_variadic_type_pack::TypeFunctionVariadicTypePack,
   },
   type_aliases::{
-    type_function_type_pack_id::TypeFunctionTypePackId,
+    type_function_type_id::AsTypeFunctionType,
+    type_function_type_pack_id::{AsTypeFunctionTypePack, TypeFunctionTypePackId},
     type_function_type_pack_variant::TypeFunctionTypePackVariantMember,
     type_function_type_variant::TypeFunctionTypeVariantMember,
   },
@@ -74,20 +77,12 @@ pub fn are_equal_are_equal_state_type_function_union_type_type_function_union_ty
     return false;
   }
 
-  let mut l_iter = lhs.components.iter();
-  let mut r_iter = rhs.components.iter();
-
-  while let (Some(l), Some(r)) = (l_iter.next(), r_iter.next()) {
+  // components 按下标一一对应，zip 替代迭代器手动 next
+  for (&l, &r) in lhs.components.iter().zip(&rhs.components) {
     if !are_equal_are_equal_state_type_function_type_type_function_type(
       seen,
-      // Safety: `l` 是 `lhs.components: Vec<TypeFunctionTypeId>` 的元素借用，
-      // 解出的 `*const TypeFunctionType` 由构造该 union 时 `allocate_type_function_type`
-      // 写入 runtime 的 `type_arena: TypedAllocator<TypeFunctionType>`——块只追加、
-      // 地址稳定。`lhs`（`&`）存活即其 arena 分量存活，本次比较全程只读，无并存 `&mut`。
-      unsafe { &**l },
-      // Safety: `r` 同构来自 `rhs.components`，指向 rhs 所属 arena 的分量节点；
-      // 由 `&rhs` 借用保证有效，仅生成共享引用。
-      unsafe { &**r },
+      l.as_type(),
+      r.as_type(),
     ) {
       return false;
     }
@@ -113,13 +108,8 @@ pub fn are_equal_are_equal_state_type_function_intersection_type_type_function_i
   for (&l, &r) in lhs.components.iter().zip(&rhs.components) {
     if !are_equal_are_equal_state_type_function_type_type_function_type(
       seen,
-      // Safety: 解构后 `l: TypeFunctionTypeId = *const TypeFunctionType`，是
-      // `lhs.components` 里由 `allocate_type_function_type` 落在 `type_arena` 的
-      // 分量指针；arena 节点地址稳定，`&lhs` 借用期内必存活，且此处只做只读解引用。
-      unsafe { &*l },
-      // Safety: `r` 为 `rhs.components` 对应下标的 arena 分量指针，由 `&rhs`
-      // 保证有效，共享引用不产生别名冲突。
-      unsafe { &*r },
+      l.as_type(),
+      r.as_type(),
     ) {
       return false;
     }
@@ -137,17 +127,11 @@ pub fn are_equal_are_equal_state_type_function_negation_type_type_function_negat
     return true;
   }
 
-  // Safety: `lhs.type_id`/`rhs.type_id` 均为构造 negation 时经
-  // `allocate_type_function_type` 写入 runtime `type_arena` 的类型指针（非空、
-  // 地址稳定）。两侧 `&` 借用存活即各自 arena 分量存活，本次比较只读、无别名冲突，
-  // 故对整个递归调用期间解引用的两个共享引用均成立。
-  unsafe {
-    are_equal_are_equal_state_type_function_type_type_function_type(
-      seen,
-      &*lhs.type_id,
-      &*rhs.type_id,
-    )
-  }
+  are_equal_are_equal_state_type_function_type_type_function_type(
+    seen,
+    lhs.type_id.as_type(),
+    rhs.type_id.as_type(),
+  )
 }
 
 pub fn are_equal_are_equal_state_type_function_table_type_type_function_table_type(
@@ -163,33 +147,26 @@ pub fn are_equal_are_equal_state_type_function_table_type_type_function_table_ty
     return false;
   }
 
-  if (lhs.indexer.is_some()) != (rhs.indexer.is_some()) {
-    return false;
-  }
+  match (&lhs.indexer, &rhs.indexer) {
+    (Some(l_indexer), Some(r_indexer)) => {
+      if !are_equal_are_equal_state_type_function_type_type_function_type(
+        seen,
+        l_indexer.key_type.as_type(),
+        r_indexer.key_type.as_type(),
+      ) {
+        return false;
+      }
 
-  if let (Some(l_indexer), Some(r_indexer)) = (&lhs.indexer, &rhs.indexer) {
-    if !are_equal_are_equal_state_type_function_type_type_function_type(
-      seen,
-      // Safety: `key_type: TypeFunctionTypeId` 是 table 构造时对 key 调用
-      // `allocate_type_function_type` 得到的 arena 类型指针（非空、稳定）；`l_indexer`
-      // 借自 `&lhs`，借用期内其 indexer 分量必存活，仅取共享引用。
-      unsafe { &*l_indexer.key_type },
-      // Safety: 同上，`r_indexer.key_type` 指向 rhs 侧 arena 的 key 类型节点。
-      unsafe { &*r_indexer.key_type },
-    ) {
-      return false;
+      if !are_equal_are_equal_state_type_function_type_type_function_type(
+        seen,
+        l_indexer.value_type.as_type(),
+        r_indexer.value_type.as_type(),
+      ) {
+        return false;
+      }
     }
-
-    if !are_equal_are_equal_state_type_function_type_type_function_type(
-      seen,
-      // Safety: `value_type` 为构造 indexer 时 `allocate_type_function_type`
-      // 落在 `type_arena` 的 value 类型指针（非空、稳定），由 `&lhs`/`&rhs` 借用保证存活。
-      unsafe { &*l_indexer.value_type },
-      // Safety: 对应 rhs 侧 `value_type`，同一 arena 存活不变量下只读解引用。
-      unsafe { &*r_indexer.value_type },
-    ) {
-      return false;
-    }
+    (None, None) => {}
+    _ => return false,
   }
 
   let mut l_iter = lhs.props.iter();
@@ -199,43 +176,32 @@ pub fn are_equal_are_equal_state_type_function_table_type_type_function_table_ty
     let _ = l_key;
     let _ = r_key;
 
-    if (l_prop.read_ty.is_some() && r_prop.read_ty.is_none())
-      || (l_prop.read_ty.is_none() && r_prop.read_ty.is_some())
-    {
-      return false;
+    match (l_prop.read_ty, r_prop.read_ty) {
+      (Some(l), Some(r)) => {
+        if !are_equal_are_equal_state_type_function_type_type_function_type(
+          seen,
+          l.as_type(),
+          r.as_type(),
+        ) {
+          return false;
+        }
+      }
+      (None, None) => {}
+      _ => return false,
     }
 
-    if let (Some(l_read_ty), Some(r_read_ty)) = (&l_prop.read_ty, &r_prop.read_ty)
-      && !are_equal_are_equal_state_type_function_type_type_function_type(
-        seen,
-        // Safety: `read_ty: Option<TypeFunctionTypeId>`，`Some` 已排除空指针；其内层
-        // `*const TypeFunctionType` 由建属性时对 read 类型 `allocate_type_function_type`
-        // 落入 `type_arena`（地址稳定），`&lhs`/`&rhs` 借用期内分量存活，仅共享解引用。
-        unsafe { &**l_read_ty },
-        // Safety: rhs 侧 `read_ty` 同理，Some 保证非空、arena 保证存活。
-        unsafe { &**r_read_ty },
-      )
-    {
-      return false;
-    }
-
-    if (l_prop.write_ty.is_some() && r_prop.write_ty.is_none())
-      || (l_prop.write_ty.is_none() && r_prop.write_ty.is_some())
-    {
-      return false;
-    }
-
-    if let (Some(l_write_ty), Some(r_write_ty)) = (&l_prop.write_ty, &r_prop.write_ty)
-      && !are_equal_are_equal_state_type_function_type_type_function_type(
-        seen,
-        // Safety: `write_ty` 与 read_ty 同族——Option 内 Some 排除 null，指向写类型的
-        // arena 节点（`allocate_type_function_type` 稳定分配），随 prop 借用存活。
-        unsafe { &**l_write_ty },
-        // Safety: 对应 rhs 的 `write_ty` arena 指针，只读解引用无别名。
-        unsafe { &**r_write_ty },
-      )
-    {
-      return false;
+    match (l_prop.write_ty, r_prop.write_ty) {
+      (Some(l), Some(r)) => {
+        if !are_equal_are_equal_state_type_function_type_type_function_type(
+          seen,
+          l.as_type(),
+          r.as_type(),
+        ) {
+          return false;
+        }
+      }
+      (None, None) => {}
+      _ => return false,
     }
   }
 
@@ -251,18 +217,14 @@ fn are_equal_optional_pack(
   lhs: TypeFunctionTypePackId,
   rhs: TypeFunctionTypePackId,
 ) -> bool {
-  if lhs.is_null() != rhs.is_null() {
-    return false;
-  }
-  if lhs.is_null() {
-    return true;
-  }
-  // Safety: 已双侧 `!is_null()` 守卫，二者均为 `allocate_type_function_type_pack`
-  // 落在 `type_pack_arena` 的地址稳定存活 pack；随外层 `&lhs`/`&rhs` 借用存续，只读解引用无别名。
-  unsafe {
-    are_equal_are_equal_state_type_function_type_pack_var_type_function_type_pack_var(
-      seen, &*lhs, &*rhs,
-    )
+  match (lhs.as_pack_opt(), rhs.as_pack_opt()) {
+    (None, None) => true,
+    (Some(l), Some(r)) => {
+      are_equal_are_equal_state_type_function_type_pack_var_type_function_type_pack_var(
+        seen, l, r,
+      )
+    }
+    _ => false,
   }
 }
 
@@ -283,12 +245,8 @@ pub fn are_equal_are_equal_state_type_function_function_type_type_function_funct
   for (&l, &r) in lhs.generics.iter().zip(&rhs.generics) {
     if !are_equal_are_equal_state_type_function_type_type_function_type(
       seen,
-      // Safety: `generics: Vec<TypeFunctionTypeId>`，元素 `l` 是构造泛型签名时
-      // `allocate_type_function_type` 落在 `type_arena` 的类型指针（非空、块内地址稳定）；
-      // `&lhs` 借用存续即该 arena 分量存续，仅共享解引用。
-      unsafe { &*l },
-      // Safety: `r` 来自 rhs.generics，同一 arena 存活不变量下的只读解引用。
-      unsafe { &*r },
+      l.as_type(),
+      r.as_type(),
     ) {
       return false;
     }
@@ -301,12 +259,8 @@ pub fn are_equal_are_equal_state_type_function_function_type_type_function_funct
   for (&l, &r) in lhs.generic_packs.iter().zip(&rhs.generic_packs) {
     if !are_equal_are_equal_state_type_function_type_pack_var_type_function_type_pack_var(
       seen,
-      // Safety: `generic_packs: Vec<TypeFunctionTypePackId>`，解构后 `l` 为
-      // `*const TypeFunctionTypePackVar`，由 `allocate_type_function_type_pack` 落在
-      // runtime 的 `type_pack_arena`（地址稳定）；随 `&lhs` 借用存活，只读无别名。
-      unsafe { &*l },
-      // Safety: rhs 侧 pack 变量指针，同一 type_pack_arena 不变量。
-      unsafe { &*r },
+      l.as_pack(),
+      r.as_pack(),
     ) {
       return false;
     }
@@ -444,12 +398,8 @@ pub fn are_equal_are_equal_state_type_function_type_pack_type_function_type_pack
   for (&l, &r) in lhs.head.iter().zip(&rhs.head) {
     if !are_equal_are_equal_state_type_function_type_type_function_type(
       seen,
-      // Safety: `head: Vec<TypeFunctionTypeId>`，元素 `l` 为 pack 构造时
-      // `allocate_type_function_type` 写入 `type_arena` 的头类型指针（非空、地址稳定），
-      // 随 `&lhs` 借用存活，仅共享解引用。
-      unsafe { &*l },
-      // Safety: rhs.head 对应元素，同一 type_arena 存活不变量下的只读解引用。
-      unsafe { &*r },
+      l.as_type(),
+      r.as_type(),
     ) {
       return false;
     }
@@ -467,16 +417,11 @@ pub fn are_equal_are_equal_state_type_function_variadic_type_pack_type_function_
     return true;
   }
 
-  // Safety: `lhs.type_id`/`rhs.type_id` 是变长 pack 构造时对元素类型
-  // `allocate_type_function_type` 落入 `type_arena` 的类型指针（非空、地址稳定）；两侧
-  // `&` 借用存续即 arena 分量存续，递归比较全程只读，故两个共享解引用均成立。
-  unsafe {
-    are_equal_are_equal_state_type_function_type_type_function_type(
-      seen,
-      &*lhs.type_id,
-      &*rhs.type_id,
-    )
-  }
+  are_equal_are_equal_state_type_function_type_type_function_type(
+    seen,
+    lhs.type_id.as_type(),
+    rhs.type_id.as_type(),
+  )
 }
 
 /// C++ `bool areEqual(AreEqualState& seen, const TypeFunctionTypePackVar& lhs,
@@ -501,8 +446,8 @@ pub fn are_equal_are_equal_state_type_function_type_pack_var_type_function_type_
     let rv = TypeFunctionVariadicTypePack::get_if(&rhs.type_variant);
     if let (Some(lv), Some(rv)) = (lv, rv) {
       return are_equal_are_equal_state_type_function_variadic_type_pack_type_function_variadic_type_pack(
-                seen, lv, rv,
-            );
+        seen, lv, rv,
+      );
     }
   }
 
