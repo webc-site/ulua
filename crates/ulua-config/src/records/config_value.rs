@@ -1,29 +1,47 @@
 use alloc::string::String;
 
-use ulua_common::records::{dense_hash_table::DenseDefault, variant::Variant4};
+use ulua_common::records::dense_hash_table::DenseDefault;
 
 use crate::records::config_table::ConfigTable;
 
+/// 对应 C++ `ConfigValue = Variant<std::string, double, bool, ConfigTable>`。
+/// r7-variant4：由位置式 `Variant4` + `V0..V3`/`get_if_0..3` 改写为直接语义
+/// enum（review.md §3/§7 消灭位置式 C 风格命名；消费面已核实收敛于 ulua-config
+/// ±测试，其余 `VariantN` 调用方在 ast/analysis/compiler，不波及本 enum）。
 #[derive(Debug, Clone)]
-pub struct ConfigValue(pub Variant4<String, f64, bool, ConfigTable>);
+pub enum ConfigValue {
+  String(String),
+  F64(f64),
+  Bool(bool),
+  Table(ConfigTable),
+}
 
 impl ConfigValue {
   pub fn get_string(&self) -> Option<&String> {
-    self.0.get_if_0()
+    match self {
+      Self::String(value) => Some(value),
+      _ => None,
+    }
   }
 
   pub fn get_bool(&self) -> Option<&bool> {
-    self.0.get_if_2()
+    match self {
+      Self::Bool(value) => Some(value),
+      _ => None,
+    }
   }
 
   pub fn get_table(&self) -> Option<&ConfigTable> {
-    self.0.get_if_3()
+    match self {
+      Self::Table(value) => Some(value),
+      _ => None,
+    }
   }
 }
 
 impl Default for ConfigValue {
   fn default() -> Self {
-    Self(Variant4::V0(String::new()))
+    Self::String(String::new())
   }
 }
 
@@ -35,24 +53,24 @@ impl DenseDefault for ConfigValue {
 
 impl From<String> for ConfigValue {
   fn from(value: String) -> Self {
-    Self(Variant4::V0(value))
+    Self::String(value)
   }
 }
 
 impl From<f64> for ConfigValue {
   fn from(value: f64) -> Self {
-    Self(Variant4::V1(value))
+    Self::F64(value)
   }
 }
 
 impl From<bool> for ConfigValue {
   fn from(value: bool) -> Self {
-    Self(Variant4::V2(value))
+    Self::Bool(value)
   }
 }
 
 impl From<ConfigTable> for ConfigValue {
   fn from(value: ConfigTable) -> Self {
-    Self(Variant4::V3(value))
+    Self::Table(value)
   }
 }

@@ -12,7 +12,7 @@ use crate::{
   },
   records::{
     alias_options::AliasOptions, config::Config, config_table::ConfigTable,
-    config_value::ConfigValue,
+    config_table_key::ConfigTableKey, config_value::ConfigValue,
   },
 };
 
@@ -29,7 +29,7 @@ pub(crate) fn create_luau_config_from_luau_table(
   alias_options: Option<AliasOptions>,
 ) -> Result<(), ConfigError> {
   for (k, v) in luau_table.iter() {
-    let Some(key) = k.0.get_if_0() else {
+    let ConfigTableKey::String(key) = k else {
       return Err(ConfigError::LuauTableKeyNotString);
     };
 
@@ -49,7 +49,7 @@ pub(crate) fn create_luau_config_from_luau_table(
         }
 
         for (k, v) in lint.iter() {
-          let Some(warning_name) = k.0.get_if_0() else {
+          let ConfigTableKey::String(warning_name) = k else {
             return Err(ConfigError::LintTableKeyNotString);
           };
 
@@ -77,7 +77,7 @@ pub(crate) fn create_luau_config_from_luau_table(
         let mut globals = vec![String::new(); table.size()];
 
         for (k, v) in table.iter() {
-          let Some(key) = k.0.get_if_1() else {
+          let ConfigTableKey::F64(key) = k else {
             return Err(ConfigError::GlobalsKeyNotNumeric);
           };
 
@@ -102,7 +102,7 @@ pub(crate) fn create_luau_config_from_luau_table(
         let aliases = typed(v.get_table(), "aliases", VAL_TABLE)?;
 
         for (k, v) in aliases.iter() {
-          let Some(alias_key) = k.0.get_if_0() else {
+          let ConfigTableKey::String(alias_key) = k else {
             return Err(ConfigError::AliasTableKeyNotString);
           };
 
