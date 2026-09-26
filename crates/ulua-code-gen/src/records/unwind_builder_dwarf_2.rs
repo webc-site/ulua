@@ -17,9 +17,8 @@ use crate::{
     writeuleb_128::writeuleb_128,
   },
   macros::{
-    codegen_assert::CODEGEN_ASSERT, dw_reg_a_64_lr::DW_REG_A64_LR, dw_reg_a_64_sp::DW_REG_A64_SP,
-    dw_reg_x_64_ra::DW_REG_X64_RA, dw_reg_x_64_rbp::DW_REG_X64_RBP,
-    dw_reg_x_64_rsp::DW_REG_X64_RSP,
+    codegen_assert::CODEGEN_ASSERT,
+    dwarf_reg::{DW_REG_A64_LR, DW_REG_A64_SP, DW_REG_X64_RA, DW_REG_X64_RBP, DW_REG_X64_RSP},
   },
   records::{
     register_a_64::RegisterA64, register_x_64::RegisterX64, unwind_builder::UnwindBuilder,

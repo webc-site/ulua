@@ -2,7 +2,7 @@ use ulua_vm::enums::lua_type::LuaType;
 
 use crate::{
   enums::ir_cmd::IrCmd,
-  macros::{has_op_c::HAS_OP_C, ir_operand::op_c_ref},
+  macros::ir_operand::{HAS_OP_C, op_c_ref},
   records::{ir_function::IrFunction, ir_op::IrOp},
 };
 

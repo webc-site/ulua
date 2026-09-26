@@ -3,7 +3,7 @@ use ulua_vm::enums::lua_type::LuaType;
 use crate::{
   enums::ir_cmd::IrCmd,
   functions::{is_gco::is_gco, replace_ir_utils::replace_ir_function_ir_block_u32_ir_inst},
-  macros::{codegen_assert::CODEGEN_ASSERT, has_op_d::HAS_OP_D, has_op_e::HAS_OP_E},
+  macros::{codegen_assert::CODEGEN_ASSERT, ir_operand::{HAS_OP_D, HAS_OP_E}},
   records::{
     ir_function::IrFunction,
     ir_inst::IrInst,
