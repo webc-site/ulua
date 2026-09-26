@@ -203,25 +203,18 @@ pub unsafe extern "C-unwind" fn time(t: *mut i64) -> i64 {
 
 /// `clock()` — 处理器时间（`CLOCKS_PER_SEC` 单位）。没有额外宿主 import
 /// 就没有可用的 wasm 时钟 syscall，这里报告零；`os.clock` 只用于计时，
-/// 对 playground 不承重。
-///
-/// # Safety
-/// 无参数；本实现不解引用任何指针。
-///
+/// 对 playground 不承重。恒返回 0，不触碰任何指针，全函数无前置条件。
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn clock() -> c_long {
+pub extern "C-unwind" fn clock() -> c_long {
   0
 }
 
 /// `sysconf(name)` — 只有页大小查询会被发起（由 JIT 代码分配器发起，
-/// 解释器路径不执行）。报告 wasm 页大小，见 [`WASM_PAGE_SIZE`]。
-///
-/// # Safety
-/// `_name` 一律忽略（任何查询都回页大小，消费方 `page_size()` 对返回值
-/// 二次校验「正且 2 的幂」）；本实现不解引用任何指针。
-///
+/// 解释器路径不执行）。报告 wasm 页大小，见 [`WASM_PAGE_SIZE`]。`_name`
+/// 一律忽略（任何查询都回页大小，消费方 `page_size()` 对返回值二次校验
+/// 「正且 2 的幂」）；全函数不解引用任何指针，无前置条件。
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn sysconf(_name: c_int) -> c_long {
+pub extern "C-unwind" fn sysconf(_name: c_int) -> c_long {
   WASM_PAGE_SIZE
 }
 
@@ -229,13 +222,10 @@ pub unsafe extern "C-unwind" fn sysconf(_name: c_int) -> c_long {
 // 永远到达不了。以"忠实失败"提供（mmap 返回 MAP_FAILED；其余 no-op），
 // 使模块无需 JS 宿主提供即可链接。
 
-/// `mmap` — JIT 页分配；wasm 解释器路径不可达。
-///
-/// # Safety
-/// 仅调用约定层面 unsafe；本实现不访问任何指针。
-///
+/// `mmap` — JIT 页分配；wasm 解释器路径不可达。忠实失败形态：恒返回
+/// MAP_FAILED，不访问任何指针，全函数无前置条件。
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn mmap(
+pub extern "C-unwind" fn mmap(
   _addr: *mut c_void,
   _len: usize,
   _prot: c_int,
@@ -247,23 +237,17 @@ pub unsafe extern "C-unwind" fn mmap(
   usize::MAX as *mut c_void
 }
 
-/// `munmap` — JIT 页释放；wasm 解释器路径不可达。
-///
-/// # Safety
-/// 仅调用约定层面 unsafe；本实现不访问任何指针。
-///
+/// `munmap` — JIT 页释放；wasm 解释器路径不可达。no-op：恒返回 0，
+/// 不访问任何指针，全函数无前置条件。
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn munmap(_addr: *mut c_void, _len: usize) -> c_int {
+pub extern "C-unwind" fn munmap(_addr: *mut c_void, _len: usize) -> c_int {
   0
 }
 
-/// `mprotect` — JIT 页权限；wasm 解释器路径不可达。
-///
-/// # Safety
-/// 仅调用约定层面 unsafe；本实现不访问任何指针。
-///
+/// `mprotect` — JIT 页权限；wasm 解释器路径不可达。no-op：恒返回 0，
+/// 不访问任何指针，全函数无前置条件。
 #[unsafe(no_mangle)]
-pub unsafe extern "C-unwind" fn mprotect(_addr: *mut c_void, _len: usize, _prot: c_int) -> c_int {
+pub extern "C-unwind" fn mprotect(_addr: *mut c_void, _len: usize, _prot: c_int) -> c_int {
   0
 }
 

@@ -23,7 +23,7 @@ static CALLED: AtomicUsize = AtomicUsize::new(0);
 /// 再 `LUAU_DEBUGBREAK`）。测试进程若在抑制语义失效时走到断点分支会直接崩溃，
 /// 因此本用例通过即证明 cpp `assertCallHandler(...) && DEBUGBREAK()` 的短路
 /// 语义被保留。
-unsafe extern "C-unwind" fn take_over(
+extern "C-unwind" fn take_over(
   _expression: *const c_char,
   _file: *const c_char,
   _line: i32,
