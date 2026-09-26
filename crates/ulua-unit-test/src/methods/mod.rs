@@ -15,6 +15,7 @@ pub mod bytecode_compiler_fixture_build_bytecode;
 pub mod bytecode_compiler_fixture_check_roundtrip;
 pub mod bytecode_compiler_fixture_extract_string_table;
 pub mod bytecode_compiler_fixture_get_function_bytecode;
+pub mod bytecode_compiler_fixture_get_roundtrip_function_bytecode;
 pub mod bytecode_inliner_fixture_build_bytecode;
 pub mod bytecode_inliner_fixture_compile_and_inline;
 pub mod bytecode_inliner_fixture_extract_string_table;

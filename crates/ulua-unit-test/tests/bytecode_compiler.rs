@@ -868,3 +868,171 @@ fn bytecode_compiler_variadic_function() {
   assert_eq!(set_list.ops[2], new_table_op);
   assert_eq!(set_list.ops[3], get_var_args2_op);
 }
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+// "inheriting_classes_bytecode_roundtrips" (line 827).
+#[test]
+fn bytecode_compiler_inheriting_classes_bytecode_roundtrips() {
+  use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
+  use ulua_common::fflag::DebugLuauUserDefinedClasses;
+  use ulua_unit_test::{
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
+  };
+
+  let _classes = ScopedFastFlag::new(&DebugLuauUserDefinedClasses, true);
+
+  let source = r#"
+open class Animal
+    public species: string
+
+    function __tostring(self)
+        return "I am an animal."
+    end
+
+    function live(self)
+        return "I am alive"
+    end
+end
+
+class Cat extends Animal
+    public breed: string
+
+    function __tostring(self): string
+        return `{Animal.__tostring(self)} I am a {self.breed} cat.`
+    end
+end
+
+print(Cat)
+
+return { Animal = Animal, Cat = Cat }
+    "#;
+
+  let mut fixture = BytecodeCompilerFixture::new();
+  fixture.check_roundtrip(source);
+
+  let dump = fixture.get_roundtrip_function_bytecode(
+    source,
+    BytecodeBuilder::DUMP_CODE | BytecodeBuilder::DUMP_CONSTANTS,
+    1,
+    3,
+  );
+
+  let expected = r#"
+K0: 'Animal'
+K1: 'species'
+K2: function __tostring
+K3: '__tostring'
+K4: function live
+K5: 'live'
+K6: 'new'
+K7: '__init'
+K8: class Animal (props: 1, methods: 4)
+  props:
+    K1 ['species']
+  methods:
+    K3 ['__tostring']
+    K5 ['live']
+    K6 ['new']
+    K7 ['__init']
+K9: 'Cat'
+K10: 'breed'
+K11: class Cat (props: 1, methods: 3)
+  props:
+    K10 ['breed']
+  methods:
+    K3 ['__tostring']
+    K6 ['new']
+    K7 ['__init']
+K12: 'print'
+K13: print
+K14: {['Animal'] #1, ['Cat'] #0} sizenode=2
+LOADNIL R0
+LOADNIL R1
+NEWCLASS R0 no_base K8 1 [class Animal (props: 1, methods: 4)]
+DUPCLOSURE R2 K2 ['__tostring']
+NEWCLASSMEMBER R0 R2 ['__tostring']
+DUPCLOSURE R2 K4 ['live']
+NEWCLASSMEMBER R0 R2 ['live']
+NEWCLASS R1 R0 K11 0 [class Cat (props: 1, methods: 3)]
+NEWCLOSURE R2 P2
+CAPTURE REF R0
+NEWCLASSMEMBER R1 R2 ['__tostring']
+GETIMPORT R2 13 [print]
+MOVE R3 R1
+CALL R2 1 0
+DUPTABLE R2 14
+SETTABLEKS R0 R2 K0 ['Animal']
+SETTABLEKS R1 R2 K9 ['Cat']
+CLOSEUPVALS R0
+RETURN R2 1
+"#;
+
+  assert_eq!(format!("\n{}", dump), expected);
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+// "fastpcall_roundtrip" (line 912).
+#[test]
+fn bytecode_compiler_fastpcall_roundtrip() {
+  use ulua_common::fflag::LuauCompileFastpcall;
+  use ulua_unit_test::{
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
+  };
+
+  let _luau_compile_fastpcall = ScopedFastFlag::new(&LuauCompileFastpcall, true);
+
+  let mut fixture = BytecodeCompilerFixture::new();
+  fixture.check_roundtrip(
+    r#"
+        local function test(fn)
+            return pcall(fn, 42)
+        end
+    "#,
+  );
+
+  fixture.check_roundtrip(
+    r#"
+        local function test(fn, errf)
+            return xpcall(fn, errf, 1, 2, 3)
+        end
+    "#,
+  );
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+// "jump_expand_limits" (line 929).
+#[test]
+fn bytecode_compiler_jump_expand_limits() {
+  use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
+  use ulua_common::{enums::luau_opcode::LuauOpcode, fflag::LuauCompileExpandLimit};
+  use ulua_unit_test::type_aliases::scoped_fast_flag::ScopedFastFlag;
+
+  // Takes too long to run without optimizations enabled
+  let _luau_compile_expand_limit = ScopedFastFlag::new(&LuauCompileExpandLimit, true);
+
+  let mut bcb = BytecodeBuilder::new(None);
+  bcb.begin_function(0, false);
+
+  let jump_count: usize = 2_804_000;
+
+  for _ in 0..jump_count {
+    bcb.emit_ad(LuauOpcode::LOP_JUMP, 0, 0);
+  }
+
+  let target = bcb.emit_label();
+  bcb.emit_abc(LuauOpcode::LOP_RETURN, 0, 1, 0);
+
+  let mut success = true;
+  for i in 0..jump_count {
+    success = success && bcb.patch_jump_d(i, target);
+  }
+
+  assert!(success);
+
+  // cpp `expandJumps(error)` 出参：展开后仍超出 JUMPX 24 位射程时报错
+  let error = bcb.expand_jumps();
+
+  assert!(error);
+}
