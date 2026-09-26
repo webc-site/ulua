@@ -1,6 +1,6 @@
 use ulua_common::{
   enums::luau_opcode::LuauOpcode, functions::get_op_length::get_op_length,
-  macros::luau_insn_op::luau_insn_op,
+  macros::luau_insn_ops::luau_insn_op,
 };
 
 use crate::type_aliases::instruction_ir_builder::Instruction;

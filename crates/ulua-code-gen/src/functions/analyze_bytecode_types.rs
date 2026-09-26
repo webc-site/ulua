@@ -6,10 +6,9 @@ use ulua_common::{
     luau_opcode::LuauOpcode,
   },
   functions::get_op_length::get_op_length,
-  macros::{
-    luau_insn_a::luau_insn_a, luau_insn_aux_a::luau_insn_aux_a, luau_insn_aux_b::luau_insn_aux_b,
-    luau_insn_aux_kv_16::luau_insn_aux_kv16, luau_insn_b::luau_insn_b, luau_insn_c::luau_insn_c,
-    luau_insn_d::luau_insn_d, luau_insn_op::luau_insn_op,
+  macros::luau_insn_ops::{
+    luau_insn_a, luau_insn_aux_a, luau_insn_aux_b, luau_insn_aux_kv16, luau_insn_b, luau_insn_c,
+    luau_insn_d, luau_insn_op,
   },
 };
 

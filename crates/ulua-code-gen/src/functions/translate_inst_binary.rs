@@ -1,6 +1,6 @@
 use ulua_common::{
   enums::{luau_builtin_function::LuauBuiltinFunction, luau_bytecode_type::LuauBytecodeType},
-  macros::{luau_insn_a::luau_insn_a, luau_insn_b::luau_insn_b, luau_insn_c::luau_insn_c},
+  macros::luau_insn_ops::{luau_insn_a, luau_insn_b, luau_insn_c},
 };
 use ulua_vm::enums::{lua_type::LuaType, tms::TMS};
 

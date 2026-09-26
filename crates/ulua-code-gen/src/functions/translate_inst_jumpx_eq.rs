@@ -1,9 +1,7 @@
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
-  macros::{
-    luau_insn_a::luau_insn_a, luau_insn_aux_kb::luau_insn_aux_kb,
-    luau_insn_aux_kv::luau_insn_aux_kv, luau_insn_aux_not::luau_insn_aux_not,
-    luau_insn_d::luau_insn_d,
+  macros::luau_insn_ops::{
+    luau_insn_a, luau_insn_aux_kb, luau_insn_aux_kv, luau_insn_aux_not, luau_insn_d,
   },
 };
 use ulua_vm::enums::lua_type::LuaType;

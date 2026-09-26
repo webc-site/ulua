@@ -1,6 +1,6 @@
 use ulua_common::{
   enums::luau_capture_type::LuauCaptureType,
-  macros::{luau_insn_a::luau_insn_a, luau_insn_b::luau_insn_b},
+  macros::luau_insn_ops::{luau_insn_a, luau_insn_b},
 };
 
 use crate::{

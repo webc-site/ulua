@@ -2,10 +2,7 @@ use core::ffi::c_char;
 
 use ulua_common::{
   enums::{luau_bytecode_type::LuauBytecodeType, luau_opcode::LuauOpcode},
-  macros::{
-    luau_insn_a::luau_insn_a, luau_insn_aux_kv_16::luau_insn_aux_kv16, luau_insn_b::luau_insn_b,
-    luau_insn_op::luau_insn_op,
-  },
+  macros::luau_insn_ops::{luau_insn_a, luau_insn_aux_kv16, luau_insn_b, luau_insn_op},
 };
 use ulua_vm::enums::lua_type::LuaType;
 

@@ -1,8 +1,8 @@
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
   macros::{
-    luau_assert::LUAU_ASSERT, luau_insn_a::luau_insn_a, luau_insn_aux_kv_16::luau_insn_aux_kv16,
-    luau_insn_b::luau_insn_b, luau_insn_c::luau_insn_c, luau_insn_op::luau_insn_op,
+    luau_assert::LUAU_ASSERT,
+    luau_insn_ops::{luau_insn_a, luau_insn_aux_kv16, luau_insn_b, luau_insn_c, luau_insn_op},
   },
 };
 use ulua_vm::{

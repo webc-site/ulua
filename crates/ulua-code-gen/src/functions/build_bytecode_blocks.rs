@@ -5,7 +5,7 @@ use ulua_common::{
   functions::{
     get_jump_target::get_jump_target, get_op_length::get_op_length, is_fast_call::is_fast_call,
   },
-  macros::luau_insn_op::luau_insn_op,
+  macros::luau_insn_ops::luau_insn_op,
 };
 
 use crate::records::{bytecode_block::BytecodeBlock, ir_function::IrFunction};

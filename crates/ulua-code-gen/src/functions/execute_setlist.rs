@@ -1,8 +1,6 @@
 use core::ptr::null;
 
-use ulua_common::macros::{
-  luau_insn_a::luau_insn_a, luau_insn_b::luau_insn_b, luau_insn_c::luau_insn_c,
-};
+use ulua_common::macros::luau_insn_ops::{luau_insn_a, luau_insn_b, luau_insn_c};
 use ulua_vm::{
   macros::lua_multret::LUA_MULTRET,
   type_aliases::{stk_id::StkId, t_value::TValue},

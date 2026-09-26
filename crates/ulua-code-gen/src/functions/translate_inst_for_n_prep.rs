@@ -1,7 +1,7 @@
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
   functions::{get_jump_target::get_jump_target, get_op_length::get_op_length},
-  macros::{luau_insn_a::luau_insn_a, luau_insn_op::luau_insn_op},
+  macros::luau_insn_ops::{luau_insn_a, luau_insn_op},
 };
 
 use crate::{

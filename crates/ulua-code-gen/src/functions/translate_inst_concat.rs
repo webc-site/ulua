@@ -1,6 +1,4 @@
-use ulua_common::macros::{
-  luau_insn_a::luau_insn_a, luau_insn_b::luau_insn_b, luau_insn_c::luau_insn_c,
-};
+use ulua_common::macros::luau_insn_ops::{luau_insn_a, luau_insn_b, luau_insn_c};
 
 use crate::{
   enums::ir_cmd::IrCmd, records::ir_builder::IrBuilder,

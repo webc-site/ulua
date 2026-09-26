@@ -1,5 +1,6 @@
 use ulua_common::macros::{
-  luau_assert::LUAU_ASSERT, luau_insn_a::luau_insn_a, luau_insn_c::luau_insn_c,
+  luau_assert::LUAU_ASSERT,
+  luau_insn_ops::{luau_insn_a, luau_insn_c},
 };
 use ulua_vm::type_aliases::{stk_id::StkId, t_value::TValue};
 

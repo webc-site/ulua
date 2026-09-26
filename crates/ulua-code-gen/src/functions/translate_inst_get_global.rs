@@ -1,6 +1,6 @@
 use core::mem::offset_of;
 
-use ulua_common::macros::luau_insn_a::luau_insn_a;
+use ulua_common::macros::luau_insn_ops::luau_insn_a;
 use ulua_vm::records::lua_node::LuaNode;
 
 use crate::{

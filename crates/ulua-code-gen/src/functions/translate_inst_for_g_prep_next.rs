@@ -1,4 +1,4 @@
-use ulua_common::macros::{luau_insn_a::luau_insn_a, luau_insn_d::luau_insn_d};
+use ulua_common::macros::luau_insn_ops::{luau_insn_a, luau_insn_d};
 use ulua_vm::{enums::lua_type::LuaType, macros::lu_tag_iterator::LU_TAG_ITERATOR};
 
 use crate::{

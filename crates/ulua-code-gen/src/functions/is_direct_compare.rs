@@ -1,6 +1,5 @@
-use ulua_common::macros::{
-  luau_insn_a::luau_insn_a, luau_insn_b::luau_insn_b, luau_insn_c::luau_insn_c,
-  luau_insn_d::luau_insn_d, luau_insn_op::luau_insn_op,
+use ulua_common::macros::luau_insn_ops::{
+  luau_insn_a, luau_insn_b, luau_insn_c, luau_insn_d, luau_insn_op,
 };
 
 use crate::type_aliases::instruction_ir_builder::Instruction;
