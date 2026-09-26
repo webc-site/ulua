@@ -5,14 +5,14 @@ use crate::{
     buffer_errors::buffer_oob_error, lua_l_checkbuffer::lua_l_checkbuffer,
     lua_l_checkinteger::lua_l_checkinteger, lua_pushlstring::lua_pushlstring,
   },
-  macros::{isoutofbounds::isoutofbounds, lua_l_argcheck::luaL_argcheck},
+  macros::{isoutofbounds::isoutofbounds, lua_l_argcheck::luaL_argcheck, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
 };
 
 /// # Safety
 ///
 /// `l` must point to a valid, properly initialized `LuaState`.
-pub(crate) unsafe extern "C-unwind" fn buffer_readstring(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn buffer_readstring(l: *mut LuaState) -> i32 {
   // Safety: 契约保证 `l` 指向本次 buffer 库调用的存活 LuaState，buffer 数据界由已校验的 userdata 长度字段给出，越界访问统一走报错路径
   unsafe {
     let mut len: usize = 0;
@@ -33,3 +33,5 @@ pub(crate) unsafe extern "C-unwind" fn buffer_readstring(l: *mut LuaState) -> i3
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn buffer_readstring, buffer_readstring_arm);

@@ -2,14 +2,14 @@ use ulua_common::fflag;
 
 use crate::{
   functions::{
-    buffer_copy::buffer_copy, buffer_create::buffer_create, buffer_fill::buffer_fill,
-    buffer_fromstring::buffer_fromstring, buffer_len::buffer_len, buffer_readbits::buffer_readbits,
-    buffer_readfp::buffer_readfp, buffer_readinteger::buffer_readinteger,
-    buffer_readlong::buffer_readlong, buffer_readstring::buffer_readstring,
-    buffer_tostring::buffer_tostring, buffer_writebits::buffer_writebits,
-    buffer_writefp::buffer_writefp, buffer_writeinteger::buffer_writeinteger,
-    buffer_writelong::buffer_writelong, buffer_writestring::buffer_writestring,
-    lua_l_register::lua_l_register,
+    buffer_copy::buffer_copy_arm, buffer_create::buffer_create_arm, buffer_fill::buffer_fill_arm,
+    buffer_fromstring::buffer_fromstring_arm, buffer_len::buffer_len_arm,
+    buffer_readbits::buffer_readbits_arm, buffer_readfp::buffer_readfp,
+    buffer_readinteger::buffer_readinteger, buffer_readlong::buffer_readlong_arm,
+    buffer_readstring::buffer_readstring_arm, buffer_tostring::buffer_tostring_arm,
+    buffer_writebits::buffer_writebits_arm, buffer_writefp::buffer_writefp,
+    buffer_writeinteger::buffer_writeinteger, buffer_writelong::buffer_writelong_arm,
+    buffer_writestring::buffer_writestring_arm, lua_l_register::lua_l_register,
   },
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
@@ -70,9 +70,9 @@ fp_wrappers! {
 
 // 共享基表（integer 开关不影响的前 26 个条目，编译期拼接出两个注册表）
 const BUFFER_BASE: [LuaLReg; 26] = [
-  LuaLReg::new(b"create", buffer_create),
-  LuaLReg::new(b"fromstring", buffer_fromstring),
-  LuaLReg::new(b"tostring", buffer_tostring),
+  LuaLReg::new(b"create", buffer_create_arm),
+  LuaLReg::new(b"fromstring", buffer_fromstring_arm),
+  LuaLReg::new(b"tostring", buffer_tostring_arm),
   LuaLReg::new(b"readi8", buffer_readinteger_i8),
   LuaLReg::new(b"readu8", buffer_readinteger_u8),
   LuaLReg::new(b"readi16", buffer_readinteger_i16),
@@ -89,19 +89,19 @@ const BUFFER_BASE: [LuaLReg; 26] = [
   LuaLReg::new(b"writeu32", buffer_writeinteger_u32),
   LuaLReg::new(b"writef32", buffer_writefp_f32),
   LuaLReg::new(b"writef64", buffer_writefp_f64),
-  LuaLReg::new(b"readstring", buffer_readstring),
-  LuaLReg::new(b"writestring", buffer_writestring),
-  LuaLReg::new(b"len", buffer_len),
-  LuaLReg::new(b"copy", buffer_copy),
-  LuaLReg::new(b"fill", buffer_fill),
-  LuaLReg::new(b"readbits", buffer_readbits),
-  LuaLReg::new(b"writebits", buffer_writebits),
+  LuaLReg::new(b"readstring", buffer_readstring_arm),
+  LuaLReg::new(b"writestring", buffer_writestring_arm),
+  LuaLReg::new(b"len", buffer_len_arm),
+  LuaLReg::new(b"copy", buffer_copy_arm),
+  LuaLReg::new(b"fill", buffer_fill_arm),
+  LuaLReg::new(b"readbits", buffer_readbits_arm),
+  LuaLReg::new(b"writebits", buffer_writebits_arm),
 ];
 
 // integer 开启时追加 readinteger/writeinteger（转调 buffer_readlong/writelong）
 const INTEGER_TAIL: [LuaLReg; 2] = [
-  LuaLReg::new(b"readinteger", buffer_readlong),
-  LuaLReg::new(b"writeinteger", buffer_writelong),
+  LuaLReg::new(b"readinteger", buffer_readlong_arm),
+  LuaLReg::new(b"writeinteger", buffer_writelong_arm),
 ];
 
 // 编译期拼接注册表

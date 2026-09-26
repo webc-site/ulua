@@ -8,13 +8,14 @@ use crate::{
     lua_l_checknumber::lua_l_checknumber,
     lua_pushunsigned::lua_pushunsigned,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
 };
 
 /// # Safety
 ///
 /// `l` 必须指向本次 buffer 库调用的存活 `LuaState`，索引/长度实参按约定可读，栈顶有压入结果的余量。
-pub(crate) unsafe extern "C-unwind" fn buffer_readbits(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn buffer_readbits(l: *mut LuaState) -> i32 {
   // Safety: 契约保证读取区间 [byte, byte+nbits) 落在已检查的 buffer 数据界内，越界路径走报错
   unsafe {
     let (buf, len) = buffer_data(l, 1);
@@ -35,3 +36,5 @@ pub(crate) unsafe extern "C-unwind" fn buffer_readbits(l: *mut LuaState) -> i32 
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn buffer_readbits, buffer_readbits_arm);

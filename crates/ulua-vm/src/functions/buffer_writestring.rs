@@ -6,7 +6,10 @@ use crate::{
     lua_l_checkinteger::lua_l_checkinteger, lua_l_checklstring::lua_l_checklstring,
     lua_l_optinteger::lua_l_optinteger,
   },
-  macros::{isoutofbounds::isoutofbounds, lua_l_argcheck::luaL_argcheck, lua_l_error::luaL_error},
+  macros::{
+    isoutofbounds::isoutofbounds, lua_l_argcheck::luaL_argcheck, lua_l_error::luaL_error,
+    lua_lib_fn::lua_lib_fn,
+  },
   records::lua_state::LuaState,
 };
 
@@ -14,7 +17,7 @@ use crate::{
 /// `l` 须为存活 LuaState 并处于本 C 函数受保护帧：栈 1 号为 buffer（`lua_l_checkbuffer` 取回 `buf`/`len` 并登记 GC），
 /// 3 号为字符串（`val`/`size`）；`copy_nonoverlapping` 写入 `buf + offset..buf + offset + count`，
 /// 该区间由 `isoutofbounds(offset, len, count)` 前置校验保证落在 buffer 内，且 count ≤ size。cpp/VM/src/lbuflib.cpp:216。
-pub(crate) unsafe extern "C-unwind" fn buffer_writestring(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn buffer_writestring(l: *mut LuaState) -> i32 {
   unsafe {
     let mut len: usize = 0;
     let buf = lua_l_checkbuffer(l, 1, &mut len).cast::<u8>();
@@ -43,3 +46,5 @@ pub(crate) unsafe extern "C-unwind" fn buffer_writestring(l: *mut LuaState) -> i
     0
   }
 }
+
+lua_lib_fn!(pub(crate) fn buffer_writestring, buffer_writestring_arm);
