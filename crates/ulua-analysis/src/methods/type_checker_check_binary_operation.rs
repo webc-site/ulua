@@ -96,9 +96,7 @@ impl TypeChecker {
 
     if type_could_have_metatable(lhs_type) || type_could_have_metatable(rhs_type) {
       let op = op_to_meta_table_entry(expr.op);
-      if let Some(fnt) =
-        self.find_metatable_entry(lhs_type, op.clone(), &expr.base.base.location, true)
-      {
+      if let Some(fnt) = self.find_metatable_entry(lhs_type, op, &expr.base.base.location, true) {
         return self.check_binary_operation_metatable_call(scope, expr, fnt, lhs_type, rhs_type);
       }
       if let Some(fnt) = self.find_metatable_entry(rhs_type, op, &expr.base.base.location, true) {

@@ -1202,7 +1202,7 @@ impl TypeChecker2 {
           Handle::from_ptr(self.builtin_types.as_ptr()),
           &mut (*self.module).errors,
           left_type,
-          &metamethod,
+          metamethod,
           expr.base.base.location,
         )
       };
@@ -1214,7 +1214,7 @@ impl TypeChecker2 {
             Handle::from_ptr(self.builtin_types.as_ptr()),
             &mut (*self.module).errors,
             right_type,
-            &metamethod,
+            metamethod,
             expr.base.base.location,
           )
         }

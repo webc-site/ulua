@@ -258,12 +258,8 @@ impl TypeChecker {
         }
 
         if left_metatable.is_some() {
-          let metamethod = self.find_metatable_entry(
-            lhs_type,
-            metamethod_name.clone(),
-            &expr.base.base.location,
-            true,
-          );
+          let metamethod =
+            self.find_metatable_entry(lhs_type, metamethod_name, &expr.base.base.location, true);
           if let Some(metamethod) = metamethod {
             let ftv = get_type::get::<FunctionType>(follow_type::follow(metamethod));
             if is_equality && let Some(ftv) = ftv {
