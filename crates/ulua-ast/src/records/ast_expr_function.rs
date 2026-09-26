@@ -3,7 +3,7 @@
 //! Hand-ported (false-blocked via the bare-name `AstAttr::Type` resolution).
 //! `AstLocal* self` -> `self_` (Rust keyword). `std::optional<Location>` ->
 //! `Option<Location>`. The two constructors and the
-//! `has_native_attribute`/`has_attribute`/`get_attribute`/`visit` methods are
+//! `has_native_attribute`/`get_attribute`/`visit` methods are
 //! separate items.
 
 use crate::records::{

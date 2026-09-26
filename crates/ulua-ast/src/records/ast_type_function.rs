@@ -1,7 +1,7 @@
 //! Faithful port of Luau `AstTypeFunction : AstType` (`Ast/include/Luau/Ast.h`).
 //! Hand-ported (false-blocked via the bare-name `AstAttr::Type` resolution).
 //! `AstArray<std::optional<AstArgumentName>>` -> `AstArray<Option<AstArgumentName>>`.
-//! The two constructors and the `visit`/`isCheckedFunction`/`has_attribute`/
+//! The two constructors and the `visit`/`isCheckedFunction`/
 //! `get_attribute` methods are separate items.
 
 use crate::{

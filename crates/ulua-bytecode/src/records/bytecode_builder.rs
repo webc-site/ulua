@@ -225,12 +225,6 @@ impl<'a> BytecodeBuilder<'a> {
   pub fn instructions(&self) -> &[Instruction] {
     Instruction::from_slice(&self.insns)
   }
-
-  /// 获取当前待决指令流的可变强类型切片视图。
-  #[inline(always)]
-  pub fn instructions_mut(&mut self) -> &mut [Instruction] {
-    Instruction::from_slice_mut(&mut self.insns)
-  }
 }
 
 impl Default for BytecodeBuilder<'_> {

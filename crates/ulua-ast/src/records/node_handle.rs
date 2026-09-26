@@ -7,11 +7,9 @@
 //!
 //! - [`Node<T>`]:非空子节点句柄(`NonNull` 承载,布局与裸指针逐位相同);
 //! - [`OptNode<T>`]:可空子节点句柄,`None` 即 cpp 的 `nullptr`,哨兵消失;
-//! - [`Nodes<T>`]:子节点句柄数组(`Box<[Node<T>]>`),替代「指针数组 + 长度」;
-//! - [`OptNodes<T>`]:可空子节点句柄数组,`None` 即 cpp `AstArray<T*>{nullptr, 0}`
-//!   (parser `copy` 在 `size == 0` 时不分配、`data` 恒为 null 的形态)。
+//! - [`Nodes<T>`]:子节点句柄数组(`Box<[Node<T>]>`),替代「指针数组 + 长度」。
 //!
-//! 三者的读接口(`get`/`iter`)是全 crate 唯一的 arena 解引用点:节点由 `Allocator`
+//! 其读接口(`get`/`iter`)是全 crate 唯一的 arena 解引用点:节点由 `Allocator`
 //! 的 bump 页承载、页在解析会话结束前从不移动/释放(parser 错误路径经
 //! `Allocator::free_pages` 归还前树已放弃),且遍历写穿遵循「visitor 持有树根
 //! `&mut` 期间单线程独占」的既有纪律(见 `visit.rs` 总说明)——该契约即以下全部
@@ -294,13 +292,6 @@ impl<T> Nodes<T> {
     }
   }
 
-  /// 交出数组本体 `Box<[Node<T>]>`(移动,零复制):[`OptNodes`] 等
-  /// 句柄数组形态间转换的所有权通道。
-  #[inline]
-  pub(crate) fn into_boxed_slice(self) -> Box<[Node<T>]> {
-    self.items
-  }
-
   /// 从 arena 槽数组(裸指针切片)构造:parser 的 scratch/TempVector 收口点。
   /// 元素恒出自 arena 分配(cpp 语义下 nullptr 数组元素只在错误形态出现),
   /// 经 [`Node::from_raw`] 的单槽判空拦截。
@@ -374,12 +365,6 @@ impl<T> Nodes<T> {
   #[inline]
   pub fn get(&self, index: usize) -> Option<&T> {
     self.items.get(index).map(Node::get)
-  }
-
-  /// 句柄下标访问(`[i]` 语法走 [`Nodes::at`],此处保留越界 Option 语义)。
-  #[inline]
-  pub fn get_node(&self, index: usize) -> Option<&Node<T>> {
-    self.items.get(index)
   }
 
   /// 越界即 panic 的句柄下标(与旧 `as_slice()[i]` 行为一致)。
@@ -478,7 +463,7 @@ impl<'a, T> Iterator for NodesIter<'a, T> {
 
 impl<T> ExactSizeIterator for NodesIter<'_, T> {}
 
-/// [`Nodes::iter_mut`] / [`OptNodes::iter_mut`] 的具体迭代器(与 [`NodesIter`] 对称)。
+/// [`Nodes::iter_mut`] 的具体迭代器(与 [`NodesIter`] 对称)。
 pub struct NodesIterMut<'a, T> {
   inner: IterMut<'a, Node<T>>,
 }
@@ -519,224 +504,5 @@ impl<'a, T> IntoIterator for &'a mut Nodes<T> {
   #[inline]
   fn into_iter(self) -> Self::IntoIter {
     self.iter_mut()
-  }
-}
-
-/// 可空子节点句柄数组:cpp `AstArray<T*>{nullptr, 0}` 的直接对应
-/// (parser `copy`/`copyTempVector` 在 `size == 0` 时 `data` 恒为 null,null 配 0
-/// 的成对不变量在类型层塌缩为单个 `None`)。读接口与 [`Nodes`] 逐一对齐,
-/// 空态(`None`)下一律退化为空数组语义:长度 0、遍历空、下标越界返回 [`None`]。
-pub struct OptNodes<T> {
-  items: Option<Box<[Node<T>]>>,
-}
-
-impl<T> OptNodes<T> {
-  /// 空态构造(cpp `AstArray<T*>{}` 的 `{null, 0}` 形态),不占任何存储。
-  #[inline]
-  pub const fn none() -> Self {
-    Self { items: None }
-  }
-
-  /// 从元素句柄 Vec 构造:空 `Vec` 归一为 [`OptNodes::none`]——cpp 侧
-  /// `size == 0` 恒配 `data == nullptr`,不存在「非空的零长数组」形态。
-  #[inline]
-  pub fn from_vec(items: Vec<Node<T>>) -> Self {
-    if items.is_empty() {
-      Self::none()
-    } else {
-      Self {
-        items: Some(items.into_boxed_slice()),
-      }
-    }
-  }
-
-  /// 从 arena 槽数组构造:`None`(cpp `data == nullptr`)或空切片落空态,
-  /// 元素经 [`Node::from_raw`] 的单槽判空拦截(同 [`Nodes::from_raw_slice`])。
-  /// parser 的 `AstArray<T*>` → 句柄数组收口点;对外提供以对齐 [`OptNode::from_ptr`]
-  /// 的构造面(`Nodes::from_raw_slice` 因空态需专型 `Nodes::empty` 而保持 crate 内)。
-  #[inline]
-  pub fn from_raw_slice(sl: Option<&[*mut T]>) -> Self {
-    match sl {
-      Some(sl) if !sl.is_empty() => Self {
-        items: Some(sl.iter().copied().map(Node::from_raw).collect()),
-      },
-      _ => Self::none(),
-    }
-  }
-
-  #[inline]
-  pub fn is_some(&self) -> bool {
-    self.items.is_some()
-  }
-
-  /// cpp `Parser::copy(const TempVector<T*>&)` 的可空形态:空 scratch 窗口
-  /// (cpp 里 `size == 0` 恒配 `data == nullptr`)落 [`OptNodes::none`],
-  /// 其余与 [`Nodes::from_temp_vector`] 一致地复制槽位后交还 scratch。
-  #[inline]
-  pub fn from_temp_vector(data: &TempVector<'_, *mut T>) -> Self {
-    if data.is_empty() {
-      Self::none()
-    } else {
-      Self::from_raw_slice(Some(data.as_slice()))
-    }
-  }
-
-  /// 数组本体是否缺席(cpp `a.data == nullptr` 判定的类型化形态)。
-  #[inline]
-  pub fn is_none(&self) -> bool {
-    self.items.is_none()
-  }
-
-  /// 判定是否为空句柄(语义同 [`OptNode::is_null`],等价 [`OptNodes::is_none`])。
-  #[inline]
-  pub fn is_null(&self) -> bool {
-    self.items.is_none()
-  }
-
-  #[inline]
-  pub fn len(&self) -> usize {
-    self.items.as_ref().map_or(0, |items| items.len())
-  }
-
-  /// 长度(兼容旧 `AstArray::size` 习惯;cpp `size == 0` 与 `data == null` 恒配对,
-  /// 故本判定与 [`OptNodes::is_none`] 在构造端契约下同值)。
-  #[inline]
-  pub fn size(&self) -> usize {
-    self.len()
-  }
-
-  #[inline]
-  pub fn is_empty(&self) -> bool {
-    self.len() == 0
-  }
-
-  /// 只读句柄切片:空态退化为空切片,调用方无需判空。
-  #[inline]
-  pub fn as_slice(&self) -> &[Node<T>] {
-    self.items.as_deref().unwrap_or(&[])
-  }
-
-  /// 句柄切片的可变视图(对应 [`Nodes::as_mut_slice`];空态给出空切片)。
-  #[inline]
-  pub fn as_mut_slice(&mut self) -> &mut [Node<T>] {
-    self.items.as_deref_mut().unwrap_or(&mut [])
-  }
-
-  /// 只读遍历(= [`Nodes::iter`]):空态迭代器恒空。
-  #[inline]
-  pub fn iter(&self) -> NodesIter<'_, T> {
-    NodesIter {
-      inner: self.as_slice().iter(),
-    }
-  }
-
-  /// 独占句柄遍历(= [`Nodes::iter_nodes_mut`]):空态迭代器恒空。
-  #[inline]
-  pub fn iter_nodes_mut(
-    &mut self,
-  ) -> impl DoubleEndedIterator<Item = &mut Node<T>> + ExactSizeIterator {
-    self.as_mut_slice().iter_mut()
-  }
-
-  /// 可变元素遍历(= [`Nodes::iter_mut`]):空态迭代器恒空,
-  /// 别名前提同 [`Nodes::iter_mut`]。
-  #[inline]
-  pub fn iter_mut(&mut self) -> NodesIterMut<'_, T> {
-    NodesIterMut {
-      inner: self.as_mut_slice().iter_mut(),
-    }
-  }
-
-  #[inline]
-  pub fn get(&self, index: usize) -> Option<&T> {
-    self.as_slice().get(index).map(Node::get)
-  }
-
-  /// 句柄下标访问(越界或空态返回 [`None`],对齐 [`Nodes::get_node`])。
-  #[inline]
-  pub fn get_node(&self, index: usize) -> Option<&Node<T>> {
-    self.as_slice().get(index)
-  }
-
-  /// 越界即 panic 的句柄下标(与 [`Nodes::at`] 行为一致)。
-  #[inline]
-  pub fn at(&self, index: usize) -> &Node<T> {
-    &self.as_slice()[index]
-  }
-
-  /// 转为 [`Nodes`]:空态落 [`Nodes::empty`],句柄数组本体按元素复制
-  /// (元素 [`Node`] 为 `Copy`,代价即一次 `Box<[Node]>` 分配)。
-  #[inline]
-  pub fn to_nodes(&self) -> Nodes<T> {
-    match &self.items {
-      Some(items) => Nodes::from_vec(items.to_vec()),
-      None => Nodes::empty(),
-    }
-  }
-}
-
-impl<T> Default for OptNodes<T> {
-  #[inline]
-  fn default() -> Self {
-    Self::none()
-  }
-}
-
-impl<'a, T> IntoIterator for &'a OptNodes<T> {
-  type Item = &'a T;
-  type IntoIter = NodesIter<'a, T>;
-  #[inline]
-  fn into_iter(self) -> Self::IntoIter {
-    self.iter()
-  }
-}
-
-impl<'a, T> IntoIterator for &'a mut OptNodes<T> {
-  type Item = &'a mut T;
-  type IntoIter = NodesIterMut<'a, T>;
-  #[inline]
-  fn into_iter(self) -> Self::IntoIter {
-    self.iter_mut()
-  }
-}
-
-impl<T> Clone for OptNodes<T> {
-  #[inline]
-  fn clone(&self) -> Self {
-    Self {
-      items: self.items.clone(),
-    }
-  }
-}
-
-impl<T> PartialEq for OptNodes<T> {
-  #[inline]
-  fn eq(&self, other: &Self) -> bool {
-    self.as_slice() == other.as_slice()
-  }
-}
-impl<T> Eq for OptNodes<T> {}
-
-impl<T: Debug> Debug for OptNodes<T> {
-  fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-    match &self.items {
-      Some(items) => Debug::fmt(items, f),
-      None => f.write_str("None"),
-    }
-  }
-}
-
-impl<T> From<Nodes<T>> for OptNodes<T> {
-  /// [`Nodes`] → [`OptNodes`]:空数组归一为 `None`(cpp `{null, 0}` 形态),
-  /// 零成本移动 `Box<[Node<T>]>` 本体。
-  #[inline]
-  fn from(nodes: Nodes<T>) -> Self {
-    if nodes.is_empty() {
-      Self::none()
-    } else {
-      Self {
-        items: Some(nodes.into_boxed_slice()),
-      }
-    }
   }
 }

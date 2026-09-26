@@ -1,7 +1,7 @@
 //! Faithful port of Luau `AstStatDeclareFunction : AstStat`
 //! (`Ast/include/Luau/Ast.h`). Hand-ported (false-blocked via the bare-name
 //! `AstAttr::Type` resolution). The two constructors and the
-//! `visit`/`isCheckedFunction`/`has_attribute`/`get_attribute` methods are
+//! `visit`/`isCheckedFunction`/`get_attribute` methods are
 //! separate items.
 
 use crate::{

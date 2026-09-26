@@ -78,10 +78,4 @@ impl Location {
     self.begin.shift(start, old_end, new_end);
     self.end.shift(start, old_end, new_end);
   }
-
-  /// 依据行列偏移平移区间。
-  pub fn shift_offset(&mut self, offset: Position) {
-    self.begin.shift_offset(offset);
-    self.end.shift_offset(offset);
-  }
 }

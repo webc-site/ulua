@@ -48,19 +48,6 @@ impl<T> AstArray<T> {
     }
   }
 
-  /// 从可变切片构造 AstArray 视图。
-  #[inline(always)]
-  pub fn from_mut_slice(slice: &mut [T]) -> Self {
-    if slice.is_empty() {
-      Self::EMPTY
-    } else {
-      Self {
-        data: slice.as_mut_ptr(),
-        size: slice.len(),
-      }
-    }
-  }
-
   /// 元素切片，对应 cpp `AstArray` 在 `[data, data + size)` 上的 `begin()/end()`。
   ///
   /// 前置条件即类型不变量：`data`/`size` 由 `Parser::copy_*`（arena `allocate` 成对
@@ -181,13 +168,6 @@ impl<'a, T> From<&'a [T]> for AstArray<T> {
   #[inline(always)]
   fn from(slice: &'a [T]) -> Self {
     Self::from_slice(slice)
-  }
-}
-
-impl<'a, T> From<&'a mut [T]> for AstArray<T> {
-  #[inline(always)]
-  fn from(slice: &'a mut [T]) -> Self {
-    Self::from_mut_slice(slice)
   }
 }
 

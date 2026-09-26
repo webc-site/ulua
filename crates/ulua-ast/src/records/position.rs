@@ -45,14 +45,6 @@ impl Position {
       }
     }
   }
-
-  /// 依据行列偏移平移相对位置。
-  pub fn shift_offset(&mut self, offset: Position) {
-    if self.line == 0 {
-      self.column += offset.column;
-    }
-    self.line += offset.line;
-  }
 }
 
 /// 空位置切片（cpp `AstArray<Position>{}` / nullptr 哨兵的等价形态，
