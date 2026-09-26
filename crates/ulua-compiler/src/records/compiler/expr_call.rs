@@ -3,20 +3,19 @@
 use alloc::vec::Vec;
 use core::mem::take;
 
-use ulua_ast::records::{
-  ast_array::AstArray,
-  ast_expr_call::AstExprCall,
-  ast_expr_constant_string::AstExprConstantString,
-  ast_expr_function::AstExprFunction,
-  ast_expr_global::AstExprGlobal,
-  ast_expr_index_name::AstExprIndexName,
-  ast_expr_interp_string::AstExprInterpString,
-  ast_expr_table::{
-    AstExprTable, Item, ItemKind,
-    ItemKind::{List, Record},
+use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
+  records::{
+    ast_array::AstArray,
+    ast_expr_call::AstExprCall,
+    ast_expr_function::AstExprFunction,
+    ast_expr_interp_string::AstExprInterpString,
+    ast_expr_table::{
+      AstExprTable, Item, ItemKind,
+      ItemKind::{List, Record},
+    },
+    ast_name::AstName,
   },
-  ast_expr_varargs::AstExprVarargs,
-  ast_name::AstName,
 };
 use ulua_bytecode::{
   methods::bytecode_builder_get_string_hash::bytecode_builder_get_string_hash,
@@ -35,7 +34,7 @@ use ulua_common::{
 
 use crate::{
   functions::{
-    ast_slot_ref::{ast_slot_is, ast_slot_ref, ast_slot_try_as},
+    ast_slot_ref::ast_slot_ref,
     escape_and_append::escape_and_append,
     get_builtin::get_builtin,
     get_builtin_info::get_builtin_info,
@@ -65,16 +64,14 @@ impl Compiler {
   /// 预留的寄存器区间。
   pub(crate) fn compile_expr_call(
     &mut self,
-    expr: *mut AstExprCall,
+    expr: impl Into<Node<AstExprCall>>,
     target: u8,
     target_count: u8,
     target_top: bool,
     mult_ret: bool,
   ) {
-    // 门面解引用：`expr` 是分发器传入的合法 `AstExprCall`（arena 分配、非空、地址稳定），
-    // AST 全程只读，共享借用与后续 &mut self 调用无交集。
-    let expr_ref = ast_slot_ref(expr)
-      .expect("compile_expr_call 入口契约：expr 为分发器判型后的存活 AstExprCall");
+    let expr = expr.into();
+    let expr_ref = expr.borrow();
     LUAU_ASSERT!(target_count < K_MAX_TARGET_COUNT);
     LUAU_ASSERT!(!target_top || (target as u32 + target_count as u32) == self.reg_top);
 
@@ -147,7 +144,7 @@ impl Compiler {
       // "非内建"，绝不可启用 FASTCALL。内建 apply/restore（及 operator[] 查找）
       // 会留下真实的 LBF_NONE 条目，故只测 `!= -1` 会误置 bfid = 0 并以
       // builtin 0 发出 FASTCALL。
-      if let Some(id) = self.builtins.find(&expr.into())
+      if let Some(id) = self.builtins.find(&expr)
         && *id != LuauBuiltinFunction::LBF_NONE as i32
       {
         bfid = *id;
@@ -276,8 +273,8 @@ impl Compiler {
     if fflag::LuauCompileFastpcall.get()
       && self.options.optimization_level >= 1
       && !expr_ref.self_
-      // 门面判型+下转：null 或动态类型非 AstExprGlobal 折叠为 None（cpp 只读判型形态）。
-      && let Some(g) = ast_slot_try_as::<AstExprGlobal, _>(expr_ref.func)
+      // 判型+下转：非 AstExprGlobal 折叠为 None（cpp 只读判型形态）。
+      && let AstExprRef::Global(g) = Node::from(expr_ref.func).as_expr_ref()
       && self.can_import(g)
     {
       let name = g.name;
@@ -290,11 +287,12 @@ impl Compiler {
 
     // self_ 调用的 func 必为 AstExprIndexName（parser 保证）：checked 共享下转 +
     // 断言收口为闭包两处复用；全为只读访问，调用点现场重建借用、半径限于单条语句。
-    let index_name = || {
-      // 门面判型+下转：self_ 调用由解析器保证 func 为存活 AstExprIndexName。
-      let fi = ast_slot_try_as::<AstExprIndexName, _>(expr_ref.func);
-      LUAU_ASSERT!(fi.is_some());
-      fi.expect("self_ 调用的 func 必为 AstExprIndexName（parser 保证，cpp 静态断言后裸解引用）")
+    let index_name = || match Node::from(expr_ref.func).as_expr_ref() {
+      AstExprRef::IndexName(fi) => fi,
+      _ => {
+        LUAU_ASSERT!(false);
+        panic!("self_ 调用的 func 必为 AstExprIndexName（parser 保证，cpp 静态断言后裸解引用）");
+      }
     };
 
     if expr_ref.self_ {
@@ -547,16 +545,12 @@ impl Compiler {
   /// 上述 arena 指针与 names 表句柄。
   pub(crate) fn compile_expr_interp_string(
     &mut self,
-    expr: *mut AstExprInterpString,
+    expr: &AstExprInterpString,
     target: u8,
     target_temp: bool,
   ) {
-    {
-      // Safety: `expr` 是分发器传入的合法 `AstExprInterpString`（函数契约：arena 存活、
-      // 非空、地址稳定且 RTTI 命中）；`&*expr` 只读，strings/expressions 迭代受各
-      // AstArray 的 size 界约束。
-      let expr_ref = unsafe { &*expr };
-      let mut format_capacity = 0;
+    let expr_ref = expr;
+    let mut format_capacity = 0;
       for string in expr_ref.strings.iter() {
         format_capacity += string.size + (*string).iter().filter(|&&c| c == b'%').count();
       }
@@ -664,7 +658,6 @@ impl Compiler {
           .bc_mut()
           .emit_abc(LuauOpcode::LOP_MOVE, target, base_reg, 0);
       }
-    }
   }
 
   /// DUPTABLE 双路循环头部同构六行样板的单点收口：断言 Record 形态 → 判型
@@ -674,9 +667,10 @@ impl Compiler {
   fn record_item_key_cid(&mut self, item: &Item) -> i32 {
     LUAU_ASSERT!(item.kind == ItemKind::Record);
     // 门面判型+下转：Record 项的 key 由 parser 保证为存活 AstExprConstantString。
-    let ckey = ast_slot_try_as::<AstExprConstantString, _>(item.key);
-    LUAU_ASSERT!(ckey.is_some());
-    let ckey = ckey.expect("Record 项的 key 由 parser 保证为 AstExprConstantString");
+    let AstExprRef::ConstantString(ckey) = Node::from(item.key).as_expr_ref() else {
+      LUAU_ASSERT!(false);
+      panic!("Record 项的 key 由 parser 保证为 AstExprConstantString");
+    };
     let key_cid = self
       .bc_mut()
       .add_constant_string(sref_ast_array_u8(ckey.value));
@@ -819,9 +813,10 @@ impl Compiler {
       // 优化：末元素是 `...` 时，把存储分配交给 SETLIST 处理。
       // items 非空（size==0 已提前返回），iter().last() 必命中
       // 谓词是「value 是 Varargs」（cpp `last.value->is<AstExprVarargs>()`），
-      // ast_slot_is 即该判定本身（null 折叠 false），不能再取反。
+      // matches! 即该判定本身，替代旧 ast_slot_is。
       let trailing_varargs = expr_ref.items.iter().last().is_some_and(|last| {
-        last.kind == ItemKind::List && ast_slot_is::<AstExprVarargs, _>(last.value)
+        last.kind == ItemKind::List
+          && matches!(Node::from(last.value).as_expr_ref(), AstExprRef::Varargs(_))
       });
       LUAU_ASSERT!(!trailing_varargs || array_size > 0);
 
@@ -863,7 +858,7 @@ impl Compiler {
       if fflag::LuauCompileDuptableConstantPack2.get()
         && last_key_val.size() > 0
         // 门面判型+下转：带键项的 key 命中 AstExprConstantString 才读 value。
-        && let Some(ckey) = ast_slot_try_as::<AstExprConstantString, _>(key)
+        && let AstExprRef::ConstantString(ckey) = Node::from(key).as_expr_ref()
       {
         let key_cid = self
           .bc_mut()
@@ -1093,7 +1088,7 @@ impl Compiler {
     let arg = expr_ref.args.as_slice()[0];
     let arg_varargs = expr_ref.args.as_slice()[1];
     // 门面判型：arg_varargs 由上方 select 特判保证为 arena 存活 AstExpr 指针。
-    LUAU_ASSERT!(ast_slot_is::<AstExprVarargs, _>(arg_varargs));
+    LUAU_ASSERT!(matches!(Node::from(arg_varargs).as_expr_ref(), AstExprRef::Varargs(_)));
 
     let argreg: u8;
     let reg = self.get_expr_local_reg(arg);

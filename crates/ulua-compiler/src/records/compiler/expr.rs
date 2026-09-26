@@ -6,31 +6,23 @@ use core::{
 };
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
     ast_array::AstArray,
     ast_expr::AstExpr,
     ast_expr_binary::{AstExprBinary, AstExprBinaryOp},
     ast_expr_call::AstExprCall,
-    ast_expr_constant_bool::AstExprConstantBool,
     ast_expr_constant_integer::AstExprConstantInteger,
-    ast_expr_constant_nil::AstExprConstantNil,
-    ast_expr_constant_number::AstExprConstantNumber,
-    ast_expr_constant_string::AstExprConstantString,
     ast_expr_function::AstExprFunction,
     ast_expr_global::AstExprGlobal,
     ast_expr_group::AstExprGroup,
     ast_expr_if_else::AstExprIfElse,
     ast_expr_index_expr::AstExprIndexExpr,
     ast_expr_index_name::AstExprIndexName,
-    ast_expr_instantiate::AstExprInstantiate,
-    ast_expr_interp_string::AstExprInterpString,
     ast_expr_local::AstExprLocal,
-    ast_expr_table::AstExprTable,
-    ast_expr_type_assertion::AstExprTypeAssertion,
     ast_expr_unary::{AstExprUnary, AstExprUnaryOp},
     ast_expr_varargs::AstExprVarargs,
   },
-  rtti::{AstNodeClass, ast_node_is, ast_node_try_as_mut},
 };
 use ulua_bytecode::{
   methods::bytecode_builder_get_string_hash::bytecode_builder_get_string_hash,
@@ -58,7 +50,7 @@ use crate::{
     compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
     compiler::{
       Compiler, K_GETIMPORT_FLAG, K_MAX_AD_INDEX, K_MAX_IMPORT_ID, K_MAX_K_CONST_INDEX,
-      K_MAX_TARGET_COUNT, node_downcast,
+      K_MAX_TARGET_COUNT,
     },
     constant::Constant,
     node::Node,
@@ -88,42 +80,40 @@ impl Compiler {
       return;
     }
 
-    match node.base.class_index {
-      AstExprGroup::CLASS_INDEX => {
-        let expr_group = unsafe { &mut *(node_ptr as *mut AstExprGroup) };
+    match node.as_expr_ref() {
+      AstExprRef::Group(expr_group) => {
         // Box 字段靠自动解引用强转即可，无需显式 `*`（clippy explicit_auto_deref）
-        self.compile_expr(&mut expr_group.expr, target, target_temp);
+        self.compile_expr(
+          unsafe { &mut *expr_group.expr.as_ptr() },
+          target,
+          target_temp,
+        );
       }
-      AstExprConstantNil::CLASS_INDEX => {
+      AstExprRef::ConstantNil(_) => {
         self
           .bc_mut()
           .emit_abc(LuauOpcode::LOP_LOADNIL, target, 0, 0);
       }
-      AstExprConstantBool::CLASS_INDEX => {
-        let expr_bool = node_downcast::<AstExprConstantBool>(&node.base);
+      AstExprRef::ConstantBool(expr_bool) => {
         self
           .bc_mut()
           .emit_abc(LuauOpcode::LOP_LOADB, target, expr_bool.value as u8, 0);
       }
-      AstExprConstantNumber::CLASS_INDEX => {
-        let expr_number = node_downcast::<AstExprConstantNumber>(&node.base);
+      AstExprRef::ConstantNumber(expr_number) => {
         let cid = self.bc_mut().add_constant_number(expr_number.value);
         self.emit_constant_load(&expr_number.base, target, cid);
       }
-      AstExprConstantInteger::CLASS_INDEX => {
-        let expr_integer = node_downcast::<AstExprConstantInteger>(&node.base);
+      AstExprRef::ConstantInteger(expr_integer) => {
         let cid = self.bc_mut().add_constant_integer(expr_integer.value);
         self.emit_constant_load(&expr_integer.base, target, cid);
       }
-      AstExprConstantString::CLASS_INDEX => {
-        let expr_string = node_downcast::<AstExprConstantString>(&node.base);
+      AstExprRef::ConstantString(expr_string) => {
         let cid = self
           .bc_mut()
           .add_constant_string(sref_ast_array_u8(expr_string.value));
         self.emit_constant_load(&expr_string.base, target, cid);
       }
-      AstExprLocal::CLASS_INDEX => {
-        let expr_local = node_downcast::<AstExprLocal>(&node.base);
+      AstExprRef::Local(expr_local) => {
         // local 槽已句柄化恒非空：.get() 安全借用（旧 expect 判空分支随类型消失）。
         let local = expr_local.local.get();
         let is_exported_class = self
@@ -176,48 +166,38 @@ impl Compiler {
           }
         }
       }
-      AstExprGlobal::CLASS_INDEX => {
-        let expr_global = node_downcast::<AstExprGlobal>(&node.base);
+      AstExprRef::Global(expr_global) => {
         self.compile_expr_global(expr_global, target);
       }
-      AstExprVarargs::CLASS_INDEX => {
-        let expr_varargs = node_downcast::<AstExprVarargs>(&node.base);
+      AstExprRef::Varargs(expr_varargs) => {
         self.compile_expr_varargs(expr_varargs, target, 1, false);
       }
-      AstExprCall::CLASS_INDEX => {
-        let expr_call = unsafe { &mut *(node_ptr as *mut AstExprCall) };
+      AstExprRef::Call(expr_call) => {
         if target_temp && self.reg_top != 0 && u32::from(target) == self.reg_top - 1 {
-          self.compile_expr_call(from_mut(expr_call), target, 1, true, false);
+          self.compile_expr_call(expr_call, target, 1, true, false);
         } else {
-          self.compile_expr_call(from_mut(expr_call), target, 1, false, false);
+          self.compile_expr_call(expr_call, target, 1, false, false);
         }
       }
-      AstExprIndexName::CLASS_INDEX => {
-        let expr_index_name = node_downcast::<AstExprIndexName>(&node.base);
+      AstExprRef::IndexName(expr_index_name) => {
         self.compile_expr_index_name(expr_index_name, target, target_temp);
       }
-      AstExprIndexExpr::CLASS_INDEX => {
-        let expr_index_expr = node_downcast::<AstExprIndexExpr>(&node.base);
+      AstExprRef::IndexExpr(expr_index_expr) => {
         self.compile_expr_index_expr(expr_index_expr, target);
       }
-      AstExprFunction::CLASS_INDEX => {
-        let expr_function = unsafe { &mut *(node_ptr as *mut AstExprFunction) };
-        self.compile_expr_function(from_mut(expr_function), target);
+      AstExprRef::Function(expr_function) => {
+        self.compile_expr_function(expr_function, target);
       }
-      AstExprTable::CLASS_INDEX => {
-        let expr_table = node_downcast::<AstExprTable>(&node.base);
+      AstExprRef::Table(expr_table) => {
         self.compile_expr_table(expr_table, target, target_temp);
       }
-      AstExprUnary::CLASS_INDEX => {
-        let expr_unary = node_downcast::<AstExprUnary>(&node.base);
+      AstExprRef::Unary(expr_unary) => {
         self.compile_expr_unary(expr_unary, target);
       }
-      AstExprBinary::CLASS_INDEX => {
-        let expr_binary = node_downcast::<AstExprBinary>(&node.base);
+      AstExprRef::Binary(expr_binary) => {
         self.compile_expr_binary(expr_binary, target, target_temp);
       }
-      AstExprTypeAssertion::CLASS_INDEX => {
-        let expr_assertion = node_downcast::<AstExprTypeAssertion>(&node.base);
+      AstExprRef::TypeAssertion(expr_assertion) => {
         // expr 已句柄化恒非空；本入口持共享借用（cpp 非 const 透传形态），&mut 重建
         // 经 as_ptr 裸出口，写穿仅落在该节点编译期临时字段，单线程独占。
         self.compile_expr(
@@ -226,19 +206,16 @@ impl Compiler {
           target_temp,
         );
       }
-      AstExprIfElse::CLASS_INDEX => {
-        let expr_if_else = node_downcast::<AstExprIfElse>(&node.base);
+      AstExprRef::IfElse(expr_if_else) => {
         self.compile_expr_if_else(expr_if_else, target, target_temp);
       }
-      AstExprInterpString::CLASS_INDEX => {
-        let interp_string = unsafe { &mut *(node_ptr as *mut AstExprInterpString) };
-        self.compile_expr_interp_string(from_mut(interp_string), target, target_temp);
+      AstExprRef::InterpString(interp_string) => {
+        self.compile_expr_interp_string(interp_string, target, target_temp);
       }
-      AstExprInstantiate::CLASS_INDEX => {
-        let expr_instantiate = node_downcast::<AstExprInstantiate>(&node.base);
+      AstExprRef::Instantiate(expr_instantiate) => {
         self.compile_expr(unsafe { &mut *expr_instantiate.expr }, target, target_temp);
       }
-      _ => LUAU_ASSERT!(false),
+      AstExprRef::Error(_) => LUAU_ASSERT!(false),
     }
   }
 
@@ -989,15 +966,17 @@ impl Compiler {
       );
     }
 
-    // safe 下转门面：&mut 借用即独占证明，命中即动态类型为 AstExprCall。
-    if let Some(expr_call) = ast_node_try_as_mut::<AstExprCall>(&mut node.base) {
-      self.compile_expr_call(from_mut(expr_call), target, target_count, target_top, false);
-      return;
-    }
-
-    if let Some(expr_varargs) = ast_node_try_as_mut::<AstExprVarargs>(&mut node.base) {
-      self.compile_expr_varargs(expr_varargs, target, target_count, false);
-      return;
+    // safe 下转门面：命中即动态类型为 AstExprCall 或 AstExprVarargs。
+    match node.as_expr_ref() {
+      AstExprRef::Call(expr_call) => {
+        self.compile_expr_call(expr_call, target, target_count, target_top, false);
+        return;
+      }
+      AstExprRef::Varargs(expr_varargs) => {
+        self.compile_expr_varargs(expr_varargs, target, target_count, false);
+        return;
+      }
+      _ => {}
     }
 
     self.compile_expr(node, target, true);
@@ -1022,23 +1001,25 @@ impl Compiler {
     // Call 且非 multret 时按单值 temp 路径编译；判定先于 &mut 下转，
     // 避免 Call 借用横跨对同一 node 的递归分发。
     if self.options.optimization_level >= 2
-      && ast_node_is::<AstExprCall>(&*node)
+      && matches!(node.as_expr_ref(), AstExprRef::Call(_))
       && !self.is_expr_mult_ret(node_ptr)
     {
       self.compile_expr(node, target, true);
       return false;
     }
 
-    if let Some(expr) = ast_node_try_as_mut::<AstExprCall>(&mut node.base) {
-      let _rs = self.reg_scope_top(target as u32);
-      self.compile_expr_call(from_mut(expr), target, 0, true, true);
-      return true;
-    }
-
-    if let Some(expr) = ast_node_try_as_mut::<AstExprVarargs>(&mut node.base) {
-      let _rs = self.reg_scope_top(target as u32);
-      self.compile_expr_varargs(expr, target, 0, true);
-      return true;
+    match node.as_expr_ref() {
+      AstExprRef::Call(expr) => {
+        let _rs = self.reg_scope_top(target as u32);
+        self.compile_expr_call(expr, target, 0, true, true);
+        return true;
+      }
+      AstExprRef::Varargs(expr) => {
+        let _rs = self.reg_scope_top(target as u32);
+        self.compile_expr_varargs(expr, target, 0, true);
+        return true;
+      }
+      _ => {}
     }
 
     self.compile_expr(node, target, true);
