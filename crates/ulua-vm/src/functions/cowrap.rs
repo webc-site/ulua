@@ -2,7 +2,7 @@ use core::ptr::null;
 
 use crate::{
   functions::{
-    auxwrapcont::auxwrapcont, auxwrapy::auxwrapy, cocreate::cocreate,
+    auxwrapcont::auxwrapcont_arm, auxwrapy::auxwrapy, cocreate::cocreate,
     lua_pushcclosurek::lua_pushcclosurek,
   },
   records::lua_state::LuaState,
@@ -15,7 +15,7 @@ use crate::{
 pub unsafe extern "C-unwind" fn cowrap(l: *mut LuaState) -> i32 {
   unsafe {
     cocreate(l);
-    lua_pushcclosurek(l, Some(auxwrapy), null(), 1, Some(auxwrapcont));
+    lua_pushcclosurek(l, Some(auxwrapy), null(), 1, Some(auxwrapcont_arm));
     1
   }
 }

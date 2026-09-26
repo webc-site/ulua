@@ -6,12 +6,12 @@ use crate::{
     lua_b_gcinfo::lua_b_gcinfo_arm, lua_b_getfenv::lua_b_getfenv,
     lua_b_getmetatable::lua_b_getmetatable_arm, lua_b_inext::lua_b_inext_arm,
     lua_b_ipairs::lua_b_ipairs, lua_b_newproxy::lua_b_newproxy, lua_b_next::lua_b_next_arm,
-    lua_b_pairs::lua_b_pairs_arm, lua_b_pcallcont::lua_b_pcallcont, lua_b_pcally::lua_b_pcally,
+    lua_b_pairs::lua_b_pairs_arm, lua_b_pcallcont::lua_b_pcallcont_arm, lua_b_pcally::lua_b_pcally,
     lua_b_print::lua_b_print, lua_b_rawequal::lua_b_rawequal, lua_b_rawget::lua_b_rawget_arm,
     lua_b_rawlen::lua_b_rawlen, lua_b_rawset::lua_b_rawset_arm, lua_b_select::lua_b_select,
     lua_b_setfenv::lua_b_setfenv, lua_b_setmetatable::lua_b_setmetatable_arm,
     lua_b_tonumber::lua_b_tonumber, lua_b_tostring::lua_b_tostring, lua_b_type::lua_b_type,
-    lua_b_typeof::lua_b_typeof_arm, lua_b_xpcallcont::lua_b_xpcallcont,
+    lua_b_typeof::lua_b_typeof_arm, lua_b_xpcallcont::lua_b_xpcallcont_arm,
     lua_b_xpcally::lua_b_xpcally, lua_l_register::lua_l_register,
     lua_pushcclosurek::lua_pushcclosurek, lua_pushlstring::lua_pushlstring,
     lua_pushvalue::lua_pushvalue, lua_setfield::lua_setfield,
@@ -71,7 +71,7 @@ pub unsafe extern "C-unwind" fn luaopen_base(l: *mut LuaState) -> i32 {
       Some(lua_b_pcally),
       c"pcall".as_ptr(),
       0,
-      Some(lua_b_pcallcont),
+      Some(lua_b_pcallcont_arm),
     );
     lua_setfield(l, -2, c"pcall".as_ptr());
 
@@ -80,7 +80,7 @@ pub unsafe extern "C-unwind" fn luaopen_base(l: *mut LuaState) -> i32 {
       Some(lua_b_xpcally),
       c"xpcall".as_ptr(),
       0,
-      Some(lua_b_xpcallcont),
+      Some(lua_b_xpcallcont_arm),
     );
     lua_setfield(l, -2, c"xpcall".as_ptr());
 
