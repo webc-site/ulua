@@ -8,6 +8,13 @@
 //! 快照中的文件路径是 CLI 实参回显（cpp 从仓库根传 `analysis/.../x.luau`）；
 //! 本套件在工作区根传平铺文件名，故期望行的路径前缀相应为 `./<name>.luau`，
 //! 行列号与消息正文保持 cpp 快照原文。
+//!
+//! 覆盖口径（tw-6 核实）：`cpp/tests/golden/analysis` 共 52 个 golden 条目，
+//! 本套件按类别各取 1 例（6/52）做 CLI 形态冒烟；其余条目所对应的 C++
+//! TEST_CASE（同源于 `TypeInfer*` / `TypeFunction` / `TypeFunction.user` 套件）
+//! 已由 `ulua-unit-test` 的 `type_infer_*` / `type_function` / `type_function_user`
+//! 镜像按用例级覆盖，不再重复移植。`cpp/tests/golden/meta`（10 例）是 cpp
+//! golden 运行器自身的框架自检，非语言行为回归，不移植。
 
 use ulua_cli_lib::test_utils::{Workspace, code, stderr_of};
 

@@ -1,4 +1,4 @@
-use ulua_common::fflag::LuauCodegenSkipDeadPredecessorTags;
+use ulua_common::fflag::{LuauCodegenPropagateFallbackTags, LuauCodegenSkipDeadPredecessorTags};
 
 use crate::{
   enums::ir_block_kind::IrBlockKind,
@@ -20,6 +20,12 @@ pub fn propagate_tags_from_predecessors<T: TagAccess + ?Sized>(
     return;
   }
 
+  // 入口块有隐式的函数入口边，该时刻尚无任何 tag 信息，不得从回边前驱传播
+  // （对齐 cpp IrUtils.cpp:1884 `FFlag::LuauCodegenPropagateFallbackTags && entryBlock == blockIdx`）
+  if LuauCodegenPropagateFallbackTags.get() && function.entry_block == block_idx {
+    return;
+  }
+
   let preds = predecessors(&function.cfg, block_idx);
 
   if preds.as_slice().is_empty() {
@@ -30,7 +36,8 @@ pub fn propagate_tags_from_predecessors<T: TagAccess + ?Sized>(
 
   let num_block_exit_tags = function.block_exit_tags.len();
 
-  for pred_idx in preds {
+  // cpp 单次取前驱迭代器两轮复用；切片经 BlockIteratorWrapper 的共享借用，两轮一致
+  for &pred_idx in preds.as_slice() {
     // 死前驱不参与 tag 传播（对齐 cpp `FFlag::LuauCodegenSkipDeadPredecessorTags`）
     if LuauCodegenSkipDeadPredecessorTags.get()
       && function.blocks[pred_idx as usize].kind == IrBlockKind::Dead
@@ -49,7 +56,7 @@ pub fn propagate_tags_from_predecessors<T: TagAccess + ?Sized>(
 
   let mut first_predecessor = true;
 
-  for pred_idx in predecessors(&function.cfg, block_idx) {
+  for &pred_idx in preds.as_slice() {
     if LuauCodegenSkipDeadPredecessorTags.get()
       && function.blocks[pred_idx as usize].kind == IrBlockKind::Dead
     {

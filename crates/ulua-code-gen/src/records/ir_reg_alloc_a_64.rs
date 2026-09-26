@@ -78,11 +78,7 @@ impl IrRegAllocA64 {
 
     if self.get_set(kind).free == 0 {
       // 尝试找一个未被当前指令使用、next use 最远的寄存器来 spill
-      let furthest_use_target = self.find_instruction_with_furthest_next_use(kind);
-      if furthest_use_target != K_INVALID_INST_IDX {
-        self.spill_set_u32_u32(kind, index, furthest_use_target);
-        CODEGEN_ASSERT!(self.get_set(kind).free != 0);
-      } else {
+      if self.refill_free(kind, index).is_none() {
         self.error = true;
         return RegisterA64 {
           bits: (kind as u8) & RegisterA64::KIND_MASK,
@@ -90,14 +86,8 @@ impl IrRegAllocA64 {
       }
     }
 
+    let reg = self.take_free(kind);
     let set = self.get_set(kind);
-    let mut reg = 31 - countlz_u32(set.free);
-
-    if fflag::DebugCodegenChaosA64.get() {
-      reg = countrz_u32(set.free); // allocate from low end; this causes extra conflicts for calls
-    }
-
-    set.free &= !(1u32 << reg);
     set.defs[reg as usize] = index;
 
     RegisterA64 {
@@ -135,11 +125,7 @@ impl IrRegAllocA64 {
 
     if self.get_set(kind).free == 0 {
       // 尝试找一个未被当前指令使用、next use 最远的寄存器来 spill
-      let furthest_use_target = self.find_instruction_with_furthest_next_use(kind);
-      if furthest_use_target != K_INVALID_INST_IDX {
-        self.spill_set_u32_u32(kind, self.curr_inst_idx, furthest_use_target);
-        CODEGEN_ASSERT!(self.get_set(kind).free != 0);
-      } else {
+      if self.refill_free(kind, self.curr_inst_idx).is_none() {
         self.error = true;
         return RegisterA64 {
           bits: (kind as u8) & RegisterA64::KIND_MASK,
@@ -147,6 +133,34 @@ impl IrRegAllocA64 {
       }
     }
 
+    let reg = self.take_free(kind);
+    let set = self.get_set(kind);
+    set.temp |= 1u32 << reg;
+    CODEGEN_ASSERT!(set.defs[reg as usize] == K_INVALID_INST_IDX);
+
+    RegisterA64 {
+      bits: ((kind as u8) & RegisterA64::KIND_MASK) | ((reg as u8) << RegisterA64::INDEX_SHIFT),
+    }
+  }
+
+  /// `alloc_reg`/`alloc_temp` 共用的 free 耗尽补充路径：把 next use 最远的占用者溢出，
+  /// 成功（含溢出后 free 非空的断言）返回 `Some`，无可溢出返回 `None`（error 由调用方置位）。
+  fn refill_free(&mut self, kind: KindA64, spill_index: u32) -> Option<()> {
+    let furthest_use_target = self.find_instruction_with_furthest_next_use(kind);
+
+    if furthest_use_target == K_INVALID_INST_IDX {
+      return None;
+    }
+
+    self.spill_set_u32_u32(kind, spill_index, furthest_use_target);
+    CODEGEN_ASSERT!(self.get_set(kind).free != 0);
+
+    Some(())
+  }
+
+  /// `alloc_reg`/`alloc_temp` 共用的取空闲寄存器路径：high 端优先（chaos fflag 反向
+  /// 从 low 端取以放大调用点冲突），取走并清位，返回寄存器编号。
+  fn take_free(&mut self, kind: KindA64) -> i32 {
     let set = self.get_set(kind);
     let mut reg = 31 - countlz_u32(set.free);
 
@@ -155,12 +169,7 @@ impl IrRegAllocA64 {
     }
 
     set.free &= !(1u32 << reg);
-    set.temp |= 1u32 << reg;
-    CODEGEN_ASSERT!(set.defs[reg as usize] == K_INVALID_INST_IDX);
-
-    RegisterA64 {
-      bits: ((kind as u8) & RegisterA64::KIND_MASK) | ((reg as u8) << RegisterA64::INDEX_SHIFT),
-    }
+    reg
   }
 
   pub fn find_instruction_with_furthest_next_use(&self, kind: KindA64) -> u32 {

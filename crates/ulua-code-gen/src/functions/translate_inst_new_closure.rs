@@ -1,8 +1,8 @@
 use ulua_common::{
   enums::{luau_capture_type::LuauCaptureType, luau_opcode::LuauOpcode},
   macros::{
-    luau_assert::LUAU_UNREACHABLE, luau_insn_a::luau_insn_a, luau_insn_b::luau_insn_b,
-    luau_insn_d::luau_insn_d, luau_insn_op::luau_insn_op,
+    luau_insn_a::luau_insn_a, luau_insn_b::luau_insn_b, luau_insn_d::luau_insn_d,
+    luau_insn_op::luau_insn_op, luau_unreachable::LUAU_UNREACHABLE,
   },
 };
 use ulua_vm::enums::lua_type::LuaType;

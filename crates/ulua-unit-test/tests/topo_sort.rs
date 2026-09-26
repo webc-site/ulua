@@ -1,6 +1,19 @@
 extern crate alloc;
 
+use ulua_ast::records::{ast_stat::AstStat, ast_stat_block::AstStatBlock, node_handle::Node};
+
 // Source: `tests/TopoSort.test.cpp`
+
+/// 表驱动校验：`sorted[k]` 应为源第 `perm[k]` 条语句。收拢各用例中
+/// `CHECK_EQ(sorted[i], program->body.data[j])` 形态的 C++ 断言组；条数断言
+/// （cpp 的 `REQUIRE_EQ(sorted.size(), N)`）留在各用例内，与 cpp 逐一对应。
+fn assert_sorted_order(program: &AstStatBlock, sorted: &[Node<AstStat>], perm: &[usize]) {
+  let body = program.body.as_slice();
+  for (k, &j) in perm.iter().enumerate() {
+    assert_eq!(sorted[k], body[j], "sorted[{k}] 应为源语句 {j}");
+  }
+}
+
 #[test]
 fn topo_sort_break_comes_last() {
   use ulua_ast::records::{ast_stat_repeat::AstStatRepeat, parse_options::ParseOptions};
@@ -131,17 +144,8 @@ fn topo_sort_doesnt_omit_statements_that_dont_need_sorting() {
 
   assert_eq!(5, program.body.len());
 
-  let x = program.body.as_slice()[0];
-  let a = program.body.as_slice()[1];
-  let y = program.body.as_slice()[2];
-  let b = program.body.as_slice()[3];
-  let z = program.body.as_slice()[4];
-
-  assert_eq!(sorted[0], x);
-  assert_eq!(sorted[1], y);
-  assert_eq!(sorted[2], b);
-  assert_eq!(sorted[3], z);
-  assert_eq!(sorted[4], a);
+  // sorted: X, Y, B, Z, A
+  assert_sorted_order(program, &sorted, &[0, 2, 3, 4, 1]);
 }
 
 // Source: `tests/TopoSort.test.cpp`
@@ -171,15 +175,8 @@ fn topo_sort_dont_force_checking_until_an_ast_expr_call_needs_the_symbol() {
 
   assert_eq!(4, sorted.len());
 
-  let a = program.body.as_slice()[0];
-  let b = program.body.as_slice()[1];
-  let c = program.body.as_slice()[2];
-  let d = program.body.as_slice()[3];
-
-  assert_eq!(sorted[0], c);
-  assert_eq!(sorted[1], a);
-  assert_eq!(sorted[2], b);
-  assert_eq!(sorted[3], d);
+  // sorted: C, A, B, D
+  assert_sorted_order(program, &sorted, &[2, 0, 1, 3]);
 }
 
 // Source: `tests/TopoSort.test.cpp`
@@ -215,12 +212,8 @@ fn topo_sort_dont_reorder_assigns() {
   let sorted = toposort(&mut *program);
 
   assert_eq!(6, sorted.len());
-  assert_eq!(sorted[0], program.body.as_slice()[0]);
-  assert_eq!(sorted[1], program.body.as_slice()[3]);
-  assert_eq!(sorted[2], program.body.as_slice()[2]);
-  assert_eq!(sorted[3], program.body.as_slice()[1]);
-  assert_eq!(sorted[4], program.body.as_slice()[4]);
-  assert_eq!(sorted[5], program.body.as_slice()[5]);
+  // sorted: 0, 3, 2, 1, 4, 5
+  assert_sorted_order(program, &sorted, &[0, 3, 2, 1, 4, 5]);
 }
 
 // Source: `tests/TopoSort.test.cpp`
@@ -246,9 +239,7 @@ fn topo_sort_dont_reorder_function_after_assignment_to_global() {
   let sorted = toposort(&mut *program);
 
   assert_eq!(3, sorted.len());
-  assert_eq!(sorted[0], program.body.as_slice()[0]);
-  assert_eq!(sorted[1], program.body.as_slice()[1]);
-  assert_eq!(sorted[2], program.body.as_slice()[2]);
+  assert_sorted_order(program, &sorted, &[0, 1, 2]);
 }
 
 // Source: `tests/TopoSort.test.cpp`
@@ -297,13 +288,8 @@ fn topo_sort_function_return_type_depends_on_type_aliases() {
 
   assert_eq!(3, sorted.len());
 
-  let callback_fn = program.body.as_slice()[0];
-  let map = program.body.as_slice()[1];
-  let foo = program.body.as_slice()[2];
-
-  assert_eq!(sorted[0], callback_fn);
-  assert_eq!(sorted[1], map);
-  assert_eq!(sorted[2], foo);
+  // sorted: callbackFn, Map, foo
+  assert_sorted_order(program, &sorted, &[0, 1, 2]);
 }
 
 // Source: `tests/TopoSort.test.cpp`
@@ -334,11 +320,8 @@ fn topo_sort_local_functions_need_sorting_too() {
   let sorted = toposort(&mut *program);
 
   assert_eq!(5, sorted.len());
-  assert_eq!(sorted[0], program.body.as_slice()[0]);
-  assert_eq!(sorted[1], program.body.as_slice()[3]);
-  assert_eq!(sorted[2], program.body.as_slice()[4]);
-  assert_eq!(sorted[3], program.body.as_slice()[1]);
-  assert_eq!(sorted[4], program.body.as_slice()[2]);
+  // sorted: 0, 3, 4, 1, 2
+  assert_sorted_order(program, &sorted, &[0, 3, 4, 1, 2]);
 }
 
 // Source: `tests/TopoSort.test.cpp`
@@ -361,13 +344,8 @@ fn topo_sort_nested_type_annotations_depends_on_later_typealiases() {
 
   assert_eq!(3, sorted.len());
 
-  let foo = program.body.as_slice()[0];
-  let b = program.body.as_slice()[1];
-  let a = program.body.as_slice()[2];
-
-  assert_eq!(sorted[0], b);
-  assert_eq!(sorted[1], a);
-  assert_eq!(sorted[2], foo);
+  // sorted: B, A, Foo
+  assert_sorted_order(program, &sorted, &[1, 2, 0]);
 }
 
 // Source: `tests/TopoSort.test.cpp`
@@ -403,12 +381,8 @@ fn topo_sort_reorder_functions_after_dependent_assigns() {
   let sorted = toposort(&mut *program);
 
   assert_eq!(6, sorted.len());
-  assert_eq!(sorted[0], program.body.as_slice()[0]);
-  assert_eq!(sorted[1], program.body.as_slice()[3]);
-  assert_eq!(sorted[2], program.body.as_slice()[4]);
-  assert_eq!(sorted[3], program.body.as_slice()[2]);
-  assert_eq!(sorted[4], program.body.as_slice()[1]);
-  assert_eq!(sorted[5], program.body.as_slice()[5]);
+  // sorted: 0, 3, 4, 2, 1, 5
+  assert_sorted_order(program, &sorted, &[0, 3, 4, 2, 1, 5]);
 }
 
 // Source: `tests/TopoSort.test.cpp`
@@ -438,11 +412,8 @@ fn topo_sort_return_comes_last() {
 
   let sorted = toposort(&mut *program);
 
-  assert_eq!(sorted[0], program.body.as_slice()[0]);
-  assert_eq!(sorted[2], program.body.as_slice()[1]);
-  assert_eq!(sorted[1], program.body.as_slice()[2]);
-  assert_eq!(sorted[3], program.body.as_slice()[3]);
-  assert_eq!(sorted[4], program.body.as_slice()[4]);
+  // sorted: 0, 2, 1, 3, 4
+  assert_sorted_order(program, &sorted, &[0, 2, 1, 3, 4]);
 }
 
 // Source: `tests/TopoSort.test.cpp`
@@ -470,9 +441,8 @@ fn topo_sort_slightly_more_complex() {
   let sorted = toposort(&mut *program);
 
   assert_eq!(3, sorted.len());
-  assert_eq!(sorted[0], program.body.as_slice()[0]);
-  assert_eq!(sorted[1], program.body.as_slice()[2]);
-  assert_eq!(sorted[2], program.body.as_slice()[1]);
+  // sorted: 0, 2, 1
+  assert_sorted_order(program, &sorted, &[0, 2, 1]);
 }
 
 // Source: `tests/TopoSort.test.cpp`
@@ -494,11 +464,8 @@ fn topo_sort_sort_typealias_first() {
 
   assert_eq!(2, sorted.len());
 
-  let a = program.body.as_slice()[0];
-  let b = program.body.as_slice()[1];
-
-  assert_eq!(sorted[0], b);
-  assert_eq!(sorted[1], a);
+  // sorted: type A, foo（typealias 提前）
+  assert_sorted_order(program, &sorted, &[1, 0]);
 }
 
 // Source: `tests/TopoSort.test.cpp`
@@ -526,8 +493,7 @@ fn topo_sort_sorts() {
 
   assert_eq!(2, program.body.len());
 
-  assert_eq!(program.body.as_slice()[1], sorted[0]);
-  assert_eq!(program.body.as_slice()[0], sorted[1]);
+  assert_sorted_order(program, &sorted, &[1, 0]);
 }
 
 // Source: `tests/TopoSort.test.cpp`
@@ -549,9 +515,6 @@ fn topo_sort_typealias_of_typeof_is_not_sorted() {
 
   assert_eq!(2, sorted.len());
 
-  let a = program.body.as_slice()[0];
-  let b = program.body.as_slice()[1];
-
-  assert_eq!(sorted[0], a);
-  assert_eq!(sorted[1], b);
+  // sorted: Foo（typeof 型别名不被排序,保持源序在前）
+  assert_sorted_order(program, &sorted, &[0, 1]);
 }

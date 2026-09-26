@@ -7,7 +7,7 @@ use core::{
   slice::from_raw_parts,
 };
 
-use ulua_common::macros::luau_assert::LUAU_UNREACHABLE;
+use ulua_common::macros::luau_unreachable::LUAU_UNREACHABLE;
 
 use crate::{
   enums::{

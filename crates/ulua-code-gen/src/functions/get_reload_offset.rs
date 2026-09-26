@@ -1,4 +1,4 @@
-use ulua_common::macros::luau_assert::LUAU_UNREACHABLE;
+use ulua_common::macros::luau_unreachable::LUAU_UNREACHABLE;
 
 use crate::{enums::ir_value_kind::IrValueKind, macros::codegen_assert::CODEGEN_ASSERT};
 
