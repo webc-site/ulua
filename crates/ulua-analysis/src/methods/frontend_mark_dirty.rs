@@ -1,8 +1,6 @@
 use alloc::vec::Vec;
 
-use ulua_common::macros::{
-  luau_timetrace_argument::LUAU_TIMETRACE_ARGUMENT, luau_timetrace_scope::LUAU_TIMETRACE_SCOPE,
-};
+use ulua_common::macros::luau_timetrace_scope::{LUAU_TIMETRACE_ARGUMENT, LUAU_TIMETRACE_SCOPE};
 
 use crate::{
   records::{frontend::Frontend, source_node::SourceNode},

@@ -7,9 +7,7 @@ use ulua_ast::{
     parse_options::ParseOptions, parser::Parser, position::Position,
   },
 };
-use ulua_common::macros::{
-  luau_timetrace_argument::LUAU_TIMETRACE_ARGUMENT, luau_timetrace_scope::LUAU_TIMETRACE_SCOPE,
-};
+use ulua_common::macros::luau_timetrace_scope::{LUAU_TIMETRACE_ARGUMENT, LUAU_TIMETRACE_SCOPE};
 
 use crate::{
   functions::{get_timestamp::get_timestamp, parse_mode::parse_mode},

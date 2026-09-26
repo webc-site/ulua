@@ -1,7 +1,5 @@
 use ulua_ast::{enums::mode::Mode, records::location::Location};
-use ulua_common::macros::{
-  luau_timetrace_argument::LUAU_TIMETRACE_ARGUMENT, luau_timetrace_scope::LUAU_TIMETRACE_SCOPE,
-};
+use ulua_common::macros::luau_timetrace_scope::{LUAU_TIMETRACE_ARGUMENT, LUAU_TIMETRACE_SCOPE};
 
 use crate::{
   enums::type_file_resolver::Type,

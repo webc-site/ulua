@@ -1,6 +1,4 @@
-use ulua_common::macros::{
-  luau_timetrace_argument::LUAU_TIMETRACE_ARGUMENT, luau_timetrace_scope::LUAU_TIMETRACE_SCOPE,
-};
+use ulua_common::macros::luau_timetrace_scope::{LUAU_TIMETRACE_ARGUMENT, LUAU_TIMETRACE_SCOPE};
 
 use crate::{
   functions::arc_as_mut::arc_as_mut,
