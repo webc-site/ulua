@@ -6,7 +6,10 @@ use ulua_ast::{
 };
 
 use crate::{
-  functions::{as_mutable_type::as_mutable_type_id, follow_type, get_type},
+  functions::{
+    as_mutable_type::as_mutable_type_id, follow_type, get_type,
+    magic_names::is_reserved_type_alias_name,
+  },
   records::{
     free_type::FreeType, occurs_check_failed::OccursCheckFailed, type_checker::TypeChecker,
     type_error::TypeError,
@@ -28,7 +31,7 @@ impl TypeChecker {
       };
 
       // AstName 由词法器 intern，必为合法 ASCII/UTF-8；空名（null）按 "" 处理。
-      if typealias.name.as_bytes() == b"%error-id%" || typealias.name.as_bytes() == b"typeof" {
+      if is_reserved_type_alias_name(typealias.name.as_bytes()) {
         continue;
       }
 

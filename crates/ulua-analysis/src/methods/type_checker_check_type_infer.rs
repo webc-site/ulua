@@ -34,9 +34,9 @@ use crate::{
     follow_type_pack, get_mutable_table_type::get_mutable_table_type, get_mutable_type,
     get_mutable_type_pack, get_table_type::get_table_type, get_type, get_type_pack,
     is_generic::is_generic, is_metamethod_type_infer::is_metamethod, is_prim::is_nil,
-    is_table_intersection::is_table_intersection, match_require::match_require,
-    match_set_metatable::match_set_metatable, matches::matches, maybe_generic::maybe_generic,
-    unwrap_group::unwrap_group,
+    is_table_intersection::is_table_intersection, magic_names::is_reserved_type_alias_name,
+    match_require::match_require, match_set_metatable::match_set_metatable, matches::matches,
+    maybe_generic::maybe_generic, unwrap_group::unwrap_group,
   },
   methods::type_checker_check_function_signature::scope_mut,
   records::{
@@ -1429,7 +1429,7 @@ impl TypeChecker {
     typealias: &AstStatTypeAlias,
   ) -> ControlFlow {
     // AstName 由词法器 intern，必为合法 ASCII/UTF-8；空名（null）按 "" 处理。
-    if typealias.name.as_bytes() == b"%error-id%" || typealias.name.as_bytes() == b"typeof" {
+    if is_reserved_type_alias_name(typealias.name.as_bytes()) {
       return ControlFlow::None;
     }
 

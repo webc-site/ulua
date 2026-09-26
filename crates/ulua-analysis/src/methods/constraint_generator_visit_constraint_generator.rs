@@ -52,6 +52,7 @@ use crate::{
     follow_type,
     for_each_constraint::for_each_constraint,
     get_mutable_type, get_type,
+    magic_names::{K_TYPEOF, is_reserved_type_alias_name},
     match_require::match_require,
     match_set_metatable::match_set_metatable,
     matches::matches,
@@ -1183,15 +1184,15 @@ impl ConstraintGenerator {
     alias: &AstStatTypeAlias,
   ) -> ControlFlow {
     // AstName 由词法器 intern，必为合法 ASCII/UTF-8。
-    if alias.name.as_bytes() == b"%error-id%" {
-      return ControlFlow::None;
-    }
-
-    if alias.name.as_bytes() == b"typeof" {
-      self.report_error(
-        alias.base.base.location,
-        TypeErrorData::ReservedIdentifier(ReservedIdentifier::new(String::from("typeof"))),
-      );
+    // 保留别名名不参与绑定：`typeof` 额外报 ReservedIdentifier（cpp 两臂逐字保真）。
+    let name_bytes = alias.name.as_bytes();
+    if is_reserved_type_alias_name(name_bytes) {
+      if name_bytes == K_TYPEOF {
+        self.report_error(
+          alias.base.base.location,
+          TypeErrorData::ReservedIdentifier(ReservedIdentifier::new(String::from("typeof"))),
+        );
+      }
       return ControlFlow::None;
     }
 
@@ -1306,7 +1307,7 @@ impl ConstraintGenerator {
   ) -> ControlFlow {
     // function->name == "typeof"
     let name_bytes = function.name.as_bytes();
-    if name_bytes == b"typeof" {
+    if name_bytes == K_TYPEOF {
       self.report_error(
         function.base.base.location,
         TypeErrorData::ReservedIdentifier(ReservedIdentifier::new(String::from("typeof"))),
