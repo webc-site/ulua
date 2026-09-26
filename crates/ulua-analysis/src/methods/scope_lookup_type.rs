@@ -1,10 +1,7 @@
-use crate::{
-  records::{scope::Scope, scope_registry::resolve_scope, type_fun::TypeFun},
-  type_aliases::name_type::Name,
-};
+use crate::records::{scope::Scope, scope_registry::resolve_scope, type_fun::TypeFun};
 
 impl Scope {
-  pub fn lookup_type(&self, name: &Name) -> Option<TypeFun> {
+  pub fn lookup_type(&self, name: &str) -> Option<TypeFun> {
     let mut current_scope: &Scope = self;
     loop {
       if let Some(type_fun) = current_scope.exported_type_bindings.get(name) {
