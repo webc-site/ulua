@@ -191,7 +191,7 @@ unsafe extern "C-unwind" fn runtime_luau_config_interrupt(l: *mut LuaState, _gc:
   // 期间上下文存活），要么是 VM 未初始化时的 null；as_ref() 先判空，仅对
   // 存活 timer 做只读 is_finished()（Cell 承载可变性），不存在悬挂或别名写。
   unsafe {
-    let timer = lua_getthreaddata(l).cast::<RuntimeLuauConfigTimer>();
+    let timer = lua_getthreaddata(&*l).cast::<RuntimeLuauConfigTimer>();
     if timer.as_ref().is_some_and(|timer| timer.is_finished()) {
       luaL_error!(l, "{CONFIG_TIMEOUT_MSG}");
     }

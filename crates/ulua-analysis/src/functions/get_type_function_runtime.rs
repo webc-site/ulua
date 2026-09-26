@@ -31,7 +31,7 @@ pub unsafe fn get_type_function_runtime(l: *mut LuaState) -> *mut TypeFunctionRu
   // 与注册路径 `runtime as *mut ()` 互逆，故返回值即当初存入的合法句柄。
   unsafe {
     let main_thread = lua_mainthread(&*(l as *mut lua_state::LuaState));
-    let data = lua_getthreaddata(main_thread);
+    let data = lua_getthreaddata(&*main_thread);
     data as *mut TypeFunctionRuntime
   }
 }

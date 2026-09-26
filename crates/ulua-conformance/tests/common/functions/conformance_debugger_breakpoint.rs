@@ -20,7 +20,7 @@ pub unsafe extern "C-unwind" fn conformance_debugger_breakpoint(l: *mut LuaState
     let enabled = lua_l_optboolean(l, 2, true);
 
     let mut ar: LuaDebug = zeroed();
-    lua_getinfo(l, lua_stackdepth(l) - 1, cstr(b"f\0"), &mut ar);
+    lua_getinfo(l, lua_stackdepth(&*l) - 1, cstr(b"f\0"), &mut ar);
 
     lua_breakpoint(l, -1, line, if enabled { 1 } else { 0 });
     0
