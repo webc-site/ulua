@@ -1,6 +1,7 @@
 pub mod codegen_assert;
 pub mod codegen_target;
 pub mod dwarf_reg;
+pub mod cond_lookup_table;
 pub mod dw_reg_a_64_lr;
 pub mod dw_reg_a_64_sp;
 pub mod dw_reg_x_64_ra;
