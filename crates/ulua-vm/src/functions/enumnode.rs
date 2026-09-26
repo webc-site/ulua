@@ -21,7 +21,7 @@ pub(crate) unsafe fn enumnode(
     if let Some(node_fn) = ctx_ref.node {
       node_fn(
         ctx_ref.context,
-        enumtopointer(gco),
+        enumtopointer(&mut *gco),
         (*gco).tt(),
         (*gco).memcat(),
         size,
