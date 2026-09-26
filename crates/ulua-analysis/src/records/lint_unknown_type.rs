@@ -40,7 +40,7 @@ impl<'ctx> LintUnknownType<'ctx> {
       | "buffer" | "vector" => TypeKind::Primitive,
       _ => {
         let context = self.context.get();
-        if context.scope.lookup_type(&String::from(name)).is_some() {
+        if context.scope.lookup_type(name).is_some() {
           TypeKind::Userdata
         } else {
           TypeKind::Unknown
