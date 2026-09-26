@@ -136,7 +136,7 @@ impl Type {
     Self::BLOCK_COMMENT.0,
   ];
 
-  /// 本词素是否携带 `data`/`length` 载荷（联合体 `data` 臂的活跃性判据）。
+  /// 本词素是否携带 `data`/`length` 载荷（`LexemeData::data` 指针字段的有效性判据）。
   /// 表在编译期定形，`contains` 由编译器折成跳转表，与旧 `||` 链同形。
   #[inline]
   pub fn has_data_payload(self) -> bool {

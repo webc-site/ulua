@@ -1,9 +1,11 @@
 //! Faithful port of Luau `Lexeme` (`Ast/include/Luau/Lexer.h`).
 //!
 //! The token payload is a C++ union (`const char* data`/`name`, `unsigned
-//! codepoint`); a Rust `union` reproduces it. Unions can derive `Clone`/`Copy`
-//! but not `Debug`, so `LexemeData` gets a hand-written `Debug` (it can't know
-//! which arm is active) and `Lexeme` then derives `Debug` normally.
+//! codepoint`). In Rust the `data`/`name` arms were bit-identical pointers, so
+//! the payload is a plain struct of two named fields ([`LexemeData`]); only
+//! the hand-written `Debug` remains (the field a reader takes is decided by
+//! `Lexeme::r#type`, which `Debug` cannot see), and `Lexeme` derives `Debug`
+//! normally.
 
 use alloc::{borrow::Cow, string::String};
 use core::{
@@ -37,7 +39,7 @@ pub struct Lexeme {
 }
 
 impl Lexeme {
-  /// 不带负载的词素（`length = 0`，负载臂取 [`LexemeData::EMPTY`]）。
+  /// 不带负载的词素（`length = 0`，负载字段取 [`LexemeData::EMPTY`]）。
   pub fn new(location: Location, r#type: Type) -> Lexeme {
     Lexeme {
       r#type,
@@ -61,7 +63,7 @@ impl Lexeme {
   /// A token with a `data`/`length` payload (string, number, comment, ...).
   ///
   /// cpp 的 `(const char* data, size_t size)` 成对入参折为单一切片：指针与长度
-  /// 不再可漂移。字节保真是硬约束（[`LexemeData`] 文档）——`data` 臂照 cpp 只存
+  /// 不再可漂移。字节保真是硬约束（[`LexemeData`] 文档）——`data` 字段照 cpp 只存
   /// 区间起始地址、`length` 照存 `size`，不解释编码、不增删 NUL 终止语义；切片
   /// 源指向源缓冲，按 `records::lexer::Lexer` 的契约（源缓冲活过解析会话、词素
   /// 载荷同款 cpp `&buffer[startOffset]`）比本词素长寿。
@@ -72,21 +74,23 @@ impl Lexeme {
       r#type,
       location,
       length: data.len() as u32,
-      // 位拷贝契约：联合体臂存地址值（cpp `data(data)` 同款），任何指针位模式
-      // 合法；此处只透传 `as_ptr()`，不构造也不解引用引用。
+      // 指针透传契约：`data` 字段存地址值（cpp `data(data)` 同款），任何指针位
+      // 模式合法；此处只透传 `as_ptr()`，不构造也不解引用引用。
       data: LexemeData {
         data: data.as_ptr(),
+        codepoint: 0,
       },
     }
   }
 
-  /// A name/attribute/reserved-word token: the `name` union arm, `length = 0`.
+  /// A name/attribute/reserved-word token: the `data` pointer field (cpp 的
+  /// `name` 臂与之同槽同型), `length = 0`.
   ///
   /// 参数取 [`AstName`] 而非 `&[u8]`：cpp `Lexeme(location, type, const char*
   /// name)` 的 name 实参就是名表驻留串的指针身份（`read_name` 返回值、静态空名
   /// `""`、或 read_names=false 未命中时的 **null** 名——`Lexeme::name()` 与各
   /// parser 判定点依赖 null 与空串的区分），切片既无法表达 null、又会在
-  /// 驻留串上白白重新 strlen；union 位拷贝契约（[`LexemeData`] 文档）钉死臂为
+  /// 驻留串上白白重新 strlen；[`LexemeData`] 的指针字段契约钉死该字段为
   /// 裸指针，本入口只透传地址，逐位 ⇔ cpp。
   pub fn with_name(location: Location, r#type: Type, name: AstName) -> Lexeme {
     LUAU_ASSERT!(
@@ -99,16 +103,19 @@ impl Lexeme {
       r#type,
       location,
       length: name.len,
-      data: LexemeData { name: name.value },
+      data: LexemeData {
+        data: name.value,
+        codepoint: 0,
+      },
     }
   }
 
   pub fn get_block_depth(&self) -> u32 {
     LUAU_ASSERT!(self.r#type == Type::RAW_STRING || self.r#type == Type::BLOCK_COMMENT);
 
-    // Safety: 上方断言 r#type ∈ {RAW_STRING, BLOCK_COMMENT}，两类词法均将载荷写入
-    // union 的 data 分支，读取当前活跃变体合法。
-    let data_ptr = unsafe { self.data.data };
+    // 上方断言 r#type ∈ {RAW_STRING, BLOCK_COMMENT}，两类词法均将载荷指针写入
+    // LexemeData::data 字段。
+    let data_ptr = self.data.data;
     let length = self.length as usize;
 
     // If we have a well-formed string, we are guaranteed to see 2 `]` characters after the end of the string contents
@@ -139,10 +146,7 @@ impl Lexeme {
     LUAU_ASSERT!(self.r#type == Type::QUOTED_STRING);
 
     // If we have a well-formed string, we are guaranteed to see a closing delimiter after the string
-    let data_ptr = unsafe {
-      // Safety: union 臂读取本身恒安全（LexemeData 各臂均为指针、无有效式不变量）；类型前置为 QUOTED_STRING 时 data 臂是 read_quoted_string 写入的源缓冲内指针，非空由 with_data 构造路径保证（断言兜底）。
-      self.data.data
-    };
+    let data_ptr = self.data.data; // QUOTED_STRING 的 data 字段是 read_quoted_string 写入的源缓冲内指针，非空由 with_data 构造路径保证（断言兜底）。
     LUAU_ASSERT!(!data_ptr.is_null());
 
     let quote = unsafe {
@@ -175,11 +179,11 @@ impl Lexeme {
   /// Returns the name payload as an `AstName`.
   #[inline]
   pub fn name(&self) -> AstName {
+    // 指针字段直读（cpp `data`/`name` 同槽同型，收口为 `data` 一字段）；有效性
+    // 由词素类型约定承载（NAME/RESERVED 词素由 lexer 以 with_name 写入），
+    // 各调用点（parser/lexer）均在类型判定后进入。
     AstName {
-      value: unsafe {
-        // Safety: 联合体位拷贝读（data/name 两臂同为 *const u8、同偏移，任意位模式合法，读本身不可能 UB）；与 cpp Lexeme::name() 同款直读，指针语义有效性由词素类型约定承载（NAME/RESERVED 词素由 lexer 以 with_name 写入 name 臂），各调用点（parser/lexer）均在类型判定后进入。
-        self.data.name
-      },
+      value: self.data.data,
       len: self.length,
     }
   }
@@ -189,20 +193,19 @@ impl Lexeme {
   /// `None`（cpp 同款判空）。文本呈现口径收在本文件的
   /// `render_payload_bytes`（口径唯一）。
   ///
-  /// 本函数是 `data` 臂「指针 + `length` 裸字节区间」→ 切片的**全仓唯一收口**
-  /// （以切片为界的门面）：变体族判定内置（原 `pub(crate) unsafe fn` 的调用点
-  /// 契约收编），非负载变体一律 `None`，联合体活跃成员证明不外溢。注意变体集
-  /// 与 [`Lexeme::get_length`](Self::get_length) 的断言集不同
+  /// 本函数是 `data` 指针字段「指针 + `length` 裸字节区间」→ 切片的**全仓唯一
+  /// 收口**（以切片为界的门面）：变体族判定内置（原 `pub(crate) unsafe fn` 的
+  /// 调用点契约收编），非负载变体一律 `None`，负载字段的有效性证明不外溢。注意
+  /// 变体集与 [`Lexeme::get_length`](Self::get_length) 的断言集不同
   /// （不含 BLOCK_COMMENT/BROKEN_INTERP_DOUBLE_BRACE，对齐 cpp `toString` 的
   /// `%.*s` 分支族），消费点（to_string/parser_next_lexeme/parse_number）均经
   /// 各自类型判定后进入。
   ///
-  /// 与 [`Lexeme::name`] 同理，这里只能对联合体做位拷贝读：臂本体是裸指针
-  /// （批 2 收口后为 `*const u8`），存活前提即 [`LexemeData::EMPTY`] 文档所记
-  /// 契约——词法器成对写入的 `[ptr, ptr + length)` 指向比词素长寿的源缓冲
-  /// （records/lexer.rs）。
+  /// 与 [`Lexeme::name`] 同理，这里直读 [`LexemeData`] 的裸指针字段：存活前提即
+  /// [`LexemeData::EMPTY`] 文档所记契约——词法器成对写入的
+  /// `[ptr, ptr + length)` 指向比词素长寿的源缓冲（records/lexer.rs）。
   pub(crate) fn data_bytes(&self) -> Option<&[u8]> {
-    // 联合体 `data` 仅在下列变体下以 `data` 指针为活跃成员（词法器成对写入）
+    // `data` 指针字段仅在下列变体下由词法器成对写入为有效载荷区间
     if !matches!(
       self.r#type,
       Type::RAW_STRING
@@ -216,9 +219,7 @@ impl Lexeme {
     ) {
       return None;
     }
-    // Safety: 上方变体判定即原函数契约的内置兑现——此时 `data.data` 是活跃
-    // 且已初始化的联合体成员，直读其值合法。
-    let ptr = unsafe { self.data.data };
+    let ptr = self.data.data;
     if ptr.is_null() {
       return None;
     }
@@ -230,35 +231,44 @@ impl Lexeme {
 
 /// 词法单元是否为 NAME 且名字等于 `rhs`，对应 C++ 反复出现的
 /// `lexeme.type == Lexeme::Name && AstName(lexeme.data.name) == "x"`。
-/// NAME 判型先行短路，`data.name` 联合体仅在 NAME 时读 active 臂。
+/// NAME 判型先行短路，`data` 指针字段仅在 NAME 时按名字读取。
 /// 接受 `&Lexeme`：实时态传 `parser.lexer.current()`，快照态传局部拷贝。
 #[inline]
 pub fn lexeme_name_is(lexeme: &Lexeme, rhs: &str) -> bool {
   lexeme.name_is(rhs)
 }
 
+/// 词素负载：cpp `Lexeme` 匿名 union（`const char* data`/`name` + `unsigned
+/// codepoint`）的具名字段化形态。
+///
+/// cpp 里 `data` 与 `name` 本就是同一槽位的同型指针（union 别名），故收口为
+/// 单一 `data` 字段；真正与指针复用的只有 `codepoint`（BROKEN_UNICODE 码点），
+/// 改为独立具名字段后即无位复用——读哪一字段仍由 `Lexeme::r#type` 决定，
+/// 各构造入口只写自己语义对应的字段（另一字段恒为 0/null 占位）。
 #[derive(Clone, Copy)]
-#[repr(C)]
-pub union LexemeData {
+pub struct LexemeData {
+  /// 载荷/名字指针（cpp `data`/`name` 两臂的合并）。
   pub data: *const u8,
-  pub name: *const u8,
+  /// BROKEN_UNICODE 词素的码点（cpp `codepoint` 臂）。
   pub codepoint: u32,
 }
 
 impl LexemeData {
   /// 「无负载」词素（cpp `Lexeme` 默认构造下的 `nullptr` 臂）的唯一构造点。
   ///
-  /// 为什么本联合体只能存裸指针：`data` 臂在 NUMBER/COMMENT/RAW_STRING 等词素上是
+  /// 为什么 `data` 字段只能存裸指针：它在 NUMBER/COMMENT/RAW_STRING 等词素上是
   /// 「源缓冲指针 + `Lexeme::length`」的裸字节区间，区间末没有 NUL 终止、内容可为任意
-  /// 字节，故 `&CStr`/`&str` 这类自带不变量的类型不成立；`codepoint` 臂又与指针臂逐位
-  /// 重叠，指针的 niche 会被合法码点值占用。有没有负载、读哪一臂都由 `Lexeme::r#type`
-  /// 决定，`null` 只表示该词素不带负载。
-  pub const EMPTY: Self = Self { data: null() };
+  /// 字节，故 `&CStr`/`&str` 这类自带不变量的类型不成立。有没有负载、读哪一字段
+  /// 都由 `Lexeme::r#type` 决定，`null` 只表示该词素不带负载。
+  pub const EMPTY: Self = Self {
+    data: null(),
+    codepoint: 0,
+  };
 }
 
 impl Debug for LexemeData {
   fn fmt(&self, f: &mut Formatter<'_>) -> Result {
-    // The active arm is determined by `Lexeme::type`; print opaquely.
+    // The active field is determined by `Lexeme::type`; print opaquely.
     f.write_str("LexemeData(..)")
   }
 }
@@ -356,9 +366,9 @@ impl Display for Lexeme {
       }
 
       Type::BROKEN_UNICODE => {
-        // Safety: 本分支 `r#type` 为 BROKEN_UNICODE，词法器在该变体下把码点写入联合体 `codepoint` 成员，
-        // 故 `data.codepoint` 读取的是活跃且已初始化的成员，直读合法。
-        let cp = unsafe { self.data.codepoint };
+        // 本分支 `r#type` 为 BROKEN_UNICODE，词法器在该变体下把码点写入
+        // LexemeData::codepoint 字段。
+        let cp = self.data.codepoint;
         if cp != 0 {
           if let Some(confusable) = find_confusable(cp) {
             write!(
