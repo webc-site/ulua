@@ -7422,3 +7422,73 @@ local function f(arg1 : T) : T...
     region.nearest_statement
   ));
 }
+
+// Source: `tests/FragmentAutocomplete.test.cpp:5534-5569`
+#[test]
+fn fragment_autocomplete_fragment_ac_on_nonexistent_table() {
+  let source = String::from(
+    r#"
+        local mygame = {}
+
+        local char = (nil :: any) :: {
+            Humanoid: {
+                Animator: number
+            }
+        } & typeof(mygame.interesting)
+    "#,
+  );
+
+  let updated = String::from(
+    r#"
+        local mygame = {}
+
+        local char = (nil :: any) :: {
+            Humanoid: {
+                Animator: number
+            }
+        } & typeof(mygame.interesting)
+
+        char.Humanoid.@1
+    "#,
+  );
+
+  let mut fixture = FragmentAutocompleteFixture::default();
+  fixture.base.autocomplete_fragment_in_new_solver(
+    &source,
+    &updated,
+    '1',
+    |frag: &mut FragmentAutocompleteStatusResult| {
+      LUAU_ASSERT!(frag.result.is_some());
+      let ac = &frag.result.as_ref().unwrap().ac_results;
+      assert!(ac.entry_map.contains_key("Animator"));
+    },
+    None,
+  );
+}
+
+// 灭失申报（对照 cpp `FragmentAutocomplete.test.cpp`，tw-4 复核；本文件缺的
+// 另 11 例全部挂账如下，非测试侧可表达）：
+// - `autocomplete_props_through_metatable_typed_metatable`（:1610，无 flag 依赖）
+//   ——与 autocomplete.rs 台账同根因：补全须穿透 `setmetatable` 值元表链
+//   （obj -> Meta -> Base）看到 `baseProp`，本移植实测 `entry_map` 为空，属
+//   autocomplete 实现缺口，待实现补齐后应补回。
+// - `local_inside_of_function_parameter`（:2555）——依赖 FFlag
+//   `LuauFragmentACLocalAutocompleteFix`（全仓 0 引用、未同步），faithful
+//   前置不可表达。
+// - `fragment_autocomplete_type_function_string_singleton_union`（:5571）——
+//   依赖 FFlag `LuauFragmentACEnableTypeFunctionEvaluation`；产品侧未注册该
+//   可设旗标，`allow_evaluation` 恒 false 硬编码
+//   （typecheck_fragment_fragment_autocomplete.rs:188-189），用例无法按 cpp
+//   置位，待 sync 该旗标后补回。
+// - `if_local_optional_binding_member_completion_in_then_body`（:5607）、
+//   `if_local_optional_binding_is_in_scope_in_then_body`（:5643）、
+//   `if_local_and_elseif_local_bindings_are_scoped_to_their_own_branch`（:5678）、
+//   `elseif_local_binding_offers_member_completion`（:5730）、
+//   `nested_if_local_bindings_are_both_in_scope`（:5768）、
+//   `if_local_binding_is_not_in_scope_in_else_branch`（:5808）、
+//   `if_local_binding_is_not_in_scope_after_if_statement`（:5845）、
+//   `if_const_binding_offers_member_completion`（:5880）——8 例均前置
+//   `DebugLuauIfLocalSyntax` + `DebugLuauIfLocalAnalysis` 且源码用 `if local`/
+//   `if const` 语法；本端口 parser 未接入（ast_expr_if_else.rs:23
+//   `condition_local` 构造端恒 None，与 compiler.rs/linter.rs 台账同源），
+//   用例源码无法解析，待语法接入后补回。
