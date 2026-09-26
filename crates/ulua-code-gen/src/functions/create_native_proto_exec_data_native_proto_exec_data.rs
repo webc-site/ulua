@@ -12,8 +12,8 @@ use crate::{
 };
 
 /// execdata 分配块的对齐要求：header 内联于块首，块对齐必须同时满足 header（含裸指针/usize，
-/// 8 对齐）与其后 u32 数组（4 对齐）的较大者。与 `destroy_native_proto_exec_data` 的 dealloc
-/// 端共用，保证分配/释放 layout 逐位一致。
+/// 8 对齐）与其后 u32 数组（4 对齐）的较大者。释放端按同一常量重建 layout，
+/// 保证分配/释放 layout 逐位一致。
 pub(crate) const NATIVE_EXEC_DATA_ALIGN: usize = {
   let u32_align = align_of::<u32>();
   let header_align = align_of::<NativeProtoExecDataHeader>();
