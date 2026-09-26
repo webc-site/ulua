@@ -2,7 +2,7 @@
 //! (`Analysis/src/GlobalTypes.cpp:11`). Builds the shared global scope and the
 //! global type-function scope, registers the builtin type bindings, and wires
 //! up the string metatable.
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{sync::Arc, vec::Vec};
 use core::ptr::{NonNull, null_mut};
 
 use ulua_common::fflag;
@@ -93,50 +93,50 @@ impl GlobalTypes {
     };
 
     global_scope
-      .add_builtin_type_binding(&String::from("any"), &TypeFun::type_fun_type_id(any_type));
+      .add_builtin_type_binding("any", &TypeFun::type_fun_type_id(any_type));
     global_scope
-      .add_builtin_type_binding(&String::from("nil"), &TypeFun::type_fun_type_id(nil_type));
+      .add_builtin_type_binding("nil", &TypeFun::type_fun_type_id(nil_type));
     global_scope.add_builtin_type_binding(
-      &String::from("number"),
+      "number",
       &TypeFun::type_fun_type_id(number_type),
     );
     if fflag::LuauIntegerType2.get() {
       global_scope.add_builtin_type_binding(
-        &String::from("integer"),
+        "integer",
         &TypeFun::type_fun_type_id(integer_type),
       );
     }
     global_scope.add_builtin_type_binding(
-      &String::from("string"),
+      "string",
       &TypeFun::type_fun_type_id(string_type),
     );
     global_scope.add_builtin_type_binding(
-      &String::from("boolean"),
+      "boolean",
       &TypeFun::type_fun_type_id(boolean_type),
     );
     global_scope.add_builtin_type_binding(
-      &String::from("thread"),
+      "thread",
       &TypeFun::type_fun_type_id(thread_type),
     );
     global_scope.add_builtin_type_binding(
-      &String::from("buffer"),
+      "buffer",
       &TypeFun::type_fun_type_id(buffer_type),
     );
     global_scope.add_builtin_type_binding(
-      &String::from("unknown"),
+      "unknown",
       &TypeFun::type_fun_type_id(unknown_type),
     );
     global_scope.add_builtin_type_binding(
-      &String::from("never"),
+      "never",
       &TypeFun::type_fun_type_id(never_type),
     );
     if fflag::DebugLuauUserDefinedClasses.get() {
       global_scope.add_builtin_type_binding(
-        &String::from("object"),
+        "object",
         &TypeFun::type_fun_type_id(object_type),
       );
       global_scope.add_builtin_type_binding(
-        &String::from("class"),
+        "class",
         &TypeFun::type_fun_type_id(class_type),
       );
     }

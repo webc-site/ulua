@@ -40,12 +40,12 @@ impl GenericType {
     }
   }
 
-  pub fn generic_type_name_polarity(name: &Name, polarity: Polarity) -> Self {
+  pub fn generic_type_name_polarity(name: &str, polarity: Polarity) -> Self {
     GenericType {
       index: fresh_index(),
       level: TypeLevel::default(),
       scope: null_mut(),
-      name: name.clone(),
+      name: name.to_owned(),
       explicit_name: true,
       polarity,
     }

@@ -17,7 +17,7 @@ impl GlobalTypes {
     let t = self
       .global_types
       .add_type(GenericType::generic_type_name_polarity(
-        &String::from("T"),
+        "T",
         Polarity::Mixed,
       ));
     let generic_t = GenericTypeDefinition {
@@ -28,7 +28,7 @@ impl GlobalTypes {
     let u = self
       .global_types
       .add_type(GenericType::generic_type_name_polarity(
-        &String::from("U"),
+        "U",
         Polarity::Mixed,
       ));
     let generic_u = GenericTypeDefinition {
