@@ -86,13 +86,14 @@ impl AstVisitor for FindUninitializedAccesses {
       }
 
       // 字段不存在的情况由其它机制上报；这里只管「存在、未初始化、被右值读取」。
-      let field_name = String::from(node.index.as_str_or_empty());
+      // 查询走 &str 借用口（r7-rc-4），仅 try_insert 命中时才物化键。
+      let field_name = node.index.as_str_or_empty();
       let uninitialized = &*self.uninitialized_fields;
-      if uninitialized.contains(&field_name) {
+      if uninitialized.contains_str(field_name) {
         self
           .violating_fields
-          .try_insert(field_name, from_mut(&mut node.base));
-      } else if self.method_names.contains(&field_name) && !uninitialized.empty() {
+          .try_insert(String::from(field_name), from_mut(&mut node.base));
+      } else if self.method_names.contains_str(field_name) && !uninitialized.empty() {
         self.violating_ref = Some(from_mut(&mut node.base));
       }
     }
@@ -113,14 +114,15 @@ impl AstVisitor for FindUninitializedAccesses {
         return true;
       }
       let str_expr = &*(node.index.cast::<AstExprConstantString>());
-      let key = String::from_utf8_lossy(str_expr.value.as_bytes()).into_owned();
+      // 借用口直接吃 Cow<str> 视图；仅 try_insert 命中时才 into_owned 物化键。
+      let key = String::from_utf8_lossy(str_expr.value.as_bytes());
 
       let uninitialized = &*self.uninitialized_fields;
-      if uninitialized.contains(&key) {
+      if uninitialized.contains_str(&key) {
         self
           .violating_fields
-          .try_insert(key, from_mut(&mut node.base));
-      } else if self.method_names.contains(&key) && !uninitialized.empty() {
+          .try_insert(key.into_owned(), from_mut(&mut node.base));
+      } else if self.method_names.contains_str(&key) && !uninitialized.empty() {
         self.violating_ref = Some(from_mut(&mut node.base));
       }
       false

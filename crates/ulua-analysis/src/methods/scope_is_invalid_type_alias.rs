@@ -1,16 +1,14 @@
-use alloc::string::String;
-
 use ulua_ast::records::location::Location;
 
 use crate::records::{scope::Scope, scope_registry::resolve_scope};
 
 impl Scope {
   pub fn is_invalid_type_alias(&self, name: &str) -> Option<Location> {
-    // DenseHashMap<String, _>::find 仅收 &String（ulua-common 无 &str 查询口），键转换提出循环外，每次调用至多一次堆分配。
-    let key = String::from(name);
+    // r7-rc-5（承 r7-rc-4）：DenseHashMap<String, _> 已有 &str 借用查询口，
+    // an2 票的循环外键物化（`let key = String::from(name)`）整体删除，零分配查询。
     let mut scope: Option<&Scope> = Some(self);
     while let Some(current_scope) = scope {
-      if let Some(loc) = current_scope.invalid_type_aliases.find(&key) {
+      if let Some(loc) = current_scope.invalid_type_aliases.find_str(name) {
         return Some(*loc);
       }
 

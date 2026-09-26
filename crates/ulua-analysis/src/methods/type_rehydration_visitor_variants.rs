@@ -173,7 +173,7 @@ impl TypeRehydrationVisitor {
     let _counter = RecursionCounter::recursion_counter_i32(&mut self.count);
 
     if let Some(ref name) = ttv.name
-      && !self.options.banned_names.contains(name)
+      && !self.options.banned_names.contains_str(name.as_str())
     {
       let params_size =
         ttv.instantiated_type_params.len() + ttv.instantiated_type_pack_params.len();

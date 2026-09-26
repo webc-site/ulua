@@ -120,7 +120,7 @@ impl TypeChecker2 {
                 if let AstExprRef::Local(local) = index_name.expr.as_expr_ref()
                   && local.local.as_ptr() == self_local
                 {
-                  uninitialized_fields.erase(&String::from(index_name.index.as_str_or_empty()));
+                  uninitialized_fields.erase_str(index_name.index.as_str_or_empty());
                 }
               }
               AstExprRef::IndexExpr(index_expr) => {
@@ -128,8 +128,9 @@ impl TypeChecker2 {
                   && local.local.as_ptr() == self_local
                   && let AstExprRef::ConstantString(str_expr) = index_expr.index.as_expr_ref()
                 {
-                  let key = String::from_utf8_lossy(str_expr.value.as_bytes()).into_owned();
-                  uninitialized_fields.erase(&key);
+                  // erase_str 借用口直接吃 Cow<str> 视图，免 into_owned 物化。
+                  let key = String::from_utf8_lossy(str_expr.value.as_bytes());
+                  uninitialized_fields.erase_str(&key);
                 }
               }
               _ => {}
