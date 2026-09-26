@@ -2,7 +2,9 @@ use ulua_common::fflag::FixMathNoisePrecision;
 
 use crate::{
   functions::{lua_pushnumber::lua_pushnumber, lua_tonumberx::lua_tonumberx, perlin::perlin},
-  macros::{lua_isnoneornil::lua_isnoneornil, lua_l_argexpected::luaL_argexpected},
+  macros::{
+    lua_isnoneornil::lua_isnoneornil, lua_l_argexpected::luaL_argexpected, lua_lib_fn::lua_lib_fn,
+  },
   records::lua_state::LuaState,
 };
 
@@ -10,7 +12,7 @@ use crate::{
 /// `l` 须为存活 LuaState 并处于受保护帧：栈 1..=3 号位经 `lua_tonumberx` 取数字并回报可否转换，
 /// `luaL_argexpected`/`lua_isnoneornil` 校验（1 必为数字，2/3 可缺省为 nil），`lua_pushnumber` 写回可分配/GC。
 /// cpp/VM/src/lmathlib.cpp:369 math_noise。
-pub unsafe extern "C-unwind" fn math_noise(l: *mut LuaState) -> i32 {
+pub unsafe fn math_noise(l: *mut LuaState) -> i32 {
   unsafe {
     let x = lua_tonumberx(l, 1);
     let y = lua_tonumberx(l, 2);
@@ -52,3 +54,5 @@ pub unsafe extern "C-unwind" fn math_noise(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn math_noise, math_noise_arm);

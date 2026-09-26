@@ -1,6 +1,6 @@
 use crate::{
   functions::{lua_l_checknumber::lua_l_checknumber, lua_pushnumber::lua_pushnumber},
-  macros::lua_isnoneornil::lua_isnoneornil,
+  macros::{lua_isnoneornil::lua_isnoneornil, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
 };
 
@@ -8,7 +8,7 @@ use crate::{
 /// `l` 须为存活 `LuaState` 且处于受保护帧：`lua_l_checknumber(l,1)` 要求索引 1 存在且数值，索引 2 可选
 /// （`lua_isnoneornil` 判空，缺省走自然对数）；`lua_pushnumber` 需 `(*l).top` 后 ≥1 空槽；可触发 GC。
 /// cpp VM/src/lmathlib.cpp:146
-pub(crate) unsafe extern "C-unwind" fn math_log(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn math_log(l: *mut LuaState) -> i32 {
   unsafe {
     let x = lua_l_checknumber(l, 1);
     let res = if lua_isnoneornil!(l, 2) {
@@ -28,3 +28,5 @@ pub(crate) unsafe extern "C-unwind" fn math_log(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn math_log, math_log_arm);

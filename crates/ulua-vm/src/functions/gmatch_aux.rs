@@ -4,7 +4,9 @@ use crate::{
     r#match::match_item, prepstate::prepstate, push_captures::push_captures,
     reprepstate::reprepstate,
   },
-  macros::{lua_tointeger::lua_tointeger, lua_upvalueindex::lua_upvalueindex},
+  macros::{
+    lua_lib_fn::lua_lib_fn, lua_tointeger::lua_tointeger, lua_upvalueindex::lua_upvalueindex,
+  },
   records::{lua_state::LuaState, match_state::MatchState},
 };
 
@@ -14,7 +16,7 @@ use crate::{
 /// `l` 须为存活 LuaState 并处于 gmatch 迭代器闭包的受保护帧，其 3 个 upvalue 依次为源串/模式串/游标整数：
 /// `lua_tolstring_ref` 取回 `s`/`p` 切片（`None` 即 cpp 的 NULL+0 不可达路径，折算为空串）、
 /// `lua_tointeger` 读游标，`match_item`/`push_captures` 读写 `ms` 并可抛错/GC。
-pub(crate) unsafe extern "C-unwind" fn gmatch_aux(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn gmatch_aux(l: *mut LuaState) -> i32 {
   unsafe {
     let mut ms = MatchState::default();
     // upvalue 恒为串（gmatch 闭包契约）；`None` 即 cpp 解引用 NULL 的不可达路径，
@@ -47,3 +49,5 @@ pub(crate) unsafe extern "C-unwind" fn gmatch_aux(l: *mut LuaState) -> i32 {
     0
   }
 }
+
+lua_lib_fn!(pub(crate) fn gmatch_aux, gmatch_aux_arm);

@@ -12,14 +12,16 @@ use crate::{
     lua_l_checklstring::lua_l_checklstring, lua_l_pushresultsize::lua_l_pushresultsize,
     lua_pushlstring::lua_pushlstring, lua_pushvalue::lua_pushvalue,
   },
-  macros::{lua_emptystr::LUA_EMPTYSTR, lua_l_error::luaL_error, maxssize::MAXSSIZE},
+  macros::{
+    lua_emptystr::LUA_EMPTYSTR, lua_l_error::luaL_error, lua_lib_fn::lua_lib_fn, maxssize::MAXSSIZE,
+  },
   records::{lua_l_strbuf::LuaLStrbuf, lua_state::LuaState},
 };
 
 /// # Safety
 ///
 /// `l` 必须指向本次 strlib 调用的存活 `LuaState`，所需实参按索引可读且栈顶有结果余量。
-pub(crate) unsafe extern "C-unwind" fn str_rep(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn str_rep(l: *mut LuaState) -> i32 {
   // Safety: 契约保证 `l` 存活且重复次数/串长经溢出检查，块内经 addlstring 写入 strbuf 的总量受缓冲扩展协议保护
   unsafe {
     let mut len: usize = 0;
@@ -69,3 +71,5 @@ pub(crate) unsafe extern "C-unwind" fn str_rep(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn str_rep, str_rep_arm);

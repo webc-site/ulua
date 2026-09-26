@@ -10,13 +10,13 @@ use crate::{
     lua_gettop::lua_gettop, lua_l_checkinteger::lua_l_checkinteger,
     lua_pushinteger::lua_pushinteger, lua_pushnumber::lua_pushnumber, pcg_32_random::pcg_32_random,
   },
-  macros::{lua_l_argcheck::luaL_argcheck, lua_l_error::luaL_error},
+  macros::{lua_l_argcheck::luaL_argcheck, lua_l_error::luaL_error, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe extern "C-unwind" fn math_random(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn math_random(l: *mut LuaState) -> i32 {
   unsafe {
     let g = (*l).global;
     match lua_gettop(l) {
@@ -53,3 +53,5 @@ pub(crate) unsafe extern "C-unwind" fn math_random(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn math_random, math_random_arm);
