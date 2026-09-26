@@ -54,7 +54,9 @@ impl ConstraintGenerator {
         result = read_ty;
       }
 
-      if let Some(cached_has_prop_result) = self.prop_index_pairs_seen.find(&(obj, index.to_owned())) {
+      if let Some(cached_has_prop_result) =
+        self.prop_index_pairs_seen.find(&(obj, index.to_owned()))
+      {
         result = *cached_has_prop_result;
       }
 

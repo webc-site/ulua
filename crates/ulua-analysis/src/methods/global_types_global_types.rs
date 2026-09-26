@@ -92,53 +92,21 @@ impl GlobalTypes {
       )
     };
 
-    global_scope
-      .add_builtin_type_binding("any", &TypeFun::type_fun_type_id(any_type));
-    global_scope
-      .add_builtin_type_binding("nil", &TypeFun::type_fun_type_id(nil_type));
-    global_scope.add_builtin_type_binding(
-      "number",
-      &TypeFun::type_fun_type_id(number_type),
-    );
+    global_scope.add_builtin_type_binding("any", &TypeFun::type_fun_type_id(any_type));
+    global_scope.add_builtin_type_binding("nil", &TypeFun::type_fun_type_id(nil_type));
+    global_scope.add_builtin_type_binding("number", &TypeFun::type_fun_type_id(number_type));
     if fflag::LuauIntegerType2.get() {
-      global_scope.add_builtin_type_binding(
-        "integer",
-        &TypeFun::type_fun_type_id(integer_type),
-      );
+      global_scope.add_builtin_type_binding("integer", &TypeFun::type_fun_type_id(integer_type));
     }
-    global_scope.add_builtin_type_binding(
-      "string",
-      &TypeFun::type_fun_type_id(string_type),
-    );
-    global_scope.add_builtin_type_binding(
-      "boolean",
-      &TypeFun::type_fun_type_id(boolean_type),
-    );
-    global_scope.add_builtin_type_binding(
-      "thread",
-      &TypeFun::type_fun_type_id(thread_type),
-    );
-    global_scope.add_builtin_type_binding(
-      "buffer",
-      &TypeFun::type_fun_type_id(buffer_type),
-    );
-    global_scope.add_builtin_type_binding(
-      "unknown",
-      &TypeFun::type_fun_type_id(unknown_type),
-    );
-    global_scope.add_builtin_type_binding(
-      "never",
-      &TypeFun::type_fun_type_id(never_type),
-    );
+    global_scope.add_builtin_type_binding("string", &TypeFun::type_fun_type_id(string_type));
+    global_scope.add_builtin_type_binding("boolean", &TypeFun::type_fun_type_id(boolean_type));
+    global_scope.add_builtin_type_binding("thread", &TypeFun::type_fun_type_id(thread_type));
+    global_scope.add_builtin_type_binding("buffer", &TypeFun::type_fun_type_id(buffer_type));
+    global_scope.add_builtin_type_binding("unknown", &TypeFun::type_fun_type_id(unknown_type));
+    global_scope.add_builtin_type_binding("never", &TypeFun::type_fun_type_id(never_type));
     if fflag::DebugLuauUserDefinedClasses.get() {
-      global_scope.add_builtin_type_binding(
-        "object",
-        &TypeFun::type_fun_type_id(object_type),
-      );
-      global_scope.add_builtin_type_binding(
-        "class",
-        &TypeFun::type_fun_type_id(class_type),
-      );
+      global_scope.add_builtin_type_binding("object", &TypeFun::type_fun_type_id(object_type));
+      global_scope.add_builtin_type_binding("class", &TypeFun::type_fun_type_id(class_type));
     }
 
     let global_scope: Arc<Scope> = Arc::new(global_scope);
