@@ -577,7 +577,7 @@ fn parser_parse_type_name() {
   let mut names = AstNameTable::new(&mut allocator);
 
   let result: ParseNodeResult<AstType> =
-    Parser::parse_type_c_char_usize_ast_name_table_allocator_parse_options(
+    Parser::parse_type_source(
       code,
       &mut names,
       &mut allocator,

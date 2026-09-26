@@ -99,8 +99,6 @@ fn json_emitter_prevent_multiple_object_finish() {
 // Source: `tests/JsonEmitter.test.cpp`
 #[test]
 fn json_emitter_push_and_pop_comma() {
-  use core::ffi::c_char;
-
   use ulua_analysis::{
     functions::write_json_emitter::write_json_emitter_bool, records::json_emitter::JsonEmitter,
   };
@@ -109,13 +107,13 @@ fn json_emitter_push_and_pop_comma() {
   emitter.write_comma();
   write_json_emitter_bool(&mut emitter, true);
   emitter.write_comma();
-  emitter.write_raw_c_char(b'[' as c_char);
+  emitter.write_raw_byte(b'[');
   let comma = emitter.push_comma();
   emitter.write_comma();
   write_json_emitter_bool(&mut emitter, true);
   emitter.write_comma();
   write_json_emitter_bool(&mut emitter, false);
-  emitter.write_raw_c_char(b']' as c_char);
+  emitter.write_raw_byte(b']');
   emitter.pop_comma(comma);
   emitter.write_comma();
   write_json_emitter_bool(&mut emitter, false);
