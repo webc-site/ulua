@@ -33,7 +33,7 @@ const root_dir = import.meta.dirname,
     .example("$0", "运行 workspace 全部测试与 JIT 一致性测试")
     .example("$0 -p ulua-vm", "仅运行指定包测试")
     .example("$0 -p ulua-conformance", "运行 conformance 包（包含 JIT 一致性测试）")
-    .example("$0 -- -E 'test(conformance)'", "透传 nextest 过滤器参数")
+    .example("$0 -- -E 'test(conformance)'", "透传 nextest 过滤器参数（或直接传 -E）")
     .help()
     .alias("h", "help")
     .version(false)
