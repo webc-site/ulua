@@ -34,6 +34,10 @@ use core::iter::repeat_n;
 
 use itoa::Buffer;
 
+use crate::functions::scanformat::{
+  FLAG_ALT, FLAG_LEFT, FLAG_PLUS, FLAG_SPACE, FLAG_ZERO, fold_format_flags,
+};
+
 /// A parsed `%[flags][width][.precision]` prefix of one format directive
 /// (everything between the `%` and the conversion character), as validated
 /// and bounded by `scanformat` (width and precision are at most two digits).
@@ -74,19 +78,16 @@ impl Default for FormatSpec {
 /// `%` and the conversion character, exactly as `scanformat` collected them).
 pub fn parse_format_spec(spec: &[u8]) -> FormatSpec {
   let mut fs = FormatSpec::default();
-  // 标志前缀：take_while 于首个非标志字节收口，等价原 while-index 的 break；
-  // 标志置位即“该字节出现于前缀”，与逐字节 match 赋值同一语义
-  let (flags, rest) = spec.split_at(
-    spec
-      .iter()
-      .take_while(|&&c| matches!(c, b'-' | b'+' | b' ' | b'#' | b'0'))
-      .count(),
-  );
-  fs.left = flags.contains(&b'-');
-  fs.plus = flags.contains(&b'+');
-  fs.space = flags.contains(&b' ');
-  fs.alt = flags.contains(&b'#');
-  fs.zero = flags.contains(&b'0');
+  // 标志前缀：与 scanformat 共用单遍位掩码折叠（原 take_while + 5 次线性
+  // contains），五个 bool 直接读掩码位；置位幂等，与“该字节出现于前缀”
+  // 的集合语义逐字节等价，截断位置同为首个非标志字节
+  let (flags, consumed) = fold_format_flags(spec);
+  fs.left = flags & FLAG_LEFT != 0;
+  fs.plus = flags & FLAG_PLUS != 0;
+  fs.space = flags & FLAG_SPACE != 0;
+  fs.alt = flags & FLAG_ALT != 0;
+  fs.zero = flags & FLAG_ZERO != 0;
+  let rest = &spec[consumed..];
   let (width, consumed) = parse_usize(rest);
   fs.width = width;
   let rest = &rest[consumed..];
