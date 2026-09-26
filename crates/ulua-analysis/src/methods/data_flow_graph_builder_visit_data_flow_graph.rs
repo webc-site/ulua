@@ -1,11 +1,10 @@
 use alloc::vec::Vec;
 
 use ulua_ast::{
+  enums::{ast_expr_ref::AstExprRef, ast_stat_ref::AstStatRef},
   records::{
     ast_class_method::AstClassMethod, ast_class_property::AstClassProperty, ast_expr::AstExpr,
-    ast_expr_call::AstExprCall, ast_expr_function::AstExprFunction, ast_expr_global::AstExprGlobal,
-    ast_expr_index_name::AstExprIndexName, ast_expr_local::AstExprLocal,
-    ast_expr_table::AstExprTable, ast_local::AstLocal, ast_node::AstNode, ast_stat::AstStat,
+    ast_expr_function::AstExprFunction, ast_local::AstLocal, ast_stat::AstStat,
     ast_stat_assign::AstStatAssign, ast_stat_block::AstStatBlock, ast_stat_break::AstStatBreak,
     ast_stat_class::AstStatClass, ast_stat_compound_assign::AstStatCompoundAssign,
     ast_stat_continue::AstStatContinue, ast_stat_declare_extern_type::AstStatDeclareExternType,
@@ -17,15 +16,13 @@ use ulua_ast::{
     ast_stat_return::AstStatReturn, ast_stat_type_alias::AstStatTypeAlias,
     ast_stat_type_function::AstStatTypeFunction, ast_stat_while::AstStatWhile,
   },
-  rtti::{AstNodeClass, ast_node_is, ast_node_try_as},
 };
 use ulua_common::{LUAU_ASSERT, fflag};
 
 use crate::{
   enums::{control_flow::ControlFlow, scope_type::ScopeType},
   functions::{
-    arena_ref::arena_ref, ast_node_downcast::ast_node_downcast as node_downcast,
-    contains_subscripted_definition::contains_subscripted_definition,
+    arena_ref::arena_ref, contains_subscripted_definition::contains_subscripted_definition,
     does_call_error::does_call_error, matches::matches,
   },
   records::{
@@ -59,57 +56,32 @@ impl DataFlowGraphBuilder {
 
   /// cpp `DataFlowGraphBuilder::visit(AstStat*)` 的分派入口。
   pub fn visit_stat(&mut self, s: &AstStat) -> ControlFlow {
-    // 类索引 match 与原 `ast_node_is` 长链同一判据且互斥（rtti_indices_unique
-    // 测试保证），臂序无关语义。
-    let node: &AstNode = &s.base;
-    match node.class_index {
-      AstStatBlock::CLASS_INDEX => self.visit_stat_block(node_downcast::<AstStatBlock>(node)),
-      AstStatIf::CLASS_INDEX => self.visit_stat_if(node_downcast::<AstStatIf>(node)),
-      AstStatWhile::CLASS_INDEX => self.visit_stat_while(node_downcast::<AstStatWhile>(node)),
-      AstStatRepeat::CLASS_INDEX => self.visit_stat_repeat(node_downcast::<AstStatRepeat>(node)),
-      AstStatBreak::CLASS_INDEX => self.visit_stat_break(node_downcast::<AstStatBreak>(node)),
-      AstStatContinue::CLASS_INDEX => {
-        self.visit_stat_continue(node_downcast::<AstStatContinue>(node))
-      }
-      AstStatReturn::CLASS_INDEX => self.visit_stat_return(node_downcast::<AstStatReturn>(node)),
-      AstStatExpr::CLASS_INDEX => self.visit_stat_expr(node_downcast::<AstStatExpr>(node)),
-      AstStatLocal::CLASS_INDEX => self.visit_stat_local(node_downcast::<AstStatLocal>(node)),
-      AstStatFor::CLASS_INDEX => self.visit_stat_for(node_downcast::<AstStatFor>(node)),
-      AstStatForIn::CLASS_INDEX => self.visit_stat_for_in(node_downcast::<AstStatForIn>(node)),
-      AstStatAssign::CLASS_INDEX => self.visit_stat_assign(node_downcast::<AstStatAssign>(node)),
-      AstStatCompoundAssign::CLASS_INDEX => {
-        self.visit_stat_compound_assign(node_downcast::<AstStatCompoundAssign>(node))
-      }
-      AstStatFunction::CLASS_INDEX => {
-        self.visit_stat_function(node_downcast::<AstStatFunction>(node))
-      }
-      AstStatLocalFunction::CLASS_INDEX => {
-        self.visit_stat_local_function(node_downcast::<AstStatLocalFunction>(node))
-      }
-      AstStatTypeAlias::CLASS_INDEX => {
-        self.visit_stat_type_alias(node_downcast::<AstStatTypeAlias>(node))
-      }
-      AstStatTypeFunction::CLASS_INDEX => {
-        self.visit_stat_type_function(node_downcast::<AstStatTypeFunction>(node))
-      }
-      AstStatDeclareGlobal::CLASS_INDEX => {
-        self.visit_stat_declare_global(node_downcast::<AstStatDeclareGlobal>(node))
-      }
-      AstStatDeclareFunction::CLASS_INDEX => {
-        self.visit_stat_declare_function(node_downcast::<AstStatDeclareFunction>(node))
-      }
-      AstStatDeclareExternType::CLASS_INDEX => {
-        self.visit_stat_declare_extern_type(node_downcast::<AstStatDeclareExternType>(node))
-      }
-      AstStatClass::CLASS_INDEX => {
+    match s.as_stat_ref() {
+      AstStatRef::Block(b) => self.visit_stat_block(b),
+      AstStatRef::If(i) => self.visit_stat_if(i),
+      AstStatRef::While(w) => self.visit_stat_while(w),
+      AstStatRef::Repeat(r) => self.visit_stat_repeat(r),
+      AstStatRef::Break(b) => self.visit_stat_break(b),
+      AstStatRef::Continue(c) => self.visit_stat_continue(c),
+      AstStatRef::Return(r) => self.visit_stat_return(r),
+      AstStatRef::Expr(e) => self.visit_stat_expr(e),
+      AstStatRef::Local(l) => self.visit_stat_local(l),
+      AstStatRef::For(f) => self.visit_stat_for(f),
+      AstStatRef::ForIn(f) => self.visit_stat_for_in(f),
+      AstStatRef::Assign(a) => self.visit_stat_assign(a),
+      AstStatRef::CompoundAssign(c) => self.visit_stat_compound_assign(c),
+      AstStatRef::Function(f) => self.visit_stat_function(f),
+      AstStatRef::LocalFunction(l) => self.visit_stat_local_function(l),
+      AstStatRef::TypeAlias(t) => self.visit_stat_type_alias(t),
+      AstStatRef::TypeFunction(f) => self.visit_stat_type_function(f),
+      AstStatRef::DeclareGlobal(d) => self.visit_stat_declare_global(d),
+      AstStatRef::DeclareFunction(d) => self.visit_stat_declare_function(d),
+      AstStatRef::DeclareExternType(d) => self.visit_stat_declare_extern_type(d),
+      AstStatRef::DeclareClass(d) => {
         LUAU_ASSERT!(fflag::DebugLuauUserDefinedClasses.get());
-        self.visit_stat_class(node_downcast::<AstStatClass>(node))
+        self.visit_stat_class(d)
       }
-      AstStatError::CLASS_INDEX => self.visit_stat_error(node_downcast::<AstStatError>(node)),
-      _ => {
-        // InternalErrorReporter::ice is not yet translated; use panic as a fallback
-        panic!("Unknown AstStat in DataFlowGraphBuilder::visit");
-      }
+      AstStatRef::Error(e) => self.visit_stat_error(e),
     }
   }
 
@@ -245,9 +217,7 @@ impl DataFlowGraphBuilder {
     let expr = e.expr.get();
     self.visit_expr(expr);
 
-    // ast_node_try_as 对判型+判空一步折叠为 Option，does_call_error 只在
-    // 命中分支消费引用；类型信息来自 RTTI 命中而非盲目 cast。
-    if let Some(call) = ast_node_try_as::<AstExprCall>(&expr.base)
+    if let AstExprRef::Call(call) = expr.as_expr_ref()
       && does_call_error(call)
     {
       ControlFlow::Throws
@@ -286,7 +256,7 @@ impl DataFlowGraphBuilder {
 
       if i < values.len() {
         let expr = arena_ref(values[i], "AstStatLocal.values 元素");
-        if ast_node_is::<AstExprTable>(&expr.base) {
+        if matches!(expr.as_expr_ref(), AstExprRef::Table(_)) {
           def = defs[i];
         }
       }
@@ -495,20 +465,18 @@ impl DataFlowGraphBuilder {
     let name_ptr: *const AstExpr = name as *const AstExpr;
     let name_def = self.graph.get_def_ast_expr(name_ptr);
 
-    match name.base.class_index {
-      AstExprGlobal::CLASS_INDEX => {
-        let global = node_downcast::<AstExprGlobal>(&name.base);
+    match name.as_expr_ref() {
+      AstExprRef::Global(global) => {
         let symbol = Symbol::from_global(global.name);
         // SAFETY: signature_scope 为本帧 make_child_scope 的 PinnedStorage
         // 活单元（地址稳定、活至 builder 析构）；name_def 是 get_def_ast_expr
         // 查得的合法 DefId，仅按指针值入 bindings。
         unsafe { *(*signature_scope).bindings.get_or_insert(symbol) = name_def };
       }
-      AstExprIndexName::CLASS_INDEX => {
-        let index_name = node_downcast::<AstExprIndexName>(&name.base);
+      AstExprRef::IndexName(index_name) => {
         // 索引接收者 `expr` 已句柄化恒非空（cpp 判空为死守卫），.get() 安全
         // 借用直接下转；命中即存活只读节点。
-        if let Some(receiver_expr) = ast_node_try_as::<AstExprLocal>(&index_name.expr.get().base) {
+        if let AstExprRef::Local(receiver_expr) = index_name.expr.get().as_expr_ref() {
           let receiver_def = self.lookup_symbol_location(
             Symbol::from_local(receiver_expr.local.as_ptr()),
             func.base.base.location,
@@ -536,7 +504,7 @@ impl DataFlowGraphBuilder {
     // visit_function 对两指针非空存活的契约。
     let _ = unsafe { self.visit_function(func_ptr, signature_scope) };
 
-    if let Some(local) = ast_node_try_as::<AstExprLocal>(&name.base) {
+    if let AstExprRef::Local(local) = name.as_expr_ref() {
       let capture = self
         .captures
         .get_or_insert(Symbol::from_local(local.local.as_ptr()));

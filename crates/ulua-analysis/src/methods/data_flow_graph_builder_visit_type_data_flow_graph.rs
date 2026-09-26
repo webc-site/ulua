@@ -1,52 +1,38 @@
 use ulua_ast::{
+  enums::ast_type_ref::AstTypeRef,
   records::{
-    ast_node::AstNode, ast_type::AstType, ast_type_error::AstTypeError,
-    ast_type_function::AstTypeFunction, ast_type_group::AstTypeGroup,
-    ast_type_intersection::AstTypeIntersection, ast_type_optional::AstTypeOptional,
-    ast_type_or_pack::AstTypeOrPack, ast_type_reference::AstTypeReference,
-    ast_type_singleton_bool::AstTypeSingletonBool,
-    ast_type_singleton_string::AstTypeSingletonString, ast_type_table::AstTypeTable,
+    ast_type::AstType, ast_type_error::AstTypeError, ast_type_function::AstTypeFunction,
+    ast_type_intersection::AstTypeIntersection, ast_type_or_pack::AstTypeOrPack,
+    ast_type_reference::AstTypeReference, ast_type_table::AstTypeTable,
     ast_type_typeof::AstTypeTypeof, ast_type_union::AstTypeUnion,
   },
-  rtti::AstNodeClass,
 };
 use ulua_common::LUAU_ASSERT;
 
 use crate::{
-  functions::{arena_ref::arena_ref, ast_node_downcast::ast_node_downcast as type_downcast},
-  records::data_flow_graph_builder::DataFlowGraphBuilder,
+  functions::arena_ref::arena_ref, records::data_flow_graph_builder::DataFlowGraphBuilder,
 };
 
 impl DataFlowGraphBuilder {
   /// cpp `DataFlowGraphBuilder::visitType(AstType*)` 的分派入口。类型注解在
   /// DFG 侧只为触达其中 `typeof` 表达式与泛型/包结构，本体不产生 def。
   pub fn visit_type(&mut self, t: &AstType) {
-    // 类索引 match 与原 `ast_node_is` 长链同一判据且互斥，臂序无关语义。
-    let node: &AstNode = &t.base;
-    match node.class_index {
-      AstTypeReference::CLASS_INDEX => {
-        self.visit_type_reference(type_downcast::<AstTypeReference>(node))
-      }
-      AstTypeTable::CLASS_INDEX => self.visit_type_table(type_downcast::<AstTypeTable>(node)),
-      AstTypeFunction::CLASS_INDEX => {
-        self.visit_type_function(type_downcast::<AstTypeFunction>(node))
-      }
-      AstTypeTypeof::CLASS_INDEX => self.visit_type_typeof(type_downcast::<AstTypeTypeof>(node)),
-      AstTypeOptional::CLASS_INDEX => {} // cpp：optional 不含值命名空间信息
-      AstTypeUnion::CLASS_INDEX => self.visit_type_union(type_downcast::<AstTypeUnion>(node)),
-      AstTypeIntersection::CLASS_INDEX => {
-        self.visit_type_intersection(type_downcast::<AstTypeIntersection>(node))
-      }
-      AstTypeError::CLASS_INDEX => self.visit_type_error(type_downcast::<AstTypeError>(node)),
-      AstTypeSingletonBool::CLASS_INDEX | AstTypeSingletonString::CLASS_INDEX => {} // ok
-      AstTypeGroup::CLASS_INDEX => {
-        let group = type_downcast::<AstTypeGroup>(node);
+    match t.as_type_ref() {
+      AstTypeRef::Reference(r) => self.visit_type_reference(r),
+      AstTypeRef::Table(tbl) => self.visit_type_table(tbl),
+      AstTypeRef::Function(f) => self.visit_type_function(f),
+      AstTypeRef::Typeof(tof) => self.visit_type_typeof(tof),
+      AstTypeRef::Optional(_) => {} // cpp：optional 不含值命名空间信息
+      AstTypeRef::Union(u) => self.visit_type_union(u),
+      AstTypeRef::Intersection(i) => self.visit_type_intersection(i),
+      AstTypeRef::Error(e) => self.visit_type_error(e),
+      AstTypeRef::SingletonBool(_) | AstTypeRef::SingletonString(_) => {} // ok
+      AstTypeRef::Group(group) => {
         // AstTypeGroup.type_ 是 parser 必绑定的内层类型指针（cpp 直接
         // `visitType(g->type)`）。
         let inner = arena_ref(group.type_, "AstTypeGroup.type_");
         self.visit_type(inner);
       }
-      _ => LUAU_ASSERT!(false),
     }
   }
 

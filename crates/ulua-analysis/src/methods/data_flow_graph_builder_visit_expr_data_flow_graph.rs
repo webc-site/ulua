@@ -2,16 +2,12 @@ use alloc::string::String;
 use core::ptr::null;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   functions::is_l_value::is_l_value,
   records::{
     ast_expr::AstExpr,
     ast_expr_binary::{AstExprBinary, AstExprBinaryOp},
     ast_expr_call::AstExprCall,
-    ast_expr_constant_bool::AstExprConstantBool,
-    ast_expr_constant_integer::AstExprConstantInteger,
-    ast_expr_constant_nil::AstExprConstantNil,
-    ast_expr_constant_number::AstExprConstantNumber,
-    ast_expr_constant_string::AstExprConstantString,
     ast_expr_error::AstExprError,
     ast_expr_function::AstExprFunction,
     ast_expr_global::AstExprGlobal,
@@ -25,12 +21,9 @@ use ulua_ast::{
     ast_expr_table::AstExprTable,
     ast_expr_type_assertion::AstExprTypeAssertion,
     ast_expr_unary::AstExprUnary,
-    ast_expr_varargs::AstExprVarargs,
     ast_local::AstLocal,
-    ast_node::AstNode,
     ast_type_or_pack::AstTypeOrPack,
   },
-  rtti::{AstNodeClass, ast_node_try_as},
 };
 use ulua_common::{
   fflag,
@@ -40,8 +33,7 @@ use ulua_common::{
 use crate::{
   enums::scope_type::ScopeType,
   functions::{
-    arena_ref::arena_ref, ast_node_downcast::ast_node_downcast as expr_downcast,
-    contains_subscripted_definition::contains_subscripted_definition,
+    arena_ref::arena_ref, contains_subscripted_definition::contains_subscripted_definition,
     should_typestate_for_first_argument::should_typestate_for_first_argument,
   },
   records::{
@@ -67,58 +59,36 @@ impl DataFlowGraphBuilder {
       };
     }
 
-    // 类索引 match 与原 `ast_node_is` 长链同一判据且互斥（rtti_indices_unique
-    // 测试保证），臂序无关语义；常量家族的 fresh_cell 用节点自身 location
-    // （AstNode.location），与原实现一致。
-    let node: &AstNode = &expr.base;
-    let result = match node.class_index {
-      AstExprGroup::CLASS_INDEX => self.visit_expr_group(expr_downcast::<AstExprGroup>(node)),
-      AstExprConstantNil::CLASS_INDEX
-      | AstExprConstantBool::CLASS_INDEX
-      | AstExprConstantNumber::CLASS_INDEX
-      | AstExprConstantInteger::CLASS_INDEX
-      | AstExprConstantString::CLASS_INDEX
-      | AstExprVarargs::CLASS_INDEX => DataFlowResult {
+    let result = match expr.as_expr_ref() {
+      AstExprRef::Group(group) => self.visit_expr_group(group),
+      AstExprRef::ConstantNil(_)
+      | AstExprRef::ConstantBool(_)
+      | AstExprRef::ConstantNumber(_)
+      | AstExprRef::ConstantInteger(_)
+      | AstExprRef::ConstantString(_)
+      | AstExprRef::Varargs(_) => DataFlowResult {
         def: self
           .def_arena
           .get_mut()
-          .fresh_cell(Symbol::default(), node.location, false),
+          .fresh_cell(Symbol::default(), expr.base.location, false),
         parent: null(),
       },
-      AstExprLocal::CLASS_INDEX => self.visit_expr_local(expr_downcast::<AstExprLocal>(node)),
-      AstExprGlobal::CLASS_INDEX => self.visit_expr_global(expr_downcast::<AstExprGlobal>(node)),
-      AstExprCall::CLASS_INDEX => self.visit_expr_call(expr_downcast::<AstExprCall>(node)),
-      AstExprIndexName::CLASS_INDEX => {
-        self.visit_expr_index_name(expr_downcast::<AstExprIndexName>(node))
+      AstExprRef::Local(local) => self.visit_expr_local(local),
+      AstExprRef::Global(global) => self.visit_expr_global(global),
+      AstExprRef::Call(call) => self.visit_expr_call(call),
+      AstExprRef::IndexName(index_name) => self.visit_expr_index_name(index_name),
+      AstExprRef::IndexExpr(index_expr) => self.visit_expr_index_expr(index_expr),
+      AstExprRef::Function(function) => self.visit_expr_function(function),
+      AstExprRef::Table(table) => self.visit_expr_table(table),
+      AstExprRef::Unary(unary) => self.visit_expr_unary(unary),
+      AstExprRef::Binary(binary) => self.visit_expr_binary(binary),
+      AstExprRef::TypeAssertion(type_assertion) => {
+        self.visit_expr_type_assertion(type_assertion)
       }
-      AstExprIndexExpr::CLASS_INDEX => {
-        self.visit_expr_index_expr(expr_downcast::<AstExprIndexExpr>(node))
-      }
-      AstExprFunction::CLASS_INDEX => {
-        self.visit_expr_function(expr_downcast::<AstExprFunction>(node))
-      }
-      AstExprTable::CLASS_INDEX => self.visit_expr_table(expr_downcast::<AstExprTable>(node)),
-      AstExprUnary::CLASS_INDEX => self.visit_expr_unary(expr_downcast::<AstExprUnary>(node)),
-      AstExprBinary::CLASS_INDEX => self.visit_expr_binary(expr_downcast::<AstExprBinary>(node)),
-      AstExprTypeAssertion::CLASS_INDEX => {
-        self.visit_expr_type_assertion(expr_downcast::<AstExprTypeAssertion>(node))
-      }
-      AstExprIfElse::CLASS_INDEX => self.visit_expr_if_else(expr_downcast::<AstExprIfElse>(node)),
-      AstExprInterpString::CLASS_INDEX => {
-        self.visit_expr_interp_string(expr_downcast::<AstExprInterpString>(node))
-      }
-      AstExprInstantiate::CLASS_INDEX => {
-        self.visit_expr_instantiate(expr_downcast::<AstExprInstantiate>(node))
-      }
-      AstExprError::CLASS_INDEX => self.visit_expr_error(expr_downcast::<AstExprError>(node)),
-      _ => {
-        self
-          .handle
-          .expect("DataFlowGraphBuilder::handle 须由 build() 接线非空")
-          .get()
-          .ice_string("Unknown AstExpr in DataFlowGraphBuilder::visitExpr");
-        DataFlowResult::default()
-      }
+      AstExprRef::IfElse(if_else) => self.visit_expr_if_else(if_else),
+      AstExprRef::InterpString(interp_string) => self.visit_expr_interp_string(interp_string),
+      AstExprRef::Instantiate(instantiate) => self.visit_expr_instantiate(instantiate),
+      AstExprRef::Error(error) => self.visit_expr_error(error),
     };
 
     // 缓存回写全安全：DenseHashMap 以指针值为键查写，不解引用键。
@@ -194,21 +164,11 @@ impl DataFlowGraphBuilder {
       if let Some(first_arg) = unsafe { args[0].as_ref() }
         && is_l_value(first_arg)
       {
-        let first_node = &first_arg.base;
-
-        let result = match first_node.class_index {
-          AstExprLocal::CLASS_INDEX => {
-            self.visit_expr_local(expr_downcast::<AstExprLocal>(first_node))
-          }
-          AstExprGlobal::CLASS_INDEX => {
-            self.visit_expr_global(expr_downcast::<AstExprGlobal>(first_node))
-          }
-          AstExprIndexName::CLASS_INDEX => {
-            self.visit_expr_index_name(expr_downcast::<AstExprIndexName>(first_node))
-          }
-          AstExprIndexExpr::CLASS_INDEX => {
-            self.visit_expr_index_expr(expr_downcast::<AstExprIndexExpr>(first_node))
-          }
+        let result = match first_arg.as_expr_ref() {
+          AstExprRef::Local(l) => self.visit_expr_local(l),
+          AstExprRef::Global(g) => self.visit_expr_global(g),
+          AstExprRef::IndexName(i) => self.visit_expr_index_name(i),
+          AstExprRef::IndexExpr(i) => self.visit_expr_index_expr(i),
           // SAFETY: 整段由 `is_l_value(first_arg)` 守卫，动态类型必为上述四类
           // 之一（cpp 以同一前提 LUAU_UNREACHABLE 兜底）。
           _ => LUAU_UNREACHABLE!(),
@@ -265,7 +225,7 @@ impl DataFlowGraphBuilder {
     let parent = self.visit_expr(parent_expr);
     self.visit_expr(index_expr);
 
-    if let Some(string) = ast_node_try_as::<AstExprConstantString>(&index_expr.base) {
+    if let AstExprRef::ConstantString(string) = index_expr.as_expr_ref() {
       let index = String::from_utf8_lossy(string.value.as_bytes()).into_owned();
       // SAFETY: 同 visit_expr_index_name——parent.def/parent.parent 满足 lookup
       // 的合法 DefId/可空前缀键契约。
@@ -318,7 +278,7 @@ impl DataFlowGraphBuilder {
       // 命中即 parser 写入的活键表达式节点；cpp `if (item.key)` 同款。
       if let Some(key_expr) = unsafe { item.key.as_ref() } {
         self.visit_expr(key_expr);
-        if let Some(string) = ast_node_try_as::<AstExprConstantString>(&key_expr.base) {
+        if let AstExprRef::ConstantString(string) = key_expr.as_expr_ref() {
           let key_str = String::from_utf8_lossy(string.value.as_bytes()).into_owned();
           // SAFETY: scope 仍是本帧登记的栈顶活 scope；与循环内各递归的临时
           // 借用不同时存在（每次借用止于本语句），C++:

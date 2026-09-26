@@ -1,20 +1,18 @@
 use alloc::string::String;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
-    ast_expr::AstExpr, ast_expr_constant_string::AstExprConstantString,
-    ast_expr_error::AstExprError, ast_expr_global::AstExprGlobal,
+    ast_expr::AstExpr, ast_expr_error::AstExprError, ast_expr_global::AstExprGlobal,
     ast_expr_index_expr::AstExprIndexExpr, ast_expr_index_name::AstExprIndexName,
-    ast_expr_local::AstExprLocal, ast_node::AstNode,
+    ast_expr_local::AstExprLocal,
   },
-  rtti::{AstNodeClass, ast_node_try_as},
 };
 use ulua_common::LUAU_ASSERT;
 
 use crate::{
   functions::{
-    arena_ref::arena_ref, ast_node_downcast::ast_node_downcast as lvalue_downcast,
-    contains_subscripted_definition::contains_subscripted_definition,
+    arena_ref::arena_ref, contains_subscripted_definition::contains_subscripted_definition,
   },
   records::{data_flow_graph_builder::DataFlowGraphBuilder, symbol::Symbol},
   type_aliases::def_id_def::DefId,
@@ -25,24 +23,13 @@ impl DataFlowGraphBuilder {
   pub fn visit_lvalue(&mut self, expr: &AstExpr, incoming_def: DefId) {
     // cpp 以 `AstExpr*` 作 astDefs 身份键；从共享引用取同一地址仅作键值。
     let expr_ptr: *const AstExpr = expr as *const AstExpr;
-    let node: &AstNode = &expr.base;
 
-    let def = match node.class_index {
-      AstExprLocal::CLASS_INDEX => {
-        self.visit_lvalue_local(lvalue_downcast::<AstExprLocal>(node), incoming_def)
-      }
-      AstExprGlobal::CLASS_INDEX => {
-        self.visit_lvalue_global(lvalue_downcast::<AstExprGlobal>(node), incoming_def)
-      }
-      AstExprIndexName::CLASS_INDEX => {
-        self.visit_lvalue_index_name(lvalue_downcast::<AstExprIndexName>(node), incoming_def)
-      }
-      AstExprIndexExpr::CLASS_INDEX => {
-        self.visit_lvalue_index_expr(lvalue_downcast::<AstExprIndexExpr>(node), incoming_def)
-      }
-      AstExprError::CLASS_INDEX => {
-        self.visit_lvalue_error(lvalue_downcast::<AstExprError>(node), incoming_def)
-      }
+    let def = match expr.as_expr_ref() {
+      AstExprRef::Local(l) => self.visit_lvalue_local(l, incoming_def),
+      AstExprRef::Global(g) => self.visit_lvalue_global(g, incoming_def),
+      AstExprRef::IndexName(i) => self.visit_lvalue_index_name(i, incoming_def),
+      AstExprRef::IndexExpr(i) => self.visit_lvalue_index_expr(i, incoming_def),
+      AstExprRef::Error(e) => self.visit_lvalue_error(e, incoming_def),
       _ => {
         LUAU_ASSERT!(false);
         DefId::NULL
@@ -140,7 +127,7 @@ impl DataFlowGraphBuilder {
     self.visit_expr(index_expr);
 
     let scope = self.current_scope();
-    if let Some(string) = ast_node_try_as::<AstExprConstantString>(&index_expr.base) {
+    if let AstExprRef::ConstantString(string) = index_expr.as_expr_ref() {
       let key = String::from_utf8_lossy(string.value.as_bytes()).into_owned();
 
       let subscripted = contains_subscripted_definition(incoming_def);

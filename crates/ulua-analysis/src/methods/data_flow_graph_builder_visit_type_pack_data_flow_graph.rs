@@ -1,36 +1,27 @@
 use ulua_ast::{
+  enums::ast_type_pack_ref::AstTypePackRef,
   records::{
-    ast_node::AstNode, ast_type::AstType, ast_type_pack::AstTypePack,
-    ast_type_pack_explicit::AstTypePackExplicit, ast_type_pack_generic::AstTypePackGeneric,
+    ast_type::AstType, ast_type_pack::AstTypePack, ast_type_pack_explicit::AstTypePackExplicit,
     ast_type_pack_variadic::AstTypePackVariadic,
   },
-  rtti::AstNodeClass,
 };
-use ulua_common::LUAU_ASSERT;
 
 use crate::{
-  functions::{arena_ref::arena_ref, ast_node_downcast::ast_node_downcast as pack_downcast},
-  records::data_flow_graph_builder::DataFlowGraphBuilder,
+  functions::arena_ref::arena_ref, records::data_flow_graph_builder::DataFlowGraphBuilder,
 };
 
 impl DataFlowGraphBuilder {
   /// cpp `visit(AstTypePack*)` 的分派入口。
   pub fn visit_type_pack(&mut self, p: &AstTypePack) {
-    // 类索引 match 与原 `ast_node_is` 长链同一判据且互斥（rtti_indices_unique
-    // 测试保证），臂序无关语义。
-    let node: &AstNode = &p.base;
-    match node.class_index {
-      AstTypePackExplicit::CLASS_INDEX => {
-        self.visit_type_pack_explicit(pack_downcast::<AstTypePackExplicit>(node));
+    match p.as_pack_ref() {
+      AstTypePackRef::Explicit(e) => {
+        self.visit_type_pack_explicit(e);
       }
-      AstTypePackVariadic::CLASS_INDEX => {
-        self.visit_type_pack_variadic(pack_downcast::<AstTypePackVariadic>(node));
+      AstTypePackRef::Variadic(v) => {
+        self.visit_type_pack_variadic(v);
       }
-      AstTypePackGeneric::CLASS_INDEX => {
+      AstTypePackRef::Generic(_) => {
         // ok
-      }
-      _ => {
-        LUAU_ASSERT!(false);
       }
     }
   }
