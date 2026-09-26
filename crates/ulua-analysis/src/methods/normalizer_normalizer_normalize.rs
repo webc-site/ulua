@@ -45,21 +45,6 @@ impl Normalizer {
     }
   }
 
-  pub fn normalizer_type_arena_not_null_builtin_types_not_null_unifier_shared_state_solver_mode_bool(
-    &mut self,
-    arena: Option<Handle<TypeArena>>,
-    builtin_types: Handle<BuiltinTypes>,
-    shared_state: Option<Handle<UnifierSharedState>>,
-    solver_mode: SolverMode,
-    cache_inhabitance: bool,
-  ) {
-    self.arena = arena;
-    self.builtin_types = builtin_types;
-    self.shared_state = shared_state;
-    self.cache_inhabitance = cache_inhabitance;
-    self.solver_mode = solver_mode;
-  }
-
   /// 已接线的 arena 可变视图：归一化期 arena 必已由 `TypeChecker` 的 check
   /// 入口（cpp `checkWithoutRecursionCheck`）/构造实参接线；null 哨兵只出现
   /// 在「模块外归一化」上报路径（该路径先经 `arena.is_none()` 判空短路），
