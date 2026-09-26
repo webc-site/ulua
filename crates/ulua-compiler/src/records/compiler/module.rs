@@ -47,7 +47,7 @@ impl Compiler {
   /// 修饰的 local 仅允许出现在顶层，否则抛类型化 `CompileError`；并把该 local 的
   /// 地址句柄记入 `exported_locals`（当前仅作 `exports_is_empty` 的非空判据）。
   /// `local` 为调用方持有的 arena 存活节点（parser/编译器构造期接线）。
-  pub(crate) fn check_exported_local(&mut self, local: &mut AstLocal, location: &Location) {
+  pub(crate) fn check_exported_local(&mut self, local: &AstLocal, location: &Location) {
     if local.is_exported {
       if !self.at_top_level() {
         // C++ `CompileError::raise(...)`：抛类型化 CompileError，而非 String。
@@ -58,7 +58,7 @@ impl Compiler {
       }
 
       // push 的裸指针只作地址记录（解引用链未移植），借用交出即终止。
-      self.exported_locals.push(Node::from_mut(local));
+      self.exported_locals.push(Node::from_ref(local));
     }
   }
 

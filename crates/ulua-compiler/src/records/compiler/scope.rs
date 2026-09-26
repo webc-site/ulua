@@ -269,7 +269,7 @@ impl Compiler {
   /// ulua-ast 分发门面收口；位图下标依赖 reg/index < 256（u8 寄存器号）天然不越界。
   pub(crate) fn resolve_assign_conflicts(
     &mut self,
-    stat: *mut AstStat,
+    stat: &AstStat,
     vars: &mut [Assignment],
     values: &AstArray<*mut AstExpr>,
   ) {
@@ -334,11 +334,7 @@ impl Compiler {
       if li.kind == Kind::Local {
         let reg = li.reg as usize;
         if (conflict[reg / 64] & (1 << (reg % 64))) != 0 {
-          // 门面解引用：stat 为入口契约保证的 arena 存活语句指针，仅读其基类字段定位。
-          var.conflict_reg = self.alloc_reg(
-            &ast_slot_ref(stat).expect("stat 为 arena 存活语句指针").base,
-            1,
-          );
+          var.conflict_reg = self.alloc_reg(&stat.base, 1);
         }
       }
     }
