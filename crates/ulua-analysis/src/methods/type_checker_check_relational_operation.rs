@@ -124,9 +124,7 @@ impl TypeChecker {
           // have nil in common, but string == number is not allowed.
           // SAFETY: current_module 在类型检查期间独占；as_ptr 转 *mut 供本调用可变访问。
           let arena = unsafe {
-            &mut (*arc_as_mut(self.current_module.as_ref().expect(
-              "current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some",
-            )))
+            &mut (*arc_as_mut(self.expect_current_module()))
               .internal_types
           };
           let eq_test_result = are_eq_comparable(arena, &mut self.normalizer, lhs_type, rhs_type);

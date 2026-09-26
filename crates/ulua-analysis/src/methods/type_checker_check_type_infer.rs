@@ -288,7 +288,7 @@ impl TypeChecker {
     // 函数内顺序使用，期间无其它 &mut 借用该字段（C++ shared_ptr<Module> 可变
     // 访问同契约）。
     let arena = Handle::from_mut(unsafe {
-      &mut (*(arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some")))).internal_types
+      &mut (*(arc_as_mut(self.expect_current_module()))).internal_types
     });
     let mut demoter = Demoter::new(arena, self.builtin_types);
     demoter.demote(&mut expected_types);
@@ -307,7 +307,7 @@ impl TypeChecker {
     // HACK: Nonstrict mode gets a bit too smart and strict for us when we
     // start typechecking everything across module boundaries.
     let module_return_type = {
-      (*self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"))
+      (*self.expect_current_module())
         .get_module_scope()
         .return_type
     };
@@ -327,7 +327,7 @@ impl TypeChecker {
         // return_type 覆写与 C++ `moduleScope->returnType = anyPack` 相同，单线程
         // 无别名，arc_as_mut 契约成立。
         unsafe {
-          let module_scope = (*self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some")).get_module_scope();
+          let module_scope = (*self.expect_current_module()).get_module_scope();
           let module_scope_mut = arc_as_mut(&module_scope);
           (*module_scope_mut).return_type = any_pack;
         }
@@ -350,7 +350,7 @@ impl TypeChecker {
   pub fn check_stat_assign(&mut self, scope: &ScopePtr, assign: &AstStatAssign) -> ControlFlow {
     let mut expected_types: Vec<Option<TypeId>> = Vec::with_capacity(assign.vars.size);
 
-    let module_scope = self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some").get_module_scope();
+    let module_scope = self.expect_current_module().get_module_scope();
 
     // vars/values 数组元素的解引用收口在 AstArray::iter_nodes（只读遍历，cpp 同序）。
     for dest in assign.vars.iter_nodes() {
@@ -1203,7 +1203,7 @@ impl TypeChecker {
     let name_node = &function.name.get().base;
 
     if let Some(expr_name) = ast_node_try_as::<AstExprGlobal>(name_node) {
-      let module_scope = self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some").get_module_scope();
+      let module_scope = self.expect_current_module().get_module_scope();
       let name = Symbol::from_global(expr_name.name);
       let previously_defined =
         self.is_nonstrict_mode() && module_scope.bindings.contains_key(&name);
@@ -1626,7 +1626,7 @@ impl TypeChecker {
           self.add_type_pack_type_pack(TypePack::new(Vec::from([extern_ty]), Some(old_arg_types)));
         ftv.has_self = true;
         ftv.definition = Some(FunctionDefinition {
-          definition_module_name: Some(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some").name.clone()),
+          definition_module_name: Some(self.expect_current_module().name.clone()),
           definition_location: prop.location,
           vararg_location: None,
           original_name_location: prop.name_location,
@@ -1716,13 +1716,10 @@ impl TypeChecker {
         .resolve_type_pack_scope_ptr_ast_type_pack(fun_scope.clone(), unsafe { &*global.ret_types })
     };
 
-    let module_raw = arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"));
+    let module_raw = arc_as_mut(self.expect_current_module());
     let defn = FunctionDefinition {
       definition_module_name: Some(
-        self
-          .current_module
-          .as_ref()
-          .expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some")
+        self.expect_current_module()
           .name
           .clone(),
       ),
@@ -1792,7 +1789,7 @@ impl TypeChecker {
     // SAFETY: 与 declare_function 尾部同一模式——current_module/scope 两个 Arc 均
     // 存活（expect/形参保活），declared_globals 与 bindings 的插入为块内瞬时独占写。
     unsafe {
-      let module = arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"));
+      let module = arc_as_mut(self.expect_current_module());
       (*module).declared_globals.insert(global_name, global_ty);
 
       let scope_raw = arc_as_mut(scope);
@@ -1816,9 +1813,9 @@ impl TypeChecker {
     scope: &ScopePtr,
     error_statement: &AstStatError,
   ) -> ControlFlow {
-    let module_ptr = arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"));
+    let module_ptr = arc_as_mut(self.expect_current_module());
     // 经 Arc 共享引用读取错误条目数（与 (*module_ptr).errors.len() 等价的写法），无需 deref。
-    let old_size = self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some").errors.len();
+    let old_size = self.expect_current_module().errors.len();
 
     // AstStatError 的 statements/expressions 为 parser 记录的错误恢复数组，
     // 元素指针的解引用收口在 AstArray::iter_nodes（只读遍历、cpp 同序）。

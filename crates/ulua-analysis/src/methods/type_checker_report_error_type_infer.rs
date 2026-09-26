@@ -8,7 +8,7 @@ use crate::{
 
 impl TypeChecker {
   pub fn report_error_type_error(&mut self, error: &TypeError) {
-    let module = self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some");
+    let module = self.expect_current_module();
 
     if module.mode == Mode::NoCheck {
       return;

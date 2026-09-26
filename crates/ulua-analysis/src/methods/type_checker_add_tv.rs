@@ -10,7 +10,7 @@ impl TypeChecker {
   pub fn add_tv(&mut self, tv: Type) -> TypeId {
     // currentModule->internalTypes.addType(std::move(tv))
     unsafe {
-      let module = arc_as_mut(self.current_module.as_ref().expect("current_module"));
+      let module = arc_as_mut(self.expect_current_module());
       (*module).internal_types.add_tv(tv)
     }
   }

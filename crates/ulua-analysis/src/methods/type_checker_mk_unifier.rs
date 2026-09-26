@@ -36,7 +36,7 @@ impl TypeChecker {
     // LuauTypeInferIterationLimit (luau_subtyping_is_np_hard).
     self.unifier_state.counters.iteration_count = 0;
 
-    let module = arc_as_mut(self.current_module.as_ref().expect("current_module"));
+    let module = arc_as_mut(self.expect_current_module());
     let types = unsafe { &mut (*module).internal_types as *mut _ };
     self.normalizer.arena = Handle::from_opt_ptr(types);
     self.normalizer.shared_state = Some(Handle::from_mut(&mut self.unifier_state));

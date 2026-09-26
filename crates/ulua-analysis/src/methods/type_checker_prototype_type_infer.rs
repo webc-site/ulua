@@ -198,12 +198,7 @@ impl TypeChecker {
 
     let class_name: Name = declared_extern_type.name.as_str_or_empty().to_string();
 
-    let module_name = self
-        .current_module
-        .as_ref()
-        .expect(
-          "current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some",
-        )
+    let module_name = self.expect_current_module()
         .name
         .clone();
 
@@ -217,9 +212,7 @@ impl TypeChecker {
     // 节点驻留 arena。
     let class_ty: TypeId = unsafe {
       (*(arc_as_mut(
-          self.current_module.as_ref().expect(
-            "current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some",
-          ),
+          self.expect_current_module(),
         )))
         .internal_types
         .add_type(ExternType {
@@ -241,9 +234,7 @@ impl TypeChecker {
     // 句柄存入 TableType，本调用期间不解引用。
     let meta_ty: TypeId = unsafe {
       (*(arc_as_mut(
-          self.current_module.as_ref().expect(
-            "current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some",
-          ),
+          self.expect_current_module(),
         )))
         .internal_types
         .add_type(TableType::table_type_table_state_type_level_scope(

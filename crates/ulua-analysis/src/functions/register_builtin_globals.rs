@@ -46,7 +46,8 @@ use crate::{
   records::{
     arena_handle::Handle, builtin_types::BuiltinTypes, extern_type::ExternType, frontend::Frontend,
     function_type::FunctionType, generic_type::GenericType, global_types::GlobalTypes,
-    magic_function::MagicFunction,
+    load_definition_file_result::LoadDefinitionFileResult, magic_function::MagicFunction,
+    magic_function_call_context::MagicFunctionCallContext,
     magic_function_type_check_context::MagicFunctionTypeCheckContext,
     magic_refinement_context::MagicRefinementContext, metatable_type::MetatableType,
     negation_type::NegationType, property_type::Property, scope::Scope, symbol::Symbol,
@@ -54,7 +55,7 @@ use crate::{
     type_function_instance_type::TypeFunctionInstanceType, type_level::TypeLevel,
     type_pack::TypePack,
   },
-  type_aliases::{props_type::Props, type_id::TypeId},
+  type_aliases::{old_solver_handler::OldSolverHandler, props_type::Props, type_id::TypeId},
 };
 fn noop_refine(_context: &MagicRefinementContext) {}
 fn noop_type_check(_context: &MagicFunctionTypeCheckContext) -> bool {
@@ -71,6 +72,40 @@ fn read_prop_doc(ty: TypeId, doc: &str) -> Property {
     documentation_symbol: Some(doc.to_string()),
     ..Property::default()
   }
+}
+
+/// 内建定义文件的虚拟模块名（cpp 各调用点逐字手写 `"@luau"`，收为单点常量）。
+const LUAU_DEF_MODULE: &str = "@luau";
+
+/// `attach_magic_function` 的默认收口：refine/type_check 用 no-op（cpp
+/// MagicFunction 子类二者多为基类默认空实现），仅 old-solver/infer 按位填入。
+fn attach_default_magic(
+  ty: TypeId,
+  handle_old_solver: OldSolverHandler,
+  infer: fn(&MagicFunctionCallContext) -> bool,
+) {
+  attach_magic_function(
+    ty,
+    Arc::new(MagicFunction::from_handlers(
+      handle_old_solver,
+      infer,
+      noop_refine,
+      noop_type_check,
+    )),
+  );
+}
+
+/// 定义文件加载失败时的诊断输出（builtin / type function 两处调用点逐字重复，
+/// 收口为单点；成功时静默）。
+fn report_definition_load_errors(label: &str, load_result: &LoadDefinitionFileResult) {
+  if !load_result.success
+    && let Some(module) = &load_result.module
+  {
+    for error in &module.errors {
+      eprintln!("{label} error: {}", to_string_type_error(error));
+    }
+  }
+  LUAU_ASSERT!(load_result.success);
 }
 
 /// cpp `registerBuiltinGlobals(Frontend&, GlobalTypes&, bool)` 的实现本体。
@@ -122,19 +157,12 @@ pub(crate) fn register_builtin_globals(
       globals,
       scope,
       &get_builtin_definition_source(),
-      "@luau".to_string(),
+      LUAU_DEF_MODULE.to_string(),
       /* captureComments */ false,
       type_check_for_autocomplete,
     )
   };
-  if !load_result.success
-    && let Some(module) = &load_result.module
-  {
-    for error in &module.errors {
-      eprintln!("builtin definition error: {}", to_string_type_error(error));
-    }
-  }
-  LUAU_ASSERT!(load_result.success);
+  report_definition_load_errors("builtin definition", &load_result);
 
   let generic_k = arena.add_type(GenericType::generic_type_scope_name_polarity(
     global_scope_ptr,
@@ -181,7 +209,7 @@ pub(crate) fn register_builtin_globals(
     index_prop
       .read_ty
       .expect("string 元表 __index 的 read_ty 由内建定义接线（cpp 直 deref）"),
-    "@luau",
+    LUAU_DEF_MODULE,
   );
   add_global_binding_builtin_definitions(
     globals,
@@ -189,7 +217,7 @@ pub(crate) fn register_builtin_globals(
     index_prop
       .write_ty
       .expect("string 元表 __index 的 write_ty 由内建定义接线（cpp 直 deref）"),
-    "@luau",
+    LUAU_DEF_MODULE,
   );
 
   // Setup 'vector' metatable
@@ -209,89 +237,45 @@ pub(crate) fn register_builtin_globals(
       vector_cls.metatable = Some(metatable);
 
       let number_type = builtin_types_ref.number_type;
-      let add_fn = make_function(
-        arena,
-        Some(vector_ty),
-        vec![vector_ty],
-        vec![vector_ty],
-        false,
-      );
-      let sub_fn = make_function(
-        arena,
-        Some(vector_ty),
-        vec![vector_ty],
-        vec![vector_ty],
-        false,
-      );
-      let unm_fn = make_function(arena, Some(vector_ty), Vec::new(), vec![vector_ty], false);
-      let mul_a = make_function(
-        arena,
-        Some(vector_ty),
-        vec![vector_ty],
-        vec![vector_ty],
-        false,
-      );
-      let mul_b = make_function(
-        arena,
-        Some(vector_ty),
-        vec![number_type],
-        vec![vector_ty],
-        false,
-      );
-      let mul_intersect = make_intersection(arena, vec![mul_a, mul_b]);
-      let div_a = make_function(
-        arena,
-        Some(vector_ty),
-        vec![vector_ty],
-        vec![vector_ty],
-        false,
-      );
-      let div_b = make_function(
-        arena,
-        Some(vector_ty),
-        vec![number_type],
-        vec![vector_ty],
-        false,
-      );
-      let div_intersect = make_intersection(arena, vec![div_a, div_b]);
-      let idiv_a = make_function(
-        arena,
-        Some(vector_ty),
-        vec![vector_ty],
-        vec![vector_ty],
-        false,
-      );
-      let idiv_b = make_function(
-        arena,
-        Some(vector_ty),
-        vec![number_type],
-        vec![vector_ty],
-        false,
-      );
-      let idiv_intersect = make_intersection(arena, vec![idiv_a, idiv_b]);
+      // 二元元方法统一形态：`(V, V) -> V` 与 `(number, V) -> V` 两份重载的交集
+      //（cpp 对 __mul/__div/__idiv 各手写一遍 make_function×2 + make_intersection，
+      // 同构收口；分配次序与原实现逐个对应，arena 句柄序不变）。
+      let vector_binop = |arena: &mut TypeArena| {
+        let by_vector = make_function(
+          arena,
+          Some(vector_ty),
+          vec![vector_ty],
+          vec![vector_ty],
+          false,
+        );
+        let by_scalar = make_function(
+          arena,
+          Some(vector_ty),
+          vec![number_type],
+          vec![vector_ty],
+          false,
+        );
+        make_intersection(arena, vec![by_vector, by_scalar])
+      };
 
-      let metatable_ty = get_mutable_type::get_mutable::<TableType>(metatable);
-      // metatable 刚由 arena.add_type 创建为 TableType，LUAU_ASSERT 必命中
-      let metatable_ty =
-        metatable_ty.expect("metatable 刚由 arena.add_type 建为 TableType（cpp LUAU_ASSERT）");
-      metatable_ty
-        .props
-        .insert("__add".to_string(), read_prop(add_fn));
-      metatable_ty
-        .props
-        .insert("__sub".to_string(), read_prop(sub_fn));
-      metatable_ty
-        .props
-        .insert("__unm".to_string(), read_prop(unm_fn));
-      metatable_ty
-        .props
-        .insert("__mul".to_string(), read_prop(mul_intersect));
-      metatable_ty
-        .props
-        .insert("__div".to_string(), read_prop(div_intersect));
-      metatable_ty
-        .props
-        .insert("__idiv".to_string(), read_prop(idiv_intersect));
+      // __add/__sub 只取向量×向量重载（cpp 同），其余为标量重载交集；
+      // 分配次序与原实现逐个对应，arena 句柄序不变。
+      let handlers = [
+        ("__add", make_function(arena, Some(vector_ty), vec![vector_ty], vec![vector_ty], false)),
+        ("__sub", make_function(arena, Some(vector_ty), vec![vector_ty], vec![vector_ty], false)),
+        ("__unm", make_function(arena, Some(vector_ty), Vec::new(), vec![vector_ty], false)),
+        ("__mul", vector_binop(arena)),
+        ("__div", vector_binop(arena)),
+        ("__idiv", vector_binop(arena)),
+      ];
+
+      // metatable 刚由 arena.add_type 创建为 TableType；在全部 make_function
+      // 之后才取可变引用（与原实现同序，避免持有跨 arena 增长的借用）。
+      let metatable_ty = get_mutable_type::get_mutable::<TableType>(metatable)
+        .expect("metatable 刚由 arena.add_type 建为 TableType（cpp LUAU_ASSERT）");
+      for (name, ty) in handlers {
+        metatable_ty.props.insert(name.to_string(), read_prop(ty));
+      }
     }
   }
 
@@ -305,7 +289,7 @@ pub(crate) fn register_builtin_globals(
     FunctionType::function_type_new(next_args_type_pack, next_rets_type_pack, None, false);
   next_ftv.generics = vec![generic_k, generic_v];
   let next_ty = arena.add_type(next_ftv);
-  add_global_binding_builtin_definitions(globals, "next", next_ty, "@luau");
+  add_global_binding_builtin_definitions(globals, "next", next_ty, LUAU_DEF_MODULE);
 
   let pairs_args_type_pack = arena.add_type_pack_initializer_list_type_id(&[map_of_k_to_v]);
 
@@ -327,7 +311,7 @@ pub(crate) fn register_builtin_globals(
     FunctionType::function_type_new(pairs_args_type_pack, pairs_return_type_pack, None, false);
   pairs_ftv.generics = vec![generic_k, generic_v];
   let pairs_ty = arena.add_type(pairs_ftv);
-  add_global_binding_builtin_definitions(globals, "pairs", pairs_ty, "@luau");
+  add_global_binding_builtin_definitions(globals, "pairs", pairs_ty, LUAU_DEF_MODULE);
 
   let generic_mt = arena.add_type(GenericType::generic_type_scope_name_polarity(
     global_scope_ptr,
@@ -370,7 +354,7 @@ pub(crate) fn register_builtin_globals(
       vec![getmt_return],
       false,
     );
-    add_global_binding_builtin_definitions(globals, "getmetatable", f, "@luau");
+    add_global_binding_builtin_definitions(globals, "getmetatable", f, LUAU_DEF_MODULE);
   } else {
     // getmetatable : <MT>({ @metatable MT, {+ +} }) -> MT
     let f = make_function_poly(
@@ -382,7 +366,7 @@ pub(crate) fn register_builtin_globals(
       vec![generic_mt],
       false,
     );
-    add_global_binding_builtin_definitions(globals, "getmetatable", f, "@luau");
+    add_global_binding_builtin_definitions(globals, "getmetatable", f, LUAU_DEF_MODULE);
   }
 
   if frontend.get_luau_solver_mode() == SolverMode::New {
@@ -402,7 +386,7 @@ pub(crate) fn register_builtin_globals(
       vec![setmt_return],
       false,
     );
-    add_global_binding_builtin_definitions(globals, "setmetatable", f, "@luau");
+    add_global_binding_builtin_definitions(globals, "setmetatable", f, LUAU_DEF_MODULE);
   } else {
     // setmetatable<T: {}, MT>(T, MT) -> { @metatable MT, T }
     let args_pack = arena.add_type_pack_t(TypePack::from_vec(vec![tab_ty, generic_mt]));
@@ -410,30 +394,20 @@ pub(crate) fn register_builtin_globals(
     let mut ftv = FunctionType::function_type_new(args_pack, ret_pack, None, false);
     ftv.generics = vec![generic_mt];
     let f = arena.add_type(ftv);
-    add_global_binding_builtin_definitions(globals, "setmetatable", f, "@luau");
+    add_global_binding_builtin_definitions(globals, "setmetatable", f, LUAU_DEF_MODULE);
   }
 
   finalize_global_bindings(globals.global_scope.clone());
 
-  let assert_binding = get_global_binding(globals, "assert");
-  attach_magic_function(
-    assert_binding,
-    Arc::new(MagicFunction {
-      handle_old_solver: magic_assert_handle_old_solver,
-      infer: magic_assert_infer,
-      refine: noop_refine,
-      type_check: noop_type_check,
-    }),
+  attach_default_magic(
+    get_global_binding(globals, "assert"),
+    magic_assert_handle_old_solver,
+    magic_assert_infer,
   );
-  let pcall_binding = get_global_binding(globals, "pcall");
-  attach_magic_function(
-    pcall_binding,
-    Arc::new(MagicFunction {
-      handle_old_solver: magic_pcall_handle_old_solver,
-      infer: magic_pcall_infer,
-      refine: noop_refine,
-      type_check: noop_type_check,
-    }),
+  attach_default_magic(
+    get_global_binding(globals, "pcall"),
+    magic_pcall_handle_old_solver,
+    magic_pcall_infer,
   );
 
   if frontend.get_luau_solver_mode() == SolverMode::New {
@@ -460,28 +434,18 @@ pub(crate) fn register_builtin_globals(
     let mut assert_ftv = FunctionType::function_type_new(args_pack, ret_pack, None, false);
     assert_ftv.generics = vec![generic_t2];
     let assert_ty = arena.add_type(assert_ftv);
-    add_global_binding_builtin_definitions(globals, "assert", assert_ty, "@luau");
+    add_global_binding_builtin_definitions(globals, "assert", assert_ty, LUAU_DEF_MODULE);
   }
 
-  let setmetatable_binding = get_global_binding(globals, "setmetatable");
-  attach_magic_function(
-    setmetatable_binding,
-    Arc::new(MagicFunction {
-      handle_old_solver: magic_set_metatable_handle_old_solver,
-      infer: magic_set_metatable_infer,
-      refine: noop_refine,
-      type_check: noop_type_check,
-    }),
+  attach_default_magic(
+    get_global_binding(globals, "setmetatable"),
+    magic_set_metatable_handle_old_solver,
+    magic_set_metatable_infer,
   );
-  let select_binding = get_global_binding(globals, "select");
-  attach_magic_function(
-    select_binding,
-    Arc::new(MagicFunction {
-      handle_old_solver: magic_select_handle_old_solver,
-      infer: magic_select_infer,
-      refine: noop_refine,
-      type_check: noop_type_check,
-    }),
+  attach_default_magic(
+    get_global_binding(globals, "select"),
+    magic_select_handle_old_solver,
+    magic_select_infer,
   );
 
   let table_binding = get_global_binding(globals, "table");
@@ -540,50 +504,30 @@ pub(crate) fn register_builtin_globals(
     let freeze_ty = ttv.props.get("freeze").and_then(|p| p.read_ty);
 
     if let Some(pack_ty) = pack_ty {
-      attach_magic_function(
-        pack_ty,
-        Arc::new(MagicFunction {
-          handle_old_solver: magic_pack_handle_old_solver,
-          infer: magic_pack_infer,
-          refine: noop_refine,
-          type_check: noop_type_check,
-        }),
-      );
+      attach_default_magic(pack_ty, magic_pack_handle_old_solver, magic_pack_infer);
     }
     if let Some(clone_ty) = clone_ty {
-      attach_magic_function(
-        clone_ty,
-        Arc::new(MagicFunction {
-          handle_old_solver: magic_clone_handle_old_solver,
-          infer: magic_clone_infer,
-          refine: noop_refine,
-          type_check: noop_type_check,
-        }),
-      );
+      attach_default_magic(clone_ty, magic_clone_handle_old_solver, magic_clone_infer);
     }
     if let Some(freeze_ty) = freeze_ty {
       attach_magic_function(
         freeze_ty,
-        Arc::new(MagicFunction {
-          handle_old_solver: magic_freeze_handle_old_solver,
-          infer: magic_freeze_infer,
-          refine: noop_refine,
-          type_check: magic_freeze_type_check,
-        }),
+        Arc::new(MagicFunction::from_handlers(
+          magic_freeze_handle_old_solver,
+          magic_freeze_infer,
+          noop_refine,
+          magic_freeze_type_check,
+        )),
       );
     }
   }
 
   let require_ty = get_global_binding(globals, "require");
   attach_tag(require_ty, "require");
-  attach_magic_function(
+  attach_default_magic(
     require_ty,
-    Arc::new(MagicFunction {
-      handle_old_solver: magic_require_handle_old_solver,
-      infer: magic_require_infer,
-      refine: noop_refine,
-      type_check: noop_type_check,
-    }),
+    magic_require_handle_old_solver,
+    magic_require_infer,
   );
 
   // Global scope cannot be the parent of the type checking environment because it can be changed by the embedder
@@ -654,22 +598,12 @@ pub(crate) fn register_builtin_globals(
       globals,
       scope,
       &get_type_function_definition_source(),
-      "@luau".to_string(),
+      LUAU_DEF_MODULE.to_string(),
       /* captureComments */ false,
       false,
     )
   };
-  if !type_function_load_result.success
-    && let Some(module) = &type_function_load_result.module
-  {
-    for error in &module.errors {
-      eprintln!(
-        "type function definition error: {}",
-        to_string_type_error(error)
-      );
-    }
-  }
-  LUAU_ASSERT!(type_function_load_result.success);
+  report_definition_load_errors("type function definition", &type_function_load_result);
 
   finalize_global_bindings(globals.global_type_function_scope.clone());
 }

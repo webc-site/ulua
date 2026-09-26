@@ -26,7 +26,7 @@ impl TypeChecker {
     expected_pack
       .head
       .extend(repeat_with(|| self.fresh_type_scope_ptr(scope.clone())).take(expected_length));
-    let old_errors_size = self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some").errors.len();
+    let old_errors_size = self.expect_current_module().errors.len();
     self.unify_type_pack_id_type_pack_id_scope_ptr_location_count_mismatch_context(
       tp,
       expected_type_pack,
@@ -36,9 +36,7 @@ impl TypeChecker {
     );
     unsafe {
       (*(arc_as_mut(
-          self.current_module.as_ref().expect(
-            "current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some",
-          ),
+          self.expect_current_module(),
         )))
         .errors
         .truncate(old_errors_size)

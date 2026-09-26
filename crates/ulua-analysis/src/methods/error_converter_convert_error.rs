@@ -9,6 +9,7 @@ use crate::{
   functions::{
     begin_type::begin_union_type,
     follow_type,
+    sep_join::SepWriter,
     get_definition_module_name::get_definition_module_name,
     get_table_type::get_table_type,
     get_type,
@@ -411,17 +412,11 @@ impl<'a> ErrorConverter<'a> {
     ss.push_str(e.key());
     ss.push_str("' is missing from ");
 
-    let mut first = true;
-    for ty in e.missing() {
-      if first {
-        first = false;
-      } else {
-        ss.push_str(", ");
+    {
+      let mut writer = SepWriter::new(&mut ss, ", ");
+      for ty in e.missing() {
+        writer.push(&format!("'{}'", to_string_type_id(*ty)));
       }
-
-      ss.push('\'');
-      ss.push_str(&to_string_type_id(*ty));
-      ss.push('\'');
     }
 
     ss.push_str(" in the type '");
@@ -480,13 +475,14 @@ impl<'a> ErrorConverter<'a> {
     // "types 用逗号连接；pack types 再以 ", " 前缀追加"，与 C++ 输出逐字节一致
     let append_argument_list =
       |result: &mut String, type_arguments: &[TypeId], pack_arguments: &[TypePackId]| {
-        for (i, arg) in type_arguments.iter().enumerate() {
-          if i > 0 {
-            result.push_str(", ");
+        {
+          let mut writer = SepWriter::new(result, ", ");
+          for arg in type_arguments {
+            writer.push(&to_string_type_id(*arg).to_string());
           }
-          let _ = write!(result, "{}", to_string_type_id(*arg));
         }
-        for pack_arg in pack_arguments.iter() {
+        // pack 参数逐个以 ", " 前缀追加（cpp 同形，不并入首元素旗标）。
+        for pack_arg in pack_arguments {
           let _ = write!(result, ", {}", to_string_type_pack_id(*pack_arg));
         }
       };
@@ -605,16 +601,14 @@ impl<'a> ErrorConverter<'a> {
 
   pub fn operator_call_8(&self, e: &ExplicitFunctionAnnotationRecommended) -> String {
     let recommended_return = to_string_type_id(e.recommended_return());
-    let mut arg_annotations = String::new();
-
-    for (arg, type_id) in e.recommended_args() {
-      if !arg_annotations.is_empty() {
-        arg_annotations.push_str(", ");
+    let mut buf = String::new();
+    {
+      let mut writer = SepWriter::new(&mut buf, ", ");
+      for (arg, type_id) in e.recommended_args() {
+        writer.push(&format!("{}: {}", arg, to_string_type_id(*type_id)));
       }
-      arg_annotations.push_str(arg);
-      arg_annotations.push_str(": ");
-      arg_annotations.push_str(&to_string_type_id(*type_id));
     }
+    let arg_annotations = buf;
 
     if arg_annotations.is_empty() {
       String::from("Consider annotating the return with ") + &recommended_return
@@ -825,19 +819,18 @@ impl<'a> ErrorConverter<'a> {
 
   pub fn operator_call_9(&self, e: &GenericBoundsMismatch) -> String {
     let mut lower_bounds = String::new();
-    for (i, bound) in e.lower_bounds.iter().enumerate() {
-      if i > 0 {
-        lower_bounds.push_str(" | ");
+    {
+      let mut writer = SepWriter::new(&mut lower_bounds, " | ");
+      for bound in &e.lower_bounds {
+        writer.push(&to_string_type_id(*bound).to_string());
       }
-      lower_bounds.push_str(&to_string_type_id(*bound));
     }
-
     let mut upper_bounds = String::new();
-    for (i, bound) in e.upper_bounds.iter().enumerate() {
-      if i > 0 {
-        upper_bounds.push_str(" & ");
+    {
+      let mut writer = SepWriter::new(&mut upper_bounds, " & ");
+      for bound in &e.upper_bounds {
+        writer.push(&to_string_type_id(*bound).to_string());
       }
-      upper_bounds.push_str(&to_string_type_id(*bound));
     }
 
     format!(
@@ -1106,30 +1099,17 @@ impl<'a> ErrorConverter<'a> {
 
     if !e.type_fun.type_params.is_empty() || !e.type_fun.type_pack_params.is_empty() {
       name.push('<');
-      let mut first = true;
-
-      for param in &e.type_fun.type_params {
-        if first {
-          first = false;
-        } else {
-          name.push_str(", ");
+      // 两组参数共用同一份首元素旗标（cpp 同一 `first` 变量跨两个循环），
+      // 由单个写入器跨循环持有以保持分隔语义。
+      {
+        let mut writer = SepWriter::new(&mut name, ", ");
+        for param in &e.type_fun.type_params {
+          writer.push(&to_string_type_id_to_string_options_mut(param.ty, opts.clone()));
         }
-
-        let ty_str = to_string_type_id_to_string_options_mut(param.ty, opts.clone());
-        name.push_str(&ty_str);
-      }
-
-      for param in &e.type_fun.type_pack_params {
-        if first {
-          first = false;
-        } else {
-          name.push_str(", ");
+        for param in &e.type_fun.type_pack_params {
+          writer.push(&to_string_type_pack_id_to_string_options_mut(param.tp, opts.clone()));
         }
-
-        let tp_str = to_string_type_pack_id_to_string_options_mut(param.tp, opts.clone());
-        name.push_str(&tp_str);
       }
-
       name.push('>');
     }
 
@@ -1181,16 +1161,11 @@ impl<'a> ErrorConverter<'a> {
       candidates_suggestion.push_str("one of ");
     }
 
-    let mut first = true;
-    for name in e.candidates() {
-      if first {
-        first = false;
-      } else {
-        candidates_suggestion.push_str(", ");
+    {
+      let mut writer = SepWriter::new(&mut candidates_suggestion, ", ");
+      for name in e.candidates() {
+        writer.push(&format!("'{}'", name));
       }
-      candidates_suggestion.push('\'');
-      candidates_suggestion.push_str(name);
-      candidates_suggestion.push('\'');
     }
 
     let mut s = String::from("Key '");
@@ -1287,19 +1262,13 @@ impl<'a> ErrorConverter<'a> {
 
     let mut s = String::from("Cyclic module dependency: ");
 
-    let mut first = true;
-    for name in e.cycle() {
-      if first {
-        first = false;
-      } else {
-        s.push_str(" -> ");
-      }
-
-      if let Some(file_resolver) = self.file_resolver_ref() {
-        let readable = file_resolver.get_human_readable_module_name(name);
-        s.push_str(&readable);
-      } else {
-        s.push_str(name);
+    {
+      let mut writer = SepWriter::new(&mut s, " -> ");
+      for name in e.cycle() {
+        let readable = self
+          .file_resolver_ref()
+          .map(|r| r.get_human_readable_module_name(name));
+        writer.push(readable.as_deref().unwrap_or(name));
       }
     }
 

@@ -403,7 +403,7 @@ impl TypeChecker {
       AstExprRef::Error(error_expr) => {
         // SAFETY: current_module 在类型检查期间独占（C++ 直接读改 module->errors 同义）。
         let old_size = unsafe {
-          (*(arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"))))
+          (*(arc_as_mut(self.expect_current_module())))
             .errors
             .len()
         };
@@ -413,7 +413,7 @@ impl TypeChecker {
         }
         // SAFETY: 同上；子表达式检查可能递归取 module，故此处独立短时访问。
         unsafe {
-          (*(arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"))))
+          (*(arc_as_mut(self.expect_current_module())))
             .errors
             .truncate(old_size);
         }
@@ -432,7 +432,7 @@ impl TypeChecker {
 
     // SAFETY: current_module 在类型检查期间独占（C++ 直接改 module->astTypes 同义）。
     let module = unsafe {
-      &mut *(arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some")))
+      &mut *(arc_as_mut(self.expect_current_module()))
     };
     let key = expr as *const AstExpr;
     if module.ast_types.find(&key).is_none() {

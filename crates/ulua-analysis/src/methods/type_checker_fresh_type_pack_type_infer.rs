@@ -18,7 +18,7 @@ impl TypeChecker {
 
   pub fn fresh_type_pack_type_level(&mut self, level: TypeLevel) -> TypePackId {
     unsafe {
-      let module = arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"));
+      let module = arc_as_mut(self.expect_current_module());
       (*module).internal_types.add_type_pack_t(FreeTypePack {
         index: fresh_index(),
         level,

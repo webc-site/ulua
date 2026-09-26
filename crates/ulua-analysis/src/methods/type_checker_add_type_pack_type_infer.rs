@@ -9,7 +9,7 @@ impl TypeChecker {
   /// `return currentModule->internalTypes.addTypePack(std::move(tv));`
   pub fn add_type_pack_type_pack_var(&mut self, tp: TypePackVar) -> TypePackId {
     unsafe {
-      (*(arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"))))
+      (*(arc_as_mut(self.expect_current_module())))
         .internal_types
         .add_type_pack_type_pack_var(tp)
     }

@@ -10,7 +10,7 @@ impl TypeChecker {
     let ty = self.resolve_type_worker(scope, annotation);
 
     unsafe {
-      let module = arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"));
+      let module = arc_as_mut(self.expect_current_module());
       *(*module)
         .ast_resolved_types
         .get_or_insert(annotation as *const AstType) = ty;

@@ -25,7 +25,7 @@ impl TypeChecker {
       return tf.r#type;
     }
 
-    let module_ptr = arc_as_mut(self.current_module.as_ref().expect("current_module"));
+    let module_ptr = arc_as_mut(self.expect_current_module());
     // Safety: internal_types 是模块独占的 TypeArena，取句柄后仅此借用。
     let arena = Handle::from_mut(unsafe { &mut (*module_ptr).internal_types });
     let mut apply_type_function = ApplyTypeFunction::new(arena);

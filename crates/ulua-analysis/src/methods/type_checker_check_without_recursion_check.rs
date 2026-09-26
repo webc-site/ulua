@@ -42,7 +42,7 @@ impl TypeChecker {
     mode: Mode,
     environment_scope: Option<ScopePtr>,
   ) -> ModulePtr {
-    let mut new_module = Module {
+    let new_module = Module {
       name: module.name.clone(),
       human_readable_name: module.human_readable_name.clone(),
       r#type: module.r#type,
@@ -51,11 +51,6 @@ impl TypeChecker {
       root: module.root,
       ..Default::default()
     };
-    new_module.human_readable_name = module.human_readable_name.clone();
-    new_module.r#type = module.r#type;
-    new_module.allocator = Some(module.allocator.clone());
-    new_module.names = Some(module.names.clone());
-    new_module.root = module.root;
 
     let current_module: ModulePtr = Arc::new(new_module);
     self.current_module = Some(current_module.clone());
@@ -69,10 +64,7 @@ impl TypeChecker {
     // 经 &mut self 独占驱动，无非别名冲突。
     unsafe {
       let module_mut = arc_as_mut(
-        self
-          .current_module
-          .as_ref()
-          .expect("current_module 于本函数开头置入 Some、末尾才 take()，中段恒为 Some"),
+        self.expect_current_module(),
       );
       (*module_mut).internal_types.owning_module = module_mut;
       (*module_mut).interface_types.owning_module = module_mut;
@@ -89,10 +81,7 @@ impl TypeChecker {
       (*self.ice_handler).module_name = module.name.to_string();
       self.normalizer.arena = Some(Handle::from_mut(
         &mut (*(Arc::as_ptr(
-          self
-            .current_module
-            .as_ref()
-            .expect("current_module 于本函数开头置入 Some、末尾才 take()，中段恒为 Some"),
+          self.expect_current_module(),
         ) as *mut Module))
           .internal_types,
       ));
@@ -127,10 +116,7 @@ impl TypeChecker {
     // 计数升为 2（本地 + scopes），本语句内写入 scopes/mode 后即结束借用。
     unsafe {
       let module_mut = arc_as_mut(
-        self
-          .current_module
-          .as_ref()
-          .expect("current_module 于本函数开头置入 Some、末尾才 take()，中段恒为 Some"),
+        self.expect_current_module(),
       );
       (*module_mut)
         .scopes
@@ -139,10 +125,7 @@ impl TypeChecker {
     }
 
     if let Some(prepare_module_scope) = &self.prepare_module_scope {
-      let module_name = self
-        .current_module
-        .as_ref()
-        .expect("current_module 于本函数开头置入 Some、末尾才 take()，中段恒为 Some")
+      let module_name = self.expect_current_module()
         .name
         .clone();
       prepare_module_scope(&module_name, &module_scope);
@@ -155,15 +138,9 @@ impl TypeChecker {
 
     if fflag::LuauExportValueSyntax.get()
       && fflag::LuauExportValueTypecheck.get()
-      && !self
-        .current_module
-        .as_ref()
-        .expect("current_module 于本函数开头置入 Some、末尾才 take()，中段恒为 Some")
+      && !self.expect_current_module()
         .timeout
-      && !self
-        .current_module
-        .as_ref()
-        .expect("current_module 于本函数开头置入 Some、末尾才 take()，中段恒为 Some")
+      && !self.expect_current_module()
         .cancelled
     {
       {
@@ -174,10 +151,7 @@ impl TypeChecker {
         // 先前借用皆已结束，本函数体内无第二读写路径。
         unsafe {
           let module_mut = arc_as_mut(
-            self
-              .current_module
-              .as_ref()
-              .expect("current_module 于本函数开头置入 Some、末尾才 take()，中段恒为 Some"),
+            self.expect_current_module(),
           );
           synthesize_export_return(self.builtin_types, module_mut)
         };
@@ -250,10 +224,7 @@ impl TypeChecker {
     // 即借用结束。
     unsafe {
       let errors = &mut (*(arc_as_mut(
-        self
-          .current_module
-          .as_ref()
-          .expect("current_module 于本函数开头置入 Some、末尾才 take()，中段恒为 Some"),
+        self.expect_current_module(),
       )))
       .errors as *mut ErrorVec;
       self.prepare_errors_for_display(&mut *errors);
@@ -272,10 +243,7 @@ impl TypeChecker {
     // 结束——此刻 normalizer.arena 已置 null，无任何并发借用。
     unsafe {
       let module_mut = arc_as_mut(
-        self
-          .current_module
-          .as_ref()
-          .expect("current_module 于本函数开头置入 Some、末尾才 take()，中段恒为 Some"),
+        self.expect_current_module(),
       );
       let ice = &mut *self.ice_handler;
       (*module_mut).clone_public_interface(self.builtin_types, ice, SolverMode::Old);
