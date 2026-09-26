@@ -178,7 +178,6 @@ macro_rules! builtin_store_impls {
     )+
   };
 }
-pub use builtin_load_impls;
 
 /// x64 AVX 助记符表坍缩骨架（对照 cpp：`AssemblyBuilderX64.cpp` 各 `placeAvx(...)`
 /// 单行转发体）。
@@ -270,4 +269,3 @@ macro_rules! x64_avx_rm_rev_impls {
     }
   };
 }
-pub use x64_avx_rm_rev_impls;
