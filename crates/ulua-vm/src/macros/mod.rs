@@ -158,7 +158,6 @@ pub mod lua_s_updateatom;
 pub mod lua_setglobal;
 pub mod lua_sizeclasses;
 pub mod lua_strftimeoptions;
-pub mod lua_strlen;
 pub mod lua_tointeger;
 pub mod lua_tonumber;
 pub mod lua_tostring;
