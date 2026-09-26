@@ -1,6 +1,6 @@
 use crate::{
   functions::{
-    class_classof::class_classof, class_isinstance::class_isinstance,
+    class_classof::class_classof_arm, class_isinstance::class_isinstance_arm,
     lua_l_register::lua_l_register,
   },
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
@@ -12,8 +12,8 @@ use crate::{
 pub(crate) unsafe extern "C-unwind" fn luaopen_class(l: *mut LuaState) -> i32 {
   unsafe {
     let class_lib: [LuaLReg; 2] = [
-      LuaLReg::new(b"isinstance", class_isinstance),
-      LuaLReg::new(b"classof", class_classof),
+      LuaLReg::new(b"isinstance", class_isinstance_arm),
+      LuaLReg::new(b"classof", class_classof_arm),
     ];
 
     lua_l_register(l, c"class".as_ptr(), &class_lib);

@@ -4,7 +4,7 @@ use crate::{
     lua_a_toobject::lua_a_toobject, lua_l_checkany::lua_l_checkany,
     lua_l_checktype::lua_l_checktype, lua_pushboolean::lua_pushboolean,
   },
-  macros::{classvalue::classvalue, objectvalue::objectvalue},
+  macros::{classvalue::classvalue, lua_lib_fn::lua_lib_fn, objectvalue::objectvalue},
   records::lua_state::LuaState,
   type_aliases::t_value::TValue,
 };
@@ -14,7 +14,7 @@ use crate::{
 /// 否则抛错回退；`lua_a_toobject(l,1/2)` 返回栈内 TValue 裸指针（索引须存在）；`obj` 侧 `classvalue!` 与 `inst` 侧
 /// 沿 `(*LuauObject).lclass.super_` 上溯的链均须为存活 class 对象；`lua_pushboolean` 需 `(*l).top` 后 ≥1 空槽；可触发 GC。
 /// cpp VM/src/lclasslib.cpp:10
-pub unsafe extern "C-unwind" fn class_isinstance(l: *mut LuaState) -> i32 {
+pub unsafe fn class_isinstance(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_checkany(l, 1);
     lua_l_checktype(l, 2, LuaType::Class as i32);
@@ -45,3 +45,5 @@ pub unsafe extern "C-unwind" fn class_isinstance(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn class_isinstance, class_isinstance_arm);
