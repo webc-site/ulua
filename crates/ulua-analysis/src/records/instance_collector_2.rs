@@ -3,11 +3,7 @@ use alloc::string::String;
 use ulua_common::records::{dense_hash_set::DenseHashSet, vec_deque::VecDeque};
 
 use crate::{
-  functions::follow_type,
-  records::{
-    extern_type::ExternType, type_function_instance_type::TypeFunctionInstanceType,
-    type_once_visitor::TypeOnceVisitor,
-  },
+  records::{extern_type::ExternType, type_once_visitor::TypeOnceVisitor},
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
 
@@ -29,19 +25,6 @@ impl InstanceCollector2 {
       cyclic_instance: DenseHashSet::default(),
       instance_arguments: DenseHashSet::default(),
     }
-  }
-
-  pub fn visit_type_function_instance_type(
-    &mut self,
-    ty: TypeId,
-    it: &TypeFunctionInstanceType,
-  ) -> bool {
-    self.tys.push_front(ty);
-    for &t in &it.type_arguments {
-      let followed = follow_type::follow(t);
-      self.instance_arguments.insert(followed);
-    }
-    true
   }
 
   // `cycle` lives in its own method node file (methods/instance_collector_2_cycle.rs).

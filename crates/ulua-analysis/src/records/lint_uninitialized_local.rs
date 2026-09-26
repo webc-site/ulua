@@ -38,10 +38,6 @@ pub struct LintUninitializedLocal<'ctx> {
 }
 
 impl<'ctx> LintUninitializedLocal<'ctx> {
-  pub fn lint_uninitialized_local(&mut self) {
-    self.locals = DenseHashMap::default();
-  }
-
   pub fn report(&mut self) {
     // NOTE: exact warning emission/reporting is implemented in a separate translated method file.
     // This record item only models state needed by that method.
