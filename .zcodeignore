@@ -1,6 +1,5 @@
 # === Rust & Cargo ===
-.qoder/
-/cpp/
+.cargo-target/
 target/
 target*/
 *.rlib
@@ -14,6 +13,7 @@ target*/
 **/*.rs.bk
 
 # === C / C++ / CMake ===
+/cpp/
 *.o
 *.obj
 *.a
@@ -26,6 +26,15 @@ node_modules/
 dist/
 website/dist/
 website/pkg/
+website/public/pkg/
+website/src/lib/benchData.js
+.svelte-kit/
+website/.svelte-kit/
+.vite/
+website/.vite/
+*.tsbuildinfo
+.eslintcache
+coverage/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
@@ -33,6 +42,25 @@ pnpm-debug.log*
 playwright-report/
 test-results/
 .playwright-mcp/
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# === Benchmarks & Generated Data ===
+benchmarks/results.json
+benchmarks/results-compile.json
+benchmarks/results-analysis.json
+benchmarks/*.svg
+benchmarks/engines.json
+benchmarks/big.luau
+benchmarks/drivers/*/target/
 
 # === CLI / Runtime / Logs ===
 /sh
@@ -43,20 +71,38 @@ bytecode-summary.json
 trace.json
 
 # === Fuzzing ===
+fuzz/corpus/
 fuzz/corpus-cmin/
+fuzz/artifacts/
+fuzz/coverage/
 fuzz/.afl-showmap-temp-*
 
 # === OS & Editors ===
 .DS_Store
+.DS_Store?
 ._*
-.idea/
-.vscode/
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.bak
+*.tmp
+*.temp
 *.swp
 *.swo
 *~
+.idea/
+.vscode/
+*.sublime-*
 
-# === Local AI & Index Tools ===
+# === AI & Local Developer Tools ===
 .codegraph/
+.qoder/
+.gemini/
+.claude/
+.cursor/
+.zed/
 
 # === Crash & Debug ===
 core
@@ -66,7 +112,6 @@ core
 posts/
 post.md
 research/*.md
-.codegraph/
 
 # ===== ↑ 以上同步自 .gitignore（「从 .gitignore 同步」只重写以上部分）=====
 .git/
@@ -74,10 +119,7 @@ research/*.md
 .svn/
 bower_components/
 jspm_packages/
-__pycache__/
 site-packages/
-venv/
-coverage/
 htmlcov/
 lcov-report/
 cmakefiles/
@@ -88,7 +130,6 @@ storybook-static/
 allure-results/
 allure-report/
 cdk.out/
-*.egg-info/
 *.dist-info/
 eggs/
 pip-wheel-metadata/
