@@ -1,7 +1,9 @@
 use core::ptr::null;
 
 use crate::{
-  functions::{iter_aux::iter_aux, lua_pushinteger::lua_pushinteger, lua_pushvalue::lua_pushvalue},
+  functions::{
+    iter_aux::iter_aux_arm, lua_pushinteger::lua_pushinteger, lua_pushvalue::lua_pushvalue,
+  },
   luaL_checkstring,
   macros::lua_pushcfunction::LUA_PUSHCFUNCTION,
   records::lua_state::LuaState,
@@ -15,7 +17,7 @@ use crate::{
 pub unsafe extern "C-unwind" fn iter_codes(l: *mut LuaState) -> i32 {
   unsafe {
     luaL_checkstring!(l, 1);
-    LUA_PUSHCFUNCTION(l, Some(iter_aux), null());
+    LUA_PUSHCFUNCTION(l, Some(iter_aux_arm), null());
     lua_pushvalue(l, 1);
     lua_pushinteger(l, 0);
     3

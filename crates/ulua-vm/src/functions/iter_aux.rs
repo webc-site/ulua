@@ -6,7 +6,7 @@ use crate::{
     lua_pushinteger::lua_pushinteger,
     utf_8_decode::{is_cont_byte, utf_8_decode},
   },
-  macros::{lua_l_error::luaL_error, lua_tointeger::lua_tointeger},
+  macros::{lua_l_error::luaL_error, lua_lib_fn::lua_lib_fn, lua_tointeger::lua_tointeger},
   records::lua_state::LuaState,
 };
 
@@ -14,7 +14,7 @@ use crate::{
 /// `l` 须为存活 `LuaState`：栈 index 1 为字符串（`luaL_checklstring` 返回覆盖 `[0,len]` 含终止
 /// NUL 的数据指针），index 2 为上一步游标整数；解码越界或非法 UTF-8 经 `luaL_error` 抛错，
 /// 须在受保护帧内调用。cpp `lutf8lib.cpp:240`。
-pub unsafe extern "C-unwind" fn iter_aux(l: *mut LuaState) -> i32 {
+pub unsafe fn iter_aux(l: *mut LuaState) -> i32 {
   unsafe {
     let mut len: usize = 0;
     let s = lua_l_checklstring(l, 1, &mut len);
@@ -50,3 +50,5 @@ pub unsafe extern "C-unwind" fn iter_aux(l: *mut LuaState) -> i32 {
     }
   }
 }
+
+lua_lib_fn!(pub fn iter_aux, iter_aux_arm);
