@@ -3,11 +3,10 @@ use alloc::{format, string::String, vec::Vec};
 use core::ptr::NonNull;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
-    ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_expr_index_name::AstExprIndexName,
-    ast_node::AstNode, location::Location,
+    ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_node::AstNode, location::Location,
   },
-  rtti::ast_node_try_as,
 };
 use ulua_common::{
   fflag,
@@ -280,10 +279,10 @@ impl TypeChecker2 {
       // method receiver `self` must be prepended onto `args` here too.
       if call.self_ {
         // Safety: `call.func` 是 parser 写入 AstExprCall 的非空子表达式指针，指向
-        // arena 存活节点（与 `call_func_location` 同一来源）；此处只读一次 AstNode
-        // 头部做 RTTI 判别，非 IndexName 的情形由下方 `let Some(..) else` 分支兜底。
-        let index_expr = ast_node_try_as::<AstExprIndexName>(unsafe { &(*call.func).base });
-        let Some(index_expr) = index_expr else {
+        // arena 存活节点（与 `call_func_location` 同一来源）；解引用后经 safe
+        // `as_expr_ref()` 模式匹配判别具体类型，非 IndexName 的情形由下方 else 分支兜底。
+        let func = unsafe { &*call.func };
+        let AstExprRef::IndexName(index_expr) = func.as_expr_ref() else {
           self.report_error_type_error_data_location(
             TypeErrorData::InternalError(InternalError {
               message: "method call expression has no 'self'".into(),
@@ -319,13 +318,11 @@ impl TypeChecker2 {
         if let Some(arg_ty) = module.ast_types.find(&(arg_expr as *const AstExpr)) {
           args.head.push(*arg_ty);
         } else if is_last {
-          // Safety: `self.builtin_types.as_ptr()` 为构造期以 NotNull 语义注入的会话级指针
-          // （对应 C++ `NotNull<BuiltinTypes>` 成员），在 visit_call 全程有效且
-          // 无人改写；此处只读取其 `any_type_pack` 这一个 id 字段。
+          // `self.builtin_types` 为构造期以 NotNull 语义注入的会话级句柄，只读其
+          // `any_type_pack` 字段。
           args.tail = Some(self.builtin_types.get().any_type_pack);
         } else {
-          // Safety: 同上来源——`self.builtin_types.as_ptr()` 是构造注入且比 checker 长寿的
-          // 非空指针，本语句仅读 `any_type` 字段，无任何写操作。
+          // 同上：只读其 `any_type` 字段。
           args.head.push(self.builtin_types.get().any_type);
         }
       }
@@ -428,9 +425,9 @@ impl TypeChecker2 {
 
     if call.self_ {
       // Safety: `call.func` 与 `call_func_location` 读取的是同一非空 arena 节点
-      // 指针；这里只取一次 AstNode 头部供 RTTI 判别，类型不符走下方错误分支。
-      let index_expr = ast_node_try_as::<AstExprIndexName>(unsafe { &(*call.func).base });
-      let Some(index_expr) = index_expr else {
+      // 指针；解引用后经 safe `as_expr_ref()` 模式匹配判别具体类型，类型不符走下方错误分支。
+      let func = unsafe { &*call.func };
+      let AstExprRef::IndexName(index_expr) = func.as_expr_ref() else {
         self.report_error_type_error_data_location(
           TypeErrorData::InternalError(InternalError {
             message: "method call expression has no 'self'".into(),
@@ -462,14 +459,14 @@ impl TypeChecker2 {
       }
 
       // Safety: `arg_expr` 是 parser 写入 `call.args` 数组的实参节点地址，非空且
-      // 与 AST arena 同寿；此 &AstExpr 引用交给 lookup_type 只做类型查询。
-      let arg_expr_type = self.lookup_type(unsafe { &*arg_expr });
+      // 与 AST arena 同寿；解引用为 &AstExpr 引用供 lookup_type 与 location 访问，全程只读。
+      let arg_ref = unsafe { &*arg_expr };
+      let arg_expr_type = self.lookup_type(arg_ref);
       arg_exprs.push(arg_expr);
       if use_bidirectional_args
         && idx + self_offset < params_head.len()
         && !self.is_error_suppressing_location_type_id(
-          // Safety: 同上，`arg_expr` 指向的存活节点，仅再读一次 base.location 字段。
-          unsafe { (*arg_expr).base.location },
+          arg_ref.base.location,
           arg_expr_type,
         )
       {
