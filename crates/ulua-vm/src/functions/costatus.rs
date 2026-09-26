@@ -9,14 +9,14 @@ use crate::{
   functions::{
     lua_costatus::lua_costatus, lua_pushstring::lua_pushstring, lua_tothread::lua_tothread,
   },
-  macros::lua_l_argexpected::luaL_argexpected,
+  macros::{lua_l_argexpected::luaL_argexpected, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
 };
 
 /// # Safety
 ///
 /// `l` 必须指向存活 `LuaState`，索引/长度/标签等参数满足各 API 注释约定，需压栈时栈顶预留由调用方保证。
-pub(crate) unsafe extern "C-unwind" fn costatus(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn costatus(l: *mut LuaState) -> i32 {
   // Safety: 契约保证 `L` 存活且实参 1 为 thread 槽位，读取其 status 字段不越出协程对象界
   unsafe {
     let co = lua_tothread(l, 1);
@@ -29,3 +29,5 @@ pub(crate) unsafe extern "C-unwind" fn costatus(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn costatus, costatus_arm);

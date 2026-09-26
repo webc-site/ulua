@@ -5,7 +5,8 @@ use crate::{
     lua_toboolean::lua_toboolean, lua_type::lua_type,
   },
   macros::{
-    lua_l_argexpected::luaL_argexpected, lua_newtable::lua_newtable, utag_proxy::UTAG_PROXY,
+    lua_l_argexpected::luaL_argexpected, lua_lib_fn::lua_lib_fn, lua_newtable::lua_newtable,
+    utag_proxy::UTAG_PROXY,
   },
   records::lua_state::LuaState,
 };
@@ -14,7 +15,7 @@ use crate::{
 /// `l` 须为存活 LuaState 并处于受保护帧：栈 1 号位须为 nil/boolean/无值（`lua_type` 配合 `luaL_argexpected` 校验，
 /// 否则抛错），随后 `lua_newuserdatatagged`/`lua_newtable`/`lua_setmetatable` 分配对象并可 GC。
 /// cpp/VM/src/lbaselib.cpp:412 luaB_newproxy。
-pub(crate) unsafe extern "C-unwind" fn lua_b_newproxy(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn lua_b_newproxy(l: *mut LuaState) -> i32 {
   unsafe {
     let t = lua_type(l, 1);
     luaL_argexpected!(
@@ -36,3 +37,5 @@ pub(crate) unsafe extern "C-unwind" fn lua_b_newproxy(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn lua_b_newproxy, lua_b_newproxy_arm);

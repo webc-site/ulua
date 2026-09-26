@@ -1,9 +1,9 @@
 use crate::{
   functions::{
-    coclose::coclose, cocreate::cocreate, coresumecont::coresumecont_arm, coresumey::coresumey,
-    corunning::corunning, costatus::costatus, cowrap::cowrap, coyield::coyield,
-    coyieldable::coyieldable, lua_l_register::lua_l_register, lua_pushcclosurek::lua_pushcclosurek,
-    lua_setfield::lua_setfield,
+    coclose::coclose_arm, cocreate::cocreate_arm, coresumecont::coresumecont_arm,
+    coresumey::coresumey_arm, corunning::corunning_arm, costatus::costatus_arm, cowrap::cowrap_arm,
+    coyield::coyield_arm, coyieldable::coyieldable_arm, lua_l_register::lua_l_register,
+    lua_pushcclosurek::lua_pushcclosurek, lua_setfield::lua_setfield,
   },
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
@@ -16,7 +16,7 @@ pub(crate) unsafe extern "C-unwind" fn luaopen_coroutine(l: *mut LuaState) -> i3
 
     lua_pushcclosurek(
       l,
-      Some(coresumey),
+      Some(coresumey_arm),
       c"resume".as_ptr(),
       0,
       Some(coresumecont_arm),
@@ -28,11 +28,11 @@ pub(crate) unsafe extern "C-unwind" fn luaopen_coroutine(l: *mut LuaState) -> i3
 }
 
 static CO_FUNCS: [LuaLReg; 7] = [
-  LuaLReg::new(b"create", cocreate),
-  LuaLReg::new(b"running", corunning),
-  LuaLReg::new(b"status", costatus),
-  LuaLReg::new(b"wrap", cowrap),
-  LuaLReg::new(b"yield", coyield),
-  LuaLReg::new(b"isyieldable", coyieldable),
-  LuaLReg::new(b"close", coclose),
+  LuaLReg::new(b"create", cocreate_arm),
+  LuaLReg::new(b"running", corunning_arm),
+  LuaLReg::new(b"status", costatus_arm),
+  LuaLReg::new(b"wrap", cowrap_arm),
+  LuaLReg::new(b"yield", coyield_arm),
+  LuaLReg::new(b"isyieldable", coyieldable_arm),
+  LuaLReg::new(b"close", coclose_arm),
 ];

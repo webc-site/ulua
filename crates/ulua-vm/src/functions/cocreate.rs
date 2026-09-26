@@ -3,6 +3,7 @@ use crate::{
   functions::{
     lua_l_checktype::lua_l_checktype, lua_newthread::lua_newthread, lua_xpush::lua_xpush,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
 };
 
@@ -11,7 +12,7 @@ use crate::{
 /// `lua_newthread(l)` 新建并压入协程（需 `(*l).top` 后 ≥1 空槽、写入 `(*l).top`、分配可触发 GC）；
 /// `lua_xpush(l,nl,1)` 要求 `l` 索引 1 的值存活，将其移入新线程 `nl` 栈。
 /// cpp VM/src/lcorolib.cpp:332
-pub unsafe extern "C-unwind" fn cocreate(l: *mut LuaState) -> i32 {
+pub unsafe fn cocreate(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_checktype(l, 1, LuaType::Function as i32);
 
@@ -21,3 +22,5 @@ pub unsafe extern "C-unwind" fn cocreate(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn cocreate, cocreate_arm);

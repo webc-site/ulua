@@ -5,13 +5,13 @@ use crate::{
     lua_isnumber::lua_isnumber, lua_l_checktype::lua_l_checktype, lua_pushthread::lua_pushthread,
     lua_pushvalue::lua_pushvalue, lua_setfenv::lua_setfenv, lua_setsafeenv::lua_setsafeenv,
   },
-  macros::{lua_l_error::luaL_error, lua_tonumber::lua_tonumber},
+  macros::{lua_l_error::luaL_error, lua_lib_fn::lua_lib_fn, lua_tonumber::lua_tonumber},
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe extern "C-unwind" fn lua_b_setfenv(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn lua_b_setfenv(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_checktype(l, 2, LuaType::Table as i32);
     getfunc(l, 0);
@@ -28,3 +28,5 @@ pub(crate) unsafe extern "C-unwind" fn lua_b_setfenv(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn lua_b_setfenv, lua_b_setfenv_arm);
