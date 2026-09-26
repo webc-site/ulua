@@ -23,7 +23,7 @@ thread_local! {
 
 pub(crate) fn coverage_init(l: *mut LuaState) {
   // Safety: `l` 指向存活的 `LuaState`（repl_main 以守卫持有 VM 状态）。
-  let main_thread = unsafe { lua_mainthread(l) };
+  let main_thread = unsafe { lua_mainthread(&*l) };
   G_COVERAGE.with(|coverage| {
     coverage.borrow_mut().l = node_opt(main_thread);
   });

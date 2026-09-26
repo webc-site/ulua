@@ -53,7 +53,7 @@ pub(crate) unsafe extern "C-unwind" fn load(
   // 活跃线程的环境表，不跨状态。
   let ml = unsafe {
     // note: we create ML on main thread so that it doesn't inherit environment of l
-    let gl = lua_mainthread(l);
+    let gl = lua_mainthread(&*l);
     let ml = lua_newthread(gl);
     lua_xmove(gl, l, 1);
     // new thread needs to have the globals sandboxed

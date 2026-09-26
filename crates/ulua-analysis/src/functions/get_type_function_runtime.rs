@@ -25,10 +25,12 @@ pub unsafe fn get_type_function_runtime(l: *mut LuaState) -> *mut TypeFunctionRu
   // Safety: `l` 由 Lua 虚拟机按 C 函数调用约定传入，为有效存活的 `*mut LuaState`；
   // `l as *mut lua_state::LuaState` 只是同一地址的类型重解释。`lua_mainthread` 返回该
   // 状态所属主线程的有效指针，`lua_getthreaddata` 返回我们在注册时写入主线程的 user
-  // data（即 `TypeFunctionRuntime` 地址）。此处全程未解引用，仅做指针取回与重解释，
+  // data（即 `TypeFunctionRuntime` 地址）。`&*(l as *mut …)` 仅形成只读借用供
+  // lua_mainthread 读其 `global`/`mainthread` 字段，全程未解引用返回值、未写任何
+  // 状态，仅做指针取回与重解释，
   // 与注册路径 `runtime as *mut ()` 互逆，故返回值即当初存入的合法句柄。
   unsafe {
-    let main_thread = lua_mainthread(l as *mut lua_state::LuaState);
+    let main_thread = lua_mainthread(&*(l as *mut lua_state::LuaState));
     let data = lua_getthreaddata(main_thread);
     data as *mut TypeFunctionRuntime
   }
