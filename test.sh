@@ -9,38 +9,44 @@ import { $, cd } from "zx";
 $.verbose = true;
 
 const root_dir = import.meta.dirname,
-  raw_argv_li = hideBin(process.argv);
-
-cd(root_dir);
-
-let target_base =
-  process.env.ULUA_TARGET_BASE || process.env.CARGO_TARGET_DIR || "/tmp";
-if (target_base.includes("/ulua")) {
-  target_base = path.dirname(target_base);
-}
-
-const parsed = yargs(raw_argv_li)
-  .parserConfiguration({
-    "boolean-negation": false,
-  })
-  .option("package", {
-    alias: "p",
-    type: "string",
-  })
-  .option("workspace", {
-    type: "boolean",
-  })
-  .help(false)
-  .version(false)
-  .parseSync();
-
-const pkg_li = Array.isArray(parsed.package)
+  raw_argv_li = hideBin(process.argv),
+  env_target_base =
+    process.env.ULUA_TARGET_BASE ?? process.env.CARGO_TARGET_DIR ?? "/tmp",
+  target_base = env_target_base.includes("/ulua")
+    ? path.dirname(env_target_base)
+    : env_target_base,
+  parsed = yargs(raw_argv_li)
+    .scriptName("./test.sh")
+    .usage("用法: $0 [选项] [nextest参数...]")
+    .parserConfiguration({
+      "boolean-negation": false,
+    })
+    .option("package", {
+      alias: "p",
+      type: "string",
+      describe: "指定运行测试的包名（如 ulua-vm, ulua-conformance）",
+    })
+    .option("workspace", {
+      type: "boolean",
+      describe: "运行整个 workspace 所有包的测试（默认）",
+    })
+    .example("$0", "运行 workspace 全部测试与 JIT 一致性测试")
+    .example("$0 -p ulua-vm", "仅运行指定包测试")
+    .example("$0 -p ulua-conformance", "运行 conformance 包（包含 JIT 一致性测试）")
+    .example("$0 -- -E 'test(conformance)'", "透传 nextest 过滤器参数")
+    .help()
+    .alias("h", "help")
+    .version(false)
+    .parseSync(),
+  pkg_li = Array.isArray(parsed.package)
     ? parsed.package
     : parsed.package
       ? [parsed.package]
       : [],
   has_pkg = pkg_li.length > 0,
   has_workspace = Boolean(parsed.workspace);
+
+cd(root_dir);
 
 const runTest = async (sub_dir, extra_li, env = {}) => {
   const target_dir = path.join(target_base, sub_dir);
