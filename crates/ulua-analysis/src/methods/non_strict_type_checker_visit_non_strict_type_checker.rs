@@ -79,9 +79,16 @@ use ulua_common::{fflag, fint, macros::luau_assert::LUAU_ASSERT};
 use crate::{
   enums::value_context::ValueContext,
   functions::{
-    begin_type_pack::begin, end_type_pack::end_type_pack_id, finite::finite, first::first,
-    follow_type, follow_type_pack, get_function_name_as_string::get_function_name_as_string,
-    get_type, get_type_pack, is_optional::is_optional, size_type_pack::size,
+    begin_type_pack::begin,
+    end_type_pack::end_type_pack_id,
+    finite::finite,
+    first::first,
+    follow_type, follow_type_pack,
+    get_function_name_as_string::get_function_name_as_string,
+    get_type, get_type_pack,
+    is_optional::is_optional,
+    magic_names::{LUAU_FORCE_CONSTRAINT_SOLVING_INCOMPLETE, LUAU_PRINT},
+    size_type_pack::size,
   },
   records::{
     any_type::AnyType as AnyTypeRecord,
@@ -697,11 +704,11 @@ impl NonStrictTypeChecker {
     if fflag::DebugLuauMagicTypes.get() {
       let magic_name = ty_ref.name.as_str_or_empty();
       // No further validation is necessary in this case.
-      if magic_name == "_luau_print" {
+      if magic_name == LUAU_PRINT {
         return;
       }
 
-      if magic_name == "_luau_force_constraint_solving_incomplete" {
+      if magic_name == LUAU_FORCE_CONSTRAINT_SOLVING_INCOMPLETE {
         let error = ConstraintSolvingIncompleteError::default();
         self.report_error(error.into(), &ty_ref.base.base.location);
         return;

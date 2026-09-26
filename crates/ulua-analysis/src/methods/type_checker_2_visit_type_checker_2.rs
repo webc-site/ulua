@@ -104,6 +104,7 @@ use crate::{
     is_ok_to_compare::is_ok_to_compare,
     is_optional::is_optional,
     is_string::is_string,
+    magic_names::{LUAU_BLOCKED_TYPE, LUAU_FORCE_CONSTRAINT_SOLVING_INCOMPLETE, LUAU_PRINT},
     match_assert::match_assert,
     match_type_of::match_type_of,
     op_to_meta_table_entry::op_to_meta_table_entry,
@@ -1555,7 +1556,7 @@ impl TypeChecker2 {
       let magic_name = ty.name.as_str_or_empty();
       if matches!(
         magic_name,
-        "_luau_print" | "_luau_force_constraint_solving_incomplete" | "_luau_blocked_type"
+        LUAU_PRINT | LUAU_FORCE_CONSTRAINT_SOLVING_INCOMPLETE | LUAU_BLOCKED_TYPE
       ) {
         return;
       }

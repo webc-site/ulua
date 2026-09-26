@@ -12,7 +12,10 @@ use ulua_common::fflag;
 
 use crate::{
   functions::{
-    follow_type, set_print_line::luau_print_line, to_string_to_string::to_string_type_id,
+    follow_type,
+    magic_names::{LUAU_FORCE_CONSTRAINT_SOLVING_INCOMPLETE, LUAU_PRINT},
+    set_print_line::luau_print_line,
+    to_string_to_string::to_string_type_id,
   },
   records::{
     constraint_solving_incomplete_error::ConstraintSolvingIncompleteError,
@@ -29,7 +32,7 @@ impl TypeChecker2 {
         // SAFETY: name.value 指向 AST arena 内的 NUL 结尾字面量。
         let name = ref_ty.name.as_str_or_empty();
 
-        if name == "_luau_print"
+        if name == LUAU_PRINT
           && let Some(&param) = ref_ty.parameters.first()
         {
           if let AstTypeOrPack::Type(arg) = param {
@@ -38,7 +41,7 @@ impl TypeChecker2 {
             // 「type 为 null 直落后续分支」路径。
             let arg_ty = self.lookup_annotation(arg);
             let line = format!(
-              "_luau_print ({}, {}): {}\n",
+              "{LUAU_PRINT} ({}, {}): {}\n",
               annotation.base.location.begin.line,
               annotation.base.location.begin.column,
               to_string_type_id(arg_ty)
@@ -50,7 +53,7 @@ impl TypeChecker2 {
 
             return follow_type::follow(arg_ty);
           }
-        } else if name == "_luau_force_constraint_solving_incomplete" {
+        } else if name == LUAU_FORCE_CONSTRAINT_SOLVING_INCOMPLETE {
           let location = annotation.base.location;
           self.report_error_type_error_data_location(
             ConstraintSolvingIncompleteError::default().into(),
