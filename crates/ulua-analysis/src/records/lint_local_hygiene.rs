@@ -1,15 +1,15 @@
 use alloc::vec::Vec;
-use core::ptr::{from_mut, null_mut};
+use core::ptr::from_mut;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
-    ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_expr_function::AstExprFunction,
-    ast_expr_global::AstExprGlobal, ast_expr_local::AstExprLocal, ast_local::AstLocal,
-    ast_name::AstName, ast_stat_assign::AstStatAssign, ast_stat_local::AstStatLocal,
+    ast_expr::AstExpr, ast_expr_function::AstExprFunction, ast_expr_global::AstExprGlobal,
+    ast_expr_local::AstExprLocal, ast_local::AstLocal, ast_name::AstName,
+    ast_stat_assign::AstStatAssign, ast_stat_local::AstStatLocal,
     ast_stat_local_function::AstStatLocalFunction, ast_type::AstType, ast_type_pack::AstTypePack,
     ast_type_reference::AstTypeReference, ast_visitor::AstVisitor,
   },
-  rtti::{ast_node_is, ast_node_try_as_ptr},
   visit::{ast_expr_visit, ast_stat_visit},
 };
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_table::DenseDefault};
@@ -23,21 +23,11 @@ use crate::{
 };
 
 /// C++ `LintLocalHygiene::Global` (`Analysis/src/Linter.cpp:725`).
-#[derive(Debug, Clone, Copy)]
-pub struct Global {
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Global<'ctx> {
   pub(crate) used: bool,
   pub(crate) builtin: bool,
-  pub(crate) first_ref: *mut AstExprGlobal,
-}
-
-impl Default for Global {
-  fn default() -> Self {
-    Self {
-      used: false,
-      builtin: false,
-      first_ref: null_mut(),
-    }
-  }
+  pub(crate) first_ref: Option<&'ctx AstExprGlobal>,
 }
 
 #[derive(Debug, Clone)]
@@ -45,28 +35,28 @@ pub struct LintLocalHygiene<'ctx> {
   pub(crate) context: LintContextHandle<'ctx>,
   pub(crate) locals: DenseHashMap<*mut AstLocal, Local>,
   pub(crate) imports: DenseHashMap<AstName, *mut AstLocal>,
-  pub(crate) globals: DenseHashMap<AstName, Global>,
+  pub(crate) globals: DenseHashMap<AstName, Global<'ctx>>,
 }
 
 // —— 原 methods/lint_local_hygiene_is_require_call.rs ——
 impl<'ctx> LintLocalHygiene<'ctx> {
   pub(crate) fn is_require_call(&mut self, expr: *mut AstExpr) -> bool {
-    // Safety: expr 指向模块 AST 内存池中存活的 AstExpr（repr(C) 基类置于首字段、
-    // 基址重合）；try_as_ptr 先判空再按 class_index 甄别，未命中返回 None 且从不
-    // 解引用，命中即借出完整存活节点的只读借用；arena 地址不移动、遍历期内存活。
-    let Some(call) = (unsafe { ast_node_try_as_ptr::<AstExprCall>(expr) }) else {
+    let Some(expr_ref) = (unsafe { expr.as_ref() }) else {
       return false;
     };
-    // Safety: call.func 由 parser 保证为非空子 AstExpr，同上契约只读下转。
-    let Some(glob) = (unsafe { ast_node_try_as_ptr::<AstExprGlobal>(call.func) }) else {
-      return false;
-    };
-    glob.name == "require"
+    if let AstExprRef::Call(call) = expr_ref.as_expr_ref()
+      && let Some(func_ref) = unsafe { call.func.as_ref() }
+      && let AstExprRef::Global(global) = func_ref.as_expr_ref()
+    {
+      global.name.as_bytes() == b"require"
+    } else {
+      false
+    }
   }
 }
 
 // —— 原 methods/lint_local_hygiene_lint_local_hygiene.rs ——
-impl DenseDefault for Global {
+impl<'ctx> DenseDefault for Global<'ctx> {
   fn dense_default() -> Self {
     Self::default()
   }
@@ -233,12 +223,7 @@ impl<'ctx> LintLocalHygiene<'ctx> {
       if global.builtin {
         return;
       }
-      if !global.first_ref.is_null() {
-        // Safety: `first_ref` 由 visitor 登记全局引用时记自其正在分发的存活
-        // `AstExprGlobal` arena 节点（cpp `global->firstRef = node`），上方
-        // 判空保证非空；这里只读该节点头部 `location` 的行号，共享借用止于
-        // 本条 `format_args!` 求值。
-        let first_ref = unsafe { &*global.first_ref };
+      if let Some(first_ref) = global.first_ref {
         emit_warning(
           context,
           Code::LocalShadow,
@@ -269,102 +254,91 @@ impl<'ctx> LintLocalHygiene<'ctx> {
   /// 出的 `&mut` 借用）。`vars`/`values` 数组元素由 parser 构造，均为指向 arena
   /// 存活节点的非常空指针；`self` 只持有 linter 记账状态，与 AST arena 不相交。
   pub(crate) fn visit_ast_stat_assign(&mut self, node: *mut AstStatAssign) -> bool {
-    // Safety: node 由上方契约保证存活且对齐，此处仅按值拷出 vars 的
-    // {指针, 长度}，不构造引用；数组本体在 arena 中遍历期存活。
-    let vars = unsafe { (*node).vars };
-    for &var in vars.as_slice() {
-      // Safety: var 按 parser 不变量非空且指向 arena 存活节点；这里只读其头部
-      // 的 class index 做动态类型判定，等价 cpp `expr->is<AstExprLocal>()`。
-      if unsafe { !ast_node_is::<AstExprLocal>(&(*var).base) } {
-        // Safety: var 非空、指向存活 `AstExpr`；该子树此刻仅此一条访问路径，
-        // `self` 与 AST arena 不相交，故 ast_expr_visit 写穿节点时无并发别名
-        // （cpp `expr->visit(this)` 的同款前提）。
+    let node_ref = unsafe { &*node };
+    for &var in node_ref.vars.as_slice() {
+      let Some(var_ref) = (unsafe { var.as_ref() }) else {
+        continue;
+      };
+      if !matches!(var_ref.as_expr_ref(), AstExprRef::Local(_)) {
         unsafe {
           ast_expr_visit(var, self);
         }
       }
     }
-    // Safety: 同 vars——node 存活，values 只是按值拷出的 {指针, 长度} 视图。
-    let values = unsafe { (*node).values };
-    for &val in values.as_slice() {
-      // Safety: val 是 parser 写入 values 数组的存活 `AstExpr` 指针；右值子树
-      // 在本帧之下不再被其他借用触及，`self` 与 arena 不相交，独占成立。
+    for &val in node_ref.values.as_slice() {
       unsafe {
         ast_expr_visit(val, self);
       }
     }
     false
   }
+
   /// # Safety
   /// `node` 必须非空并指向 parser arena 中存活的 `AstStatLocal`（唯一入口
   /// `AstVisitor::visit_stat_local` 的 `from_mut` 转换）；`vars`/`values` 元素
   /// 均为 arena 内存活的非常空 `AstLocal`/`AstExpr` 指针，且 `&mut self` 借用
   /// 期内无人以其他路径改写这些节点。
   pub(crate) fn visit_ast_stat_local(&mut self, node: *mut AstStatLocal) -> bool {
-    // Safety: node 存活（函数级契约），此处只拷出 vars 的数组视图，不造引用。
-    let vars = unsafe { (*node).vars };
-    // Safety: 同上——values 也是存活节点的按值数组视图读取。
-    let values = unsafe { (*node).values };
+    let node_ref = unsafe { &*node };
+    let vars = node_ref.vars.as_slice();
+    let values = node_ref.values.as_slice();
     if vars.len() == 1 && values.len() == 1 {
-      let local = vars.as_slice()[0];
-      let value = values.as_slice()[0];
+      let local = vars[0];
+      let value = values[0];
       let is_import = self.is_require_call(value);
       {
         let info = self.locals.get_or_insert(local);
         info.defined = node.cast();
         info.import = is_import;
       }
-      if is_import {
-        // Safety: local 来自 node->vars，parser 保证非空且指向存活 `AstLocal`；
-        // 读取 name（`*const c_char` 包装值）要求 arena 中该节点仍存活，遍历
-        // 期成立。imports 以值为键拷贝，不留引用。
-        *self.imports.get_or_insert(unsafe { (*local).name }) = local;
+      if is_import
+        && let Some(local_ref) = unsafe { local.as_ref() }
+      {
+        *self.imports.get_or_insert(local_ref.name) = local;
       }
     } else {
-      for &local in vars.as_slice() {
+      for &local in vars {
         let info = self.locals.get_or_insert(local);
         info.defined = node.cast();
       }
     }
     true
   }
+
   /// # Safety
   /// `node` 必须非空并指向 parser arena 中存活的 `AstStatLocalFunction`（唯一
   /// 入口 `AstVisitor::visit_stat_local_function`）；其 `name` 字段按 parser
   /// 不变量恒为非空 `*mut AstLocal`（local function 必有绑定名）。
   pub(crate) fn visit_ast_stat_local_function(&mut self, node: *mut AstStatLocalFunction) -> bool {
-    // Safety: node 存活（函数级契约）；`name` 已句柄化为 Node<AstLocal>（parser
-    // 不变量恒非空由类型层承载），`as_ptr` 读出的是指针值拷贝，仅以之为 map 键
-    // 登记，不解引用、不留引用。
-    let info = self.locals.get_or_insert(unsafe { (*node).name.as_ptr() });
+    let node_ref = unsafe { &*node };
+    let info = self.locals.get_or_insert(node_ref.name.as_ptr());
     info.defined = node.cast();
     info.function = true;
     true
   }
+
   /// # Safety
   /// `node` 必须非空并指向 parser arena 中存活的 `AstExprLocal`（唯一入口
   /// `AstVisitor::visit_expr_local`）；其 `local` 字段由 parser 构造，恒为非空
   /// 且指向同一 arena 中存活的 `AstLocal`。
   pub(crate) fn visit_ast_expr_local(&mut self, node: *mut AstExprLocal) -> bool {
-    // Safety: 读 node->local 仅要求 node 此刻存活（函数级契约）；local 槽已句柄化
-    // 恒非空，经 as_ptr 只作为 locals 的键使用，与 `self` 的借用互不重叠。
-    self
-      .locals
-      .get_or_insert(unsafe { (*node).local }.as_ptr())
-      .used = true;
+    let node_ref = unsafe { &*node };
+    self.locals.get_or_insert(node_ref.local.as_ptr()).used = true;
     true
   }
+
   /// # Safety
   /// `node` 必须非空并指向 parser arena 中存活的 `AstExprGlobal`（唯一入口
   /// `AstVisitor::visit_expr_global`）；其 `name` 指向 `AstNameTable` 持有的
   /// 常量字符串，生命周期覆盖整个 lint 遍历。
   pub(crate) fn visit_ast_expr_global(&mut self, node: *mut AstExprGlobal) -> bool {
-    // Safety: node 存活，`name` 是拷出的 `*const c_char` 包装值；globals map
-    // 只以该值为键，不产生指向节点的引用。
-    let global = self.globals.get_or_insert(unsafe { (*node).name });
+    let Some(node_ref) = (unsafe { node.as_ref() }) else {
+      return true;
+    };
+    let global = self.globals.get_or_insert(node_ref.name);
     global.used = true;
-    if global.first_ref.is_null() {
-      global.first_ref = node;
+    if global.first_ref.is_none() {
+      global.first_ref = Some(node_ref);
     }
     true
   }
