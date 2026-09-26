@@ -1,9 +1,8 @@
-use crate::functions::{
-  write_unaligned::writeu_8 as writeu8, writeuleb_128::writeuleb_128 as writeuleb128,
+use crate::{
+  functions::{write_unaligned::writeu_8 as writeu8, writeuleb_128::writeuleb_128 as writeuleb128},
+  macros::dwarf_reg::{DW_CFA_OFFSET, DW_CFA_OFFSET_EXTENDED},
 };
 
-const DW_CFA_OFFSET: u8 = 0x80;
-const DW_CFA_OFFSET_EXTENDED: u8 = 0x05;
 const K_DATA_ALIGN_FACTOR: u32 = 8;
 
 /// # Safety

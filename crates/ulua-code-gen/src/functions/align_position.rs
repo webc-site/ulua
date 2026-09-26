@@ -1,9 +1,8 @@
 use core::mem::size_of;
 
-use crate::functions::write_unaligned::writeu_8;
+use crate::{functions::write_unaligned::writeu_8, macros::dwarf_reg::DW_CFA_NOP};
 
 const K_DWARF_ALIGN: usize = size_of::<usize>();
-const DW_CFA_NOP: u8 = 0;
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
