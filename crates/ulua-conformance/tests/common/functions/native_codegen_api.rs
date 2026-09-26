@@ -12,12 +12,10 @@
 //!   `instruction_offsets` 裸指针，要求指向 codegen 分配内合法的 execdata。
 
 use alloc::vec::Vec;
-use core::{
-  ffi::{c_char, c_int},
-  ptr::{null, null_mut},
-  slice::from_raw_parts,
-};
+use core::{ffi::c_int, ptr::null};
 
+use ulua_ast::records::parse_options::ParseOptions;
+use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
 use ulua_code_gen::{
   functions::{
     compile_internal::compile_internal,
@@ -34,10 +32,10 @@ use ulua_code_gen::{
   },
   type_aliases::{module_id::ModuleId, native_proto_exec_data_ptr::NativeProtoExecDataPtr},
 };
-use ulua_compiler::functions::luau_compile::luau_compile;
+use ulua_compiler::{
+  functions::compile::compile, records::compile_options::CompileOptions,
+};
 use ulua_vm::{functions::luau_load::luau_load, records::lua_state::LuaState};
-
-use crate::common::functions::c_alloc::c_free;
 
 /// 可空切片 → `(ptr, len)` 哨兵收口：空切片译成 `(null, 0)`，与旧写法逐字同形。
 fn bytes_ptr_len(bytes: &[u8]) -> (*const u8, usize) {
@@ -211,28 +209,14 @@ pub fn codegen_create_shared(l: *mut LuaState, ctx: *mut SharedCodeGenContext) {
   unsafe { create(l, ctx) }
 }
 
-/// `luau_compile`（默认选项）→ 非空断言 → 复制为 [`Vec<u8>`] → `c_free`：把裸编译
-/// 产物整链收口，返回拥有所有权的字节码，不留悬垂缓冲。
+/// `compile`（默认选项）：返回拥有所有权的字节码。
 pub fn compile_bytecode(source: &[u8]) -> Vec<u8> {
-  let mut bytecode_size = 0usize;
-  // Safety: `luau_compile` 返回非空可读取产物（失败时亦非空）；`source`/`bytecode_size`
-  // 为合法缓冲与本帧可变槽。
-  let bytecode = unsafe {
-    luau_compile(
-      source.as_ptr() as *const c_char,
-      source.len(),
-      // FFI: c-API 要求 NULL
-      null_mut(),
-      &mut bytecode_size,
-    )
-  };
-  assert!(!bytecode.is_null());
-  // Safety: `bytecode` 自返回点起 `bytecode_size` 字节连续可读且未释放。
-  let bytes = unsafe { from_raw_parts(bytecode.cast::<u8>(), bytecode_size) };
-  let owned = bytes.to_vec();
-  // Safety: `bytecode` 是 luau_compile 交回、尚未释放的裸缓冲。
-  unsafe { c_free(bytecode.cast()) };
-  owned
+  compile(
+    source,
+    &CompileOptions::default(),
+    &ParseOptions::default(),
+    NoopEncoder,
+  )
 }
 
 /// `luau_load` 收口：把已物化的字节码切片加载进 `l`，返回状态码。

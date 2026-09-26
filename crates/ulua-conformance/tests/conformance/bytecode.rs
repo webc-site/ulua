@@ -8,8 +8,6 @@
 use core::ptr::null_mut;
 use std::iter::once;
 
-use crate::common::functions::c_alloc::c_free;
-
 #[test]
 fn conformance_bytecode_distribution_per_function_test() {
   use ulua_code_gen::records::function_bytecode_summary::FunctionBytecodeSummary;
@@ -170,10 +168,14 @@ fn conformance_huge_function() {
 
 #[test]
 fn conformance_huge_function_load_failure() {
-  use core::{ffi::c_char, slice::from_raw_parts, sync::atomic::Ordering};
+  use core::sync::atomic::Ordering;
 
+  use ulua_ast::records::parse_options::ParseOptions;
+  use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
   use ulua_common::functions::c_str::cstr_bytes;
-  use ulua_compiler::functions::luau_compile::luau_compile;
+  use ulua_compiler::{
+    functions::compile::compile, records::compile_options::CompileOptions,
+  };
   use ulua_vm::{
     functions::{lua_c_fullgc::lua_c_fullgc, lua_newstate::lua_newstate, luau_load::luau_load},
     macros::lua_tostring::lua_tostring,
@@ -197,22 +199,12 @@ fn conformance_huge_function_load_failure() {
 
   // 阶段①（cpp `Conformance.test.cpp:4861-4863`）：整体编译一次大函数，字节码在
   // 后续所有失败注入轮次里只读复用。
-  let mut bytecode_size = 0usize;
-  // Safety: `luau_compile` 收到 `source` 的不可变切片与空选项指针，返回非空则
-  // 为 c 分配器分配的只读产物，用例末尾统一 `c_free`。
-  let bytecode = unsafe {
-    luau_compile(
-      source.as_ptr() as *const c_char,
-      source.len(),
-      // FFI: c-API 要求 NULL
-      null_mut(),
-      &mut bytecode_size,
-    )
-  };
-  assert!(!bytecode.is_null());
-  // Safety: `bytecode` 为刚返回的非空缓冲、`bytecode_size` 字节内有效；切片在
-  // `c_free` 之前只读，不越出本用例作用域。
-  let bytes = unsafe { from_raw_parts(bytecode.cast::<u8>(), bytecode_size) };
+  let bytecode = compile(
+    source.as_bytes(),
+    &CompileOptions::default(),
+    &ParseOptions::default(),
+    NoopEncoder,
+  );
 
   // 阶段②（cpp `:4865-4890` 的 for 循环）：逐轮指定「第 N 次大分配失败」，每轮
   // 全新状态加载同一字节码，必须报 `not enough memory`。原子 store 是安全操作，
@@ -241,11 +233,11 @@ fn conformance_huge_function_load_failure() {
       openlibs_and_sandbox(l);
     }
 
-    // Safety: `bytes` 为存活只读字节码；`luau_load` 预期失败（status 1）并把错误
+    // Safety: `bytecode` 为存活只读字节码；`luau_load` 预期失败（status 1）并把错误
     // 字符串压栈，`lua_tostring` 读 -1 即该字符串；`lua_c_fullgc` 作用于同一存活
     // 状态，回收本轮未能加载的残留。
     unsafe {
-      let status = luau_load(l, "=HugeFunction", bytes, 0);
+      let status = luau_load(l, "=HugeFunction", &bytecode, 0);
       assert_eq!(status, 1);
 
       assert_eq!(cstr_bytes(lua_tostring!(l, -1)), b"not enough memory");
@@ -255,10 +247,6 @@ fn conformance_huge_function_load_failure() {
 
     large_allocation_to_fail += 1;
   }
-
-  // Safety: `bytecode` 为 `luau_compile` 用 c 分配器分配的缓冲，所有读取已结束，
-  // 此处按 cpp `:4890` 的 `free(bytecode)` 释放。
-  unsafe { c_free(bytecode.cast()) };
 }
 
 #[test]

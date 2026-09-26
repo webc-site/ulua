@@ -1,6 +1,10 @@
-use core::{ffi::c_int, ptr::null_mut, slice::from_raw_parts};
+use core::{ffi::c_int, slice::from_raw_parts};
 
-use ulua_compiler::functions::luau_compile::luau_compile;
+use ulua_ast::records::parse_options::ParseOptions;
+use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
+use ulua_compiler::{
+  functions::compile::compile, records::compile_options::CompileOptions,
+};
 use ulua_vm::{
   functions::{
     lua_insert::lua_insert, lua_l_checklstring::lua_l_checklstring, lua_pushnil::lua_pushnil,
@@ -11,7 +15,7 @@ use ulua_vm::{
   records::lua_state::LuaState,
 };
 
-use crate::common::functions::{c_alloc::c_free, cstr_text::cstr_text};
+use crate::common::functions::cstr_text::cstr_text;
 
 /// # Safety
 ///
@@ -27,23 +31,19 @@ pub unsafe extern "C-unwind" fn lua_loadstring(l: *mut LuaState) -> c_int {
   // Safety: `l` 存活；把加载环境切回非沙箱（loadstring 需读全局）。
   unsafe { lua_setsafeenv(l, LUA_ENVIRONINDEX, 0) };
 
-  // Safety: `source`/`len` 是刚校验的合法字节区间；`luau_compile` 返回非空产物（失败时
-  // 亦返回可读取的缓冲）并写出 `bytecode_size`，选项传 null 表示取编译端缺省。
-  let mut bytecode_size = 0usize;
-  // FFI: c-API 要求 NULL
-  let bytecode = unsafe { luau_compile(source, len, null_mut(), &mut bytecode_size) };
+  // Safety: `source`/`len` 是刚校验的合法字节区间。
+  let source_bytes = unsafe { from_raw_parts(source.cast::<u8>(), len) };
+  let bytecode = compile(
+    source_bytes,
+    &CompileOptions::default(),
+    &ParseOptions::default(),
+    NoopEncoder,
+  );
 
-  // C 边界转换：`chunkname` 是栈上 VM 串（cpp `luau_load` 亦按 strlen 取用，
-  // 内部 NUL 截断语义一致）；`bytecode` 为 luau_compile 的裸缓冲 + 长度出参
-  // （cpp `std::string` data()/size() 同形态），至本处 c_free 前保持存活。
   // Safety: 上一段保证 `chunkname` 为 NUL 结尾串（lossy 只用于传给 luau_load 的名称）。
   let chunkname = unsafe { cstr_text(chunkname) };
-  // Safety: `bytecode` 起 `bytecode_size` 字节连续可读，至本处 c_free 前存活。
-  let bytes = unsafe { from_raw_parts(bytecode.cast::<u8>(), bytecode_size) };
-  // Safety: `l` 存活；`bytes` 为上一步物化的合法切片，加载结果非零不 panic（cpp 语义）。
-  let result = unsafe { luau_load(l, &chunkname, bytes, 0) };
-  // Safety: `bytecode` 是 luau_compile 交回、尚未释放的裸缓冲。
-  unsafe { c_free(bytecode.cast()) };
+  // Safety: `l` 存活；`bytecode` 为安全生成的字节码，加载结果非零不 panic（cpp 语义）。
+  let result = unsafe { luau_load(l, &chunkname, &bytecode, 0) };
 
   if result == 0 {
     return 1;

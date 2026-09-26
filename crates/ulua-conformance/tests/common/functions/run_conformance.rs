@@ -308,7 +308,7 @@ pub fn run_conformance(
 
   // cpp `Conformance.test.cpp:377`：`lua_CompileOptions opts = options ? *options
   // : defaultOptions();`（按值取用，不改动调用方的对象）。
-  let mut options = options.copied().unwrap_or_else(default_compile_options);
+  let options = options.copied().unwrap_or_else(default_compile_options);
 
   // cpp `Conformance.test.cpp:386`：`CompilationOptions nativeOpts =
   // codegenOptions ? *codegenOptions : defaultCodegenOptions();`（同样按值取用）。
@@ -355,7 +355,7 @@ pub fn run_conformance(
 
   // 加载结果 `load_result` 上提给下方分支——与 cpp 一致，非零加载**不中止**，
   // 交由后续分支走受控的错误路径（故不能改用会在失败时 panic 的 compile_and_load 门面）。
-  let load_result = safe_api::load_source(l, &chunkname, &source, &mut options);
+  let load_result = safe_api::load_source(l, &chunkname, &source, &options);
 
   // 主编译结果交安全断言辅助核对（`assert_codegen_result`）。
   if load_result == 0 && codegen() && !skip_codegen && luau_codegen_supported() != 0 {

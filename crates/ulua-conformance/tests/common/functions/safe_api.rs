@@ -20,16 +20,17 @@ use alloc::string::String;
 use core::{
   ffi::{c_char, c_int, c_void},
   ptr::{from_mut, null, null_mut, write},
-  slice::from_raw_parts,
 };
 
+use ulua_ast::records::parse_options::ParseOptions;
+use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
 use ulua_code_gen::{
   functions::{compile_internal::compile_internal, luau_codegen_create::luau_codegen_create},
   records::{compilation_options::CompilationOptions, compilation_result::CompilationResult},
 };
 use ulua_common::functions::c_str::cstr_bytes;
 use ulua_compiler::{
-  functions::luau_compile::luau_compile, records::compile_options::CompileOptions,
+  functions::compile::compile, records::compile_options::CompileOptions,
 };
 use ulua_vm::{
   enums::lua_type::LuaType,
@@ -84,7 +85,7 @@ use ulua_vm::{
 };
 
 use crate::common::functions::{
-  c_alloc::c_free, cpcall_test::cpcall_test, cstr::cstr, cstr_text::diagnostic_text,
+  cpcall_test::cpcall_test, cstr::cstr, cstr_text::diagnostic_text,
 };
 
 /// C ABI 状态句柄别名；仅在本门面内部被解引用（每函数恰一次 `unsafe`）。
@@ -244,29 +245,12 @@ pub fn resumeerror(l: L) -> c_int {
 // 编译-加载-释放整链
 // ---------------------------------------------------------------------------
 
-/// `luau_compile` → `luau_load` → `c_free` 的一次性整链收口：编译 `source`（按
-/// 原始字节透传，允许非 UTF-8）为字节码并加载进 `l`，返回 `luau_load` 的状态码；
-/// 编译产物在函数内即释放，不留悬垂缓冲。
-pub fn load_source(l: L, chunkname: &str, source: &[u8], options: &mut CompileOptions) -> c_int {
-  let mut bytecode_size = 0usize;
-  // Safety: `luau_compile` 返回非空可读取产物（失败时亦非空），`options`/`bytecode_size`
-  // 为本帧可变槽；`source` 为合法字节缓冲。
-  let bytecode = unsafe {
-    luau_compile(
-      source.as_ptr() as *const c_char,
-      source.len(),
-      options,
-      &mut bytecode_size,
-    )
-  };
-  // Safety: `bytecode` 自返回点起 `bytecode_size` 字节连续可读且未释放
-  // （cpp `std::string bytecode` 的 data()/size() 同形态）。
-  let bytes = unsafe { from_raw_parts(bytecode.cast::<u8>(), bytecode_size) };
-  // Safety: `l` 存活；`bytes`/`chunkname` 为上一步构造的合法切片与借用。
-  let load_result = unsafe { luau_load(l, chunkname, bytes, 0) };
-  // Safety: `bytecode` 是 luau_compile 交回、尚未释放的裸缓冲。
-  unsafe { c_free(bytecode.cast()) };
-  load_result
+/// `compile` → `luau_load` 的一次性整链收口：编译 `source`（按
+/// 原始字节透传，允许非 UTF-8）为字节码并加载进 `l`，返回 `luau_load` 的状态码。
+pub fn load_source(l: L, chunkname: &str, source: &[u8], options: &CompileOptions) -> c_int {
+  let bytecode = compile(source, options, &ParseOptions::default(), NoopEncoder);
+  // Safety: `l` 存活；`chunkname`/`&bytecode` 为合法借用。
+  unsafe { luau_load(l, chunkname, &bytecode, 0) }
 }
 
 /// `compile_internal`（native codegen）对栈顶函数的收口：`l` 存活且栈顶 -1 为
