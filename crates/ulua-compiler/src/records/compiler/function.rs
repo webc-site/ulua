@@ -618,33 +618,23 @@ impl Compiler {
     let mut call_cost_model = fi_cost_model;
 
     if self.reg_top > K_MAX_INLINE_REG_TOP || fi_stack_size > K_MAX_INLINE_STACK_SIZE {
-      self
-        .bc_mut()
-        .add_debug_remark(format_args!("inlining failed: high register pressure"));
-      return false;
+      return self.reject_with_remark(format_args!("inlining failed: high register pressure"));
     }
 
     if self.inline_frames.len() as i32 >= depth_limit {
-      self
-        .bc_mut()
-        .add_debug_remark(format_args!("inlining failed: too many inlined frames"));
-      return false;
+      return self.reject_with_remark(format_args!("inlining failed: too many inlined frames"));
     }
 
     for frame in &self.inline_frames {
       if frame.func == func_node {
-        self
-          .bc_mut()
-          .add_debug_remark(format_args!("{REMARK_INLINE_RECURSIVE}"));
-        return false;
+        return self.reject_with_remark(format_args!("{REMARK_INLINE_RECURSIVE}"));
       }
     }
 
     if mult_ret {
-      self.bc_mut().add_debug_remark(format_args!(
+      return self.reject_with_remark(format_args!(
         "inlining failed: can't convert fixed returns to multret"
       ));
-      return false;
     }
 
     let func_args_size = func.args.len();

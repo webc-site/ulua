@@ -38,20 +38,9 @@ impl Parser {
 
         let key = self.parse_expr(0);
 
-        let closing_bracket_found =
-          self.expect_match_and_consume(']', &match_location_bracket, false);
-        let indexer_close_position = if closing_bracket_found {
-          self.lexer.previous_location().begin
-        } else {
-          Position::missing()
-        };
-
-        let equals_found = self.expect_and_consume_char('=', "table field");
-        let equals_position = if equals_found {
-          self.lexer.previous_location().begin
-        } else {
-          Position::missing()
-        };
+        let indexer_close_position =
+          self.expect_match_and_consume_position(']', &match_location_bracket, false);
+        let equals_position = self.expect_and_consume_char_position('=', "table field");
 
         let value = self.parse_expr(0);
 

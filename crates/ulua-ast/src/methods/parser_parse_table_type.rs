@@ -81,20 +81,9 @@ impl Parser {
           };
 
           let begin_match = Lexeme::new(begin.location, begin.r#type);
-          let closing_bracket_found =
-            self.expect_match_and_consume(']', &MatchLexeme::new(&begin_match), false);
-          let indexer_close_position = if closing_bracket_found {
-            self.lexer.previous_location().begin
-          } else {
-            Position::missing()
-          };
-
-          let colon_found = self.expect_and_consume_char(':', "table field");
-          let colon_position = if colon_found {
-            self.lexer.previous_location().begin
-          } else {
-            Position::missing()
-          };
+          let indexer_close_position =
+            self.expect_match_and_consume_position(']', &MatchLexeme::new(&begin_match), false);
+          let colon_position = self.expect_and_consume_char_position(':', "table field");
 
           let r#type = self.parse_type(false);
 
@@ -202,12 +191,7 @@ impl Parser {
           break;
         };
 
-        let colon_found = self.expect_and_consume_char(':', "table field");
-        let colon_position = if colon_found {
-          self.lexer.previous_location().begin
-        } else {
-          Position::missing()
-        };
+        let colon_position = self.expect_and_consume_char_position(':', "table field");
 
         let r#type = self.parse_type(in_declaration_context);
 

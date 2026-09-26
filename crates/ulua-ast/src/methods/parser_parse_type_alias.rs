@@ -51,12 +51,7 @@ impl Parser {
       self.parse_generic_type_list(true, None, None, None)
     };
 
-    let equals_found = self.expect_and_consume_char('=', "type alias");
-    let equals_position = if equals_found {
-      self.lexer.previous_location().begin
-    } else {
-      Position::missing()
-    };
+    let equals_position = self.expect_and_consume_char_position('=', "type alias");
 
     let type_ = self.parse_type(false);
 

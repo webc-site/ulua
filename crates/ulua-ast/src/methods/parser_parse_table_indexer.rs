@@ -2,7 +2,7 @@ use crate::{
   enums::ast_table_access::AstTableAccess,
   records::{
     ast_table_indexer::AstTableIndexer, lexeme::Lexeme, location::Location, parser::Parser,
-    position::Position, table_indexer_result::TableIndexerResult,
+    table_indexer_result::TableIndexerResult,
   },
 };
 
@@ -15,19 +15,8 @@ impl Parser {
   ) -> TableIndexerResult {
     let index = self.parse_type(false);
 
-    let indexer_close_found = self.expect_and_consume_char(']', "table field");
-    let indexer_close_position = if indexer_close_found {
-      self.lexer.previous_location().begin
-    } else {
-      Position::missing()
-    };
-
-    let colon_found = self.expect_and_consume_char(':', "table field");
-    let colon_position = if colon_found {
-      self.lexer.previous_location().begin
-    } else {
-      Position::missing()
-    };
+    let indexer_close_position = self.expect_and_consume_char_position(']', "table field");
+    let colon_position = self.expect_and_consume_char_position(':', "table field");
 
     let result = self.parse_type(false);
 

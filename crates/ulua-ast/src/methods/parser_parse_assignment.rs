@@ -10,8 +10,7 @@ use crate::{
   enums::type_lexer::Type,
   records::{
     ast_expr::AstExpr, ast_stat::AstStat, ast_stat_assign::AstStatAssign,
-    cst_stat_assign::CstStatAssign, location::Location, parser::Parser, position::Position,
-    temp_vector::TempVector,
+    cst_stat_assign::CstStatAssign, location::Location, parser::Parser, temp_vector::TempVector,
   },
 };
 
@@ -40,12 +39,7 @@ impl Parser {
       vars.push_back(expr);
     }
 
-    let equals_found = self.expect_and_consume_char('=', "assignment");
-    let equals_position = if equals_found {
-      self.lexer.previous_location().begin
-    } else {
-      Position::missing()
-    };
+    let equals_position = self.expect_and_consume_char_position('=', "assignment");
 
     let mut values = TempVector::new(&mut self.scratch_expr_aux);
     let mut values_comma_positions = TempVector::new(&mut self.scratch_position);

@@ -41,7 +41,11 @@ impl Parser {
       let c = self.lexer.current().r#type;
       let separator_position = self.lexer.current().location.begin;
 
-      if c == Type::PIPE {
+      // `|` 与 `&` 两分支逐字同构（cpp 同为「消费分隔符 → allowPack=false 解析
+      // 成员 → 压入 parts → 置向标志 → CST 记分隔符」），仅 union/intersection
+      // 标志位不同，以 `is_pipe` 落位；QUESTION/DOT3 语义不同，各走各臂。
+      if c == Type::PIPE || c == Type::AMPERSAND {
+        let is_pipe = c == Type::PIPE;
         self.next_lexeme();
 
         let old_recursion_count = self.recursion_counter;
@@ -54,8 +58,13 @@ impl Parser {
           .as_type()
           .expect("allowPack=false 时 parse_simple_type 恒产出 Type 变体");
         parts.push_back(NonNull::from(ty).as_ptr());
-        is_union = true;
+        if is_pipe {
+          is_union = true;
+        } else {
+          is_intersection = true;
+        }
 
+        // 首个分隔符记 leading（type_ 为 None 即无前导类型的联合/交叉），其余入表。
         if self.options.store_cst_data {
           if type_.is_none() && !leading_position.has_value() {
             leading_position = separator_position;
@@ -73,27 +82,6 @@ impl Parser {
         optional_count += 1;
 
         is_union = true;
-      } else if c == Type::AMPERSAND {
-        self.next_lexeme();
-
-        let old_recursion_count = self.recursion_counter;
-        let part = self.parse_simple_type(false, false);
-        self.recursion_counter = old_recursion_count;
-
-        // 同上：allowPack=false ⇒ 必为 `Type` 变体。
-        let ty = part
-          .as_type()
-          .expect("allowPack=false 时 parse_simple_type 恒产出 Type 变体");
-        parts.push_back(NonNull::from(ty).as_ptr());
-        is_intersection = true;
-
-        if self.options.store_cst_data {
-          if type_.is_none() && !leading_position.has_value() {
-            leading_position = separator_position;
-          } else {
-            separator_positions.push_back(separator_position);
-          }
-        }
       } else if c == Type::DOT3 {
         self.report(
           self.lexer.current().location,

@@ -74,12 +74,8 @@ impl Parser {
     }
 
     let location = Location::new(begin.location.begin, self.lexer.current().location.end);
-    let close_paren_found = self.expect_match_and_consume(')', &MatchLexeme::new(&begin), true);
-    let close_parentheses_position = if close_paren_found {
-      self.lexer.previous_location().begin
-    } else {
-      Position::missing()
-    };
+    let close_parentheses_position =
+      self.expect_match_and_consume_position(')', &MatchLexeme::new(&begin), true);
 
     self.match_recovery_stop_on_token[Type::SKINNY_ARROW.0 as usize] -= 1;
 
@@ -97,11 +93,9 @@ impl Parser {
             parens_belong_to_inner_group = true;
             if self.options.store_cst_data {
               self.attach_cst(inner, |alloc| {
-                alloc.alloc(CstTypeGroup::new(if close_paren_found {
-                  close_parentheses_position
-                } else {
-                  Position::missing()
-                }))
+                // close_parentheses_position 未命中时即 missing，无需再按
+                // found 标志二选一（与被收敛的旧 if/else 逐值相等）。
+                alloc.alloc(CstTypeGroup::new(close_parentheses_position))
               });
             }
           } else {
@@ -115,11 +109,8 @@ impl Parser {
           };
           if vararg_annotation.is_none() && self.options.store_cst_data {
             self.attach_cst(inner, |alloc| {
-              alloc.alloc(CstTypeGroup::new(if close_paren_found {
-                close_parentheses_position
-              } else {
-                Position::missing()
-              }))
+              // 契约同上：未命中即 missing，直接用位置值。
+              alloc.alloc(CstTypeGroup::new(close_parentheses_position))
             });
           }
         }

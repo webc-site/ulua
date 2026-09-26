@@ -1,5 +1,8 @@
 use alloc::vec::Vec;
-use core::ptr::{NonNull, null_mut};
+use core::{
+  fmt::Arguments,
+  ptr::{NonNull, null_mut},
+};
 
 use ulua_ast::{
   records::{
@@ -242,6 +245,14 @@ impl Compiler {
   pub(crate) fn names_mut(&mut self) -> &mut AstNameTable {
     // Safety: 同 names()；调用处 self 的 &mut 借用保证无并发别名。
     unsafe { self.names.as_mut() }
+  }
+
+  /// `try_compile_*` 的守卫样板单源：记录放弃原因 remark 后返回 `false`
+  /// （cpp 各 `if (...) { addRemark(...); return false; }` 同构分支）。
+  #[inline]
+  pub(crate) fn reject_with_remark(&mut self, args: Arguments<'_>) -> bool {
+    self.bc_mut().add_debug_remark(args);
+    false
   }
 }
 

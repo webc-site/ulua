@@ -48,7 +48,7 @@ impl Parser {
       let end = self.lexer.current().location;
       let arg_end = end.end;
 
-      let closing_paren_found = self.expect_match_and_consume(')', &match_paren, true);
+      let close_position = self.expect_match_and_consume_position(')', &match_paren, true);
 
       let args_array = self.copy_temp_vector_t(&args);
       let explicit_types: AstArray<AstTypeOrPack> = AstArray::EMPTY;
@@ -64,11 +64,6 @@ impl Parser {
 
       if self.options.store_cst_data {
         let comma_positions_array = self.copy_temp_vector_t(&comma_positions);
-        let close_position = if closing_paren_found {
-          self.lexer.previous_location().begin
-        } else {
-          Position::missing()
-        };
         self.attach_cst(node, |alloc| {
           alloc.alloc(CstExprCall::new(
             match_paren.position,

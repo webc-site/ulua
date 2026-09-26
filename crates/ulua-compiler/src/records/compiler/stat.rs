@@ -1498,27 +1498,20 @@ impl Compiler {
     };
 
     if trip_count < 0 {
-      self
-        .bc_mut()
-        .add_debug_remark(format_args!("loop unroll failed: invalid iteration count"));
-      return false;
+      return self.reject_with_remark(format_args!("loop unroll failed: invalid iteration count"));
     }
 
     if trip_count > threshold_base {
-      self.bc_mut().add_debug_remark(format_args!(
+      return self.reject_with_remark(format_args!(
         "loop unroll failed: too many iterations ({})",
         trip_count
       ));
-      return false;
     }
 
     if let Some(lv) = self.variables.find(&stat_ref.var.into())
       && lv.written
     {
-      self
-        .bc_mut()
-        .add_debug_remark(format_args!("loop unroll failed: mutable loop variable"));
-      return false;
+      return self.reject_with_remark(format_args!("loop unroll failed: mutable loop variable"));
     }
 
     let var = Node::from(stat_ref.var);
