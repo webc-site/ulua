@@ -6,6 +6,7 @@
 //! - `get_condition_fp`          ← cpp `IrLoweringA64.cpp:24`   getConditionFP
 //! - `get_condition_int` (X64)   ← cpp `EmitCommonX64.cpp:98`   getConditionInt
 //! - `get_negated_condition_ir_condition` ← cpp `IrUtils.h:142` getNegatedCondition
+//! - `get_negated_condition` (X64) ← cpp `EmitCommonX64.h` getNegatedCondition（旧 match 逐臂）
 //! - 以及 `get_block_kind_priority` ← cpp 块排序优先级。
 //!
 //! 期望值逐条取自上述 cpp switch，与收敛前的 Rust match 分支一一对应，
@@ -21,6 +22,7 @@ use ulua_code_gen::{
     get_condition_int_64::get_condition_int_64,
     get_condition_int_emit_common_x_64::get_condition_int as get_condition_int_x64,
     get_condition_int_ir_lowering_a_64::get_condition_int as get_condition_int_a64,
+    get_negated_condition_condition_x_64::get_negated_condition as get_negated_condition_x64,
     get_negated_condition_ir_utils::get_negated_condition_ir_condition,
   },
 };
@@ -179,6 +181,54 @@ fn negated_condition_matches_cpp_oracle() {
       get_negated_condition_ir_condition(get_negated_condition_ir_condition(cond)),
       cond,
       "involution({cond:?})"
+    );
+  }
+}
+
+#[test]
+fn negated_condition_x64_matches_old_match() {
+  use ConditionX64::*;
+  // 期望值逐条取自改写前的 Rust match 臂（其本身对齐 cpp EmitCommonX64.h），
+  // 证明 match→定表收敛后 26 个具名条件逐值全等。
+  let pairs = [
+    (Overflow, NoOverflow),
+    (NoOverflow, Overflow),
+    (Carry, NoCarry),
+    (NoCarry, Carry),
+    (Below, NotBelow),
+    (BelowEqual, NotBelowEqual),
+    (Above, NotAbove),
+    (AboveEqual, NotAboveEqual),
+    (Equal, NotEqual),
+    (Less, NotLess),
+    (LessEqual, NotLessEqual),
+    (Greater, NotGreater),
+    (GreaterEqual, NotGreaterEqual),
+    (NotBelow, Below),
+    (NotBelowEqual, BelowEqual),
+    (NotAbove, Above),
+    (NotAboveEqual, AboveEqual),
+    (NotEqual, Equal),
+    (NotLess, Less),
+    (NotLessEqual, LessEqual),
+    (NotGreater, Greater),
+    (NotGreaterEqual, GreaterEqual),
+    (Zero, NotZero),
+    (NotZero, Zero),
+    (Parity, NotParity),
+    (NotParity, Parity),
+  ];
+  for (cond, want) in pairs {
+    assert_eq!(
+      get_negated_condition_x64(cond),
+      want,
+      "x64 negate({cond:?})"
+    );
+    // 取反为对合
+    assert_eq!(
+      get_negated_condition_x64(get_negated_condition_x64(cond)),
+      cond,
+      "x64 negate involution({cond:?})"
     );
   }
 }

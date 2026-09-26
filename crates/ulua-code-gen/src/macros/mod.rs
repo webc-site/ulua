@@ -12,6 +12,7 @@ pub mod call_fallback_yield;
 pub mod codegen_assert;
 pub mod codegen_target_a_64;
 pub mod codegen_target_x_64;
+pub mod cond_lookup_table;
 pub mod define_vm_frame_accessor;
 pub mod dw_cf_a_advance_loc;
 pub mod dw_cf_a_advance_loc_1;
