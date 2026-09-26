@@ -1,8 +1,8 @@
 use core::ptr::from_mut;
 
 use ulua_ast::{
-  records::{ast_stat_block::AstStatBlock, ast_stat_local::AstStatLocal, ast_visitor::AstVisitor},
-  rtti::ast_node_is,
+  enums::ast_stat_ref::AstStatRef,
+  records::{ast_stat_block::AstStatBlock, ast_visitor::AstVisitor},
   visit::ast_stat_visit,
 };
 use ulua_config::enums::code::Code;
@@ -49,8 +49,8 @@ impl<'ctx> LintSameLineStatement<'ctx> {
       if location.begin.line == self.last_line {
         continue;
       }
-      let last_is_local = ast_node_is::<AstStatLocal>(&last.base);
-      let current_is_block = ast_node_is::<AstStatBlock>(&current.base);
+      let last_is_local = matches!(last.as_stat_ref(), AstStatRef::Local(_));
+      let current_is_block = matches!(current.as_stat_ref(), AstStatRef::Block(_));
       if last_is_local && current_is_block {
         continue;
       }

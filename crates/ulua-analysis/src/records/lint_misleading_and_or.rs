@@ -1,14 +1,14 @@
 use core::ptr::from_mut;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
     ast_attr::AstAttr,
     ast_expr_binary::{AstExprBinary, AstExprBinaryOp},
     ast_expr_constant_bool::AstExprConstantBool,
-    ast_expr_constant_nil::AstExprConstantNil,
     ast_visitor::AstVisitor,
   },
-  rtti::{ast_node_is_ptr, ast_node_try_as_ptr},
+  rtti::ast_node_try_as_ptr,
   visit::ast_stat_visit,
 };
 use ulua_config::enums::code::Code;
@@ -59,7 +59,7 @@ impl<'ctx> LintMisleadingAndOr<'ctx> {
       return true;
     }
     let right = and_.right;
-    let alt = if unsafe { ast_node_is_ptr::<AstExprConstantNil>(right) } {
+    let alt = if matches!(right.as_expr_ref(), AstExprRef::ConstantNil(_)) {
       Some("nil")
     } else if let Some(bool_node) = unsafe { ast_node_try_as_ptr::<AstExprConstantBool>(right) } {
       if !bool_node.value {

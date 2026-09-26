@@ -2,6 +2,7 @@ use alloc::vec::Vec;
 use core::ptr::from_mut;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
     ast_attr::AstAttr,
     ast_expr::AstExpr,
@@ -12,7 +13,7 @@ use ulua_ast::{
     ast_stat_if::AstStatIf,
     ast_visitor::AstVisitor,
   },
-  rtti::{ast_node_is, ast_node_try_as, ast_node_try_as_ptr},
+  rtti::{ast_node_try_as, ast_node_try_as_ptr},
   visit::{ast_expr_visit, ast_stat_visit},
 };
 use ulua_config::enums::code::Code;
@@ -165,7 +166,7 @@ impl<'ctx> LintDuplicateCondition<'ctx> {
     let Some(expr_ref) = (unsafe { expr.as_ref() }) else {
       return true;
     };
-    if !ast_node_is::<AstExprIfElse>(&expr_ref.false_expr.get().base) {
+    if !matches!(expr_ref.false_expr.get().as_expr_ref(), AstExprRef::IfElse(_)) {
       return true;
     }
     let mut conditions = Vec::with_capacity(2);

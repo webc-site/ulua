@@ -4,13 +4,12 @@ use core::{
 };
 
 use ulua_ast::{
+  enums::ast_stat_ref::AstStatRef,
   records::{
     ast_expr::AstExpr, ast_expr_function::AstExprFunction, ast_stat::AstStat,
-    ast_stat_assign::AstStatAssign, ast_stat_expr::AstStatExpr, ast_stat_local::AstStatLocal,
     ast_stat_return::AstStatReturn, ast_visitor::AstVisitor, location::Location,
     position::Position,
   },
-  rtti::ast_node_is,
   visit::ast_stat_visit,
 };
 use ulua_config::enums::code::Code;
@@ -50,10 +49,10 @@ pub fn lint_implicit_return_get_end_location(
   let node = node as *const AstStat;
   let node_ref = unsafe { &*node };
   let loc = node_ref.base.location;
-  if ast_node_is::<AstStatExpr>(&node_ref.base)
-    || ast_node_is::<AstStatAssign>(&node_ref.base)
-    || ast_node_is::<AstStatLocal>(&node_ref.base)
-  {
+  if matches!(
+    node_ref.as_stat_ref(),
+    AstStatRef::Expr(_) | AstStatRef::Assign(_) | AstStatRef::Local(_)
+  ) {
     return loc;
   }
   if loc.begin.line == loc.end.line {

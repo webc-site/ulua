@@ -1,13 +1,11 @@
 use core::ptr::from_mut;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
-    ast_array::AstArray, ast_expr::AstExpr, ast_expr_call::AstExprCall,
-    ast_expr_constant_nil::AstExprConstantNil, ast_expr_varargs::AstExprVarargs,
-    ast_stat_assign::AstStatAssign, ast_stat_local::AstStatLocal, ast_visitor::AstVisitor,
-    location::Location,
+    ast_array::AstArray, ast_expr::AstExpr, ast_stat_assign::AstStatAssign,
+    ast_stat_local::AstStatLocal, ast_visitor::AstVisitor, location::Location,
   },
-  rtti::ast_node_is_ptr,
   visit::ast_stat_visit,
 };
 use ulua_config::enums::code::Code;
@@ -58,13 +56,10 @@ impl<'ctx> LintUnbalancedAssignment<'ctx> {
           location,
           format_args!("{}", msg),
         );
-      } else if unsafe {
-        // Safety: last 取自 vals 界内槽位，为 arena 存活 AstExpr 指针；边界门面
-        // 只读 class_index，判型语义与 cpp 逐点一致。
-        ast_node_is_ptr::<AstExprCall>(last)
-          || ast_node_is_ptr::<AstExprVarargs>(last)
-          || ast_node_is_ptr::<AstExprConstantNil>(last)
-      } {
+      } else if matches!(
+        unsafe { (*last).as_expr_ref() },
+        AstExprRef::Call(_) | AstExprRef::Varargs(_) | AstExprRef::ConstantNil(_)
+      ) {
         // we don't know how many values the last expression returns
         // or last expression is nil which explicitly silences the nil-init warning
       } else {

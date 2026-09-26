@@ -1,10 +1,10 @@
 use ulua_ast::{
+  enums::ast_stat_ref::AstStatRef,
   records::{
     ast_expr_call::AstExprCall, ast_expr_function::AstExprFunction, ast_stat::AstStat,
-    ast_stat_block::AstStatBlock, ast_stat_break::AstStatBreak, ast_stat_continue::AstStatContinue,
-    ast_stat_expr::AstStatExpr, ast_stat_for::AstStatFor, ast_stat_for_in::AstStatForIn,
-    ast_stat_if::AstStatIf, ast_stat_repeat::AstStatRepeat, ast_stat_return::AstStatReturn,
-    ast_stat_while::AstStatWhile, ast_visitor::AstVisitor,
+    ast_stat_block::AstStatBlock, ast_stat_expr::AstStatExpr, ast_stat_for::AstStatFor,
+    ast_stat_for_in::AstStatForIn, ast_stat_if::AstStatIf, ast_stat_repeat::AstStatRepeat,
+    ast_stat_return::AstStatReturn, ast_stat_while::AstStatWhile, ast_visitor::AstVisitor,
   },
   rtti::{AstNodePtr, ast_node_is_ptr, ast_node_try_as_ptr},
   visit::ast_stat_visit,
@@ -33,7 +33,7 @@ impl<'ctx> AstVisitor for LintUnreachableCode<'ctx> {
 // —— 原 methods/lint_unreachable_code_analyze.rs ——
 impl<'ctx> LintUnreachableCode<'ctx> {
   /// cpp `LintUnreachableCode::analyze(AstStat* node)` 的直译。
-  pub fn analyze(&mut self, node: *mut AstStat) -> Status {
+  pub(crate) fn analyze(&mut self, node: *mut AstStat) -> Status {
     if node.is_null() {
       return Status::Unknown;
     }
@@ -105,14 +105,11 @@ impl<'ctx> LintUnreachableCode<'ctx> {
       self.analyze(stat.body.cast::<AstStat>().as_ptr());
       return Status::Unknown;
     }
-    if unsafe { ast_node_is_ptr::<AstStatBreak>(node_base) } {
-      return Status::Break;
-    }
-    if unsafe { ast_node_is_ptr::<AstStatContinue>(node_base) } {
-      return Status::Continue;
-    }
-    if unsafe { ast_node_is_ptr::<AstStatReturn>(node_base) } {
-      return Status::Return;
+    match unsafe { (*node).as_stat_ref() } {
+      AstStatRef::Break(_) => return Status::Break,
+      AstStatRef::Continue(_) => return Status::Continue,
+      AstStatRef::Return(_) => return Status::Return,
+      _ => {}
     }
     // Safety: 判型命中的引用只读；expr 是 AstStatExpr 恒非空的实参槽位
     // （parser 构造保证），交给安全的递归前先经共享引用取值。
