@@ -2,20 +2,27 @@
 //! 带契约的收口点」）。
 //!
 //! `run_repl` 只需要两句语义：「把当前 REPL 状态登记为活动状态并挂上信号处理函数」
-//! 与「循环结束后摘掉」。libc `signal()` / kernel32 `SetConsoleCtrlHandler()` 的
-//! 外部函数声明、以及与 async-signal handler 交换的 `null` 协议值都收在本模块内，
-//! 业务侧因此不再出现裸 `null_mut()` 与 `unsafe extern` 声明。
+//! 与「循环结束后摘掉」。与 async-signal handler 交换的 `null` 协议值收在本模块内；
+//! OS 级注册委托 signal-hook-registry（POSIX 走 `sigaction` + `SA_RESTART`，与
+//! libc `signal()` 的 BSD 语义一致；Windows 走 CRT `signal()`，Ctrl+C 事件由
+//! CRT 转成 SIGINT 送达），本 crate 不再出现 `unsafe extern` 声明、
+//! kernel32 分支与裸 `null_mut()`。
 
 use core::{ffi::c_int, ptr::null_mut, sync::atomic::Ordering};
+use std::sync::Once;
 
 use ulua_vm::records::lua_state::LuaState;
 
-use crate::functions::sigint_callback::REPL_STATE;
+use crate::functions::{sigint_callback::REPL_STATE, sigint_handler_repl::arm_interrupt};
 
-/// POSIX 信号号 `SIGINT`（与 `sigint_handler_repl` 的判等常量同值；两处各自 cfg
-/// 编译，不共享以免跨 cfg 泄漏符号）。
-#[cfg(not(target_os = "windows"))]
+/// 信号号 `SIGINT`：POSIX 信号号为 2，Windows CRT（signal-hook-registry 内部
+/// 调用的 `signal()`）同值，两平台共用一个常量。
 const SIGINT: c_int = 2;
+
+/// OS 级 handler 全进程只注册一次：`withdraw` 不摘 OS handler（handler 判空即
+/// no-op，与 cpp 只换 `replState` 的做法一致），重复 `install` 若再注册会让
+/// 每次 Ctrl-C 多跑一遍已登记的 handler。
+static REGISTER_ONCE: Once = Once::new();
 
 /// 登记活动状态并注册进程级 Ctrl-C 处理函数，对应 cpp `Repl.cpp` 的
 /// `replState = l; signal(SIGINT, sigintHandler);`。
@@ -35,8 +42,10 @@ pub(crate) unsafe fn install(l: *mut LuaState) {
   // Safety: 契约保证 l 指向存活状态；store 为原子写，不需要额外前置条件。
   REPL_STATE.store(l, Ordering::SeqCst);
 
-  // Safety: 状态已先行发布，注册本身只做一次 libc/kernel32 调用（见下两个 cfg 变体）。
-  unsafe { register() };
+  REGISTER_ONCE.call_once(|| {
+    // Safety: 状态已先行发布（call_once 前同步 store），register 的契约成立。
+    unsafe { register() };
+  });
 }
 
 /// 摘掉活动状态（cpp `replState = nullptr`）。`null` 作为「REPL 非活动」协议值只在
@@ -48,46 +57,17 @@ pub(crate) fn withdraw() {
   REPL_STATE.store(null_mut(), Ordering::SeqCst);
 }
 
-#[cfg(not(target_os = "windows"))]
 /// # Safety
 ///
-/// 注册进程级 SIGINT 处理函数，仅在单线程 REPL 启动路径调用；`sigint_handler` 必须是
-/// 签名匹配的 `unsafe extern "C-unwind" fn(c_int)`，且调用前 `REPL_STATE` 已指向存活的
-/// `LuaState`（信号异步进入 handler，依赖该全局的有效性与单线程驱动契约）。
+/// 注册进程级 SIGINT 处理函数，仅在单线程 REPL 启动路径且状态先行发布后调用；
+/// `arm_interrupt` 必须只做原子读 + 判空 + 单槽写（async-signal-safe 子集，
+/// 契约见其文档），且永不 panic（registry 的 dispatch 发生在信号上下文）。
 unsafe fn register() {
-  use core::ffi::c_void;
-
-  use crate::functions::sigint_handler_repl::sigint_handler;
-  // POSIX: signal(SIGINT, sigintHandler)
-  unsafe extern "C" {
-    fn signal(signum: c_int, handler: unsafe extern "C-unwind" fn(c_int)) -> *mut c_void;
-  }
-  // Safety: libc signal() 的 FFI 调用：SIGINT 为合法信号号，sigint_handler 是与处理函数签名匹配的 unsafe extern "C-unwind" fn(c_int)（指针可安全转成 sighandler_t），且 handler 只做原子读+单槽写入（async-signal 安全子集，契约见其 /// # Safety）。
-  unsafe {
-    signal(SIGINT, sigint_handler);
-  }
-}
-
-#[cfg(target_os = "windows")]
-/// # Safety
-///
-/// 注册进程级控制台 Ctrl 处理函数，仅在单线程 REPL 启动路径调用；`sigint_handler_windows` 必须是
-/// 签名匹配的 `unsafe extern "C-unwind" fn(u32) -> c_int`，且调用前 `REPL_STATE` 已指向
-/// 存活的 `LuaState`（回调跨线程进入 handler，依赖该全局有效性与单线程驱动契约）。
-unsafe fn register() {
-  use crate::functions::sigint_handler_repl::sigint_handler_windows;
-
-  // Windows: SetConsoleCtrlHandler(sigintHandler, TRUE)
-  unsafe extern "system" {
-    fn SetConsoleCtrlHandler(
-      handler: Option<unsafe extern "C-unwind" fn(u32) -> c_int>,
-      add: c_int,
-    ) -> c_int;
-  }
-  // Safety: kernel32 SetConsoleCtrlHandler 的 FFI 调用：handler 为签名匹配的
-  // unsafe extern "C-unwind" fn（Option 包裹即合法注册形态），add=1 表 TRUE；
-  // 注册前置条件（REPL_STATE 有效性）由本 fn 的 /// # Safety 契约承担。
-  unsafe {
-    SetConsoleCtrlHandler(Some(sigint_handler_windows), 1);
-  }
+  // registry 用 handler 数组取代单一 OS handler，注册后常驻进程（与原先
+  // signal() 装上后直到进程退出都不摘的行为一致）；注册失败理论上不可能
+  // （SIGINT 合法且不在 FORBIDDEN 表内），与原实现忽略 signal() 返回值
+  // 同样静默略过。
+  // Safety: `arm_interrupt` 是 async-signal-safe 的 `Fn()`（原子读 + 判空 +
+  // 单槽写，无锁无堆无 panic），满足 registry::register 对回调的全部契约。
+  let _ = unsafe { signal_hook_registry::register(SIGINT, arm_interrupt) };
 }
