@@ -1,7 +1,7 @@
 use crate::{
   functions::{
-    b_and::b_and, b_arshift::b_arshift, b_countlz::b_countlz, b_countrz::b_countrz,
-    b_extract::b_extract, b_lrot::b_lrot, b_lshift::b_lshift, b_not::b_not, b_or::b_or,
+    b_and::b_and_arm, b_arshift::b_arshift, b_countlz::b_countlz, b_countrz::b_countrz,
+    b_extract::b_extract, b_lrot::b_lrot, b_lshift::b_lshift, b_not::b_not, b_or::b_or_arm,
     b_replace::b_replace, b_rrot::b_rrot, b_rshift::b_rshift, b_swap::b_swap, b_test::b_test,
     b_xor::b_xor, lua_l_register::lua_l_register,
   },
@@ -16,9 +16,9 @@ pub unsafe extern "C-unwind" fn luaopen_bit32(l: *mut LuaState) -> i32 {
     // Faithful port of bitlib[] in lbitlib.cpp (Lua name -> b_* function).
     let bitlib: [LuaLReg; 15] = [
       LuaLReg::new(b"arshift", b_arshift),
-      LuaLReg::new(b"band", b_and),
+      LuaLReg::new(b"band", b_and_arm),
       LuaLReg::new(b"bnot", b_not),
-      LuaLReg::new(b"bor", b_or),
+      LuaLReg::new(b"bor", b_or_arm),
       LuaLReg::new(b"bxor", b_xor),
       LuaLReg::new(b"btest", b_test),
       LuaLReg::new(b"extract", b_extract),
