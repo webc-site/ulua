@@ -1,0 +1,63 @@
+use ulua_common::macros::luau_assert::LUAU_ASSERT;
+
+use crate::{
+  enums::{lua_type::LuaType, value_view::ValueView},
+  functions::{c_slice, c_slice_mut, validateobjref::validateobjref, validateref::validateref},
+  macros::gkey::{gkey, gval},
+  records::{
+    gc_object::GCObject, global_state::global_State, lua_node::LuaNode, lua_table::LuaTable,
+  },
+  type_aliases::t_value::TValue,
+};
+
+/// # Safety
+/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
+pub(crate) unsafe fn validatetable(g: *mut global_State, h: *mut LuaTable) {
+  unsafe {
+    let sizenode = 1 << (*h).lsizenode;
+
+    LUAU_ASSERT!((*h).union.lastfree <= sizenode);
+
+    let h_gco = h as *mut GCObject;
+
+    if !(*h).metatable.is_null() {
+      validateobjref(g, h_gco, (*h).metatable as *mut GCObject);
+    }
+
+    // Safety:array 为 C 指针 + sizearray 计数，与表分配一致。
+    for val in c_slice((*h).array, (*h).sizearray as usize) {
+      validateref(g, h_gco, val);
+    }
+
+    // Safety:node 数组与 lsizenode 分配一致；空表时 node 指向 dummynode
+    // （合法静态对象），按 sizenode 读取与 C++ 遍历语义一致。
+    for (i, n) in c_slice_mut((*h).node.cast::<LuaNode>(), sizenode as usize)
+      .iter_mut()
+      .enumerate()
+    {
+      // ttype(gkey(n)) -> (*gkey!(n)).tt()（键轴 4 位字段访问，非读宏）
+      // ttisnil(gval(n)) -> ValueView::Nil 变体判定（§11 pass B 读宏收口）
+      LUAU_ASSERT!(
+        (*gkey!(n)).tt() != LuaType::DeadKey as i32
+          || matches!(ValueView::from_tvalue(&*gval!(n)), ValueView::Nil)
+      );
+
+      // gnext(n) -> n.key.next()
+      let next_val = n.key.next();
+      let i = i as i32;
+      LUAU_ASSERT!(i + next_val >= 0 && i + next_val < sizenode);
+
+      if !matches!(ValueView::from_tvalue(&*gval!(n)), ValueView::Nil) {
+        let src = &*gkey!(n);
+        let k = TValue {
+          tt: src.tt(),
+          value: src.value,
+          ..Default::default()
+        };
+
+        validateref(g, h_gco, &k);
+        validateref(g, h_gco, &*gval!(n));
+      }
+    }
+  }
+}

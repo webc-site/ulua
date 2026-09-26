@@ -1,0 +1,24 @@
+[package]
+name = "ulua-require"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Require-by-string module resolution for Luau (Rust)."
+keywords = ["luau", "lua", "require", "modules", "resolver"]
+categories = ["development-tools"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+coarsetime = "0.1.37"
+memchr = "2.8.3"
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
+ulua-config = { path = "../ulua-config", version = "0.1.2" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
+
+# 旧 [features] 段的 default/std/wasm 为零消费点空特性（无 cfg 门控、无
+# 下游转发），删除虚假 no_std 特性面（对齐 ulua-bytecode 先例）。
+

@@ -1,0 +1,965 @@
+extern crate alloc;
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_content_reassignment() {
+  use alloc::string::String;
+
+  use ulua_analysis::{
+    functions::{as_mutable_type::as_mutable_type_id, get_type},
+    records::{
+      any_type::AnyType, builtin_types::BuiltinTypes, r#type::Type, type_arena::TypeArena,
+      type_level::TypeLevel,
+    },
+  };
+
+  let mut my_any = Type::from(AnyType::default());
+  my_any.persistent = true;
+  my_any.documentation_symbol = Some(String::from("@global/any"));
+
+  let mut arena = TypeArena::default();
+  let builtin_types = BuiltinTypes::new();
+  let future_any =
+    arena.fresh_type_not_null_builtin_types_type_level(&builtin_types, TypeLevel::default());
+
+  // Safety: future_any 是 arena 刚 fresh 出的独占节点（cpp `getMutable<AnyType>` 同型），
+  // 非空且在作用域内存活，reassign 只改写该节点自身；可变借用止于本行。
+  unsafe { &mut *as_mutable_type_id(future_any) }.reassign(&my_any);
+
+  // Safety: future_any 同上，指向 arena 存活节点；此后仅只读断言字段。
+  let future_tv = unsafe { &*future_any };
+  assert!(get_type::get::<AnyType>(future_any).is_some());
+  assert!(!future_tv.persistent);
+  assert_eq!(
+    future_tv.documentation_symbol.as_deref(),
+    Some("@global/any")
+  );
+  assert_eq!(future_tv.owning_arena, arena.arena_id);
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_is_boolean_on_boolean_singletons() {
+  use ulua_analysis::{
+    functions::is_boolean::is_boolean,
+    records::{boolean_singleton::BooleanSingleton, singleton_type::SingletonType, r#type::Type},
+    type_aliases::singleton_variant::SingletonVariant,
+  };
+
+  let true_bool = Type::from(SingletonType {
+    variant: SingletonVariant::V0(BooleanSingleton { value: true }),
+  });
+
+  assert!(is_boolean(&true_bool));
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_is_boolean_on_unions_of_true_or_false_singletons() {
+  use alloc::vec;
+
+  use ulua_analysis::{
+    functions::is_boolean::is_boolean,
+    records::{
+      boolean_singleton::BooleanSingleton, singleton_type::SingletonType, r#type::Type,
+      union_type::UnionType,
+    },
+    type_aliases::singleton_variant::SingletonVariant,
+  };
+
+  let true_bool = Type::from(SingletonType {
+    variant: SingletonVariant::V0(BooleanSingleton { value: true }),
+  });
+  let false_bool = Type::from(SingletonType {
+    variant: SingletonVariant::V0(BooleanSingleton { value: false }),
+  });
+  let union_ = Type::from(UnionType {
+    options: vec![&true_bool, &false_bool],
+  });
+
+  assert!(is_boolean(&union_));
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_is_string_on_string_singletons() {
+  use alloc::string::String;
+
+  use ulua_analysis::{
+    functions::is_string::is_string,
+    records::{singleton_type::SingletonType, string_singleton::StringSingleton, r#type::Type},
+    type_aliases::singleton_variant::SingletonVariant,
+  };
+
+  let hello_string = Type::from(SingletonType {
+    variant: SingletonVariant::V1(StringSingleton {
+      value: String::from("hello"),
+    }),
+  });
+
+  assert!(is_string(&hello_string));
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_is_string_on_unions_of_various_string_singletons() {
+  use alloc::{string::String, vec};
+
+  use ulua_analysis::{
+    functions::is_string::is_string,
+    records::{
+      singleton_type::SingletonType, string_singleton::StringSingleton, r#type::Type,
+      union_type::UnionType,
+    },
+    type_aliases::singleton_variant::SingletonVariant,
+  };
+
+  let hello_string = Type::from(SingletonType {
+    variant: SingletonVariant::V1(StringSingleton {
+      value: String::from("hello"),
+    }),
+  });
+  let bye_string = Type::from(SingletonType {
+    variant: SingletonVariant::V1(StringSingleton {
+      value: String::from("bye"),
+    }),
+  });
+  let union_ = Type::from(UnionType {
+    options: vec![&hello_string, &bye_string],
+  });
+
+  assert!(is_string(&union_));
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_iterate_over_union_type() {
+  use alloc::{vec, vec::Vec};
+
+  use ulua_analysis::{
+    functions::{begin_type::begin_union_type, end_type::end_union_type},
+    records::union_type::UnionType,
+  };
+  use ulua_unit_test::records::fixture::Fixture;
+
+  let mut fixture = Fixture::fixture_bool(false);
+  let builtins = fixture.get_builtins();
+  let utv = UnionType {
+    options: vec![
+      builtins.number_type,
+      builtins.string_type,
+      builtins.any_type,
+    ],
+  };
+
+  let mut result = Vec::new();
+  let mut it = begin_union_type(&utv);
+  let end = end_union_type(&utv);
+  while it != end {
+    result.push(it.current());
+    it.advance();
+  }
+
+  assert_eq!(utv.options, result);
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_iterating_over_nested_union_types() {
+  use alloc::{vec, vec::Vec};
+
+  use ulua_analysis::{
+    functions::{begin_type::begin_union_type, end_type::end_union_type},
+    records::{r#type::Type, union_type::UnionType},
+  };
+  use ulua_unit_test::records::fixture::Fixture;
+
+  let mut fixture = Fixture::fixture_bool(false);
+  let builtins = fixture.get_builtins();
+  let subunion = Type::from(UnionType {
+    options: vec![builtins.number_type, builtins.string_type],
+  });
+  let utv = UnionType {
+    options: vec![builtins.any_type, &subunion],
+  };
+
+  let mut result = Vec::new();
+  let mut it = begin_union_type(&utv);
+  let end = end_union_type(&utv);
+  while it != end {
+    result.push(it.current());
+    it.advance();
+  }
+
+  assert_eq!(3, result.len());
+  assert_eq!(builtins.any_type, result[0]);
+  assert_eq!(builtins.string_type, result[2]);
+  assert_eq!(builtins.number_type, result[1]);
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_iterating_over_nested_union_types_postfix_operator_plus_plus() {
+  use alloc::{vec, vec::Vec};
+
+  use ulua_analysis::{
+    functions::{begin_type::begin_union_type, end_type::end_union_type},
+    records::{r#type::Type, union_type::UnionType},
+  };
+  use ulua_unit_test::records::fixture::Fixture;
+
+  let mut fixture = Fixture::fixture_bool(false);
+  let builtins = fixture.get_builtins();
+  let subunion = Type::from(UnionType {
+    options: vec![builtins.number_type, builtins.string_type],
+  });
+  let utv = UnionType {
+    options: vec![builtins.any_type, &subunion],
+  };
+
+  let mut result = Vec::new();
+  let mut it = begin_union_type(&utv);
+  let end = end_union_type(&utv);
+  while it != end {
+    let mut old = it.advance_and_get_prev();
+    result.push(old.current());
+  }
+
+  assert_eq!(3, result.len());
+  assert_eq!(builtins.any_type, result[0]);
+  assert_eq!(builtins.string_type, result[2]);
+  assert_eq!(builtins.number_type, result[1]);
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_iterator_descends_on_nested_in_first_operator() {
+  use alloc::{vec, vec::Vec};
+
+  use ulua_analysis::{
+    functions::{begin_type::begin_union_type, end_type::end_union_type},
+    records::{r#type::Type, union_type::UnionType},
+    type_aliases::type_variant::TypeVariant,
+  };
+  use ulua_unit_test::records::fixture::Fixture;
+
+  let mut fixture = Fixture::fixture_bool(false);
+  let builtins = fixture.get_builtins();
+
+  let tv1 = Type::from(UnionType {
+    options: vec![builtins.string_type, builtins.number_type],
+  });
+  let tv2 = Type::from(UnionType {
+    options: vec![&tv1, builtins.boolean_type],
+  });
+  let TypeVariant::Union(utv) = &tv2.ty else {
+    unreachable!();
+  };
+
+  let mut result = Vec::new();
+  let mut it = begin_union_type(utv);
+  let end = end_union_type(utv);
+  while it != end {
+    result.push(it.current());
+    it.advance();
+  }
+
+  assert_eq!(3, result.len());
+  assert_eq!(builtins.string_type, result[0]);
+  assert_eq!(builtins.number_type, result[1]);
+  assert_eq!(builtins.boolean_type, result[2]);
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_iterator_detects_cyclic_union_types_and_skips_over_them() {
+  use alloc::vec::Vec;
+
+  use ulua_analysis::{
+    functions::{begin_type::begin_union_type, end_type::end_union_type},
+    records::{r#type::Type, union_type::UnionType},
+    type_aliases::type_variant::TypeVariant,
+  };
+  use ulua_unit_test::records::fixture::Fixture;
+
+  let mut fixture = Fixture::fixture_bool(false);
+  let builtins = fixture.get_builtins();
+
+  // 故意构造 A↔B 互环类型图：`options` 的元素类型就是 TypeId（`*const Type`），
+  // 环正是本用例的测试对象，指针形态由 API 决定、不可安全化。
+  let mut atv = Type::from(UnionType::default());
+  let mut btv = Type::from(UnionType::default());
+  let atv_id = &atv as *const Type;
+  let btv_id = &btv as *const Type;
+
+  if let TypeVariant::Union(utv2) = &mut btv.ty {
+    utv2.options.push(builtins.number_type);
+    utv2.options.push(builtins.string_type);
+    utv2.options.push(atv_id);
+  } else {
+    unreachable!();
+  }
+
+  if let TypeVariant::Union(utv1) = &mut atv.ty {
+    utv1.options.push(btv_id);
+  } else {
+    unreachable!();
+  }
+
+  let TypeVariant::Union(utv2) = &btv.ty else {
+    unreachable!();
+  };
+
+  let mut result = Vec::new();
+  let mut it = begin_union_type(utv2);
+  let end = end_union_type(utv2);
+  while it != end {
+    result.push(it.current());
+    it.advance();
+  }
+
+  assert_eq!(2, result.len());
+  assert_eq!(builtins.number_type, result[0]);
+  assert_eq!(builtins.string_type, result[1]);
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_proof_that_is_boolean_uses_all_of() {
+  use alloc::vec;
+
+  use ulua_analysis::{
+    functions::is_boolean::is_boolean,
+    records::{
+      boolean_singleton::BooleanSingleton, primitive_type::PrimitiveType,
+      singleton_type::SingletonType, r#type::Type, union_type::UnionType,
+    },
+    type_aliases::singleton_variant::SingletonVariant,
+  };
+
+  let true_bool = Type::from(SingletonType {
+    variant: SingletonVariant::V0(BooleanSingleton { value: true }),
+  });
+  let false_bool = Type::from(SingletonType {
+    variant: SingletonVariant::V0(BooleanSingleton { value: false }),
+  });
+  let string_type = Type::from(PrimitiveType {
+    r#type: PrimitiveType::STRING,
+    metatable: None,
+  });
+  let union_ = Type::from(UnionType {
+    options: vec![&true_bool, &false_bool, &string_type],
+  });
+
+  assert!(!is_boolean(&union_));
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_proof_that_is_string_uses_all_of() {
+  use alloc::{string::String, vec};
+
+  use ulua_analysis::{
+    functions::is_string::is_string,
+    records::{
+      primitive_type::PrimitiveType, singleton_type::SingletonType,
+      string_singleton::StringSingleton, r#type::Type, union_type::UnionType,
+    },
+    type_aliases::singleton_variant::SingletonVariant,
+  };
+
+  let hello_string = Type::from(SingletonType {
+    variant: SingletonVariant::V1(StringSingleton {
+      value: String::from("hello"),
+    }),
+  });
+  let bye_string = Type::from(SingletonType {
+    variant: SingletonVariant::V1(StringSingleton {
+      value: String::from("bye"),
+    }),
+  });
+  let boolean_type = Type::from(PrimitiveType {
+    r#type: PrimitiveType::BOOLEAN,
+    metatable: None,
+  });
+  let union_ = Type::from(UnionType {
+    options: vec![&hello_string, &bye_string, &boolean_type],
+  });
+
+  assert!(!is_string(&union_));
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_return_type_of_function_is_not_parenthesized_if_just_one_value() {
+  use alloc::vec;
+
+  use ulua_analysis::{
+    functions::to_string_to_string::to_string_type_item,
+    records::{
+      function_type::FunctionType, r#type::Type, type_pack::TypePack, type_pack_var::TypePackVar,
+    },
+  };
+  use ulua_unit_test::records::fixture::Fixture;
+
+  let mut fixture = Fixture::fixture_bool(false);
+  let number_type = fixture.get_builtins().number_type;
+
+  let empty_argument_pack = TypePackVar::from(TypePack::new(vec![], None));
+  let return_pack = TypePackVar::from(TypePack::new(vec![number_type], None));
+  let returns_one = Type::from(FunctionType::function_type_new(
+    &empty_argument_pack,
+    &return_pack,
+    None,
+    false,
+  ));
+
+  let res = to_string_type_item(&returns_one);
+  assert_eq!("() -> number", res);
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_return_type_of_function_is_parenthesized_if_not_just_one_value() {
+  use alloc::vec;
+
+  use ulua_analysis::{
+    functions::to_string_to_string::to_string_type_item,
+    records::{
+      function_type::FunctionType, r#type::Type, type_pack::TypePack, type_pack_var::TypePackVar,
+    },
+  };
+  use ulua_unit_test::records::fixture::Fixture;
+
+  let mut fixture = Fixture::fixture_bool(false);
+  let number_type = fixture.get_builtins().number_type;
+
+  let empty_argument_pack = TypePackVar::from(TypePack::new(vec![], None));
+  let return_pack = TypePackVar::from(TypePack::new(vec![number_type, number_type], None));
+  let returns_two = Type::from(FunctionType::function_type_new(
+    &empty_argument_pack,
+    &return_pack,
+    None,
+    false,
+  ));
+
+  let res = to_string_type_item(&returns_two);
+  assert_eq!("() -> (number, number)", res);
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_return_type_of_function_is_parenthesized_if_tail_is_free() {
+  use alloc::vec;
+
+  use ulua_analysis::{
+    functions::to_string_to_string::to_string_type_item,
+    records::{
+      free_type_pack::FreeTypePack, function_type::FunctionType, r#type::Type,
+      type_level::TypeLevel, type_pack::TypePack, type_pack_var::TypePackVar,
+    },
+  };
+  use ulua_unit_test::records::fixture::Fixture;
+
+  let mut fixture = Fixture::fixture_bool(false);
+  let number_type = fixture.get_builtins().number_type;
+
+  let empty_argument_pack = TypePackVar::from(TypePack::new(vec![], None));
+  let free_pack = TypePackVar::from(FreeTypePack::new(TypeLevel::default()));
+  let return_pack = TypePackVar::from(TypePack::new(vec![number_type], Some(&free_pack)));
+  let returns_two = Type::from(FunctionType::function_type_new(
+    &empty_argument_pack,
+    &return_pack,
+    None,
+    false,
+  ));
+
+  let res = to_string_type_item(&returns_two);
+  assert_eq!("() -> (number, a...)", res);
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_subset_check() {
+  use alloc::vec;
+
+  use ulua_analysis::{functions::is_subset::is_subset, records::union_type::UnionType};
+  use ulua_unit_test::records::fixture::Fixture;
+
+  let mut fixture = Fixture::fixture_bool(false);
+  let builtins = fixture.get_builtins();
+  let super_ = UnionType {
+    options: vec![
+      builtins.number_type,
+      builtins.string_type,
+      builtins.boolean_type,
+    ],
+  };
+  let sub = UnionType {
+    options: vec![builtins.number_type, builtins.string_type],
+  };
+  let not_sub = UnionType {
+    options: vec![builtins.number_type, builtins.nil_type],
+  };
+
+  assert!(is_subset(&super_, &sub));
+  assert!(!is_subset(&super_, &not_sub));
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_substitution_skip_failure() {
+  use alloc::{string::String, sync::Arc, vec};
+
+  use ulua_analysis::{
+    functions::to_string_to_string::to_string_type_id,
+    records::{
+      anyification::Anyification, arena_handle::Handle, free_type::FreeType,
+      function_type::FunctionType, generic_type::GenericType, module::Module,
+      property_type::Property, table_type::TableType, r#type::Type, type_level::TypeLevel,
+      type_pack::TypePack, type_pack_var::TypePackVar,
+    },
+    type_aliases::type_variant::TypeVariant,
+  };
+  use ulua_unit_test::records::fixture::Fixture;
+
+  let mut fixture = Fixture::fixture_bool(false);
+  let builtins = fixture.get_builtins();
+  let never_type = builtins.never_type;
+  let unknown_type = builtins.unknown_type;
+
+  let ftv11 = Type::from(FreeType {
+    level: TypeLevel::default(),
+    lower_bound: never_type,
+    upper_bound: unknown_type,
+    ..FreeType::default()
+  });
+  let ftv11_id = &ftv11 as *const Type;
+
+  let tp24 = TypePackVar::from(TypePack::new(vec![ftv11_id], None));
+  let tp17 = TypePackVar::from(TypePack::new(vec![], None));
+
+  let ftv23 = Type::from(FunctionType::function_type_new(&tp24, &tp17, None, false));
+  let ftv23_id = &ftv23 as *const Type;
+
+  let mut ttv_connection2 = Type::from(TableType::new());
+  if let TypeVariant::Table(ttv) = &mut ttv_connection2.ty {
+    ttv.instantiated_type_params.push(ftv11_id);
+    ttv
+      .props
+      .insert(String::from("f"), Property::rw_type_id(ftv23_id));
+  } else {
+    unreachable!();
+  }
+
+  let tp21 = TypePackVar::from(TypePack::new(vec![ftv11_id], None));
+  let tp20 = TypePackVar::from(TypePack::new(vec![], None));
+
+  let ftv19 = Type::from(FunctionType::function_type_new(&tp21, &tp20, None, false));
+  let ftv19_id = &ftv19 as *const Type;
+
+  let mut ttv_signal = Type::from(TableType::new());
+  let ttv_signal_id = &ttv_signal as *const Type;
+  if let TypeVariant::Table(ttv) = &mut ttv_signal.ty {
+    ttv.instantiated_type_params.push(ftv11_id);
+    ttv
+      .props
+      .insert(String::from("f"), Property::rw_type_id(ftv19_id));
+  } else {
+    unreachable!();
+  }
+
+  if let TypeVariant::Table(ttv) = &mut ttv_connection2.ty {
+    ttv
+      .props
+      .insert(String::from("signal"), Property::rw_type_id(ttv_signal_id));
+  } else {
+    unreachable!();
+  }
+
+  let gtv_k2 = Type::from(GenericType::default());
+  let gtv_k2_id = &gtv_k2 as *const Type;
+  let gtv_v2 = Type::from(GenericType::default());
+  let gtv_v2_id = &gtv_v2 as *const Type;
+
+  let mut ttv_tween_result2 = Type::from(TableType::new());
+  let ttv_tween_result2_id = &ttv_tween_result2 as *const Type;
+  if let TypeVariant::Table(ttv) = &mut ttv_tween_result2.ty {
+    ttv.instantiated_type_params.push(gtv_k2_id);
+    ttv.instantiated_type_params.push(gtv_v2_id);
+  } else {
+    unreachable!();
+  }
+
+  let tp13 = TypePackVar::from(TypePack::new(vec![ttv_tween_result2_id], None));
+  let ftv12 = Type::from(FunctionType::function_type_new(&tp13, &tp17, None, false));
+  let ftv12_id = &ftv12 as *const Type;
+
+  let mut ttv_connection = Type::from(TableType::new());
+  let ttv_connection_id = &ttv_connection as *const Type;
+  if let TypeVariant::Table(ttv) = &mut ttv_connection.ty {
+    ttv.instantiated_type_params.push(ttv_tween_result2_id);
+    ttv
+      .props
+      .insert(String::from("f"), Property::rw_type_id(ftv12_id));
+    ttv
+      .props
+      .insert(String::from("signal"), Property::rw_type_id(ttv_signal_id));
+  } else {
+    unreachable!();
+  }
+
+  let tp9 = TypePackVar::from(TypePack::new(vec![], None));
+  let tp10 = TypePackVar::from(TypePack::new(vec![ttv_connection_id], None));
+
+  let ftv8 = Type::from(FunctionType::function_type_new(&tp9, &tp10, None, false));
+  let ftv8_id = &ftv8 as *const Type;
+
+  let mut ttv_tween = Type::from(TableType::new());
+  let ttv_tween_id = &ttv_tween as *const Type;
+  if let TypeVariant::Table(ttv) = &mut ttv_tween.ty {
+    ttv.instantiated_type_params.push(gtv_k2_id);
+    ttv.instantiated_type_params.push(gtv_v2_id);
+    ttv
+      .props
+      .insert(String::from("f"), Property::rw_type_id(ftv8_id));
+  } else {
+    unreachable!();
+  }
+
+  let tp4 = TypePackVar::from(TypePack::new(vec![], None));
+  let tp5 = TypePackVar::from(TypePack::new(vec![ttv_tween_id], None));
+
+  let ftv3 = Type::from(FunctionType::function_type_new(&tp4, &tp5, None, false));
+  let ftv3_id = &ftv3 as *const Type;
+
+  if let TypeVariant::Table(ttv) = &mut ttv_tween_result2.ty {
+    ttv
+      .props
+      .insert(String::from("f"), Property::rw_type_id(ftv3_id));
+  } else {
+    unreachable!();
+  }
+
+  let gtv_k = Type::from(GenericType::default());
+  let gtv_k_id = &gtv_k as *const Type;
+  let gtv_v = Type::from(GenericType::default());
+  let gtv_v_id = &gtv_v as *const Type;
+
+  let mut ttv_tween_result = Type::from(TableType::new());
+  let root = &ttv_tween_result as *const Type;
+  if let TypeVariant::Table(ttv) = &mut ttv_tween_result.ty {
+    ttv.instantiated_type_params.push(gtv_k_id);
+    ttv.instantiated_type_params.push(gtv_v_id);
+    ttv
+      .props
+      .insert(String::from("f"), Property::rw_type_id(ftv3_id));
+  } else {
+    unreachable!();
+  }
+
+  let mut current_module = Module::default();
+  let (global_scope, builtin_types, ice_handler, any_type, any_type_pack) = {
+    let frontend = fixture.get_frontend();
+    let global_scope = frontend.globals.global_scope();
+    let builtin_types = frontend.builtin_types_handle();
+    let ice_handler = &mut frontend.ice_handler as *mut _;
+    // `builtin_types` 是经 `Frontend::builtin_types_handle` chokepoint 取的句柄，
+    // 指向前端持有且比本借用更长寿的 BuiltinTypes；仅取只读引用拿两个 Copy 句柄。
+    let builtins = builtin_types.get();
+    let any_type = builtins.any_type;
+    let any_type_pack = builtins.any_type_pack;
+    (
+      global_scope,
+      builtin_types,
+      ice_handler,
+      any_type,
+      any_type_pack,
+    )
+  };
+
+  let mut anyification =
+      Anyification::anyification_type_arena_scope_ptr_not_null_builtin_types_internal_error_reporter_type_id_type_pack_id(
+          Handle::from_mut(&mut current_module.internal_types),
+          &Arc::clone(&global_scope),
+          builtin_types,
+          ice_handler,
+          any_type,
+          any_type_pack,
+      );
+
+  let any = anyification.substitute_type_id(root);
+
+  assert!(!anyification.normalization_too_complex);
+  assert!(any.is_some());
+  assert_eq!(
+    "{ f: t1 } where t1 = () -> { f: () -> { f: ({ f: t1 }) -> (), signal: { f: (any) -> () } } }",
+    to_string_type_id(any.unwrap())
+  );
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_tagging_extern_types() {
+  use ulua_analysis::{
+    functions::{attach_tag_type::attach_tag, has_tag_type::has_tag_type_id},
+    records::{extern_type::ExternType, r#type::Type},
+  };
+
+  let base = Type::from(ExternType {
+    name: "Base".into(),
+    props: Default::default(),
+    parent: None,
+    metatable: None,
+    tags: Default::default(),
+    user_data: None,
+    definition_module_name: "Test".into(),
+    definition_location: None,
+    indexer: None,
+    relation: None,
+  });
+  let base_id = &base as *const Type;
+
+  assert!(!has_tag_type_id(base_id, "foo"));
+  attach_tag(base_id, "foo");
+  assert!(has_tag_type_id(base_id, "foo"));
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_tagging_functions() {
+  use alloc::vec;
+
+  use ulua_analysis::{
+    functions::{attach_tag_type::attach_tag, has_tag_type::has_tag_type_id},
+    records::{
+      function_type::FunctionType, r#type::Type, type_pack::TypePack, type_pack_var::TypePackVar,
+    },
+  };
+
+  let empty = TypePackVar::from(TypePack::new(vec![], None));
+  let ftv = Type::from(FunctionType::function_type_new(&empty, &empty, None, false));
+  let ty = &ftv as *const Type;
+
+  assert!(!has_tag_type_id(ty, "foo"));
+  attach_tag(ty, "foo");
+  assert!(has_tag_type_id(ty, "foo"));
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_tagging_props() {
+  use ulua_analysis::{
+    functions::{
+      attach_tag_type::attach_tag_property_string, has_tag_type::has_tag_property_string,
+    },
+    records::property_type::Property,
+  };
+
+  let mut prop = Property::default();
+  assert!(!has_tag_property_string(&prop, "foo"));
+  attach_tag_property_string(&mut prop, "foo");
+  assert!(has_tag_property_string(&prop, "foo"));
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_tagging_subextern_types() {
+  use ulua_analysis::{
+    functions::{attach_tag_type::attach_tag, has_tag_type::has_tag_type_id},
+    records::{extern_type::ExternType, r#type::Type},
+  };
+
+  let base = Type::from(ExternType {
+    name: "Base".into(),
+    props: Default::default(),
+    parent: None,
+    metatable: None,
+    tags: Default::default(),
+    user_data: None,
+    definition_module_name: "Test".into(),
+    definition_location: None,
+    indexer: None,
+    relation: None,
+  });
+  let base_id = &base as *const Type;
+  let derived = Type::from(ExternType {
+    name: "Derived".into(),
+    props: Default::default(),
+    parent: Some(base_id),
+    metatable: None,
+    tags: Default::default(),
+    user_data: None,
+    definition_module_name: "Test".into(),
+    definition_location: None,
+    indexer: None,
+    relation: None,
+  });
+  let derived_id = &derived as *const Type;
+
+  assert!(!has_tag_type_id(base_id, "foo"));
+  assert!(!has_tag_type_id(derived_id, "foo"));
+
+  attach_tag(base_id, "foo");
+  assert!(has_tag_type_id(base_id, "foo"));
+  assert!(has_tag_type_id(derived_id, "foo"));
+
+  attach_tag(derived_id, "bar");
+  assert!(!has_tag_type_id(base_id, "bar"));
+  assert!(has_tag_type_id(derived_id, "bar"));
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_tagging_tables() {
+  use ulua_analysis::{
+    functions::{attach_tag_type::attach_tag, has_tag_type::has_tag_type_id},
+    records::{table_type::TableType, r#type::Type},
+  };
+
+  let ttv = Type::from(TableType::new());
+  let ty = &ttv as *const Type;
+
+  assert!(!has_tag_type_id(ty, "foo"));
+  attach_tag(ty, "foo");
+  assert!(has_tag_type_id(ty, "foo"));
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_union_type_iterator_with_empty_union() {
+  use alloc::vec::Vec;
+
+  use ulua_analysis::{
+    functions::{begin_type::begin_union_type, end_type::end_union_type},
+    records::{r#type::Type, union_type::UnionType},
+    type_aliases::type_variant::TypeVariant,
+  };
+
+  let tv = Type::from(UnionType::default());
+  let TypeVariant::Union(utv) = &tv.ty else {
+    unreachable!();
+  };
+
+  let mut actual = Vec::new();
+  let mut it = begin_union_type(utv);
+  let end = end_union_type(utv);
+  while it != end {
+    actual.push(it.current());
+    it.advance();
+  }
+
+  assert!(actual.is_empty());
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_union_type_iterator_with_only_cyclic_union() {
+  use alloc::vec::Vec;
+
+  use ulua_analysis::{
+    functions::{begin_type::begin_union_type, end_type::end_union_type},
+    records::{r#type::Type, union_type::UnionType},
+    type_aliases::type_variant::TypeVariant,
+  };
+
+  // 故意构造自环：options 元素即存活节点的 TypeId（`*const Type` 由 API 决定），
+  // 环本身是被测语义。
+  let mut tv = Type::from(UnionType::default());
+  let tv_id = &tv as *const Type;
+  if let TypeVariant::Union(utv) = &mut tv.ty {
+    utv.options.push(tv_id);
+    utv.options.push(tv_id);
+  } else {
+    unreachable!();
+  }
+
+  let TypeVariant::Union(utv) = &tv.ty else {
+    unreachable!();
+  };
+  let mut actual = Vec::new();
+  let mut it = begin_union_type(utv);
+  let end = end_union_type(utv);
+  while it != end {
+    actual.push(it.current());
+    it.advance();
+  }
+
+  assert!(actual.is_empty());
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_union_type_iterator_with_vector_iter_ctor() {
+  use alloc::{vec, vec::Vec};
+
+  use ulua_analysis::{
+    functions::{begin_type::begin_union_type, end_type::end_union_type},
+    records::{r#type::Type, union_type::UnionType},
+    type_aliases::type_variant::TypeVariant,
+  };
+  use ulua_unit_test::records::fixture::Fixture;
+
+  let mut fixture = Fixture::fixture_bool(false);
+  let builtins = fixture.get_builtins();
+
+  let tv1 = Type::from(UnionType {
+    options: vec![builtins.string_type, builtins.number_type],
+  });
+  let tv2 = Type::from(UnionType {
+    options: vec![&tv1, builtins.boolean_type],
+  });
+  let TypeVariant::Union(utv) = &tv2.ty else {
+    unreachable!();
+  };
+
+  let mut actual = Vec::new();
+  let mut it = begin_union_type(utv);
+  let end = end_union_type(utv);
+  while it != end {
+    actual.push(it.current());
+    it.advance();
+  }
+  let expected = vec![
+    builtins.string_type,
+    builtins.number_type,
+    builtins.boolean_type,
+  ];
+
+  assert_eq!(actual, expected);
+}
+
+// Source: `tests/TypeVar.test.cpp`
+#[test]
+fn type_var_visit_once() {
+  use alloc::string::String;
+
+  use ulua_unit_test::records::{fixture::Fixture, visit_count_tracker::VisitCountTracker};
+
+  let mut fixture = Fixture::fixture_bool(false);
+  let source = String::from(
+    r#"
+type T = { a: number, b: () -> () }
+local b: (T, T, T) -> T
+"#,
+  );
+  let result = fixture.check_string_optional_frontend_options(&source, None);
+  assert!(
+    result.errors.is_empty(),
+    "expected no errors, got {:?}",
+    result.errors
+  );
+
+  let b_type = fixture.require_type_string("b");
+
+  let mut tester = VisitCountTracker::new();
+  tester.traverse(b_type);
+
+  for count in tester.ty_visits.values() {
+    assert_eq!(1, *count);
+  }
+
+  for count in tester.tp_visits.values() {
+    assert_eq!(1, *count);
+  }
+}

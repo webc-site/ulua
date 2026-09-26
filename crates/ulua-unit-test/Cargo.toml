@@ -1,0 +1,23 @@
+[package]
+name = "ulua-unit-test"
+version.workspace = true
+edition.workspace = true
+publish = false
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+hipstr = "0.8.0"
+ulua-analysis = { path = "../ulua-analysis", version = "0.1.2" }
+ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.2" }
+ulua-code-gen = { path = "../ulua-code-gen", version = "0.1.2" }
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
+ulua-compiler = { path = "../ulua-compiler", version = "0.1.2" }
+ulua-config = { path = "../ulua-config", version = "0.1.2" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
+
+# 旧 [features] 段的 default/std/wasm 为零消费点空特性（无 cfg 门控、无
+# 下游转发），删除虚假 no_std 特性面（对齐 ulua-bytecode 先例）。
+

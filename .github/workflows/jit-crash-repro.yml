@@ -1,0 +1,138 @@
+name: JIT Crash Repro (linux-x64 + gdb)
+
+# 目的：在 x86_64 ubuntu runner 上以 headless 方式复现 ulua x64 CodeGen 在
+# CI 基准里的高确定性 SIGSEGV，把 gdb 栈 + 寄存器 + core 上传成 artifact，供
+# 本地分析。与 bench-regression.yml 完全解耦、只手动触发；不进并发组，不影响
+# PR 门。历史签名：#1 Label 哨兵（dev@5c8929b 已修）；#2 high_level_lua_jit::
+# binarytrees（本工作流的目标）。
+
+on:
+  workflow_dispatch:
+    inputs:
+      case:
+        description: "divan bench 过滤（例如 high_level_lua_jit::binarytrees；留空则跑全组）"
+        required: false
+        default: "high_level_lua_jit::binarytrees"
+      extra_args:
+        description: "追加给 bench 二进制的参数（例如 --sample-count=1）"
+        required: false
+        default: "--sample-count=1"
+      mode:
+        description: "interp = 不带 --features jit（对照组）；jit = 带 --features jit"
+        type: choice
+        required: false
+        default: "jit"
+        options: [jit, interp]
+
+permissions:
+  contents: read
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_MIN_STACK: "67108864"
+  CARGO_INCREMENTAL: "0"
+  # 让 gdb 能拿到 ulua-code-gen 与 ulua-vm 的行号 + 局部变量；bench profile
+  # 默认继承 release，不带 debug 符号。
+  CARGO_PROFILE_BENCH_DEBUG: "true"
+
+jobs:
+  repro:
+    name: x64 SIGSEGV capture
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Install gdb + core dump helpers
+        run: |
+          set -euxo pipefail
+          sudo apt-get update
+          sudo apt-get install -y gdb
+          # 允许 core 落到当前目录，命名为 core.<exe>.<pid>
+          ulimit -c unlimited || true
+          echo 'core.%e.%p' | sudo tee /proc/sys/kernel/core_pattern
+
+      - name: Build bench binary (debug symbols, feature per input)
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          set -euxo pipefail
+          if [ "$MODE" = "jit" ]; then
+            cargo bench --locked -p ulua --bench benchmarks --features jit --no-run --message-format=json \
+              | tee /tmp/build.jsonl
+          else
+            cargo bench --locked -p ulua --bench benchmarks --no-run --message-format=json \
+              | tee /tmp/build.jsonl
+          fi
+          # 从 cargo --message-format=json 里抓最后一个 executable 字段
+          BIN=$(python3 -c "import json,sys
+          exe=''
+          for line in open('/tmp/build.jsonl'):
+            try:
+              m=json.loads(line)
+            except Exception:
+              continue
+            if m.get('reason')=='compiler-artifact' and m.get('executable'):
+              exe=m['executable']
+          print(exe)")
+          if [ -z "$BIN" ] || [ ! -x "$BIN" ]; then
+            echo "no bench binary located (BIN=$BIN)" >&2; exit 1
+          fi
+          echo "BENCH_BIN=$BIN" >>"$GITHUB_ENV"
+
+      - name: Run under gdb, capture backtrace
+        env:
+          CASE: ${{ inputs.case }}
+          EXTRA: ${{ inputs.extra_args }}
+        run: |
+          set -euxo pipefail
+          ARGS=("--bench")
+          [ -n "${EXTRA:-}" ] && ARGS+=($EXTRA)
+          [ -n "${CASE:-}" ] && ARGS+=("$CASE")
+          echo "===> $BENCH_BIN ${ARGS[*]}"
+          # -batch 一次性跑完；崩溃时 gcore 生成 core 便于二次分析。
+          gdb -batch \
+            -ex "set pagination off" \
+            -ex "set print frame-info source-and-location on" \
+            -ex "handle SIGSEGV stop print nopass" \
+            -ex "run" \
+            -ex "echo \n=== backtrace ===\n" \
+            -ex "bt 60" \
+            -ex "echo \n=== backtrace (full frame vars) ===\n" \
+            -ex "bt full 40" \
+            -ex "echo \n=== all threads ===\n" \
+            -ex "thread apply all bt 25" \
+            -ex "echo \n=== registers ===\n" \
+            -ex "info registers rip rsp rbp rax rbx rcx rdx rsi rdi r8 r9 r10 r11 r12 r13 r14 r15" \
+            -ex "echo \n=== faulting instruction ===\n" \
+            -ex "x/24i \$pc-32" \
+            -ex "echo \n=== core dump ===\n" \
+            -ex "generate-core-file ./jit-crash.core" \
+            --args "$BENCH_BIN" "${ARGS[@]}" 2>&1 | tee gdb-trace.txt
+
+      - name: Collect JIT env info
+        if: always()
+        run: |
+          {
+            echo "=== CPU ==="; lscpu | head -25
+            echo "=== kernel ==="; uname -a
+            echo "=== rustc ==="; rustc -vV
+            echo "=== binary ==="; file "$BENCH_BIN" 2>/dev/null || true
+            echo "=== AVX present ==="; grep -c avx /proc/cpuinfo || true
+          } > jit-env.txt 2>&1 || true
+
+      - name: Upload artifacts
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: jit-crash-${{ github.run_number }}
+          path: |
+            gdb-trace.txt
+            jit-env.txt
+            jit-crash.core
+          retention-days: 14
+          if-no-files-found: warn

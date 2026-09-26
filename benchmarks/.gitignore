@@ -1,0 +1,6 @@
+# Local config (copy from engines.example.json, edit paths to your binaries)
+engines.json
+# Generated compile-speed corpus
+big.luau
+# Driver build output
+drivers/*/target/

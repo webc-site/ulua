@@ -1,0 +1,6 @@
+[profile.default]
+# 大模块 a64/x64 lowering 测试在并行负载下需要更长时间
+# 对应 cpp tests/main.cpp:69-107：上游 debuggerPresent() 在附加调试器时抬高 doctest 超时，
+# 本端口不移植调试器探测（原 ulua-unit-test debugger_present 助手无消费点已删除），
+# 慢测试兜底语义统一由本条 slow-timeout 承载。
+slow-timeout = { period = "300s", terminate-after = 1 }

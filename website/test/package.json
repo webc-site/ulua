@@ -1,0 +1,12 @@
+{
+  "name": "ulua-playground-test",
+  "private": true,
+  "description": "Headless-browser smoke test for the ulua playground (website/).",
+  "type": "module",
+  "scripts": {
+    "test": "bun playground.smoke.mjs"
+  },
+  "devDependencies": {
+    "playwright": "^1.50.0"
+  }
+}

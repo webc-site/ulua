@@ -1,0 +1,116 @@
+name: Deploy GitHub Pages
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  test-wasm:
+    name: Test & Build Wasm (Ubuntu ARM)
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust (+ wasm32 target)
+        uses: ./.github/actions/setup-rust
+        with:
+          targets: wasm32-unknown-unknown
+
+      - name: Setup wasm-bindgen-cli
+        uses: ./.github/actions/setup-wasm
+
+      - name: Test ulua-web unit tests
+        run: cargo test -p ulua-web --locked
+
+      - name: Build WebAssembly engine
+        run: |
+          chmod +x website/wasm.sh
+          ./website/wasm.sh --release
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Install website dependencies
+        run: bun install --cwd website --frozen-lockfile
+
+      - name: Run benchmarks & update website data
+        run: |
+          chmod +x bench.sh
+          ./bench.sh --runs=3
+
+      - name: Build website (Vite + Svelte + Pug + Stylus)
+        run: bun run --cwd website build
+
+      - name: Copy benchmark assets to website dist
+        run: |
+          mkdir -p website/dist/benchmarks
+          cp benchmarks/*.svg benchmarks/results.json website/dist/benchmarks/ || true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+
+      - name: Run website smoke tests
+        run: |
+          npm --prefix website/test ci
+          npx --prefix website/test playwright install --with-deps chromium
+          npm --prefix website/test test
+
+      - name: Deploy website dist to gh-pages branch
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+        run: |
+          cd website/dist
+          git init
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git checkout -b gh-pages
+          git add -A
+          git commit -m "chore(pages): deploy website and benchmark assets [skip ci]"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" gh-pages
+          rm -rf .git
+
+      - name: Setup Pages
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+        uses: actions/configure-pages@v6
+
+      - name: Upload Pages artifact
+        if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: website/dist
+
+  deploy:
+    name: Deploy to GitHub Pages
+    if: github.event_name != 'pull_request' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev')
+    needs: test-wasm
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-24.04-arm
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

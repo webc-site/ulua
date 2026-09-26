@@ -1,0 +1,21 @@
+name: "Setup wasm-bindgen-cli"
+description: "Resolve and install the matching wasm-bindgen-cli prebuilt binary from Cargo.lock"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Resolve wasm-bindgen version
+      id: wasm-bindgen-version
+      shell: bash
+      run: |
+        VERSION=$(awk '$1 == "name" && $3 == "\"wasm-bindgen\"" { getline; print $3 }' Cargo.lock | tr -d '"' | head -n 1)
+        if [ -z "$VERSION" ]; then
+          VERSION="0.2.128"
+        fi
+        echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+        echo "Expected wasm-bindgen version: $VERSION"
+
+    - name: Install wasm-bindgen-cli
+      uses: taiki-e/install-action@v2
+      with:
+        tool: wasm-bindgen-cli@${{ steps.wasm-bindgen-version.outputs.version }}

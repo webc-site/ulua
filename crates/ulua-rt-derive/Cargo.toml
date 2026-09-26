@@ -1,0 +1,19 @@
+[package]
+name = "ulua-rt-derive"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Procedural derive macros (`UserData`, `FromLua`) for ulua-rt, the mlua-style API of ulua (pure-Rust Luau)."
+keywords = ["luau", "lua", "mlua", "derive", "userdata"]
+categories = ["api-bindings", "development-tools::procedural-macro-helpers"]
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "3.0", features = ["full"] }
+quote = "1.0"
+proc-macro2 = "1.0"
+

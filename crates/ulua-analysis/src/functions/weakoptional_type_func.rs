@@ -1,0 +1,68 @@
+use ulua_common::macros::luau_assert::LUAU_ASSERT;
+
+use crate::{
+  enums::{normalization_result::NormalizationResult, reduction::Reduction},
+  functions::{follow_type, get_type, is_pending::is_pending},
+  records::{
+    never_type::NeverType, type_function_context::TypeFunctionContext,
+    type_function_reduction_result::TypeFunctionReductionResult,
+  },
+  type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
+};
+/// # Safety
+/// 调用方须保证满足 C++ 原实现的调用契约。
+pub unsafe fn weakoptional_type_func(
+  instance: TypeId,
+  type_params: &[TypeId],
+  pack_params: &[TypePackId],
+  ctx: &mut TypeFunctionContext,
+) -> TypeFunctionReductionResult {
+  // Safety: ctx 由类型函数派发器以当前会话的 TypeFunctionContext 独占借用传入（对应 C++
+  // `TypeFunctionContext&`），本函数执行期间该对象存活；此处取可变再借用供后续访问器使用。
+  let ctx_ref = &mut *ctx;
+  if type_params.len() != 1 || !pack_params.is_empty() {
+    ctx_ref.ice().ice_string("weakoptional type function: encountered a type function instance without the required argument structure");
+    LUAU_ASSERT!(false);
+  }
+
+  let target_ty = follow_type::follow(type_params[0]);
+
+  // Safety: is_pending 为 unsafe fn，其契约要求 solver 裸指针有效——ctx_ref.solver 为上下文持有的
+  // 会话 ConstraintSolver（C++ 可空，is_pending 内部 `as_mut` 判空），target_ty 为 arena 存活句柄，
+  // ctx_ref 因 ctx 契约在本次调用内存活。
+  if unsafe { is_pending(target_ty, ctx_ref.solver) } {
+    return TypeFunctionReductionResult::no_reduction(alloc::vec![target_ty]);
+  }
+
+  if get_type::get::<NeverType>(instance).as_ref().is_some() {
+    return TypeFunctionReductionResult {
+      result: Some(ctx_ref.builtins().nil_type),
+      reduction_status: Reduction::MaybeOk,
+      blocked_types: alloc::vec![],
+      blocked_packs: alloc::vec![],
+      error: None,
+      messages: alloc::vec![],
+    };
+  }
+
+  // C++ 中归一化失败返回空指针：不归约，对驻留性一无所知
+  let Some(target_norm) = ctx_ref.normalizer_mut().try_normalize(target_ty) else {
+    return TypeFunctionReductionResult::no_reduction(alloc::vec![]);
+  };
+
+  let result = ctx_ref
+    .normalizer_mut()
+    .is_inhabited_normalized_type(target_norm.as_ref());
+  if result == NormalizationResult::False {
+    return TypeFunctionReductionResult {
+      result: Some(ctx_ref.builtins().nil_type),
+      reduction_status: Reduction::MaybeOk,
+      blocked_types: alloc::vec![],
+      blocked_packs: alloc::vec![],
+      error: None,
+      messages: alloc::vec![],
+    };
+  }
+
+  TypeFunctionReductionResult::reduction(target_ty)
+}

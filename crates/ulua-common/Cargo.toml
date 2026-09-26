@@ -1,0 +1,43 @@
+[package]
+name = "ulua-common"
+description = "Core types, flags, and shared utilities for the ulua Luau-in-Rust toolchain."
+keywords = ["luau", "lua", "data-structures"]
+categories = ["data-structures"]
+
+[package.version]
+workspace = true
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[features]
+default = ["std"]
+std = []
+# `std` 有 cfg(feature = "std") 消费点（functions/assert_call_handler.rs），保留；
+# 曾有的 native/cli/native-codegen/wasm 空特性零 cfg 门控、零下游转发，删之。
+luau_assert = []
+luau_enable_time_trace = []
+
+
+[dependencies]
+fast-float2 = { version = "0.2.4", default-features = false }
+foldhash = "0.2.0"
+# hashbrown 激活 `default-hasher`（由 foldhash 驱动），提供原生的 `new()` / `with_capacity()`。
+hashbrown = { version = "0.17.1", default-features = false, features = ["alloc", "default-hasher"] }
+indexmap = "2.14.2"
+memchr = "2.8.3"
+parking_lot = "0.12.5"
+smallvec = { version = "1.16.1", default-features = false, features = ["const_generics"] }
+strum = { version = "0.28.0", default-features = false, features = ["derive"] }

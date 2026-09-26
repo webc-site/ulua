@@ -1,0 +1,53 @@
+[package]
+name = "ulua-reduce-cli"
+description = "Command-line Luau test-case reducer (Rust)."
+keywords = ["luau", "lua", "reduce", "minimizer", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[package.version]
+workspace = true
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "ulua-reduce"
+path = "src/main.rs"
+
+[dependencies]
+memchr = "2.8.3"
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.2"
+
+[dependencies.ulua-cli-lib]
+path = "../ulua-cli-lib"
+version = "0.1.2"
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.2"
+
+# 旧 [features] 段的 default/std/wasm 为零消费点空特性（无 cfg 门控、无
+# 下游转发），删除虚假 no_std 特性面（对齐 ulua-bytecode 先例）。
+
+[dev-dependencies]
+tempfile = "3.27.0"
+
+[dev-dependencies.ulua-cli-lib]
+path = "../ulua-cli-lib"
+features = ["test-utils"]
+version = "0.1.2"

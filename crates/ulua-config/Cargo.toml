@@ -1,0 +1,27 @@
+[package]
+name = "ulua-config"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "`.uluac` configuration handling for Luau (Rust)."
+keywords = ["luau", "lua", "config", "configuration"]
+categories = ["config", "parsing"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+hipstr = "0.8.0"
+strum = { version = "0.28.0", default-features = false, features = ["derive"] }
+thiserror = "2"
+ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
+ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.2" }
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
+ulua-compiler = { path = "../ulua-compiler", version = "0.1.2" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
+
+# 旧 [features] 段的 default/std 为零消费点空特性（无 cfg 门控、无下游
+# 转发），删除虚假 no_std 特性面（对齐 ulua-bytecode 先例）。
+

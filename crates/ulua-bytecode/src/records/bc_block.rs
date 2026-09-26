@@ -1,0 +1,44 @@
+use std::{collections::VecDeque, vec::Vec};
+
+use ulua_common::macros::luau_assert::LUAU_ASSERT;
+
+use crate::{enums::bc_op_kind::BcOpKind, records::bc_op::BcOp, type_aliases::bc_edges::BcEdges};
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct BcBlock {
+  pub flags: u8,
+  pub use_count: u32,
+  pub phis: Vec<BcOp>,
+  pub ops: VecDeque<BcOp>,
+  pub successors: BcEdges,
+  pub predecessors: BcEdges,
+  pub sortkey: u32,
+  pub chainkey: u32,
+  pub startpc: u32,
+}
+
+impl BcBlock {
+  pub(crate) const K_BLOCK_NO_START_PC: u32 = !0u32;
+
+  /// （原 `methods/bc_block_append_instruction.rs`，abs-r139 并回本类型。）
+  pub(crate) fn append_instruction(&mut self, inst: BcOp) {
+    LUAU_ASSERT!(inst.kind == BcOpKind::Inst);
+    self.ops.push_back(inst);
+  }
+}
+
+impl Default for BcBlock {
+  fn default() -> Self {
+    Self {
+      flags: 0,
+      use_count: 0,
+      phis: Vec::new(),
+      ops: VecDeque::new(),
+      successors: BcEdges::default(),
+      predecessors: BcEdges::default(),
+      sortkey: Self::K_BLOCK_NO_START_PC,
+      chainkey: 0,
+      startpc: Self::K_BLOCK_NO_START_PC,
+    }
+  }
+}

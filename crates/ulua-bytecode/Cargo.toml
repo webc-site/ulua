@@ -1,0 +1,23 @@
+[package]
+name = "ulua-bytecode"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Luau bytecode format and builder (Rust)."
+keywords = ["luau", "lua", "bytecode", "compiler"]
+categories = ["compilers", "encoding"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+memchr = { version = "2.8", default-features = false, features = ["alloc"] }
+strum = { version = "0.28.0", default-features = false, features = ["derive"] }
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
+
+# 本 crate 为 std-only 移植：旧 [features] 段的 default/std/wasm 全为零消费点
+# 的空特性（无 cfg(feature=...) 门控），且库根曾 `extern crate alloc` 造成
+# alloc/std 双路径混写。已统一 std 路径，故删除虚假 no_std 特性面。
+

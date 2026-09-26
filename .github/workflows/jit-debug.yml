@@ -1,0 +1,225 @@
+# =============================================================================
+# 独立 JIT 调试隧道（与现有 CI/Pages 无关，仅 workflow_dispatch 手动触发）
+# 在 Windows(x64) runner 上装好 Rust 工具链，启动 sshd，并在同一 step 内用
+# bore.pub 免注册隧道把 runner 的 22 端口映射出去（runner 会在 step 结束时
+# 杀死步骤进程树，所以 bore 必须与 hold 循环在同一 step 内运行）。
+#
+# ---- 1. 端口是怎么映射出来的 ----
+#   bore 把 runner:22 挂到公网 bore.pub 上，得到一个随机端口：
+#     bore local 22 --to bore.pub   # 输出 "public address: bore.pub:47545"
+#   job 解析该端口后创建两个临时 Issue（github-actions[bot] 名义）：
+#     * "JIT tunnel: ssh -p <port> administrator@bore.pub"  —— 公告端口
+#     * "DIAG tunnel <port>" —— sshd 监听/账号/事件日志诊断，hold 期间每
+#       约 60s 刷新一次（job 运行中无法下载步骤日志，Issue 是唯一实时通道）
+#   本地轮询读取：
+#     gh issue list --repo webc-site/ulua --state open --json number,title
+#
+# ---- 2. 怎么连接调试 ----
+#   gh issue view <n> --repo webc-site/ulua   # 拿到端口
+#   本机 TUN 代理会 fake-IP 劫持 bore.pub 直连，必须经 n1 跳板：
+#     ssh -i ~/.ssh/id_ed25519 -p <port> -o StrictHostKeyChecking=no \
+#         -o UserKnownHostsFile=/dev/null \
+#         -o ProxyCommand='ssh -W %h:%p n1' runneradmin@bore.pub
+#   注意：内建 administrator 账号在 GitHub Windows runner 上常不可用，
+#   用 runneradmin（同一把 key，属 Administrators 组）登录。
+#   登录后：默认 shell 是 pwsh；仓库在 D:\a\ulua\ulua（cargo 在 PATH、
+#   依赖已 cargo fetch 预取）；cdb.exe 在
+#   'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe'。
+#   临时 harness（jit_bisect/jit_bench 等）只写在 runner 上，勿入库。
+#
+# ---- 3. 完成调试 / 4. 怎么用 gh 关闭 ----
+#   隧道最长持有 duration_minutes（默认 150 分钟）后自动收工：
+#   停 bore、停 sshd，always() 步骤自动删除上述公告 Issue。
+#   想提前结束，直接取消 run（等价于关闭隧道，清理步骤照样执行）：
+#     gh run list --repo webc-site/ulua --workflow jit-debug.yml --limit 5
+#     gh run cancel <run-id> --repo webc-site/ulua
+#   验证已关：gh run view <run-id> 显示 cancelled，且公告 Issue 消失。
+#
+# ---- 触发方式（⚠ gh/REST 不会应用 inputs 默认值，必须显式传参）----
+#   gh workflow run jit-debug.yml --repo webc-site/ulua --ref dev \
+#     -f pubkey="$(cat ~/.ssh/id_ed25519.pub)" \
+#     -f duration_minutes=150 \
+#     [-f setup_script='git checkout <sha>']   # 可选：hold 前在 runner 上跑的 pwsh
+#   不传 pubkey 会写入空的 administrators_authorized_keys，导致所有
+#   公钥认证静默失败（历史踩坑，2026-09-24）。
+#   安全：隧道 runner 只授权指定的这一把 ed25519 公钥，job 结束即停 sshd，
+#   属明确的临时曝光通道，用完务必 cancel。
+# =============================================================================
+name: JIT Debug Tunnel
+
+on:
+  workflow_dispatch:
+    inputs:
+      pubkey:
+        description: "Authorized SSH public key"
+        required: true
+        default: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOVG6anr8tYNjNWh5HH5D2SN4Tw/jDW7LHtVHK2HUSdQ js0"
+      duration_minutes:
+        description: "Tunnel hold time (minutes)"
+        required: false
+        default: "150"
+      setup_script:
+        description: "Extra pwsh commands run before holding the tunnel"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+  issues: write
+
+env:
+  RUST_BACKTRACE: "1"
+
+jobs:
+  debug:
+    runs-on: windows-latest
+    timeout-minutes: 360
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Prepare repo (git safe dir + prefetch deps)
+        shell: pwsh
+        run: |
+          git config --global safe.directory '*'
+          Write-Host "repo at $PWD"
+          cargo fetch
+          $cdb = 'C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe'
+          Write-Host "cdb present: $(Test-Path $cdb)"
+
+      - name: Install bore
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $rel = Invoke-RestMethod 'https://api.github.com/repos/ekzhang/bore/releases/latest'
+          $asset = $rel.assets | Where-Object { $_.name -like '*x86_64*p-windows*' } | Select-Object -First 1
+          if (-not $asset) { $asset = $rel.assets | Where-Object { $_.name -like '*windows*' } | Select-Object -First 1 }
+          Write-Host "bore asset: $($asset.name)"
+          Invoke-WebRequest $asset.browser_download_url -OutFile $env:RUNNER_TEMP\bore.zip
+          Expand-Archive $env:RUNNER_TEMP\bore.zip -DestinationPath $env:RUNNER_TEMP\bore -Force
+          $exe = Get-ChildItem $env:RUNNER_TEMP\bore -Recurse -Filter bore.exe | Select-Object -First 1
+          Copy-Item $exe.FullName C:\Windows\System32\bore.exe
+          bore --version
+
+      - name: Start sshd with debug key
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if (-not (Get-Service sshd -ErrorAction SilentlyContinue)) {
+            Add-WindowsCapability -Online -Name OpenSSH.Server~~~~0.0.1.0 | Out-Null
+          }
+          $sshDir = 'C:\ProgramData\ssh'
+          New-Item -ItemType Directory -Force $sshDir | Out-Null
+          if (-not (Test-Path "$sshDir\ssh_host_ed25519_key")) {
+            & "$env:WINDIR\System32\OpenSSH\ssh-keygen.exe" -A
+          }
+          $authKeys = Join-Path $sshDir 'administrators_authorized_keys'
+          $pubkey = '${{ github.event.inputs.pubkey }}'
+          Write-Host "pubkey length: $($pubkey.Length)"
+          Set-Content -Path $authKeys -Value $pubkey -Encoding ascii
+          icacls $authKeys /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)" | Out-Null
+          if (Test-Path "$sshDir\sshd_config") {
+            icacls "$sshDir\sshd_config" /inheritance:r /grant "SYSTEM:(F)" /grant "BUILTIN\Administrators:(F)" | Out-Null
+          }
+          # 内建 administrator 默认可能处于禁用状态 -> 公钥认证会被 sshd 直接拒绝
+          $adm = Get-LocalUser -Name administrator -ErrorAction SilentlyContinue
+          Write-Host "administrator enabled(before): $($adm.Enabled)"
+          if ($adm -and -not $adm.Enabled) {
+            Enable-LocalUser -Name administrator
+            Write-Host "administrator account enabled"
+          }
+          # 兜底：同一把 key 也写入当前 runner 用户的 authorized_keys（可双用户尝试登录）
+          $uDir = Join-Path $env:USERPROFILE '.ssh'
+          New-Item -ItemType Directory -Force $uDir | Out-Null
+          Set-Content -Path (Join-Path $uDir 'authorized_keys') -Value $pubkey -Encoding ascii
+          Write-Host "fallback authorized_keys for $env:USERNAME at $uDir"
+          Set-Service sshd -StartupType Manual
+          Restart-Service sshd
+          if (-not (Get-NetFirewallRule -Name 'sshd-jit-debug' -ErrorAction SilentlyContinue)) {
+            New-NetFirewallRule -Name 'sshd-jit-debug' -DisplayName 'sshd-jit-debug' -Enabled True -Direction Inbound -Protocol TCP -Action Allow -LocalPort 22 | Out-Null
+          }
+          # Default login shell -> pwsh
+          $pwsh = (Get-Command pwsh.exe).Source
+          New-ItemProperty -Path 'HKLM:\SOFTWARE\OpenSSH' -Name DefaultShell -Value $pwsh -PropertyType String -Force | Out-Null
+          Write-Host "sshd OK; DefaultShell=$pwsh"
+
+      - name: Extra setup (optional commands)
+        if: ${{ github.event.inputs.setup_script != '' }}
+        shell: pwsh
+        run: |
+          $s = @'
+          ${{ github.event.inputs.setup_script }}
+          '@
+          Invoke-Expression $s
+
+      - name: Open bore tunnel, announce port via Issue, and hold
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $job = Start-Job { bore local 22 --to bore.pub 2>&1 }
+          $port = $null
+          for ($i = 0; $i -lt 30; $i++) {
+            Start-Sleep -Seconds 2
+            $out = (Receive-Job $job) -join "`n"
+            if ($out) { Write-Host "bore: $out" }
+            if ($out -match 'bore\.pub:(\d+)') { $port = $Matches[1]; break }
+            if ($job.State -eq 'Failed') { break }
+          }
+          if (-not $port) { Write-Error 'failed to open bore tunnel'; exit 1 }
+          $cmd = "ssh -p $port administrator@bore.pub"
+          Write-Host "==== SSH COMMAND: $cmd ===="
+          $summary = @(
+            "## JIT debug tunnel"
+            $cmd
+            "Repo path: D:\a\ulua\ulua (branch ${{ github.ref_name }})"
+            "Rust: cargo on PATH; deps prefetched"
+            "cdb debugger: C:\Program Files (x86)\Windows Kits\10\Debuggers\x64\cdb.exe"
+          ) -join "`n"
+          $summary | Out-File $env:GITHUB_STEP_SUMMARY -Append -Encoding utf8
+          # 临时 Issue：运行中即可被本地读取（步骤不结束 summary/日志都不可见）
+          $body = "run ${{ github.run_id }} (${{ github.ref_name }})`nSSH: $cmd`nRepo at D:\a\ulua\ulua; cargo on PATH; hold ${{ github.event.inputs.duration_minutes }} min; default shell pwsh. Auto-deleted when job ends."
+          gh api "repos/${{ github.repository }}/issues" -f title="JIT tunnel: $cmd" -f body="$body" --jq .html_url
+          # 诊断：sshd 监听/账号/authorized_keys/OpenSSH 事件日志，公告到第二个 issue，并在 hold 期间持续刷新
+          $listen = Get-NetTCPConnection -LocalPort 22 -State Listen -ErrorAction SilentlyContinue |
+            ForEach-Object { "$($_.LocalAddress):$($_.LocalPort) pid=$($_.OwningProcess)" }
+          $akeysRaw = Get-Content 'C:\ProgramData\ssh\administrators_authorized_keys' -Raw -ErrorAction SilentlyContinue
+          $sshLog = { (Get-WinEvent -LogName 'OpenSSH/Operational' -MaxEvents 15 -ErrorAction SilentlyContinue |
+            ForEach-Object { "$($_.TimeCreated.ToString('HH:mm:ss')) $($_.Message)" }) -join "`n" }
+          $dbase = @(
+            "run ${{ github.run_id }}"
+            "listen=[$listen]"
+            "authkeysLen=$($akeysRaw.Length) head=$($akeysRaw.Substring(0, [Math]::Min(40, $akeysRaw.Length)))"
+            "admEnabled=$((Get-LocalUser -Name administrator -ErrorAction SilentlyContinue).Enabled)"
+            "runnerUser=$env:USERNAME"
+          ) -join "`n"
+          $dbody = "$dbase`n`n$(& $sshLog)"
+          $diagNum = (gh api "repos/${{ github.repository }}/issues" -F title="DIAG tunnel $port" -F body="$dbody" --jq .number)
+          $deadline = (Get-Date).AddMinutes([int]'${{ github.event.inputs.duration_minutes }}')
+          $tick = 0
+          while ((Get-Date) -lt $deadline) {
+            if ($job.State -ne 'Running') { Write-Error 'bore job died'; break }
+            Start-Sleep -Seconds 30
+            $tick++
+            if ($tick % 2 -eq 0 -and $diagNum) {
+              $fresh = "$dbase`n`n$(& $sshLog)"
+              gh api -X PATCH "repos/${{ github.repository }}/issues/$diagNum" -F body="$fresh" | Out-Null
+            }
+          }
+          Stop-Job $job; Remove-Job $job
+          Stop-Service sshd -ErrorAction SilentlyContinue
+
+      - name: Delete tunnel issue
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $n = '${{ github.repository }}'
+          gh api "repos/$n/issues?state=all&per_page=30" -f creator='github-actions[bot]' --jq '.[] | select(.title | startswith("JIT tunnel:") or startswith("DIAG tunnel")) | .number' | ForEach-Object {
+            gh api -X DELETE "repos/$n/issues/$_"
+          }

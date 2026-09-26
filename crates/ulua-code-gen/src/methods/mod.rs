@@ -1,0 +1,9 @@
+pub mod assembly_builder_a_64_r1_table;
+pub mod assembly_builder_x_64_avx_table;
+pub mod function_bytecode_summary_get_count;
+pub mod function_bytecode_summary_inc_count;
+pub mod ir_function_get_inst_index;
+pub mod ir_lowering_a_64_lower_inst;
+pub mod ir_lowering_x_64_lower_inst;
+pub mod ir_reg_alloc_a_64_free_temp;
+pub mod ir_reg_alloc_a_64_free_temp_regs;

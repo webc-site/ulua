@@ -1,0 +1,14 @@
+use crate::{
+  records::type_function_property::TypeFunctionProperty,
+  type_aliases::type_function_type_id::TypeFunctionTypeId,
+};
+
+impl TypeFunctionProperty {
+  #[inline]
+  pub fn writeonly(ty: TypeFunctionTypeId) -> Self {
+    TypeFunctionProperty {
+      read_ty: None,
+      write_ty: Some(ty),
+    }
+  }
+}

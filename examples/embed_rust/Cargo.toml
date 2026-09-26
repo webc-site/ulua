@@ -1,0 +1,10 @@
+[package]
+name = "ulua-example-embed-rust"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies.ulua]
+path = "../../crates/ulua"
+default-features = false
+version = "0.1.2"

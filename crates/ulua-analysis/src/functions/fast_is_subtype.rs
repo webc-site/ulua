@@ -1,0 +1,12 @@
+//! Source: `Analysis/src/TypeUtils.cpp` (TypeUtils.cpp:561-565)
+
+use crate::{
+  enums::relation::Relation, functions::relate_simplify::relate_type_id_type_id,
+  type_aliases::type_id::TypeId,
+};
+
+// A fast approximation of sub_ty <: super_ty
+pub fn fast_is_subtype(sub_ty: TypeId, super_ty: TypeId) -> bool {
+  let r = relate_type_id_type_id(super_ty, sub_ty);
+  matches!(r, Relation::Coincident | Relation::Superset)
+}

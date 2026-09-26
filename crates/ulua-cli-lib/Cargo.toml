@@ -1,0 +1,26 @@
+[package]
+name = "ulua-cli-lib"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+description = "Shared command-line helpers used by the ulua tool crates."
+keywords = ["luau", "lua", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
+ulua-common = { path = "../ulua-common", version = "0.1.2" }
+ulua-compiler = { path = "../ulua-compiler", version = "0.1.2" }
+ulua-require = { version = "0.1.2", path = "../ulua-require" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
+
+[features]
+# 仅测试侧启用：暴露 test_utils 共享工作区脚手架，默认不编译、不扩大公开 API。
+test-utils = []
+# 曾有的 default/std/wasm 为零消费点空特性（无 cfg 门控、无下游转发），已删。
+

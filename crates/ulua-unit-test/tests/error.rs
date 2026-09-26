@@ -1,0 +1,121 @@
+extern crate alloc;
+
+// Source: `tests/Error.test.cpp`
+#[test]
+fn error_binary_op_type_function_errors() {
+  use ulua_analysis::functions::to_string_error::to_string_type_error;
+  use ulua_common::fflag::DebugLuauForceOldSolver;
+  use ulua_unit_test::records::builtins_fixture::BuiltinsFixture;
+
+  let mut fixture = BuiltinsFixture::default();
+  fixture.get_frontend().options.retain_full_type_graphs = false;
+
+  let result = fixture.base.check_string_optional_frontend_options(
+    r#"
+        --!strict
+        local x = 1 + "foo"
+    "#,
+    None,
+  );
+
+  assert_eq!(result.errors.len(), 1);
+
+  if !DebugLuauForceOldSolver.get() {
+    assert_eq!(
+      "Operator '+' could not be applied to operands of types number and string; there is no corresponding overload for __add",
+      to_string_type_error(&result.errors[0])
+    );
+  } else {
+    assert_eq!(
+      "Expected this to be 'number', but got 'string'",
+      to_string_type_error(&result.errors[0])
+    );
+  }
+}
+
+// Source: `tests/Error.test.cpp`
+#[test]
+fn error_metatable_names_show_instead_of_tables() {
+  use ulua_analysis::functions::to_string_error::to_string_type_error;
+  use ulua_unit_test::records::builtins_fixture::BuiltinsFixture;
+
+  let mut fixture = BuiltinsFixture::default();
+  fixture.get_frontend().options.retain_full_type_graphs = false;
+
+  let result = fixture.base.check_string_optional_frontend_options(
+    r#"
+--!strict
+local Account = {}
+Account.__index = Account
+function Account.deposit(self: Account, x: number)
+	self.balance += x
+end
+type Account = typeof(setmetatable({} :: { balance: number }, Account))
+local x: Account = 5
+"#,
+    None,
+  );
+
+  assert_eq!(result.errors.len(), 1);
+  assert_eq!(
+    "Expected this to be 'Account', but got 'number'",
+    to_string_type_error(&result.errors[0])
+  );
+}
+
+// Source: `tests/Error.test.cpp`
+#[test]
+fn error_type_error_code_should_return_nonzero_code() {
+  use ulua_analysis::records::{
+    type_error::TypeError,
+    unknown_symbol::{Context, UnknownSymbol},
+  };
+  use ulua_ast::records::{location::Location, position::Position};
+
+  let e = TypeError::type_error_location_type_error_data(
+    Location {
+      begin: Position { line: 0, column: 0 },
+      end: Position { line: 0, column: 1 },
+    },
+    UnknownSymbol::new("Foo".to_string(), Context::Binding).into(),
+  );
+
+  assert!(e.code() >= 1000);
+}
+
+// Source: `tests/Error.test.cpp`
+#[test]
+fn error_unary_op_type_function_errors() {
+  use ulua_analysis::functions::to_string_error::to_string_type_error;
+  use ulua_common::fflag::DebugLuauForceOldSolver;
+  use ulua_unit_test::records::builtins_fixture::BuiltinsFixture;
+
+  let mut fixture = BuiltinsFixture::default();
+  fixture.get_frontend().options.retain_full_type_graphs = false;
+
+  let result = fixture.base.check_string_optional_frontend_options(
+    r#"
+        --!strict
+        local x = -"foo"
+    "#,
+    None,
+  );
+
+  if !DebugLuauForceOldSolver.get() {
+    assert_eq!(result.errors.len(), 2);
+    assert_eq!(
+      "Operator '-' could not be applied to operand of type string; there is no corresponding overload for __unm",
+      to_string_type_error(&result.errors[0])
+    );
+    assert_eq!(
+      "Expected this to be 'number', but got 'string'",
+      to_string_type_error(&result.errors[1])
+    );
+  } else {
+    assert_eq!(result.errors.len(), 1);
+    assert_eq!(
+      "Expected this to be 'number', but got 'string'",
+      to_string_type_error(&result.errors[0])
+    );
+  }
+}

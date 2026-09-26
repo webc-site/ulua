@@ -1,0 +1,69 @@
+[package]
+name = "ulua-analysis"
+description = "Luau type checker and type inference (Rust)."
+keywords = ["luau", "lua", "typechecker", "inference", "types"]
+categories = ["compilers", "development-tools"]
+
+[package.version]
+workspace = true
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+bitflags = { version = "2.13.2", default-features = false }
+hipstr = "0.8.0"
+parking_lot = "0.12.5"
+strum = { version = "0.28.0", default-features = false, features = ["derive"] }
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.2"
+
+[dependencies.ulua-bytecode]
+path = "../ulua-bytecode"
+version = "0.1.2"
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.2"
+
+[dependencies.ulua-compiler]
+path = "../ulua-compiler"
+version = "0.1.2"
+
+[dependencies.ulua-config]
+path = "../ulua-config"
+version = "0.1.2"
+
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.2"
+
+[dev-dependencies.ulua-unit-test]
+path = "../ulua-unit-test"
+version = "0.1.2"
+
+[features]
+default = ["std"]
+std = []
+luau_assert = ["ulua-common/luau_assert"]
+
+[target."cfg(windows)".dependencies.windows-sys]
+version = "0.61"
+features = ["Win32_System_Memory"]
+
+[target."cfg(not(target_arch = \"wasm32\"))".dependencies]
+coarsetime = "0.1.37"

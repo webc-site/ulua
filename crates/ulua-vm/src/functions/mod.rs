@@ -1,0 +1,935 @@
+pub mod add_s;
+pub mod add_value;
+pub mod addfield;
+pub mod addquoted;
+pub mod adjustasize;
+pub mod andaux;
+pub mod append;
+pub mod arrayindex;
+pub mod arrayornewkey;
+pub mod atomic;
+pub mod aux_upvalue;
+pub mod auxgetinfo;
+pub mod auxopen;
+pub mod auxresume;
+pub mod auxresumecont;
+pub mod auxwrapcont;
+pub mod auxwrapfinish;
+pub mod auxwrapy;
+pub mod b_and;
+pub mod b_arshift;
+pub mod b_countlz;
+pub mod b_countrz;
+pub mod b_extract;
+pub mod b_lrot;
+pub mod b_lshift;
+pub mod b_not;
+pub mod b_or;
+pub mod b_replace;
+pub mod b_rot;
+pub mod b_rrot;
+pub mod b_rshift;
+pub mod b_shift;
+pub mod b_swap;
+pub mod b_test;
+pub mod b_xor;
+pub mod bit_map1;
+pub mod bitfold;
+pub mod buffer_copy;
+pub mod buffer_create;
+pub mod buffer_errors;
+pub mod buffer_fill;
+pub mod buffer_fromstring;
+pub mod buffer_len;
+pub mod buffer_readbits;
+pub mod buffer_readfp;
+pub mod buffer_readinteger;
+pub mod buffer_readlong;
+pub mod buffer_readstring;
+pub mod buffer_swapbe;
+pub mod buffer_tostring;
+pub mod buffer_window;
+pub mod buffer_writebits;
+pub mod buffer_writefp;
+pub mod buffer_writeinteger;
+pub mod buffer_writelong;
+pub mod buffer_writestring;
+pub mod buffutfchar;
+pub mod byteoffset;
+pub mod call_bin_tm;
+pub mod call_order_tm;
+pub mod call_t_mres;
+pub mod call_tm;
+pub mod callerrfunc;
+pub mod capture_to_close;
+pub mod check_capture;
+pub mod check_div_args_64;
+pub mod class_classof;
+pub mod class_isinstance;
+pub mod classend;
+pub mod clearstack;
+pub mod cleartable;
+pub mod clearupvals;
+pub mod close_state;
+pub mod coclose;
+pub mod cocreate;
+pub mod codepoint;
+pub mod computesizes;
+pub mod copywithendian;
+pub mod coresumecont;
+pub mod coresumefinish;
+pub mod coresumey;
+pub mod correctstack;
+pub mod corunning;
+pub mod costatus;
+pub mod countint;
+pub mod cowrap;
+pub mod coyield;
+pub mod coyieldable;
+pub mod createmetatable_lstrlib;
+pub mod createmetatable_lveclib;
+pub mod currentline;
+pub mod currentpc;
+pub mod currfuncname;
+pub mod db_info;
+pub mod db_traceback;
+pub mod deletegco;
+pub mod dumpbuffer;
+pub mod dumpclass;
+pub mod dumpclosure;
+pub mod dumpgco;
+pub mod dumpobj;
+pub mod dumpobject;
+pub mod dumpproto;
+pub mod dumpref;
+pub mod dumprefs;
+pub mod dumpstring;
+pub mod dumpstringdata;
+pub mod dumptable;
+pub mod dumpthread;
+pub mod dumpudata;
+pub mod dumpupval;
+pub mod end_capture;
+pub mod ensure_stack;
+pub mod enumbuffer;
+pub mod enumclass;
+pub mod enumclosure;
+pub mod enumedge;
+pub mod enumedges;
+pub mod enumgco;
+pub mod enumnode;
+pub mod enumobj;
+pub mod enumobject;
+pub mod enumproto;
+pub mod enumstring;
+pub mod enumtable;
+pub mod enumthread;
+pub mod enumtopointer;
+pub mod enumudata;
+pub mod enumupval;
+/// 共享辅助: cpp `runCode`/`runFile` 的「yield 文案或错误串 + trace 头 +
+/// debugtrace」组装（原 ulua-repl-cli 私有副本上移）
+pub mod error_with_trace;
+pub mod extendstrbuf;
+pub mod f_call;
+pub mod f_ccall;
+pub mod f_luaopen;
+pub mod fieldargs;
+pub mod findindex;
+pub mod finish_gc_cycle_metrics;
+pub mod fmt_cstr_buf;
+pub mod foreach;
+pub mod foreachi;
+pub mod format_directive;
+pub mod freeblock;
+pub mod freeclasspage;
+pub mod freegcoblock;
+pub mod freeobj;
+pub mod freepage;
+pub mod freestack;
+pub mod gcstep;
+pub mod get_comp_tm;
+pub mod getboolfield;
+pub mod getcounters;
+pub mod getcoverage;
+pub mod getcurrenv;
+pub mod getdetails;
+pub mod getfield;
+pub mod getfreepos;
+pub mod getfunc;
+pub mod getfuncname;
+pub mod getheaptrigger;
+pub mod getheaptriggererroroffset;
+pub mod getluaproto;
+pub mod getmaxline;
+pub mod getn;
+pub mod getnextbuffersize;
+pub mod getnextline;
+pub mod getnum;
+pub mod getnumlimit;
+pub mod getoption;
+pub mod gettablemode;
+pub mod getthread;
+pub mod gmatch;
+pub mod gmatch_aux;
+pub mod hashint;
+pub mod hashnum;
+pub mod hashpointer;
+pub mod hashvec;
+pub mod index_2_addr;
+pub mod initheader;
+pub mod install_lua_exception_panic_hook;
+pub mod int_64_add;
+pub mod int_64_arshift;
+pub mod int_64_band;
+pub mod int_64_bnot;
+pub mod int_64_bor;
+pub mod int_64_bswap;
+pub mod int_64_btest;
+pub mod int_64_bxor;
+pub mod int_64_clamp;
+pub mod int_64_countlz;
+pub mod int_64_countrz;
+pub mod int_64_create;
+pub mod int_64_div;
+pub mod int_64_extract;
+pub mod int_64_fromstring;
+pub mod int_64_ge;
+pub mod int_64_gt;
+pub mod int_64_idiv;
+pub mod int_64_le;
+pub mod int_64_lrotate;
+pub mod int_64_lshift;
+pub mod int_64_lt;
+pub mod int_64_max;
+pub mod int_64_min;
+pub mod int_64_mod;
+pub mod int_64_mul;
+pub mod int_64_neg;
+pub mod int_64_rem;
+pub mod int_64_replace;
+pub mod int_64_rrotate;
+pub mod int_64_rshift;
+pub mod int_64_shared;
+pub mod int_64_sub;
+pub mod int_64_tonumber;
+pub mod int_64_udiv;
+pub mod int_64_uge;
+pub mod int_64_ugt;
+pub mod int_64_ule;
+pub mod int_64_ult;
+pub mod int_64_urem;
+pub mod interrupt_thread;
+pub mod isobjcleared;
+pub mod iter_aux;
+pub mod iter_codes;
+pub mod l_alloc;
+pub mod lapi_barrier;
+pub mod libsize;
+pub mod lmemfind;
+pub mod load_bits_u64;
+pub mod loadsafe;
+pub mod localtime_r;
+pub mod lua_a_pushclass;
+pub mod lua_a_pushvalue;
+pub mod lua_a_toobject;
+pub mod lua_absindex;
+pub mod lua_b_assert;
+pub mod lua_b_error;
+pub mod lua_b_freebuffer;
+pub mod lua_b_gcinfo;
+pub mod lua_b_getfenv;
+pub mod lua_b_getmetatable;
+pub mod lua_b_inext;
+pub mod lua_b_ipairs;
+pub mod lua_b_newbuffer;
+pub mod lua_b_newproxy;
+pub mod lua_b_next;
+pub mod lua_b_pairs;
+pub mod lua_b_pcallcont;
+pub mod lua_b_pcally;
+pub mod lua_b_print;
+pub mod lua_b_rawequal;
+pub mod lua_b_rawget;
+pub mod lua_b_rawlen;
+pub mod lua_b_rawset;
+pub mod lua_b_select;
+pub mod lua_b_setfenv;
+pub mod lua_b_setmetatable;
+pub mod lua_b_tonumber;
+pub mod lua_b_tostring;
+pub mod lua_b_type;
+pub mod lua_b_typeof;
+pub mod lua_b_xpcallcont;
+pub mod lua_b_xpcallerr;
+pub mod lua_b_xpcally;
+pub mod lua_break;
+pub mod lua_breakpoint;
+pub mod lua_c_allocationrate;
+pub mod lua_c_barrierback;
+pub mod lua_c_barrierf;
+pub mod lua_c_barriertable;
+pub mod lua_c_dump;
+pub mod lua_c_enumheap;
+pub mod lua_c_freeall;
+pub mod lua_c_fullgc;
+pub mod lua_c_statename;
+pub mod lua_c_step;
+pub mod lua_c_upvalclosed;
+pub mod lua_c_validate;
+pub mod lua_call;
+pub mod lua_callbacks;
+pub mod lua_callyieldable_impl;
+pub mod lua_checkstack;
+pub mod lua_cleartable;
+pub mod lua_clonefunction;
+pub mod lua_clonetable;
+pub mod lua_close;
+pub mod lua_concat;
+pub mod lua_costatus;
+pub mod lua_cpcall;
+pub mod lua_createtable;
+pub mod lua_d_call;
+pub mod lua_d_callint;
+pub mod lua_d_callny;
+pub mod lua_d_check_cstack;
+pub mod lua_d_grow_ci;
+pub mod lua_d_growstack;
+pub mod lua_d_pcall;
+pub mod lua_d_performcally;
+pub mod lua_d_rawrunprotected_ldo;
+pub mod lua_d_realloc_ci;
+pub mod lua_d_reallocstack;
+pub mod lua_d_seterrorobj;
+pub mod lua_d_throw_ldo;
+pub mod lua_debugtrace;
+pub mod lua_e_freethread;
+pub mod lua_e_newthread;
+pub mod lua_encodepointer;
+pub mod lua_equal;
+pub mod lua_error;
+pub mod lua_f_close;
+pub mod lua_f_closeupval;
+pub mod lua_f_findlocal;
+pub mod lua_f_findupval;
+pub mod lua_f_freeclosure;
+pub mod lua_f_freeproto;
+pub mod lua_f_freeupval;
+pub mod lua_f_getlocal;
+pub mod lua_f_new_cclosure;
+pub mod lua_f_new_lclosure;
+pub mod lua_f_newproto;
+pub mod lua_f_recordhit;
+pub mod lua_g_aritherror;
+pub mod lua_g_breakpoint;
+pub mod lua_g_concaterror;
+pub mod lua_g_forerror_l;
+pub mod lua_g_getline;
+pub mod lua_g_hasnative;
+pub mod lua_g_indexerror;
+pub mod lua_g_isnative;
+pub mod lua_g_methoderror;
+pub mod lua_g_missingmembererror;
+pub mod lua_g_onbreak;
+pub mod lua_g_ordererror;
+pub mod lua_g_pusherror;
+pub mod lua_g_readonlyerror;
+pub mod lua_g_runerror_l;
+pub mod lua_g_typeerror_l;
+pub mod lua_gc;
+pub mod lua_getallocf;
+pub mod lua_getargument;
+pub mod lua_getcounters;
+pub mod lua_getcoverage;
+pub mod lua_getfenv;
+pub mod lua_getfield;
+pub mod lua_getinfo;
+pub mod lua_getlightuserdataname;
+pub mod lua_getlocal;
+pub mod lua_getmetatable;
+pub mod lua_getreadonly;
+pub mod lua_gettable;
+pub mod lua_getthreaddata;
+pub mod lua_gettop;
+pub mod lua_getupvalue;
+pub mod lua_getuserdatadtor;
+pub mod lua_getuserdatametatable;
+pub mod lua_getuserdataname;
+pub mod lua_h_clear;
+pub mod lua_h_clone;
+pub mod lua_h_free;
+pub mod lua_h_get;
+pub mod lua_h_getn;
+pub mod lua_h_getnum;
+pub mod lua_h_getp;
+pub mod lua_h_getstr;
+pub mod lua_h_new;
+pub mod lua_h_newkey;
+pub mod lua_h_next;
+pub mod lua_h_resizearray;
+pub mod lua_h_resizehash;
+pub mod lua_h_set;
+pub mod lua_h_setnum;
+pub mod lua_h_setp;
+pub mod lua_h_setstr;
+pub mod lua_insert;
+pub mod lua_is_lfunction;
+pub mod lua_iscfunction;
+pub mod lua_isnumber;
+pub mod lua_isstring;
+pub mod lua_isthreadreset;
+pub mod lua_isuserdata;
+pub mod lua_isyieldable;
+pub mod lua_l_addchar;
+pub mod lua_l_addlstring;
+pub mod lua_l_addstring;
+pub mod lua_l_addvalue;
+pub mod lua_l_addvalueany;
+pub mod lua_l_argerror_l;
+pub mod lua_l_buffinit;
+pub mod lua_l_buffinitsize;
+pub mod lua_l_callmeta;
+pub mod lua_l_checkany;
+pub mod lua_l_checkboolean;
+pub mod lua_l_checkbuffer;
+pub mod lua_l_checkinteger;
+pub mod lua_l_checkinteger_64;
+pub mod lua_l_checklstring;
+pub mod lua_l_checknumber;
+pub mod lua_l_checkoption;
+pub mod lua_l_checkstack;
+pub mod lua_l_checktype;
+pub mod lua_l_checkudata;
+pub mod lua_l_checkudatatagged;
+pub mod lua_l_checkunsigned;
+pub mod lua_l_checkvector;
+pub mod lua_l_error_l;
+pub mod lua_l_findtable;
+pub mod lua_l_getmetafield;
+pub mod lua_l_newmetatable;
+pub mod lua_l_newstate;
+pub mod lua_l_openlibs;
+pub mod lua_l_optboolean;
+pub mod lua_l_optinteger;
+pub mod lua_l_optinteger_64;
+pub mod lua_l_optlstring;
+pub mod lua_l_optnumber;
+pub mod lua_l_optvector;
+pub mod lua_l_prepbuffsize;
+pub mod lua_l_pushresult;
+pub mod lua_l_pushresultsize;
+pub mod lua_l_register;
+pub mod lua_l_sandbox;
+pub mod lua_l_sandboxthread;
+pub mod lua_l_tolstring;
+pub mod lua_l_traceback;
+pub mod lua_l_typeerror_l;
+pub mod lua_l_typename;
+pub mod lua_l_where;
+pub mod lua_lessthan;
+pub mod lua_lightuserdatatag;
+pub mod lua_m_free;
+pub mod lua_m_freegco;
+pub mod lua_m_getnextpage;
+pub mod lua_m_getpagewalkinfo;
+pub mod lua_m_new;
+pub mod lua_m_newgco;
+pub mod lua_m_realloc;
+pub mod lua_m_toobig;
+pub mod lua_m_visitgco;
+pub mod lua_m_visitpage;
+pub mod lua_mainthread;
+pub mod lua_namecallatom;
+pub mod lua_newbuffer;
+pub mod lua_newstate;
+pub mod lua_newthread;
+pub mod lua_newuserdatadtor;
+pub mod lua_newuserdatatagged;
+pub mod lua_newuserdatataggedwithmetatable;
+pub mod lua_next;
+pub mod lua_o_chunkid;
+pub mod lua_o_log_2;
+pub mod lua_o_pushfstring;
+pub mod lua_o_pushvfstring;
+pub mod lua_o_rawequal_key;
+pub mod lua_o_rawequal_obj;
+pub mod lua_o_str_2_d;
+pub mod lua_o_str_2_l;
+pub mod lua_o_utf_8_esc;
+pub mod lua_objlen;
+pub mod lua_pcall;
+pub mod lua_pcallyieldable;
+pub mod lua_pushboolean;
+pub mod lua_pushcclosurek;
+pub mod lua_pushfstring_l;
+pub mod lua_pushinteger;
+pub mod lua_pushinteger_64;
+pub mod lua_pushlightuserdatatagged;
+pub mod lua_pushlstring;
+pub mod lua_pushnil;
+pub mod lua_pushnumber;
+pub mod lua_pushstring;
+pub mod lua_pushthread;
+pub mod lua_pushunsigned;
+pub mod lua_pushvalue;
+pub mod lua_pushvector_lapi;
+pub mod lua_pushvfstring;
+pub mod lua_r_addclassmember;
+pub mod lua_r_cloneclass;
+pub mod lua_r_freeclass;
+pub mod lua_r_freeobject;
+pub mod lua_r_inheritclass;
+pub mod lua_r_newclass;
+pub mod lua_rawcheckstack;
+pub mod lua_rawequal;
+pub mod lua_rawget;
+pub mod lua_rawgetfield;
+pub mod lua_rawgeti;
+pub mod lua_rawgetptagged;
+pub mod lua_rawiter;
+pub mod lua_rawset;
+pub mod lua_rawsetfield;
+pub mod lua_rawseti;
+pub mod lua_rawsetptagged;
+pub mod lua_ref;
+pub mod lua_registeruserdatadirectaccess;
+pub mod lua_registeruserdatadirectfieldget;
+pub mod lua_remove;
+pub mod lua_replace;
+pub mod lua_resetthread;
+pub mod lua_resume;
+pub mod lua_resumeerror;
+pub mod lua_s_buffinish;
+pub mod lua_s_bufstart;
+pub mod lua_s_free;
+pub mod lua_s_hash;
+pub mod lua_s_newlstr;
+pub mod lua_s_resize;
+pub mod lua_setfenv;
+pub mod lua_setfield;
+pub mod lua_setlightuserdataname;
+pub mod lua_setlocal;
+pub mod lua_setmemcat;
+pub mod lua_setmetatable;
+pub mod lua_setreadonly;
+pub mod lua_setsafeenv;
+pub mod lua_settable;
+pub mod lua_setthreaddata;
+pub mod lua_settop;
+pub mod lua_setuserdatadtor;
+pub mod lua_setuserdatametatable;
+pub mod lua_setuserdatatag;
+pub mod lua_singlestep;
+pub mod lua_stackdepth;
+pub mod lua_status;
+pub mod lua_t_gettm;
+pub mod lua_t_gettmbyobj;
+pub mod lua_t_init;
+pub mod lua_t_objtypename;
+pub mod lua_t_objtypenamestr;
+pub mod lua_toboolean;
+pub mod lua_tobuffer;
+pub mod lua_tointeger_64;
+pub mod lua_tointegerx;
+pub mod lua_tolightuserdata;
+pub mod lua_tolightuserdatatagged;
+pub mod lua_tolstring;
+pub mod lua_tonumberx;
+pub mod lua_topointer;
+pub mod lua_tostringatom;
+pub mod lua_tothread;
+pub mod lua_tounsignedx;
+pub mod lua_touserdata;
+pub mod lua_touserdatatagged;
+pub mod lua_tovector;
+pub mod lua_type;
+pub mod lua_typename;
+pub mod lua_u_freeudata;
+pub mod lua_u_newudata;
+pub mod lua_unref;
+pub mod lua_userdatadirectfield_setboolean;
+pub mod lua_userdatadirectfield_setinteger_64;
+pub mod lua_userdatadirectfield_setnil;
+pub mod lua_userdatadirectfield_setnumber;
+pub mod lua_userdatadirectfield_setvector_lapi;
+pub mod lua_userdatatag;
+pub mod lua_usesexport;
+pub mod lua_v_call_tm;
+pub mod lua_v_concat;
+pub mod lua_v_doarithimpl;
+pub mod lua_v_dolen;
+pub mod lua_v_equalval;
+pub mod lua_v_getimport;
+pub mod lua_v_gettable;
+pub mod lua_v_lessequal;
+pub mod lua_v_lessthan;
+pub mod lua_v_prepare_forn;
+pub mod lua_v_settable;
+pub mod lua_v_strcmp;
+pub mod lua_v_tonumber;
+pub mod lua_v_tostring;
+pub mod lua_v_tryfunc_tm;
+pub mod lua_xmove;
+pub mod lua_xpush;
+pub mod lua_yield;
+pub mod luai_int_2_str;
+pub mod luai_lerpf;
+pub mod luai_num_2_str;
+pub mod luai_numidiv;
+pub mod luai_nummod;
+pub mod luai_veceq;
+pub mod luai_vecisnan;
+pub mod luaopen_base;
+pub mod luaopen_bit_32;
+pub mod luaopen_buffer;
+pub mod luaopen_class;
+pub mod luaopen_coroutine;
+pub mod luaopen_debug;
+pub mod luaopen_integer;
+pub mod luaopen_math;
+pub mod luaopen_os;
+pub mod luaopen_string;
+pub mod luaopen_table;
+pub mod luaopen_utf_8;
+pub mod luaopen_vector;
+pub mod luau_callhook;
+pub mod luau_execute;
+pub mod luau_f_byte;
+pub mod luau_f_extract;
+pub mod luau_f_missing;
+pub mod luau_f_modf;
+pub mod luau_f_rawequal;
+pub mod luau_f_readinteger;
+pub mod luau_f_vectormin;
+pub mod luau_f_writeinteger;
+pub mod luau_finishop;
+pub mod luau_load;
+pub mod luau_poscall;
+pub mod luau_precall;
+pub mod luau_setupcci;
+pub mod luau_skipstep;
+pub mod luaui_clampf;
+pub mod luaui_signf;
+pub mod mainposition;
+pub mod markmt;
+pub mod markroot;
+pub mod marktaggetmt;
+pub mod markudatadirect;
+pub mod r#match;
+pub mod match_capture;
+pub mod match_class;
+pub mod matchbalance;
+pub mod matchbracketclass;
+pub mod math_abs;
+pub mod math_acos;
+pub mod math_asin;
+pub mod math_atan;
+pub mod math_atan_2;
+pub mod math_ceil;
+pub mod math_clamp;
+pub mod math_cos;
+pub mod math_cosh;
+pub mod math_deg;
+pub mod math_exp;
+pub mod math_floor;
+pub mod math_fmod;
+pub mod math_frexp;
+pub mod math_isfinite;
+pub mod math_isinf;
+pub mod math_isnan;
+pub mod math_ldexp;
+pub mod math_lerp;
+pub mod math_log;
+pub mod math_log_10;
+pub mod math_map;
+pub mod math_max;
+pub mod math_min;
+pub mod math_modf;
+pub mod math_noise;
+pub mod math_pow;
+pub mod math_rad;
+pub mod math_random;
+pub mod math_randomseed;
+pub mod math_round;
+pub mod math_shared;
+pub mod math_sign;
+pub mod math_sin;
+pub mod math_sinh;
+pub mod math_sqrt;
+pub mod math_tan;
+pub mod math_tanh;
+pub mod max_expand;
+pub mod maxn;
+pub mod maybesetaboundary;
+pub mod min_expand;
+pub mod moveelements;
+pub mod mul_128;
+pub mod mul_192_hi;
+pub mod murmur_hash_64b;
+pub mod newblock;
+pub mod newclasspage;
+pub mod newgcoblock;
+pub mod newkey;
+pub mod newlstr;
+pub mod newpage;
+pub mod nospecials;
+pub mod numusearray;
+pub mod numusehash;
+pub mod os_clock;
+pub mod os_date;
+pub mod os_difftime;
+pub mod os_time;
+pub mod os_timegm;
+pub mod packint;
+pub mod pcg_32_random;
+pub mod pcg_32_seed;
+pub mod performcall;
+pub mod perlin;
+pub mod perlin_fade;
+pub mod perlin_grad;
+pub mod perlin_lerp;
+pub mod posrelat;
+pub mod preinit_state;
+pub mod prepstate;
+pub mod printexp;
+pub mod printspecial;
+pub mod printunsignedrev;
+pub mod propagateall;
+pub mod propagatemark;
+pub mod pseudo_2_addr;
+pub mod push_captures;
+pub mod push_onecapture;
+pub mod pusherror;
+pub mod read;
+pub mod read_string;
+pub mod read_var_int;
+pub mod reallymarkobject;
+pub mod record_gc_state_step;
+pub mod rehash;
+pub mod remap_userdata_types;
+pub mod remarkupvals;
+pub mod removeentry;
+pub mod reprepstate;
+pub mod resize;
+pub mod resolve_import_safe;
+pub mod restore_stack_limit;
+pub mod resume;
+pub mod resume_continue;
+pub mod resume_error;
+pub mod resume_findhandler;
+pub mod resume_finish;
+pub mod resume_handle;
+pub mod resume_start;
+pub mod roundodd;
+/// cpp `runCode` 的加载/执行段（Repl.cpp / Web.cpp 三方宿主的共同主干）
+pub mod run_loaded_chunk;
+pub mod runerror;
+pub mod safejson;
+pub mod scanformat;
+pub mod schubfach;
+pub mod set_iterator_done;
+pub mod set_iterator_index;
+pub mod setarrayvector;
+pub mod setboolfield;
+pub mod setfield;
+pub mod setnodevector;
+pub mod shrinkbuffers;
+pub mod shrinkbuffersfull;
+pub mod shrinkstack;
+pub mod shrinkstackprotected;
+pub mod singlematch;
+pub mod sort_func;
+pub mod sort_heap;
+pub mod sort_less;
+pub mod sort_rec;
+pub mod sort_siftheap;
+pub mod sort_swap;
+pub mod stack_init;
+pub mod start_capture;
+pub mod start_gc_cycle_metrics;
+pub mod str_byte;
+pub mod str_char;
+pub mod str_find;
+pub mod str_find_aux;
+pub mod str_format;
+pub mod str_gsub;
+pub mod str_len;
+pub mod str_lower;
+pub mod str_match;
+pub mod str_pack;
+pub mod str_packsize;
+pub mod str_rep;
+pub mod str_reverse;
+pub mod str_shared;
+pub mod str_split;
+pub mod str_sub;
+pub mod str_unpack;
+pub mod str_upper;
+pub mod strftime_directive;
+pub mod stringresizeprotected;
+pub mod sweepgcopage;
+pub mod tableresizeprotected;
+pub mod tag_error;
+pub mod tclear;
+pub mod tclone;
+pub mod tconcat;
+pub mod tcreate;
+pub mod tfind;
+pub mod tfreeze;
+pub mod tinsert;
+pub mod tisfrozen;
+pub mod tmove;
+pub mod tpack;
+pub mod traverseclass;
+pub mod traverseclosure;
+pub mod traverseobject;
+pub mod traverseproto;
+pub mod traversestack;
+pub mod traversetable;
+pub mod tremove;
+pub mod trimzero;
+pub mod tsort;
+pub mod tunpack;
+pub mod u_posrelat;
+pub mod unpackint;
+pub mod utf_8_decode;
+pub mod utfchar;
+pub mod utflen;
+pub mod validateclass;
+pub mod validateclosure;
+pub mod validategco;
+pub mod validategraylist;
+pub mod validateobj;
+pub mod validateobject;
+pub mod validateobjref;
+pub mod validateproto;
+pub mod validateref;
+pub mod validatestack;
+pub mod validatetable;
+pub mod vector_angle;
+pub mod vector_clamp;
+pub mod vector_create;
+pub mod vector_cross;
+pub mod vector_dot;
+pub mod vector_index;
+pub mod vector_lerp;
+pub mod vector_magnitude;
+pub mod vector_normalize;
+pub mod vector_shared;
+pub mod walk_nodes;
+pub mod writestring;
+
+use core::{
+  ffi::{c_char, c_void},
+  fmt as c_fmt,
+};
+
+// 变参 C stdio（`fprintf`/`fputc`）的替代写出层：Rust `core::fmt`
+// 栈上格式化 + 单一非变参 `fwrite` 符号，仅服务调试 dump 系列。
+unsafe extern "C" {
+  fn fwrite(ptr: *const c_void, size: usize, n: usize, stream: *mut c_void) -> usize;
+}
+
+/// 单次格式化输出的栈缓冲上限（dump 系列最长模板约 70 字节）
+const C_FILE_FMT_CAP: usize = 192;
+
+/// 向 C `FILE*` 写格式化输出（Rust fmt 语义）。
+/// 写失败与原 `fprintf` 版一致：静默忽略（原实现也未检查返回值）。
+///
+/// # Safety
+/// `f` 必须是有效的 `FILE*`（C `fprintf` 同等约束）。
+pub(crate) unsafe fn c_file_write(f: *mut c_void, args: c_fmt::Arguments<'_>) {
+  struct BufOut<'a> {
+    buf: &'a mut [u8],
+    len: usize,
+  }
+
+  impl c_fmt::Write for BufOut<'_> {
+    fn write_str(&mut self, s: &str) -> c_fmt::Result {
+      let bytes = s.as_bytes();
+      let rest = &mut self.buf[self.len..];
+      let n = bytes.len().min(rest.len());
+      rest[..n].copy_from_slice(&bytes[..n]);
+      self.len += n;
+      Ok(())
+    }
+  }
+
+  let mut buf = [0u8; C_FILE_FMT_CAP];
+  let len = {
+    let mut out = BufOut {
+      buf: &mut buf,
+      len: 0,
+    };
+    let _ = c_fmt::write(&mut out, args);
+    out.len
+  };
+  // Safety: 契约保证 `f` 为有效 FILE*，buf[..len] 为本次格式化所得栈上字节
+  unsafe {
+    c_file_write_bytes(f, &buf[..len]);
+  }
+}
+
+/// 向 C `FILE*` 写字节切片。
+///
+/// # Safety
+/// `f` 必须是有效的 `FILE*`。
+pub(crate) unsafe fn c_file_write_bytes(f: *mut c_void, bytes: &[u8]) {
+  if bytes.is_empty() {
+    return;
+  }
+  // Safety: 契约保证 `f` 为有效 FILE*；bytes 借用自身合法，fwrite 只读取不取所有权
+  unsafe {
+    fwrite(bytes.as_ptr().cast(), 1, bytes.len(), f);
+  }
+}
+
+/// 向 C `FILE*` 写 NUL 结尾 C 字符串（不含 NUL，对应 `%s`）。
+///
+/// # Safety
+/// `f` 必须是有效的 `FILE*`；`s` 非空时必须指向 NUL 结尾缓冲区。
+pub(crate) unsafe fn c_file_write_str(f: *mut c_void, s: *const c_char) {
+  if s.is_null() {
+    return;
+  }
+  // Safety: 契约保证 `s` 指向 NUL 结尾字符串，门面内 `CStr` 扫描必然终止
+  let bytes = unsafe { cstr_bytes(s) };
+  // Safety: 契约保证 `f` 为有效 FILE*，bytes 源自 `s` 的 NUL 前内容
+  unsafe {
+    c_file_write_bytes(f, bytes);
+  }
+}
+
+/// dump 家族 JSON 对象的统一起始：写出 `{"type":"<ty>","cat":<cat>,"size":<size>`
+/// （不含收尾）；各对象专有的字段尾巴与闭括号由调用点按原形状续写，逐字节与收口前一致。
+///
+/// # Safety
+/// `f` 必须是有效的 `FILE*`（同 [`c_file_write`] 契约）。
+pub(crate) unsafe fn dump_json_head(
+  f: *mut c_void,
+  ty: &str,
+  cat: impl c_fmt::Display,
+  size: impl c_fmt::Display,
+) {
+  // Safety: 契约保证 `f` 为有效 FILE*，格式化仅栈内完成后转发写出
+  unsafe {
+    c_file_write(
+      f,
+      format_args!("{{\"type\":\"{ty}\",\"cat\":{cat},\"size\":{size}"),
+    );
+  }
+}
+
+/// C「指针 + 计数」惯用法的切片封装：实现已提升到 `ulua-common`，
+/// 此处按原路径重导出，VM 内调用点不变。
+pub(crate) use ulua_common::functions::c_slice::{c_slice, c_slice_mut};
+/// 读 C 字符串的统一门面：非豁免文件读 `*const c_char` 一律经 `cstr_bytes`/
+/// `cstr_cow`（`ulua-common::functions::c_str`），不再直接 `CStr::from_ptr`。
+pub(crate) use ulua_common::functions::c_str::{cstr_bytes, cstr_cow};
+
+/// `[offset, offset + len)` 是否完整落在 `size` 长度的缓冲内（`checked_add`
+/// 兼顾 `offset + len` 自身溢出，溢出即视为放不下）。字节码/loader 里对不可信
+/// 长度、count 的硬边界校验统一走此判定，再据结果切片或收口成「损坏字节码」错误。
+pub(crate) fn fits(offset: usize, len: usize, size: usize) -> bool {
+  offset.checked_add(len).is_some_and(|end| end <= size)
+}
