@@ -89,6 +89,35 @@ impl IrRegAllocX64 {
   // 统一契约见 `crate::shared_ptr_accessors!`（与宿主 IrLoweringX64 同一守则）。
   crate::shared_ptr_accessors!(AssemblyBuilderX64);
 
+  /// spill 槽半字位图：每个 u64 字覆盖 64 个半字（512 半字 = 8 字）
+  const HALVES_PER_WORD: u32 = 64;
+
+  /// 占用 `[start, end)` 的 spill 槽半字（新 spill 落槽）
+  fn occupy_spill_slots(&mut self, start: u32, end: u32) {
+    for pos in start..end {
+      self.used_spill_slot_halfs[(pos / Self::HALVES_PER_WORD) as usize] |=
+        1u64 << (pos % Self::HALVES_PER_WORD);
+    }
+  }
+
+  /// 跨块快照重建：逐位断言原本空闲后占用（沿用原单循环的逐位判定序）
+  fn occupy_free_spill_slots(&mut self, start: u32, end: u32) {
+    for pos in start..end {
+      let word = (pos / Self::HALVES_PER_WORD) as usize;
+      let mask = 1u64 << (pos % Self::HALVES_PER_WORD);
+      CODEGEN_ASSERT!(self.used_spill_slot_halfs[word] & mask == 0);
+      self.used_spill_slot_halfs[word] |= mask;
+    }
+  }
+
+  /// 释放 `[start, end)` 的 spill 槽半字（restore / last-use 释放）
+  fn free_spill_slots(&mut self, start: u32, end: u32) {
+    for pos in start..end {
+      self.used_spill_slot_halfs[(pos / Self::HALVES_PER_WORD) as usize] &=
+        !(1u64 << (pos % Self::HALVES_PER_WORD));
+    }
+  }
+
   pub fn alloc_reg(&mut self, size: SizeX64, inst_idx: u32) -> RegisterX64 {
     self.alloc_action_count += 1;
 
@@ -264,9 +293,7 @@ impl IrRegAllocX64 {
         return i;
       }
     } else {
-      let _num_halves = K_VALUE_DWORD_SIZE[value_kind as usize];
-      let _boundary = K_SPILL_SLOTS * 2;
-
+      // 位图尾部 3 个半字不够最宽的 Tvalue（4 半字）起泡，排除出搜索上界
       let max_start = self.used_spill_slot_halfs.len() as u32 * 64 - 3;
 
       let mut i = 0u32;
@@ -540,9 +567,7 @@ impl IrRegAllocX64 {
 
       let end = i + K_VALUE_DWORD_SIZE[spill.value_kind as usize];
 
-      for pos in i..end {
-        self.used_spill_slot_halfs[(pos / 64) as usize] |= 1u64 << (pos % 64);
-      }
+      self.occupy_spill_slots(i, end);
 
       if end.div_ceil(2) > self.max_used_slot {
         self.max_used_slot = end.div_ceil(2);
@@ -648,15 +673,9 @@ impl IrRegAllocX64 {
         // 若这是最后一次 use，则不完整恢复以释放寄存器，并删除 spill 记录
         if self.is_last_use_reg(target, origin_inst_idx) {
           if arg.stack_slot != IrSpillX64::K_NO_STACK_SLOT {
-            let end =
-              arg.stack_slot as usize + K_VALUE_DWORD_SIZE[spill.value_kind as usize] as usize;
+            let end = arg.stack_slot as u32 + K_VALUE_DWORD_SIZE[spill.value_kind as usize];
 
-            for pos in arg.stack_slot as usize..end {
-              let bit = pos as u64;
-              let idx = bit / 64;
-              let mask = 1u64 << (bit % 64);
-              self.used_spill_slot_halfs[idx as usize] &= !mask;
-            }
+            self.free_spill_slots(arg.stack_slot as u32, end);
           }
 
           CODEGEN_ASSERT!(target.reg_x64 == RegisterX64::NOREG);
@@ -749,9 +768,7 @@ impl IrRegAllocX64 {
 
       let end = spill.stack_slot as u32 + K_VALUE_DWORD_SIZE[spill.value_kind as usize];
 
-      for pos in spill.stack_slot as u32..end {
-        self.used_spill_slot_halfs[(pos / 64) as usize] &= !(1u64 << (pos % 64));
-      }
+      self.free_spill_slots(spill.stack_slot as u32, end);
     } else {
       restore_addr = self.get_restore_address(inst, restore_location);
     }
@@ -843,13 +860,7 @@ impl IrRegAllocX64 {
 
         // 标记 spill 槽已占用，以便 restore 能释放它
         let end = spill.stack_slot as u32 + K_VALUE_DWORD_SIZE[spill.value_kind as usize];
-        let mut pos = spill.stack_slot as u32;
-        while pos < end {
-          let mask = 1u64 << (pos % 64);
-          CODEGEN_ASSERT!(self.used_spill_slot_halfs[(pos / 64) as usize] & mask == 0);
-          self.used_spill_slot_halfs[(pos / 64) as usize] |= mask;
-          pos += 1;
-        }
+        self.occupy_free_spill_slots(spill.stack_slot as u32, end);
 
         self.spills.push(spill);
       } else {

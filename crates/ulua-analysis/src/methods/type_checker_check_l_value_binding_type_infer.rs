@@ -80,7 +80,7 @@ impl TypeChecker {
     expr: &AstExprGlobal,
   ) -> TypeId {
     let name: Name = expr.name.as_str_or_empty().to_string();
-    let module_scope = self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some").get_module_scope();
+    let module_scope = self.expect_current_module().get_module_scope();
 
     let sym = Symbol::from_global(expr.name);
 

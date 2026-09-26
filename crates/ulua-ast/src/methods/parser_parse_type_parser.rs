@@ -6,7 +6,12 @@ use crate::records::{
 };
 
 impl Parser {
-  pub fn parse_type_c_char_usize_ast_name_table_allocator_parse_options<B>(
+  /// cpp 自由函数 `Luau::parseType(buffer, bufferSize, names, allocator, options)`
+  /// （`Ast/include/Luau/Parser.h`）：从源码字节解析单个类型。
+  ///
+  /// 命名去机器味：旧名 `parse_type_c_char_usize_...` 照抄 cpp 形参类型表，
+  /// 但签名早已是 `AsRef<[u8]>` 借用形态，C 类型不在签名中，名不副实。
+  pub fn parse_type_source<B>(
     buffer: &B,
     names: &mut AstNameTable,
     allocator: &mut Allocator,

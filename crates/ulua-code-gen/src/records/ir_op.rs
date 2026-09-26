@@ -57,11 +57,6 @@ impl IrOp {
   pub fn ir_op_operator_eq(&self, rhs: IrOp) -> bool {
     self.kind() == rhs.kind() && self.index() == rhs.index()
   }
-
-  #[inline]
-  pub const fn ir_op_operator_ne(&self, rhs: IrOp) -> bool {
-    self.kind_and_index != rhs.kind_and_index
-  }
 }
 
 impl Default for IrOp {
@@ -77,8 +72,4 @@ impl PartialEq<IrOp> for &IrOp {
   fn eq(&self, other: &IrOp) -> bool {
     self.kind_and_index == other.kind_and_index
   }
-}
-
-pub fn new() -> IrOp {
-  IrOp::new()
 }

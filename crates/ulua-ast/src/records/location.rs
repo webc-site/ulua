@@ -47,27 +47,6 @@ impl Location {
     }
   }
 
-  pub const fn from_position(position: Position) -> Self {
-    Self {
-      begin: position,
-      end: position,
-    }
-  }
-
-  pub const fn from_position_length(position: Position, length: usize) -> Self {
-    Self {
-      begin: position,
-      end: Position {
-        line: position.line,
-        column: position.column + length as u32,
-      },
-    }
-  }
-
-  pub const fn from_positions(begin: Position, length: usize) -> Self {
-    Self::from_position_length(begin, length)
-  }
-
   pub fn contains(&self, position: Position) -> bool {
     self.begin <= position && position < self.end
   }

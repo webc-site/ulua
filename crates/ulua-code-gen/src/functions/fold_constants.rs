@@ -23,7 +23,6 @@ use crate::{
   },
   macros::codegen_assert::CODEGEN_ASSERT,
   records::{ir_builder::ConstantMap, ir_function::IrFunction, ir_inst::IrInst, ir_op::IrOp},
-  type_aliases::ir_ops::IrOps,
 };
 const K_DOUBLE_MAX_EXACT_INTEGER: f64 = 9007199254740992.0;
 
@@ -31,18 +30,6 @@ const LUA_TNIL: u8 = LuaType::Nil as u8;
 const LUA_TBOOLEAN: u8 = LuaType::Boolean as u8;
 const LUA_TNUMBER: u8 = LuaType::Number as u8;
 const LUA_TINTEGER: u8 = LuaType::Integer as u8;
-
-fn make_inst(cmd: IrCmd, ops: &[IrOp]) -> IrInst {
-  let mut v = IrOps::new();
-  for &o in ops {
-    v.push(o);
-  }
-  IrInst {
-    cmd,
-    ops: v,
-    ..Default::default()
-  }
-}
 
 /// cpp 上游指令操作数上限为 6（OP_A..OP_F）
 const MAX_OPERANDS: usize = 6;
@@ -126,7 +113,7 @@ pub fn fold_constants(
   macro_rules! fold_jump_cmp {
     ($cond:expr) => {
       if is_const(0) && is_const(1) {
-        let r = make_inst(IrCmd::JUMP, &[if $cond { read(3) } else { read(4) }]);
+        let r = IrInst::ir_inst_new(IrCmd::JUMP, &[if $cond { read(3) } else { read(4) }]);
         replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
       }
     };
@@ -138,7 +125,7 @@ pub fn fold_constants(
         if $cond {
           kill_ir_function_ir_inst_at(function, index);
         } else {
-          let r = make_inst(IrCmd::JUMP, &[read(3)]);
+          let r = IrInst::ir_inst_new(IrCmd::JUMP, &[read(3)]);
           replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
         }
       }
@@ -300,7 +287,7 @@ pub fn fold_constants(
             let c = function.const_int(map, 1);
             substitute_at(function, index, c);
           } else if same_value {
-            let r = make_inst(IrCmd::CmpTag, &[read(0), read(1), read(4)]);
+            let r = IrInst::ir_inst_new(IrCmd::CmpTag, &[read(0), read(1), read(4)]);
             replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
           } else {
             let c = function.const_int(map, 0);
@@ -343,7 +330,7 @@ pub fn fold_constants(
             let c = function.const_int(map, 0);
             substitute_at(function, index, c);
           } else {
-            let r = make_inst(IrCmd::CmpTag, &[read(0), read(1), read(4)]);
+            let r = IrInst::ir_inst_new(IrCmd::CmpTag, &[read(0), read(1), read(4)]);
             replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
           }
         }
@@ -352,7 +339,7 @@ pub fn fold_constants(
     IrCmd::JumpEqTag => {
       if is_const(0) && is_const(1) {
         let same = function.tag_op(read(0)) == function.tag_op(read(1));
-        let r = make_inst(IrCmd::JUMP, &[if same { read(2) } else { read(3) }]);
+        let r = IrInst::ir_inst_new(IrCmd::JUMP, &[if same { read(2) } else { read(3) }]);
         replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
       }
     }
@@ -388,11 +375,11 @@ pub fn fold_constants(
             let c = function.const_int(map, arr_index);
             substitute_at(function, index, c);
           } else {
-            let r = make_inst(IrCmd::JUMP, &[read(1)]);
+            let r = IrInst::ir_inst_new(IrCmd::JUMP, &[read(1)]);
             replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
           }
         } else {
-          let r = make_inst(IrCmd::JUMP, &[read(1)]);
+          let r = IrInst::ir_inst_new(IrCmd::JUMP, &[read(1)]);
           replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
         }
       }
@@ -449,7 +436,7 @@ pub fn fold_constants(
         if function.tag_op(read(0)) == function.tag_op(read(1)) {
           kill_ir_function_ir_inst_at(function, index);
         } else {
-          let r = make_inst(IrCmd::JUMP, &[read(2)]); // Shows a conflict in assumptions on this path
+          let r = IrInst::ir_inst_new(IrCmd::JUMP, &[read(2)]); // Shows a conflict in assumptions on this path
           replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
         }
       }
@@ -457,12 +444,12 @@ pub fn fold_constants(
     IrCmd::CheckTruthy => {
       if is_const(0) {
         if function.tag_op(read(0)) == LUA_TNIL {
-          let r = make_inst(IrCmd::JUMP, &[read(2)]); // Shows a conflict in assumptions on this path
+          let r = IrInst::ir_inst_new(IrCmd::JUMP, &[read(2)]); // Shows a conflict in assumptions on this path
           replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
         } else if function.tag_op(read(0)) == LUA_TBOOLEAN {
           if is_const(1) {
             if function.int_op(read(1)) == 0 {
-              let r = make_inst(IrCmd::JUMP, &[read(2)]); // Shows a conflict in assumptions on this path
+              let r = IrInst::ir_inst_new(IrCmd::JUMP, &[read(2)]); // Shows a conflict in assumptions on this path
               replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
             } else {
               kill_ir_function_ir_inst_at(function, index);
@@ -564,7 +551,7 @@ pub fn fold_constants(
           kill_ir_function_ir_inst_at(function, index);
         // guard 已满足，消除它
         } else {
-          let r = make_inst(IrCmd::JUMP, &[read(2)]);
+          let r = IrInst::ir_inst_new(IrCmd::JUMP, &[read(2)]);
           replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
         }
       }
@@ -741,13 +728,13 @@ pub fn fold_constants(
         let op = read(1);
         substitute_with_truncated_uint_at(function, block_idx, index, op);
       } else if is_const(0) && function.int_op(read(0)) == -1 {
-        let r = make_inst(IrCmd::BitnotUint, &[read(1)]);
+        let r = IrInst::ir_inst_new(IrCmd::BitnotUint, &[read(1)]);
         replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
       } else if is_const(1) && function.int_op(read(1)) == 0 {
         let op = read(0);
         substitute_with_truncated_uint_at(function, block_idx, index, op);
       } else if is_const(1) && function.int_op(read(1)) == -1 {
-        let r = make_inst(IrCmd::BitnotUint, &[read(0)]);
+        let r = IrInst::ir_inst_new(IrCmd::BitnotUint, &[read(0)]);
         replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
       }
     }
@@ -840,7 +827,7 @@ pub fn fold_constants(
           // 这会让运行期的等值检查失效
           replace_ir_function_ir_op_ir_op_at(function, index, 4, u);
         } else {
-          let r = make_inst(IrCmd::JUMP, &[read(5)]); // Shows a conflict in assumptions on this path
+          let r = IrInst::ir_inst_new(IrCmd::JUMP, &[read(5)]); // Shows a conflict in assumptions on this path
           replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
         }
       } else if read(1).kind() == IrOpKind::Inst && is_const(4) {
@@ -851,7 +838,7 @@ pub fn fold_constants(
           && inner.ops.as_slice().first().copied().unwrap_or_default() == e_op;
         CODEGEN_ASSERT!(ok);
 
-        let r = make_inst(IrCmd::JUMP, &[read(5)]); // Shows a conflict in assumptions on this path
+        let r = IrInst::ir_inst_new(IrCmd::JUMP, &[read(5)]); // Shows a conflict in assumptions on this path
         replace_ir_function_ir_block_u32_ir_inst(function, block_idx, index, r);
       }
     }

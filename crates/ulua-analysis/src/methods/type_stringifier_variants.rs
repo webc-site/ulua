@@ -481,57 +481,18 @@ impl TypeStringifier {
     let mut optional = false;
     let mut has_non_nil_disjunct = false;
 
-    let mut results: Vec<ElementResult> = Vec::new();
-    let mut results_length: usize = 0;
-    let mut length_limit_hit = false;
-
     // for (auto el : &uv) — UnionTypeIterator 展平嵌套 union，防环。
-    for el in begin_union_type(uv).map(follow) {
-      if self.st().opts_mut().use_question_marks && is_nil(el) {
+    let use_question_marks = self.st().opts_mut().use_question_marks;
+    let els = begin_union_type(uv).map(follow).filter(|&el| {
+      if use_question_marks && is_nil(el) {
         optional = true;
-        continue;
+        false
       } else {
         has_non_nil_disjunct = true;
+        true
       }
-
-      let saved = take(&mut self.st().result_mut().name);
-      let saved_spans_size = self.st().result_mut().type_spans.len();
-
-      let need_parens = !self.st().cycle_names.contains(&el)
-        && (get::<IntersectionType>(el).is_some() || get::<FunctionType>(el).is_some());
-
-      if need_parens {
-        self.st().emit("(");
-      }
-
-      self.stringify_type_id(el);
-
-      if need_parens {
-        self.st().emit(")");
-      }
-
-      let mut elem = ElementResult {
-        str: take(&mut self.st().result_mut().name),
-        ..Default::default()
-      };
-
-      for i in saved_spans_size..self.st().result_mut().type_spans.len() {
-        elem.spans.push((&self.st().result_mut().type_spans)[i]);
-      }
-      self.st().result_mut().type_spans.truncate(saved_spans_size);
-
-      results_length += elem.str.len();
-      results.push(elem);
-
-      self.st().result_mut().name = saved;
-
-      let max_type_length = self.st().opts_mut().max_type_length;
-      length_limit_hit = max_type_length > 0 && results_length > max_type_length;
-
-      if length_limit_hit {
-        break;
-      }
-    }
+    });
+    let (mut results, length_limit_hit) = self.collect_stringified_elements(els, JoinKind::Union);
 
     self.st().unsee(uv);
 
@@ -543,31 +504,9 @@ impl TypeStringifier {
       self.st().emit("(");
     }
 
-    let mut first = true;
     let should_place_on_newlines =
       results.len() > self.st().opts_mut().composite_types_single_line_limit;
-    for elem in results.iter() {
-      if !first {
-        if should_place_on_newlines {
-          self.st().newline();
-        } else {
-          self.st().emit(" ");
-        }
-        self.st().emit("| ");
-      }
-
-      let base_pos = self.st().result_mut().name.len();
-      self.st().emit(elem.str.as_str());
-      for span in elem.spans.iter() {
-        self.st().result_mut().type_spans.push(ToStringSpan {
-          start_pos: base_pos + span.start_pos,
-          end_pos: base_pos + span.end_pos,
-          r#type: span.r#type,
-        });
-      }
-
-      first = false;
-    }
+    self.emit_stringified_elements(&results, "| ", should_place_on_newlines);
 
     if optional {
       let mut s = "?";
@@ -599,51 +538,10 @@ impl TypeStringifier {
       return;
     }
 
-    let mut results: Vec<ElementResult> = Vec::new();
-    let mut results_length: usize = 0;
-    let mut length_limit_hit = false;
-
-    for &part in uv.parts.iter() {
-      let el = follow(part);
-
-      let saved = take(&mut self.st().result_mut().name);
-      let saved_spans_size = self.st().result_mut().type_spans.len();
-
-      let need_parens = !self.st().cycle_names.contains(&el)
-        && (get::<UnionType>(el).is_some() || get::<FunctionType>(el).is_some());
-
-      if need_parens {
-        self.st().emit("(");
-      }
-
-      self.stringify_type_id(el);
-
-      if need_parens {
-        self.st().emit(")");
-      }
-
-      let mut elem = ElementResult {
-        str: take(&mut self.st().result_mut().name),
-        ..Default::default()
-      };
-
-      for i in saved_spans_size..self.st().result_mut().type_spans.len() {
-        elem.spans.push((&self.st().result_mut().type_spans)[i]);
-      }
-      self.st().result_mut().type_spans.truncate(saved_spans_size);
-
-      results_length += elem.str.len();
-      results.push(elem);
-
-      self.st().result_mut().name = saved;
-
-      let max_type_length = self.st().opts_mut().max_type_length;
-      length_limit_hit = max_type_length > 0 && results_length > max_type_length;
-
-      if length_limit_hit {
-        break;
-      }
-    }
+    let (mut results, length_limit_hit) = self.collect_stringified_elements(
+      uv.parts.iter().map(|&part| follow(part)),
+      JoinKind::Intersection,
+    );
 
     self.st().unsee(uv);
 
@@ -651,32 +549,10 @@ impl TypeStringifier {
       results.sort_unstable_by(|a, b| a.str.cmp(&b.str));
     }
 
-    let mut first = true;
     let should_place_on_newlines = results.len()
       > self.st().opts_mut().composite_types_single_line_limit
       || is_overloaded_function(ty);
-    for elem in results.iter() {
-      if !first {
-        if should_place_on_newlines {
-          self.st().newline();
-        } else {
-          self.st().emit(" ");
-        }
-        self.st().emit("& ");
-      }
-
-      let base_pos = self.st().result_mut().name.len();
-      self.st().emit(elem.str.as_str());
-      for span in elem.spans.iter() {
-        self.st().result_mut().type_spans.push(ToStringSpan {
-          start_pos: base_pos + span.start_pos,
-          end_pos: base_pos + span.end_pos,
-          r#type: span.r#type,
-        });
-      }
-
-      first = false;
-    }
+    self.emit_stringified_elements(&results, "& ", should_place_on_newlines);
   }
 
   pub fn stringify_error(&mut self, _ty: TypeId, tv: &ErrorType) {
@@ -795,5 +671,107 @@ impl TypeStringifier {
     }
 
     self.st().emit(">");
+  }
+}
+
+/// union / intersection 序列化的共通参数：括号包裹规则互为镜像
+/// （union 的 Intersection|Function 成员加括号，intersection 的 Union|Function
+/// 成员加括号——均对应 cpp ToString.cpp 两处逐字重复 lambda 的差异位）。
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub(crate) enum JoinKind {
+  Union,
+  Intersection,
+}
+
+impl TypeStringifier {
+  /// cpp union/intersection 两处重复的"逐元素捕获字符串 + spans"循环：
+  /// 每个元素先摘走 `result.name`，按需加括号后递归序列化，再回收本次
+  /// 产出的字符串与 spans（`drain` 取走后截断还原），累计长度命中
+  /// `max_type_length` 即停。返回 `(元素结果, 是否命中长度上限)`。
+  fn collect_stringified_elements(
+    &mut self,
+    els: impl Iterator<Item = TypeId>,
+    kind: JoinKind,
+  ) -> (Vec<ElementResult>, bool) {
+    let mut results: Vec<ElementResult> = Vec::new();
+    let mut results_length: usize = 0;
+    let mut length_limit_hit = false;
+
+    for el in els {
+      let saved = take(&mut self.st().result_mut().name);
+      let saved_spans_size = self.st().result_mut().type_spans.len();
+
+      // 括号判定须逐元素现场求值：递归序列化可能中途登记 cycle name，
+      // 提前批量计算会用过期状态。
+      let need_parens = !self.st().cycle_names.contains(&el)
+        && match kind {
+          JoinKind::Union => {
+            get::<IntersectionType>(el).is_some() || get::<FunctionType>(el).is_some()
+          }
+          JoinKind::Intersection => {
+            get::<UnionType>(el).is_some() || get::<FunctionType>(el).is_some()
+          }
+        };
+
+      if need_parens {
+        self.st().emit("(");
+      }
+
+      self.stringify_type_id(el);
+
+      if need_parens {
+        self.st().emit(")");
+      }
+
+      // 本次新增 spans：drain 取走（原实现先按下标逐个 clone 再 truncate，
+      // drain 单次完成同一动作）。
+      let elem = ElementResult {
+        str: take(&mut self.st().result_mut().name),
+        spans: self.st().result_mut().type_spans.drain(saved_spans_size..).collect(),
+      };
+
+      results_length += elem.str.len();
+      results.push(elem);
+
+      self.st().result_mut().name = saved;
+
+      let max_type_length = self.st().opts_mut().max_type_length;
+      length_limit_hit = max_type_length > 0 && results_length > max_type_length;
+
+      if length_limit_hit {
+        break;
+      }
+    }
+
+    (results, length_limit_hit)
+  }
+
+  /// cpp union/intersection 两处重复的"拼接已捕获元素"循环：非首元素前按
+  /// `newlines` 决定换行或空格，再补 `op`（"| "/"& "）；元素落位时把其
+  /// spans 平移 `base_pos` 后登记回 `type_spans`。
+  fn emit_stringified_elements(&mut self, results: &[ElementResult], op: &str, newlines: bool) {
+    let mut first = true;
+    for elem in results.iter() {
+      if !first {
+        if newlines {
+          self.st().newline();
+        } else {
+          self.st().emit(" ");
+        }
+        self.st().emit(op);
+      }
+
+      let base_pos = self.st().result_mut().name.len();
+      self.st().emit(elem.str.as_str());
+      for span in elem.spans.iter() {
+        self.st().result_mut().type_spans.push(ToStringSpan {
+          start_pos: base_pos + span.start_pos,
+          end_pos: base_pos + span.end_pos,
+          r#type: span.r#type,
+        });
+      }
+
+      first = false;
+    }
   }
 }

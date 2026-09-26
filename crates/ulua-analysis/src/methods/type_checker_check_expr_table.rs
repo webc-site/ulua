@@ -176,11 +176,11 @@ impl TypeChecker {
       scope.level,
       state,
     );
-    table.definition_module_name = self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some").name.clone();
+    table.definition_module_name = self.expect_current_module().name.clone();
     table.definition_location = expr.base.base.location;
     // SAFETY: current_module 在类型检查期间独占使用（C++ 直接改 module->internalTypes 同义）。
     unsafe {
-      let module = arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"));
+      let module = arc_as_mut(self.expect_current_module());
       (*module).internal_types.add_type(table)
     }
   }

@@ -37,11 +37,15 @@ pub unsafe extern "C-unwind" fn iter_aux(l: *mut LuaState) -> i32 {
       0
     } else {
       let (step, code) = utf_8_decode(&bytes[n as usize..]);
-      if code.is_none() || is_cont_byte(bytes[n as usize + step]) {
-        luaL_error!(l, "invalid UTF-8 code");
-      }
+      // cpp `if (!code || iscont(...)) error`：两臂判定收敛为 match 守卫，
+      // 失败经 luaL_error(!) 抛出不返回，消除哨兵回退值（None 臂不求值守卫，
+      // 与原 `||` 短路同序）
+      let code = match code {
+        Some(code) if !is_cont_byte(bytes[n as usize + step]) => code,
+        _ => luaL_error!(l, "invalid UTF-8 code"),
+      };
       lua_pushinteger(l, n + 1);
-      lua_pushinteger(l, code.unwrap_or(0) as i32);
+      lua_pushinteger(l, code as i32);
       2
     }
   }

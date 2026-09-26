@@ -440,6 +440,7 @@ pub mod scope_slots;
 pub mod seal_table;
 pub mod search_props_and_indexer;
 pub mod seen_set_contains;
+pub mod sep_join;
 pub mod serialize_type_function_runtime_builder;
 pub mod set_function_generics;
 pub mod set_function_parameters;

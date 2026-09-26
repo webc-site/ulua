@@ -34,7 +34,7 @@ impl Frontend {
     arena: &mut TypeArena,
     source: &str,
   ) -> TypeId {
-    let parse_result = Parser::parse_type_c_char_usize_ast_name_table_allocator_parse_options(
+    let parse_result = Parser::parse_type_source(
       source,
       name_table,
       allocator,

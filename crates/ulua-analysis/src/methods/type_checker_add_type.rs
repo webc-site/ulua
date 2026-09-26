@@ -10,7 +10,7 @@ impl TypeChecker {
     T: Clone + Into<Type> + 'static,
   {
     unsafe {
-      let module = arc_as_mut(self.current_module.as_ref().expect("current_module"));
+      let module = arc_as_mut(self.expect_current_module());
       (*module).internal_types.add_type(tv.clone())
     }
   }

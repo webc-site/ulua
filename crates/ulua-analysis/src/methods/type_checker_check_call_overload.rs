@@ -249,7 +249,7 @@ impl TypeChecker {
       // SAFETY: current_module 在类型检查期间独占使用（C++ 直接改
       // module->astOverloadResolvedTypes 同义）。
       unsafe {
-        let module_ptr = arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"));
+        let module_ptr = arc_as_mut(self.expect_current_module());
         *(*module_ptr)
           .ast_overload_resolved_types
           .get_or_insert(expr as *const AstExprCall as *const AstNode) = fn_ty;

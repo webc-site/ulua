@@ -56,7 +56,7 @@ impl TypeChecker {
 
     // SAFETY: current_module 在类型检查期间独占使用（C++ 直接改 module->astTypes 同义）。
     let module = unsafe {
-      &mut *(arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some")))
+      &mut *(arc_as_mut(self.expect_current_module()))
     };
 
     for (i, &expr) in expr_slice.iter().enumerate() {

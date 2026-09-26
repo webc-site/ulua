@@ -13,7 +13,7 @@ use crate::{
 impl TypeChecker {
   pub fn anyify_type_id_location(&mut self, ty: TypeId, location: Location) -> TypeId {
     let arena = Handle::from_mut(unsafe {
-      &mut (*arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"))).internal_types
+      &mut (*arc_as_mut(self.expect_current_module())).internal_types
     });
     let mut anyification =
       Anyification::new(arena, self.builtin_types, self.any_type, self.any_type_pack);
@@ -35,7 +35,7 @@ impl TypeChecker {
 
   pub fn anyify_type_pack_id_location(&mut self, ty: TypePackId, location: Location) -> TypePackId {
     let arena = Handle::from_mut(unsafe {
-      &mut (*arc_as_mut(self.current_module.as_ref().expect("current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some"))).internal_types
+      &mut (*arc_as_mut(self.expect_current_module())).internal_types
     });
     let mut anyification =
       Anyification::new(arena, self.builtin_types, self.any_type, self.any_type_pack);

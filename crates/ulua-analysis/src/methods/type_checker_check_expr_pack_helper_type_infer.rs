@@ -196,9 +196,7 @@ impl TypeChecker {
       // TypeInfer.cpp:4574 `currentModule->astOriginalCallTypes[expr.func]`。
       let module = unsafe {
         &mut *(arc_as_mut(
-          self.current_module.as_ref().expect(
-            "current_module 由 check_without_recursion_check 入口置入 Some、末尾才 take()，check 调用树内恒为 Some",
-          ),
+          self.expect_current_module(),
         ))
       };
       *module

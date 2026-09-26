@@ -5,9 +5,7 @@ use core::{ffi::c_char, ptr::null};
 use ulua_compiler::{
   functions::set_compile_constant::{set_compile_constant_slice, set_compile_constant_str},
   records::{compile_options::CompileOptions, constant::Constant},
-  type_aliases::{
-    compile_constant::CompileConstant, library_member_type_callback::LibraryMemberTypeCallback,
-  },
+  type_aliases::compile_constant::CompileConstant,
 };
 
 #[test]
@@ -66,15 +64,4 @@ fn set_compile_constant_slice_and_str() {
 
   set_compile_constant_str(ptr, "native slice");
   assert_eq!(slot.get_string_bytes(), b"native slice");
-}
-
-#[test]
-fn library_member_type_callback_i32_signature() {
-  unsafe extern "C-unwind" fn mock_callback(_library: *const u8, _member: *const u8) -> i32 {
-    42
-  }
-
-  let cb: LibraryMemberTypeCallback = Some(mock_callback);
-  let res = cb.map(|f| unsafe { f(null(), null()) });
-  assert_eq!(res, Some(42));
 }

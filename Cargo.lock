@@ -1533,7 +1533,6 @@ dependencies = [
 name = "ulua-unit-test"
 version = "0.1.2"
 dependencies = [
- "hipstr",
  "ulua-analysis",
  "ulua-ast",
  "ulua-bytecode",

@@ -533,40 +533,33 @@ impl AssemblyBuilderA64 {
     self.place_div("udiv", dst, src1, src2, 0b000010); // cpp :233
   }
 
+  /// dup（scalar/vector 4s 臂同构，cpp AssemblyBuilderA64.cpp dup 模板）：
+  /// S 臂与 Q 臂仅 dst 助记符前缀（`s{}` vs `v{}.4s`）与编码 Q 位（op 段 bit18）不同，
+  /// 其余断言/日志/发射序列一致，收敛为单臂参数化。
   pub fn dup_4s(&mut self, dst: RegisterA64, src: RegisterA64, index: u8) {
-    if dst.kind() == KindA64::S {
-      CODEGEN_ASSERT!(src.kind() == KindA64::Q);
-      CODEGEN_ASSERT!(index < 4);
+    let scalar = dst.kind() == KindA64::S;
 
-      if self.log_text {
-        self.log_append(format_args!(
-          " {:<12}s{},v{}.s[{}]\n",
-          "dup",
-          dst.index(),
-          src.index(),
-          index
-        ));
-      }
+    CODEGEN_ASSERT!(src.kind() == KindA64::Q);
+    CODEGEN_ASSERT!(index < 4);
 
-      let op: u32 = 0b01_0111_1000_0001_0000_0001;
-      self.place(dst.index() as u32 | (src.index() as u32) << 5 | op << 10 | (index as u32) << 19);
-    } else {
-      CODEGEN_ASSERT!(src.kind() == KindA64::Q);
-      CODEGEN_ASSERT!(index < 4);
-
-      if self.log_text {
-        self.log_append(format_args!(
-          " {:<12}v{}.4s,v{}.s[{}]\n",
-          "dup",
-          dst.index(),
-          src.index(),
-          index
-        ));
-      }
-
-      let op: u32 = 0b01_0011_1000_0001_0000_0001;
-      self.place(dst.index() as u32 | (src.index() as u32) << 5 | op << 10 | (index as u32) << 19);
+    if self.log_text {
+      let dst_name = if scalar {
+        format_args!("s{}", dst.index())
+      } else {
+        format_args!("v{}.4s", dst.index())
+      };
+      self.log_append(format_args!(
+        " {:<12}{},v{}.s[{}]\n",
+        "dup",
+        dst_name,
+        src.index(),
+        index
+      ));
     }
+
+    // 标量（s{}）臂在 op 段内置 Q 位（编码 bit18，place 前整体左移 10）
+    let op: u32 = 0b01_0011_1000_0001_0000_0001 | ((scalar as u32) << 18);
+    self.place(dst.index() as u32 | (src.index() as u32) << 5 | op << 10 | (index as u32) << 19);
 
     self.commit();
   }

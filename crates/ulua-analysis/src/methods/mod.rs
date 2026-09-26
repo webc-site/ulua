@@ -935,6 +935,7 @@ pub mod type_checker_child_function_scope;
 pub mod type_checker_child_scope;
 pub mod type_checker_context_accessors;
 pub mod type_checker_create_generic_types;
+pub mod type_checker_current_module;
 pub mod type_checker_error_recovery_type_pack_type_infer;
 pub mod type_checker_error_recovery_type_type_infer;
 pub mod type_checker_filter_map;

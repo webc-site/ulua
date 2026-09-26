@@ -141,6 +141,30 @@ use crate::{
   },
 };
 
+/// `NonNull::new(..).expect(..)` 的非空契约文案单点表：原 40 余处逐字重复的
+/// expect 字符串收敛为常量（panic 文案不变，语义不变）。
+mod nonnull_contract {
+  /// cpp `NotNull<Scope>` 契约：`Constraint.scope` 构造期接线，恒非空。
+  pub(crate) const CONSTRAINT_SCOPE: &str =
+    "Constraint.scope 按 cpp NotNull<Scope> 契约构造期接线，恒非空";
+  /// `scope` 值即 `constraint.scope`（cpp NotNull 契约），恒非空。
+  pub(crate) const SCOPE_IS_CONSTRAINT_SCOPE: &str =
+    "scope 即 constraint.scope（cpp NotNull<Scope> 契约），恒非空";
+  /// `Handle<T>` 内持 `NonNull`，`as_ptr` 恒非空。
+  pub(crate) const HANDLE_AS_PTR: &str = "Handle 内持 NonNull，as_ptr 恒非空";
+  /// 正在派发的约束借自 `&Constraint`，转裸指针恒非空。
+  pub(crate) const CONSTRAINT_REF: &str = "正在派发的约束借自 &Constraint，转裸指针恒非空";
+  /// `&mut self` 转裸指针恒非空。
+  pub(crate) const SELF_AS_PTR: &str = "&mut self 转裸指针恒非空";
+  /// 局部 `&mut` 转裸指针恒非空。
+  pub(crate) const LOCAL_MUT_AS_PTR: &str = "局部 &mut 转裸指针恒非空";
+  /// subtyping 由构造期 `Handle(NonNull)` 接线为 `*mut`，恒非空。
+  pub(crate) const SUBTYPING: &str = "subtyping 由构造期 Handle(NonNull) 接线为 *mut，恒非空";
+  /// `&` 借用转裸指针恒非空。
+  pub(crate) const REF_AS_PTR: &str = "& 借用转裸指针恒非空";
+}
+use nonnull_contract as nc;
+
 impl ConstraintSolver {
   /// C++ `tryDispatch(NotNull<const Constraint> c, bool force)`：`constraint`
   /// 来自 `solver_constraints`（`Vec<Box<Constraint>>`），非空由构造保证。
@@ -573,7 +597,7 @@ impl ConstraintSolver {
         self,
         &signature,
         NonNull::new(constraint.scope)
-          .expect("Constraint.scope 按 cpp NotNull<Scope> 契约构造期接线，恒非空"),
+          .expect(nc::CONSTRAINT_SCOPE),
       );
       itf.run_type_id(target);
 
@@ -641,7 +665,7 @@ impl ConstraintSolver {
     if get_type::get::<TypeFunctionInstanceType>(follow_type::follow(tf.r#type())).is_some() {
       self.push_constraint(
         NonNull::new(constraint.scope)
-          .expect("Constraint.scope 按 cpp NotNull<Scope> 契约构造期接线，恒非空"),
+          .expect(nc::CONSTRAINT_SCOPE),
         constraint.location,
         ConstraintV::Reduce(ReduceConstraint { ty: tf.r#type() }),
       );
@@ -708,7 +732,7 @@ impl ConstraintSolver {
       self,
       &signature,
       NonNull::new(constraint.scope)
-        .expect("Constraint.scope 按 cpp NotNull<Scope> 契约构造期接线，恒非空"),
+        .expect(nc::CONSTRAINT_SCOPE),
     );
     itf.run_type_id(tf.r#type());
 
@@ -747,14 +771,14 @@ impl ConstraintSolver {
     if fflag::LuauIterativeInstantiationQueuer.get() {
       let mut queuer = InstantiationQueuer::new(
         NonNull::new(constraint.scope)
-          .expect("Constraint.scope 按 cpp NotNull<Scope> 契约构造期接线，恒非空"),
+          .expect(nc::CONSTRAINT_SCOPE),
         &constraint.location,
         self as *mut ConstraintSolver,
       );
       queuer.run_type_id(target);
     } else {
       let mut queuer = InstantiationQueuerDeprecated::instantiation_queuer_deprecated_instantiation_queuer_deprecated(
-                NonNull::new(constraint.scope).expect("Constraint.scope 按 cpp NotNull<Scope> 契约构造期接线，恒非空"),
+                NonNull::new(constraint.scope).expect(nc::CONSTRAINT_SCOPE),
                 &constraint.location,
                 self as *mut ConstraintSolver,
             );
@@ -947,9 +971,9 @@ impl ConstraintSolver {
       && !c.call_site.is_null()
     {
       used_magic = (magic.infer)(&MagicFunctionCallContext {
-        solver: NonNull::new(self as *mut ConstraintSolver).expect("&mut self 转裸指针恒非空"),
+        solver: NonNull::new(self as *mut ConstraintSolver).expect(nc::SELF_AS_PTR),
         constraint: NonNull::new(constraint as *const Constraint as *mut Constraint)
-          .expect("正在派发的约束借自 &Constraint，转裸指针恒非空"),
+          .expect(nc::CONSTRAINT_REF),
         call_site: NonNull::new(c.call_site).expect("上方 !c.call_site.is_null() 守卫已排除空指针"),
         arguments: c.args_pack,
         result,
@@ -1050,10 +1074,10 @@ impl ConstraintSolver {
     ));
 
     let mut u2 = Unifier2::unifier_2_not_null_type_arena_not_null_builtin_types_not_null_scope_not_null_internal_error_reporter(
-            NonNull::new(self.arena.as_ptr()).expect("Handle 内持 NonNull，as_ptr 恒非空"),
-            NonNull::new(self.builtin_types.as_ptr()).expect("Handle 内持 NonNull，as_ptr 恒非空"),
-            NonNull::new(scope).expect("scope 即 constraint.scope（cpp NotNull<Scope> 契约），恒非空"),
-            NonNull::new(&self.ice_reporter as *const InternalErrorReporter as *mut InternalErrorReporter).expect("& 借用转裸指针恒非空"),
+            NonNull::new(self.arena.as_ptr()).expect(nc::HANDLE_AS_PTR),
+            NonNull::new(self.builtin_types.as_ptr()).expect(nc::HANDLE_AS_PTR),
+            NonNull::new(scope).expect(nc::SCOPE_IS_CONSTRAINT_SCOPE),
+            NonNull::new(&self.ice_reporter as *const InternalErrorReporter as *mut InternalErrorReporter).expect(nc::REF_AS_PTR),
         );
 
     let unify_result = u2.unify(overload_to_use, inferred_ty);
@@ -1193,7 +1217,7 @@ impl ConstraintSolver {
 
     if fflag::LuauIterativeInstantiationQueuer.get() {
       let mut queuer = InstantiationQueuer::new(
-        NonNull::new(scope).expect("scope 即 constraint.scope（cpp NotNull<Scope> 契约），恒非空"),
+        NonNull::new(scope).expect(nc::SCOPE_IS_CONSTRAINT_SCOPE),
         &location,
         self as *mut ConstraintSolver,
       );
@@ -1204,7 +1228,7 @@ impl ConstraintSolver {
       queuer.run_type_pack_id(result);
     } else {
       let mut queuer = InstantiationQueuerDeprecated::instantiation_queuer_deprecated_instantiation_queuer_deprecated(
-                NonNull::new(scope).expect("scope 即 constraint.scope（cpp NotNull<Scope> 契约），恒非空"),
+                NonNull::new(scope).expect(nc::SCOPE_IS_CONSTRAINT_SCOPE),
                 &location,
                 self as *mut ConstraintSolver,
             );
@@ -1272,10 +1296,10 @@ impl ConstraintSolver {
     let mut generic_types_and_packs: DenseHashSet<*const ()> = DenseHashSet::default();
 
     let mut u2 = Unifier2::unifier_2_not_null_type_arena_not_null_builtin_types_not_null_scope_not_null_internal_error_reporter(
-            NonNull::new(self.arena.as_ptr()).expect("Handle 内持 NonNull，as_ptr 恒非空"),
-            NonNull::new(self.builtin_types.as_ptr()).expect("Handle 内持 NonNull，as_ptr 恒非空"),
-            NonNull::new(constraint.scope).expect("Constraint.scope 按 cpp NotNull<Scope> 契约构造期接线，恒非空"),
-            NonNull::new(&self.ice_reporter as *const InternalErrorReporter as *mut InternalErrorReporter).expect("& 借用转裸指针恒非空"),
+            NonNull::new(self.arena.as_ptr()).expect(nc::HANDLE_AS_PTR),
+            NonNull::new(self.builtin_types.as_ptr()).expect(nc::HANDLE_AS_PTR),
+            NonNull::new(constraint.scope).expect(nc::CONSTRAINT_SCOPE),
+            NonNull::new(&self.ice_reporter as *const InternalErrorReporter as *mut InternalErrorReporter).expect(nc::REF_AS_PTR),
         );
 
     for generic in &ftv.generics {
@@ -1321,7 +1345,7 @@ impl ConstraintSolver {
     let (arg_pack_head, _) = flatten_type_pack_id(args_pack);
 
     let subtyping =
-      NonNull::new(self.subtyping).expect("subtyping 由构造期 Handle(NonNull) 接线为 *mut，恒非空");
+      NonNull::new(self.subtyping).expect(nc::SUBTYPING);
 
     // 统一上界：原 break 条件只依赖 i，可提前算出可处理长度
     let bound = args_slice
@@ -1338,12 +1362,12 @@ impl ConstraintSolver {
           .expect("cpp pushTypeInto 首参为 NotNull：约束生成器为本约束接线非空 ast_types"),
         NonNull::new(c.ast_expected_types as *mut DenseHashMap<*const AstExpr, TypeId>)
           .expect("cpp pushTypeInto 次参为 NotNull：约束生成器为本约束接线非空 ast_expected_types"),
-        NonNull::new(self as *mut ConstraintSolver).expect("&mut self 转裸指针恒非空"),
+        NonNull::new(self as *mut ConstraintSolver).expect(nc::SELF_AS_PTR),
         NonNull::new(constraint as *const Constraint as *mut Constraint)
-          .expect("正在派发的约束借自 &Constraint，转裸指针恒非空"),
+          .expect(nc::CONSTRAINT_REF),
         NonNull::new(&mut generic_types_and_packs as *mut DenseHashSet<*const ()>)
-          .expect("局部 &mut 转裸指针恒非空"),
-        NonNull::new(&mut u2 as *mut Unifier2).expect("局部 &mut 转裸指针恒非空"),
+          .expect(nc::LOCAL_MUT_AS_PTR),
+        NonNull::new(&mut u2 as *mut Unifier2).expect(nc::LOCAL_MUT_AS_PTR),
         subtyping,
         expected_arg_ty,
         expr as *const AstExpr,
@@ -1353,7 +1377,7 @@ impl ConstraintSolver {
         for incomplete in &result.incomplete_types {
           let addition = self.push_constraint(
             NonNull::new(constraint.scope)
-              .expect("Constraint.scope 按 cpp NotNull<Scope> 契约构造期接线，恒非空"),
+              .expect(nc::CONSTRAINT_SCOPE),
             constraint.location,
             ConstraintV::PushType(PushTypeConstraint {
               expected_type: incomplete.expected_type,
@@ -1372,7 +1396,7 @@ impl ConstraintSolver {
     for c_item in incomplete_subtypes {
       let addition = self.push_constraint(
         NonNull::new(constraint.scope)
-          .expect("Constraint.scope 按 cpp NotNull<Scope> 契约构造期接线，恒非空"),
+          .expect(nc::CONSTRAINT_SCOPE),
         constraint.location,
         c_item,
       );
@@ -1960,11 +1984,11 @@ impl ConstraintSolver {
     let location = constraint.location;
 
     let mut context = TypeFunctionContext::from_solver(
-      NonNull::new(self as *mut ConstraintSolver).expect("&mut self 转裸指针恒非空"),
-      NonNull::new(scope).expect("scope 即 constraint.scope（cpp NotNull<Scope> 契约），恒非空"),
+      NonNull::new(self as *mut ConstraintSolver).expect(nc::SELF_AS_PTR),
+      NonNull::new(scope).expect(nc::SCOPE_IS_CONSTRAINT_SCOPE),
       NonNull::new(constraint as *const Constraint as *mut Constraint)
-        .expect("正在派发的约束借自 &Constraint，转裸指针恒非空"),
-      NonNull::new(self.subtyping).expect("subtyping 由构造期 Handle(NonNull) 接线为 *mut，恒非空"),
+        .expect(nc::CONSTRAINT_REF),
+      NonNull::new(self.subtyping).expect(nc::SUBTYPING),
     );
     let mut result = reduce_type_functions(ty, location, &mut context, force);
 
@@ -2039,11 +2063,11 @@ impl ConstraintSolver {
     let location = constraint.location;
 
     let mut context = TypeFunctionContext::from_solver(
-      NonNull::new(self as *mut ConstraintSolver).expect("&mut self 转裸指针恒非空"),
-      NonNull::new(scope).expect("scope 即 constraint.scope（cpp NotNull<Scope> 契约），恒非空"),
+      NonNull::new(self as *mut ConstraintSolver).expect(nc::SELF_AS_PTR),
+      NonNull::new(scope).expect(nc::SCOPE_IS_CONSTRAINT_SCOPE),
       NonNull::new(constraint as *const Constraint as *mut Constraint)
-        .expect("正在派发的约束借自 &Constraint，转裸指针恒非空"),
-      NonNull::new(self.subtyping).expect("subtyping 由构造期 Handle(NonNull) 接线为 *mut，恒非空"),
+        .expect(nc::CONSTRAINT_REF),
+      NonNull::new(self.subtyping).expect(nc::SUBTYPING),
     );
     let result = reduce_type_functions_tp(tp, location, &mut context, force);
 
@@ -2293,15 +2317,15 @@ impl ConstraintSolver {
     }
 
     let mut u2 = Unifier2::unifier_2_not_null_type_arena_not_null_builtin_types_not_null_scope_not_null_internal_error_reporter_dense_hash_set_void(
-            NonNull::new(self.arena.as_ptr()).expect("Handle 内持 NonNull，as_ptr 恒非空"),
-            NonNull::new(self.builtin_types.as_ptr()).expect("Handle 内持 NonNull，as_ptr 恒非空"),
-            NonNull::new(constraint.scope).expect("Constraint.scope 按 cpp NotNull<Scope> 契约构造期接线，恒非空"),
-            NonNull::new(&self.ice_reporter as *const InternalErrorReporter as *mut InternalErrorReporter).expect("& 借用转裸指针恒非空"),
+            NonNull::new(self.arena.as_ptr()).expect(nc::HANDLE_AS_PTR),
+            NonNull::new(self.builtin_types.as_ptr()).expect(nc::HANDLE_AS_PTR),
+            NonNull::new(constraint.scope).expect(nc::CONSTRAINT_SCOPE),
+            NonNull::new(&self.ice_reporter as *const InternalErrorReporter as *mut InternalErrorReporter).expect(nc::REF_AS_PTR),
             &mut self.uninhabited_type_functions as *mut DenseHashSet<*const ()>,
         );
 
     let subtyping =
-      NonNull::new(self.subtyping).expect("subtyping 由构造期 Handle(NonNull) 接线为 *mut，恒非空");
+      NonNull::new(self.subtyping).expect(nc::SUBTYPING);
 
     // NOTE: If we don't do this check up front, we almost immediately start
     // spawning tons of push type constraints. It's pretty important.
@@ -2318,11 +2342,11 @@ impl ConstraintSolver {
         .expect("cpp pushTypeInto 首参为 NotNull：约束生成器为本约束接线非空 ast_types"),
       NonNull::new(c.ast_expected_types as *mut DenseHashMap<*const AstExpr, TypeId>)
         .expect("cpp pushTypeInto 次参为 NotNull：约束生成器为本约束接线非空 ast_expected_types"),
-      NonNull::new(self as *mut ConstraintSolver).expect("&mut self 转裸指针恒非空"),
+      NonNull::new(self as *mut ConstraintSolver).expect(nc::SELF_AS_PTR),
       NonNull::new(constraint as *const Constraint as *mut Constraint)
-        .expect("正在派发的约束借自 &Constraint，转裸指针恒非空"),
-      NonNull::new(&mut empty as *mut DenseHashSet<*const ()>).expect("局部 &mut 转裸指针恒非空"),
-      NonNull::new(&mut u2 as *mut Unifier2).expect("局部 &mut 转裸指针恒非空"),
+        .expect(nc::CONSTRAINT_REF),
+      NonNull::new(&mut empty as *mut DenseHashSet<*const ()>).expect(nc::LOCAL_MUT_AS_PTR),
+      NonNull::new(&mut u2 as *mut Unifier2).expect(nc::LOCAL_MUT_AS_PTR),
       subtyping,
       c.expected_type,
       c.expr,
@@ -2337,7 +2361,7 @@ impl ConstraintSolver {
     for incomplete in &result.incomplete_types {
       let addition = self.push_constraint(
         NonNull::new(constraint.scope)
-          .expect("Constraint.scope 按 cpp NotNull<Scope> 契约构造期接线，恒非空"),
+          .expect(nc::CONSTRAINT_SCOPE),
         constraint.location,
         ConstraintV::PushType(PushTypeConstraint {
           expected_type: incomplete.expected_type,

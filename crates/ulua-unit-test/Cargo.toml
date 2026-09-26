@@ -8,7 +8,6 @@ publish = false
 crate-type = ["rlib"]
 
 [dependencies]
-hipstr = "0.8.0"
 ulua-analysis = { path = "../ulua-analysis", version = "0.1.2" }
 ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
 ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.2" }

@@ -201,11 +201,6 @@ impl RegisterA64 {
   pub const Q31: RegisterA64 = reg(KindA64::Q, 31);
 
   #[inline]
-  pub const fn register_a_64_operator_eq(&self, rhs: RegisterA64) -> bool {
-    self.bits == rhs.bits
-  }
-
-  #[inline]
   pub const fn register_a_64_operator_ne(&self, rhs: RegisterA64) -> bool {
     self.bits != rhs.bits
   }
