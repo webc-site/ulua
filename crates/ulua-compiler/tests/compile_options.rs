@@ -65,3 +65,71 @@ fn set_compile_constant_slice_and_str() {
   set_compile_constant_str(ptr, "native slice");
   assert_eq!(slot.get_string_bytes(), b"native slice");
 }
+
+#[test]
+fn compile_options_safe_builder_and_const_construction() {
+  const OPTS: CompileOptions = CompileOptions::new()
+    .with_optimization_level(2)
+    .with_debug_level(0)
+    .with_type_info_level(1)
+    .with_coverage_level(2)
+    .with_vector(Some(b"Vector3\0"), Some(b"new\0"), Some(b"Vector3\0"));
+
+  assert_eq!(OPTS.optimization_level, 2);
+  assert_eq!(OPTS.debug_level, 0);
+  assert_eq!(OPTS.type_info_level, 1);
+  assert_eq!(OPTS.coverage_level, 2);
+  assert_eq!(OPTS.vector_lib(), Some("Vector3"));
+  assert_eq!(OPTS.vector_ctor(), Some("new"));
+  assert_eq!(OPTS.vector_type(), Some("Vector3"));
+}
+
+#[test]
+fn compile_options_native_compilation_builder() {
+  let opts = CompileOptions::new().with_native_compilation();
+  assert_eq!(opts.optimization_level, 2);
+  assert_eq!(opts.type_info_level, 1);
+  assert_eq!(opts.debug_level, 1);
+  assert_eq!(opts.coverage_level, 0);
+}
+
+#[test]
+fn compile_options_list_builders() {
+  let item1 = c"foo".as_ptr();
+  let list: [*const c_char; 2] = [item1, null()];
+
+  let opts = CompileOptions::new()
+    .with_mutable_globals(list.as_ptr())
+    .with_userdata_types(list.as_ptr())
+    .with_libraries_with_known_members(list.as_ptr())
+    .with_disabled_builtins(list.as_ptr());
+
+  assert_eq!(
+    opts.mutable_globals().collect::<Vec<_>>(),
+    vec![b"foo".as_slice()]
+  );
+  assert_eq!(
+    opts.userdata_types().collect::<Vec<_>>(),
+    vec![b"foo".as_slice()]
+  );
+  assert_eq!(
+    opts.libraries_with_known_members().collect::<Vec<_>>(),
+    vec![b"foo".as_slice()]
+  );
+  assert_eq!(
+    opts.disabled_builtins().collect::<Vec<_>>(),
+    vec![b"foo".as_slice()]
+  );
+}
+
+#[test]
+fn compile_options_individual_vector_builders() {
+  let opts = CompileOptions::new()
+    .with_vector_lib(Some(b"Lib\0"))
+    .with_vector_ctor(Some(b"ctor\0"))
+    .with_vector_type(Some(b"Type\0"));
+
+  assert_eq!(opts.vector_lib(), Some("Lib"));
+  assert_eq!(opts.vector_ctor(), Some("ctor"));
+  assert_eq!(opts.vector_type(), Some("Type"));
+}
