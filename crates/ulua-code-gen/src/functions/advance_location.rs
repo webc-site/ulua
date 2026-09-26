@@ -1,6 +1,4 @@
-use crate::functions::write_unaligned::writeu_8;
-
-const DW_CFA_ADVANCE_LOC1: u8 = 0x02;
+use crate::{functions::write_unaligned::writeu_8, macros::dwarf_reg::DW_CFA_ADVANCE_LOC1};
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
