@@ -1,11 +1,9 @@
-//! VM 帧支撑族：`VmFrame` 访问器生成宏、pc 保护/补丁转发与 call-fallback
-//! 产出码常量（r7-macros98 合并票：逐字保真自原一文件一宏碎片）。
-
-use ulua_vm::{
-  macros::vm_protect_pc::vm_protect_pc as VM_PROTECT_PC_VM, records::lua_state::LuaState,
-};
-
-use crate::type_aliases::instruction_ir_builder::Instruction;
+//! VM 帧支撑族：`VmFrame` 访问器生成宏与 call-fallback 产出码常量
+//! （r7-macros98 合并票：逐字保真自原一文件一宏碎片）。
+//!
+//! 原文件内的 `vm_patch_c`/`vm_protect_pc` 两份 ulua-vm 运行时原子的同义克隆已
+//! 单源化删除：请直接消费 `ulua_vm::macros::vm_patch_c::vm_patch_c` 与
+//! `ulua_vm::macros::vm_protect_pc::vm_protect_pc`（r7-vmarch 仲裁票，勿再复制）。
 
 /// 收口 `VmFrame` 的「严格同形单行访问器」族：签名为 `&self` + 单个逐位类型化形参、
 /// 函数体恰为一条 `unsafe { $body }`（纯字段读或谓词/取值宏转发）、成员间只差字段名/
@@ -108,25 +106,5 @@ macro_rules! define_vm_frame_accessor {
 }
 
 pub(crate) use define_vm_frame_accessor;
-
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn vm_patch_c(pc: *const Instruction, slot: i32) {
-  // Safety: 契约保证 pc 指向字节码缓冲内存活的合法 Instruction 槽，转 *mut 仅就地
-  // 改写当前槽；读写同为 Instruction(u32) 对齐一致，单线程串行 patch 无别名冲突。
-  unsafe {
-    *(pc as *mut Instruction) = ((slot as u8 as u32) << 24) | (0x00ffffffu32 & *pc);
-  }
-}
-
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn vm_protect_pc(l: *mut LuaState, pc: *const u32) {
-  // Safety: 本 unsafe fn 的 `# Safety` 契约保证 l 为存活 LuaState*、pc 为界内指令指针，
-  // 与被转发的 VM_PROTECT_PC_VM 前置条件完全一致，转发既未收紧也未放宽该契约。
-  unsafe {
-    VM_PROTECT_PC_VM(l, pc);
-  }
-}
 
 pub const CALL_FALLBACK_YIELD: i32 = 1;

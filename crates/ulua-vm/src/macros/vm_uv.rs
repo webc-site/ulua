@@ -8,6 +8,9 @@
 //! `cl` 指向存活的 LClosure 且其 uprefs 尾部按 `nupvalues` 过分配（lua_f_new_lclosure
 //! 布局保证）；`i` 为字节码 B 字段，已由 LUAU_ASSERT 校验 `i < nupvalues`。
 //! 与 cpp 柔性数组成员寻址语义一致。
+//!
+//! See also: ulua-code-gen `functions/vm_upvalue_op.rs`（形似义异：IR 操作数编号
+//! 提取，与本宏无关，勿合并）。
 
 #[macro_export]
 macro_rules! VM_UV {

@@ -1,3 +1,6 @@
+// See also: 本 crate `macros/codegen_assert.rs` 的 `CODEGEN_ASSERT!`——形似义异：
+// 该宏走 ulua_common `assert_fail` C-ABI 上报通道，此处是同名局部替身（标准
+// `assert!` panic 语义），刻意不统一，勿合并。
 macro_rules! CODEGEN_ASSERT {
   ($expr:expr) => {
     assert!($expr);
