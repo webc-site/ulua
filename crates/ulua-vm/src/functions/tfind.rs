@@ -5,14 +5,14 @@ use crate::{
     lua_l_checktype::lua_l_checktype, lua_l_optinteger::lua_l_optinteger,
     lua_pushinteger::lua_pushinteger, lua_pushnil::lua_pushnil,
   },
-  macros::equalobj::equalobj,
+  macros::{equalobj::equalobj, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
   type_aliases::{stk_id::StkId, t_value::TValue},
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn tfind(l: *mut LuaState) -> i32 {
+pub unsafe fn tfind(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_checktype(l, 1, LuaType::Table as i32);
     lua_l_checkany(l, 2);
@@ -50,3 +50,5 @@ pub unsafe extern "C-unwind" fn tfind(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn tfind, tfind_arm);

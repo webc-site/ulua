@@ -5,13 +5,16 @@ use crate::{
     lua_l_checkinteger::lua_l_checkinteger, lua_l_checktype::lua_l_checktype,
     lua_pushvalue::lua_pushvalue, moveelements::moveelements,
   },
-  macros::{lua_isnoneornil::lua_isnoneornil, lua_l_argcheck::luaL_argcheck, sizenode::sizenode},
+  macros::{
+    lua_isnoneornil::lua_isnoneornil, lua_l_argcheck::luaL_argcheck, lua_lib_fn::lua_lib_fn,
+    sizenode::sizenode,
+  },
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe extern "C-unwind" fn tmove(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn tmove(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_checktype(l, 1, LuaType::Table as i32);
     let f = lua_l_checkinteger(l, 2);
@@ -48,3 +51,5 @@ pub(crate) unsafe extern "C-unwind" fn tmove(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub(crate) fn tmove, tmove_arm);

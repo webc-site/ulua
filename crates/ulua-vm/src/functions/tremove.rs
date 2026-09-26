@@ -5,12 +5,13 @@ use crate::{
     lua_pushnil::lua_pushnil, lua_rawgeti::lua_rawgeti, lua_rawseti::lua_rawseti,
     moveelements::moveelements,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn tremove(l: *mut LuaState) -> i32 {
+pub unsafe fn tremove(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_checktype(l, 1, LuaType::Table as i32);
     let n = lua_objlen(l, 1);
@@ -30,3 +31,5 @@ pub unsafe extern "C-unwind" fn tremove(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn tremove, tremove_arm);

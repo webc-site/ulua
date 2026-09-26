@@ -1,13 +1,13 @@
 use crate::{
   enums::{lua_type::LuaType, t_key_view::TKeyView, value_view::ValueView},
   functions::{c_slice, lua_l_checktype::lua_l_checktype, lua_pushnumber::lua_pushnumber},
-  macros::sizenode::sizenode,
+  macros::{lua_lib_fn::lua_lib_fn, sizenode::sizenode},
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// `l` 必须指向本次 strlib 调用的存活 `LuaState`，所需实参按索引可读且栈顶有结果余量。
-pub(crate) unsafe extern "C-unwind" fn maxn(l: *mut LuaState) -> i32 {
+pub(crate) unsafe fn maxn(l: *mut LuaState) -> i32 {
   let mut max: f64 = 0.0;
   // Safety: 契约保证 `l` 为存活调用帧、1..=n 实参栈槽可读，数值探测与比较不越过帧栈界
   unsafe {
@@ -43,3 +43,5 @@ pub(crate) unsafe extern "C-unwind" fn maxn(l: *mut LuaState) -> i32 {
   }
   1
 }
+
+lua_lib_fn!(pub(crate) fn maxn, maxn_arm);
