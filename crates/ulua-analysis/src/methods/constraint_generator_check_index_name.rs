@@ -7,7 +7,10 @@ use ulua_ast::records::{ast_expr::AstExpr, location::Location};
 
 use crate::{
   enums::value_context::ValueContext,
-  functions::{get_mutable_type, get_table_type::get_table_type, in_conditional::in_conditional},
+  functions::{
+    get_mutable_type, get_table_type::get_table_type, in_conditional::in_conditional,
+    inference_with_refinement::inference_with_refinement,
+  },
   records::{
     blocked_type::BlockedType, constraint_generator::ConstraintGenerator,
     has_prop_constraint::HasPropConstraint, inference::Inference, refinement_key::RefinementKey,
@@ -86,11 +89,8 @@ impl ConstraintGenerator {
           let refinement = self
             .refinement_arena
             .proposition_refinement_key_type_id(key, self.builtin_types.get().truthy_type);
-          // §2：`None`（原 `Inference{ty, nullptr}` 形态）收口到 `no_refinement` 构造器。
-          return refinement.map_or_else(
-            || Inference::no_refinement(ty),
-            |r| Inference::inference_type_id_refinement_id(ty, r),
-          );
+          // §2：`None`（原 `Inference{ty, nullptr}` 形态）收口到 Option 构造器。
+          return inference_with_refinement(ty, refinement);
         }
 
         self.update_r_value_refinements_scope_ptr_def_id_type_id(scope, (*key).def, result);
@@ -100,11 +100,8 @@ impl ConstraintGenerator {
         let refinement = self
           .refinement_arena
           .proposition_refinement_key_type_id(key, self.builtin_types.get().truthy_type);
-        // §2：`None`（原 `Inference{result, nullptr}` 形态）收口到 `no_refinement` 构造器。
-        refinement.map_or_else(
-          || Inference::no_refinement(result),
-          |r| Inference::inference_type_id_refinement_id(result, r),
-        )
+        // §2：`None`（原 `Inference{result, nullptr}` 形态）收口到 Option 构造器。
+        inference_with_refinement(result, refinement)
       } else {
         Inference::no_refinement(result)
       }

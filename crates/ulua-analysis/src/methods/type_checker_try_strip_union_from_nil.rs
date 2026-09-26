@@ -1,32 +1,20 @@
-use alloc::vec::Vec;
-
+//! `TypeChecker::tryStripUnionFromNil` 的核心遍历已单源化于
+//! [`crate::functions::try_strip_union_from_nil`]（cpp TypeUtils.cpp 同名
+//! static 函数），此处仅做 arena 接线。
 use crate::{
-  functions::{begin_type::begin_union_type, get_type, is_prim::is_nil},
-  records::{type_checker::TypeChecker, union_type::UnionType},
+  functions::{arc_as_mut::arc_as_mut, try_strip_union_from_nil::try_strip_union_from_nil},
+  records::type_checker::TypeChecker,
   type_aliases::type_id::TypeId,
 };
+
 impl TypeChecker {
   pub fn try_strip_union_from_nil(&mut self, ty: TypeId) -> Option<TypeId> {
-    let utv = get_type::get::<UnionType>(ty)?;
-
-    // C++ `std::any_of(begin(utv), end(utv), isNil)` 与
-    // `for (TypeId option : utv)` — UnionTypeIterator 防环展平并 follow。
-    if !begin_union_type(utv).any(is_nil) {
-      return Some(ty);
+    // SAFETY: current_module 在类型检查期间独占（与 self.add_type 同一降级
+    // 路径：arc_as_mut 短时重建 &mut，借用止于本次调用，对应 C++ 直接持有
+    // module->internal_types）。
+    unsafe {
+      let module = arc_as_mut(self.expect_current_module());
+      try_strip_union_from_nil(&mut (*module).internal_types, ty)
     }
-
-    let result: Vec<TypeId> = begin_union_type(utv)
-      .filter(|&option| !is_nil(option))
-      .collect();
-
-    if result.is_empty() {
-      return None;
-    }
-
-    if result.len() == 1 {
-      return Some(result[0]);
-    }
-
-    Some(self.add_type(&UnionType { options: result }))
   }
 }

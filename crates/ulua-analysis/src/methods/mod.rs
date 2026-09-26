@@ -552,6 +552,7 @@ pub mod normalizer_cache_type_ids;
 pub mod normalizer_clear_caches;
 pub mod normalizer_clear_fuel;
 pub mod normalizer_clear_normal;
+pub mod normalizer_combine_type_packs;
 pub mod normalizer_consume_fuel;
 pub mod normalizer_initialize_fuel;
 pub mod normalizer_intersect_extern_types;
