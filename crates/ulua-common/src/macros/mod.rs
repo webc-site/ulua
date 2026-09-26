@@ -1,8 +1,6 @@
 pub mod fast_flags;
 pub mod luau_assert;
-pub mod luau_assertenabled;
 pub mod luau_big_endian;
-pub mod luau_debugbreak;
 pub mod luau_insn_a;
 pub mod luau_insn_aux_a;
 pub mod luau_insn_aux_b;
@@ -20,5 +18,3 @@ pub mod luau_insn_op;
 pub mod luau_noinline;
 pub mod luau_timetrace_argument;
 pub mod luau_timetrace_scope;
-pub mod luau_unlikely;
-pub mod luau_unreachable;

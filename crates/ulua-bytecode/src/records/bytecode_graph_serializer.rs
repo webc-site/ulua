@@ -9,7 +9,7 @@ use ulua_common::{
     is_jump_d::is_jump_d,
     is_skip_c::is_skip_c,
   },
-  macros::{luau_assert::LUAU_ASSERT, luau_unreachable::LUAU_UNREACHABLE},
+  macros::luau_assert::{LUAU_ASSERT, LUAU_UNREACHABLE},
 };
 
 use crate::{

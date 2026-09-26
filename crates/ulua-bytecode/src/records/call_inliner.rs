@@ -3,7 +3,7 @@ use std::{cmp::max, vec::Vec};
 
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
-  macros::{luau_assert::LUAU_ASSERT, luau_unreachable::LUAU_UNREACHABLE},
+  macros::luau_assert::{LUAU_ASSERT, LUAU_UNREACHABLE},
   records::{
     dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet, small_vector::SmallVector,
   },

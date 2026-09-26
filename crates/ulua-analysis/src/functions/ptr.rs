@@ -1,7 +1,7 @@
 //! Source: `Analysis/src/TypeOrPack.cpp:9-17` (hand-ported)
 
 // C++ `const void* ptr(TypeOrPack tyOrTp)`.
-use ulua_common::macros::luau_unreachable::LUAU_UNREACHABLE;
+use ulua_common::macros::luau_assert::LUAU_UNREACHABLE;
 
 use crate::type_aliases::{
   type_id::TypeId,

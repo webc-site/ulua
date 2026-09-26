@@ -22,7 +22,7 @@ use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
 use ulua_common::{
   enums::{luau_capture_type::LuauCaptureType, luau_opcode::LuauOpcode},
   functions::assert_handler::{assert_handler, set_assert_handler},
-  macros::luau_assertenabled::LUAU_ASSERTENABLED,
+  macros::luau_assert::LUAU_ASSERTENABLED,
   type_aliases::assert_handler::AssertHandler,
 };
 
