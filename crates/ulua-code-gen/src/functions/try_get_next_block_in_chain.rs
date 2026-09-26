@@ -1,6 +1,6 @@
 use crate::{
   enums::{ir_cmd::IrCmd, ir_op_kind::IrOpKind},
-  macros::op_a::op_a,
+  macros::ir_operand::op_a,
   records::{ir_function::IrFunction, ir_inst::IrInst},
 };
 

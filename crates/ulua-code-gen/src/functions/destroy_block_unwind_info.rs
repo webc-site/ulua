@@ -6,10 +6,10 @@ use core::ffi::c_void;
 use crate::macros::codegen_assert::CODEGEN_ASSERT;
 // wasm32 等无帧表注销机制的目标上本函数整体为空操作，两个宏均不参与编译。
 #[cfg(any(target_os = "windows", target_os = "linux", target_os = "macos"))]
-use crate::macros::codegen_target_x_64::CODEGEN_TARGET_X64;
+use crate::macros::codegen_target::CODEGEN_TARGET_X64;
 #[cfg(any(target_os = "linux", target_os = "macos"))]
 use crate::{
-  functions::visit_fde_entries::visit_fde_entries, macros::codegen_target_a_64::CODEGEN_TARGET_A64,
+  functions::visit_fde_entries::visit_fde_entries, macros::codegen_target::CODEGEN_TARGET_A64,
 };
 
 #[cfg(target_os = "windows")]

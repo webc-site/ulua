@@ -6,8 +6,8 @@ use crate::{
     get_cmd_value_kind::get_cmd_value_kind, reg_bitset::reg_bit_test, vm_reg_op::vm_reg_op,
   },
   macros::{
-    codegen_assert::CODEGEN_ASSERT, op_a::op_a, op_a_ref::op_a_ref, op_b_ref::op_b_ref,
-    op_c_ref::op_c_ref, op_d_ref::op_d_ref, op_g_ref::op_g_ref,
+    codegen_assert::CODEGEN_ASSERT,
+    ir_operand::{op_a, op_a_ref, op_b_ref, op_c_ref, op_d_ref, op_g_ref},
   },
   records::{
     ir_data::K_INVALID_INST_IDX, ir_function::IrFunction, ir_inst::IrInst, ir_op::IrOp,

@@ -1,6 +1,6 @@
 // builtin 翻译共享骨架：load/check/store 三组同构函数由宏按字面量表一次性生成
 // （逐格对账见 tests/builtin_linearop_table_matches_cpp.rs，骨架说明见
-// crate::macros::builtin_linearop_impls）。
+// crate::macros::impl_tables 的 builtin_linearop_impls 段）。
 
 use ulua_vm::enums::lua_type::LuaType;
 

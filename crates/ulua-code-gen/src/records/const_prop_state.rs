@@ -20,8 +20,8 @@ use crate::{
     vm_upvalue_op::vm_upvalue_op,
   },
   macros::{
-    codegen_assert::CODEGEN_ASSERT, op_a::op_a, op_a_ref::op_a_ref, op_b_ref::op_b_ref,
-    op_c_ref::op_c_ref, op_d_ref::op_d_ref, op_e_ref::op_e_ref,
+    codegen_assert::CODEGEN_ASSERT,
+    ir_operand::{op_a, op_a_ref, op_b_ref, op_c_ref, op_d_ref, op_e_ref},
   },
   records::{
     array_value_entry::ArrayValueEntry,

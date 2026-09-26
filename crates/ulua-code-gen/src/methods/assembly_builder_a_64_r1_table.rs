@@ -1,5 +1,5 @@
 // A64 单源浮点指令表（placeR1 三臂级联），逐格对账见
-// tests/a64_r1_table_matches_cpp.rs；骨架说明见 crate::macros::a64_r1_impls。
+// tests/a64_r1_table_matches_cpp.rs；骨架说明见 crate::macros::impl_tables 的 a64_r1_impls 段。
 // op 位串原样照搬自坍缩前的手写文件（= cpp 数值，仅分组书写不同）。
 
 crate::a64_r1_impls! {

@@ -8,7 +8,7 @@ pub fn get_cpu_features_x_64() -> u32 {
   let mut result: u32 = 0;
 
   #[cfg(target_arch = "x86_64")]
-  let cpuinfo = if crate::macros::codegen_target_x_64::CODEGEN_TARGET_X64 {
+  let cpuinfo = if crate::macros::codegen_target::CODEGEN_TARGET_X64 {
     use core::arch::x86_64::__cpuid;
     let r = __cpuid(1);
     [r.eax as i32, r.ebx as i32, r.ecx as i32, r.edx as i32]
@@ -17,7 +17,7 @@ pub fn get_cpu_features_x_64() -> u32 {
   };
 
   #[cfg(target_arch = "x86")]
-  let cpuinfo = if crate::macros::codegen_target_x_64::CODEGEN_TARGET_X64 {
+  let cpuinfo = if crate::macros::codegen_target::CODEGEN_TARGET_X64 {
     use core::arch::x86::__cpuid;
     let r = __cpuid(1);
     [r.eax as i32, r.ebx as i32, r.ecx as i32, r.edx as i32]

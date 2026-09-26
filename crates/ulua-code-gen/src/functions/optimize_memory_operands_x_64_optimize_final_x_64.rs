@@ -6,7 +6,7 @@
 use crate::{
   enums::{ir_block_kind::IrBlockKind, ir_cmd::IrCmd, ir_op_kind::IrOpKind},
   functions::replace_inst_operand_ir_utils::replace_ir_function_ir_inst_operand,
-  macros::{codegen_assert::CODEGEN_ASSERT, op_a::op_a, op_b_ref::op_b_ref},
+  macros::{codegen_assert::CODEGEN_ASSERT, ir_operand::{op_a, op_b_ref}},
   records::{ir_function::IrFunction, ir_inst::IrInst},
 };
 

@@ -7,7 +7,7 @@ use crate::{
     get_live_out_value_count::get_live_out_value_count,
     try_get_next_block_in_chain::try_get_next_block_idx_in_chain,
   },
-  macros::{codegen_assert::CODEGEN_ASSERT, op_a::op_a},
+  macros::{codegen_assert::CODEGEN_ASSERT, ir_operand::op_a},
   records::{ir_block::IrBlock, ir_function::IrFunction},
 };
 
