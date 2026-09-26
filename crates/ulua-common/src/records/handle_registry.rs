@@ -1,8 +1,8 @@
 //! §2（裸指针 → Rust 类型）通用句柄注册表 [`HandleRegistry`]。
 //!
 //! `ulua-analysis` 的六个句柄注册表（`DefId`/`SymDefId`/`BlockId`/`InstrId`/
-//! `ScopeId`/`ConstraintId`）共享同一骨架：`thread_local! { RefCell<Vec<槽位>> }`
-//! + u32 单调 id 发放 + `id -> 节点视图` 解析，部分表附带 `地址 -> id` 反查
+//! `ScopeId`/`ConstraintId`）共享同一骨架：`thread_local! { RefCell<Vec<槽位>> }`，
+//! 加上 u32 单调 id 发放以及 `id -> 节点视图` 解析，部分表附带 `地址 -> id` 反查
 //! （find-or-insert 幂等）。本模块把该骨架泛型化为 [`HandleRegistry`]，各域
 //! 只需一行实例化加各自的 id newtype 薄封装；注册表本体仍留在各域的
 //! `thread_local` 包装内（会话/线程边界不变），为后续把注册表从 `thread_local`
@@ -16,13 +16,13 @@
 //!
 //! # id 契约（与迁移前逐表隐含前提对应，语义不变）
 //! 1. 判等即 id 判等：id 由 `T` 的堆地址（裸指针或 Arc 堆块地址）首发登记，
-//!   find-or-insert 路径（[`HandleRegistry::intern`] / [`HandleRegistry::intern_arc`]）
-//!   经反查表保证「同址 ⇔ 同句柄」；
+//!    find-or-insert 路径（[`HandleRegistry::intern`] / [`HandleRegistry::intern_arc`]）
+//!    经反查表保证「同址 ⇔ 同句柄」；
 //! 2. id 单调增长、永不回收复用；id 0 为「空哨兵」，永不入库（各域 newtype
-//!   的 `NULL` 约定），[`HandleRegistry::resolve_ptr`] 对 0 直接返回 `None`；
+//!    的 `NULL` 约定），[`HandleRegistry::resolve_ptr`] 对 0 直接返回 `None`；
 //! 3. 线程内注册表：本类型刻意不做 `Send`/`Sync` 论证，`*const T` 槽位本就
-//!   非 `Send`——由各域 `thread_local!` 包装保证登记与解析同线程，异线程句柄
-//!   查表越界返回 `None`。
+//!    非 `Send`——由各域 `thread_local!` 包装保证登记与解析同线程，异线程句柄
+//!    查表越界返回 `None`。
 //!
 //! 节点存活前提（注册表级契约 1 的「地址指向的 `T` 仍然存活」部分）由调用方
 //! 各域文档保证，与原先逐表成立条件逐字相同；故解析三函数均为 `unsafe fn`，
