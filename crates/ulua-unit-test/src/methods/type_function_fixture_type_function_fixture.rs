@@ -36,7 +36,7 @@ impl TypeFunctionFixture {
     let generic_t = {
       let arena = frontend.globals.global_types_mut();
       let t = arena.add_type(GenericType::generic_type_name_polarity(
-        &String::from("T"),
+        "T",
         Polarity::Negative,
       ));
       let result_type = arena.add_type(

@@ -1,5 +1,3 @@
-use alloc::string::String;
-
 use ulua_analysis::{
   enums::polarity::Polarity,
   functions::{
@@ -252,7 +250,7 @@ fn register_globals(globals: &mut GlobalTypes, builtins: &BuiltinTypes) -> (Type
 
     // ClassWithGenericMethod { identity: <T>(T) -> T }
     let generic_t = arena.add_type(GenericType::generic_type_name_polarity(
-      &String::from("T"),
+      "T",
       Polarity::Mixed,
     ));
     let identity_args = arena.add_type_pack_t(TypePack::new(alloc::vec![generic_t], None));

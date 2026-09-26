@@ -66,7 +66,7 @@ impl NormalizeFixture {
           .copied()
       }
     } else {
-      self.base.lookup_type(&String::from("_Res"))
+      self.base.lookup_type("_Res")
     };
 
     let ty = ty.expect("expected resolved _Res type");
