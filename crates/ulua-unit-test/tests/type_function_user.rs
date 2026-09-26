@@ -4557,13 +4557,87 @@ fn type_function_user_issubtypeof_intersection() {
     );
   }
 }
-// 真缺余量（可移植未补，留续票，按 cpp 行号序）：
-// - issubtypeof_extern_type_hierarchy（:3632）、issubtypeof_table_indexer
-//   （:3653）、types_singleton_error_message（:3680）、type_tostring（:3700）、
-//   udtf_integer_methods_work（:3355）、udtf_integer_is_distinct_from_number
-//   （:3375）、udtf_integer_constructor_is_not_number（:3394）、oss2164_table_
-//   subtyping_bug（:3084）——前 12 例名额已在 tst-r32 用尽。
-// 缺口（未移植，对照 `tests/TypeFunction.user.test.cpp`，共 12 例）：
+
+// Source: `tests/TypeFunction.user.test.cpp:3632-3651`
+#[test]
+fn type_function_user_issubtypeof_extern_type_hierarchy() {
+  if fflag::DebugLuauForceOldSolver.get() {
+    return;
+  }
+  let _sff = ScopedFastFlag::new(&fflag::LuauUdtfTypeIsSubtypeOf, true);
+
+  let mut fixture = ExternTypeFixture::default();
+  fixture.get_frontend();
+  let result = fixture.base.base.check_string_optional_frontend_options(
+    r#"
+        type function issub(a, b)
+            return types.singleton(a:issubtypeof(b))
+        end
+
+        local a: issub<ChildClass, BaseClass>
+        local b: issub<BaseClass, ChildClass>
+        local c: issub<BaseClass, BaseClass>
+    "#,
+    None,
+  );
+
+  assert_eq!(0, result.errors.len(), "{:?}", result.errors);
+  for (name, expected) in [("a", "true"), ("b", "false"), ("c", "true")] {
+    assert_eq!(
+      expected,
+      to_string_type_id(fixture.base.base.require_type_string(name)),
+      "issub<{name}> 期望 {expected}"
+    );
+  }
+}
+
+// Source: `tests/TypeFunction.user.test.cpp:3680-3698`
+#[test]
+fn type_function_user_types_singleton_error_message() {
+  if fflag::DebugLuauForceOldSolver.get() {
+    return;
+  }
+  // cpp 侧 `createSingleton` 已无条件使用修正后的消息（TypeFunctionRuntime.cpp:567）；
+  // 本移植仍以 `LuauUdtfCreateSingletonFixErrorMessage` 门控新旧两版文案，置 true
+  // 以复现 cpp 现行为。
+  let _fix_msg = ScopedFastFlag::new(&fflag::LuauUdtfCreateSingletonFixErrorMessage, true);
+
+  let (_fixture, result) = bs_check!(
+    r#"
+        type alias = {}
+        type function meow()
+            return types.singleton(alias :: any)
+        end
+
+        type test = meow<>
+    "#
+  );
+
+  assert_eq!(1, result.errors.len(), "{:?}", result.errors);
+  assert_eq!(
+    "'meow' type function errored at runtime: [string \"meow\"]:4: types.singleton: can't create a singleton from a type",
+    to_string_type_error(&result.errors[0])
+  );
+}
+// 续票清账（tw-3）：前账 7 例续票中 2 例本轮已补——issubtypeof_extern_type_hierarchy
+//（:3632，见上）、types_singleton_error_message（:3680，见上）；oss2164_table_
+// subtyping_bug（:3084）已由 tst-r32 移植。其余 5 例经实测确认属产品缺口而非
+// 可移植余量，并入下方缺口清单。
+// 缺口（未移植，对照 `tests/TypeFunction.user.test.cpp`，共 17 例）：
+// - udtf_integer_methods_work（:3355）、udtf_integer_is_distinct_from_number
+//   （:3375）、udtf_integer_constructor_is_not_number（:3394）——FFlag
+//   `LuauIntegerType2` 已同步，但 `types` 库未注册 `integer` 构造器
+//   （register_types_library.rs 字段表无该字段；cpp 于 TypeFunctionRuntime.cpp:1953-1957
+//   旗标开启时 setfield），运行时 `types.integer` 为 nil，实测报
+//   "attempt to index nil with 'is'" / "returned a non-type value"。
+// - issubtypeof_table_indexer（:3653）——`{ read [number]: string }` 的 read
+//   索引器在类型解析层被拒：constraint_generator_resolve_table_type.rs:92、
+//   type_checker_resolve_type_worker.rs:273/312 报 "read keyword is illegal here"
+//   （cpp 侧 read/write 索引器在 TableType 上合法，仅特定上下文才报该错，
+//   TypeInfer.cpp:5914-5926）。语法解析已通过，缺口在解析后的类型解析链路。
+// - type_tostring（:3700）——UDTF 运行时 `tostring(ty)` 需 Type userdata 元表
+//   `__tostring`（typeToString，TypeFunctionRuntime.cpp:2040-2041）；本移植
+//   register_type_user_data.rs 未注册该元方法，实测渲染为 "type: 0x…"。
 // - udtf_negation_type_mismatch（:660）、udtf_negation_type_mismatch_in_union
 //   （:680）、udtf_actual_negation_type_mismatch（:701）、
 //   udtf_two_negations_type_mismatch（:722）——依赖 FFlag

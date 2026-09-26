@@ -44,23 +44,23 @@ use crate::{
     value_view::ValueView,
   },
   functions::{
-    lua_d_call::lua_d_call, lua_d_check_cstack::lua_d_check_cstack,
-    lua_d_performcally::lua_d_performcally, lua_f_close::lua_f_close,
-    lua_f_findupval::lua_f_findupval, lua_f_new_lclosure::lua_f_new_lclosure,
-    lua_f_recordhit::lua_f_recordhit, lua_g_methoderror::lua_g_methoderror,
-    lua_g_missingmembererror::lua_g_missingmembererror, lua_g_typeerror_l::lua_g_typeerror_l,
-    lua_h_clone::lua_h_clone, lua_h_getn::lua_h_getn, lua_h_getstr::lua_h_getstr,
-    lua_h_new::lua_h_new, lua_h_resizearray::lua_h_resizearray, lua_h_setstr::lua_h_setstr,
-    lua_o_rawequal_obj::lua_o_rawequal_obj, lua_r_addclassmember::lua_r_addclassmember,
-    lua_r_cloneclass::lua_r_cloneclass, lua_r_inheritclass::lua_r_inheritclass,
-    lua_t_gettmbyobj::lua_t_gettmbyobj, lua_v_call_tm::lua_v_call_tm, lua_v_concat::lua_v_concat,
-    lua_v_doarithimpl::lua_v_doarithimpl, lua_v_dolen::lua_v_dolen, lua_v_equalval::lua_v_equalval,
-    lua_v_getimport::lua_v_getimport, lua_v_gettable::lua_v_gettable,
-    lua_v_lessequal::lua_v_lessequal, lua_v_lessthan::lua_v_lessthan,
-    lua_v_prepare_forn::lua_v_prepare_forn, lua_v_settable::lua_v_settable,
-    lua_v_strcmp::lua_v_strcmp, lua_v_tryfunc_tm::lua_v_tryfunc_tm, luai_numidiv::luai_numidiv,
-    luai_nummod::luai_nummod, luai_veceq::luai_veceq, luau_callhook::luau_callhook,
-    luau_setupcci::luau_setupcci, luau_skipstep::luau_skipstep,
+    copy_results_pop_frame::pop_frame_copy_results, lua_d_call::lua_d_call,
+    lua_d_check_cstack::lua_d_check_cstack, lua_d_performcally::lua_d_performcally,
+    lua_f_close::lua_f_close, lua_f_findupval::lua_f_findupval,
+    lua_f_new_lclosure::lua_f_new_lclosure, lua_f_recordhit::lua_f_recordhit,
+    lua_g_methoderror::lua_g_methoderror, lua_g_missingmembererror::lua_g_missingmembererror,
+    lua_g_typeerror_l::lua_g_typeerror_l, lua_h_clone::lua_h_clone, lua_h_getn::lua_h_getn,
+    lua_h_getstr::lua_h_getstr, lua_h_new::lua_h_new, lua_h_resizearray::lua_h_resizearray,
+    lua_h_setstr::lua_h_setstr, lua_o_rawequal_obj::lua_o_rawequal_obj,
+    lua_r_addclassmember::lua_r_addclassmember, lua_r_cloneclass::lua_r_cloneclass,
+    lua_r_inheritclass::lua_r_inheritclass, lua_t_gettmbyobj::lua_t_gettmbyobj,
+    lua_v_call_tm::lua_v_call_tm, lua_v_concat::lua_v_concat, lua_v_doarithimpl::lua_v_doarithimpl,
+    lua_v_dolen::lua_v_dolen, lua_v_equalval::lua_v_equalval, lua_v_getimport::lua_v_getimport,
+    lua_v_gettable::lua_v_gettable, lua_v_lessequal::lua_v_lessequal,
+    lua_v_lessthan::lua_v_lessthan, lua_v_prepare_forn::lua_v_prepare_forn,
+    lua_v_settable::lua_v_settable, lua_v_strcmp::lua_v_strcmp, lua_v_tryfunc_tm::lua_v_tryfunc_tm,
+    luai_numidiv::luai_numidiv, luai_nummod::luai_nummod, luai_veceq::luai_veceq,
+    luau_callhook::luau_callhook, luau_setupcci::luau_setupcci, luau_skipstep::luau_skipstep,
     set_iterator_done::set_iterator_done, set_iterator_index::set_iterator_index,
   },
   macros::{
@@ -150,6 +150,238 @@ macro_rules! dispatch_fastcall {
         let p = cl_proto!($cl);
         LUAU_ASSERT!(($pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
       }
+    }
+  }};
+}
+
+/// GETUDATAKS/SETUDATAKS 快路径单源（lvmexecute.cpp:3441-3512/3516-3587）：两臂
+/// 仅差 udatadirect 字段对（index/indextm ↔ newindex/newindextm）、是否追压新值
+/// 实参、setupcci 结果数、deopt 回查 opcode 与是否回写结果；tag 取值、压栈、
+/// C 栈计数、cachedslot 回补、帧弹出与 base 刷新逐句相同，收敛于此。`$val` 为
+/// SET 追压的写值槽（GET 传 `None::<*const TValue>`，死分支被折叠消除），
+/// `$grab_result` 仅 GET 为真。生成码与原两臂手写逐语句一致。
+macro_rules! udata_direct_fast {
+  ($l:ident, $pc:ident, $base:ident, $insn:expr, $rb:expr, $aux:expr, $kidx:expr, $kv:expr,
+   $fn_field:ident, $tm_field:ident, $val:expr, $nres:expr, $deopt_op:ident, $grab_result:expr, $label:lifetime) => {{
+    'udata_fast: {
+      // §11 pass B: rb 的 userdata tag 判定收敛为 ValueView::Userdata 匹配
+      // （uvalue! 同为 *const Udata，payload 语义不变）
+      if let ValueView::Userdata(u) = ValueView::from_tvalue(&*$rb) {
+        // cpp: `int utag = uvalue(rb)->tag;`（lvmexecute.cpp:3445/3519/3588）
+        let utag = (*u).tag as usize;
+        let udatadirect = &mut (*(*$l).global).udatadirect[utag];
+        let onudata = udatadirect.$fn_field;
+        let tm = &mut udatadirect.$tm_field as *mut TValue;
+
+        if let Some(onudata) = onudata
+          && !matches!(ValueView::from_tvalue(&*tm), ValueView::Nil)
+        {
+          // cpp: `void* udata = uvalue(rb)->data;`（lvmexecute.cpp:3452/3526/3595）
+          let udata = (*u).data.as_ptr() as *mut c_void;
+
+          // note: it's safe to push arguments past top for
+          // complicated reasons (see top of the file)
+          let nargs = 3 + usize::from($val.is_some());
+          LUAU_ASSERT!((*$l).top.add(nargs) < (*$l).stack.add((*$l).stacksize as usize));
+          let top = (*$l).top;
+          setobj_2_s!($l, top.add(0), tm);
+          setobj_2_s!($l, top.add(1), $rb);
+          setobj_2_s!($l, top.add(2), $kv);
+          if let Some(v) = $val {
+            setobj_2_s!($l, top.add(3), v);
+          }
+          (*$l).top = top.add(nargs);
+
+          (*(*$l).ci).savedpc = $pc;
+
+          (*$l).n_ccalls += 1;
+
+          if ((*$l).n_ccalls as i32) >= LUAI_MAXCCALLS {
+            lua_d_check_cstack($l);
+          }
+
+          luau_setupcci($l, $nres, top);
+
+          let mut cachedslot: u16 = luau_insn_aux_slot($aux) as u16;
+          onudata(
+            $l,
+            udata,
+            (*(*$kv).as_string_ptr()).atom as i32,
+            &mut cachedslot,
+            utag as i32,
+          );
+
+          // update cached slot if instruction didn't deoptimize
+          if cachedslot as u32 != luau_insn_aux_slot($aux)
+            && luau_insn_op(*$pc.sub(2)) == LuauOpcode::$deopt_op as u32
+          {
+            vm_patch_aux_slot($pc.sub(1), $kidx, cachedslot as i32);
+          }
+
+          // ci is our callinfo, cip is our parent
+          let ci = (*$l).ci;
+          let cip = ci.sub(1);
+
+          (*$l).ci = cip;
+          (*$l).base = (*cip).base;
+          if !$grab_result {
+            (*$l).top = (*cip).top;
+          }
+          (*$l).n_ccalls -= 1;
+
+          // stack may have been reallocated, so we need to refresh base ptr
+          $base = (*$l).base;
+
+          if $grab_result {
+            let ra = VM_REG!(luau_insn_a($insn), $l, $base);
+
+            // grab result while l->top is still pointed to the
+            // previous function frame
+            setobj_2_s!($l, ra, (*$l).top.sub(1));
+
+            // then update top
+            (*$l).top = (*cip).top;
+          }
+
+          continue $label;
+        }
+      }
+      break 'udata_fast;
+    }
+  }};
+}
+
+/// LOP_CALL/LOP_CALLFB 单源（lvmexecute.cpp:1038/1145）：两臂除 CALLFB 的
+/// feedback slot 读取、SEALED 回补与命中记录外逐行同构。`$fb` 为反馈槽快照：
+/// CALL 传 `None::<Instruction>`（三处反馈桩被 LLVM 常量折叠消除，与无反馈版
+/// 逐字节一致），CALLFB 传 `Some(*pc)`（此刻 pc 尚未越过 aux 槽）。生成码与
+/// 原两臂手写逐语句一致，判定顺序、GC/重入点一律不动。
+macro_rules! call_arm {
+  ($l:ident, $pc:ident, $base:ident, $cl:ident, $k:ident, $fb:expr, $label:lifetime) => {{
+    VM_INTERRUPT!($l, $pc, $base);
+    let insn = *$pc;
+    $pc = $pc.add(1);
+    let feedback_slot: Option<Instruction> = $fb;
+    if feedback_slot.is_some() {
+      $pc = $pc.add(1);
+    }
+    let ra = VM_REG!(luau_insn_a(insn), $l, $base);
+
+    let nparams = luau_insn_b(insn) as i32 - 1;
+    let nresults = luau_insn_c(insn) as i32 - 1;
+
+    let mut argtop = (*$l).top;
+    argtop = if nparams == LUA_MULTRET {
+      argtop
+    } else {
+      ra.add(1 + nparams as usize)
+    };
+
+    // slow-path: not a function call
+    // §11 pass B: function tag 判定收敛为 ValueView::Function 匹配
+    if !matches!(ValueView::from_tvalue(&*ra), ValueView::Function(_)) {
+      if let Some(fb) = feedback_slot
+        && fb != LUAU_INSN_FBSLOT_SEALED
+      {
+        vm_patch_aux($pc.sub(1), LUAU_INSN_FBSLOT_SEALED as i32);
+      }
+
+      (*(*$l).ci).savedpc = $pc; // vm_protect_pc(): luaV_tryfuncTM may fail
+
+      lua_v_tryfunc_tm($l, ra);
+      argtop = argtop.add(1); // __call adds an extra self
+    }
+
+    let ccl = (*ra).as_closure_ptr();
+    (*(*$l).ci).savedpc = $pc;
+
+    incr_ci!($l);
+    let ci = (*$l).ci;
+    (*ci).func = ra;
+    (*ci).base = ra.add(1);
+    // note: technically UB since we haven't reallocated the stack yet
+    (*ci).top = argtop.add((*ccl).stacksize as usize);
+    (*ci).savedpc = null();
+    (*ci).flags = 0;
+    (*ci).nresults = nresults;
+
+    (*$l).base = (*ci).base;
+    (*$l).top = argtop;
+
+    // note: this reallocs stack, but we don't need to VM_PROTECT this
+    // this is because we're going to modify base/savedpc manually anyhow
+    // crucially, we can't use ra/argtop after this line
+    lua_d_checkstackfornewci($l, (*ccl).stacksize as i32);
+
+    LUAU_ASSERT!((*ci).top <= (*$l).stack_last);
+
+    if (*ccl).is_c == 0 {
+      let p = cl_proto!(ccl);
+
+      if let Some(fb) = feedback_slot
+        && fb != LUAU_INSN_FBSLOT_SEALED
+        && !lua_f_recordhit($l, $cl, ccl, fb)
+      {
+        vm_patch_aux($pc.sub(1), LUAU_INSN_FBSLOT_SEALED as i32);
+      }
+
+      // fill unused parameters with nil
+      // 缺失参数个数 = argend - top（负值按 0，与原 `while argi < argend`
+      // 游走严格等价），一次算清后定界切片逐格补 nil
+      let argi = (*$l).top;
+      let argend = (*$l).base.add((*p).numparams as usize);
+      // Safety: [(*l).top, base+numparams) 由上方 lua_d_checkstackfornewci 扩栈保证
+      // 为存活栈区间，差值即元素数
+      let missing = argend.offset_from(argi).max(0) as usize;
+      for slot in from_raw_parts_mut(argi, missing) {
+        setnilvalue!(slot); // complete missing arguments
+      }
+      let argi = argi.add(missing);
+      (*$l).top = if (*p).is_vararg != 0 { argi } else { (*ci).top };
+
+      // reentry
+      // codeentry may point to NATIVECALL instruction when proto is
+      // compiled to native code; execution continues in native code.
+      // note that p->codeentry may point *outside* of
+      // p->code..p->code+p->sizecode, but that pointer never gets
+      // saved to savedpc.
+      $pc = if SINGLE_STEP {
+        (*p).code
+      } else {
+        (*p).codeentry
+      };
+      $cl = ccl;
+      $base = (*$l).base;
+      $k = (*p).k;
+      continue $label;
+    } else {
+      if let Some(fb) = feedback_slot
+        && fb != LUAU_INSN_FBSLOT_SEALED
+      {
+        vm_patch_aux($pc.sub(1), LUAU_INSN_FBSLOT_SEALED as i32);
+      }
+
+      let func = {
+        let c = &(*ccl).inner.c;
+        c.f
+      };
+      let n = match func {
+        Some(f) => f($l),
+        None => 0,
+      };
+
+      // yield
+      if n < 0 {
+        return; // goto exit
+      }
+
+      // 将返回值拷回父栈（最多 nresults 个），不足补 nil，并弹出本帧
+      // （lvmexecute.cpp:1131-1142，见 pop_frame_copy_results）
+      pop_frame_copy_results($l, (*$l).top.sub(n as usize), (*$l).top, nresults);
+
+      // stack may have been reallocated, so we need to refresh base ptr
+      $base = (*$l).base;
+      continue $label;
     }
   }};
 }
@@ -262,63 +494,6 @@ unsafe fn call_c_tm(
     (*(*l).ci).savedpc = pc;
     lua_v_call_tm(l, nparams as i32, res);
     *base = (*l).base;
-  }
-}
-
-/// cpp `ccall` 收尾与 `LOP_RETURN` 的公共样板：把 `[vali, valend)` 的值按
-/// `nresults` 上限拷回 `(*ci).func`（不足补 nil），弹出帧并设置 `l->top`。
-///
-/// # Safety（由调用侧 unsafe 上下文承担）
-///
-/// `l` 指向存活 `LuaState` 且其 `ci` 为当前 Lua/C 帧（CALL 布局保证 func..top 可写）；
-/// `vali <= valend` 且两指针指向同一存活栈区间；`nresults` 为 -1/0/正数声明的结果数。
-#[inline(always)]
-unsafe fn pop_frame_copy_results(l: *mut LuaState, vali: StkId, valend: StkId, nresults: i32) {
-  // Safety: 契约保证 l/ci 有效、vali..valend 为存活栈区间，拷贝目标 (*ci).func 起同样在栈内可写
-  unsafe {
-    // ci is our callinfo, cip is our parent
-    let ci = (*l).ci;
-    let cip = ci.sub(1);
-
-    // copy return values into parent stack (but only up to nresults!),
-    // fill the rest with nil
-    // note: in MULTRET context nresults starts as -1 so the copy limit is
-    // the whole [vali, valend) window (C++ `i != 0` never fires)
-    let res = (*ci).func;
-    // 源窗口元素数：契约保证 vali <= valend 且同属存活栈，offset_from 一次算清，
-    // 取代原「指针逐格比较」的手写游走
-    let avail = valend.offset_from(vali).max(0) as usize;
-    let ncopy = if nresults < 0 {
-      avail
-    } else {
-      avail.min(nresults as usize)
-    };
-    // 保留索引遍历：j 同时是 dst 与 src 两个窗口的偏移，且窗口可重叠（RETURN 布局下
-    // src = dst + Δ），借成 &mut/[TValue] 切片会构成别名冲突，只能按正序逐格先读后写
-    for j in 0..ncopy {
-      setobj_2_s!(l, res.add(j), vali.add(j));
-    }
-    let mut res = res.add(ncopy);
-    // 补 nil 数：仅 nresults>0 且源不足时补差额（等价原 `while i > 0` 尾循环）
-    let nfill = if nresults > 0 {
-      (nresults as usize) - ncopy
-    } else {
-      0
-    };
-    // Safety: res 起的 nfill 格是本帧预留的结果槽，落在 (*ci).func..(*l).top 内
-    for slot in from_raw_parts_mut(res, nfill) {
-      setnilvalue!(slot);
-    }
-    res = res.add(nfill);
-
-    // pop the stack frame
-    (*l).ci = cip;
-    (*l).base = (*cip).base;
-    (*l).top = if nresults == LUA_MULTRET {
-      res
-    } else {
-      (*cip).top
-    };
   }
 }
 
@@ -886,15 +1061,17 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               }
             }
           }
-          LuauOpcode::LOP_GETTABLE => {
-            // lvmexecute.cpp:741
+          // GET/SETTABLE 两臂（lvmexecute.cpp:741/771）除「写路径要求 readonly==0 +
+          // barriert + settable 慢路径」外逐行同构，合并为单一臂以 is_set 区分。
+          LuauOpcode::LOP_GETTABLE | LuauOpcode::LOP_SETTABLE => {
             let insn = *pc;
             pc = pc.add(1);
             let ra = VM_REG!(luau_insn_a(insn), l, base);
             let rb = VM_REG!(luau_insn_b(insn), l, base);
             let rc = VM_REG!(luau_insn_c(insn), l, base);
+            let is_set = op == LuauOpcode::LOP_SETTABLE as u8;
 
-            // fast-path: array lookup（§11 pass B: rb/rc 双 tag 判链收敛为 ValueView 变体 match）
+            // fast-path: array access（§11 pass B: rb/rc 双 tag 判链收敛为 ValueView 变体 match）
             if let (ValueView::Table(_), ValueView::Number(indexd)) =
               (ValueView::from_tvalue(&*rb), ValueView::from_tvalue(&*rc))
             {
@@ -904,115 +1081,75 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               // index has to be an exact integer and in-bounds for the array portion
               if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32
                 && (*h).metatable.as_ref().is_none()
+                && (!is_set || (*h).readonly == 0)
                 && index as f64 == indexd
               {
-                setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
+                if is_set {
+                  setobj2t!(l, (*h).array.add((index - 1) as u32 as usize), ra);
+                  luaC_barriert!(l, h, ra);
+                } else {
+                  setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
+                }
                 continue 'dispatch;
               }
 
               // fall through to slow path
             }
 
-            // slow-path: handles out of bounds array lookups, non-integer
-            // numeric keys, non-array table lookup, __index MT calls
-            vm_protect!(l, pc, base, {
-              lua_v_gettable(l, rb, rc, ra);
-            });
-            continue 'dispatch;
-          }
-          LuauOpcode::LOP_SETTABLE => {
-            // lvmexecute.cpp:771
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let rc = VM_REG!(luau_insn_c(insn), l, base);
-
-            // fast-path: array assign（§11 pass B: rb/rc 双 tag 判链收敛为 ValueView 变体 match）
-            if let (ValueView::Table(_), ValueView::Number(indexd)) =
-              (ValueView::from_tvalue(&*rb), ValueView::from_tvalue(&*rc))
-            {
-              let h = (*rb).as_table_ptr();
-              let index = indexd as i32;
-
-              // index has to be an exact integer and in-bounds for the array portion
-              if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32
-                && (*h).metatable.as_ref().is_none()
-                && (*h).readonly == 0
-                && index as f64 == indexd
-              {
-                setobj2t!(l, (*h).array.add((index - 1) as u32 as usize), ra);
-                luaC_barriert!(l, h, ra);
-                continue 'dispatch;
-              }
-
-              // fall through to slow path
+            if is_set {
+              // slow-path: handles out of bounds array assignments, non-integer
+              // numeric keys, non-array table access, __newindex MT calls
+              vm_protect!(l, pc, base, {
+                lua_v_settable(l, rb, rc, ra);
+              });
+            } else {
+              // slow-path: handles out of bounds array lookups, non-integer
+              // numeric keys, non-array table lookup, __index MT calls
+              vm_protect!(l, pc, base, {
+                lua_v_gettable(l, rb, rc, ra);
+              });
             }
-
-            // slow-path: handles out of bounds array assignments, non-integer
-            // numeric keys, non-array table access, __newindex MT calls
-            vm_protect!(l, pc, base, {
-              lua_v_settable(l, rb, rc, ra);
-            });
             continue 'dispatch;
           }
-          LuauOpcode::LOP_GETTABLEN => {
-            // lvmexecute.cpp:802
+          // GET/SETTABLEN 两臂（lvmexecute.cpp:802/830）除「写路径要求 readonly==0 +
+          // barriert + settable 慢路径」外逐行同构，合并为单一臂以 is_set 区分。
+          LuauOpcode::LOP_GETTABLEN | LuauOpcode::LOP_SETTABLEN => {
             let insn = *pc;
             pc = pc.add(1);
             let ra = VM_REG!(luau_insn_a(insn), l, base);
             let rb = VM_REG!(luau_insn_b(insn), l, base);
             let c = luau_insn_c(insn) as i32;
+            let is_set = op == LuauOpcode::LOP_SETTABLEN as u8;
 
-            // fast-path: array lookup（§11 pass B: rb tag 判定收敛为 ValueView::Table 匹配）
-            if let ValueView::Table(_) = ValueView::from_tvalue(&*rb) {
-              let h = (*rb).as_table_ptr();
-
-              if (c as u32) < (*h).sizearray as u32 && (*h).metatable.as_ref().is_none() {
-                setobj_2_s!(l, ra, (*h).array.add(c as usize));
-                continue 'dispatch;
-              }
-
-              // fall through to slow path
-            }
-
-            // slow-path: handles out of bounds array lookups
-            let mut n = TValue::default();
-            setnvalue!(&mut n, (c + 1) as f64);
-            vm_protect!(l, pc, base, {
-              lua_v_gettable(l, rb, &mut n, ra);
-            });
-            continue 'dispatch;
-          }
-          LuauOpcode::LOP_SETTABLEN => {
-            // lvmexecute.cpp:830
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let c = luau_insn_c(insn) as i32;
-
-            // fast-path: array assign（§11 pass B: rb tag 判定收敛为 ValueView::Table 匹配）
+            // fast-path: array access（§11 pass B: rb tag 判定收敛为 ValueView::Table 匹配）
             if let ValueView::Table(_) = ValueView::from_tvalue(&*rb) {
               let h = (*rb).as_table_ptr();
 
               if (c as u32) < (*h).sizearray as u32
                 && (*h).metatable.as_ref().is_none()
-                && (*h).readonly == 0
+                && (!is_set || (*h).readonly == 0)
               {
-                setobj2t!(l, (*h).array.add(c as usize), ra);
-                luaC_barriert!(l, h, ra);
+                if is_set {
+                  setobj2t!(l, (*h).array.add(c as usize), ra);
+                  luaC_barriert!(l, h, ra);
+                } else {
+                  setobj_2_s!(l, ra, (*h).array.add(c as usize));
+                }
                 continue 'dispatch;
               }
 
               // fall through to slow path
             }
 
-            // slow-path: handles out of bounds array lookups
+            // slow-path: handles out of bounds array accesses
             let mut n = TValue::default();
             setnvalue!(&mut n, (c + 1) as f64);
             vm_protect!(l, pc, base, {
-              lua_v_settable(l, rb, &n, ra);
+              if is_set {
+                lua_v_settable(l, rb, &n, ra);
+              } else {
+                lua_v_gettable(l, rb, &mut n, ra);
+              }
             });
             continue 'dispatch;
           }
@@ -1260,224 +1397,14 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               continue 'dispatch;
             }
           }
+          // CALL/CALLFB 两臂逐行同构（单源见 call_arm! 宏文档）：
           LuauOpcode::LOP_CALL => {
             // lvmexecute.cpp:1038
-            VM_INTERRUPT!(l, pc, base);
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-
-            let nparams = luau_insn_b(insn) as i32 - 1;
-            let nresults = luau_insn_c(insn) as i32 - 1;
-
-            let mut argtop = (*l).top;
-            argtop = if nparams == LUA_MULTRET {
-              argtop
-            } else {
-              ra.add(1 + nparams as usize)
-            };
-
-            // §11 pass B: function tag 判定收敛为 ValueView::Function 匹配
-            if !matches!(ValueView::from_tvalue(&*ra), ValueView::Function(_)) {
-              // slow-path: not a function call
-              (*(*l).ci).savedpc = pc; // vm_protect_pc(): luaV_tryfuncTM may fail
-
-              lua_v_tryfunc_tm(l, ra);
-              argtop = argtop.add(1); // __call adds an extra self
-            }
-
-            let ccl = (*ra).as_closure_ptr();
-            (*(*l).ci).savedpc = pc;
-
-            incr_ci!(l);
-            let ci = (*l).ci;
-            (*ci).func = ra;
-            (*ci).base = ra.add(1);
-            // note: technically UB since we haven't reallocated the stack yet
-            (*ci).top = argtop.add((*ccl).stacksize as usize);
-            (*ci).savedpc = null();
-            (*ci).flags = 0;
-            (*ci).nresults = nresults;
-
-            (*l).base = (*ci).base;
-            (*l).top = argtop;
-
-            // note: this reallocs stack, but we don't need to VM_PROTECT this
-            // this is because we're going to modify base/savedpc manually anyhow
-            // crucially, we can't use ra/argtop after this line
-            lua_d_checkstackfornewci(l, (*ccl).stacksize as i32);
-
-            LUAU_ASSERT!((*ci).top <= (*l).stack_last);
-
-            if (*ccl).is_c == 0 {
-              let p = cl_proto!(ccl);
-
-              // fill unused parameters with nil
-              // 缺失参数个数 = argend - top（负值按 0，与原 `while argi < argend`
-              // 游走严格等价），一次算清后定界切片逐格补 nil
-              let argi = (*l).top;
-              let argend = (*l).base.add((*p).numparams as usize);
-              // Safety: [(*l).top, base+numparams) 由上方 lua_d_checkstackfornewci 扩栈保证
-              // 为存活栈区间，差值即元素数
-              let missing = argend.offset_from(argi).max(0) as usize;
-              for slot in from_raw_parts_mut(argi, missing) {
-                setnilvalue!(slot); // complete missing arguments
-              }
-              let argi = argi.add(missing);
-              (*l).top = if (*p).is_vararg != 0 { argi } else { (*ci).top };
-
-              // reentry
-              // codeentry may point to NATIVECALL instruction when proto is
-              // compiled to native code; execution continues in native code.
-              // note that p->codeentry may point *outside* of
-              // p->code..p->code+p->sizecode, but that pointer never gets
-              // saved to savedpc.
-              pc = if SINGLE_STEP {
-                (*p).code
-              } else {
-                (*p).codeentry
-              };
-              cl = ccl;
-              base = (*l).base;
-              k = (*p).k;
-              continue 'dispatch;
-            } else {
-              let func = {
-                let c = &(*ccl).inner.c;
-                c.f
-              };
-              let n = match func {
-                Some(f) => f(l),
-                None => 0,
-              };
-
-              // yield
-              if n < 0 {
-                return; // goto exit
-              }
-
-              // 将返回值拷回父栈（最多 nresults 个），不足补 nil，并弹出本帧
-              // （lvmexecute.cpp:1131-1142，见 pop_frame_copy_results）
-              pop_frame_copy_results(l, (*l).top.sub(n as usize), (*l).top, nresults);
-
-              // stack may have been reallocated, so we need to refresh base ptr
-              base = (*l).base;
-              continue 'dispatch;
-            }
+            call_arm!(l, pc, base, cl, k, None::<Instruction>, 'dispatch);
           }
           LuauOpcode::LOP_CALLFB => {
             // lvmexecute.cpp:1145
-            VM_INTERRUPT!(l, pc, base);
-            let insn = *pc;
-            pc = pc.add(1);
-            let feedback_slot: Instruction = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-
-            let nparams = luau_insn_b(insn) as i32 - 1;
-            let nresults = luau_insn_c(insn) as i32 - 1;
-
-            let mut argtop = (*l).top;
-            argtop = if nparams == LUA_MULTRET {
-              argtop
-            } else {
-              ra.add(1 + nparams as usize)
-            };
-
-            // slow-path: not a function call
-            // §11 pass B: function tag 判定收敛为 ValueView::Function 匹配
-            if !matches!(ValueView::from_tvalue(&*ra), ValueView::Function(_)) {
-              if feedback_slot != LUAU_INSN_FBSLOT_SEALED {
-                vm_patch_aux(pc.sub(1), LUAU_INSN_FBSLOT_SEALED as i32);
-              }
-
-              (*(*l).ci).savedpc = pc; // vm_protect_pc(): luaV_tryfuncTM may fail
-
-              lua_v_tryfunc_tm(l, ra);
-              argtop = argtop.add(1); // __call adds an extra self
-            }
-
-            let ccl = (*ra).as_closure_ptr();
-            (*(*l).ci).savedpc = pc;
-
-            incr_ci!(l);
-            let ci = (*l).ci;
-            (*ci).func = ra;
-            (*ci).base = ra.add(1);
-            // note: technically UB since we haven't reallocated the stack yet
-            (*ci).top = argtop.add((*ccl).stacksize as usize);
-            (*ci).savedpc = null();
-            (*ci).flags = 0;
-            (*ci).nresults = nresults;
-
-            (*l).base = (*ci).base;
-            (*l).top = argtop;
-
-            // note: this reallocs stack, but we don't need to VM_PROTECT this
-            // this is because we're going to modify base/savedpc manually anyhow
-            // crucially, we can't use ra/argtop after this line
-            lua_d_checkstackfornewci(l, (*ccl).stacksize as i32);
-
-            LUAU_ASSERT!((*ci).top <= (*l).stack_last);
-
-            if (*ccl).is_c == 0 {
-              let p = cl_proto!(ccl);
-
-              if feedback_slot != LUAU_INSN_FBSLOT_SEALED
-                && !lua_f_recordhit(l, cl, ccl, feedback_slot)
-              {
-                vm_patch_aux(pc.sub(1), LUAU_INSN_FBSLOT_SEALED as i32);
-              }
-
-              // fill unused parameters with nil（与 LOP_CALL 同型：范围计数一次算清后切片补 nil）
-              let argi = (*l).top;
-              let argend = (*l).base.add((*p).numparams as usize);
-              // Safety: [(*l).top, base+numparams) 由上方 lua_d_checkstackfornewci 扩栈保证
-              // 为存活栈区间，差值即元素数
-              let missing = argend.offset_from(argi).max(0) as usize;
-              for slot in from_raw_parts_mut(argi, missing) {
-                setnilvalue!(slot); // complete missing arguments
-              }
-              let argi = argi.add(missing);
-              (*l).top = if (*p).is_vararg != 0 { argi } else { (*ci).top };
-
-              // reentry (see LOP_CALL for the codeentry note)
-              pc = if SINGLE_STEP {
-                (*p).code
-              } else {
-                (*p).codeentry
-              };
-              cl = ccl;
-              base = (*l).base;
-              k = (*p).k;
-              continue 'dispatch;
-            } else {
-              if feedback_slot != LUAU_INSN_FBSLOT_SEALED {
-                vm_patch_aux(pc.sub(1), LUAU_INSN_FBSLOT_SEALED as i32);
-              }
-
-              let func = {
-                let c = &(*ccl).inner.c;
-                c.f
-              };
-              let n = match func {
-                Some(f) => f(l),
-                None => 0,
-              };
-
-              // yield
-              if n < 0 {
-                return; // goto exit
-              }
-
-              // 将返回值拷回父栈（最多 nresults 个），不足补 nil，并弹出本帧
-              // （lvmexecute.cpp:1252-1263，见 pop_frame_copy_results）
-              pop_frame_copy_results(l, (*l).top.sub(n as usize), (*l).top, nresults);
-
-              // stack may have been reallocated, so we need to refresh base ptr
-              base = (*l).base;
-              continue 'dispatch;
-            }
+            call_arm!(l, pc, base, cl, k, Some(*pc), 'dispatch);
           }
           LuauOpcode::LOP_RETURN => {
             // lvmexecute.cpp:1265
@@ -2290,111 +2217,71 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             pc = pc.add(1);
             let mut ra = VM_REG!(luau_insn_a(insn), l, base);
 
-            if fflag::DebugLuauUserDefinedClassesRuntime.get() {
-              // If this is a function it will be called during FORGLOOP
-              // §11 pass B: function tag 判定收敛为 ValueView::Function 匹配
-              if !matches!(ValueView::from_tvalue(&*ra), ValueView::Function(_)) {
-                let mt = frame.slot_metatable(ra);
-                let mut fn_tm = frame.fast_tm(mt, TMS::TmIter);
+            // If this is a function it will be called during FORGLOOP
+            // §11 pass B: function tag 判定收敛为 ValueView::Function 匹配。
+            // 旗标双分支（cpp 旗开/旗关两份拷贝）除「Object 实例经 lua_t_gettmbyobj
+            // 兜底物化 __iter」这一段（旗关无此步）外逐行同构，合并为单分支；
+            // fast_tm 为纯读，前置求值与原 `if let Some = fast_tm(..)` 同值同序。
+            if !matches!(ValueView::from_tvalue(&*ra), ValueView::Function(_)) {
+              let mt = frame.slot_metatable(ra);
+              let mut fn_tm = frame.fast_tm(mt, TMS::TmIter);
 
-                // §11 pass B 次波：object tag 判定收敛为 ValueView::Object 一级变体
-                // （本臂只需知类型，payload 由下方 lua_t_gettmbyobj 自槽内自取）
-                if fn_tm.is_none() && matches!(ValueView::from_tvalue(&*ra), ValueView::Object(_)) {
-                  // lua_t_gettmbyobj 永不返回 null（LUA_O_NILOBJECT 兜底），原
-                  // `!fn_tm.is_null()` 判定恒真
-                  let tm = lua_t_gettmbyobj(l, ra, TMS::TmIter);
-                  // if the metamethod is not present, error.
-                  if matches!(ValueView::from_tvalue(&*tm), ValueView::Nil) {
-                    (*(*l).ci).savedpc = pc; // vm_protect_pc(): next call always errors
-                    lua_g_typeerror_l(l, ra, ERR_ITERATE_OVER);
-                  }
-                  fn_tm = Some(tm);
-                }
-
-                if let Some(fn_tm) = fn_tm {
-                  // §2 (a)：[ra, ra+3) 三槽窗口（func/self/游标）经 `VmFrame::slots_mut`
-                  // 切片视图读写，取代逐槽 `ra.add(n)` 手写算术；luaD_call 的 StkId
-                  // 实参即窗口首槽，top 边界取窗口第 3 格地址（与原 ra.add(2) 同值）
-                  let w = frame.slots_mut(ra, 3);
-                  setobj_2_s!(l, &raw mut w[1], &raw const w[0]);
-                  setobj_2_s!(l, &raw mut w[0], fn_tm);
-
-                  frame.set_top(&raw mut w[2]); // func + self arg
-                  LUAU_ASSERT!((*l).top <= (*l).stack_last);
-
-                  vm_protect!(l, pc, base, {
-                    lua_d_call(l, &raw mut w[0], 3);
-                  });
-                  (*l).top = (*(*l).ci).top;
-
-                  // recompute ra since stack might have been reallocated
-                  ra = VM_REG!(luau_insn_a(insn), l, base);
-
-                  // protect against __iter returning nil, since nil is used
-                  // as a marker for builtin iteration in FORGLOOP
-                  if matches!(ValueView::from_tvalue(&*ra), ValueView::Nil) {
-                    (*(*l).ci).savedpc = pc; // vm_protect_pc(): next call always errors
-                    lua_g_typeerror_l(l, ra, "call");
-                  }
-                } else if frame.fast_tm(mt, TMS::TmCall).is_some() {
-                  // table or userdata with __call, will be called during FORGLOOP
-                  // TODO: we might be able to stop supporting this depending
-                  // on whether it's used in practice
-                } else if matches!(ValueView::from_tvalue(&*ra), ValueView::Table(_)) {
-                  // set up registers for builtin iteration
-                  let w = frame.slots_mut(ra, 3);
-                  setobj_2_s!(l, &raw mut w[1], &raw const w[0]);
-                  set_iterator_done(&raw mut w[2]);
-                  setnilvalue!(&mut w[0]);
-                } else {
+              // 旗开时 Object 实例的兜底：§11 pass B 次波 object tag 判定收敛为
+              // ValueView::Object 一级变体（本臂只需知类型，payload 由下方
+              // lua_t_gettmbyobj 自槽内自取）；旗关短路，不读 tag、与旧路径一致。
+              if fflag::DebugLuauUserDefinedClassesRuntime.get()
+                && fn_tm.is_none()
+                && matches!(ValueView::from_tvalue(&*ra), ValueView::Object(_))
+              {
+                // lua_t_gettmbyobj 永不返回 null（LUA_O_NILOBJECT 兜底），原
+                // `!fn_tm.is_null()` 判定恒真
+                let tm = lua_t_gettmbyobj(l, ra, TMS::TmIter);
+                // if the metamethod is not present, error.
+                if matches!(ValueView::from_tvalue(&*tm), ValueView::Nil) {
                   (*(*l).ci).savedpc = pc; // vm_protect_pc(): next call always errors
                   lua_g_typeerror_l(l, ra, ERR_ITERATE_OVER);
                 }
+                fn_tm = Some(tm);
               }
-            } else {
-              // §11 pass B: function tag 判定收敛为 ValueView::Function 匹配
-              if matches!(ValueView::from_tvalue(&*ra), ValueView::Function(_)) {
-                // will be called during FORGLOOP
-              } else {
-                let mt = frame.slot_metatable(ra);
 
-                if let Some(fn_tm) = frame.fast_tm(mt, TMS::TmIter) {
-                  // §2 (a)：同上前一分支的 [ra, ra+3) 三槽窗口切片视图读写
-                  let w = frame.slots_mut(ra, 3);
-                  setobj_2_s!(l, &raw mut w[1], &raw const w[0]);
-                  setobj_2_s!(l, &raw mut w[0], fn_tm);
+              if let Some(fn_tm) = fn_tm {
+                // §2 (a)：[ra, ra+3) 三槽窗口（func/self/游标）经 `VmFrame::slots_mut`
+                // 切片视图读写，取代逐槽 `ra.add(n)` 手写算术；luaD_call 的 StkId
+                // 实参即窗口首槽，top 边界取窗口第 3 格地址（与原 ra.add(2) 同值）
+                let w = frame.slots_mut(ra, 3);
+                setobj_2_s!(l, &raw mut w[1], &raw const w[0]);
+                setobj_2_s!(l, &raw mut w[0], fn_tm);
 
-                  frame.set_top(&raw mut w[2]); // func + self arg
-                  LUAU_ASSERT!((*l).top <= (*l).stack_last);
+                frame.set_top(&raw mut w[2]); // func + self arg
+                LUAU_ASSERT!((*l).top <= (*l).stack_last);
 
-                  vm_protect!(l, pc, base, {
-                    lua_d_call(l, &raw mut w[0], 3);
-                  });
-                  (*l).top = (*(*l).ci).top;
+                vm_protect!(l, pc, base, {
+                  lua_d_call(l, &raw mut w[0], 3);
+                });
+                (*l).top = (*(*l).ci).top;
 
-                  // recompute ra since stack might have been reallocated
-                  ra = VM_REG!(luau_insn_a(insn), l, base);
+                // recompute ra since stack might have been reallocated
+                ra = VM_REG!(luau_insn_a(insn), l, base);
 
-                  // protect against __iter returning nil, since nil is used
-                  // as a marker for builtin iteration in FORGLOOP
-                  if matches!(ValueView::from_tvalue(&*ra), ValueView::Nil) {
-                    (*(*l).ci).savedpc = pc; // vm_protect_pc(): next call always errors
-                    lua_g_typeerror_l(l, ra, "call");
-                  }
-                } else if frame.fast_tm(mt, TMS::TmCall).is_some() {
-                  // table or userdata with __call, will be called during FORGLOOP
-                  // TODO: we might be able to stop supporting this depending
-                  // on whether it's used in practice
-                } else if matches!(ValueView::from_tvalue(&*ra), ValueView::Table(_)) {
-                  // set up registers for builtin iteration
-                  let w = frame.slots_mut(ra, 3);
-                  setobj_2_s!(l, &raw mut w[1], &raw const w[0]);
-                  set_iterator_done(&raw mut w[2]);
-                  setnilvalue!(&mut w[0]);
-                } else {
+                // protect against __iter returning nil, since nil is used
+                // as a marker for builtin iteration in FORGLOOP
+                if matches!(ValueView::from_tvalue(&*ra), ValueView::Nil) {
                   (*(*l).ci).savedpc = pc; // vm_protect_pc(): next call always errors
-                  lua_g_typeerror_l(l, ra, ERR_ITERATE_OVER);
+                  lua_g_typeerror_l(l, ra, "call");
                 }
+              } else if frame.fast_tm(mt, TMS::TmCall).is_some() {
+                // table or userdata with __call, will be called during FORGLOOP
+                // TODO: we might be able to stop supporting this depending
+                // on whether it's used in practice
+              } else if matches!(ValueView::from_tvalue(&*ra), ValueView::Table(_)) {
+                // set up registers for builtin iteration
+                let w = frame.slots_mut(ra, 3);
+                setobj_2_s!(l, &raw mut w[1], &raw const w[0]);
+                set_iterator_done(&raw mut w[2]);
+                setnilvalue!(&mut w[0]);
+              } else {
+                (*(*l).ci).savedpc = pc; // vm_protect_pc(): next call always errors
+                lua_g_typeerror_l(l, ra, ERR_ITERATE_OVER);
               }
             }
 
@@ -2553,8 +2440,9 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               continue 'dispatch;
             }
           }
-          LuauOpcode::LOP_FORGPREP_INEXT => {
-            // lvmexecute.cpp:2830
+          // NEXT/INEXT 两臂（lvmexecute.cpp:2830/2853）除控制槽判据（pairs 要
+          // Nil、ipairs 要数值 0）外逐行同构，合并为单一臂按 op 分流判据。
+          LuauOpcode::LOP_FORGPREP_NEXT | LuauOpcode::LOP_FORGPREP_INEXT => {
             let insn = *pc;
             pc = pc.add(1);
             let ra = VM_REG!(luau_insn_a(insn), l, base);
@@ -2562,45 +2450,19 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             // §2 (a)：[ra, ra+3) 三槽窗口（func/state/control）经 `VmFrame::slots`
             // 切片视图读取，取代 `ra.add(1)/ra.add(2)` 手写算术
             let w = frame.slots(ra, 3);
-            // fast-path: ipairs/inext
-            // §11 pass B: table 判定与 number tag+payload 判定收敛为 ValueView 变体匹配
-            if (*(*cl).env).safeenv != 0
-              && matches!(ValueView::from_tvalue(&w[1]), ValueView::Table(_))
-              && matches!(
+            // fast-path: pairs/next 或 ipairs/inext
+            // §11 pass B: table 判定与 number/nil 控制槽判定收敛为 ValueView 变体匹配
+            let control_ok = if op == LuauOpcode::LOP_FORGPREP_NEXT as u8 {
+              matches!(ValueView::from_tvalue(&w[2]), ValueView::Nil)
+            } else {
+              matches!(
                 ValueView::from_tvalue(&w[2]),
                 ValueView::Number(n) if n == 0.0
               )
-            {
-              let w = frame.slots_mut(ra, 3);
-              setnilvalue!(&mut w[0]);
-              // ra+1 is already the table
-              set_iterator_done(&raw mut w[2]);
-            } else
-            // §11 pass B: function tag 判定收敛为 ValueView::Function 匹配
-            if !matches!(ValueView::from_tvalue(&*ra), ValueView::Function(_)) {
-              (*(*l).ci).savedpc = pc; // vm_protect_pc(): next call always errors
-              lua_g_typeerror_l(l, ra, ERR_ITERATE_OVER);
-            }
-
-            pc = pc.offset(luau_insn_d(insn) as isize);
-            let p = cl_proto!(cl);
-            LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
-            continue 'dispatch;
-          }
-          LuauOpcode::LOP_FORGPREP_NEXT => {
-            // lvmexecute.cpp:2853
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-
-            // §2 (a)：[ra, ra+3) 三槽窗口（func/state/control）经 `VmFrame::slots`
-            // 切片视图读取，取代 `ra.add(1)/ra.add(2)` 手写算术
-            let w = frame.slots(ra, 3);
-            // fast-path: pairs/next
-            // §11 pass B: table+nil 双 tag 判定收敛为 ValueView 变体匹配
+            };
             if (*(*cl).env).safeenv != 0
               && matches!(ValueView::from_tvalue(&w[1]), ValueView::Table(_))
-              && matches!(ValueView::from_tvalue(&w[2]), ValueView::Nil)
+              && control_ok
             {
               let w = frame.slots_mut(ra, 3);
               setnilvalue!(&mut w[0]);
@@ -3127,7 +2989,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             continue 'dispatch;
           }
           LuauOpcode::LOP_GETUDATAKS => {
-            // lvmexecute.cpp:3498
+            // lvmexecute.cpp:3498（快路径单源见 udata_direct_fast! 宏文档）
             let insn = *pc;
             pc = pc.add(1);
             let rb = VM_REG!(luau_insn_b(insn), l, base);
@@ -3136,83 +2998,10 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             let kidx = luau_insn_aux_kv16(aux);
             let kv = VM_KV!(kidx, cl, k);
 
-            'udata_fast: {
-              // §11 pass B: rb 的 userdata tag 判定收敛为 ValueView::Userdata 匹配
-              // （uvalue! 同为 *const Udata，payload 语义不变）
-              if let ValueView::Userdata(u) = ValueView::from_tvalue(&*rb) {
-                // cpp: `int utag = uvalue(rb)->tag;`（lvmexecute.cpp:3445/3519/3588）
-                let utag = (*u).tag as usize;
-                let udatadirect = &mut (*(*l).global).udatadirect[utag];
-                let onudataindex = udatadirect.index;
-                let tm = &mut udatadirect.indextm as *mut TValue;
-
-                if let Some(onudataindex) = onudataindex
-                  && !matches!(ValueView::from_tvalue(&*tm), ValueView::Nil)
-                {
-                  let udata = {
-                    // cpp: `void* udata = uvalue(rb)->data;`（lvmexecute.cpp:3452/3526/3595）
-                    (*u).data.as_ptr() as *mut c_void
-                  };
-
-                  // note: it's safe to push arguments past top for
-                  // complicated reasons (see top of the file)
-                  LUAU_ASSERT!((*l).top.add(3) < (*l).stack.add((*l).stacksize as usize));
-                  let top = (*l).top;
-                  setobj_2_s!(l, top.add(0), tm);
-                  setobj_2_s!(l, top.add(1), rb);
-                  setobj_2_s!(l, top.add(2), kv);
-                  (*l).top = (*l).top.add(3);
-
-                  (*(*l).ci).savedpc = pc;
-
-                  (*l).n_ccalls += 1;
-
-                  if ((*l).n_ccalls as i32) >= LUAI_MAXCCALLS {
-                    lua_d_check_cstack(l);
-                  }
-
-                  luau_setupcci(l, 1, top);
-
-                  let mut cachedslot: u16 = luau_insn_aux_slot(aux) as u16;
-                  onudataindex(
-                    l,
-                    udata,
-                    (*(*kv).as_string_ptr()).atom as i32,
-                    &mut cachedslot,
-                    utag as i32,
-                  );
-
-                  // update cached slot if instruction didn't deoptimize
-                  if cachedslot as u32 != luau_insn_aux_slot(aux)
-                    && luau_insn_op(*pc.sub(2)) == LuauOpcode::LOP_GETUDATAKS as u32
-                  {
-                    vm_patch_aux_slot(pc.sub(1), kidx, cachedslot as i32);
-                  }
-
-                  // ci is our callinfo, cip is our parent
-                  let ci = (*l).ci;
-                  let cip = ci.sub(1);
-
-                  (*l).ci = cip;
-                  (*l).base = (*cip).base;
-                  (*l).n_ccalls -= 1;
-
-                  // stack may have been reallocated, so we need to refresh base ptr
-                  base = (*l).base;
-                  let ra = VM_REG!(luau_insn_a(insn), l, base);
-
-                  // grab result while l->top is still pointed to the
-                  // previous function frame
-                  setobj_2_s!(l, ra, (*l).top.sub(1));
-
-                  // then update top
-                  (*l).top = (*cip).top;
-
-                  continue 'dispatch;
-                }
-              }
-              break 'udata_fast;
-            }
+            udata_direct_fast!(
+              l, pc, base, insn, rb, aux, kidx, kv, index, indextm, None::<*const TValue>, 1,
+              LOP_GETUDATAKS, true, 'dispatch
+            );
 
             // Slow path - backpatch and dispatch to regular table access
             vm_patch_op(pc.sub(2), LuauOpcode::LOP_GETTABLEKS as u8);
@@ -3223,7 +3012,7 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             continue 'dispatch;
           }
           LuauOpcode::LOP_SETUDATAKS => {
-            // lvmexecute.cpp:3573
+            // lvmexecute.cpp:3573（快路径单源见 udata_direct_fast! 宏文档）
             let insn = *pc;
             pc = pc.add(1);
             let ra = VM_REG!(luau_insn_a(insn), l, base);
@@ -3233,77 +3022,10 @@ unsafe fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             let kidx = luau_insn_aux_kv16(aux);
             let kv = VM_KV!(kidx, cl, k);
 
-            'udata_fast: {
-              // §11 pass B: rb 的 userdata tag 判定收敛为 ValueView::Userdata 匹配
-              // （uvalue! 同为 *const Udata，payload 语义不变）
-              if let ValueView::Userdata(u) = ValueView::from_tvalue(&*rb) {
-                // cpp: `int utag = uvalue(rb)->tag;`（lvmexecute.cpp:3445/3519/3588）
-                let utag = (*u).tag as usize;
-                let udatadirect = &mut (*(*l).global).udatadirect[utag];
-                let onudatanewindex = udatadirect.newindex;
-                let tm = &mut udatadirect.newindextm as *mut TValue;
-
-                if let Some(onudatanewindex) = onudatanewindex
-                  && !matches!(ValueView::from_tvalue(&*tm), ValueView::Nil)
-                {
-                  let udata = {
-                    // cpp: `void* udata = uvalue(rb)->data;`（lvmexecute.cpp:3452/3526/3595）
-                    (*u).data.as_ptr() as *mut c_void
-                  };
-
-                  // note: it's safe to push arguments past top for
-                  // complicated reasons (see top of the file)
-                  LUAU_ASSERT!((*l).top.add(4) < (*l).stack.add((*l).stacksize as usize));
-                  let top = (*l).top;
-                  setobj_2_s!(l, top.add(0), tm);
-                  setobj_2_s!(l, top.add(1), rb);
-                  setobj_2_s!(l, top.add(2), kv);
-                  setobj_2_s!(l, top.add(3), ra);
-                  (*l).top = (*l).top.add(4);
-
-                  (*(*l).ci).savedpc = pc;
-
-                  (*l).n_ccalls += 1;
-
-                  if ((*l).n_ccalls as i32) >= LUAI_MAXCCALLS {
-                    lua_d_check_cstack(l);
-                  }
-
-                  luau_setupcci(l, 0, top);
-
-                  let mut cachedslot: u16 = luau_insn_aux_slot(aux) as u16;
-                  onudatanewindex(
-                    l,
-                    udata,
-                    (*(*kv).as_string_ptr()).atom as i32,
-                    &mut cachedslot,
-                    utag as i32,
-                  );
-
-                  // update cached slot if instruction didn't deoptimize
-                  if cachedslot as u32 != luau_insn_aux_slot(aux)
-                    && luau_insn_op(*pc.sub(2)) == LuauOpcode::LOP_SETUDATAKS as u32
-                  {
-                    vm_patch_aux_slot(pc.sub(1), kidx, cachedslot as i32);
-                  }
-
-                  // ci is our callinfo, cip is our parent
-                  let ci = (*l).ci;
-                  let cip = ci.sub(1);
-
-                  (*l).ci = cip;
-                  (*l).base = (*cip).base;
-                  (*l).top = (*cip).top;
-                  (*l).n_ccalls -= 1;
-
-                  // stack may have been reallocated, so we need to refresh base ptr
-                  base = (*l).base;
-
-                  continue 'dispatch;
-                }
-              }
-              break 'udata_fast;
-            }
+            udata_direct_fast!(
+              l, pc, base, insn, rb, aux, kidx, kv, newindex, newindextm, Some(ra), 0,
+              LOP_SETUDATAKS, false, 'dispatch
+            );
 
             // Slow path - backpatch and dispatch to regular table access
             vm_patch_op(pc.sub(2), LuauOpcode::LOP_SETTABLEKS as u8);

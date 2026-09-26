@@ -75,6 +75,7 @@ pub mod coclose;
 pub mod cocreate;
 pub mod codepoint;
 pub mod computesizes;
+pub mod copy_results_pop_frame;
 pub mod copywithendian;
 pub mod coresumecont;
 pub mod coresumefinish;

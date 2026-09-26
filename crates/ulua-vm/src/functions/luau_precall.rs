@@ -5,11 +5,11 @@ use core::{ptr::null, slice::from_raw_parts_mut};
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  functions::lua_v_tryfunc_tm::lua_v_tryfunc_tm,
+  functions::{copy_results_pop_frame::copy_results_pop_frame, lua_v_tryfunc_tm::lua_v_tryfunc_tm},
   macros::{
     incr_ci::incr_ci, lua_callinfo_native::LUA_CALLINFO_NATIVE,
     lua_d_checkstackfornewci::lua_d_checkstackfornewci, pcrc::PCRC, pcrlua::PCRLUA,
-    pcryield::PCRYIELD, setnilvalue::setnilvalue, setobj_2_s::setobj_2_s,
+    pcryield::PCRYIELD, setnilvalue::setnilvalue,
   },
   records::lua_state::LuaState,
   type_aliases::{stk_id::StkId, t_value::TValue},
@@ -89,49 +89,11 @@ pub(crate) unsafe fn luau_precall(l: *mut LuaState, func: StkId, nresults: i32) 
         return PCRYIELD;
       }
 
-      // ci is our callinfo, cip is our parent
-      let ci = (*l).ci;
-      let cip = ci.sub(1);
-
-      // copy return values into parent stack (but only up to nresults!),
-      // fill the rest with nil
-      // TODO: it might be worthwhile to handle the case when nresults==b explicitly?
-      let res = (*ci).func;
-      let vali = (*l).top.sub(n.max(0) as usize);
-      let valend = (*l).top;
-
-      // 源窗口元素数：契约保证 top-n <= top 且同属存活栈，一次 offset_from
-      // 算清，取代原「指针逐格比较」的手写游走
-      let avail = valend.offset_from(vali).max(0) as usize;
-      // nresults<0（MULTRET）时全量拷贝（C++ `i != 0` 恒真），否则按 nresults 截断
-      let ncopy = if nresults < 0 {
-        avail
-      } else {
-        avail.min(nresults as usize)
-      };
-      // 保留索引遍历：j 同时是 dst 与 src 两个窗口的偏移，且窗口可重叠（C 帧返回的
-      // 结果就紧跟在 res 之后，src = dst + Δ），借用成 &mut/& 切片会构成别名冲突，
-      // 只能按正序逐格「先读后写」走指针（cpp lvmexecute.cpp:3922）
-      for j in 0..ncopy {
-        setobj_2_s!(l, res.add(j), vali.add(j) as *const TValue);
-      }
-      let mut res = res.add(ncopy);
-      // 补 nil 数：仅 nresults>0 且源不足时补差额（等价原 `while i > 0` 尾循环）
-      let nfill = if nresults > 0 {
-        (nresults as usize) - ncopy
-      } else {
-        0
-      };
-      // Safety: res 起的 nfill 格属调用方（父帧）预留的结果槽，落在 func..父帧 top 内
-      for slot in from_raw_parts_mut(res, nfill) {
-        setnilvalue!(slot);
-      }
-      res = res.add(nfill);
-
-      // pop the stack frame
-      (*l).ci = cip;
-      (*l).base = (*cip).base;
-      (*l).top = res;
+      // ci is our callinfo, cip is our parent：C 路径返回收尾——把 [top-n, top) 按
+      // nresults 上限拷回 func（不足补 nil）并弹帧，`l->top` 恒收在结果尾
+      // （拷回-补 nil-弹帧三连单源见 copy_results_pop_frame；
+      // TODO: it might be worthwhile to handle the case when nresults==b explicitly?）
+      (*l).top = copy_results_pop_frame(l, (*l).top.sub(n.max(0) as usize), (*l).top, nresults);
 
       PCRC
     }
