@@ -551,113 +551,113 @@ impl Compiler {
   ) {
     let expr_ref = expr;
     let mut format_capacity = 0;
-      for string in expr_ref.strings.iter() {
-        format_capacity += string.size + (*string).iter().filter(|&&c| c == b'%').count();
-      }
+    for string in expr_ref.strings.iter() {
+      format_capacity += string.size + (*string).iter().filter(|&&c| c == b'%').count();
+    }
 
-      // 单次遍历同时完成：构建格式串 + 记录各子表达式是否为 String 常量。
-      // 该标记供尾部发射循环复用，原先"预扫描 + 构建 + 发射"三轮各查一次
-      // 常量表（3N 次哈希），现合并为一轮（N 次）。
-      let mut sub_is_string_const = Vec::with_capacity(expr_ref.expressions.size);
-      let mut skipped_sub_expr = 0;
-      // 容量下界：字符串段 + 每个子表达式至多 2 字节占位（"%*"），字符串常量
-      // 追加时超出部分由 Vec 摊销扩容
-      let mut format_string = Vec::with_capacity(format_capacity + 2 * expr_ref.expressions.size);
-      let expressions = expr_ref.expressions.as_slice();
-      for (i, string) in expr_ref.strings.iter().enumerate() {
-        escape_and_append(&mut format_string, string.as_bytes());
-        if let Some(&sub_expr) = expressions.get(i) {
-          if let Some(c) = self.constants.find(&sub_expr.into())
-            && matches!(c, Constant::Str(_))
-          {
-            escape_and_append(&mut format_string, c.get_string_bytes());
-            sub_is_string_const.push(true);
-            skipped_sub_expr += 1;
-          } else {
-            format_string.extend_from_slice(b"%*");
-            sub_is_string_const.push(false);
-          }
+    // 单次遍历同时完成：构建格式串 + 记录各子表达式是否为 String 常量。
+    // 该标记供尾部发射循环复用，原先"预扫描 + 构建 + 发射"三轮各查一次
+    // 常量表（3N 次哈希），现合并为一轮（N 次）。
+    let mut sub_is_string_const = Vec::with_capacity(expr_ref.expressions.size);
+    let mut skipped_sub_expr = 0;
+    // 容量下界：字符串段 + 每个子表达式至多 2 字节占位（"%*"），字符串常量
+    // 追加时超出部分由 Vec 摊销扩容
+    let mut format_string = Vec::with_capacity(format_capacity + 2 * expr_ref.expressions.size);
+    let expressions = expr_ref.expressions.as_slice();
+    for (i, string) in expr_ref.strings.iter().enumerate() {
+      escape_and_append(&mut format_string, string.as_bytes());
+      if let Some(&sub_expr) = expressions.get(i) {
+        if let Some(c) = self.constants.find(&sub_expr.into())
+          && matches!(c, Constant::Str(_))
+        {
+          escape_and_append(&mut format_string, c.get_string_bytes());
+          sub_is_string_const.push(true);
+          skipped_sub_expr += 1;
+        } else {
+          format_string.extend_from_slice(b"%*");
+          sub_is_string_const.push(false);
         }
       }
+    }
 
-      let format_string_index = if format_string.is_empty() {
-        // `self.names()` 访问器兑现构造期接线契约（名表比 self 长寿）；
-        // get_or_add_str 只插入不移动已有项。
-        let interned = self.names_mut().get_or_add_str("");
-        self.bc_mut().add_constant_string(sref_ast_name(interned))
-      } else {
-        // 同上，get_or_add_slice 只在其内插入；返回的 interned.value 是合法
-        // NUL 结尾串指针，仅作只读 sref 消费。
-        let interned = self.names_mut().get_or_add_slice(&format_string);
-        // *const→*mut 仅用于填充 cpp 形制的 AstArray 字段；该指针随后只经
-        // sref_ast_array_u8 作只读 sref 消费，不经由它写入。
-        let format_string_array = AstArray {
-          data: interned.value as *mut u8,
-          size: format_string.len(),
-        };
-        self
-          .bc_mut()
-          .add_constant_string(sref_ast_array_u8(format_string_array))
+    let format_string_index = if format_string.is_empty() {
+      // `self.names()` 访问器兑现构造期接线契约（名表比 self 长寿）；
+      // get_or_add_str 只插入不移动已有项。
+      let interned = self.names_mut().get_or_add_str("");
+      self.bc_mut().add_constant_string(sref_ast_name(interned))
+    } else {
+      // 同上，get_or_add_slice 只在其内插入；返回的 interned.value 是合法
+      // NUL 结尾串指针，仅作只读 sref 消费。
+      let interned = self.names_mut().get_or_add_slice(&format_string);
+      // *const→*mut 仅用于填充 cpp 形制的 AstArray 字段；该指针随后只经
+      // sref_ast_array_u8 作只读 sref 消费，不经由它写入。
+      let format_string_array = AstArray {
+        data: interned.value as *mut u8,
+        size: format_string.len(),
       };
+      self
+        .bc_mut()
+        .add_constant_string(sref_ast_array_u8(format_string_array))
+    };
 
-      self.check_constant(format_string_index, &expr_ref.base.base.location);
+    self.check_constant(format_string_index, &expr_ref.base.base.location);
 
-      let _rs = self.reg_scope();
-      let reg_count = 2 + expr_ref.expressions.size - skipped_sub_expr;
-      let target_top = fflag::LuauCompileStringInterpTargetTop.get()
+    let _rs = self.reg_scope();
+    let reg_count = 2 + expr_ref.expressions.size - skipped_sub_expr;
+    let target_top = fflag::LuauCompileStringInterpTargetTop.get()
         && target_temp
         // `reg_top != 0` 对齐 cpp 的无符号回绕语义（regTop==0 时比较恒为假）
         && self.reg_top != 0
         && target as u32 == self.reg_top - 1;
-      let base_reg = if target_top {
-        self.alloc_reg(&expr_ref.base.base, (reg_count - 1) as u32) - 1
+    let base_reg = if target_top {
+      self.alloc_reg(&expr_ref.base.base, (reg_count - 1) as u32) - 1
+    } else {
+      self.alloc_reg(&expr_ref.base.base, reg_count as u32)
+    };
+
+    self.emit_load_k(base_reg, format_string_index);
+
+    let mut skipped = 0;
+    for (i, (&sub_expr, &is_string_const)) in expr_ref
+      .expressions
+      .iter()
+      .zip(sub_is_string_const.iter())
+      .enumerate()
+    {
+      if is_string_const {
+        skipped += 1;
       } else {
-        self.alloc_reg(&expr_ref.base.base, reg_count as u32)
-      };
-
-      self.emit_load_k(base_reg, format_string_index);
-
-      let mut skipped = 0;
-      for (i, (&sub_expr, &is_string_const)) in expr_ref
-        .expressions
-        .iter()
-        .zip(sub_is_string_const.iter())
-        .enumerate()
-      {
-        if is_string_const {
-          skipped += 1;
-        } else {
-          // Safety: sub_expr 为 expressions 数组记录的存活 AstExpr 子指针；&mut 写穿
-          // 限于该节点编译期临时字段，AST 与 &mut self 各字段无别名交集。
-          self.compile_expr_temp_top(
-            unsafe { &mut *sub_expr },
-            base_reg + 2 + i as u8 - skipped as u8,
-          );
-        }
+        // Safety: sub_expr 为 expressions 数组记录的存活 AstExpr 子指针；&mut 写穿
+        // 限于该节点编译期临时字段，AST 与 &mut self 各字段无别名交集。
+        self.compile_expr_temp_top(
+          unsafe { &mut *sub_expr },
+          base_reg + 2 + i as u8 - skipped as u8,
+        );
       }
+    }
 
-      let format_method = sref_ast_name(AstName::from_static(b"format"));
-      let format_method_index = self.bc_mut().add_constant_string(format_method.clone());
-      self.check_constant(format_method_index, &expr_ref.base.base.location);
+    let format_method = sref_ast_name(AstName::from_static(b"format"));
+    let format_method_index = self.bc_mut().add_constant_string(format_method.clone());
+    self.check_constant(format_method_index, &expr_ref.base.base.location);
 
-      self.bc_mut().emit_abc(
-        LuauOpcode::LOP_NAMECALL,
-        base_reg,
-        base_reg,
-        bytecode_builder_get_string_hash(format_method) as u8,
-      );
-      self.bc_mut().emit_aux(format_method_index as u32);
-      self.bc_mut().emit_abc(
-        LuauOpcode::LOP_CALL,
-        base_reg,
-        (expr_ref.expressions.size + 2 - skipped_sub_expr) as u8,
-        2,
-      );
-      if target != base_reg {
-        self
-          .bc_mut()
-          .emit_abc(LuauOpcode::LOP_MOVE, target, base_reg, 0);
-      }
+    self.bc_mut().emit_abc(
+      LuauOpcode::LOP_NAMECALL,
+      base_reg,
+      base_reg,
+      bytecode_builder_get_string_hash(format_method) as u8,
+    );
+    self.bc_mut().emit_aux(format_method_index as u32);
+    self.bc_mut().emit_abc(
+      LuauOpcode::LOP_CALL,
+      base_reg,
+      (expr_ref.expressions.size + 2 - skipped_sub_expr) as u8,
+      2,
+    );
+    if target != base_reg {
+      self
+        .bc_mut()
+        .emit_abc(LuauOpcode::LOP_MOVE, target, base_reg, 0);
+    }
   }
 
   /// DUPTABLE 双路循环头部同构六行样板的单点收口：断言 Record 形态 → 判型
@@ -1088,7 +1088,10 @@ impl Compiler {
     let arg = expr_ref.args.as_slice()[0];
     let arg_varargs = expr_ref.args.as_slice()[1];
     // 门面判型：arg_varargs 由上方 select 特判保证为 arena 存活 AstExpr 指针。
-    LUAU_ASSERT!(matches!(Node::from(arg_varargs).as_expr_ref(), AstExprRef::Varargs(_)));
+    LUAU_ASSERT!(matches!(
+      Node::from(arg_varargs).as_expr_ref(),
+      AstExprRef::Varargs(_)
+    ));
 
     let argreg: u8;
     let reg = self.get_expr_local_reg(arg);

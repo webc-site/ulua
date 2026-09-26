@@ -85,8 +85,8 @@ impl Compiler {
   pub(crate) fn compile_stat(&mut self, node: *mut AstStat) {
     // Safety: 调用方保证 node 指向 arena 存活 AstStat（同 cpp 直接解引用），
     // 基类借用在此一次建立，后续不再散点解引用
-    let stat_node = ast_slot_ref(node)
-      .expect("compile_stat 入口契约：node 非空且指向 arena 存活 AstStat");
+    let stat_node =
+      ast_slot_ref(node).expect("compile_stat 入口契约：node 非空且指向 arena 存活 AstStat");
     let base = &stat_node.base;
     self.set_debug_line_ast_node(base);
     if self.options.coverage_level >= 1 && self.needs_coverage(base) {
