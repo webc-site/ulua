@@ -1,14 +1,11 @@
 use core::ptr::from_mut;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
-    ast_expr_constant_number::AstExprConstantNumber,
-    ast_expr_unary::{AstExprUnary, AstExprUnaryOp},
-    ast_stat_for::AstStatFor,
-    ast_visitor::AstVisitor,
+    ast_expr_unary::AstExprUnaryOp, ast_stat_for::AstStatFor, ast_visitor::AstVisitor,
     location::Location,
   },
-  rtti::ast_node_try_as_ptr,
   visit::ast_stat_visit,
 };
 use ulua_config::enums::code::Code;
@@ -55,23 +52,31 @@ impl<'ctx> LintForRange<'ctx> {
     // 句柄化为非空 Node，as_ptr 桥交指针形态判型门面，`.get()` 直出只读视图
     // （原死 unsafe 消解）。
     if node_ref.step.is_none() {
-      let fc = unsafe { ast_node_try_as_ptr::<AstExprConstantNumber>(node_ref.from.as_ptr()) };
-      let fu = unsafe { ast_node_try_as_ptr::<AstExprUnary>(node_ref.from.as_ptr()) };
-      let tc = unsafe { ast_node_try_as_ptr::<AstExprConstantNumber>(node_ref.to.as_ptr()) };
-      let tu = unsafe { ast_node_try_as_ptr::<AstExprUnary>(node_ref.to.as_ptr()) };
+      let fc = match node_ref.from.as_expr_ref() {
+        AstExprRef::ConstantNumber(c) => Some(c.value),
+        _ => None,
+      };
+      let fu_len = matches!(
+        node_ref.from.as_expr_ref(),
+        AstExprRef::Unary(u) if u.op == AstExprUnaryOp::Len
+      );
+      let tc = match node_ref.to.as_expr_ref() {
+        AstExprRef::ConstantNumber(c) => Some(c.value),
+        _ => None,
+      };
+      let tu_len = matches!(
+        node_ref.to.as_expr_ref(),
+        AstExprRef::Unary(u) if u.op == AstExprUnaryOp::Len
+      );
       let range_location = Location::new(
         node_ref.from.get().base.location.begin,
         node_ref.to.get().base.location.end,
       );
-      let fu_len = fu.is_some_and(|u| u.op == AstExprUnaryOp::Len);
-      let tu_len = tu.is_some_and(|u| u.op == AstExprUnaryOp::Len);
       // 句柄为 Copy，先局部化，使 emit_warning 的 `&mut` 重建不与下方
       // `self.get_loop_end` 的只读借用相互冲突。
       let mut ctx = self.context;
-      if (fu_len && tc.is_some_and(|c| c.value == 1.0))
-        // 双写合一：is_some 判定+unwrap 比较并为 is_some_and 短路（与
-        // `fc.is_some() && tc.is_some() && fc.unwrap()...` 逐分支等价）。
-        || fc.is_some_and(|fc| tc.is_some_and(|tc| fc.value > tc.value))
+      if (fu_len && tc == Some(1.0))
+        || fc.is_some_and(|fc| tc.is_some_and(|tc| fc > tc))
       {
         emit_warning(
           ctx.get(),
@@ -80,7 +85,7 @@ impl<'ctx> LintForRange<'ctx> {
           format_args!("For loop should iterate backwards; did you forget to specify -1 as step?"),
         );
       } else if let (Some(fc), Some(tc)) = (fc, tc)
-        && self.get_loop_end(fc.value, tc.value) != tc.value
+        && self.get_loop_end(fc, tc) != tc
       {
         // 上游为 C `printf("%g", …)`，6 位有效数字并自动切换科学计数法
         emit_warning(
@@ -89,18 +94,18 @@ impl<'ctx> LintForRange<'ctx> {
           range_location,
           format_args!(
             "For loop ends at {} instead of {}; did you forget to specify step?",
-            format_g(self.get_loop_end(fc.value, tc.value)),
-            format_g(tc.value)
+            format_g(self.get_loop_end(fc, tc)),
+            format_g(tc)
           ),
         );
-      } else if fc.is_some_and(|c| c.value == 0.0) && tu_len {
+      } else if fc == Some(0.0) && tu_len {
         emit_warning(
           ctx.get(),
           Code::ForRange,
           range_location,
           format_args!("For loop starts at 0, but arrays start at 1"),
         );
-      } else if fu_len && tc.is_some_and(|c| c.value == 0.0) {
+      } else if fu_len && tc == Some(0.0) {
         emit_warning(
           ctx.get(),
           Code::ForRange,

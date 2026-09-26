@@ -5,21 +5,17 @@ use core::{
 use std::cmp::max;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
     ast_attr::AstAttr,
     ast_expr::AstExpr,
-    ast_expr_binary::{AstExprBinary, AstExprBinaryOp},
+    ast_expr_binary::AstExprBinaryOp,
     ast_expr_call::AstExprCall,
-    ast_expr_constant_number::AstExprConstantNumber,
-    ast_expr_global::AstExprGlobal,
     ast_expr_index_name::AstExprIndexName,
-    ast_expr_table::AstExprTable,
-    ast_expr_type_assertion::AstExprTypeAssertion,
     ast_expr_unary::{AstExprUnary, AstExprUnaryOp},
     ast_visitor::AstVisitor,
     location::Location,
   },
-  rtti::{ast_node_try_as, ast_node_try_as_ptr},
   visit::ast_stat_visit,
 };
 use ulua_config::enums::code::Code;
@@ -125,7 +121,7 @@ impl<'ctx> LintTableOperations<'ctx> {
     if op == Some(TableOps::Insert) && args.len() == 2 {
       // SAFETY: args 元素由解析器保证非空。
       let arg1 = unsafe { &*args[1] };
-      if let Some(tail) = ast_node_try_as::<AstExprCall>(&arg1.base)
+      if let AstExprRef::Call(tail) = arg1.as_expr_ref()
         && let Some(funty) = self.context.get().get_type(tail.func)
       {
         let ret = self.get_return_count(follow_type::follow(funty));
@@ -159,7 +155,7 @@ impl<'ctx> LintTableOperations<'ctx> {
           ),
         );
       }
-      if let Some(add) = ast_node_try_as::<AstExprBinary>(&arg1.base)
+      if let AstExprRef::Binary(add) = arg1.as_expr_ref()
         && add.op == AstExprBinaryOp::Add
         // left/right 已句柄化恒非空；is_length/is_constant 为既有裸指针 API，经 as_ptr 桥接。
         && self.is_length(add.left.as_ptr(), args[0])
@@ -184,7 +180,7 @@ impl<'ctx> LintTableOperations<'ctx> {
           format_args!("table.remove uses index 0 but arrays are 1-based; did you mean 1 instead?"),
         );
       }
-      if let Some(sub) = ast_node_try_as::<AstExprBinary>(&arg1.base)
+      if let AstExprRef::Binary(sub) = arg1.as_expr_ref()
         && sub.op == AstExprBinaryOp::Sub
         // 同上：既有裸指针 API 经 as_ptr 桥接。
         && self.is_length(sub.left.as_ptr(), args[0])
@@ -221,7 +217,7 @@ impl<'ctx> LintTableOperations<'ctx> {
     if op == Some(TableOps::Create) && args.len() == 2 {
       // SAFETY: args 元素由解析器保证非空。
       let arg1 = unsafe { &*args[1] };
-      if ast_node_try_as::<AstExprTable>(&arg1.base).is_some() {
+      if matches!(arg1.as_expr_ref(), AstExprRef::Table(_)) {
         warn(
           self.context.get(),
           arg1.base.location,
@@ -230,10 +226,10 @@ impl<'ctx> LintTableOperations<'ctx> {
           ),
         );
       }
-      if let Some(assertion) = ast_node_try_as::<AstExprTypeAssertion>(&arg1.base) {
+      if let AstExprRef::TypeAssertion(assertion) = arg1.as_expr_ref() {
         // assertion.expr 已句柄化恒非空（类型断言必有内层表达式）：.get() 安全借用。
         let inner = assertion.expr.get();
-        if ast_node_try_as::<AstExprTable>(&inner.base).is_some() {
+        if matches!(inner.as_expr_ref(), AstExprRef::Table(_)) {
           warn(
             self.context.get(),
             inner.base.location,
@@ -286,19 +282,25 @@ impl<'ctx> LintTableOperations<'ctx> {
 // —— 原 methods/lint_table_operations_is_constant.rs ——
 impl<'ctx> LintTableOperations<'ctx> {
   pub(crate) fn is_constant(&mut self, expr: *mut AstExpr, value: f64) -> bool {
-    (unsafe { ast_node_try_as_ptr::<AstExprConstantNumber>(expr) })
-      .is_some_and(|n| n.value == value)
+    let Some(expr_ref) = (unsafe { expr.as_ref() }) else {
+      return false;
+    };
+    matches!(expr_ref.as_expr_ref(), AstExprRef::ConstantNumber(n) if n.value == value)
   }
 }
 
 // —— 原 methods/lint_table_operations_is_length.rs ——
 impl<'ctx> LintTableOperations<'ctx> {
   pub(crate) fn is_length(&mut self, expr: *mut AstExpr, table: *mut AstExpr) -> bool {
-    let Some(n_ref) = (unsafe { ast_node_try_as_ptr::<AstExprUnary>(expr) }) else {
+    let Some(expr_ref) = (unsafe { expr.as_ref() }) else {
       return false;
     };
-    // expr 已句柄化；similar 为既有裸指针 API，经 as_ptr 桥接。
-    n_ref.op == AstExprUnaryOp::Len && unsafe { similar(n_ref.expr.as_ptr(), table) }
+    if let AstExprRef::Unary(n_ref) = expr_ref.as_expr_ref() {
+      // expr 已句柄化；similar 为既有裸指针 API，经 as_ptr 桥接。
+      n_ref.op == AstExprUnaryOp::Len && unsafe { similar(n_ref.expr.as_ptr(), table) }
+    } else {
+      false
+    }
   }
 }
 
@@ -323,32 +325,34 @@ impl<'ctx> LintTableOperations<'ctx> {
 // —— 原 methods/lint_table_operations_visit_linter.rs ——
 impl<'ctx> LintTableOperations<'ctx> {
   pub(crate) fn visit_ast_expr_unary(&mut self, node: *mut AstExprUnary) -> bool {
-    // Safety: node 由 lint 的 AST 访问器传入——parse 树节点（SourceModule 的
-    // allocator 堆块上分配，bump 块地址不移动），访问期间非空且存活（C++
-    // `Linter` 同前提）。`(*node).op` 只读字段；`node as *mut AstExpr` 上转合法因
-    // AstExprUnary 为 repr(C) 且首字段 base: AstExpr，基址重合；`(*node).expr` 是
-    // parser 保证非空的子节点指针（非 Optional 字段），`&*` 重建只读借用无别名。
-    unsafe {
-      if (*node).op == AstExprUnaryOp::Len {
-        self.check_indexer(&*(node.cast::<AstExpr>()), &(*node).expr, "#");
-      }
+    let node_ref = unsafe { &*node };
+    if node_ref.op == AstExprUnaryOp::Len {
+      self.check_indexer(&node_ref.base, node_ref.expr.get(), "#");
     }
     true
   }
+
   pub(crate) fn visit_ast_expr_call(&mut self, node: *mut AstExprCall) -> bool {
-    unsafe {
-      let func_expr = (*node).func;
-      if let Some(func_global) = ast_node_try_as_ptr::<AstExprGlobal>(func_expr) {
-        if func_global.name == "ipairs" && (*node).args.len() == 1 {
-          let arg0 = (*node).args.as_slice()[0];
-          self.check_indexer(&*(node.cast::<AstExpr>()), &*arg0, "ipairs");
+    let node_ref = unsafe { &*node };
+    let Some(func_ref) = (unsafe { node_ref.func.as_ref() }) else {
+      return true;
+    };
+    match func_ref.as_expr_ref() {
+      AstExprRef::Global(func_global) => {
+        if func_global.name == "ipairs" && node_ref.args.len() == 1 {
+          let arg0 = node_ref.args.as_slice()[0];
+          // SAFETY: arg0 由 parser 保证非空。
+          self.check_indexer(&node_ref.base, unsafe { &*arg0 }, "ipairs");
         }
-      } else if let Some(func_index) = ast_node_try_as_ptr::<AstExprIndexName>(func_expr)
-        && let Some(tablib) = ast_node_try_as_ptr::<AstExprGlobal>(func_index.expr)
-        && tablib.name == "table"
-      {
-        self.check_table_call(&*node, func_index);
       }
+      AstExprRef::IndexName(func_index) => {
+        if let AstExprRef::Global(tablib) = func_index.expr.as_expr_ref()
+          && tablib.name == "table"
+        {
+          self.check_table_call(node_ref, func_index);
+        }
+      }
+      _ => {}
     }
     true
   }

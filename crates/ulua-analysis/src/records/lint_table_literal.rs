@@ -2,10 +2,8 @@ use alloc::{collections::BTreeMap, string::String, vec::Vec};
 use core::ptr::from_mut;
 
 use ulua_ast::{
-  enums::ast_table_access::AstTableAccess,
+  enums::{ast_expr_ref::AstExprRef, ast_table_access::AstTableAccess},
   records::{
-    ast_expr_constant_number::AstExprConstantNumber,
-    ast_expr_constant_string::AstExprConstantString,
     ast_expr_table::{AstExprTable, ItemKind},
     ast_name::AstName,
     ast_type::AstType,
@@ -14,8 +12,6 @@ use ulua_ast::{
     ast_visitor::AstVisitor,
     location::Location,
   },
-  rtti,
-  rtti::AstNodePtr,
   visit::ast_stat_visit,
 };
 use ulua_config::enums::code::Code;
@@ -77,65 +73,57 @@ impl<'ctx> LintTableLiteral<'ctx> {
     let mut names: BTreeMap<Vec<u8>, u32> = BTreeMap::new();
     let mut indices: BTreeMap<i32, u32> = BTreeMap::new();
     for item in node.items.iter() {
-      if item.key.is_null() {
+      let Some(key_ref) = (unsafe { item.key.as_ref() }) else {
         continue;
-      }
-      // item.key 已由上方判空保证非空，且是 parser 填入的存活表达式 arena
-      // 节点；`as *mut AstNode` 因 repr(C) 基类在偏移 0 而基址不变。
-      let key_node = item.key.as_ast_node();
-      // Safety: `key_node` 指向存活 `AstExpr` arena 节点（见上），判型只读
-      // 偏移 0 的 `class_index`；命中后共享借用即该节点基址，只读 `value`/
-      // `location`，止于本 if-let 块（无并存的列表节点可变别名，linter 不写
-      // AST）。
-      if let Some(expr) = unsafe { rtti::ast_node_try_as_ptr::<AstExprConstantString>(key_node) } {
-        let key = expr.value.as_bytes().to_vec();
-        let field = String::from_utf8_lossy(&key);
-        if let Some(line) = names.get(&key).copied() {
-          emit_warning(
-            context,
-            Code::TableLiteral,
-            expr.base.base.location,
-            format_args!(
-              "Table field '{}' is a duplicate; previously defined at line {}",
-              field, line
-            ),
-          );
-        } else {
-          names.insert(key, expr.base.base.location.begin.line + 1);
-        }
-        continue;
-      }
-      // Safety: 与字符串常量分支同源——同一存活 `key_node` 指针换判
-      // `AstExprConstantNumber`；命中后只拷贝 `value`（f64）与 `location`，
-      // 借用止于本 if-let 块，无并存可变别名。
-      if let Some(expr) = unsafe { rtti::ast_node_try_as_ptr::<AstExprConstantNumber>(key_node) } {
-        let value = expr.value;
-        if value >= 1.0 && value <= f64::from(count) && f64::from(value as i32) == value {
-          emit_warning(
-            context,
-            Code::TableLiteral,
-            expr.base.base.location,
-            format_args!(
-              "Table index {} is a duplicate; previously defined as a list entry",
-              value as i32
-            ),
-          );
-        } else if value >= 0.0 && value <= f64::from(i32::MAX) && f64::from(value as i32) == value {
-          let index = value as i32;
-          if let Some(line) = indices.get(&index).copied() {
+      };
+      match key_ref.as_expr_ref() {
+        AstExprRef::ConstantString(expr) => {
+          let key = expr.value.as_bytes().to_vec();
+          let field = String::from_utf8_lossy(&key);
+          if let Some(line) = names.get(&key).copied() {
             emit_warning(
               context,
               Code::TableLiteral,
               expr.base.base.location,
               format_args!(
-                "Table index {} is a duplicate; previously defined at line {}",
-                index, line
+                "Table field '{}' is a duplicate; previously defined at line {}",
+                field, line
               ),
             );
           } else {
-            indices.insert(index, expr.base.base.location.begin.line + 1);
+            names.insert(key, expr.base.base.location.begin.line + 1);
           }
         }
+        AstExprRef::ConstantNumber(expr) => {
+          let value = expr.value;
+          if value >= 1.0 && value <= f64::from(count) && f64::from(value as i32) == value {
+            emit_warning(
+              context,
+              Code::TableLiteral,
+              expr.base.base.location,
+              format_args!(
+                "Table index {} is a duplicate; previously defined as a list entry",
+                value as i32
+              ),
+            );
+          } else if value >= 0.0 && value <= f64::from(i32::MAX) && f64::from(value as i32) == value {
+            let index = value as i32;
+            if let Some(line) = indices.get(&index).copied() {
+              emit_warning(
+                context,
+                Code::TableLiteral,
+                expr.base.base.location,
+                format_args!(
+                  "Table index {} is a duplicate; previously defined at line {}",
+                  index, line
+                ),
+              );
+            } else {
+              indices.insert(index, expr.base.base.location.begin.line + 1);
+            }
+          }
+        }
+        _ => {}
       }
     }
     true

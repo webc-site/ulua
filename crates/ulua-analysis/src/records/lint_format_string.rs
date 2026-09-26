@@ -1,14 +1,11 @@
 use alloc::vec::Vec;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
-    ast_array::AstArray, ast_expr::AstExpr, ast_expr_call::AstExprCall,
-    ast_expr_constant_bool::AstExprConstantBool, ast_expr_constant_string::AstExprConstantString,
-    ast_expr_global::AstExprGlobal, ast_expr_group::AstExprGroup,
-    ast_expr_index_name::AstExprIndexName, ast_name::AstName, ast_visitor::AstVisitor,
+    ast_array::AstArray, ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_name::AstName,
+    ast_visitor::AstVisitor,
   },
-  rtti,
-  rtti::AstNodePtr,
   visit::ast_stat_visit,
 };
 use ulua_common::LUAU_ASSERT;
@@ -394,30 +391,22 @@ impl<'ctx> LintFormatString<'ctx> {
   /// 共享借用（cpp 裸指针形参的 Rust 对应），本方法对其只读；宿主 context 经
   /// `self.context` 写句柄瞬时借用。
   pub fn match_call(&mut self, node: &AstExprCall) {
-    // Safety: parser 为每个调用节点无条件填非空 `func`，指向存活表达式 arena
-    // 节点；`*mut AstExpr` 经 `as_ast_node` 仅做基址不变的类型视图转换
-    // （repr(C) 基类在偏移 0），判型读 `class_index`，命中引用即该节点基址，
-    // 存活至本函数结束，期间 AST 无人写入。
-    let Some(func) = (unsafe { rtti::ast_node_try_as_ptr::<AstExprIndexName>(node.func) }) else {
+    let Some(func_ref) = (unsafe { node.func.as_ref() }) else {
+      return;
+    };
+    let AstExprRef::IndexName(func) = func_ref.as_expr_ref() else {
       return;
     };
     if node.self_ {
-      // Safety: `func.expr` 同为 parser 写入 `AstExprIndexName` 的非空存活
-      // arena 表达式指针；判型只读基类 `class_index`，未命中返回 None 时回退
-      // 到 `func.expr` 本身（拷贝指针值，不新增借用），与 cpp `group ?
-      // group->expr : func->expr` 逐步对应。
-      let group = unsafe { rtti::ast_node_try_as_ptr::<AstExprGroup>(func.expr) };
-      let self_expr: *mut AstExpr = if let Some(group) = group {
+      let self_expr: *mut AstExpr = if let AstExprRef::Group(group) = func.expr.as_expr_ref() {
         // group.expr 已句柄化恒非空；行走链沿用裸指针 API，经 as_ptr 桥接。
         group.expr.as_ptr()
       } else {
         // func.expr 已句柄化恒非空；行走链沿用裸指针 API，经 as_ptr 桥接。
         func.expr.as_ptr()
       };
-      if unsafe { rtti::ast_node_is_ptr::<AstExprConstantString>(self_expr) } {
-        // Safety: `func.index` 是上方存活 `&AstExprIndexName` 的 `AstName`
-        // 字段拷贝；`self_expr` 指向同一存活调用子树内的 arena 节点，callee
-        // （`match_string_call`）只对它判型与只读。
+      let self_ref = unsafe { self_expr.as_ref() };
+      if matches!(self_ref.map(|e| e.as_expr_ref()), Some(AstExprRef::ConstantString(_))) {
         self.match_string_call(func.index, self_expr, node.args);
       } else if let Some(type_id) = self.context.get().get_type(self_expr)
         && is_string(type_id)
@@ -426,45 +415,35 @@ impl<'ctx> LintFormatString<'ctx> {
       }
       return;
     }
-    // Safety: `func.expr` 非空且指向存活 arena 节点（同 self_ 分支）；判型命中
-    // `AstExprGlobal` 后仅拷贝其 `name` 字段（`AstName` 为 Copy），借用止于下
-    // 方分支条件求值。
-    let Some(lib) = (unsafe { rtti::ast_node_try_as_ptr::<AstExprGlobal>(func.expr) }) else {
+    let AstExprRef::Global(lib) = func.expr.as_expr_ref() else {
       return;
     };
     let lib_name = lib.name;
     if lib_name == "string" {
       if let Some(&first_arg) = node.args.first() {
         let rest = AstArray::from_slice(&node.args[1..]);
-        // Safety: `first_arg` 是存活 `args` 数组首槽位的非空 arena 表达式
-        // 指针（与 `rest` 同源），`func.index` 为上方存活的 `&AstExprIndexName`
-        // 的字段拷贝；callee 对二者只读。
         self.match_string_call(func.index, first_arg, rest);
       }
     } else if lib_name == "os"
       && func.index == "date"
       && let Some(&arg0) = node.args.first()
+      && let Some(arg0_ref) = unsafe { arg0.as_ref() }
+      && let AstExprRef::ConstantString(fmt) = arg0_ref.as_expr_ref()
+      && let Some(error) = self.check_date_format(fmt.value.as_bytes())
     {
-      // Safety: `arg0` 是存活 `args` 数组的首槽位指针（`Some` 已保证存在），
-      // 指向 parser arena 中不可变存活的表达式节点；判型命中后共享借用只读
-      // `value`/`location`，止于本分支。
-      if let Some(fmt) = unsafe { rtti::ast_node_try_as_ptr::<AstExprConstantString>(arg0) }
-        && let Some(error) = self.check_date_format(fmt.value.as_bytes())
-      {
-        emit_warning(
-          self.context.get(),
-          Code::FormatString,
-          fmt.base.base.location,
-          format_args!("Invalid date format: {}", error),
-        );
-      }
+      emit_warning(
+        self.context.get(),
+        Code::FormatString,
+        fmt.base.base.location,
+        format_args!("Invalid date format: {}", error),
+      );
     }
   }
 }
 
 // —— 原 methods/lint_format_string_match_string_call.rs ——
 impl<'ctx> LintFormatString<'ctx> {
-  pub fn match_string_call(
+  pub(crate) fn match_string_call(
     &mut self,
     name: AstName,
     self_expr: *mut AstExpr,
@@ -478,15 +457,10 @@ impl<'ctx> LintFormatString<'ctx> {
     let is_gsub = name == "gsub";
     let mut handle = self.context;
     let context = handle.get();
-    // repr(C) 基类在偏移 0，`as *mut AstNode` 是基址不变的类型视图转换；
-    // self_expr 由调用方 match_call 从存活 AstExprCall 节点取出，非空。
-    let self_node = self_expr.as_ast_node();
+    let self_ref = unsafe { self_expr.as_ref() };
     if is_format {
-      // Safety: `self_node` 指向调用方 `match_call` 正持有的存活 `AstExprCall`
-      // 的 self 表达式（parser arena 分配，非空、遍历期间存活且无人改写）；
-      // try_as_ptr 读偏移 0 判型，命中返回的只读引用即该节点基址，存活期覆盖
-      // 本分支，且 linter 的可变状态与 AST arena 不相交。
-      if let Some(fmt) = unsafe { rtti::ast_node_try_as_ptr::<AstExprConstantString>(self_node) }
+      if let Some(self_ref) = self_ref
+        && let AstExprRef::ConstantString(fmt) = self_ref.as_expr_ref()
         && let Some(error) = self.check_string_format(fmt.value.as_bytes())
       {
         emit_warning(
@@ -497,9 +471,9 @@ impl<'ctx> LintFormatString<'ctx> {
         );
       }
     } else if is_pack_packsize_unpack {
-      // Safety: 与 format 分支同源——同一 `self_node` 指针，判型为
-      // AstExprConstantString 后只读其 value/location；引用生命周期止于本分支。
-      if let Some(fmt) = unsafe { rtti::ast_node_try_as_ptr::<AstExprConstantString>(self_node) } {
+      if let Some(self_ref) = self_ref
+        && let AstExprRef::ConstantString(fmt) = self_ref.as_expr_ref()
+      {
         let is_packsize = name == "packsize";
         if let Some(error) = self.check_string_pack(fmt.value.as_bytes(), is_packsize) {
           emit_warning(
@@ -511,10 +485,8 @@ impl<'ctx> LintFormatString<'ctx> {
         }
       }
     } else if is_match_gmatch && let Some(&first_arg) = args_slice.first() {
-      // Safety: `first_arg` 取自 `args`（即存活 `AstExprCall::args`，parser 成对
-      // 写入 data/size 的 AstArray），槽位都是 arena 内存活的非空表达式指针；
-      // 判型后只读模式串内容，无并发可变别名。
-      if let Some(pat) = unsafe { rtti::ast_node_try_as_ptr::<AstExprConstantString>(first_arg) }
+      if let Some(first_ref) = unsafe { first_arg.as_ref() }
+        && let AstExprRef::ConstantString(pat) = first_ref.as_expr_ref()
         && let Err(error) = self.check_string_match(pat.value.as_bytes())
       {
         emit_warning(
@@ -526,9 +498,8 @@ impl<'ctx> LintFormatString<'ctx> {
       }
     } else if is_find && !args_slice.is_empty() && args_slice.len() <= 2 {
       let first = args_slice[0];
-      // Safety: `first` 与上一分支的 first_arg 同源，是存活调用节点的
-      // 第一实参槽位；判型命中后引用借用同一 arena 节点，只读到分支结束。
-      if let Some(pat) = unsafe { rtti::ast_node_try_as_ptr::<AstExprConstantString>(first) }
+      if let Some(first_ref) = unsafe { first.as_ref() }
+        && let AstExprRef::ConstantString(pat) = first_ref.as_expr_ref()
         && let Err(error) = self.check_string_match(pat.value.as_bytes())
       {
         emit_warning(
@@ -541,30 +512,26 @@ impl<'ctx> LintFormatString<'ctx> {
     } else if is_find && args_slice.len() >= 3 {
       let plain = args_slice[2];
       let first = args_slice[0];
-      // Safety: `plain` 是 find 第三实参（plain 标志）所在的存活 arena 节点
-      // 指针，判型只读 class_index、`value` 是 bool 字段拷贝。
-      if let Some(mode_val) = unsafe { rtti::ast_node_try_as_ptr::<AstExprConstantBool>(plain) }
+      if let Some(plain_ref) = unsafe { plain.as_ref() }
+        && let AstExprRef::ConstantBool(mode_val) = plain_ref.as_expr_ref()
         && !mode_val.value
+        && let Some(first_ref) = unsafe { first.as_ref() }
+        && let AstExprRef::ConstantString(pat) = first_ref.as_expr_ref()
+        && let Err(error) = self.check_string_match(pat.value.as_bytes())
       {
-        // Safety: 对第一实参（模式串）的下转与 is_find 短参分支完全同源
-        // （同一 args 数组、同一存活期），只读引用仅在本分支作用域内使用。
-        if let Some(pat) = unsafe { rtti::ast_node_try_as_ptr::<AstExprConstantString>(first) }
-          && let Err(error) = self.check_string_match(pat.value.as_bytes())
-        {
-          emit_warning(
-            context,
-            Code::FormatString,
-            pat.base.base.location,
-            format_args!("Invalid match pattern: {}", error),
-          );
-        }
+        emit_warning(
+          context,
+          Code::FormatString,
+          pat.base.base.location,
+          format_args!("Invalid match pattern: {}", error),
+        );
       }
     } else if is_gsub && args_slice.len() > 1 {
       let mut captures = -1;
       let first = args_slice[0];
-      // Safety: `first` 为 gsub 模式串实参槽位，指向存活 arena 节点；match
-      // 两个 arm 对引用的使用都在判型后的同一作用域内。
-      if let Some(pat) = unsafe { rtti::ast_node_try_as_ptr::<AstExprConstantString>(first) } {
+      if let Some(first_ref) = unsafe { first.as_ref() }
+        && let AstExprRef::ConstantString(pat) = first_ref.as_expr_ref()
+      {
         match self.check_string_match(pat.value.as_bytes()) {
           Ok(c) => {
             captures = c;
@@ -580,9 +547,8 @@ impl<'ctx> LintFormatString<'ctx> {
         }
       }
       let repl = args_slice[1];
-      // Safety: `repl` 是同一存活 `AstExprCall::args` 数组的替换串槽位，与
-      // 上一块同源；只读取字符串字段与 location。
-      if let Some(rep) = unsafe { rtti::ast_node_try_as_ptr::<AstExprConstantString>(repl) }
+      if let Some(repl_ref) = unsafe { repl.as_ref() }
+        && let AstExprRef::ConstantString(rep) = repl_ref.as_expr_ref()
         && let Some(error) = self.check_string_replace(rep.value.as_bytes(), captures)
       {
         emit_warning(

@@ -1,12 +1,12 @@
-use core::ptr::{from_mut, null_mut};
+use core::ptr::from_mut;
 
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
-    ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_expr_local::AstExprLocal,
-    ast_expr_varargs::AstExprVarargs, ast_local::AstLocal, ast_stat_assign::AstStatAssign,
-    ast_stat_function::AstStatFunction, ast_stat_local::AstStatLocal, ast_visitor::AstVisitor,
+    ast_expr::AstExpr, ast_expr_local::AstExprLocal, ast_local::AstLocal,
+    ast_stat_assign::AstStatAssign, ast_stat_function::AstStatFunction,
+    ast_stat_local::AstStatLocal, ast_visitor::AstVisitor,
   },
-  rtti::{AstNodePtr, ast_node_is_ptr, ast_node_try_as},
   visit::{ast_expr_visit, ast_stat_visit},
 };
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_table::DenseDefault};
@@ -127,7 +127,7 @@ pub fn lint_uninitialized_local_report(pass: &mut LintUninitializedLocal<'_>) {
 
 // —— 原 methods/lint_uninitialized_local_visit_assign.rs：C++ `LintUninitializedLocal::visitAssign` (`Analysis/src/Linter.cpp:2184`). ——
 pub fn lint_uninitialized_local_visit_assign(pass: &mut LintUninitializedLocal, node: &AstExpr) {
-  if let Some(lv) = ast_node_try_as::<AstExprLocal>(&node.base) {
+  if let AstExprRef::Local(lv) = node.as_expr_ref() {
     // local 槽已句柄化恒非空；locals 键值为既有裸指针形态，经 as_ptr 桥接。
     let l = pass.locals.get_or_insert(lv.local.as_ptr());
     l.assigned = true;
@@ -148,12 +148,11 @@ impl<'ctx> LintUninitializedLocal<'ctx> {
     // AST arena 不相交。
     let node_ref = unsafe { &*node };
     let values = node_ref.values.as_slice();
-    let last = values.last().copied().unwrap_or(null_mut());
-    // 判空守卫保留 C++ `last &&` 结构；ast_node_is 改走指针门面（同为偏移 0
-    // 读 class_index），不再手写 `&*` 重建引用。
-    let vararg = !last.is_null()
-      && (unsafe { ast_node_is_ptr::<AstExprVarargs>(last.as_ast_node()) }
-        || unsafe { ast_node_is_ptr::<AstExprCall>(last.as_ast_node()) });
+    let vararg = values
+      .last()
+      .copied()
+      .and_then(|last| unsafe { last.as_ref() })
+      .is_some_and(|l| matches!(l.as_expr_ref(), AstExprRef::Varargs(_) | AstExprRef::Call(_)));
     for (i, &var) in node_ref.vars.as_slice().iter().enumerate() {
       let l = self.locals.get_or_insert(var);
       l.defined = true;

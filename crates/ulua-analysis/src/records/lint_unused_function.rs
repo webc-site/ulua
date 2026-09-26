@@ -1,9 +1,9 @@
 use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
   records::{
     ast_expr::AstExpr, ast_expr_global::AstExprGlobal, ast_name::AstName,
     ast_stat_function::AstStatFunction, ast_visitor::AstVisitor, location::Location,
   },
-  rtti::ast_node_try_as_ptr,
   visit::{ast_expr_visit, ast_stat_visit},
 };
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_table::DenseDefault};
@@ -67,9 +67,7 @@ impl<'ctx> LintUnusedFunction<'ctx> {
   }
 
   pub(crate) fn visit_stat_function(&mut self, node: &mut AstStatFunction) -> bool {
-    // SAFETY: 遍历入口保证节点存活；name/func 已句柄化为 Node（非空由类型层
-    // 承载），`as_ptr` 桥交仍以指针形态消费的判型/分发门面。
-    if let Some(expr) = unsafe { ast_node_try_as_ptr::<AstExprGlobal>(node.name.as_ptr()) } {
+    if let AstExprRef::Global(expr) = node.name.as_expr_ref() {
       let g = self.globals.get_or_insert(expr.name);
       g.function = true;
       g.location = expr.base.base.location;
