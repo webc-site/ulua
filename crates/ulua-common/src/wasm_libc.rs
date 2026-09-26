@@ -1,7 +1,7 @@
 //! `wasm32-unknown-unknown` 目标的最小 libc 面。
 //!
 //! `wasm32-unknown-unknown` 不携带 libc，忠实翻译经 `extern "C"` 声明的少数
-//! C 函数（VM/编译器的 C 风格分配器 `malloc`/`free`/`realloc`、`os.time`/
+//! C 函数（编译器的 C 风格分配器 `malloc`/`free`/`realloc`、`os.time`/
 //! `os.date` 的 `time`/`gmtime_r`/`localtime_r` 族、类型检查器页分配器引用的
 //! `sysconf`/`mmap` 族等）没有符号可绑定，否则会以未解析的 `env` import 出现
 //! 在生成的 wasm 中。`string.format` 的 `snprintf` 已不在 wasm import 面上
@@ -111,8 +111,9 @@ pub unsafe extern "C-unwind" fn free(ptr: *mut c_void) {
 /// `realloc(ptr, size)` — 调整块大小，保留内容。
 ///
 /// `ptr` 为 NULL 等价 `malloc(size)`；`size` 为 0 释放 `ptr` 并返回 NULL
-/// （glibc 语义，native 构建同形；`l_alloc` 的 0 长度分支在调用本函数前已
-/// 自行走 `free`，不依赖此返回值）。
+/// （glibc 语义，native 构建同形）。VM 默认分配器 `l_alloc` 已改走
+/// `std::alloc::System`，不再消费本垫片；本函数保留为 C ABI 分配器面
+/// （`malloc`/`free` 配对契约的 resize 形态）与 wasm 分配器契约测试之用。
 ///
 /// # Safety
 /// `ptr` 必须是本模块分配且未释放的指针，或为 null。
