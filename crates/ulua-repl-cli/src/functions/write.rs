@@ -23,28 +23,35 @@ pub(crate) unsafe fn write(
 
   // cpp 无条件 `*sizeOut = ...` 并 memcpy，指针为空即调用方违约（在 C++ 里是
   // UB）。这里不把它伪装成 WRITE_SUCCESS——那会让 require 侧以为读到了内容。
-  if buffer.is_null() || size_out.is_null() {
+  // Safety: size_out 指向单枚 usize 且调用方保证可写（前提要求见 /// # Safety）；
+  // 借用重建后消除后续多处裸指针解引用与 unsafe。
+  let Some(size_out) = (unsafe { size_out.as_mut() }) else {
+    return LuarequireWriteResult::WRITE_FAILURE;
+  };
+
+  if buffer.is_null() {
     return LuarequireWriteResult::WRITE_FAILURE;
   }
 
   let null_terminated_size = contents.len() + 1;
 
   if buffer_size < null_terminated_size {
-    // Safety: 上方已确认 size_out 非空
-    unsafe { *size_out = null_terminated_size };
+    *size_out = null_terminated_size;
     return LuarequireWriteResult::WRITE_BUFFER_TOO_SMALL;
   }
 
   // Safety: 上方已确认 buffer 非空，且 buffer_size >= null_terminated_size，
-  // ulua-require 缓冲区协议保证 buffer 有 buffer_size 字节可写空间
-  let dst = unsafe { c_slice_mut(buffer as *mut u8, null_terminated_size) };
+  // ulua-require 缓冲区协议保证 buffer 有 buffer_size 字节可写空间。
+  let dst = unsafe { c_slice_mut(buffer.cast::<u8>(), null_terminated_size) };
+  let (text_dst, tail) = dst.split_at_mut(contents.len());
   // cpp `memcpy(buffer, contents->c_str(), nullTerminatedSize)`：连同结尾 NUL
-  dst[..contents.len()].copy_from_slice(contents.as_bytes());
-  dst[contents.len()] = 0;
+  text_dst.copy_from_slice(contents.as_bytes());
+  if let Some(nul) = tail.first_mut() {
+    *nul = 0;
+  }
   // Require.h:57-59：成功时 size_out 是写入的字节数；NUL 只是给 C 风格消费者的
   // 哨兵，不计入长度（cpp Navigation.cpp:155-158 据此 resize，不剥尾零）。
-  // Safety: 上方已确认 size_out 非空
-  unsafe { *size_out = contents.len() };
+  *size_out = contents.len();
 
   LuarequireWriteResult::WRITE_SUCCESS
 }

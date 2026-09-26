@@ -41,46 +41,50 @@ pub(crate) unsafe fn complete_partial_matches(
 
     // Loop over all the keys in the current table
     // Safety: lua_next 以 -2 为 key 就地推进并在 -1 压入 value，返回 0 表示遍历结束。
-    while unsafe { lua_next(l, -2) } != 0 {
-      if unsafe { lua_type(l, -2) } == LuaType::String as i32 {
-        // table, key, value
-        // 键按原始字节读取：补全文本必须是合法 UTF-8，非法序列的键直接跳过
-        // （避免 lossy 替换造出与实际键不符的补全项）
-        // Safety: lua_type 已确认 -2 为 string，`lua_tolstring_ref` 返回其全字节
-        // 切片（借用仅存活到下方 from_utf8 判定；串对象不受 GC 移动，弹 value 槽
-        // 不影响 -2 键槽，与旧 (指针, 长度) 形态的存活窗口一致）。
-        let key_bytes = unsafe { lua_tolstring_ref(l, -2) }.unwrap_or_default();
-
-        let value_type = unsafe { lua_type(l, -1) };
-
-        // 先弹回遍历槽位；后续判定与拼接全是纯字符串逻辑（安全域）
-        // Safety: 与本轮 lua_next 压入的 value 配平。
-        unsafe { lua_pop(l, 1) };
-
-        let Ok(key) = from_utf8(key_bytes) else {
-          continue;
-        };
-
-        // If the last separator was a ':' (i.e. a method call) then only functions should be completed.
-        let required_value_type =
-          !complete_only_functions || value_type == LuaType::Function as i32;
-
-        if !key.is_empty() && required_value_type && key.starts_with(prefix) {
-          // starts_with 已保证 prefix.len() 落在 key 的字符边界上
-          let completed_component = &key[prefix.len()..];
-          let mut completion =
-            String::with_capacity(edit_buffer.len() + completed_component.len() + 1);
-          completion.push_str(edit_buffer);
-          completion.push_str(completed_component);
-          if value_type == LuaType::Function as i32 {
-            // Add an opening paren for function calls by default.
-            completion.push('(');
-          }
-          add_completion_callback(&completion, key);
+    while unsafe { lua_next(l, -2) != 0 } {
+      // table, key, value
+      // 键按原始字节读取：补全文本必须是合法 UTF-8，非法序列或非串键直接跳过
+      // （避免 lossy 替换造出与实际键不符的补全项）。
+      // Safety: lua_type 已确认 -2 为 string，`lua_tolstring_ref` 返回其全字节
+      // 切片（借用仅存活到下方 from_utf8 判定；串对象不受 GC 移动，弹 value 槽
+      // 不影响 -2 键槽，与旧 (指针, 长度) 形态的存活窗口一致）。
+      // 与本轮 lua_next 压入的 value 配平：非串键与串键均先弹回 value 槽，
+      // 后续判定与拼接全是纯字符串逻辑（安全域）。
+      let Some((key_bytes, value_type)) = (unsafe {
+        if lua_type(l, -2) == LuaType::String as i32 {
+          let key_bytes = lua_tolstring_ref(l, -2).unwrap_or_default();
+          let value_type = lua_type(l, -1);
+          // 先弹回遍历槽位；后续判定与拼接全是纯字符串逻辑（安全域）
+          lua_pop(l, 1);
+          Some((key_bytes, value_type))
+        } else {
+          // 非串键同样弹走本轮压入的 value，保持 -1 为下一轮 key。
+          lua_pop(l, 1);
+          None
         }
-      } else {
-        // Safety: 非串键同样弹走本轮压入的 value，保持 -1 为下一轮 key。
-        unsafe { lua_pop(l, 1) };
+      }) else {
+        continue;
+      };
+
+      let Ok(key) = from_utf8(key_bytes) else {
+        continue;
+      };
+
+      // If the last separator was a ':' (i.e. a method call) then only functions should be completed.
+      let required_value_type = !complete_only_functions || value_type == LuaType::Function as i32;
+
+      if !key.is_empty() && required_value_type && key.starts_with(prefix) {
+        // starts_with 已保证 prefix.len() 落在 key 的字符边界上
+        let completed_component = &key[prefix.len()..];
+        let mut completion =
+          String::with_capacity(edit_buffer.len() + completed_component.len() + 1);
+        completion.push_str(edit_buffer);
+        completion.push_str(completed_component);
+        if value_type == LuaType::Function as i32 {
+          // Add an opening paren for function calls by default.
+          completion.push('(');
+        }
+        add_completion_callback(&completion, key);
       }
     }
 
