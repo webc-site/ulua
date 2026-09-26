@@ -545,6 +545,18 @@ pub fn is_type_class(class_index: i32) -> bool {
   )
 }
 
+/// 基类家族判别：`node->asTypePack()` 的判别面（cpp `AstNode::asTypePack()` 只在 3 个
+/// `AstTypePack` 派生类上非空）。与 [`is_type_class`] 同理。
+#[inline]
+pub fn is_type_pack_class(class_index: i32) -> bool {
+  matches!(
+    class_index,
+    AstTypePackExplicit::CLASS_INDEX
+      | AstTypePackGeneric::CLASS_INDEX
+      | AstTypePackVariadic::CLASS_INDEX
+  )
+}
+
 /// CST spelling of [`ast_rtti_index`] (CST and AST share the index function but
 /// separate index spaces). Provided so `LUAU_CST_RTTI(Class)` translations can
 /// read naturally as `cst_rtti_index("CstX")`.

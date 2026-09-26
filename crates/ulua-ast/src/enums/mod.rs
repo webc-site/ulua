@@ -1,6 +1,7 @@
 pub mod ast_expr_ref;
 pub mod ast_stat_ref;
 pub mod ast_table_access;
+pub mod ast_type_pack_ref;
 pub mod ast_type_ref;
 pub mod brace_type;
 pub mod constant_number_parse_result;

@@ -71,6 +71,7 @@ pub mod ast_name_table_rebind_allocator;
 pub mod ast_node_as_expr;
 pub mod ast_node_as_stat;
 pub mod ast_node_as_type;
+pub mod ast_node_as_type_pack;
 pub mod ast_node_ast_node;
 pub mod ast_node_is;
 pub mod ast_stat_assign_ast_stat_assign;

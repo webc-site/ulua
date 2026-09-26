@@ -1,12 +1,8 @@
 use alloc::vec::Vec;
 
 use ulua_ast::{
-  records::{
-    ast_type_list::AstTypeList, ast_type_pack::AstTypePack,
-    ast_type_pack_explicit::AstTypePackExplicit, ast_type_pack_generic::AstTypePackGeneric,
-    ast_type_pack_variadic::AstTypePackVariadic,
-  },
-  rtti::{AstNodeClass, ast_node_as_unchecked},
+  enums::ast_type_pack_ref::AstTypePackRef,
+  records::{ast_type_list::AstTypeList, ast_type_pack::AstTypePack},
 };
 
 use crate::{
@@ -61,13 +57,11 @@ impl TypeChecker {
     scope: ScopePtr,
     annotation: &AstTypePack,
   ) -> TypePackId {
-    match annotation.base.class_index {
-      AstTypePackExplicit::CLASS_INDEX => {
-        let explicit: &AstTypePackExplicit = unsafe { ast_node_as_unchecked(&annotation.base) };
+    match annotation.as_pack_ref() {
+      AstTypePackRef::Explicit(explicit) => {
         self.resolve_type_pack_scope_ptr_ast_type_list(scope, &explicit.type_list)
       }
-      AstTypePackVariadic::CLASS_INDEX => {
-        let variadic: &AstTypePackVariadic = unsafe { ast_node_as_unchecked(&annotation.base) };
+      AstTypePackRef::Variadic(variadic) => {
         let ty = if variadic.variadic_type.is_null() {
           self.error_recovery_type_scope_ptr(&scope)
         } else {
@@ -78,8 +72,7 @@ impl TypeChecker {
 
         self.add_type_pack_type_pack_var(TypePackVar::from(VariadicTypePack { ty, hidden: false }))
       }
-      AstTypePackGeneric::CLASS_INDEX => {
-        let generic: &AstTypePackGeneric = unsafe { ast_node_as_unchecked(&annotation.base) };
+      AstTypePackRef::Generic(generic) => {
         let name = generic.generic_name.as_str_or_empty().to_string();
         if let Some(generic_pack) = scope.lookup_pack(&name) {
           return generic_pack;
@@ -104,7 +97,6 @@ impl TypeChecker {
 
         self.error_recovery_type_pack_scope_ptr(scope)
       }
-      _ => self.error_recovery_type_pack_scope_ptr(scope),
     }
   }
 }
