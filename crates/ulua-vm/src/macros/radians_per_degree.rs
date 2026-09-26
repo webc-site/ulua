@@ -1,2 +1,4 @@
-use crate::macros::luau_pi::LUAU_PI;
-pub const RADIANS_PER_DEGREE: f64 = LUAU_PI / 180.0;
+use core::f64::consts::PI;
+
+/// 每度对应的弧度值：$\frac{\pi}{180}$（对应 C++ `RADIANS_PER_DEGREE`，基于 [`core::f64::consts::PI`]）。
+pub const RADIANS_PER_DEGREE: f64 = PI / 180.0;
