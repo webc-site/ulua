@@ -15,7 +15,10 @@
 
 use core::ptr::NonNull;
 
-use ulua_ast::records::{ast_stat::AstStat, ast_stat_block::AstStatBlock};
+use ulua_ast::{
+  enums::ast_stat_ref::AstStatRef,
+  records::{ast_stat::AstStat, ast_stat_block::AstStatBlock},
+};
 
 /// arena 节点句柄。`#[repr(transparent)]` 保证与裸指针 `*mut T` 布局一致，
 /// 与 ulua-ast 侧的句柄同一坐标值互转（经 `get` 引用桥接，见 `Reducer::try_body`）。
@@ -86,3 +89,17 @@ impl<'a, T> From<&'a mut T> for Node<T> {
 pub type Block = Node<AstStatBlock>;
 /// 语句句柄。
 pub type Stat = Node<AstStat>;
+
+impl Node<AstStat> {
+  /// 将语句句柄下转为具体引用枚举。
+  #[inline]
+  pub fn as_stat_ref(&self) -> AstStatRef<'_> {
+    self.get().as_stat_ref()
+  }
+
+  /// 尝试将语句句柄下转为具体引用枚举。
+  #[inline]
+  pub fn try_as_stat_ref(&self) -> Option<AstStatRef<'_>> {
+    self.get().try_as_stat_ref()
+  }
+}

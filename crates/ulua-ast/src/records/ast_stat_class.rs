@@ -13,3 +13,6 @@ pub struct AstStatClass {
   pub exported: bool,
   pub open: bool,
 }
+
+/// 兼容别名：Luau C++ `AstStatDeclareClass` 在 AST 结构中即为 `AstStatClass`。
+pub type AstStatDeclareClass = AstStatClass;
