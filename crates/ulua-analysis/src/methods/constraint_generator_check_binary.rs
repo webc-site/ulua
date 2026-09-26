@@ -1,7 +1,5 @@
 //! Source: `Analysis/src/ConstraintGenerator.cpp:3606-3731` (hand-ported)
 //! C++ `std::tuple<TypeId, TypeId, RefinementId> ConstraintGenerator::checkBinary(...)`.
-use alloc::string::String;
-
 use ulua_ast::{
   records::{ast_expr::AstExpr, ast_expr_binary::AstExprBinaryOp},
   rtti::AstNodePtr,
@@ -22,10 +20,6 @@ use crate::{
     type_id::TypeId,
   },
 };
-
-/// `lookup_type` 签名收 `&Name`（即 `&String`）；常量名提升为静态免 "vector" 臂每次调用堆分配。
-static VECTOR_TYPE_NAME: std::sync::LazyLock<String> =
-  std::sync::LazyLock::new(|| String::from("vector"));
 
 impl ConstraintGenerator {
   /// # Safety
@@ -136,7 +130,7 @@ impl ConstraintGenerator {
               .global_scope
               .as_ref()
               .expect("global_scope 构造期接线恒 Some（cpp NotNull<Scope>）")
-              .lookup_type(&VECTOR_TYPE_NAME);
+              .lookup_type("vector");
             if let Some(type_fun) = type_fun {
               discriminant_ty = follow_type::follow(type_fun.r#type());
             }
@@ -147,7 +141,7 @@ impl ConstraintGenerator {
               .global_scope
               .as_ref()
               .expect("global_scope 构造期接线恒 Some（cpp NotNull<Scope>）")
-              .lookup_type(&String::from(other));
+              .lookup_type(other);
             if let Some(type_fun) = type_fun
               && type_fun.type_params().is_empty()
               && type_fun.type_pack_params().is_empty()
