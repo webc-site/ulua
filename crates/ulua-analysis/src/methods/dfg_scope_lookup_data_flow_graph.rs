@@ -1,5 +1,3 @@
-use alloc::string::String;
-
 use crate::{
   records::{dfg_scope::DfgScope, symbol::Symbol},
   type_aliases::def_id_def::DefId,
@@ -25,7 +23,7 @@ impl DfgScope {
     None
   }
 
-  pub fn lookup_def_id_string(&self, def: DefId, key: &String) -> Option<DefId> {
+  pub fn lookup_def_id_string(&self, def: DefId, key: &str) -> Option<DefId> {
     // C++: for (current = this; current; current = current->parent)
     //          if (auto props = current->props.find(def))
     //              if (auto it = props->find(key); it != props->end())

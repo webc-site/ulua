@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use alloc::vec::Vec;
 
 use ulua_ast::records::location::Location;
 
@@ -81,7 +81,7 @@ impl DataFlowGraphBuilder {
   pub unsafe fn lookup_def_id_string_location(
     &mut self,
     def: DefId,
-    key: &String,
+    key: &str,
     location: Location,
   ) -> DefId {
     let scope = self.current_scope();
@@ -108,7 +108,7 @@ impl DataFlowGraphBuilder {
           (*scope)
             .props
             .get_or_insert(def)
-            .insert(key.clone(), result);
+            .insert(key.to_owned(), result);
           return result;
         }
 
@@ -131,7 +131,7 @@ impl DataFlowGraphBuilder {
         (*scope)
           .props
           .get_or_insert(def)
-          .insert(key.clone(), result)
+          .insert(key.to_owned(), result)
       };
       return result;
     }
@@ -145,7 +145,7 @@ impl DataFlowGraphBuilder {
         (*scope)
           .props
           .get_or_insert(def)
-          .insert(key.clone(), result)
+          .insert(key.to_owned(), result)
       };
       return result;
     }
