@@ -26,22 +26,16 @@ impl Normalizer {
     self.consume_fuel();
 
     for &there_ty in &theres.ordering {
-      // Safety: NormalizedExternType 的 ordering 与 extern_types 由 push_pair
-      // 成对写入，按 ordering 元素查表恒命中（cpp find->second 同位）。
-      let there_negations = theres
-        .extern_types
-        .get(&there_ty)
-        .expect("ordering 与 extern_types 成对登记，按 ordering 元素查表必命中");
+      // Safety: ordering 与 extern_types 的成对登记不变式经 `negations` 访问器
+      // 统一保证（cpp find->second 同位）。
+      let there_negations = theres.negations(there_ty);
 
       let mut insert = true;
       let mut idx = 0;
       while idx < heres.ordering.len() {
         let here_ty = heres.ordering[idx];
-        // Safety: 同上，heres 侧 ordering/extern_types 成对登记恒命中。
-        let here_negations = heres
-          .extern_types
-          .get_mut(&here_ty)
-          .expect("ordering 与 extern_types 成对登记，按 ordering 元素查表必命中");
+        // Safety: 同上，heres 侧经 `negations_mut` 原地访问（克隆会导致 erase 丢失）。
+        let here_negations = heres.negations_mut(here_ty);
 
         if is_subclass_type_id_type_id(there_ty, here_ty) {
           let mut inserted = false;
@@ -71,8 +65,7 @@ impl Normalizer {
           let mut negations = here_negations.clone();
           self.union_extern_types_type_ids_type_ids(&mut negations, there_negations);
 
-          heres.ordering.remove(idx);
-          heres.extern_types.remove(&here_ty);
+          heres.remove_cluster_at(idx);
           heres.push_pair(there_ty, negations);
           insert = false;
           break;

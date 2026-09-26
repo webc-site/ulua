@@ -17,13 +17,8 @@ impl Normalizer {
     let mut idx = 0;
     while idx < heres.ordering.len() {
       let here_ty = heres.ordering[idx];
-      // 成对登记不变式：`ordering` 是 `extern_types` 键的拓扑面列表，逐元素
-      // 已登记于 extern_types，cloned 命中 Some。
-      let here_negations: TypeIds = heres
-        .extern_types
-        .get(&here_ty)
-        .cloned()
-        .expect("ordering 元素必已成对登记于 extern_types");
+      // 成对登记不变式经 `negations` 访问器统一保证。
+      let here_negations: TypeIds = heres.negations(here_ty).clone();
 
       // If the incoming class is _the_ current class, skip it.
       if here_ty == there {
@@ -54,8 +49,7 @@ impl Normalizer {
         }
 
         // Remove this type from the ordering and map.
-        heres.ordering.remove(idx);
-        heres.extern_types.remove(&here_ty);
+        heres.remove_cluster_at(idx);
 
         if !empty_intersect_with_negation {
           heres.push_pair(there, negations);
@@ -68,8 +62,7 @@ impl Normalizer {
       }
       // Completely unrelated: drop current class.
       else {
-        heres.ordering.remove(idx);
-        heres.extern_types.remove(&here_ty);
+        heres.remove_cluster_at(idx);
         continue;
       }
     }
