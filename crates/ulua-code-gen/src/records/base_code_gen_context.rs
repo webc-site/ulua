@@ -14,8 +14,8 @@ use crate::{
     is_supported::is_supported,
   },
   macros::{
-    codegen_assert::CODEGEN_ASSERT, codegen_target_a_64::CODEGEN_TARGET_A64,
-    codegen_target_x_64::CODEGEN_TARGET_X64,
+    codegen_assert::CODEGEN_ASSERT,
+    codegen_target::{CODEGEN_TARGET_A64, CODEGEN_TARGET_X64},
   },
   records::{
     code_allocation_data::CodeAllocationData, code_allocator::CodeAllocator,

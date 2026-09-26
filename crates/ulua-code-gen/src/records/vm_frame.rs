@@ -58,10 +58,7 @@ use ulua_vm::{
 
 use crate::{
   functions::vm_kv::vm_kv,
-  macros::{
-    define_vm_frame_accessor::define_vm_frame_accessor, vm_patch_c::vm_patch_c,
-    vm_protect_pc::vm_protect_pc,
-  },
+  macros::vm_frame_support::{define_vm_frame_accessor, vm_patch_c, vm_protect_pc},
   type_aliases::{instruction_ir_builder::Instruction, lua_state::LuaState},
 };
 

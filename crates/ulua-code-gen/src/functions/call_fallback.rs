@@ -11,7 +11,10 @@ use ulua_vm::{
   type_aliases::stk_id::StkId,
 };
 
-use crate::{functions::call_prolog::incr_ci, macros::call_fallback_yield::CALL_FALLBACK_YIELD};
+use crate::{
+  functions::call_prolog::incr_ci,
+  macros::vm_frame_support::CALL_FALLBACK_YIELD,
+};
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。

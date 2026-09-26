@@ -7,7 +7,7 @@ use ulua_vm::records::{
 
 use crate::{
   enums::kind_a_64::KindA64,
-  macros::call_fallback_yield::CALL_FALLBACK_YIELD,
+  macros::vm_frame_support::CALL_FALLBACK_YIELD,
   records::{
     assembly_builder_a_64::AssemblyBuilderA64,
     module_helpers::ModuleHelpers,

@@ -10,7 +10,7 @@ use ulua_vm::{
 use crate::functions::is_unwind_supported::is_unwind_supported;
 
 // 与 cpp CodeGen/src/CodeGen.cpp isSupported() 逐条对齐。
-// 目标架构分支沿用 macros/codegen_target_x_64.rs、codegen_target_a_64.rs 的
+// 目标架构分支沿用 macros/codegen_target.rs 的
 // 谓词定义：#[cfg] 只接受真实 cfg 谓词，不能引用 const 布尔。
 pub fn is_supported() -> bool {
   if LUA_EXTRA_SIZE != 1 {
@@ -39,7 +39,7 @@ pub fn is_supported() -> bool {
     return false;
   }
 
-  // cpp: #if defined(CODEGEN_TARGET_X64)（谓词见 macros/codegen_target_x_64.rs）
+  // cpp: #if defined(CODEGEN_TARGET_X64)（谓词见 macros/codegen_target.rs）
   // 要求 AVX1（VEX 编码 XMM 指令）；CPUID EAX=1 的 ECX bit 28，
   // 该位同时隐含 SSE4.1（ROUNDSD 依赖）。
   // https://en.wikipedia.org/wiki/CPUID#EAX=1:_Processor_Info_and_Feature_Bits
