@@ -19,7 +19,7 @@ use ulua_common::{
 static TRIPPED: AtomicI32 = AtomicI32::new(0);
 
 /// 记录断言并接管：返回 0 告诉 `LUAU_ASSERT!` 不要再触发断点。
-unsafe extern "C-unwind" fn count_assert(
+extern "C-unwind" fn count_assert(
   _expression: *const c_char,
   _file: *const c_char,
   _line: i32,

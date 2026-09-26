@@ -70,7 +70,7 @@ fn set_compile_constant_slice_and_str() {
 
 #[test]
 fn library_member_type_callback_i32_signature() {
-  unsafe extern "C-unwind" fn mock_callback(_library: *const u8, _member: *const u8) -> i32 {
+  extern "C-unwind" fn mock_callback(_library: *const u8, _member: *const u8) -> i32 {
     42
   }
 
