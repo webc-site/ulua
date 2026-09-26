@@ -10,6 +10,7 @@ use crate::{
     quantifier::Quantifier,
     table_type::TableType,
     type_level::TypeLevel,
+    visit_key::VisitKey,
   },
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
@@ -20,7 +21,7 @@ use crate::{
 // into them; the bodies delegate to the inherent methods declared on the
 // sibling `quantifier_visit_quantify*` files.
 impl GenericTypeVisitorTrait for Quantifier {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

@@ -7,11 +7,12 @@
 use alloc::string::String;
 
 use crate::{
-  records::generic_type_visitor::GenericTypeVisitor, type_aliases::collections::HashSet,
+  records::{generic_type_visitor::GenericTypeVisitor, visit_key::VisitKey},
+  type_aliases::collections::HashSet,
 };
 #[derive(Debug, Clone)]
 pub struct TypeVisitor {
-  pub base: GenericTypeVisitor<HashSet<*mut ()>>,
+  pub base: GenericTypeVisitor<HashSet<VisitKey>>,
 }
 
 impl TypeVisitor {

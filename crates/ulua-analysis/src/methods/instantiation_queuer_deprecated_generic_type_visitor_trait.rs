@@ -7,12 +7,13 @@ use crate::{
     instantiation_queuer_deprecated::InstantiationQueuerDeprecated,
     pending_expansion_type::PendingExpansionType,
     type_function_instance_type::TypeFunctionInstanceType,
+    visit_key::VisitKey,
   },
   type_aliases::type_id::TypeId,
 };
 
 impl GenericTypeVisitorTrait for InstantiationQueuerDeprecated {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

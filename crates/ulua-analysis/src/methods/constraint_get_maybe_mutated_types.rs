@@ -46,6 +46,7 @@ use crate::{
     type_function_instance_type::TypeFunctionInstanceType,
     type_ids::TypeIds,
     unpack_constraint::UnpackConstraint,
+    visit_key::VisitKey,
   },
   type_aliases::{
     constraint_v::ConstraintVMember, type_id::TypeId, type_pack_id::TypePackId,
@@ -53,7 +54,7 @@ use crate::{
   },
 };
 impl GenericTypeVisitorTrait for ReferenceCountInitializer {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

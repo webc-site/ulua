@@ -4,6 +4,7 @@ use ulua_analysis::{
   records::{
     generic_type_visitor::{GenericTypeVisitor, GenericTypeVisitorTrait},
     type_once_visitor::TypeOnceVisitor,
+    visit_key::VisitKey,
   },
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
@@ -32,7 +33,7 @@ impl Default for VisitCountTracker {
 }
 
 impl GenericTypeVisitorTrait for VisitCountTracker {
-  type Seen = DenseHashSet<*mut ()>;
+  type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
     &mut self.base.base

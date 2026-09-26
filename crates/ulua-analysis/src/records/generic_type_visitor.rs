@@ -33,6 +33,7 @@ use crate::{
     type_function_instance_type::TypeFunctionInstanceType,
     type_function_instance_type_pack::TypeFunctionInstanceTypePack, type_pack::TypePack,
     union_type::UnionType, unknown_type::UnknownType, variadic_type_pack::VariadicTypePack,
+    visit_key::VisitKey,
   },
   type_aliases::{
     bound_type::BoundType, bound_type_pack::BoundTypePack, collections::HashSet,
@@ -45,7 +46,7 @@ pub trait VisitSeen {
   fn unsee(&mut self, tv: *const ());
 }
 
-impl VisitSeen for HashSet<*mut ()> {
+impl VisitSeen for HashSet<VisitKey> {
   fn has_seen(&mut self, tv: *const ()) -> bool {
     has_seen_visit_type::has_seen(self, tv)
   }
@@ -54,7 +55,7 @@ impl VisitSeen for HashSet<*mut ()> {
   }
 }
 
-impl VisitSeen for DenseHashSet<*mut ()> {
+impl VisitSeen for DenseHashSet<VisitKey> {
   fn has_seen(&mut self, tv: *const ()) -> bool {
     has_seen_dense_hash_set_void_void(self, tv)
   }
@@ -65,7 +66,7 @@ impl VisitSeen for DenseHashSet<*mut ()> {
 
 /// Base state of C++ `GenericTypeVisitor<S>` (VisitType.h:70-90).
 #[derive(Debug, Clone)]
-pub struct GenericTypeVisitor<S = HashSet<*mut ()>> {
+pub struct GenericTypeVisitor<S = HashSet<VisitKey>> {
   pub visitor_name: String,
   pub seen: S,
   pub skip_bound_types: bool,

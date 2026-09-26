@@ -16,6 +16,7 @@ use crate::{
     type_function_instance_type::TypeFunctionInstanceType,
     type_function_instance_type_pack::TypeFunctionInstanceTypePack, type_pack::TypePack,
     union_type::UnionType, unknown_type::UnknownType, variadic_type_pack::VariadicTypePack,
+    visit_key::VisitKey,
   },
   type_aliases::{
     bound_type_pack::BoundTypePack, error_type::ErrorType, error_type_pack::ErrorTypePack,
@@ -196,7 +197,7 @@ fn flatten_type_pack(tp: TypePackId) -> Vec<TypeId> {
 /// is constructed with `skipBoundTypes = true`.)
 pub(crate) fn cacher_traverse_type_id(this: &mut TypeCacher, ty: TypeId) {
   let ty = follow_type::follow(ty);
-  let seen_key = ty as *mut ();
+  let seen_key = VisitKey::from_ptr(ty);
   if this.base.base.seen.contains(&seen_key) {
     return;
   }
@@ -248,7 +249,7 @@ pub(crate) fn cacher_traverse_type_id(this: &mut TypeCacher, ty: TypeId) {
 /// C++ `TypeOnceVisitor::traverse(TypePackId)` for the `TypeCacher`.
 pub(crate) fn cacher_traverse_type_pack_id(this: &mut TypeCacher, tp: TypePackId) {
   let tp = follow_type_pack::follow(tp);
-  let seen_key = tp as *mut ();
+  let seen_key = VisitKey::from_ptr(tp);
   if this.base.base.seen.contains(&seen_key) {
     return;
   }
