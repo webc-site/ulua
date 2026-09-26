@@ -22,6 +22,11 @@ use crate::{
     type_id::TypeId,
   },
 };
+
+/// `lookup_type` 签名收 `&Name`（即 `&String`）；常量名提升为静态免 "vector" 臂每次调用堆分配。
+static VECTOR_TYPE_NAME: std::sync::LazyLock<String> =
+  std::sync::LazyLock::new(|| String::from("vector"));
+
 impl ConstraintGenerator {
   /// # Safety
   /// 调用方须保证满足 C++ 原实现的调用契约。
@@ -110,62 +115,56 @@ impl ConstraintGenerator {
 
         let mut discriminant_ty: TypeId = self.builtin_types.get().never_type;
         let guard_type = typeguard.r#type();
-        if guard_type == "nil" {
-          discriminant_ty = self.builtin_types.get().nil_type;
-        } else if guard_type == "string" {
-          discriminant_ty = self.builtin_types.get().string_type;
-        } else if guard_type == "number" {
-          discriminant_ty = self.builtin_types.get().number_type;
-        } else if guard_type == "integer" {
-          discriminant_ty = self.builtin_types.get().integer_type;
-        } else if guard_type == "boolean" {
-          discriminant_ty = self.builtin_types.get().boolean_type;
-        } else if guard_type == "thread" {
-          discriminant_ty = self.builtin_types.get().thread_type;
-        } else if guard_type == "buffer" {
-          discriminant_ty = self.builtin_types.get().buffer_type;
-        } else if guard_type == "table" {
-          discriminant_ty = self.builtin_types.get().table_type;
-        } else if guard_type == "function" {
-          discriminant_ty = self.builtin_types.get().function_type;
-        } else if guard_type == "userdata" {
+        // kind 关键字单点派发：一次 match（字符串 DFA）替代 11 路 else-if 顺序串比较，
+        // 形状对齐 type_checker_resolve_type_infer.rs 同场景收口；逐臂真值核对见提交说明。
+        match guard_type {
+          "nil" => discriminant_ty = self.builtin_types.get().nil_type,
+          "string" => discriminant_ty = self.builtin_types.get().string_type,
+          "number" => discriminant_ty = self.builtin_types.get().number_type,
+          "integer" => discriminant_ty = self.builtin_types.get().integer_type,
+          "boolean" => discriminant_ty = self.builtin_types.get().boolean_type,
+          "thread" => discriminant_ty = self.builtin_types.get().thread_type,
+          "buffer" => discriminant_ty = self.builtin_types.get().buffer_type,
+          "table" => discriminant_ty = self.builtin_types.get().table_type,
+          "function" => discriminant_ty = self.builtin_types.get().function_type,
           // For now, we don't really care about being accurate with userdata if the typeguard was using typeof.
-          discriminant_ty = self.builtin_types.get().extern_type;
-        } else if guard_type == "vector" && !typeguard.is_typeof() {
+          "userdata" => discriminant_ty = self.builtin_types.get().extern_type,
           // `vector` is defined in EmbeddedBuiltinDefinitions, not as an actual built-in type
-          // Safety: global_scope 由构造期注入非空空全局作用域（cpp NotNull<Scope>）。
-          let type_fun = self
-            .global_scope
-            .as_ref()
-            .expect("global_scope 构造期接线恒 Some（cpp NotNull<Scope>）")
-            .lookup_type(&String::from("vector"));
-          if let Some(type_fun) = type_fun {
-            discriminant_ty = follow_type::follow(type_fun.r#type());
-          }
-        } else if !typeguard.is_typeof() {
-          discriminant_ty = self.builtin_types.get().never_type;
-        } else {
-          // Safety: 同上——global_scope 构造期接线不变式。
-          let type_fun = self
-            .global_scope
-            .as_ref()
-            .expect("global_scope 构造期接线恒 Some（cpp NotNull<Scope>）")
-            .lookup_type(&String::from(guard_type));
-          if let Some(type_fun) = type_fun
-            && type_fun.type_params().is_empty()
-            && type_fun.type_pack_params().is_empty()
-          {
-            let ty = follow_type::follow(type_fun.r#type());
-
-            // We're only interested in the root type of any extern type.
-            // 对照 ConstraintGenerator.cpp:3729：`if (auto etv = get<ExternType>(ty); etv && ...)`
-            if let Some(etv) = get_type::get::<ExternType>(ty)
-              && (etv.parent == Some(self.builtin_types.get().extern_type)
-                || has_tag_type_id(ty, "typeofRoot"))
-            {
-              discriminant_ty = ty;
+          "vector" if !typeguard.is_typeof() => {
+            // Safety: global_scope 由构造期注入非空空全局作用域（cpp NotNull<Scope>）。
+            let type_fun = self
+              .global_scope
+              .as_ref()
+              .expect("global_scope 构造期接线恒 Some（cpp NotNull<Scope>）")
+              .lookup_type(&VECTOR_TYPE_NAME);
+            if let Some(type_fun) = type_fun {
+              discriminant_ty = follow_type::follow(type_fun.r#type());
             }
           }
+          other if typeguard.is_typeof() => {
+            // Safety: 同上——global_scope 构造期接线不变式。
+            let type_fun = self
+              .global_scope
+              .as_ref()
+              .expect("global_scope 构造期接线恒 Some（cpp NotNull<Scope>）")
+              .lookup_type(&String::from(other));
+            if let Some(type_fun) = type_fun
+              && type_fun.type_params().is_empty()
+              && type_fun.type_pack_params().is_empty()
+            {
+              let ty = follow_type::follow(type_fun.r#type());
+
+              // We're only interested in the root type of any extern type.
+              // 对照 ConstraintGenerator.cpp:3729：`if (auto etv = get<ExternType>(ty); etv && ...)`
+              if let Some(etv) = get_type::get::<ExternType>(ty)
+                && (etv.parent == Some(self.builtin_types.get().extern_type)
+                  || has_tag_type_id(ty, "typeofRoot"))
+              {
+                discriminant_ty = ty;
+              }
+            }
+          }
+          _ => {} // 非 typeof 未知 kind：保持初值 never_type，等价原显式兜底臂。
         }
 
         let proposition = self
