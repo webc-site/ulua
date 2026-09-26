@@ -44,6 +44,21 @@ impl Hasher for FnvHasher {
   }
 }
 
+/// 对任意 `Hash` 值（含 `?Sized` 借用视图，如 `str`）计算与
+/// [`DenseHashDefault`] 逐位一致的 FNV-1a 64 位哈希值。
+///
+/// `DenseHashDefault::hash` 与 `String` 键容器的 `*_str` 借用查询口都经本函数，
+/// 于是同一内容的 `&String` 与 `&str` 得到同一哈希：std 的 `impl Hash for String`
+/// 是对 `impl Hash for str` 的纯转发（无长度前缀、无附加字节），二者在
+/// [`FnvHasher::write`] 上喂入的字节流完全相同；`finish() as usize` 的截断
+/// （wasm32 下 64→32 位）对两条路径也同样施加。`tests/dense_hash.rs` 的
+/// 双口等价用例据此断言。
+pub fn dense_hash_of<T: Hash + ?Sized>(key: &T) -> usize {
+  let mut hasher = FnvHasher(FNV_OFFSET_BASIS);
+  key.hash(&mut hasher);
+  hasher.finish() as usize
+}
+
 /// Default key hasher. Generic over the key type so it mirrors the C++ alias
 /// `DenseHashDefault<T>`.
 #[derive(Clone, Copy)]
@@ -59,8 +74,6 @@ impl<K> Default for DenseHashDefault<K> {
 
 impl<K: Hash> DenseHasher<K> for DenseHashDefault<K> {
   fn hash(&self, key: &K) -> usize {
-    let mut hasher = FnvHasher(FNV_OFFSET_BASIS);
-    key.hash(&mut hasher);
-    hasher.finish() as usize
+    dense_hash_of(key)
   }
 }

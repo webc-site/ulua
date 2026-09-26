@@ -573,3 +573,190 @@ fn custom_eq_functor_drives_lookup() {
   );
   assert_eq!(map.find(&60).copied(), Some(2), "他键槽位不得被波及");
 }
+
+// ---------------------------------------------------------------------------
+// r7-rc-4：`String` 键容器 `&str` 借用视图查询口（*_str）与 owned 口的双口等价。
+// 正确性自证：hash 逐位一致（含空串/内含 NUL/多字节 UTF-8/超长键，Rust `String`
+// 恒为合法 UTF-8，无"非 UTF-8"维度）；同插入集下 find/find_str 与 BTree 三方一致；
+// erase_str 只擦字节相等键。
+// ---------------------------------------------------------------------------
+
+/// 边界键集：空串（同时是 `new(String::new())` 的 empty_key 占位，位图版必须
+/// 可命中）、内含 NUL、多字节 UTF-8、跨 64 位字边界的长键。
+fn str_edge_cases() -> Vec<String> {
+  vec![
+    String::new(),
+    "a".into(),
+    "key\0with\0nul".into(),
+    "\0".into(),
+    "多字节 🚀 键".into(),
+    "x".repeat(63),
+    "y".repeat(64),
+    "z".repeat(1000),
+  ]
+}
+
+/// 由随机源产出 [0, 6) 片段拼出的键（含空片段→空串高频出现）。
+fn rand_str_key(rng: &mut Rng) -> String {
+  const FRAGMENTS: [&str; 8] = ["a", "b", "\u{0}", "é", "🚀", "long_key", "%n", "KEY"];
+  let n = rng.below(6);
+  let mut s = String::new();
+  for _ in 0..n {
+    s.push_str(FRAGMENTS[rng.below(FRAGMENTS.len() as u64) as usize]);
+  }
+  s
+}
+
+/// hash 保真的直接钉死：同一内容经 `&str` 与 `&String` 进 `dense_hash_of`
+/// 必须给出同一 usize（std `impl Hash for String` 纯转发 `str`，字节流相同；
+/// wasm32 下 `finish() as usize` 的截断也在同一函数里同路径施加）。
+#[test]
+fn dense_hash_of_is_identical_for_str_and_string() {
+  use ulua_common::type_aliases::dense_hash_default::dense_hash_of;
+
+  for case in str_edge_cases() {
+    assert_eq!(
+      dense_hash_of(case.as_str()),
+      dense_hash_of(&case),
+      "String/str 哈希漂移: {case:?}"
+    );
+  }
+  let mut rng = Rng(0xa1b2_c3d4_e5f6_0708);
+  for _ in 0..2000 {
+    let case = rand_str_key(&mut rng);
+    assert_eq!(dense_hash_of(case.as_str()), dense_hash_of(&case));
+  }
+}
+
+/// map 双口等价模糊测试：每个随机步都断言 `find(&String)`、`find_str(&str)`、
+/// `contains`/`contains_str`、`contains_key_str` 与 BTreeMap 对照一致；擦除全部
+/// 走 `erase_str`（借用口驱动的 do_erase 即 TAOCP 前移路径）。
+#[test]
+fn map_str_view_matches_owned_view_under_churn() {
+  let mut dense: DenseHashMap<String, u32> = DenseHashMap::new(String::new());
+  let mut oracle: BTreeMap<String, u32> = BTreeMap::new();
+
+  for (i, k) in str_edge_cases().into_iter().enumerate() {
+    dense.insert(k.clone(), i as u32 + 1);
+    oracle.insert(k, i as u32 + 1);
+  }
+
+  let mut rng = Rng(0x57c0_ffee_dead_beef);
+  for step in 0..4000u64 {
+    let key = rand_str_key(&mut rng);
+    match rng.below(3) {
+      0 | 1 => {
+        let value = u32::try_from(rng.below(u64::from(u32::MAX))).expect("值域在 u32 内");
+        dense.insert(key.clone(), value);
+        oracle.insert(key.clone(), value);
+      }
+      _ => {
+        dense.erase_str(&key);
+        oracle.remove(&key);
+      }
+    }
+    assert_eq!(
+      dense.find(&key).copied(),
+      dense.find_str(&key).copied(),
+      "step {step}: find/find_str 对 {key:?} 分歧"
+    );
+    assert_eq!(
+      dense.find_str(&key).copied(),
+      oracle.get(&key).copied(),
+      "step {step}: find_str 与 oracle 分歧"
+    );
+    assert_eq!(dense.get_str(&key).copied(), dense.find_str(&key).copied());
+    assert!(dense.contains(&key) == dense.contains_str(&key));
+    assert!(dense.contains_key_str(&key) == dense.contains_str(&key));
+    assert_eq!(dense.size(), oracle.len(), "step {step}: size 漂移");
+  }
+
+  // 全表终检：oracle 每个键的双口都可读，find_mut_str 原位改写后双口同见新值。
+  for (k, v) in &oracle {
+    assert_eq!(dense.find_str(k).copied(), Some(*v), "终检命中: {k:?}");
+    let expected = v.wrapping_add(7);
+    let slot = dense.find_mut_str(k).expect("借用口可变命中");
+    *slot = expected;
+    assert_eq!(
+      dense.find(k).copied(),
+      Some(expected),
+      "owned 口见新值: {k:?}"
+    );
+    assert_eq!(
+      dense.find_str(k).copied(),
+      Some(expected),
+      "借用口见新值: {k:?}"
+    );
+  }
+}
+
+/// set 双口等价 + 擦除精确性：`erase_str` 只擦字节相等键（前缀/扩写都不误擦），
+/// `find_mut_str` 原位改写键内容后旧视图不再命中、新视图命中——与 owned 口的
+/// `PartialEq` 语义逐位一致。
+#[test]
+fn set_str_view_matches_owned_view_and_erase_is_exact() {
+  let mut dense: DenseHashSet<String> = DenseHashSet::new(String::new());
+  let mut oracle: BTreeSet<String> = BTreeSet::new();
+
+  for k in str_edge_cases() {
+    dense.insert(k.clone());
+    oracle.insert(k);
+  }
+
+  let mut rng = Rng(0x57c0_0dec_feed_face);
+  for step in 0..4000u64 {
+    let key = rand_str_key(&mut rng);
+    if rng.below(3) == 0 {
+      assert_eq!(dense.try_insert(key.clone()), !oracle.contains(&key));
+      oracle.insert(key.clone());
+    } else if rng.below(4) == 0 {
+      dense.erase_str(&key);
+      oracle.remove(&key);
+    }
+    assert_eq!(
+      dense.find(&key).is_some(),
+      dense.find_str(&key).is_some(),
+      "step {step}: find/find_str 对 {key:?} 分歧"
+    );
+    assert_eq!(
+      dense.contains(&key),
+      dense.contains_str(&key),
+      "step {step}"
+    );
+    assert_eq!(
+      dense.find_str(&key),
+      oracle.get(&key),
+      "step {step}: 借用口与 oracle 分歧"
+    );
+    assert_eq!(dense.size(), oracle.len(), "step {step}: size 漂移");
+  }
+
+  // 擦除精确性：对表内键取真前缀/加后缀，erase_str 均不得误擦。
+  let probe = "prefix_probe_key";
+  dense.insert(probe.into());
+  dense.erase_str("prefix_probe");
+  assert!(dense.contains_str(probe), "真前缀不得命中");
+  dense.erase_str("prefix_probe_keyX");
+  assert!(dense.contains_str(probe), "扩写不得命中");
+  dense.erase_str(probe);
+  assert!(!dense.contains_str(probe));
+  assert!(!dense.contains(&probe.to_string()), "双口终态一致");
+
+  // 借用口可变访问面：find_mut_str 原位重写为**同字节**的新分配副本——即
+  // `AstNameTable` const_cast 惯用法的合法形态（hash/eq 不变故槽位仍有效）。
+  // 改写成不同字节会同时漂移哈希与桶位，属容器外契约，不在此测试范围。
+  dense.insert("mutable_key".into());
+  {
+    let slot = dense.find_mut_str("mutable_key").expect("可变借用口命中");
+    assert_eq!(slot.as_str(), "mutable_key");
+    *slot = String::from("mutable_key");
+  }
+  assert!(
+    dense.contains_str("mutable_key"),
+    "同字节重写后借用口仍命中"
+  );
+  assert!(
+    dense.contains(&"mutable_key".to_string()),
+    "同字节重写后 owned 口仍命中"
+  );
+}
