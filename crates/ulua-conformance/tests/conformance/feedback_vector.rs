@@ -8,7 +8,7 @@
 
 #[test]
 fn feedback_vector_c_call_sealed() {
-  use ulua_common::macros::luau_insn_fbslot_sealed::LUAU_INSN_FBSLOT_SEALED;
+  use ulua_common::macros::luau_insn_ops::LUAU_INSN_FBSLOT_SEALED;
 
   use crate::common::{
     functions::{feedback_vector_api as fva, id_inliner::id_inliner, safe_api},
@@ -103,7 +103,7 @@ RETURN R1 1
 
 #[test]
 fn feedback_vector_metamethod_call_sealed() {
-  use ulua_common::macros::luau_insn_fbslot_sealed::LUAU_INSN_FBSLOT_SEALED;
+  use ulua_common::macros::luau_insn_ops::LUAU_INSN_FBSLOT_SEALED;
 
   use crate::common::{
     functions::{feedback_vector_api as fva, id_inliner::id_inliner, safe_api},
@@ -203,7 +203,7 @@ RETURN R1 1
 
 #[test]
 fn feedback_vector_polymorphic_call_sealed() {
-  use ulua_common::macros::luau_insn_fbslot_sealed::LUAU_INSN_FBSLOT_SEALED;
+  use ulua_common::macros::luau_insn_ops::LUAU_INSN_FBSLOT_SEALED;
 
   use crate::common::{
     functions::{feedback_vector_api as fva, id_inliner::id_inliner},
@@ -298,7 +298,7 @@ RETURN R0 1
 
 #[test]
 fn feedback_vector_simple_call_sealed() {
-  use ulua_common::macros::luau_insn_fbslot_sealed::LUAU_INSN_FBSLOT_SEALED;
+  use ulua_common::macros::luau_insn_ops::LUAU_INSN_FBSLOT_SEALED;
 
   use crate::common::{
     functions::{feedback_vector_api as fva, id_inliner::id_inliner},
@@ -334,7 +334,7 @@ fn feedback_vector_simple_call_sealed() {
 
 #[test]
 fn feedback_vector_simple_call_sealed_on_inline() {
-  use ulua_common::macros::luau_insn_fbslot_sealed::LUAU_INSN_FBSLOT_SEALED;
+  use ulua_common::macros::luau_insn_ops::LUAU_INSN_FBSLOT_SEALED;
 
   use crate::common::{
     functions::{feedback_vector_api as fva, sealing_inliner::sealing_inliner},

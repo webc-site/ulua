@@ -1,6 +1,6 @@
 use ulua_common::{
   fflag::LuauBackedgeHeapCheck,
-  macros::{luau_insn_d::luau_insn_d, luau_insn_e::luau_insn_e},
+  macros::luau_insn_ops::{luau_insn_d, luau_insn_e},
 };
 
 use crate::{

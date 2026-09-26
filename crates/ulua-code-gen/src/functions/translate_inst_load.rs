@@ -1,9 +1,6 @@
 use ulua_common::{
   fflag,
-  macros::{
-    luau_insn_a::luau_insn_a, luau_insn_b::luau_insn_b, luau_insn_c::luau_insn_c,
-    luau_insn_d::luau_insn_d,
-  },
+  macros::luau_insn_ops::{luau_insn_a, luau_insn_b, luau_insn_c, luau_insn_d},
 };
 use ulua_vm::enums::lua_type::LuaType;
 

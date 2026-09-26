@@ -1,4 +1,4 @@
-use ulua_common::macros::luau_insn_a::luau_insn_a;
+use ulua_common::macros::luau_insn_ops::luau_insn_a;
 
 use crate::{
   functions::get_loop_step_k::get_loop_step_k,

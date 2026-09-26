@@ -1,6 +1,6 @@
 //! Source: `CodeGen/src/CodeGenUtils.cpp`
 
-use ulua_common::macros::{luau_insn_a::luau_insn_a, luau_insn_d::luau_insn_d};
+use ulua_common::macros::luau_insn_ops::{luau_insn_a, luau_insn_d};
 use ulua_vm::{
   enums::tms::TMS,
   type_aliases::{stk_id::StkId, t_value::TValue},

@@ -5,7 +5,10 @@ use core::{
 
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
-  macros::{luau_assert::LUAU_ASSERT, luau_insn_e::luau_insn_e, luau_insn_op::luau_insn_op},
+  macros::{
+    luau_assert::LUAU_ASSERT,
+    luau_insn_ops::{luau_insn_e, luau_insn_op},
+  },
 };
 
 use crate::{

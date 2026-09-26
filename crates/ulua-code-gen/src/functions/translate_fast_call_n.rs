@@ -2,10 +2,7 @@ use ulua_common::{
   enums::luau_opcode::LuauOpcode,
   fflag,
   functions::get_op_length::get_op_length,
-  macros::{
-    luau_insn_a::luau_insn_a, luau_insn_b::luau_insn_b, luau_insn_c::luau_insn_c,
-    luau_insn_op::luau_insn_op,
-  },
+  macros::luau_insn_ops::{luau_insn_a, luau_insn_b, luau_insn_c, luau_insn_op},
 };
 use ulua_vm::{enums::lua_type::LuaType, macros::lua_multret::LUA_MULTRET};
 

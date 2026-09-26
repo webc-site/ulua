@@ -9,7 +9,7 @@ use ulua_common::{
   },
   fflag,
   functions::{get_op_length::get_op_length, read_var_int_64::try_read_var_int_64},
-  macros::luau_insn_op::luau_insn_op,
+  macros::luau_insn_ops::luau_insn_op,
 };
 
 use crate::{

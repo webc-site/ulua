@@ -2,7 +2,7 @@
 //! call frame is `LOP_BREAK`.
 //! C++ source: `VM/src/ldebug.cpp:405`
 
-use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_insn_op::luau_insn_op};
+use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_insn_ops::luau_insn_op};
 
 use crate::records::lua_state::LuaState;
 

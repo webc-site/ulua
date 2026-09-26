@@ -97,9 +97,7 @@ fn op_length_table_matches_cpp_exhaustively() {
 
 #[test]
 fn jump_target_matches_cpp() {
-  use ulua_common::macros::{
-    luau_insn_c::luau_insn_c, luau_insn_d::luau_insn_d, luau_insn_op::luau_insn_op,
-  };
+  use ulua_common::macros::luau_insn_ops::{luau_insn_c, luau_insn_d, luau_insn_op};
 
   // 编码辅助：op 在低 8 位，D 为 16..31 位（有符号），C 为 24..31 位。
   let jump = luau_insn_op(LuauOpcode::LOP_JUMP as u32) | (5u32 << 16); // D = 5

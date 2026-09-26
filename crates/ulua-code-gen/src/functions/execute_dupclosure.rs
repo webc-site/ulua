@@ -1,8 +1,8 @@
 use ulua_common::{
   enums::{luau_capture_type::LuauCaptureType, luau_opcode::LuauOpcode},
   macros::{
-    luau_assert::LUAU_ASSERT, luau_insn_a::luau_insn_a, luau_insn_b::luau_insn_b,
-    luau_insn_d::luau_insn_d, luau_insn_op::luau_insn_op,
+    luau_assert::LUAU_ASSERT,
+    luau_insn_ops::{luau_insn_a, luau_insn_b, luau_insn_d, luau_insn_op},
   },
 };
 use ulua_vm::type_aliases::{stk_id::StkId, t_value::TValue};
