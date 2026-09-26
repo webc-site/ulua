@@ -3,7 +3,7 @@ use crate::{
     c_slice_mut, lua_createtable::lua_createtable, lua_l_checkinteger::lua_l_checkinteger,
   },
   luaL_argerror,
-  macros::lua_isnoneornil::lua_isnoneornil,
+  macros::{lua_isnoneornil::lua_isnoneornil, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
   setobj2t,
   type_aliases::{stk_id::StkId, t_value::TValue},
@@ -11,7 +11,7 @@ use crate::{
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn tcreate(l: *mut LuaState) -> i32 {
+pub unsafe fn tcreate(l: *mut LuaState) -> i32 {
   unsafe {
     let size = lua_l_checkinteger(l, 1);
     if size < 0 {
@@ -34,3 +34,5 @@ pub unsafe extern "C-unwind" fn tcreate(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn tcreate, tcreate_arm);

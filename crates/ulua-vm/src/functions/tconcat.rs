@@ -7,12 +7,13 @@ use crate::{
     lua_l_checktype::lua_l_checktype, lua_l_optinteger::lua_l_optinteger,
     lua_l_optlstring::lua_l_optlstring, lua_l_pushresult::lua_l_pushresult, lua_objlen::lua_objlen,
   },
+  macros::lua_lib_fn::lua_lib_fn,
   records::{lua_l_strbuf::LuaLStrbuf, lua_state::LuaState},
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn tconcat(l: *mut LuaState) -> i32 {
+pub unsafe fn tconcat(l: *mut LuaState) -> i32 {
   unsafe {
     let mut lsep: usize = 0;
     let sep = lua_l_optlstring(l, 2, null(), &mut lsep);
@@ -41,3 +42,5 @@ pub unsafe extern "C-unwind" fn tconcat(l: *mut LuaState) -> i32 {
     1
   }
 }
+
+lua_lib_fn!(pub fn tconcat, tconcat_arm);

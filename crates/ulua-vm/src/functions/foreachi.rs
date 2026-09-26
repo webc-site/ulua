@@ -4,7 +4,7 @@ use crate::{
     lua_call::lua_call, lua_l_checktype::lua_l_checktype, lua_objlen::lua_objlen,
     lua_pushinteger::lua_pushinteger, lua_pushvalue::lua_pushvalue, lua_rawgeti::lua_rawgeti,
   },
-  macros::{lua_isnil::lua_isnil, lua_pop::lua_pop},
+  macros::{lua_isnil::lua_isnil, lua_lib_fn::lua_lib_fn, lua_pop::lua_pop},
   records::lua_state::LuaState,
 };
 
@@ -13,7 +13,7 @@ use crate::{
 /// 否则抛错回退；`lua_objlen(l,1)` 取表长度 n，循环对 1..=n 压函数/整数/`lua_rawgeti` 后 `lua_call(...,2,1)`
 /// （可再入 Lua、抛错、扩栈、触发 GC），每次迭代需 ≥3 栈槽；`lua_isnil`/`lua_pop` 读写 `(*l).top`。
 /// cpp VM/src/ltablib.cpp:16
-pub unsafe extern "C-unwind" fn foreachi(l: *mut LuaState) -> i32 {
+pub unsafe fn foreachi(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_checktype(l, 1, LuaType::Table as i32);
     lua_l_checktype(l, 2, LuaType::Function as i32);
@@ -38,3 +38,5 @@ pub unsafe extern "C-unwind" fn foreachi(l: *mut LuaState) -> i32 {
     0
   }
 }
+
+lua_lib_fn!(pub fn foreachi, foreachi_arm);

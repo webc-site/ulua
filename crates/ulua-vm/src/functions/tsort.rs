@@ -5,14 +5,14 @@ use crate::{
     lua_settop::lua_settop, lua_v_lessthan::lua_v_lessthan, sort_func::sort_func,
     sort_rec::sort_rec,
   },
-  macros::lua_isnoneornil::lua_isnoneornil,
+  macros::{lua_isnoneornil::lua_isnoneornil, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
   type_aliases::sort_predicate::SortPredicate,
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn tsort(l: *mut LuaState) -> i32 {
+pub unsafe fn tsort(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_checktype(l, 1, LuaType::Table as i32);
 
@@ -34,3 +34,5 @@ pub unsafe extern "C-unwind" fn tsort(l: *mut LuaState) -> i32 {
     0
   }
 }
+
+lua_lib_fn!(pub fn tsort, tsort_arm);

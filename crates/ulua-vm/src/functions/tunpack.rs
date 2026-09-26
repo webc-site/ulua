@@ -4,13 +4,13 @@ use crate::{
     c_slice, c_slice_mut, lua_checkstack::lua_checkstack, lua_l_checktype::lua_l_checktype,
     lua_l_optinteger::lua_l_optinteger, lua_objlen::lua_objlen, lua_rawgeti::lua_rawgeti,
   },
-  macros::{lua_l_error::luaL_error, setobj_2_s::setobj_2_s},
+  macros::{lua_l_error::luaL_error, lua_lib_fn::lua_lib_fn, setobj_2_s::setobj_2_s},
   records::{lua_state::LuaState, lua_t_value::TValue},
 };
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn tunpack(l: *mut LuaState) -> i32 {
+pub unsafe fn tunpack(l: *mut LuaState) -> i32 {
   unsafe {
     lua_l_checktype(l, 1, LuaType::Table as i32);
     let t = (*(*l).base).as_table_ptr();
@@ -56,3 +56,5 @@ pub unsafe extern "C-unwind" fn tunpack(l: *mut LuaState) -> i32 {
     n as i32
   }
 }
+
+lua_lib_fn!(pub fn tunpack, tunpack_arm);
