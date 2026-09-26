@@ -17,8 +17,12 @@ use ulua_common::{fflag, records::dense_hash_map::DenseHashMap};
 use crate::{
   enums::{polarity::Polarity, table_state::TableState},
   functions::{
-    arc_as_mut::arc_as_mut, as_mutable_type::as_mutable_type_id, follow_type::follow,
-    get_mutable_type, get_type, is_valid_class_metamethod::is_valid_class_metamethod,
+    arc_as_mut::arc_as_mut,
+    as_mutable_type::as_mutable_type_id,
+    follow_type::follow,
+    get_mutable_type, get_type,
+    is_valid_class_metamethod::is_valid_class_metamethod,
+    magic_names::{K_ERROR_ID, is_reserved_type_alias_name},
   },
   records::{
     arena_handle::{alias, alias_ref},
@@ -113,7 +117,7 @@ impl ConstraintGenerator {
         if fflag::LuauTidyTypePrototyping.get() {
           // A type alias might have no name if the code is syntactically
           // illegal. We mustn't prepopulate anything in this case.
-          if ast_name_is(alias_name, b"%error-id%") || ast_name_is(alias_name, b"typeof") {
+          if is_reserved_type_alias_name(alias_name.as_bytes()) {
             continue;
           }
 
@@ -133,7 +137,7 @@ impl ConstraintGenerator {
 
           // A type alias might have no name if the code is syntactically
           // illegal. We mustn't prepopulate anything in this case.
-          if ast_name_is(alias_name, b"%error-id%") || ast_name_is(alias_name, b"typeof") {
+          if is_reserved_type_alias_name(alias_name.as_bytes()) {
             continue;
           }
         }
@@ -333,7 +337,7 @@ impl ConstraintGenerator {
 
         if fflag::LuauTidyTypePrototyping.get() {
           // A class might have no name if the code is syntactically illegal.
-          if ast_name_is(class_decl_name, b"%error-id%") {
+          if ast_name_is(class_decl_name, K_ERROR_ID) {
             continue;
           }
 
@@ -356,7 +360,7 @@ impl ConstraintGenerator {
           }
 
           // A class might have no name if the code is syntactically illegal.
-          if ast_name_is(class_decl_name, b"%error-id%") {
+          if ast_name_is(class_decl_name, K_ERROR_ID) {
             continue;
           }
         }

@@ -1,4 +1,4 @@
-use alloc::{string::String, vec::Vec};
+use alloc::{format, vec::Vec};
 use core::ptr::{NonNull, null_mut};
 
 use ulua_ast::records::{
@@ -9,8 +9,14 @@ use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT};
 use crate::{
   enums::polarity::Polarity,
   functions::{
-    arc_as_mut::arc_as_mut, finite::finite, first::first, follow_type,
-    get_mutable_type::get_mutable, get_type, size_type_pack::size,
+    arc_as_mut::arc_as_mut,
+    finite::finite,
+    first::first,
+    follow_type,
+    get_mutable_type::get_mutable,
+    get_type,
+    magic_names::{LUAU_BLOCKED_TYPE, LUAU_ICE, LUAU_PRINT},
+    size_type_pack::size,
   },
   records::{
     blocked_type::BlockedType, constraint_generator::ConstraintGenerator,
@@ -50,7 +56,7 @@ impl ConstraintGenerator {
       // Safety: `ref_` 按本函数契约指向存活 `AstTypeReference`，此处仅读 `name` 槽。
       let ref_name_str = unsafe { (*ref_).name.as_str_or_empty() };
 
-      if ref_name_str == "_luau_ice" {
+      if ref_name_str == LUAU_ICE {
         // Safety: `ty` 同为契约存活的 AST 节点，此处仅读 location。
         let location = unsafe { (*ty).base.location };
         // Safety: `self.ice.as_ptr()` 是构造期 `NonNull<InternalErrorReporter>` 注入的
@@ -59,8 +65,8 @@ impl ConstraintGenerator {
         self
           .ice
           .get()
-          .ice_string_location("_luau_ice encountered", &location);
-      } else if ref_name_str == "_luau_print" {
+          .ice_string_location(&format!("{LUAU_ICE} encountered"), &location);
+      } else if ref_name_str == LUAU_PRINT {
         // Safety: 解引用契约存活的 `ty` 仅读 location。
         let location = unsafe { (*ty).base.location };
         // Safety: `ref_` 按本函数契约指向存活 `AstTypeReference`，只读借用其
@@ -81,7 +87,7 @@ impl ConstraintGenerator {
           let param_ty = NonNull::from(arg_ty).as_ptr();
           return self.resolve_type_inner(scope_ptr, param_ty, in_type_arguments, false);
         } else {
-          let err = GenericError::new(String::from("_luau_print requires one generic parameter"));
+          let err = GenericError::new(format!("{LUAU_PRINT} requires one generic parameter"));
           self.report_error(location, TypeErrorData::GenericError(err));
           // Safety: `self.module` 由构造断言为 `Some`、Arc 被 generator 持有至会话末，
           // `arc_as_mut` 句柄按 C++ const_cast 惯用法写 `module->astResolvedTypes`
@@ -100,7 +106,7 @@ impl ConstraintGenerator {
             return self.builtin_types.get().error_type;
           }
         }
-      } else if ref_name_str == "_luau_blocked_type" {
+      } else if ref_name_str == LUAU_BLOCKED_TYPE {
         // Safety: `self.arena.as_ptr()` 为构造期从 `NonNull<Normalizer>` 解出的 arena 句柄，
         // 与生成会话同寿；`add_type` 是单线程生成器独占的 arena 追加写。
         return self.arena.get_mut().add_type(BlockedType::default());

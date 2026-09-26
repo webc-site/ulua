@@ -347,6 +347,7 @@ pub mod lint_comments;
 pub mod lookup_extern_type_prop;
 pub mod lt_type_function;
 pub mod lua_names;
+pub mod magic_names;
 pub mod make_anonymous_autofilled;
 pub mod make_function_builtin_definitions;
 pub mod make_intersection;

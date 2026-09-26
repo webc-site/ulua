@@ -5,7 +5,10 @@ use ulua_common::{functions::format::format, macros::luau_assert::LUAU_ASSERT};
 
 use crate::{
   enums::table_state::TableState,
-  functions::{arc_as_mut::arc_as_mut, follow_type, get_mutable_type, get_type},
+  functions::{
+    arc_as_mut::arc_as_mut, follow_type, get_mutable_type, get_type,
+    magic_names::is_reserved_type_alias_name,
+  },
   records::{
     duplicate_type_definition::DuplicateTypeDefinition,
     extern_type::ExternType,
@@ -34,7 +37,7 @@ impl TypeChecker {
     // If the alias is missing a name, we can't do anything with it.  Ignore it.
     // Also, typeof is not a valid type alias name.  We will report an error for
     // this in check()
-    if typealias.name.as_bytes() == b"%error-id%" || typealias.name.as_bytes() == b"typeof" {
+    if is_reserved_type_alias_name(typealias.name.as_bytes()) {
       return;
     }
 
