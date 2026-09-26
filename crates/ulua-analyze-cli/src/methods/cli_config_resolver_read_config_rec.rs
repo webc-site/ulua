@@ -106,20 +106,14 @@ impl CliConfigResolver {
     // std::optional<std::string> configPath = joinPaths(path, kConfigName);
     // if (!isFile(*configPath)) configPath = std::nullopt;
     let config_path_candidate = join_paths(path, K_CONFIG_NAME, false);
-    let config_path: Option<String> = if is_file(&config_path_candidate) {
-      Some(config_path_candidate)
-    } else {
-      None
-    };
+    let config_path: Option<String> =
+      is_file(&config_path_candidate).then_some(config_path_candidate);
 
     // std::optional<std::string> luauConfigPath = joinPaths(path, kLuauConfigName);
     // if (!isFile(*luauConfigPath)) luauConfigPath = std::nullopt;
     let luau_config_path_candidate = join_paths(path, K_LUAU_CONFIG_NAME, false);
-    let luau_config_path: Option<String> = if is_file(&luau_config_path_candidate) {
-      Some(luau_config_path_candidate)
-    } else {
-      None
-    };
+    let luau_config_path: Option<String> =
+      is_file(&luau_config_path_candidate).then_some(luau_config_path_candidate);
 
     if let (Some(config_path), Some(_)) = (&config_path, &luau_config_path) {
       // configErrors.emplace_back(*configPath, "Both ... files exist");

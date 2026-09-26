@@ -386,11 +386,7 @@ impl Function {
       FunctionInfo::default()
     } else {
       let what = debug_cstr(ar.what).unwrap_or_default();
-      let line_defined = if ar.linedefined > 0 {
-        Some(ar.linedefined as i64)
-      } else {
-        None
-      };
+      let line_defined = (ar.linedefined > 0).then_some(ar.linedefined as i64);
       // Lua chunks are loaded with a `=<name>` chunkname marker; mlua
       // reports the bare name in `source`, so strip a single leading
       // `=`/`@` for Lua/main functions. C functions keep their VM-reported

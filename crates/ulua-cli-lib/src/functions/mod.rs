@@ -1,4 +1,5 @@
-pub mod absolute_prefix;
+/// 内部专用（rg 全仓核对零外部消费方）：模块保持 crate 内可见即可
+pub(crate) mod absolute_prefix;
 /// `-O`/`-g`/`-t` 级别解析 + 写全局的同构收口（Bytecode/Compile/Repl 共用）
 pub mod argv;
 pub mod assertion_handler;
@@ -12,9 +13,9 @@ pub mod copts;
 pub mod display_help;
 pub mod escape_filename;
 pub mod get_current_working_directory;
-pub mod get_module_path;
+pub(crate) mod get_module_path;
 pub mod get_parent_path;
-pub mod get_real_path;
+pub(crate) mod get_real_path;
 pub mod get_source_files;
 pub mod is_absolute_path;
 pub mod is_directory;
@@ -29,14 +30,14 @@ pub(crate) mod path_string;
 pub mod read_file;
 pub mod read_stdin;
 pub mod report;
-pub mod report_compile_error;
+pub(crate) mod report_compile_error;
 pub mod report_compile_panic;
 pub mod report_open_error;
-pub mod report_parse_error;
+pub(crate) mod report_parse_error;
 pub mod report_parse_errors;
 pub mod report_unrecognized_option;
 pub mod safe_get_table;
-pub mod set_luau_flag;
+pub(crate) mod set_luau_flag;
 pub mod set_luau_flags_default;
 pub mod set_luau_flags_flags;
 pub mod setup_arguments;

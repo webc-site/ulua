@@ -186,6 +186,6 @@ pub fn repl_main(args: &[impl AsRef<str>]) -> i32 {
     }
 
     // 守卫在块尾 drop → lua_close，早于任何 return/panic 逃逸
-    if failed != 0 { 1 } else { 0 }
+    (failed != 0) as i32
   }
 }
