@@ -30,7 +30,7 @@ static FIRED: AtomicI32 = AtomicI32::new(0);
 /// 处理器是进程级全局槽位，串行化依赖它的测试，避免并行互相踩计数。
 static HANDLER_LOCK: Mutex<()> = Mutex::new(());
 
-unsafe extern "C-unwind" fn counting_handler(
+extern "C-unwind" fn counting_handler(
   _expression: *const c_char,
   _file: *const c_char,
   _line: i32,

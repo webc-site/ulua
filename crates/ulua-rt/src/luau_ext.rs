@@ -383,7 +383,7 @@ impl TypeMetatable for Function {
     // Push a throwaway C function so `lua_setmetatable` targets the global
     // function-type slot.
     // Safety: 契约保证 state 存活且有 ≥1 空位。`noop_cfn` 是
-    // `unsafe extern "C-unwind"` 全函数（恒返回 0），与 `LuaCFunction` 的
+    // `extern "C-unwind"` 全函数（恒返回 0），与 `LuaCFunction` 的
     // C ABI 约定兼容；`nup=0` 不消费栈、`cont=None` 为合法空续体。关键是
     // `debugname` 指针会被闭包长期持有并在调试路径解引用——这里传的
     // `EMPTY_NUL` 是 `'static` 静态 NUL 结尾字节串，永不失效。压恰一个闭包值。
@@ -423,11 +423,8 @@ impl TypeMetatable for LightUserData {
 }
 
 /// A do-nothing C function used as the representative value for the
-/// function-type metatable slot.
-///
-/// # Safety
-/// 仅作为 `lua_CFunction` 句柄使用（比较身份，不实际执行）；即便被调用也只返
-/// 回 0，不触碰 `state`。
-unsafe extern "C-unwind" fn noop_cfn(_state: *mut LuaState) -> c_int {
+/// function-type metatable slot. 仅作为 `lua_CFunction` 句柄使用（比较身份，
+/// 不实际执行）；即便被调用也只返回 0，不触碰 `state`，无前置条件。
+extern "C-unwind" fn noop_cfn(_state: *mut LuaState) -> c_int {
   0
 }

@@ -16,7 +16,7 @@ use ulua_rt::{Lua, Result, Value};
 use ulua_vm::functions::lua_newstate::lua_newstate;
 
 /// 一个总是分配失败的 VM 分配器（模拟 OOM）。
-unsafe extern "C-unwind" fn failing_alloc(
+extern "C-unwind" fn failing_alloc(
   _ud: *mut c_void,
   ptr: *mut u8,
   _osize: usize,

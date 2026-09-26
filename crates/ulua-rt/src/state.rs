@@ -371,17 +371,11 @@ impl Lua {
   ///
   /// Mirrors `mlua::Lua::unsafe_new`. In Luau there is no separate set of
   /// "unsafe" base libraries (the `debug`/`ffi`/`package` distinction is a
-  /// Lua-5.x concept), so this is equivalent to [`Lua::new`]; it exists for
-  /// mlua signature parity.
-  ///
-  /// # Safety
-  /// Provided for parity with mlua's `unsafe_new`, which can open libraries
-  /// that allow loading native code. ulua's Luau base library does not expose
-  /// such facilities, so this is in practice as safe as [`Lua::new`]; the
-  /// `unsafe` marker is retained to match mlua's signature.
-  pub unsafe fn unsafe_new() -> Lua {
-    // Safety: 函数体即安全的 `Lua::new`，无任何 unsafe 操作；unsafe 标记纯为
-    // mlua 签名对等而保留（见本函数 `# Safety` 文档）。
+  /// Lua-5.x concept), so this is equivalent to [`Lua::new`]; the name is
+  /// kept for mlua signature parity. mlua's counterpart is `unsafe fn`
+  /// because its default libraries can load native code; ulua's cannot, so
+  /// this entry point needs no preconditions and is fully safe.
+  pub fn unsafe_new() -> Lua {
     Lua::new()
   }
 
@@ -1239,12 +1233,10 @@ mod tests {
 
   /// 一个总是分配失败的 VM 分配器（模拟 OOM）：任何请求都返回 null（VM 把
   /// null 同时当作「释放完成」与「分配失败」，故无需区分 `nsize == 0`）。
-  ///
-  /// # Safety
-  /// 仅作为 `lua_newstate` 的 `lua_Alloc` 回调：签名与 C 侧一致，忽略全部
-  /// 入参（含 `ud`）且无内部状态，恒返回 null——VM 契约允许分配器返回 null
-  /// 表示失败，因此任何调用都安全。
-  unsafe extern "C-unwind" fn failing_alloc(
+  /// 仅作 `lua_newstate` 的 `lua_Alloc` 回调：签名与 C 侧一致，忽略全部入参
+  /// （含 `ud`）且无内部状态，恒返回 null——VM 契约允许分配器返回 null 表示
+  /// 失败，因此任何调用都安全，无前置条件。
+  extern "C-unwind" fn failing_alloc(
     _ud: *mut c_void,
     _ptr: *mut u8,
     _osize: usize,
