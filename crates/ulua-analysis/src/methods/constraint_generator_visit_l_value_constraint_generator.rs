@@ -11,6 +11,7 @@ use ulua_ast::{
   rtti::ast_node_try_as_ptr,
 };
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
+
 use crate::{
   enums::value::Value,
   functions::{

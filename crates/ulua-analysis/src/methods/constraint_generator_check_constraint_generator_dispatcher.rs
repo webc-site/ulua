@@ -110,9 +110,7 @@ impl ConstraintGenerator {
       AstExprRef::ConstantBool(bool_expr) => {
         self.check_expr_constant_bool(scope, bool_expr, expected_type, force_singleton)
       }
-      AstExprRef::ConstantNil(_) => {
-        Inference::no_refinement(self.builtin_types.get().nil_type)
-      }
+      AstExprRef::ConstantNil(_) => Inference::no_refinement(self.builtin_types.get().nil_type),
       AstExprRef::Local(local) => self.check_expr_local(scope, local),
       AstExprRef::Global(global) => self.check_expr_global(scope, global),
       AstExprRef::Varargs(_) => {
@@ -157,13 +155,13 @@ impl ConstraintGenerator {
           expected_type,
         )
       }
-      AstExprRef::IfElse(if_else) => {
-        self.check_expr_if_else(scope, if_else, expected_type)
-      }
+      AstExprRef::IfElse(if_else) => self.check_expr_if_else(scope, if_else, expected_type),
       AstExprRef::TypeAssertion(type_assertion) => {
         self.check_expr_type_assertion(scope, type_assertion)
       }
-      AstExprRef::InterpString(interp_string) => self.check_expr_interp_string(scope, interp_string),
+      AstExprRef::InterpString(interp_string) => {
+        self.check_expr_interp_string(scope, interp_string)
+      }
       AstExprRef::Instantiate(instantiate) => self.check_expr_instantiate(scope, instantiate),
       AstExprRef::Error(error) => {
         // Open question: Should we traverse into this?

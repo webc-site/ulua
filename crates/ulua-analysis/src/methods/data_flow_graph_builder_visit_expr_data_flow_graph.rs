@@ -82,9 +82,7 @@ impl DataFlowGraphBuilder {
       AstExprRef::Table(table) => self.visit_expr_table(table),
       AstExprRef::Unary(unary) => self.visit_expr_unary(unary),
       AstExprRef::Binary(binary) => self.visit_expr_binary(binary),
-      AstExprRef::TypeAssertion(type_assertion) => {
-        self.visit_expr_type_assertion(type_assertion)
-      }
+      AstExprRef::TypeAssertion(type_assertion) => self.visit_expr_type_assertion(type_assertion),
       AstExprRef::IfElse(if_else) => self.visit_expr_if_else(if_else),
       AstExprRef::InterpString(interp_string) => self.visit_expr_interp_string(interp_string),
       AstExprRef::Instantiate(instantiate) => self.visit_expr_instantiate(instantiate),
