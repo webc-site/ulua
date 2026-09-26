@@ -45,11 +45,10 @@ pub unsafe extern "C-unwind" fn tunpack(l: *mut LuaState) -> i32 {
       }
       (*l).top = (*l).top.offset(n as isize);
     } else {
-      // push arg[i..e - 1] (to avoid overflows)
-      let mut current_i = i;
-      while current_i < e {
+      // push arg[i..e - 1] (to avoid overflows)：cpp `while current_i < e` 游走
+      // 收为区间迭代，末元素单独压栈（i <= e 此前已由空区间早退保证）
+      for current_i in i..e {
         lua_rawgeti(l, 1, current_i);
-        current_i += 1;
       }
       lua_rawgeti(l, 1, e); // push last element
     }

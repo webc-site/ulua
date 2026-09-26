@@ -25,16 +25,17 @@ pub unsafe extern "C-unwind" fn tconcat(l: *mut LuaState) -> i32 {
 
     let mut b = LuaLStrbuf::new();
     lua_l_buffinit(l, &mut b);
-    let mut current_i = i;
-    while current_i < last {
+    // 尾元素前的每字段后随分隔符（cpp `while current_i < last` 游走收为区间
+    // 迭代）；收尾判定 i <= last 与原循环退出时 `current_i == last` 等价
+    //（i > last 时区间为空且两判定同假，字段一个不输出）
+    for current_i in i..last {
       addfield(l, &mut b, current_i, t);
       if lsep != 0 {
         lua_l_addlstring(&mut b, from_raw_parts(sep as *const u8, lsep));
       }
-      current_i += 1;
     }
-    if current_i == last {
-      addfield(l, &mut b, current_i, t);
+    if i <= last {
+      addfield(l, &mut b, last, t);
     }
     lua_l_pushresult(&mut b);
     1

@@ -43,25 +43,21 @@ pub unsafe extern "C-unwind" fn byteoffset(l: *mut LuaState) -> i32 {
       }
       if n < 0 {
         while n < 0 && posi > 0 {
-          // move back
-          loop {
-            // find beginning of previous character
+          // find beginning of previous character：先退一格，续字节连退至序列首
+          //（原 `loop { posi -= 1; if !(…) break; }` 的 do-while 形态展开）
+          posi -= 1;
+          while posi > 0 && is_cont_byte(bytes[posi as usize]) {
             posi -= 1;
-            if !(posi > 0 && is_cont_byte(bytes[posi as usize])) {
-              break;
-            }
           }
           n += 1;
         }
       } else {
         n -= 1; // do not move for 1st character
         while n > 0 && posi < len as i32 {
-          loop {
-            // find beginning of next character
+          // find beginning of next character：先进一格，续字节连进至下一序列首
+          posi += 1;
+          while is_cont_byte(bytes[posi as usize]) {
             posi += 1;
-            if !is_cont_byte(bytes[posi as usize]) {
-              break;
-            }
           } // (cannot pass final '\0')
           n -= 1;
         }

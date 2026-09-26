@@ -43,10 +43,11 @@ pub unsafe extern "C-unwind" fn codepoint(l: *mut LuaState) -> i32 {
     let mut i = (posi - 1) as usize;
     while i < pose as usize {
       let (step, code) = utf_8_decode(&bytes[i..]);
-      if code.is_none() {
-        luaL_error!(l, "invalid UTF-8 code");
-      }
-      lua_pushinteger(l, code.unwrap_or(0) as i32);
+      // 解码失败经 luaL_error(!) 抛出不返回：let-else 收敛判定，消除哨兵回退值
+      let Some(code) = code else {
+        luaL_error!(l, "invalid UTF-8 code")
+      };
+      lua_pushinteger(l, code as i32);
       n += 1;
       // cpp `s = next`：解码成功 step >= 1，循环必前进
       i += step;
