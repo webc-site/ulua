@@ -406,7 +406,10 @@ impl<'ctx> LintFormatString<'ctx> {
         func.expr.as_ptr()
       };
       let self_ref = unsafe { self_expr.as_ref() };
-      if matches!(self_ref.map(|e| e.as_expr_ref()), Some(AstExprRef::ConstantString(_))) {
+      if matches!(
+        self_ref.map(|e| e.as_expr_ref()),
+        Some(AstExprRef::ConstantString(_))
+      ) {
         self.match_string_call(func.index, self_expr, node.args);
       } else if let Some(type_id) = self.context.get().get_type(self_expr)
         && is_string(type_id)

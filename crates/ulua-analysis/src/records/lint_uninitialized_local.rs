@@ -152,7 +152,12 @@ impl<'ctx> LintUninitializedLocal<'ctx> {
       .last()
       .copied()
       .and_then(|last| unsafe { last.as_ref() })
-      .is_some_and(|l| matches!(l.as_expr_ref(), AstExprRef::Varargs(_) | AstExprRef::Call(_)));
+      .is_some_and(|l| {
+        matches!(
+          l.as_expr_ref(),
+          AstExprRef::Varargs(_) | AstExprRef::Call(_)
+        )
+      });
     for (i, &var) in node_ref.vars.as_slice().iter().enumerate() {
       let l = self.locals.get_or_insert(var);
       l.defined = true;

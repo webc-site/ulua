@@ -106,7 +106,8 @@ impl<'ctx> LintTableLiteral<'ctx> {
                 value as i32
               ),
             );
-          } else if value >= 0.0 && value <= f64::from(i32::MAX) && f64::from(value as i32) == value {
+          } else if value >= 0.0 && value <= f64::from(i32::MAX) && f64::from(value as i32) == value
+          {
             let index = value as i32;
             if let Some(line) = indices.get(&index).copied() {
               emit_warning(

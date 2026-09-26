@@ -75,9 +75,7 @@ impl<'ctx> LintForRange<'ctx> {
       // 句柄为 Copy，先局部化，使 emit_warning 的 `&mut` 重建不与下方
       // `self.get_loop_end` 的只读借用相互冲突。
       let mut ctx = self.context;
-      if (fu_len && tc == Some(1.0))
-        || fc.is_some_and(|fc| tc.is_some_and(|tc| fc > tc))
-      {
+      if (fu_len && tc == Some(1.0)) || fc.is_some_and(|fc| tc.is_some_and(|tc| fc > tc)) {
         emit_warning(
           ctx.get(),
           Code::ForRange,
