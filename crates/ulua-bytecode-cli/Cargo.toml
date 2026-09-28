@@ -1,0 +1,59 @@
+[package]
+name = "ulua-bytecode-cli"
+description = "Command-line Luau bytecode disassembler and inspector (Rust)."
+keywords = ["luau", "lua", "bytecode", "disassembler", "cli"]
+categories = ["command-line-utilities", "development-tools"]
+
+[package.version]
+workspace = true
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[lib]
+crate-type = ["rlib"]
+
+[[bin]]
+name = "ulua-bytecode"
+path = "src/main.rs"
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.2"
+
+[dependencies.ulua-bytecode]
+path = "../ulua-bytecode"
+version = "0.1.2"
+
+[dependencies.ulua-cli-lib]
+path = "../ulua-cli-lib"
+version = "0.1.2"
+
+[dependencies.ulua-code-gen]
+path = "../ulua-code-gen"
+version = "0.1.2"
+
+[dependencies.ulua-compiler]
+path = "../ulua-compiler"
+version = "0.1.2"
+
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.2"
+
+# 旧 [features] 段的 default/std/wasm 为零消费点空特性（无 cfg 门控、无
+# 下游转发），删除虚假 no_std 特性面（对齐 ulua-bytecode 先例）。
+
+[dev-dependencies.ulua-cli-lib]
+path = "../ulua-cli-lib"
+features = ["test-utils"]
+version = "0.1.2"

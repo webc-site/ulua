@@ -1,0 +1,89 @@
+//! `TypeChecker2::reportErrorsFromAssigningToNever`（TypeChecker2.cpp:1188-1217）。
+use alloc::vec::Vec;
+
+use ulua_ast::{
+  records::{ast_expr::AstExpr, ast_expr_index_name::AstExprIndexName, ast_node::AstNode},
+  rtti::ast_node_try_as,
+};
+use ulua_common::records::dense_hash_set::DenseHashSet;
+
+use crate::{
+  enums::{normalization_result::NormalizationResult, reason::Reason, value_context::ValueContext},
+  functions::get_type,
+  records::{
+    cannot_assign_to_never::CannotAssignToNever, never_type::NeverType,
+    normalization_too_complex::NormalizationTooComplex, type_checker_2::TypeChecker2,
+    type_error::TypeError,
+  },
+  type_aliases::{type_error_data::IntoTypeErrorData, type_id::TypeId},
+};
+impl TypeChecker2 {
+  pub fn report_errors_from_assigning_to_never(&mut self, lhs: &AstExpr, rhs_type: TypeId) {
+    // SAFETY: AstExpr 是 #[repr(C)] 单继承，AstNode 子对象在偏移 0，cast 有效。
+    let node = unsafe { &*((lhs as *const AstExpr).cast::<AstNode>()) };
+    let Some(index_name) = ast_node_try_as::<AstExprIndexName>(node) else {
+      return;
+    };
+
+    // index_name.expr 已句柄化恒非空：.get() 安全借用与 visit 树同寿。
+    let indexed_type = self.lookup_type(index_name.expr.get());
+
+    // if it's already never, I don't think we have anything to do here.
+    if get_type::get::<NeverType>(indexed_type).is_some() {
+      return;
+    }
+
+    // SAFETY: index.value 指向 AST arena 内的 NUL 结尾字面量。
+    let prop = index_name.index.as_str_or_empty().to_string();
+
+    // C++: `std::shared_ptr<const NormalizedType> norm =
+    // normalizer.normalize(indexedType);` followed by `if (!norm) { reportError(
+    // NormalizationTooComplex{}); return; }`. 归一化失败（过于复杂）须报错返回。
+    let location = lhs.base.location;
+    let Some(norm) = self.normalizer.try_normalize(indexed_type) else {
+      self.report_error_type_error_data_location(
+        NormalizationTooComplex::default().into_type_error_data(),
+        &location,
+      );
+      return;
+    };
+
+    // if the type is error suppressing, we don't actually have any work left to do.
+    if norm.should_suppress_errors() {
+      return;
+    }
+
+    let mut cause = Vec::new();
+
+    // C++ passes `lookupProp(...).typesOfProp` as the cause.  The full
+    // `lookup_prop` method is still a stub, but the table component path
+    // is enough to preserve the tagged-union narrowing reason here.
+    for &ty in norm.tables.order.iter() {
+      if self.normalizer.is_inhabited_type_id(ty) != NormalizationResult::True {
+        continue;
+      }
+
+      let mut seen = DenseHashSet::default();
+      let mut dummy_errors: Vec<TypeError> = Vec::new();
+      // SAFETY: builtin_types 由构造方保证有效（C++ 同契约）。
+      let prop_type = self.has_index_type_from_type(
+        ty,
+        &prop,
+        ValueContext::LValue,
+        &location,
+        &mut seen,
+        self.builtin_types_ref().string_type,
+        &mut dummy_errors,
+      );
+
+      if prop_type.present == NormalizationResult::True
+        && let Some(result) = prop_type.result
+      {
+        cause.push(result);
+      }
+    }
+
+    let err = CannotAssignToNever::new(rhs_type, cause, Reason::PropertyNarrowed);
+    self.report_error_type_error_data_location(err.into_type_error_data(), &location);
+  }
+}

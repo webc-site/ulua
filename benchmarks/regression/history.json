@@ -1,0 +1,114 @@
+[
+  {
+    "commit": "7f47ec8",
+    "date": "2026-09-23T15:03:27+08:00",
+    "message": "refactor(bench,analysis): programs→cases 收口删 JS/tsuki-run 补 binarytrees/spectralnorm，DenseHashMap null()→default() 惯用化，build_wasm.sh 挪 website/wasm.sh 同步 CI",
+    "author": "x-at-01",
+    "vm": {},
+    "compile": {
+      "binarytrees": 0.03,
+      "fib": 0.01,
+      "mandel": 0.01,
+      "matmul": 0.02,
+      "nbody": 0.06,
+      "spectralnorm": 0.03,
+      "strings": 0.01,
+      "tablesort": 0.01
+    }
+  },
+  {
+    "commit": "7f47ec8",
+    "date": "2026-09-23T15:03:27+08:00",
+    "message": "refactor(bench,analysis): programs→cases 收口删 JS/tsuki-run 补 binarytrees/spectralnorm，DenseHashMap null()→default() 惯用化，build_wasm.sh 挪 website/wasm.sh 同步 CI",
+    "author": "x-at-01",
+    "vm": {},
+    "compile": {
+      "binarytrees": 0.02,
+      "fib": 0,
+      "mandel": 0.01,
+      "matmul": 0.02,
+      "nbody": 0.06,
+      "spectralnorm": 0.03,
+      "strings": 0.01,
+      "tablesort": 0.01
+    }
+  },
+  {
+    "commit": "a688e43",
+    "date": "2026-09-23T15:17:52+08:00",
+    "message": "refactor(bench,website): mlua-run→纯 Rust 进程内 runner，cases print→return，新增回归 CI 并同步网站基准数据",
+    "author": "x-at-01",
+    "vm": {
+      "binarytrees": 53.79,
+      "fib": 629.1,
+      "mandel": 1440,
+      "matmul": 164.6,
+      "nbody": 696.5,
+      "spectralnorm": 35.62,
+      "strings": 43.11,
+      "tablesort": 27.69
+    },
+    "compile": {
+      "binarytrees": 0.02,
+      "fib": 0,
+      "mandel": 0.01,
+      "matmul": 0.02,
+      "nbody": 0.05,
+      "spectralnorm": 0.03,
+      "strings": 0.01,
+      "tablesort": 0.01
+    }
+  },
+  {
+    "commit": "3727306",
+    "date": "2026-09-23T15:34:15+08:00",
+    "message": "refactor(bench,website): 基准用例规模调参、runner total_cmp/let-chains/strip_prefix 惯用化，回归 CI 落 Job Summary 中文报表，网站抽 BenchDropdown/Syntax 组件并 genLocales 生成 CODE/NAME 双语键",
+    "author": "x-at-01",
+    "vm": {
+      "binarytrees": 110.8,
+      "fib": 226.7,
+      "mandel": 353.1,
+      "matmul": 632.4,
+      "nbody": 632.7,
+      "spectralnorm": 1609,
+      "strings": 86.85,
+      "tablesort": 16.41
+    },
+    "compile": {
+      "binarytrees": 0.02,
+      "fib": 0,
+      "mandel": 0.01,
+      "matmul": 0.02,
+      "nbody": 0.08,
+      "spectralnorm": 0.03,
+      "strings": 0.01,
+      "tablesort": 0.01
+    }
+  },
+  {
+    "commit": "976615a",
+    "date": "2026-09-23T15:58:14+08:00",
+    "message": "refactor(bench): regression.sh 直调可执行 record.js 并移除冗余日志输出",
+    "author": "x-at-01",
+    "vm": {
+      "binarytrees": 108.9,
+      "fib": 230.2,
+      "mandel": 348.4,
+      "matmul": 638.1,
+      "nbody": 629,
+      "spectralnorm": 1580,
+      "strings": 89.7,
+      "tablesort": 16.07
+    },
+    "compile": {
+      "binarytrees": 0.02,
+      "fib": 0,
+      "mandel": 0.01,
+      "matmul": 0.01,
+      "nbody": 0.05,
+      "spectralnorm": 0.03,
+      "strings": 0.01,
+      "tablesort": 0.01
+    }
+  }
+]

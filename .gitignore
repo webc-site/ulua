@@ -1,0 +1,119 @@
+# === Rust & Cargo ===
+.cargo-target/
+target/
+target*/
+*.rlib
+*.dylib
+*.so
+*.dll
+*.pdb
+*.dSYM/
+*.profraw
+*.profdata
+**/*.rs.bk
+*.scip
+
+# === C / C++ / CMake ===
+/cpp/
+*.o
+*.obj
+*.a
+compile_commands.json
+.clangd/
+cmake-build-*/
+
+# === Web / Node / Frontend ===
+node_modules/
+dist/
+website/dist/
+website/pkg/
+website/public/pkg/
+website/src/lib/benchData.js
+.svelte-kit/
+website/.svelte-kit/
+.vite/
+website/.vite/
+*.tsbuildinfo
+.eslintcache
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+playwright-report/
+test-results/
+.playwright-mcp/
+
+# === Python ===
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.venv/
+venv/
+
+# === Benchmarks & Generated Data ===
+benchmarks/results.json
+benchmarks/results-compile.json
+benchmarks/results-analysis.json
+benchmarks/*.svg
+benchmarks/engines.json
+benchmarks/big.luau
+benchmarks/drivers/*/target/
+
+# === CLI / Runtime / Logs ===
+/sh
+err.log
+*.log
+profile.out
+bytecode-summary.json
+trace.json
+
+# === Fuzzing ===
+fuzz/corpus/
+fuzz/corpus-cmin/
+fuzz/artifacts/
+fuzz/coverage/
+fuzz/.afl-showmap-temp-*
+
+# === OS & Editors ===
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+*.bak
+*.tmp
+*.temp
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
+*.sublime-*
+
+# === AI & Local Developer Tools ===
+.codegraph/
+.qoder/
+.gemini/
+.claude/
+.cursor/
+.zed/
+
+# === Crash & Debug ===
+core
+*.core
+
+# === Launch / marketing prep notes — kept local, never in the public repo ===
+posts/
+post.md
+research/*.md
+cpp
+node_modules
+target
+.codegraph

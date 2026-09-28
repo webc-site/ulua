@@ -1,0 +1,33 @@
+[package]
+name = "ulua-bench-runner"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ulua = { path = "../../crates/ulua", default-features = false, features = ["jit"] }
+ulua-ast = { path = "../../crates/ulua-ast" }
+ulua-analysis = { path = "../../crates/ulua-analysis" }
+ulua-bytecode = { path = "../../crates/ulua-bytecode" }
+ulua-compiler = { path = "../../crates/ulua-compiler" }
+ulua-common = { path = "../../crates/ulua-common" }
+ulua-config = { path = "../../crates/ulua-config" }
+mlua = { version = "0.12", default-features = false, features = ["luau-jit", "vendored"] }
+serde = { version = "1.0", features = ["derive"] }
+sonic-rs = "0.3"
+mimalloc = "0.1.52"
+jiff = "0.2.37"
+sysinfo = "0.39.6"
+
+[features]
+default = []
+# cfg 门控的分配计数：开启后全局分配器切换为计数包装（默认关闭，
+# 既有对比输出与性能零影响）。见 src/main.rs `--alloc`。
+count-alloc = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[workspace]

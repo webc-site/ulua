@@ -1,0 +1,147 @@
+name: Benchmark Regression
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    # 文档 / website / skills 改动不影响 ulua 代码路径，跳过冷编译基准。
+    paths-ignore: &paths-ignore
+      - "**.md"
+      - "docs/**"
+      - "website/**"
+      - "sh/skills/**"
+      - ".gitignore"
+      - "LICENSE*"
+  pull_request:
+    paths-ignore: *paths-ignore
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bench-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_MIN_STACK: "67108864"
+  # 与 CI 保持一致：CI 上无增量收益，去掉增量产物可缩小 rust-cache 体积。
+  CARGO_INCREMENTAL: "0"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  # 解释器基准：`cargo bench`（不带 --features jit），永远必须绿。
+  # 与 JIT job 拆开的原因见 `benchmark-jit` 的注释。
+  benchmark-interpreter:
+    name: Regression Benchmark (interpreter)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Run interpreter benchmark
+        env:
+          BENCH_MODE: interp
+        run: |
+          chmod +x regression.sh
+          ./regression.sh
+
+      - name: Upload interpreter result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-result-interp
+          path: |
+            benchmarks/regression/result.json
+            benchmarks/regression/bench-stdout-interp.txt
+          retention-days: 14
+          if-no-files-found: warn
+
+  # JIT 基准：`cargo bench --features jit`。x64 CodeGen 目前在 ubuntu-latest
+  # 上仍会在第一个 JIT case 处 SIGSEGV（record.js 已经把 raw 输出落盘），拆成
+  # 独立 job + continue-on-error，让解释器回归不被 JIT 崩溃连带拖红，同时 JIT
+  # 数据一旦跑通就自动进入 history。
+  benchmark-jit:
+    name: Regression Benchmark (JIT)
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Run JIT benchmark
+        env:
+          BENCH_MODE: jit
+        run: |
+          chmod +x regression.sh
+          ./regression.sh
+
+      - name: Upload JIT result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-result-jit
+          path: |
+            benchmarks/regression/result.json
+            benchmarks/regression/bench-stdout-jit.txt
+          retention-days: 14
+          if-no-files-found: warn
+
+  # 报告汇总：拉两份 artifact，合并写回 history.json + Job Summary。
+  # JIT job 允许失败（continue-on-error 后 needs.benchmark-jit.result 会是 failure，
+  # 但 artifact 若已上传仍可下载）；解释器成功即出报告，JIT 缺数据时列留空。
+  report:
+    name: Publish combined report
+    needs: [benchmark-interpreter, benchmark-jit]
+    if: always() && needs.benchmark-interpreter.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Download interpreter artifact
+        uses: actions/download-artifact@v7
+        with:
+          name: bench-result-interp
+          path: bench-results/interp
+
+      - name: Download JIT artifact
+        uses: actions/download-artifact@v7
+        continue-on-error: true
+        with:
+          name: bench-result-jit
+          path: bench-results/jit
+
+      - name: Merge into history.json and publish Job Summary
+        env:
+          BENCH_RESULTS_DIR: bench-results
+          BENCH_INTERP_NAME: interp/result.json
+          BENCH_JIT_NAME: jit/result.json
+        run: bun benchmarks/regression/publish.js
+
+      - name: Upload combined history artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-regression-history
+          path: benchmarks/regression/history.json
+          retention-days: 30

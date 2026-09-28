@@ -1,0 +1,32 @@
+use crate::{
+  enums::type_lexer::Type,
+  records::{ast_expr::AstExpr, parser::Parser, position::Position, temp_vector::TempVector},
+};
+
+impl Parser {
+  pub fn parse_expr_list(
+    &mut self,
+    result: &mut TempVector<'_, *mut AstExpr>,
+    mut comma_positions: Option<&mut TempVector<'_, Position>>,
+  ) {
+    result.push_back(self.parse_expr(0));
+
+    while self.lexer.current().r#type == Type::COMMA {
+      if let Some(ref mut positions) = comma_positions {
+        positions.push_back(self.lexer.current().location.begin);
+      }
+
+      self.next_lexeme();
+
+      if self.lexer.current().r#type == Type::RPAREN {
+        self.report(
+          self.lexer.current().location,
+          format_args!("Expected expression after ',' but got ')' instead"),
+        );
+        break;
+      }
+
+      result.push_back(self.parse_expr(0));
+    }
+  }
+}

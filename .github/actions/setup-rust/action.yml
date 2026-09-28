@@ -1,0 +1,40 @@
+name: "Setup Rust"
+description: "Install Rust toolchain and configure rust-cache"
+
+inputs:
+  toolchain:
+    description: "Rust toolchain version"
+    required: false
+    default: "stable"
+  targets:
+    description: "Additional target platforms to install"
+    required: false
+    default: ""
+  components:
+    description: "Additional components to install"
+    required: false
+    default: ""
+  cache:
+    description: "Enable rust-cache"
+    required: false
+    default: "true"
+  workspaces:
+    description: "Workspaces to cache"
+    required: false
+    default: "."
+
+runs:
+  using: "composite"
+  steps:
+    - name: Install Rust toolchain
+      uses: dtolnay/rust-toolchain@stable
+      with:
+        toolchain: ${{ inputs.toolchain }}
+        targets: ${{ inputs.targets }}
+        components: ${{ inputs.components }}
+
+    - name: Cache cargo + target
+      if: inputs.cache == 'true'
+      uses: Swatinem/rust-cache@v2
+      with:
+        workspaces: ${{ inputs.workspaces }}
