@@ -7,20 +7,17 @@ use crate::{
   type_aliases::{type_id::TypeId, type_or_pack::TypeOrPack, type_pack_id::TypePackId},
 };
 
-impl TypeCloner {
+impl TypeCloner<'_> {
   pub(crate) fn find_type_id(&self, ty: TypeId) -> Option<TypeId> {
     let ty = follow_type::follow_with_option(ty, FollowOption::DisableLazyTypeThunks);
 
-    // Safety: `self.types` 是克隆会话入口以 `&mut` 注入的 SeenTypes 映射裸化
-    // 句柄（C++ 引用成员），会话期内存活；find/get 为只读访问，与 `ty` 指向
-    // 的 arena Type 节点无重叠。
-    if let Some(it) = unsafe { (*self.types).get(&ty) } {
+    if let Some(it) = self.types.get(&ty) {
       return Some(*it);
     } else if unsafe {
       // Safety: `ty` 经上方 follow 收敛为存活 arena Type 节点（C++ TypeId 直译，
       // 非持久即普通 arena 驻留），仅只读 persistent 标志位。
       (*ty).persistent
-    } && ty != self.force_ty
+    } && self.force_ty != Some(ty)
     {
       return Some(ty);
     }
@@ -31,15 +28,13 @@ impl TypeCloner {
   pub(crate) fn find_type_pack_id(&self, tp: TypePackId) -> Option<TypePackId> {
     let tp = follow_type_pack::follow(tp);
 
-    // Safety: `self.packs` 为克隆会话入口 `&mut` 注入的 SeenTypePacks 映射
-    // 裸化句柄，会话期存活，只读 get。
-    if let Some(it) = unsafe { (*self.packs).get(&tp) } {
+    if let Some(it) = self.packs.get(&tp) {
       return Some(*it);
     } else if unsafe {
       // Safety: `tp` 经 follow 指向存活 arena TypePackVar 节点，仅只读
       // persistent 标志（与 find_type_id 的 TypeId 分支同构）。
       (*tp).persistent
-    } && tp != self.force_tp
+    } && self.force_tp != Some(tp)
     {
       return Some(tp);
     }

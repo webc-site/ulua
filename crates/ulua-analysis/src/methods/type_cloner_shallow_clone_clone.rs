@@ -15,7 +15,7 @@ use crate::{
   type_aliases::{type_id::TypeId, type_or_pack::TypeOrPack, type_pack_id::TypePackId},
 };
 
-impl TypeCloner {
+impl TypeCloner<'_> {
   pub(crate) fn shallow_clone_type_id(&mut self, ty: TypeId) -> TypeId {
     // We want to [`Luau::follow`] but without forcing the expansion of [`LazyType`]s.
     let ty = follow_type::follow_with_option(ty, FollowOption::DisableLazyTypeThunks);
@@ -24,7 +24,7 @@ impl TypeCloner {
       return clone;
     } else
     // persistent 标志读取收口在 `is_persistent`（arena 节点契约同 C++ get）。
-    if is_persistent(ty) && ty != self.force_ty {
+    if is_persistent(ty) && self.force_ty != Some(ty) {
       return ty;
     }
 
@@ -38,22 +38,21 @@ impl TypeCloner {
     new_type.documentation_symbol = documentation_symbol_of(ty);
     let target = self.arena.get_mut().add_type(new_type);
 
-    // `replacement_for_null_scope` is null for ordinary clones (Clone.cpp:171-176,
-    // free/table scope -> null) and carries the fragment cloner's fresh scope for
-    // the `FragmentAutocompleteTypeCloner` override (Clone.cpp:508-513). Generic
-    // types always get a null scope in both paths.
+    // 普通克隆无替换 scope（Clone.cpp:171-176，free/table scope -> null）；
+    // `FragmentAutocompleteTypeCloner` 重载（Clone.cpp:508-513）带上其 fresh scope。
+    // Generic 类型两路恒为 null。折算裸指针仅发生在写入契约字段处。
+    let replacement_scope = self
+      .replacement_for_null_scope
+      .map_or(null_mut(), |scope| scope.as_ptr());
     if let Some(generic) = get_mutable_type::get_mutable::<GenericType>(target) {
       generic.scope = null_mut();
     } else if let Some(free) = get_mutable_type::get_mutable::<FreeType>(target) {
-      free.scope = self.replacement_for_null_scope;
+      free.scope = replacement_scope;
     } else if let Some(table) = get_mutable_type::get_mutable::<TableType>(target) {
-      table.scope = self.replacement_for_null_scope;
+      table.scope = replacement_scope;
     }
 
-    // Safety: self.types 由 clone() 闭包从调用方 `tys: &mut HashMap` 借用接线为非空
-    // 裸指针，HashMap 存活期覆盖整个 cloner 运行，且该 cloner 是唯一写入者；
-    // ty/target 均为上方已确认的存活节点指针。
-    unsafe { (*self.types).insert(ty, target) };
+    self.types.insert(ty, target);
     self.queue.push(TypeOrPack::V0(target));
     target
   }
@@ -65,7 +64,7 @@ impl TypeCloner {
       return clone;
     } else
     // persistent 标志读取收口在 `pack_is_persistent`（arena 节点契约同 C++ get）。
-    if pack_is_persistent(tp) && tp != self.force_tp {
+    if pack_is_persistent(tp) && self.force_tp != Some(tp) {
       return tp;
     }
 
@@ -82,18 +81,18 @@ impl TypeCloner {
         owning_arena: ArenaId::NONE,
       });
 
-    // null for ordinary clones (Clone.cpp:194-197), fresh scope for the
-    // fragment cloner override (Clone.cpp:531-534). Generic packs always null.
+    // 普通克隆为 null（Clone.cpp:194-197），fragment 重载带上 fresh scope
+    // （Clone.cpp:531-534）。Generic pack 恒 null。
+    let replacement_scope = self
+      .replacement_for_null_scope
+      .map_or(null_mut(), |scope| scope.as_ptr());
     if let Some(generic) = get_mutable_type_pack::get_mutable::<GenericTypePack>(target) {
       generic.scope = null_mut();
     } else if let Some(free) = get_mutable_type_pack::get_mutable::<FreeTypePack>(target) {
-      free.scope = self.replacement_for_null_scope;
+      free.scope = replacement_scope;
     }
 
-    // Safety: self.packs 由 clone() 闭包从调用方 `tps: &mut HashMap` 借用接线为非空
-    // 裸指针，HashMap 存活期覆盖整个 cloner 运行且本 cloner 是唯一写入者；tp/target
-    // 均为上方已确认的存活节点指针。
-    unsafe { (*self.packs).insert(tp, target) };
+    self.packs.insert(tp, target);
     self.queue.push(TypeOrPack::V1(target));
     target
   }

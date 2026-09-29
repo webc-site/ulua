@@ -2,7 +2,7 @@ use ulua_common::fint;
 
 use crate::records::type_cloner::TypeCloner;
 
-impl TypeCloner {
+impl TypeCloner<'_> {
   pub fn has_exceeded_iteration_limit(&self) -> bool {
     if fint::LuauTypeCloneIterationLimit.get() == 0 {
       return false;

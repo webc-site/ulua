@@ -55,7 +55,7 @@ fn type_pack_variant_mut(tp: TypePackId) -> &'static mut TypePackVariant {
   unsafe { &mut (*as_mutable_type_pack(tp)).ty }
 }
 
-impl TypeCloner {
+impl TypeCloner<'_> {
   /// cpp `void TypeCloner::cloneChildren(TypeId ty)`（`Clone.cpp:225-234`）。
   ///
   /// C++：`visit([&](auto&& t){ return cloneChildren(&t); }, asMutable(ty)->ty);`

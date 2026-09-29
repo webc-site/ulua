@@ -1,5 +1,3 @@
-use core::ptr::null;
-
 use crate::{
   functions::clone_clone::{pack_is_persistent, type_is_persistent, with_clone_maps},
   records::{
@@ -7,7 +5,7 @@ use crate::{
     fragment_autocomplete_type_cloner::FragmentAutocompleteTypeCloner, scope::Scope,
     type_arena::TypeArena, type_fun::TypeFun,
   },
-  type_aliases::{collections::HashMap, type_id::TypeId, type_pack_id::TypePackId},
+  type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
 
 /// 对应 C++ `cloneIncremental(TypePackId, ...)`（Clone.cpp）：持久 pack 直接复用，
@@ -15,8 +13,8 @@ use crate::{
 ///
 /// `tp` 为 arena 句柄：须指向本次克隆所用 type arena 的存活节点（同 `clone_clone::clone`
 /// 的纪律）；`fresh_scope_for_free_types` 是 free/lazy 类型落点的目标 scope，
-/// 下游 `FragmentAutocompleteTypeCloner::new` 以 `LUAU_ASSERT!` 断言其非空——
-/// `&mut` 形参已从类型上排除 null。
+/// `FragmentAutocompleteTypeCloner::new` 的 `&mut` 形参已从类型上排除 null
+/// （原 `LUAU_ASSERT!(!p.is_null())` 断言随之取消）。
 pub fn clone_incremental(
   tp: TypePackId,
   dest: &mut TypeArena,
@@ -35,11 +33,9 @@ pub fn clone_incremental(
       let mut cloner = FragmentAutocompleteTypeCloner::new(
         Handle::from_mut(dest),
         builtin_types,
-        tys as *mut HashMap<TypeId, TypeId>,
-        tps as *mut HashMap<TypePackId, TypePackId>,
-        null(),
-        null(),
-        fresh_scope_for_free_types as *mut Scope,
+        tys,
+        tps,
+        fresh_scope_for_free_types,
       );
       cloner.base.clone_type_pack_id(tp)
     },
@@ -65,11 +61,9 @@ pub fn clone_incremental_type_id(
       let mut cloner = FragmentAutocompleteTypeCloner::new(
         Handle::from_mut(dest),
         builtin_types,
-        tys as *mut HashMap<TypeId, TypeId>,
-        tps as *mut HashMap<TypePackId, TypePackId>,
-        null(),
-        null(),
-        fresh_scope_for_free_types as *mut Scope,
+        tys,
+        tps,
+        fresh_scope_for_free_types,
       );
       cloner.base.clone_type_id(type_id)
     },
@@ -91,11 +85,9 @@ pub fn clone_incremental_type_fun(
       let mut cloner = FragmentAutocompleteTypeCloner::new(
         Handle::from_mut(dest),
         builtin_types,
-        tys as *mut HashMap<TypeId, TypeId>,
-        tps as *mut HashMap<TypePackId, TypePackId>,
-        null(),
-        null(),
-        fresh_scope_for_free_types as *mut Scope,
+        tys,
+        tps,
+        fresh_scope_for_free_types,
       );
 
       let mut copy = type_fun.clone();
@@ -138,11 +130,9 @@ pub fn clone_incremental_binding(
       let mut cloner = FragmentAutocompleteTypeCloner::new(
         Handle::from_mut(dest),
         builtin_types,
-        tys as *mut HashMap<TypeId, TypeId>,
-        tps as *mut HashMap<TypePackId, TypePackId>,
-        null(),
-        null(),
-        fresh_scope_for_free_types as *mut Scope,
+        tys,
+        tps,
+        fresh_scope_for_free_types,
       );
 
       Binding {

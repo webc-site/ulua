@@ -2,7 +2,7 @@ use ulua_common::LUAU_ASSERT;
 
 use crate::{records::type_cloner::TypeCloner, type_aliases::type_or_pack::TypeOrPack};
 
-impl TypeCloner {
+impl TypeCloner<'_> {
   pub fn run(&mut self) {
     while !self.queue.is_empty() {
       self.steps += 1;

@@ -1,5 +1,4 @@
 use alloc::vec::Vec;
-use core::ptr::{null, null_mut};
 
 use crate::{
   records::{
@@ -64,12 +63,12 @@ pub fn clone(tp: TypePackId, dest: &mut TypeArena, clone_state: &mut CloneState)
         arena: Handle::from_mut(dest),
         builtin_types,
         queue: Vec::new(),
-        types: tys as *mut HashMap<TypeId, TypeId>,
-        packs: tps as *mut HashMap<TypePackId, TypePackId>,
-        force_ty: null(),
-        force_tp: null(),
+        types: tys,
+        packs: tps,
+        force_ty: None,
+        force_tp: None,
         steps: 0,
-        replacement_for_null_scope: null_mut(),
+        replacement_for_null_scope: None,
         skip_lazy_type_clone: false,
       };
       cloner.clone_type_pack_id(tp)
@@ -120,12 +119,12 @@ pub fn clone_type_id(
         arena: Handle::from_mut(dest),
         builtin_types,
         queue: Vec::new(),
-        types: tys as *mut HashMap<TypeId, TypeId>,
-        packs: tps as *mut HashMap<TypePackId, TypePackId>,
-        force_ty: null(),
-        force_tp: null(),
+        types: tys,
+        packs: tps,
+        force_ty: None,
+        force_tp: None,
         steps: 0,
-        replacement_for_null_scope: null_mut(),
+        replacement_for_null_scope: None,
         skip_lazy_type_clone: false,
       };
       cloner.clone_type_id(type_id)
@@ -147,12 +146,12 @@ pub fn clone_type_fun(
         arena: Handle::from_mut(dest),
         builtin_types,
         queue: Vec::new(),
-        types: tys as *mut HashMap<TypeId, TypeId>,
-        packs: tps as *mut HashMap<TypePackId, TypePackId>,
-        force_ty: null(),
-        force_tp: null(),
+        types: tys,
+        packs: tps,
+        force_ty: None,
+        force_tp: None,
         steps: 0,
-        replacement_for_null_scope: null_mut(),
+        replacement_for_null_scope: None,
         skip_lazy_type_clone: false,
       };
 

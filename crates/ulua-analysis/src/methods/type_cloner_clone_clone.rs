@@ -3,7 +3,7 @@ use crate::{
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
 
-impl TypeCloner {
+impl TypeCloner<'_> {
   pub fn clone_type_id(&mut self, ty: TypeId) -> TypeId {
     self.shallow_clone_type_id(ty);
     self.run();
@@ -11,10 +11,7 @@ impl TypeCloner {
       // Safety: builtin_types 是构造期按 C++ 引用成员接线的非空 BuiltinTypes
       // 会话单例，比本 cloner 长寿；error_type 按值读出。
       let error = self.builtin_types.get_mut().error_type;
-      // Safety: self.types 指向调用方持有的存活 SeenTypes 表（引用成员语义，
-      // 比 cloner 长寿）；ty/error 均为存活句柄值，&mut 再借用止于本次 insert
-      // 返回，单线程窗口内无并存别名。
-      unsafe { (*self.types).insert(ty, error) };
+      self.types.insert(ty, error);
       return error;
     }
     self
@@ -30,9 +27,7 @@ impl TypeCloner {
       // Safety: builtin_types 为构造期接线的非空 BuiltinTypes 单例（引用成员
       // 语义长寿于 cloner），error_type_pack 按值读出。
       let error = self.builtin_types.get_mut().error_type_pack;
-      // Safety: self.packs 指向调用方持有的存活 SeenTypePacks 表；tp/error 为
-      // 存活句柄值，&mut 再借用止于本次 insert，无并存别名。
-      unsafe { (*self.packs).insert(tp, error) };
+      self.packs.insert(tp, error);
       return error;
     }
     self
