@@ -17,13 +17,13 @@ name = "ulua-analyze"
 path = "src/main.rs"
 
 [dependencies]
-ulua-analysis = { path = "../ulua-analysis", version = "0.1.2" }
-ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
-ulua-cli-lib = { path = "../ulua-cli-lib", version = "0.1.2" }
-ulua-common = { path = "../ulua-common", version = "0.1.2" }
-ulua-config = { path = "../ulua-config", version = "0.1.2" }
-ulua-require = { path = "../ulua-require", version = "0.1.2" }
-ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
+ulua-analysis = { path = "../ulua-analysis", version = "0.1.3" }
+ulua-ast = { path = "../ulua-ast", version = "0.1.3" }
+ulua-cli-lib = { path = "../ulua-cli-lib", version = "0.1.3" }
+ulua-common = { path = "../ulua-common", version = "0.1.3" }
+ulua-config = { path = "../ulua-config", version = "0.1.3" }
+ulua-require = { path = "../ulua-require", version = "0.1.3" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.3" }
 
 # 旧 [features] 段的 default/std/wasm 为零消费点空特性（无 cfg 门控、无
 # 下游转发），删除虚假 no_std 特性面（对齐 ulua-bytecode 先例）。
@@ -31,5 +31,4 @@ ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
 [dev-dependencies.ulua-cli-lib]
 path = "../ulua-cli-lib"
 features = ["test-utils"]
-version = "0.1.2"
 

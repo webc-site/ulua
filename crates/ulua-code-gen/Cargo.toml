@@ -14,14 +14,14 @@ crate-type = ["rlib"]
 
 [dependencies]
 strum = { workspace = true }
-ulua-common = { path = "../ulua-common", version = "0.1.2" }
-ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
+ulua-common = { path = "../ulua-common", version = "0.1.3" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.3" }
 
 # 集成测试需要真实源码→字节码管线（a64_frame_spill_layout 的端到端 JIT 用例）
 [dev-dependencies]
-ulua-ast = { path = "../ulua-ast", version = "0.1.2" }
-ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.2" }
-ulua-compiler = { path = "../ulua-compiler", version = "0.1.2" }
+ulua-ast = { path = "../ulua-ast" }
+ulua-bytecode = { path = "../ulua-bytecode" }
+ulua-compiler = { path = "../ulua-compiler" }
 
 
 # The JIT code-allocator's Windows path uses VirtualAlloc/VirtualFree/

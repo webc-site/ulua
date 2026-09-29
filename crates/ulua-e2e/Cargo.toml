@@ -13,20 +13,20 @@ publish = false
 path = "src/lib.rs"
 
 [dev-dependencies]
-ulua = { path = "../ulua", version = "0.1.2" }
-ulua-common = { path = "../ulua-common", version = "0.1.2" }
+ulua = { path = "../ulua" }
+ulua-common = { path = "../ulua-common" }
 assert_cmd = { workspace = true }
 predicates = { workspace = true }
 tempfile = { workspace = true }
 
 # Pull in the CLI crates so cargo exposes their binaries to assert_cmd's
 # `cargo_bin(..)` lookup (CARGO_BIN_EXE_* / target-dir discovery) deterministically.
-ulua-repl-cli = { path = "../ulua-repl-cli", version = "0.1.2" }
-ulua-analyze-cli = { path = "../ulua-analyze-cli", version = "0.1.2" }
-ulua-ast-cli = { path = "../ulua-ast-cli", version = "0.1.2" }
-ulua-compile-cli = { path = "../ulua-compile-cli", version = "0.1.2" }
-ulua-bytecode-cli = { path = "../ulua-bytecode-cli", version = "0.1.2" }
-ulua-reduce-cli = { path = "../ulua-reduce-cli", version = "0.1.2" }
+ulua-repl-cli = { path = "../ulua-repl-cli" }
+ulua-analyze-cli = { path = "../ulua-analyze-cli" }
+ulua-ast-cli = { path = "../ulua-ast-cli" }
+ulua-compile-cli = { path = "../ulua-compile-cli" }
+ulua-bytecode-cli = { path = "../ulua-bytecode-cli" }
+ulua-reduce-cli = { path = "../ulua-reduce-cli" }
 sonic-rs = { workspace = true }
 parking_lot = { workspace = true }
 

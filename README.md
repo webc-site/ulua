@@ -1,7 +1,8 @@
-<a href="https://github.com/webc-site/ulua/blob/main/README.md#en"><img src="https://cdn.jsdmirror.com/gh/webc-site/svg/i18n/en.svg" height="28"></a> <a href="https://github.com/webc-site/ulua/blob/main/readme/zh.md"><img src="https://cdn.jsdmirror.com/gh/webc-site/svg/i18n/zh.svg" height="28"></a>
-<a href="https://webc-site.github.io/ulua/"><img src="https://img.shields.io/badge/website-webc--site.github.io%2Fulua-0969da?logo=googlechrome&logoColor=white" height="28"></a>
-<a href="https://github.com/webc-site/ulua"><img src="https://img.shields.io/badge/github-webc--site%2Fulua-181717?logo=github&logoColor=white" height="28"></a>
+<a href="https://github.com/webc-site/ulua/blob/main/README.md#en"><img src="https://cdn.jsdmirror.com/gh/webc-site/svg/i18n/en.svg" height="28"></a>
+<a href="https://github.com/webc-site/ulua/blob/main/readme/zh.md"><img src="https://cdn.jsdmirror.com/gh/webc-site/svg/i18n/zh.svg" height="28"></a>
+
 <a href="https://crates.io/crates/ulua"><img src="https://img.shields.io/crates/v/ulua.svg" height="28"></a>
+<a href="https://webc-site.github.io/ulua/"><img src="https://img.shields.io/badge/Playground-WebAssembly-blue.svg" height="28"></a>
 
 ---
 
@@ -32,6 +33,36 @@ Building upon that foundation, this project conducts a deep idiomatic refactor a
 - [Performance Benchmarks](#performance-benchmarks)
 - [Key Features](#key-features)
 - [Differences Between Luau and Lua](#differences-between-luau-and-lua)
+- [Design Architecture & Execution Pipeline](#design-architecture-execution-pipeline)
+  - [1. Core Execution Pipeline](#1-core-execution-pipeline)
+- [Module Architecture](#module-architecture)
+  - [1. Core Execution Engine (Core)](#1-core-execution-engine-core)
+  - [2. Analysis & Bindings](#2-analysis-bindings)
+  - [3. Command-Line Tools (CLI)](#3-command-line-tools-cli)
+  - [4. Test Suites](#4-test-suites)
+- [API Reference](#api-reference)
+  - [Top-Level Helper Functions](#top-level-helper-functions)
+  - [Procedural Macros](#procedural-macros)
+  - [Core Runtime Types and Traits](#core-runtime-types-and-traits)
+
+- [Features Overview](#features-overview)
+- [Usage Demonstration](#usage-demonstration)
+  - [Direct Script & Bytecode Execution](#direct-script-bytecode-execution)
+  - [JIT Native Acceleration & Switching](#jit-native-acceleration-switching)
+    - [1. Rust API Control](#1-rust-api-control)
+    - [2. CLI Command-Line Control](#2-cli-command-line-control)
+    - [3. JIT Control Comparison with Major Lua Runtimes](#3-jit-control-comparison-with-major-lua-runtimes)
+  - [Rust Calling Lua Functions (Arguments & Multi-Return)](#rust-calling-lua-functions-arguments-multi-return)
+  - [Lua Calling Rust Functions & Closures](#lua-calling-rust-functions-closures)
+  - [Host Objects & UserData (Methods & Metamethods)](#host-objects-userdata-methods-metamethods)
+  - [Static Type Checking](#static-type-checking)
+- [Performance Benchmarks](#performance-benchmarks)
+- [Key Features](#key-features)
+- [Differences Between Luau and Lua](#differences-between-luau-and-lua)
+  - [1. Gradual Static Type System](#1-gradual-static-type-system)
+  - [2. Modern Syntax Ergonomics](#2-modern-syntax-ergonomics)
+  - [3. Standard Library & Data Structures](#3-standard-library-data-structures)
+  - [4. Intentional Deviations & Design Trade-offs](#4-intentional-deviations-design-trade-offs)
 - [Design Architecture & Execution Pipeline](#design-architecture-execution-pipeline)
   - [1. Core Execution Pipeline](#1-core-execution-pipeline)
 - [Module Architecture](#module-architecture)
@@ -121,7 +152,7 @@ fn main() -> Result<()> {
 
 #### 2. CLI Command-Line Control
 
-Use the `--codegen` flag or environment variable to toggle JIT execution:
+Use the `--codegen` flag to toggle JIT execution:
 
 - **Interpreter (Default)**:
   ```bash
@@ -494,3 +525,4 @@ Target Standard: Luau 0.737 compatible specification.
 - `FromLua` / `IntoLua`: Conversion traits for bidirectional data marshaling between Rust and Luau.
 - `TypeDiagnostic`: Structured diagnostic item indicating line, column, and description of static type violations.
 - `Error` / `Result`: Unified error types encompassing syntax, runtime, memory, and type failure states.
+

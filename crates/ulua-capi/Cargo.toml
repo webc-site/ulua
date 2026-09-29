@@ -13,4 +13,4 @@ categories = ["external-ffi-bindings", "emulators"]
 crate-type = ["rlib"]
 
 [dependencies]
-ulua-vm = { path = "../ulua-vm", version = "0.1.2" }
+ulua-vm = { path = "../ulua-vm", version = "0.1.3" }

@@ -16,6 +16,6 @@ crate-type = ["rlib"]
 itoa = { workspace = true, default-features = false }
 memchr = { workspace = true, default-features = false }
 strum = { workspace = true }
-ulua-common = { path = "../ulua-common", version = "0.1.2" }
+ulua-common = { path = "../ulua-common", version = "0.1.3" }
 
 
