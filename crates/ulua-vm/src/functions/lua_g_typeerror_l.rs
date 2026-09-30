@@ -17,7 +17,7 @@ pub unsafe fn lua_g_typeerror_l(l: *mut LuaState, o: *const TValue, op: &str) ->
       l,
       "attempt to {} a {} value",
       op,
-      cstr_cow(lua_t_objtypename(l, o))
+      cstr_cow(lua_t_objtypename(l, &*o))
     )
   }
 }

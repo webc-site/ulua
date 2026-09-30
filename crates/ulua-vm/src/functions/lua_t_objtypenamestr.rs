@@ -13,14 +13,15 @@ use crate::{
 
 /// # Safety
 /// 调用方须保证：`l` 存活且 global 的 ttname/mt/tmname/lightuserdataname 数组已按类型标签初始化、
-/// `o` 指向可读 TValue（ttype 标签 < LUA_T_COUNT 且 userdata 的 tag 可信）；返回存活 TString，
+/// `o` 须为存活 `TValue` 的共享只读借用（本函数只读其 tag 与 gc/指针位，体内 `lua_h_getstr`
+/// 为只读表查找、不搬 Lua 栈；userdata 的 metatable/`name` 读取沿 cpp 契约）；返回存活 TString，
 /// 其有效性止于后续 GC 或 lightuserdataname 被改写。cpp ltm.cpp:140 `luaT_objtypenamestr`
-pub(crate) unsafe fn lua_t_objtypenamestr(l: *mut LuaState, o: *const TValue) -> *const tstring {
+pub(crate) unsafe fn lua_t_objtypenamestr(l: *mut LuaState, o: &TValue) -> *const tstring {
   unsafe {
     // Userdata created by the environment can have a custom type name set in the individual metatable
     // If there is no custom name, 'userdata' is returned
-    if (*o).is_userdata() {
-      let u = (*o).as_userdata_ptr();
+    if o.is_userdata() {
+      let u = o.as_userdata_ptr();
       let mt = (*u).metatable;
       if (*u).tag as i32 != UTAG_PROXY && !mt.is_null() {
         let type_ = lua_h_getstr(mt, (*(*l).global).tmname[TMS::TmType as usize]);
@@ -34,7 +35,7 @@ pub(crate) unsafe fn lua_t_objtypenamestr(l: *mut LuaState, o: *const TValue) ->
     }
 
     // Tagged lightuserdata can be named using lua_setlightuserdataname
-    if (*o).is_lightuserdata() {
+    if o.is_lightuserdata() {
       let tag = lightuserdatatag!(o);
 
       if (tag as u32) < LUA_LUTAG_LIMIT as u32 {
@@ -66,6 +67,7 @@ pub unsafe extern "C-unwind" fn lua_t_objtypenamestr_export(
   l: *mut LuaState,
   o: *const TValue,
 ) -> *const c_void {
-  // SAFETY: 导出壳原样转发同契约 `lua_t_objtypenamestr`，返回 C 字符串指针按 c_void 宽化
-  unsafe { lua_t_objtypenamestr(l, o).cast() }
+  // SAFETY: 导出壳原样转发同契约 `lua_t_objtypenamestr`，裸指针在此转为共享只读借用
+  // （契约要求 `o` 非空存活），返回 C 字符串指针按 c_void 宽化
+  unsafe { lua_t_objtypenamestr(l, &*o).cast() }
 }

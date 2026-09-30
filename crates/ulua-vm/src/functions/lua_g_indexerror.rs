@@ -13,8 +13,8 @@ use crate::{
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub unsafe fn lua_g_indexerror(l: *mut LuaState, p1: *const TValue, p2: *const TValue) -> ! {
   unsafe {
-    let t1: *const c_char = lua_t_objtypename(l, p1);
-    let t2: *const c_char = lua_t_objtypename(l, p2);
+    let t1: *const c_char = lua_t_objtypename(l, &*p1);
+    let t2: *const c_char = lua_t_objtypename(l, &*p2);
     let key: *const tstring = if (*p2).is_string() {
       (*p2).as_string_ptr()
     } else {

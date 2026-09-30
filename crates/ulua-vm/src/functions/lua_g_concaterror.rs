@@ -14,8 +14,8 @@ use crate::{
 /// （`luaT_objtypename` 读其类型），`luaG_runerror` 抛错且永不返回，须在受保护帧内调用。cpp `ldebug.cpp:290`。
 pub unsafe fn lua_g_concaterror(l: *mut LuaState, p1: StkId, p2: StkId) -> ! {
   unsafe {
-    let t1: *const c_char = lua_t_objtypename(l, p1);
-    let t2: *const c_char = lua_t_objtypename(l, p2);
+    let t1: *const c_char = lua_t_objtypename(l, &*p1);
+    let t2: *const c_char = lua_t_objtypename(l, &*p2);
 
     lua_g_runerror!(
       l,

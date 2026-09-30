@@ -17,8 +17,10 @@ use crate::{
 /// 的键轴读法同形。
 ///
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn rehash(l: *mut LuaState, t: *mut LuaTable, ek: *const TValue) {
+/// `l`/`t` 须为存活 `LuaState`/`LuaTable`；`ek` 须为存活 `TValue` 的共享只读借用（即将
+/// 插入、尚未落表的额外键，本函数只读其 tag/payload；体内 `resize` 分配在表侧，不搬
+/// Lua 栈）。传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
+pub(crate) unsafe fn rehash(l: *mut LuaState, t: *mut LuaTable, ek: &TValue) {
   unsafe {
     let mut nums = [0i32; (MAXBITS + 1) as usize];
     // 数组部分元素数（同时也是已计数的整数键数）

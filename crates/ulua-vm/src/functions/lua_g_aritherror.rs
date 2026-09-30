@@ -23,8 +23,8 @@ pub unsafe fn lua_g_aritherror(
 ) -> ! {
   // SAFETY: 契约保证 `l` 为存活调用帧、操作数 TValue 可读；错误串格式化后经 luaG 路径抛出、不返回
   unsafe {
-    let t1: *const c_char = lua_t_objtypename(l, p1);
-    let t2: *const c_char = lua_t_objtypename(l, p2);
+    let t1: *const c_char = lua_t_objtypename(l, &*p1);
+    let t2: *const c_char = lua_t_objtypename(l, &*p2);
     // skip __ from metamethod name
     let opname = getstr((*(*l).global).tmname[op as usize]).add(2);
 

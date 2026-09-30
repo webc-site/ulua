@@ -26,7 +26,7 @@ pub unsafe fn lua_rawset(l: *mut LuaState, idx: i32) {
     // ⇔ cpp lapi.cpp:1038-1040 逐位同序：:1038 `setobj2t(L, luaH_set(...), top-1)`
     // （取槽→写值，key/value 是栈槽指针，不受表 rehash 影响）、:1039 `luaC_barriert`
     // （屏障在值落槽之后）、:1040 `top -= 2`。屏障与写分步保留，不收敛单函数。
-    let slot = lua_h_set(l, (*t).as_table_ptr(), key);
+    let slot = lua_h_set(l, (*t).as_table_ptr(), &*key);
     setobj2t!(l, slot, value);
     luaC_barriert!(l, (*t).as_table_ptr(), value);
     (*l).top = key;

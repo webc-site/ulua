@@ -49,7 +49,7 @@ pub(crate) unsafe fn resize(l: *mut LuaState, t: *mut LuaTable, nasize: i32, nhs
         if !(*e).is_nil() {
           let mut ok = TValue::default();
           setnvalue!(addr_of_mut!(ok), (i + 1) as f64);
-          let dest = newkey(l, t, addr_of!(ok));
+          let dest = newkey(l, t, &ok);
           // newkey 返回后重新解引用活数组取源值（与 cpp 参数求值语义一致）
           let e = (*t).array.add(i as usize);
           setobjt2t!(l, dest, &*e);
@@ -82,7 +82,7 @@ pub(crate) unsafe fn resize(l: *mut LuaState, t: *mut LuaTable, nasize: i32, nhs
         if !(*gval!(old)).is_nil() {
           let mut ok = TValue::default();
           getnodekey!(l, addr_of_mut!(ok), old);
-          setobjt2t!(l, arrayornewkey(l, t, addr_of!(ok)), gval!(old));
+          setobjt2t!(l, arrayornewkey(l, t, &ok), gval!(old));
         }
       }
 

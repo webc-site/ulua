@@ -508,7 +508,7 @@ pub(crate) unsafe fn loadsafe(
               let Some(kslot) = constant_at(&*p, key as i64) else {
                 malformed!(l, chunkname, "bytecode table key index is out of range");
               };
-              let val = lua_h_set(l, h, kslot);
+              let val = lua_h_set(l, h, &*kslot);
               setnvalue!(val, 0.0);
             }
             sethvalue!(l, k, h);
@@ -534,7 +534,7 @@ pub(crate) unsafe fn loadsafe(
               let Some(kslot) = constant_at(&*p, key as i64) else {
                 malformed!(l, chunkname, "bytecode table key index is out of range");
               };
-              let val = lua_h_set(l, h, kslot);
+              let val = lua_h_set(l, h, &*kslot);
               let constant_idx = read_value!(i32, "table constant index");
               if let Some(constant) = constant_at(&*p, constant_idx as i64) {
                 if matches!(ValueView::from_tvalue(&*constant), ValueView::Nil) {
@@ -554,7 +554,7 @@ pub(crate) unsafe fn loadsafe(
               let Some(kslot) = constant_at(&*p, *key as i64) else {
                 malformed!(l, chunkname, "bytecode table key index is out of range");
               };
-              let val = lua_h_set(l, h, kslot);
+              let val = lua_h_set(l, h, &*kslot);
               setnilvalue!(val);
             }
 

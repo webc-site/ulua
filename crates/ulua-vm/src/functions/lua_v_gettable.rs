@@ -34,7 +34,7 @@ pub unsafe fn lua_v_gettable(l: *mut LuaState, mut t: *const TValue, key: *mut T
       if (*t).is_table() {
         let h = (*t).as_table_ptr();
 
-        let res = lua_h_get(h, key);
+        let res = lua_h_get(h, &*key);
 
         if res != LUA_O_NILOBJECT {
           (*l).cachedslot = gval2slot!(h, res);
@@ -52,7 +52,7 @@ pub unsafe fn lua_v_gettable(l: *mut LuaState, mut t: *const TValue, key: *mut T
         }
       } else if fflag::DebugLuauUserDefinedClassesRuntime.get() && (*t).is_object() {
         let inst = objectvalue!(t);
-        let offsettval = lua_h_get((*(*inst).lclass).memberstooffset, key);
+        let offsettval = lua_h_get((*(*inst).lclass).memberstooffset, &*key);
 
         if (*offsettval).is_nil() {
           lua_g_missingmembererror(l, t, key);
@@ -64,7 +64,7 @@ pub unsafe fn lua_v_gettable(l: *mut LuaState, mut t: *const TValue, key: *mut T
         return;
       } else if fflag::DebugLuauUserDefinedClassesRuntime.get() && (*t).is_class() {
         let lco = classvalue!(t);
-        let res = lua_h_get((*lco).memberstooffset, key);
+        let res = lua_h_get((*lco).memberstooffset, &*key);
 
         if (*res).is_nil() {
           lua_g_missingmembererror(l, t, key);

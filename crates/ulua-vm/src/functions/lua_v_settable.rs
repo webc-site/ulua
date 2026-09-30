@@ -42,7 +42,7 @@ pub unsafe fn lua_v_settable(
       if (*t).is_table() {
         let h = (*t).as_table_ptr();
 
-        let oldval = lua_h_get(h, key);
+        let oldval = lua_h_get(h, &*key);
 
         if (*oldval).is_nil() {
           tm = fasttm(l, (*h).metatable, TMS::TmNewIndex);
@@ -60,7 +60,7 @@ pub unsafe fn lua_v_settable(
           //        把白色值置灰，写前触发等于漏灰。三步在 cpp 同函数相邻成对，
           //        但仍保留分步形态与 SETOBJ/barrier 宏语义一一对应（C3 规程：
           //        不发明单函数收敛，屏障时机只照抄 cpp）。
-          let newval = lua_h_setslot!(l, h, oldval, key);
+          let newval = lua_h_setslot!(l, h, oldval, &*key);
 
           (*l).cachedslot = gval2slot!(h, newval);
 
@@ -70,7 +70,7 @@ pub unsafe fn lua_v_settable(
         }
       } else if fflag::DebugLuauUserDefinedClassesRuntime.get() && (*t).is_object() {
         let inst = objectvalue!(t);
-        let offset = lua_h_get((*(*inst).lclass).memberstooffset, key);
+        let offset = lua_h_get((*(*inst).lclass).memberstooffset, &*key);
         if (*offset).is_nil() {
           lua_g_missingmembererror(l, t, key);
         }

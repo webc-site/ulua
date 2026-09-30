@@ -20,7 +20,7 @@ pub unsafe fn lua_rawget(l: *mut LuaState, idx: i32) -> i32 {
     api_check!(l, (*t).is_table());
 
     let slot = (*l).top.sub(1);
-    setobj_2_s!(l, slot, lua_h_get((*t).as_table_ptr(), slot));
+    setobj_2_s!(l, slot, lua_h_get((*t).as_table_ptr(), &*slot));
 
     ttype!((*l).top.sub(1)) as i32
   }

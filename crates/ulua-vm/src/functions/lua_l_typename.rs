@@ -21,7 +21,7 @@ pub unsafe fn lua_l_typename(l: *mut LuaState, idx: i32) -> *const c_char {
     if obj.is_null() || eq(obj, LUA_O_NILOBJECT) {
       NO_VALUE_BYTES.as_ptr().cast()
     } else {
-      lua_t_objtypename(l, obj)
+      lua_t_objtypename(l, &*obj)
     }
   }
 }
