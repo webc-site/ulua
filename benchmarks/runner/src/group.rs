@@ -9,9 +9,9 @@ use std::io::{Error as IoError, ErrorKind};
 
 use crate::{
   Config,
-  analysis::{ANALYSIS_CHECK, ANALYSIS_GLOBALS},
   case::{filter_cases, locate_dir, scan_group_cases},
-  compile, engine,
+  compile,
+  engine::{self, EngineImpl},
   output::{export_group_json, export_results_json},
   report::{W_EXEC, W_GROUP, Widths, measure_and_tabulate},
 };
@@ -80,64 +80,60 @@ pub static GROUPS: &[&GroupSpec] = &[&EXEC_GROUP, &COMPILE_GROUP, &ANALYSIS_GROU
 
 fn compile_engines() -> Vec<engine::EngineSpec> {
   let mut engines = vec![
-    engine::spec_public("ulua-parse", "ulua parse", true, Some(&compile::ULUA_PARSE)),
-    engine::spec_public(
+    engine::group_spec("ulua-parse", "ulua parse", true, Some(EngineImpl::UluaParse)),
+    engine::group_spec(
       "ulua-compile",
       "ulua parse+compile",
       true,
-      Some(&compile::ULUA_COMPILE),
+      Some(EngineImpl::UluaCompile),
     ),
   ];
   #[cfg(feature = "engine-luau")]
-  engines.push(engine::spec_public(
+  engines.push(engine::group_spec(
     "mlua-compile",
     "mlua/luau compile",
     false,
-    Some(&compile::LUAU_CPP_COMPILE),
+    Some(EngineImpl::LuauCppCompile),
   ));
   #[cfg(not(feature = "engine-luau"))]
-  engines.push(engine::spec_public(
-    "mlua-compile",
-    "mlua/luau compile",
-    false,
-    None,
-  ));
+  engines.push(engine::group_spec("mlua-compile", "mlua/luau compile", false, None));
   engines
 }
 
 fn analysis_engines() -> Vec<engine::EngineSpec> {
   vec![
-    engine::spec_public(
+    engine::group_spec(
       "ulua-analysis-globals",
       "globals 基线",
       true,
-      Some(&ANALYSIS_GLOBALS),
+      Some(EngineImpl::AnalysisGlobals),
     ),
-    engine::spec_public(
+    engine::group_spec(
       "ulua-analysis-check",
       "globals+检查",
       true,
-      Some(&ANALYSIS_CHECK),
+      Some(EngineImpl::AnalysisCheck),
     ),
   ]
 }
 
-/// 按用户 `--engines` 过滤实测引擎；空过滤器 = 全部实测引擎。顺序保持注册序。
+/// 按用户 `--engines` 过滤实测引擎，返回「注册条目 + 实现」按值配对的
+/// [`engine::LiveEngine`] 列表；空过滤器 = 全部实测引擎。顺序保持注册序。
 /// 指定了当前二进制不可测的 key 时报错（带可用清单与后端提示），不静默跳过。
-fn select_engines(spec: &GroupSpec, cfg: &Config) -> Result<Vec<engine::EngineSpec>, IoError> {
+fn select_engines(spec: &GroupSpec, cfg: &Config) -> Result<Vec<engine::LiveEngine>, IoError> {
   let all = spec.engines();
-  let live: Vec<engine::EngineSpec> = all
+  let live: Vec<engine::LiveEngine> = all
     .into_iter()
-    .filter(|e| e.engine.is_some())
-    .filter(|e| cfg.engine_keys.is_empty() || cfg.engine_keys.iter().any(|key| key == e.key))
+    .filter(|e| cfg.engine_keys.is_empty() || cfg.engine_keys.iter().any(|key| key == e.meta.key))
+    .filter_map(|e| e.engine.map(|imp| engine::LiveEngine { spec: e, imp }))
     .collect();
   for want in &cfg.engine_keys {
-    if !live.iter().any(|e| e.key == want) {
+    if !live.iter().any(|e| e.spec.meta.key == want) {
       let available: Vec<&str> = spec
         .engines()
         .iter()
         .filter(|e| e.engine.is_some())
-        .map(|e| e.key)
+        .map(|e| e.meta.key)
         .collect();
       return Err(IoError::new(
         ErrorKind::InvalidInput,
@@ -178,8 +174,7 @@ pub fn run_group(spec: &GroupSpec, cfg: &Config) -> Result<(), IoError> {
         .join(", ")
     );
   }
-  let engines = select_engines(spec, cfg)?;
-  let engine_refs: Vec<&engine::EngineSpec> = engines.iter().collect();
+  let live = select_engines(spec, cfg)?;
 
   println!();
   println!(
@@ -188,13 +183,7 @@ pub fn run_group(spec: &GroupSpec, cfg: &Config) -> Result<(), IoError> {
   );
   println!();
 
-  let tab = measure_and_tabulate(
-    &active_cases,
-    &engine_refs,
-    cfg.runs,
-    spec.widths,
-    cfg.alloc,
-  )?;
+  let tab = measure_and_tabulate(&active_cases, &live, cfg.runs, spec.widths, cfg.alloc)?;
   if !tab.values_ok {
     eprintln!(
       "警告: 分组 {} 存在跨引擎返回值分歧（详情见上方 [用例] 行），对比数据请谨慎采信",

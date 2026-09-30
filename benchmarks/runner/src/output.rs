@@ -113,14 +113,14 @@ fn engine_items(engines: &[EngineSpec]) -> Vec<EngineItem> {
   engines
     .iter()
     .map(|e| EngineItem {
-      id: e.id,
-      key: e.key,
-      label: e.label,
-      lang: e.lang,
-      mode: e.mode,
-      color: e.color,
-      is_ulua: e.is_ulua,
-      is_reference: e.is_reference,
+      id: e.meta.id,
+      key: e.meta.key,
+      label: e.meta.label,
+      lang: e.meta.lang,
+      mode: e.meta.mode,
+      color: e.meta.color,
+      is_ulua: e.meta.is_ulua,
+      is_reference: e.meta.is_reference,
     })
     .collect()
 }
@@ -173,8 +173,8 @@ pub fn export_results_json(
   if has_baseline {
     geomean_map.insert(BASELINE_KEY.to_owned(), 1.0);
     for engine in engines.iter().skip(1) {
-      if let Some(ratio) = geomean_ratio(BASELINE_KEY, engine.key, cases, &data) {
-        geomean_map.insert(engine.key.to_owned(), ratio);
+      if let Some(ratio) = geomean_ratio(BASELINE_KEY, engine.meta.key, cases, &data) {
+        geomean_map.insert(engine.meta.key.to_owned(), ratio);
       }
     }
   }
@@ -209,10 +209,10 @@ pub fn export_group_json(
   // 各引擎相对分组首引擎（ulua 侧基线）的几何平均比率（基线自身恒为 1.0）。
   let baseline = engines.first().expect("分组至少有一个引擎");
   let mut geomean_map: BTreeMap<String, f64> = BTreeMap::new();
-  geomean_map.insert(baseline.key.to_owned(), 1.0);
+  geomean_map.insert(baseline.meta.key.to_owned(), 1.0);
   for engine in engines.iter().skip(1) {
-    if let Some(ratio) = geomean_ratio(baseline.key, engine.key, cases, &data_map) {
-      geomean_map.insert(engine.key.to_owned(), ratio);
+    if let Some(ratio) = geomean_ratio(baseline.key, engine.meta.key, cases, &data_map) {
+      geomean_map.insert(engine.meta.key.to_owned(), ratio);
     }
   }
 

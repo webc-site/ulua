@@ -13,7 +13,6 @@ use ulua_analysis::{
 use ulua_ast::enums::mode::Mode;
 use ulua_config::records::config::Config as LuauConfig;
 
-use crate::engine::BenchEngine;
 
 /// 把当前被测源码喂给 Frontend 的内存版 FileResolver（实现公开 trait，无 internals）。
 struct BenchFileResolver {
@@ -70,9 +69,10 @@ impl BenchConfigResolver {
 }
 
 /// Frontend 搭建（可选执行模块检查）：`check=false` 时只注册/冻结内置全局，
-/// 作为 `check=true` 的固定开销基线。resolver 均为本地且后于 frontend 声明，
-/// frontend（Box）先析构，满足 Frontend 持有裸指针的长寿契约。
-fn analysis_common(src: &str, check: bool) -> Result<Option<String>, String> {
+/// 作为 `check=true` 的固定开销基线（分析组两个引擎只差这一开关，共用本函数）。
+/// resolver 均为本地且后于 frontend 声明，frontend（Box）先析构，满足
+/// Frontend 持有裸指针的长寿契约。
+pub(crate) fn run(check: bool, src: &str) -> Result<Option<String>, String> {
   let mut file_resolver = BenchFileResolver {
     source: src.to_owned(),
   };
@@ -103,23 +103,3 @@ fn analysis_common(src: &str, check: bool) -> Result<Option<String>, String> {
   Ok(None)
 }
 
-/// 仅内置全局注册 + 冻结：分析组的固定开销基线。
-pub(crate) struct AnalysisGlobals;
-
-impl BenchEngine for AnalysisGlobals {
-  fn run(&self, src: &str) -> Result<Option<String>, String> {
-    analysis_common(src, false)
-  }
-}
-
-/// 全量：内置全局 + strict 模式类型检查被测模块。
-pub(crate) struct AnalysisCheck;
-
-impl BenchEngine for AnalysisCheck {
-  fn run(&self, src: &str) -> Result<Option<String>, String> {
-    analysis_common(src, true)
-  }
-}
-
-pub static ANALYSIS_GLOBALS: AnalysisGlobals = AnalysisGlobals;
-pub static ANALYSIS_CHECK: AnalysisCheck = AnalysisCheck;

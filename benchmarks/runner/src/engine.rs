@@ -1,9 +1,12 @@
-//! 评测引擎抽象与注册表。
+//! 评测引擎注册表与统一派发。
 //!
-//! 设计：`BenchEngine` trait 把「跑一次被测源码」抽象成单元结构体实现，每引擎
-//! 一个类型，构造逻辑（state 建立、JIT 开关）收敛在各自实现内；`EngineSpec`
-//! 是引擎的静态元数据 + 实现引用，注册表按 `cfg` 在编译期组装，未编译进当前
-//! 二进制的后端引擎保留元数据（供 JSON 引擎清单）但不带实现。
+//! 设计：全部引擎（exec / compile / analysis 三组）收敛为一个 [`EngineImpl`]
+//! 枚举——类型集编译期封闭（每个 variant 对应一个已知引擎），故用 enum match
+//! 派发而非 `dyn Trait` 虚分派，单态调用点 + 零 `dyn`。[`EngineSpec`] 是引擎的
+//! 静态元数据 + 可选实现，注册表按 `cfg` 在编译期组装，未编译进当前二进制的
+//! 后端引擎保留元数据（供 JSON 引擎清单）但不带实现；测量路径统一走
+//! [`LiveEngine`]（spec + 实现按值配对），「实测引擎」由类型承载而非运行期
+//! unwrap。
 //!
 //! 后端互斥三选一（`engine-luau` / `engine-luajit` / `engine-lua54`，见 Cargo.toml
 //! 与 main.rs 顶部守卫）：mlua 0.12 的 ffi 扁平 re-export 使同一二进制只能共链
@@ -40,33 +43,8 @@ pub(crate) fn format_fvals(vals: impl IntoIterator<Item = FVal>) -> String {
     .join(",")
 }
 
-/// 单引擎执行器：完整运行一次被测源码。
-///
-/// `Ok` 携带「返回值指纹」（见 [`format_fvals`]），无脚本返回值的引擎
-/// （解析/编译/类型检查）返回 `Ok(None)`。
-pub trait BenchEngine: Sync {
-  fn run(&self, src: &str) -> Result<Option<String>, String>;
-}
-
-/// 引擎静态元数据 + 实现。`engine: None` 表示当前二进制未编译该引擎
-/// （仅保留 JSON 引擎清单与文档用途），测量循环会跳过它。
-pub struct EngineSpec {
-  pub id: &'static str,
-  pub key: &'static str,
-  pub label: &'static str,
-  pub lang: &'static str,
-  /// "interp" | "jit"，纯展示字段。
-  pub mode: &'static str,
-  pub color: &'static str,
-  /// 是否 ulua 侧引擎（`--alloc` 分配计数只覆盖 ulua 侧）。
-  pub is_ulua: bool,
-  /// 是否第三方参考基线（纯展示字段，网页侧区分阵营用）。
-  pub is_reference: bool,
-  pub engine: Option<&'static dyn BenchEngine>,
-}
-
 // ---------------------------------------------------------------------------
-// ulua 侧引擎（与后端无关，任何 feature 组合下都可实测）。
+// ulua 侧执行（与后端无关，任何 feature 组合下都可实测）。
 // ---------------------------------------------------------------------------
 
 /// `Lua::new()` 的内置库注册开销对所有被测引擎完全对称，比值不受影响，而
@@ -78,365 +56,365 @@ fn ulua_eval(src: &str, jit: bool) -> Result<Option<String>, String> {
     lua.enable_jit(true).map_err(|e| format!("{e:?}"))?;
   }
   let values: ulua::MultiValue = lua.load(src).eval().map_err(|e| format!("{e:?}"))?;
-  Ok(Some(format_fvals(values.into_iter().map(
-    |value| match value {
-      Value::Nil => FVal::Nil,
-      Value::Boolean(b) => FVal::Bool(b),
-      Value::Integer(i) => FVal::Int(i),
-      Value::Number(f) => FVal::Num(f),
-      Value::String(s) => FVal::Str(s.to_string_lossy()),
-      other => FVal::Other(format!("{other:?}")),
-    },
-  ))))
+  Ok(Some(format_fvals(values.into_iter().map(|value| match value {
+    Value::Nil => FVal::Nil,
+    Value::Boolean(b) => FVal::Bool(b),
+    Value::Integer(i) => FVal::Int(i),
+    Value::Number(f) => FVal::Num(f),
+    Value::String(s) => FVal::Str(s.to_string_lossy()),
+    other => FVal::Other(format!("{other:?}")),
+  }))))
 }
-
-struct UluaInterp;
-
-impl BenchEngine for UluaInterp {
-  fn run(&self, src: &str) -> Result<Option<String>, String> {
-    ulua_eval(src, false)
-  }
-}
-
-struct UluaJit;
-
-impl BenchEngine for UluaJit {
-  fn run(&self, src: &str) -> Result<Option<String>, String> {
-    ulua_eval(src, true)
-  }
-}
-
-static ULUA_INTERP: UluaInterp = UluaInterp;
-static ULUA_JIT: UluaJit = UluaJit;
 
 // ---------------------------------------------------------------------------
-// C 侧引擎：按后端 feature 编译，每后端一个模块（模块内保留该后端 Value →
-// FVal 的 6 行转换）。feature 关闭时模块整体不存在，注册表以 `engine: None`
-// 占位保留元数据。
+// C 侧执行：按后端 feature 编译，每后端一个模块（模块内保留该后端 Value →
+// FVal 的转换）。feature 关闭时模块整体不存在，对应枚举 variant 一并 cfg 掉。
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "engine-luau")]
 mod backend_luau {
-  use super::{BenchEngine, FVal, format_fvals};
+  use super::{FVal, format_fvals};
 
-  fn eval(src: &str, jit: bool) -> Result<Option<String>, String> {
+  pub(super) fn eval(src: &str, jit: bool) -> Result<Option<String>, String> {
     let lua = mlua_luau::Lua::new();
     lua.enable_jit(jit);
     let values: mlua_luau::MultiValue = lua.load(src).eval().map_err(|e| format!("{e:?}"))?;
-    Ok(Some(format_fvals(values.into_iter().map(
-      |value| match value {
-        mlua_luau::Value::Nil => FVal::Nil,
-        mlua_luau::Value::Boolean(b) => FVal::Bool(b),
-        mlua_luau::Value::Integer(i) => FVal::Int(i),
-        mlua_luau::Value::Number(f) => FVal::Num(f),
-        mlua_luau::Value::String(s) => {
-          FVal::Str(String::from_utf8_lossy(&s.as_bytes()).into_owned())
-        }
-        other => FVal::Other(format!("{other:?}")),
-      },
-    ))))
+    Ok(Some(format_fvals(values.into_iter().map(|value| match value {
+      mlua_luau::Value::Nil => FVal::Nil,
+      mlua_luau::Value::Boolean(b) => FVal::Bool(b),
+      mlua_luau::Value::Integer(i) => FVal::Int(i),
+      mlua_luau::Value::Number(f) => FVal::Num(f),
+      mlua_luau::Value::String(s) => {
+        FVal::Str(String::from_utf8_lossy(&s.as_bytes()).into_owned())
+      }
+      other => FVal::Other(format!("{other:?}")),
+    }))))
   }
-
-  pub(super) struct LuauCppInterp;
-
-  impl BenchEngine for LuauCppInterp {
-    fn run(&self, src: &str) -> Result<Option<String>, String> {
-      eval(src, false)
-    }
-  }
-
-  pub(super) struct LuauCppJit;
-
-  impl BenchEngine for LuauCppJit {
-    fn run(&self, src: &str) -> Result<Option<String>, String> {
-      eval(src, true)
-    }
-  }
-
-  pub(super) static LUAU_CPP_INTERP: LuauCppInterp = LuauCppInterp;
-  pub(super) static LUAU_CPP_JIT: LuauCppJit = LuauCppJit;
 }
 
 #[cfg(feature = "engine-luajit")]
 mod backend_luajit {
-  use super::{BenchEngine, FVal, format_fvals};
+  use super::{FVal, format_fvals};
 
-  fn eval(src: &str, jit: bool) -> Result<Option<String>, String> {
+  pub(super) fn eval(src: &str, jit: bool) -> Result<Option<String>, String> {
     let lua = mlua_luajit::Lua::new();
-    if jit {
-      let _ = lua.load("jit.on()").exec();
-    } else {
-      let _ = lua.load("jit.off()").exec();
-    }
+    // mlua-luajit 无 enable_jit 高层 API，用 Lua 侧 jit.on/off 等价开关。
+    let _ = lua.load(if jit { "jit.on()" } else { "jit.off()" }).exec();
     let values: mlua_luajit::MultiValue = lua.load(src).eval().map_err(|e| format!("{e:?}"))?;
-    Ok(Some(format_fvals(values.into_iter().map(
-      |value| match value {
-        mlua_luajit::Value::Nil => FVal::Nil,
-        mlua_luajit::Value::Boolean(b) => FVal::Bool(b),
-        mlua_luajit::Value::Integer(i) => FVal::Int(i),
-        mlua_luajit::Value::Number(f) => FVal::Num(f),
-        mlua_luajit::Value::String(s) => {
-          FVal::Str(String::from_utf8_lossy(&s.as_bytes()).into_owned())
-        }
-        other => FVal::Other(format!("{other:?}")),
-      },
-    ))))
+    Ok(Some(format_fvals(values.into_iter().map(|value| match value {
+      mlua_luajit::Value::Nil => FVal::Nil,
+      mlua_luajit::Value::Boolean(b) => FVal::Bool(b),
+      mlua_luajit::Value::Integer(i) => FVal::Int(i),
+      mlua_luajit::Value::Number(f) => FVal::Num(f),
+      mlua_luajit::Value::String(s) => {
+        FVal::Str(String::from_utf8_lossy(&s.as_bytes()).into_owned())
+      }
+      other => FVal::Other(format!("{other:?}")),
+    }))))
   }
-
-  pub(super) struct LuaJitInterp;
-
-  impl BenchEngine for LuaJitInterp {
-    fn run(&self, src: &str) -> Result<Option<String>, String> {
-      eval(src, false)
-    }
-  }
-
-  pub(super) struct LuaJitJit;
-
-  impl BenchEngine for LuaJitJit {
-    fn run(&self, src: &str) -> Result<Option<String>, String> {
-      eval(src, true)
-    }
-  }
-
-  pub(super) static LUAJIT_INTERP: LuaJitInterp = LuaJitInterp;
-  pub(super) static LUAJIT_JIT: LuaJitJit = LuaJitJit;
 }
 
 #[cfg(feature = "engine-lua54")]
 mod backend_lua54 {
-  use super::{BenchEngine, FVal, format_fvals};
+  use super::{FVal, format_fvals};
 
-  fn eval(src: &str) -> Result<Option<String>, String> {
+  pub(super) fn eval(src: &str) -> Result<Option<String>, String> {
     let lua = mlua_lua54::Lua::new();
     let values: mlua_lua54::MultiValue = lua.load(src).eval().map_err(|e| format!("{e:?}"))?;
-    Ok(Some(format_fvals(values.into_iter().map(
-      |value| match value {
-        mlua_lua54::Value::Nil => FVal::Nil,
-        mlua_lua54::Value::Boolean(b) => FVal::Bool(b),
-        mlua_lua54::Value::Integer(i) => FVal::Int(i),
-        mlua_lua54::Value::Number(f) => FVal::Num(f),
-        mlua_lua54::Value::String(s) => {
-          FVal::Str(String::from_utf8_lossy(&s.as_bytes()).into_owned())
-        }
-        other => FVal::Other(format!("{other:?}")),
-      },
-    ))))
+    Ok(Some(format_fvals(values.into_iter().map(|value| match value {
+      mlua_lua54::Value::Nil => FVal::Nil,
+      mlua_lua54::Value::Boolean(b) => FVal::Bool(b),
+      mlua_lua54::Value::Integer(i) => FVal::Int(i),
+      mlua_lua54::Value::Number(f) => FVal::Num(f),
+      mlua_lua54::Value::String(s) => {
+        FVal::Str(String::from_utf8_lossy(&s.as_bytes()).into_owned())
+      }
+      other => FVal::Other(format!("{other:?}")),
+    }))))
   }
-
-  pub(super) struct Lua54Interp;
-
-  impl BenchEngine for Lua54Interp {
-    fn run(&self, src: &str) -> Result<Option<String>, String> {
-      eval(src)
-    }
-  }
-
-  pub(super) static LUA54_INTERP: Lua54Interp = Lua54Interp;
 }
 
-// ---------------------------------------------------------------------------
-// 注册表：便捷构造与组装函数（编译期 cfg 决定哪些引擎带实现）。
-// ---------------------------------------------------------------------------
+/// 全部引擎的封闭集合：variant 与「跑一次被测源码」一一对应，`run` 的 match
+/// 即全部派发（无 dyn、无注册表查找）。
+///
+/// `Ok` 携带「返回值指纹」（见 [`format_fvals`]），无脚本返回值的引擎
+/// （解析/编译/类型检查）返回 `Ok(None)`。
+#[derive(Clone, Copy)]
+pub(crate) enum EngineImpl {
+  UluaInterp,
+  UluaJit,
+  #[cfg(feature = "engine-luau")]
+  LuauCppInterp,
+  #[cfg(feature = "engine-luau")]
+  LuauCppJit,
+  #[cfg(feature = "engine-luajit")]
+  LuaJitInterp,
+  #[cfg(feature = "engine-luajit")]
+  LuaJitJit,
+  #[cfg(feature = "engine-lua54")]
+  Lua54Interp,
+  UluaParse,
+  UluaCompile,
+  #[cfg(feature = "engine-luau")]
+  LuauCppCompile,
+  AnalysisGlobals,
+  AnalysisCheck,
+}
 
-/// 便捷构造（元数据全字段 + 实现）。
-#[allow(clippy::too_many_arguments)]
-pub fn spec(
-  id: &'static str,
-  key: &'static str,
-  label: &'static str,
-  lang: &'static str,
-  mode: &'static str,
-  color: &'static str,
-  is_ulua: bool,
-  is_reference: bool,
-  engine: Option<&'static dyn BenchEngine>,
-) -> EngineSpec {
-  EngineSpec {
-    id,
-    key,
-    label,
-    lang,
-    mode,
-    color,
-    is_ulua,
-    is_reference,
-    engine,
+impl EngineImpl {
+  pub(crate) fn run(self, src: &str) -> Result<Option<String>, String> {
+    match self {
+      Self::UluaInterp => ulua_eval(src, false),
+      Self::UluaJit => ulua_eval(src, true),
+      #[cfg(feature = "engine-luau")]
+      Self::LuauCppInterp => backend_luau::eval(src, false),
+      #[cfg(feature = "engine-luau")]
+      Self::LuauCppJit => backend_luau::eval(src, true),
+      #[cfg(feature = "engine-luajit")]
+      Self::LuaJitInterp => backend_luajit::eval(src, false),
+      #[cfg(feature = "engine-luajit")]
+      Self::LuaJitJit => backend_luajit::eval(src, true),
+      #[cfg(feature = "engine-lua54")]
+      Self::Lua54Interp => backend_lua54::eval(src),
+      Self::UluaParse => crate::compile::run_parse(src),
+      Self::UluaCompile => crate::compile::run_compile(src),
+      #[cfg(feature = "engine-luau")]
+      Self::LuauCppCompile => crate::compile::run_luau_cpp_compile(src),
+      Self::AnalysisGlobals => crate::analysis::run(false, src),
+      Self::AnalysisCheck => crate::analysis::run(true, src),
+    }
   }
+}
+
+/// 引擎静态元数据（JSON 引擎清单与表格列的全部展示字段）。
+#[derive(Clone, Copy)]
+pub(crate) struct EngineMeta {
+  pub id: &'static str,
+  pub key: &'static str,
+  pub label: &'static str,
+  pub lang: &'static str,
+  /// "interp" | "jit"，纯展示字段。
+  pub mode: &'static str,
+  pub color: &'static str,
+  /// 是否 ulua 侧引擎（`--alloc` 分配计数只覆盖 ulua 侧）。
+  pub is_ulua: bool,
+  /// 是否第三方参考基线（纯展示字段，网页侧区分阵营用）。
+  pub is_reference: bool,
+}
+
+/// 引擎注册条目：元数据 + 可选实现。`engine: None` 表示当前二进制未编译该
+/// 引擎（仅保留 JSON 引擎清单与文档用途），测量循环会跳过它。
+/// 全 `&'static`/bool 字段，`Copy` 让注册与配对零开销。
+#[derive(Clone, Copy)]
+pub(crate) struct EngineSpec {
+  pub meta: EngineMeta,
+  pub engine: Option<EngineImpl>,
+}
+
+/// 实测引擎（注册条目 + 实现按值配对）：测量路径只接受本类型，「是否可测」
+/// 由构造保证而非运行期断言。
+#[derive(Clone, Copy)]
+pub(crate) struct LiveEngine {
+  pub spec: EngineSpec,
+  pub imp: EngineImpl,
+}
+
+/// 注册条目便捷构造。
+pub(crate) fn spec(meta: EngineMeta, engine: Option<EngineImpl>) -> EngineSpec {
+  EngineSpec { meta, engine }
 }
 
 /// C 侧引擎占位（当前后端未编译该引擎：保留元数据，`engine: None`）。
-fn uncompiled(
-  id: &'static str,
+pub(crate) fn uncompiled(meta: EngineMeta) -> EngineSpec {
+  EngineSpec { meta, engine: None }
+}
+
+/// 分组引擎便捷构造（分组引擎 id 即 key，展示字段取 ulua 默认值）。
+pub(crate) fn group_spec(
   key: &'static str,
   label: &'static str,
-  lang: &'static str,
-  mode: &'static str,
-  color: &'static str,
+  is_ulua: bool,
+  engine: Option<EngineImpl>,
 ) -> EngineSpec {
-  spec(id, key, label, lang, mode, color, false, true, None)
+  spec(
+    EngineMeta {
+      id: key,
+      key,
+      label,
+      lang: "Luau (纯 Rust)",
+      mode: "interp",
+      color: "#0969da",
+      is_ulua,
+      is_reference: false,
+    },
+    engine,
+  )
 }
 
 /// exec 组全部引擎（含当前后端未编译的占位条目，JSON 引擎清单需要全集）。
-pub fn exec_engines() -> Vec<EngineSpec> {
+pub(crate) fn exec_engines() -> Vec<EngineSpec> {
   let mut engines = vec![
     spec(
-      "ulua",
-      "ulua",
-      "ulua",
-      "Luau (纯 Rust)",
-      "interp",
-      "#0969da",
-      true,
-      false,
-      Some(&ULUA_INTERP),
+      EngineMeta {
+        id: "ulua",
+        key: "ulua",
+        label: "ulua",
+        lang: "Luau (纯 Rust)",
+        mode: "interp",
+        color: "#0969da",
+        is_ulua: true,
+        is_reference: false,
+      },
+      Some(EngineImpl::UluaInterp),
     ),
     spec(
-      "ulua_jit",
-      "ulua-jit",
-      "ulua (JIT)",
-      "Luau (纯 Rust)",
-      "jit",
-      "#0284c7",
-      true,
-      false,
-      Some(&ULUA_JIT),
+      EngineMeta {
+        id: "ulua_jit",
+        key: "ulua-jit",
+        label: "ulua (JIT)",
+        lang: "Luau (纯 Rust)",
+        mode: "jit",
+        color: "#0284c7",
+        is_ulua: true,
+        is_reference: false,
+      },
+      Some(EngineImpl::UluaJit),
     ),
   ];
   #[cfg(feature = "engine-luau")]
   {
     engines.push(spec(
-      "mlua_luau",
-      "mlua/luau",
-      "mlua/luau",
-      "Luau (C++)",
-      "interp",
-      "#1f883d",
-      false,
-      false,
-      Some(&backend_luau::LUAU_CPP_INTERP),
+      EngineMeta {
+        id: "mlua_luau",
+        key: "mlua/luau",
+        label: "mlua/luau",
+        lang: "Luau (C++)",
+        mode: "interp",
+        color: "#1f883d",
+        is_ulua: false,
+        is_reference: false,
+      },
+      Some(EngineImpl::LuauCppInterp),
     ));
     engines.push(spec(
-      "mlua_luau_jit",
-      "mlua/luau-jit",
-      "mlua/luau (JIT)",
-      "Luau (C++)",
-      "jit",
-      "#d97706",
-      false,
-      false,
-      Some(&backend_luau::LUAU_CPP_JIT),
+      EngineMeta {
+        id: "mlua_luau_jit",
+        key: "mlua/luau-jit",
+        label: "mlua/luau (JIT)",
+        lang: "Luau (C++)",
+        mode: "jit",
+        color: "#d97706",
+        is_ulua: false,
+        is_reference: false,
+      },
+      Some(EngineImpl::LuauCppJit),
     ));
   }
   #[cfg(not(feature = "engine-luau"))]
   {
-    engines.push(uncompiled(
-      "mlua_luau",
-      "mlua/luau",
-      "mlua/luau",
-      "Luau (C++)",
-      "interp",
-      "#1f883d",
-    ));
-    engines.push(uncompiled(
-      "mlua_luau_jit",
-      "mlua/luau-jit",
-      "mlua/luau (JIT)",
-      "Luau (C++)",
-      "jit",
-      "#d97706",
-    ));
+    engines.push(uncompiled(EngineMeta {
+      id: "mlua_luau",
+      key: "mlua/luau",
+      label: "mlua/luau",
+      lang: "Luau (C++)",
+      mode: "interp",
+      color: "#1f883d",
+      is_ulua: false,
+      is_reference: false,
+    }));
+    engines.push(uncompiled(EngineMeta {
+      id: "mlua_luau_jit",
+      key: "mlua/luau-jit",
+      label: "mlua/luau (JIT)",
+      lang: "Luau (C++)",
+      mode: "jit",
+      color: "#d97706",
+      is_ulua: false,
+      is_reference: false,
+    }));
   }
   #[cfg(feature = "engine-luajit")]
   {
     engines.push(spec(
-      "mlua_luajit_interp",
-      "mlua/luajit-interp",
-      "LuaJIT (解释)",
-      "LuaJIT 2.1",
-      "interp",
-      "#6366f1",
-      false,
-      true,
-      Some(&backend_luajit::LUAJIT_INTERP),
+      EngineMeta {
+        id: "mlua_luajit_interp",
+        key: "mlua/luajit-interp",
+        label: "LuaJIT (解释)",
+        lang: "LuaJIT 2.1",
+        mode: "interp",
+        color: "#6366f1",
+        is_ulua: false,
+        is_reference: true,
+      },
+      Some(EngineImpl::LuaJitInterp),
     ));
     engines.push(spec(
-      "mlua_luajit",
-      "mlua/luajit",
-      "LuaJIT (JIT)",
-      "LuaJIT 2.1",
-      "jit",
-      "#8250df",
-      false,
-      true,
-      Some(&backend_luajit::LUAJIT_JIT),
+      EngineMeta {
+        id: "mlua_luajit",
+        key: "mlua/luajit",
+        label: "LuaJIT (JIT)",
+        lang: "LuaJIT 2.1",
+        mode: "jit",
+        color: "#8250df",
+        is_ulua: false,
+        is_reference: true,
+      },
+      Some(EngineImpl::LuaJitJit),
     ));
   }
   #[cfg(not(feature = "engine-luajit"))]
   {
-    engines.push(uncompiled(
-      "mlua_luajit_interp",
-      "mlua/luajit-interp",
-      "LuaJIT (解释)",
-      "LuaJIT 2.1",
-      "interp",
-      "#6366f1",
-    ));
-    engines.push(uncompiled(
-      "mlua_luajit",
-      "mlua/luajit",
-      "LuaJIT (JIT)",
-      "LuaJIT 2.1",
-      "jit",
-      "#8250df",
-    ));
+    engines.push(uncompiled(EngineMeta {
+      id: "mlua_luajit_interp",
+      key: "mlua/luajit-interp",
+      label: "LuaJIT (解释)",
+      lang: "LuaJIT 2.1",
+      mode: "interp",
+      color: "#6366f1",
+      is_ulua: false,
+      is_reference: true,
+    }));
+    engines.push(uncompiled(EngineMeta {
+      id: "mlua_luajit",
+      key: "mlua/luajit",
+      label: "LuaJIT (JIT)",
+      lang: "LuaJIT 2.1",
+      mode: "jit",
+      color: "#8250df",
+      is_ulua: false,
+      is_reference: true,
+    }));
   }
   #[cfg(feature = "engine-lua54")]
   engines.push(spec(
-    "mlua_lua54",
-    "mlua/lua5.4",
-    "Lua 5.4",
-    "Lua 5.4",
-    "interp",
-    "#64748b",
-    false,
-    true,
-    Some(&backend_lua54::LUA54_INTERP),
+    EngineMeta {
+      id: "mlua_lua54",
+      key: "mlua/lua5.4",
+      label: "Lua 5.4",
+      lang: "Lua 5.4",
+      mode: "interp",
+      color: "#64748b",
+      is_ulua: false,
+      is_reference: true,
+    },
+    Some(EngineImpl::Lua54Interp),
   ));
   #[cfg(not(feature = "engine-lua54"))]
-  engines.push(uncompiled(
-    "mlua_lua54",
-    "mlua/lua5.4",
-    "Lua 5.4",
-    "Lua 5.4",
-    "interp",
-    "#64748b",
-  ));
+  engines.push(uncompiled(EngineMeta {
+    id: "mlua_lua54",
+    key: "mlua/lua5.4",
+    label: "Lua 5.4",
+    lang: "Lua 5.4",
+    mode: "interp",
+    color: "#64748b",
+    is_ulua: false,
+    is_reference: true,
+  }));
   engines
 }
 
-/// 分组引擎便捷构造（分组引擎 id 即 key；`engine: None` 表示当前后端未编译）。
-pub fn spec_public(
-  key: &'static str,
-  label: &'static str,
-  is_ulua: bool,
-  engine: Option<&'static dyn BenchEngine>,
-) -> EngineSpec {
-  EngineSpec {
-    id: key,
-    key,
-    label,
-    lang: "Luau (纯 Rust)",
-    mode: "interp",
-    color: "#0969da",
-    is_ulua,
-    is_reference: false,
-    engine,
-  }
-}
-
 /// 当前编译选中的引擎后端名（三选一互斥，见 main.rs 守卫）。
-pub const fn active_backend_name() -> &'static str {
+pub(crate) const fn active_backend_name() -> &'static str {
   if cfg!(feature = "engine-luau") {
     "engine-luau"
   } else if cfg!(feature = "engine-luajit") {
