@@ -7,11 +7,11 @@ use crate::{
 
 /// # Safety
 /// `ctx` 须指向存活 `EnumContext` 且其 `node` 回调与 `context` 配套（可空则跳过）；`gco` 须为存活
-/// GCObject（要读 `gch.tt`/`gch.memcat` 头字段），`objname` 为有效 C 字符串。违反则悬垂回调调用/头字段越界读。
+/// GCObject 的可读句柄（要读 `gch.tt`/`gch.memcat` 头字段），`objname` 为有效 C 字符串。违反则悬垂回调调用/头字段越界读。
 /// cpp lgcdebug.cpp:760。
 pub(crate) unsafe fn enumnode(
   ctx: *mut EnumContext,
-  gco: *mut GCObject,
+  gco: *const GCObject,
   size: usize,
   objname: *const c_char,
 ) {
@@ -21,7 +21,7 @@ pub(crate) unsafe fn enumnode(
     if let Some(node_fn) = ctx_ref.node {
       node_fn(
         ctx_ref.context,
-        enumtopointer(&mut *gco),
+        enumtopointer(&*gco),
         (*gco).tt(),
         (*gco).memcat(),
         size,

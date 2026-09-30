@@ -17,12 +17,11 @@ use crate::{
   },
   macros::{
     dummynode::dummynode, edge_metatable::EDGE_METATABLE, gcvalue::gcvalue, getstr::getstr,
-    gfasttm::gfasttm, iscollectable::iscollectable, obj_2_gco::obj2gco, registry::registry,
-    sizenode::sizenode,
+    gfasttm::gfasttm, iscollectable::iscollectable, registry::registry, sizenode::sizenode,
   },
   records::{
-    enum_context::EnumContext, lua_node::LuaNode, lua_t_value::TValue, lua_table::LuaTable,
-    t_string::tstring,
+    enum_context::EnumContext, gc_object::GCObject, lua_node::LuaNode, lua_t_value::TValue,
+    lua_table::LuaTable, t_string::tstring,
   },
 };
 const NODE_REGISTRY: &[u8] = b"registry\0";
@@ -31,24 +30,25 @@ const EDGE_ARRAY: &[u8] = b"array\0";
 
 /// # Safety
 /// `ctx` 须为存活 `EnumContext` 且 `(*ctx).l` 为存活 `LuaState`（经其取 `registry`/`global` 读 fasttm）；
-/// `h` 须为存活 `LuaTable`：`(*h).node` 为 dummynode 或覆盖 `sizenode(h)` 个 `LuaNode`，`(*h).array` 覆盖
-/// `(*h).sizearray` 个 `TValue`，`(*h).metatable` 允许 NULL；遍历 node/array 时对 collectable 键值 `gcvalue!`
+/// `h` 须为存活 `LuaTable`：`h.node` 为 dummynode 或覆盖 `sizenode(h)` 个 `LuaNode`，`h.array` 覆盖
+/// `h.sizearray` 个 `TValue`，`h.metatable` 允许 NULL；遍历 node/array 时对 collectable 键值 `gcvalue!`
 /// 递归 `enumedge`。只读枚举，不改对象、不回收。
 /// cpp VM/src/lgcdebug.cpp:784
-pub(crate) unsafe fn enumtable(ctx: *mut EnumContext, h: *mut LuaTable) {
+pub(crate) unsafe fn enumtable(ctx: *mut EnumContext, h: &LuaTable) {
   unsafe {
     let size = size_of::<LuaTable>()
-      + if eq((*h).node, dummynode) {
+      + if eq(h.node, dummynode) {
         0
       } else {
         sizenode!(h) as usize * size_of::<LuaNode>()
       }
-      + (*h).sizearray as usize * size_of::<TValue>();
+      + h.sizearray as usize * size_of::<TValue>();
 
-    let obj = obj2gco!(h);
+    // 枚举身份取对象首字节地址：`obj2gco!` 要求裸指针入参，共享句柄降 `*const` 即够用
+    let obj = (h as *const LuaTable).cast::<GCObject>();
 
     let registry_ptr = registry!((*ctx).l);
-    let is_registry = eq(h, (*registry_ptr).as_table_ptr());
+    let is_registry = eq(h as *const LuaTable, (*registry_ptr).as_table_ptr());
 
     enumnode(
       ctx,
@@ -61,12 +61,12 @@ pub(crate) unsafe fn enumtable(ctx: *mut EnumContext, h: *mut LuaTable) {
       },
     );
 
-    if !eq((*h).node, dummynode) {
+    if !eq(h.node, dummynode) {
       let mut weakkey = false;
       let mut weakvalue = false;
 
       let g = (*(*ctx).l).global;
-      let metatable = (*h).metatable;
+      let metatable = h.metatable;
       if !metatable.is_null() {
         let mode = gfasttm(g, metatable, TMS::TmMode);
         // `ttisstring! + svalue!` 链收敛为 ValueView::String 臂：tag 判定与串数据
@@ -81,7 +81,7 @@ pub(crate) unsafe fn enumtable(ctx: *mut EnumContext, h: *mut LuaTable) {
       }
 
       let node_count = sizenode!(h);
-      for n in c_slice((*h).node, node_count as usize) {
+      for n in c_slice(h.node, node_count as usize) {
         if !matches!(ValueView::from_tvalue(&n.val), ValueView::Nil)
           && (iscollectable!(&n.key) || iscollectable!(&n.val))
         {
@@ -121,12 +121,12 @@ pub(crate) unsafe fn enumtable(ctx: *mut EnumContext, h: *mut LuaTable) {
       }
     }
 
-    if (*h).sizearray > 0 {
-      enumedges(ctx, obj, (*h).array, (*h).sizearray as usize, EDGE_ARRAY);
+    if h.sizearray > 0 {
+      enumedges(ctx, obj, h.array, h.sizearray as usize, EDGE_ARRAY);
     }
 
-    if !(*h).metatable.is_null() {
-      enum_edge(ctx, obj, obj2gco!((*h).metatable), EDGE_METATABLE);
+    if !h.metatable.is_null() {
+      enum_edge(ctx, obj, h.metatable, EDGE_METATABLE);
     }
   }
 }

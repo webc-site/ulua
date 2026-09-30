@@ -22,21 +22,21 @@ const EDGE_PROTO: &[u8] = b"proto\0";
 /// `ctx` 须为存活 `EnumContext`（其节点/边缓冲有效）；`cl` 须为存活 `Closure`，按 `is_c` 分支
 /// 读取 `inner.c.upvals[0..nupvalues]` 或 `inner.l.p` 及 `inner.l.uprefs[0..nupvalues]`、`env`；
 /// Lclosure 分支要求 `inner.l.p` 非空，`p.debugname/p.source` 允许 NULL（内部已判空）。
-/// cpp `lgcdebug.cpp:847`。
-pub(crate) unsafe fn enumclosure(ctx: *mut EnumContext, cl: *mut Closure) {
+/// 只读枚举并向 ctx 回调上报，不改对象。cpp `lgcdebug.cpp:847`。
+pub(crate) unsafe fn enumclosure(ctx: *mut EnumContext, cl: &Closure) {
   unsafe {
-    let cl_ref = &*cl;
-    let obj = cl as *mut GCObject;
+    // 枚举身份取对象首字节地址：`obj2gco!` 要求裸指针入参，共享句柄降 `*const` 即够用
+    let obj = (cl as *const Closure).cast::<GCObject>();
 
-    if cl_ref.is_c != 0 {
+    if cl.is_c != 0 {
       enumnode(
         ctx,
         obj,
-        size_cclosure(cl_ref.nupvalues as i32),
-        cl_ref.inner.c.debugname,
+        size_cclosure(cl.nupvalues as i32),
+        cl.inner.c.debugname,
       );
     } else {
-      let p: *mut Proto = cl_ref.inner.l.p;
+      let p: *mut Proto = cl.inner.l.p;
       let mut buf = [0u8; LUA_IDSIZE as usize];
 
       let name = if !(*p).debugname.is_null() {
@@ -55,32 +55,32 @@ pub(crate) unsafe fn enumclosure(ctx: *mut EnumContext, cl: *mut Closure) {
       enumnode(
         ctx,
         obj,
-        size_lclosure(cl_ref.nupvalues as usize),
+        size_lclosure(cl.nupvalues as usize),
         buf.as_ptr().cast::<c_char>(),
       );
     }
 
-    enum_edge(ctx, obj, cl_ref.env, EDGE_ENV);
+    enum_edge(ctx, obj, cl.env, EDGE_ENV);
 
-    if cl_ref.is_c != 0 {
-      if cl_ref.nupvalues > 0 {
+    if cl.is_c != 0 {
+      if cl.nupvalues > 0 {
         enumedges(
           ctx,
           obj,
-          cl_ref.inner.c.upvals.as_ptr() as *mut _,
-          cl_ref.nupvalues as usize,
+          cl.inner.c.upvals.as_ptr(),
+          cl.nupvalues as usize,
           EDGE_UPVALUE,
         );
       }
     } else {
-      enum_edge(ctx, obj, cl_ref.inner.l.p, EDGE_PROTO);
+      enum_edge(ctx, obj, cl.inner.l.p, EDGE_PROTO);
 
-      if cl_ref.nupvalues > 0 {
+      if cl.nupvalues > 0 {
         enumedges(
           ctx,
           obj,
-          cl_ref.inner.l.uprefs.as_ptr() as *mut _,
-          cl_ref.nupvalues as usize,
+          cl.inner.l.uprefs.as_ptr(),
+          cl.nupvalues as usize,
           EDGE_UPVALUE,
         );
       }

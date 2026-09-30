@@ -11,8 +11,8 @@ use crate::{
 /// 违反 `size` 与实区不符会越界读堆。cpp lgcdebug.cpp:770。
 pub(crate) unsafe fn enumedges(
   ctx: *mut EnumContext,
-  from: *mut GCObject,
-  data: *mut TValue,
+  from: *const GCObject,
+  data: *const TValue,
   size: usize,
   name: &'static [u8],
 ) {

@@ -1,4 +1,4 @@
-/// NUL 结尾字节串（边名指针经 `enum_edge` 收口取；§10 不引入 C 字符串类型）。
+/// NUL 结尾字节串（边名指针经 [`enum_edge`] 收口取；§10 不引入 C 字符串类型）。
 use core::{
   ffi::c_char,
   mem::size_of,
@@ -13,10 +13,10 @@ use crate::{
     enumnode::enumnode,
     fmt_cstr_buf::{cstr_display, fmt_cstr_buf},
   },
-  macros::{getstr::getstr, obj_2_gco::obj2gco},
+  macros::getstr::getstr,
   records::{
-    call_info::CallInfo, closure::LClosure, enum_context::EnumContext, lua_state::LuaState,
-    proto::Proto,
+    call_info::CallInfo, closure::LClosure, enum_context::EnumContext, gc_object::GCObject,
+    lua_state::LuaState, proto::Proto,
   },
   type_aliases::t_value::TValue,
 };
@@ -24,19 +24,20 @@ const EDGE_GLOBALS: &[u8] = b"globals\0";
 const EDGE_STACK: &[u8] = b"stack\0";
 
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn enumthread(ctx: *mut EnumContext, th: *mut LuaState) {
+/// `ctx` 须为存活 `EnumContext`（其 `node`/`edge` 回调可用）；`th` 须为存活线程 LuaState，其
+/// `base_ci..=ci`、`stack..top` 为同数组内合法区间，栈槽与帧内闭包/Proto 字段可读。只读枚举并回调上报。
+pub(crate) unsafe fn enumthread(ctx: *mut EnumContext, th: &LuaState) {
   unsafe {
     let size = size_of::<LuaState>()
-      + size_of::<TValue>() * (*th).stacksize as usize
-      + size_of::<CallInfo>() * (*th).size_ci as usize;
+      + size_of::<TValue>() * th.stacksize as usize
+      + size_of::<CallInfo>() * th.size_ci as usize;
+
+    // 枚举身份取对象首字节地址：`obj2gco!` 要求裸指针入参，共享句柄降 `*const` 即够用
+    let obj = (th as *const LuaState).cast::<GCObject>();
 
     // 首个函数帧的闭包：base_ci..=ci 为连续 CallInfo 数组，切片 find_map 取代
     // `while ci <= ci` 手工裸偏移 + break；「未找到」由 None 承载，不用 null 哨兵（§2）。
-    let frames = c_slice(
-      (*th).base_ci,
-      (*th).ci.offset_from((*th).base_ci) as usize + 1,
-    );
+    let frames = c_slice(th.base_ci, th.ci.offset_from(th.base_ci) as usize + 1);
     let tcl = frames.iter().find_map(|frame| {
       let func = &*frame.func;
       func.is_function().then(|| func.as_closure_ptr())
@@ -65,22 +66,22 @@ pub(crate) unsafe fn enumthread(ctx: *mut EnumContext, th: *mut LuaState) {
           format_args!("thread at {name}:{} {src}", (*p).linedefined),
         );
 
-        enumnode(ctx, obj2gco!(th), size, buf.as_ptr().cast::<c_char>());
+        enumnode(ctx, obj, size, buf.as_ptr().cast::<c_char>());
       } else {
-        enumnode(ctx, obj2gco!(th), size, null());
+        enumnode(ctx, obj, size, null());
       }
     } else {
-      enumnode(ctx, obj2gco!(th), size, null());
+      enumnode(ctx, obj, size, null());
     }
 
-    enum_edge(ctx, obj2gco!(th), obj2gco!((*th).gt), EDGE_GLOBALS);
+    enum_edge(ctx, obj, th.gt, EDGE_GLOBALS);
 
-    if (*th).top > (*th).stack {
+    if th.top > th.stack {
       enumedges(
         ctx,
-        obj2gco!(th),
-        (*th).stack,
-        (*th).top.offset_from((*th).stack) as usize,
+        obj,
+        th.stack,
+        th.top.offset_from(th.stack) as usize,
         EDGE_STACK,
       );
     }

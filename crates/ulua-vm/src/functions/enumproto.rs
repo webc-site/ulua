@@ -27,35 +27,36 @@ const EDGE_PROTOS: &[u8] = b"protos\0";
 /// `p` 须指向存活 Proto：`k`/`p`/`code` 等数组指针与对应 size 字段（`sizek`/`sizep`/`sizecode`…）自洽，
 /// `execdata` 非空时 `ecb.getmemorysize` 回调可用，`debugname`/`source` 为空或可读 TString。只读遍历并回调上报。
 /// cpp/VM/src/lgcdebug.cpp:962 enumproto。
-pub(crate) unsafe fn enumproto(ctx: *mut EnumContext, p: *mut Proto) {
+pub(crate) unsafe fn enumproto(ctx: *mut EnumContext, p: &Proto) {
   unsafe {
-    let p_ref = &*p;
-
     let size = size_of::<Proto>()
-      + size_of::<Instruction>() * p_ref.sizecode as usize
-      + size_of::<*mut Proto>() * p_ref.sizep as usize
-      + size_of::<TValue>() * p_ref.sizek as usize
-      + p_ref.sizelineinfo as usize
-      + size_of::<LocVar>() * p_ref.sizelocvars as usize
-      + size_of::<*mut tstring>() * p_ref.sizeupvalues as usize;
+      + size_of::<Instruction>() * p.sizecode as usize
+      + size_of::<*mut Proto>() * p.sizep as usize
+      + size_of::<TValue>() * p.sizek as usize
+      + p.sizelineinfo as usize
+      + size_of::<LocVar>() * p.sizelocvars as usize
+      + size_of::<*mut tstring>() * p.sizeupvalues as usize;
 
     let ctx_ref = &*ctx;
 
     // Manual expansion of obj2gco for Proto because Proto is not a union member of GCObject
     // and does not have a .tt() method, but its hdr (GCheader) is at offset 0.
-    let p_gco = p as *mut GCObject;
+    let p_gco = (p as *const Proto).cast::<GCObject>();
 
-    if !p_ref.execdata.is_null() {
+    if !p.execdata.is_null() {
       let global = (*ctx_ref.l).global;
       if let Some(getmemorysize) = (*global).ecb.getmemorysize {
-        let nativesize = getmemorysize(ctx_ref.l, p);
+        // SAFETY(review §2): `getmemorysize` 为 C ABI 宿主回调，签名固定收 `*mut Proto`；
+        // 其契约为「只量取原生码大小、不改 Proto」，故此处的可变指针只跨越该外部调用边界，
+        // 本函数不据此解写。
+        let nativesize = getmemorysize(ctx_ref.l, (p as *const Proto).cast_mut());
 
         if let Some(node_cb) = ctx_ref.node {
           node_cb(
             ctx_ref.context,
-            p_ref.execdata,
+            p.execdata,
             LUA_TNONE as u8,
-            p_ref.hdr.memcat,
+            p.hdr.memcat,
             nativesize,
             null(),
           );
@@ -64,8 +65,8 @@ pub(crate) unsafe fn enumproto(ctx: *mut EnumContext, p: *mut Proto) {
         if let Some(edge_cb) = ctx_ref.edge {
           edge_cb(
             ctx_ref.context,
-            enumtopointer(&mut *p_gco),
-            p_ref.execdata,
+            enumtopointer(&*p_gco),
+            p.execdata,
             cstr(EDGE_NATIVE),
           );
         }
@@ -74,29 +75,29 @@ pub(crate) unsafe fn enumproto(ctx: *mut EnumContext, p: *mut Proto) {
 
     let mut buf = [0u8; LUA_IDSIZE as usize];
 
-    let name = if !p_ref.debugname.is_null() {
-      cstr_display(getstr(p_ref.debugname))
+    let name = if !p.debugname.is_null() {
+      cstr_display(getstr(p.debugname))
     } else {
       "unnamed"
     };
 
-    if !p_ref.source.is_null() {
-      let src = cstr_display(getstr(p_ref.source));
+    if !p.source.is_null() {
+      let src = cstr_display(getstr(p.source));
       fmt_cstr_buf(
         &mut buf,
-        format_args!("proto {name}:{} {src}", p_ref.linedefined),
+        format_args!("proto {name}:{} {src}", p.linedefined),
       );
     } else {
-      fmt_cstr_buf(&mut buf, format_args!("proto {name}:{}", p_ref.linedefined));
+      fmt_cstr_buf(&mut buf, format_args!("proto {name}:{}", p.linedefined));
     }
 
     enumnode(ctx, p_gco, size, buf.as_ptr().cast::<c_char>());
 
-    if p_ref.sizek > 0 {
-      enumedges(ctx, p_gco, p_ref.k, p_ref.sizek as usize, EDGE_CONSTANTS);
+    if p.sizek > 0 {
+      enumedges(ctx, p_gco, p.k, p.sizek as usize, EDGE_CONSTANTS);
     }
 
-    for &sub_proto in c_slice(p_ref.p, p_ref.sizep as usize) {
+    for &sub_proto in c_slice(p.p, p.sizep as usize) {
       enum_edge(ctx, p_gco, sub_proto, EDGE_PROTOS);
     }
   }

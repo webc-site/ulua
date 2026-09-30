@@ -1,4 +1,4 @@
-use core::{ffi::c_void, ptr::from_ref};
+use core::ffi::c_void;
 
 use crate::records::gc_object::GCObject;
 
@@ -13,10 +13,7 @@ pub(crate) fn enumtopointer(gco: &GCObject) -> *mut c_void {
   if let Some(u) = gco.as_udata() {
     u.data.as_ptr() as *mut c_void
   } else {
-    from_ref(gco).cast::<c_void>()
+    // 地址仅作回调身份键透传：`*mut` 形状由 C 回调签名固定，本函数不据此解写
+    gco as *const GCObject as *mut c_void
   }
 }
-
-/// 空节点名（cpp `nullptr`）：枚举族各叶子在无命名信息时统一交此哨兵，
-/// 由 [`crate::functions::enumnode::enumnode`] 的 `objname` 参数承载可空性。
-pub(crate) const NO_OBJNAME: *const core::ffi::c_char = null();

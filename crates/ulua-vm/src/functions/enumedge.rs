@@ -13,12 +13,12 @@ use crate::{
 
 /// # Safety
 /// `ctx` 须指向存活的 `EnumContext`，其 `edge` 回调与 `context` 字段互相配套且符合 C 约定
-/// （可空，空则跳过）；`from`/`to` 须为枚举期间存活、尚未回收的 GCObject，`edgename` 为有效 C 字符串。
+/// （可空，空则跳过）；`from`/`to` 须为枚举期间存活、尚未回收的 GCObject 可读句柄，`edgename` 为有效 C 字符串。
 /// 违反则调到悬垂函数指针或向回调传出已回收对象地址。cpp lgcdebug.cpp:765。
 pub(crate) unsafe fn enumedge(
   ctx: *mut EnumContext,
-  from: *mut GCObject,
-  to: *mut GCObject,
+  from: *const GCObject,
+  to: *const GCObject,
   edgename: *const c_char,
 ) {
   // SAFETY: 契约保证 ctx/from/to 相互一致（from 为遍历中存活对象、to 为其引用字段目标），边记录仅追加输出不写对象
@@ -27,8 +27,8 @@ pub(crate) unsafe fn enumedge(
     if let Some(edge_fn) = ctx_ref.edge {
       edge_fn(
         ctx_ref.context,
-        enumtopointer(&mut *from),
-        enumtopointer(&mut *to),
+        enumtopointer(&*from),
+        enumtopointer(&*to),
         edgename,
       );
     }
@@ -37,7 +37,7 @@ pub(crate) unsafe fn enumedge(
 
 /// 边载荷/边名的裸指针形态转换收口（GC 枚举族共享门面）：`to` 为对象的任意字段指针，
 /// `name` 为 NUL 结尾字节串常量。
-/// 各 enum* 调用点因此不再重复 `as *mut GCObject` + 指针转换两步（指针取出经
+/// 各 enum* 调用点因此不再重复 `as *const GCObject` + 指针转换两步（指针取出经
 /// `cstr` 写入方向门面）。
 ///
 /// # Safety
@@ -46,8 +46,8 @@ pub(crate) unsafe fn enumedge(
 #[inline]
 pub(crate) unsafe fn enum_edge<T>(
   ctx: *mut EnumContext,
-  from: *mut GCObject,
-  to: *mut T,
+  from: *const GCObject,
+  to: *const T,
   name: &'static [u8],
 ) {
   // SAFETY: 契约同 `enumedge`；此处只做同尺寸的指针形态转换与常量串的指针取出，原样转发
@@ -70,7 +70,7 @@ const MEMBER_NAME_BUFSZ: usize = 32;
 /// `names[i]` 须为存活 TString。违反则成员名越界读/悬垂回调。
 pub(crate) unsafe fn enum_member_edges(
   ctx: *mut EnumContext,
-  obj: *mut GCObject,
+  obj: *const GCObject,
   vals: &[TValue],
   names: &[*mut tstring],
 ) {
