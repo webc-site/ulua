@@ -19,21 +19,18 @@ use crate::{
 /// 不得顺手合并。
 ///
 /// # Safety
-/// `l` 须存活（错误路径经其抛 Lua 错误）；`t` 须为存活 `LuaTable`，`key` 指向可读 `TValue`
-/// （nil/NaN 键在内部抛错、不返回）。`newkey` 可能 rehash：返回槽可用，但调用方此前持有的任何
+/// `l` 须存活（错误路径经其抛 Lua 错误）；`t` 须为存活 `LuaTable`，`key` 须为存活
+/// `TValue` 的共享只读借用（nil/NaN 键在内部抛错、不返回；`lua_g_runerror_l` 为
+/// 抛出不返回，不搬 Lua 栈）；`newkey` 可能 rehash：返回槽可用，但调用方此前持有的任何
 /// 表内旧槽指针即刻失效，继续写即悬垂。cpp ltable.cpp:1195。
-pub(crate) unsafe fn lua_h_newkey(
-  l: *mut LuaState,
-  t: *mut LuaTable,
-  key: *const TValue,
-) -> *mut TValue {
-  // SAFETY: 契约保证 `t` 为存活 LuaTable 且 key 可读，块内 rehash/节点搬运仅触及 array 与 sizenode 界内槽位
+pub(crate) unsafe fn lua_h_newkey(l: *mut LuaState, t: *mut LuaTable, key: &TValue) -> *mut TValue {
+  // SAFETY: 契约保证 `t` 为存活 LuaTable 且 key 为存活 TValue 只读借用，块内 rehash/节点搬运仅触及 array 与 sizenode 界内槽位
   unsafe {
-    if (*key).is_nil() {
+    if key.is_nil() {
       lua_g_runerror_l(l, null(), format_args!("table index is nil"));
-    } else if (*key).is_number() && luai_numisnan((*key).as_number()) {
+    } else if key.is_number() && luai_numisnan(key.as_number()) {
       lua_g_runerror_l(l, null(), format_args!("table index is NaN"));
-    } else if (*key).is_vector() && luai_vecisnan((*key).as_vector_ref().as_ptr()) {
+    } else if key.is_vector() && luai_vecisnan(key.as_vector_ref().as_ptr()) {
       lua_g_runerror_l(l, null(), format_args!("table index contains NaN"));
     }
 

@@ -13,7 +13,7 @@ categories = ["compilers", "development-tools::procedural-macro-helpers"]
 proc-macro = true
 
 [dependencies]
-ulua-rt = { path = "../ulua-rt", version = "0.1.3", features = ["typecheck"] }
+ulua-rt = { path = "../ulua-rt", version = "0.1.4", features = ["typecheck"] }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
 syn = { workspace = true }

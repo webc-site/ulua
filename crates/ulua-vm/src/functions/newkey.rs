@@ -43,15 +43,16 @@ unsafe fn getnodekey_direct(obj: *mut TValue, node: *const LuaNode, g: *mut glob
 ///
 /// # Safety
 ///
-/// `node` 必须指向可写 LuaNode（含 key.extra 槽），`obj` 必须指向可读 TValue，两对象存活且互不重叠；
+/// `node` 必须指向可写 LuaNode（含 key.extra 槽），`obj` 必须为存活可读 `TValue` 的共享
+/// 只读借用，两对象存活且互不重叠；
 /// `g` 为当时存活 `global_State`（仅 debug 存活断言读取，⇔ cpp `L->global`）。
 #[inline]
-unsafe fn setnodekey_direct(node: *mut LuaNode, obj: *const TValue, g: *mut global_State) {
+unsafe fn setnodekey_direct(node: *mut LuaNode, obj: &TValue, g: *mut global_State) {
   // SAFETY: 契约保证两指针读写合法，key 三分量拷贝均在节点与 TValue 界内
   unsafe {
-    (*node).key.value = (*obj).value;
-    (*node).key.extra = (*obj).extra;
-    (*node).key.set_tt((*obj).tt);
+    (*node).key.value = obj.value;
+    (*node).key.extra = obj.extra;
+    (*node).key.set_tt(obj.tt);
     checkliveness!(g, obj);
   }
 }
@@ -66,13 +67,15 @@ unsafe fn setnodekey_direct(node: *mut LuaNode, obj: *const TValue, g: *mut glob
 /// # Safety
 ///
 /// `l` 必须指向存活 `LuaState`（表满时 `rehash` 可经它 OOM 报错）；`t` 必须指向存活
-/// `LuaTable`；`key` 必须指向存活可读 `TValue`。返回值指向 t 哈希部分新落位的值槽，
+/// `LuaTable`；`key` 必须为存活 `TValue` 的共享只读借用。本函数对 `key` 全程只读，体内
+/// `rehash`/`getfreepos`/`luaC_barriert` 均为表侧/GC 侧分配，不搬移 Lua 栈，故 `key`
+/// 源自栈槽时借用仍安全。返回值指向 t 哈希部分新落位的值槽，
 /// 其有效性随 t 直至下一次结构性写表。
-pub(crate) unsafe fn newkey(l: *mut LuaState, t: *mut LuaTable, key: *const TValue) -> *mut TValue {
-  // SAFETY: 契约保证 l/t/key 存活；节点搬运的 offset/next 均落在 t->node 的 sizenode 数组内（ltable 不变式）
+pub(crate) unsafe fn newkey(l: *mut LuaState, t: *mut LuaTable, key: &TValue) -> *mut TValue {
+  // SAFETY: 契约保证 l/t 存活、key 为存活 TValue 只读借用；节点搬运的 offset/next 均落在 t->node 的 sizenode 数组内（ltable 不变式）
   unsafe {
     // 键恰为数组尾 +1：整段数组扩容即可，无需哈希槽（cpp `nvalue(key) == t->sizearray + 1`）
-    if let ValueView::Number(k) = ValueView::from_tvalue(&*key)
+    if let ValueView::Number(k) = ValueView::from_tvalue(key)
       && k == ((*t).sizearray + 1) as f64
     {
       rehash(l, t, key);
@@ -91,7 +94,7 @@ pub(crate) unsafe fn newkey(l: *mut LuaState, t: *mut LuaTable, key: *const TVal
 
       let mut mk = TValue::default();
       getnodekey_direct(addr_of_mut!(mk), mp, (*l).global);
-      let mut othern = mainposition(t, addr_of!(mk));
+      let mut othern = mainposition(t, &mk);
 
       if othern != mp {
         while othern.offset((*othern).key.next() as isize) != mp {

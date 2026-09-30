@@ -14,10 +14,13 @@ use crate::{
 ///
 /// # Safety
 /// `l` 须存活（新键路径走 `lua_h_newkey`，可 rehash/抛 ERR_MEM）；`t` 须为存活
-/// `LuaTable`；`key` 指向可读 `TValue`。返回槽 noalias 前提：写入期间对同一表的任何
-/// 结构性写（newkey/rehash/setarrayvector）都会移动槽位，旧返回指针即刻失效；调用方
-/// 须在「取槽→写」之间不触碰该表的再扩容路径（cpp 依赖同一前提）。cpp ltable.cpp:1185。
-pub unsafe fn lua_h_set(l: *mut LuaState, t: *mut LuaTable, key: *const TValue) -> *mut TValue {
+/// `LuaTable`；`key` 须为存活 `TValue` 的共享只读借用——本函数及其调用的
+/// `lua_h_get`/`lua_h_newkey` 只读 `key`，体内 rehash/`luaC_newobj` 均为表侧分配、不动
+/// Lua 栈，故 `key` 落在可搬移的栈槽上也安全（调用方不得在取槽→写之间搬移 `key` 所在栈）。
+/// 返回槽 noalias 前提：写入期间对同一表的任何结构性写（newkey/rehash/setarrayvector）都会
+/// 移动槽位，旧返回指针即刻失效；调用方须在「取槽→写」之间不触碰该表的再扩容路径
+/// （cpp 依赖同一前提）。cpp ltable.cpp:1185。
+pub unsafe fn lua_h_set(l: *mut LuaState, t: *mut LuaTable, key: &TValue) -> *mut TValue {
   // SAFETY: 契约保证 `t` 为存活 LuaTable、key 可读，块内节点查找与插入仅落在 sizenode/dummynode 规则界内
   unsafe {
     let p = lua_h_get(t, key);

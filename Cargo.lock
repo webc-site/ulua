@@ -1293,7 +1293,7 @@ dependencies = [
 
 [[package]]
 name = "ulua"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "divan",
  "mimalloc",
@@ -1312,7 +1312,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-analysis"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "bitflags 2.13.2",
  "coarsetime",
@@ -1333,7 +1333,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-analyze-cli"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "ulua-analysis",
  "ulua-ast",
@@ -1346,7 +1346,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-ast"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "itoa",
  "memchr",
@@ -1357,7 +1357,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-ast-cli"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "ulua-analysis",
  "ulua-ast",
@@ -1366,7 +1366,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-bytecode"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "foldhash",
  "hashbrown",
@@ -1378,7 +1378,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-bytecode-cli"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "ulua-ast",
  "ulua-bytecode",
@@ -1390,14 +1390,14 @@ dependencies = [
 
 [[package]]
 name = "ulua-capi"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "ulua-vm",
 ]
 
 [[package]]
 name = "ulua-checked-macros"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1407,7 +1407,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-cli-lib"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "memchr",
  "ulua-ast",
@@ -1419,7 +1419,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-cli-test"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "memchr",
  "tempfile",
@@ -1433,7 +1433,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-code-gen"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "strum",
  "ulua-ast",
@@ -1446,7 +1446,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-common"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "fast-float2",
  "foldhash",
@@ -1460,7 +1460,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-compile-cli"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "rayon",
  "ulua-ast",
@@ -1474,7 +1474,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-compiler"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "memchr",
  "museair",
@@ -1486,7 +1486,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-config"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "hipstr",
  "strum",
@@ -1500,7 +1500,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-conformance"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "foldhash",
  "hashbrown",
@@ -1516,7 +1516,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-e2e"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "assert_cmd",
  "parking_lot",
@@ -1577,7 +1577,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-reduce-cli"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "memchr",
  "tempfile",
@@ -1588,7 +1588,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-repl-cli"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "itoa",
  "rustyline",
@@ -1605,7 +1605,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-require"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "coarsetime",
  "memchr",
@@ -1619,7 +1619,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-rt"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "bstr",
  "futures-util",
@@ -1642,7 +1642,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-rt-derive"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1651,7 +1651,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-unit-test"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "foldhash",
  "hashbrown",
@@ -1667,7 +1667,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-vm"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "coarsetime",
  "itoa",
@@ -1679,7 +1679,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-web"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "console_error_panic_hook",
  "foldhash",
