@@ -1,0 +1,19 @@
+use core::ffi::{c_int, c_void};
+
+use ulua_vm::functions::lua_userdatadirectfield_setboolean::lua_userdatadirectfield_setboolean;
+
+use crate::common::records::vec_2_direct_field_access_test::Vec2;
+/// # Safety
+///
+/// Pointer arguments must be valid, aligned, and properly initialized.
+pub unsafe extern "C-unwind" fn direct_field_access_get_non_zero_boolean(
+  ud: *mut c_void,
+  result: *mut c_void,
+) {
+  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`result` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  unsafe {
+    let vec = &*(ud as *mut Vec2);
+    let non_zero = (vec.x != 0.0 || vec.y != 0.0) as c_int;
+    lua_userdatadirectfield_setboolean(result, non_zero);
+  }
+}

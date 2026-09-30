@@ -1,0 +1,103 @@
+//! `unscoped_generic_finder` 方法汇总：原先按 cpp 符号逐方法拆分的同前缀小文件合并至此，行为逐字保留。
+
+use ulua_common::records::dense_hash_set::DenseHashSet;
+
+use crate::{
+  records::{
+    extern_type::ExternType,
+    function_type::FunctionType,
+    generic_type::GenericType,
+    generic_type_pack::GenericTypePack,
+    generic_type_visitor::{GenericTypeVisitor, GenericTypeVisitorTrait},
+    type_once_visitor::TypeOnceVisitor,
+    unscoped_generic_finder::UnscopedGenericFinder,
+    visit_key::VisitKey,
+  },
+  type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
+};
+
+impl UnscopedGenericFinder {
+  pub fn new() -> Self {
+    UnscopedGenericFinder {
+      base: TypeOnceVisitor::new("UnscopedGenericFinder".to_string(), true),
+      scope_gen_tys: Vec::new(),
+      scope_gen_tps: Vec::new(),
+      found_unscoped: false,
+    }
+  }
+}
+impl Default for UnscopedGenericFinder {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+impl GenericTypeVisitorTrait for UnscopedGenericFinder {
+  type Seen = DenseHashSet<VisitKey>;
+
+  fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
+    &mut self.base.base
+  }
+
+  /// TypeFunction.cpp:148 — stop the traversal once an unscoped generic is found.
+  fn visit_type_id(&mut self, _ty: TypeId) -> bool {
+    !self.found_unscoped
+  }
+
+  /// TypeFunction.cpp:154 — stop the traversal once an unscoped generic is found.
+  fn visit_type_pack_id(&mut self, _tp: TypePackId) -> bool {
+    !self.found_unscoped
+  }
+
+  /// TypeFunction.cpp:160
+  fn visit_type_id_generic_type(&mut self, ty: TypeId, _gtv: &GenericType) -> bool {
+    if !self.scope_gen_tys.contains(&ty) {
+      self.found_unscoped = true;
+    }
+
+    false
+  }
+
+  /// TypeFunction.cpp:168
+  fn visit_type_pack_id_generic_type_pack(
+    &mut self,
+    tp: TypePackId,
+    _gtp: &GenericTypePack,
+  ) -> bool {
+    if !self.scope_gen_tps.contains(&tp) {
+      self.found_unscoped = true;
+    }
+
+    false
+  }
+
+  /// TypeFunction.cpp:176
+  fn visit_type_id_function_type(&mut self, _ty: TypeId, ftv: &FunctionType) -> bool {
+    let start_ty_count = self.scope_gen_tys.len();
+    let start_tp_count = self.scope_gen_tps.len();
+
+    self.scope_gen_tys.extend_from_slice(&ftv.generics);
+    self.scope_gen_tps.extend_from_slice(&ftv.generic_packs);
+
+    self.traverse_type_pack_id(ftv.arg_types);
+    self.traverse_type_pack_id(ftv.ret_types);
+
+    self.scope_gen_tys.truncate(start_ty_count);
+    self.scope_gen_tps.truncate(start_tp_count);
+
+    false
+  }
+
+  /// TypeFunction.cpp:193
+  fn visit_type_id_extern_type(&mut self, _ty: TypeId, _etv: &ExternType) -> bool {
+    false
+  }
+}
+impl UnscopedGenericFinder {
+  pub fn visit_type_id_extern_type(&mut self, ty: TypeId, extern_type: &ExternType) -> bool {
+    let _ty = ty;
+    let _extern_type = extern_type;
+
+    false
+  }
+}

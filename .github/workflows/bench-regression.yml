@@ -1,0 +1,186 @@
+name: Benchmark Regression
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+    # 文档 / website / skills 改动不影响 ulua 代码路径，跳过冷编译基准。
+    paths-ignore: &paths-ignore
+      - "**.md"
+      - "docs/**"
+      - "website/**"
+      - "sh/skills/**"
+      - ".gitignore"
+      - "LICENSE*"
+  pull_request:
+    paths-ignore: *paths-ignore
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bench-regression-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  RUST_MIN_STACK: "67108864"
+  # 与 CI 保持一致：CI 上无增量收益，去掉增量产物可缩小 rust-cache 体积。
+  CARGO_INCREMENTAL: "0"
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+jobs:
+  # 解释器基准：`cargo bench`（不带 --features jit），全平台执行。
+  benchmark-interpreter:
+    name: Regression Benchmark (interpreter) — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Run interpreter benchmark
+        env:
+          BENCH_MODE: interp
+        shell: bash
+        run: bun benchmarks/regression/record.js
+
+      - name: Upload interpreter result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-result-interp-${{ matrix.os }}
+          path: |
+            benchmarks/regression/result.json
+            benchmarks/regression/bench-stdout-interp.txt
+          retention-days: 14
+          if-no-files-found: warn
+
+  # JIT 基准：`cargo bench --features jit`。
+  # 独立 job + continue-on-error，让解释器回归不被 JIT 影响，同时支持 JIT 的平台自动收集数据。
+  benchmark-jit:
+    name: Regression Benchmark (JIT) — ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, ubuntu-24.04-arm, macos-latest, windows-latest]
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Run JIT benchmark
+        env:
+          BENCH_MODE: jit
+        shell: bash
+        run: bun benchmarks/regression/record.js
+
+      - name: Upload JIT result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-result-jit-${{ matrix.os }}
+          path: |
+            benchmarks/regression/result.json
+            benchmarks/regression/bench-stdout-jit.txt
+          retention-days: 14
+          if-no-files-found: warn
+
+  # 全集对比 runner 冒烟：benchmarks/runner 按后端互斥三选一编译（mlua ffi 扁平
+  # re-export 限制单二进制只能共链一种 C Lua），本 job 依次构建三个后端并各跑一遍
+  # exec（--append 并集合并成 7 引擎全集 results.json），再跑 compile/analysis 组，
+  # 验证 runner 全链路在 CI 可构建、可运行、跨引擎返回值一致（分歧会打 stderr 警告）。
+  benchmark-runner:
+    name: Runner full-set smoke — ubuntu
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Rust
+        uses: ./.github/actions/setup-rust
+
+      - name: Build all engine backends
+        run: |
+          cargo build --release --manifest-path benchmarks/runner/Cargo.toml --features engine-luau
+          cargo build --release --manifest-path benchmarks/runner/Cargo.toml --features engine-luajit
+          cargo build --release --manifest-path benchmarks/runner/Cargo.toml --features engine-lua54
+
+      - name: Run exec group (3 backends, append-merged)
+        run: |
+          R="cargo run --release --manifest-path benchmarks/runner/Cargo.toml"
+          $R --features engine-luau -- --group=exec --runs 1
+          $R --features engine-luajit -- --group=exec --runs 1 --append --engines mlua/luajit,mlua/luajit-interp
+          $R --features engine-lua54 -- --group=exec --runs 1 --append --engines mlua/lua5.4
+
+      - name: Run compile & analysis groups
+        run: |
+          R="cargo run --release --manifest-path benchmarks/runner/Cargo.toml"
+          $R --features engine-luau -- --group=compile --runs 1
+          $R --features engine-luau -- --group=analysis --runs 1
+
+      - name: Upload runner result
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-result-runner-ubuntu
+          path: |
+            benchmarks/results.json
+            benchmarks/results-compile.json
+            benchmarks/results-analysis.json
+          retention-days: 14
+          if-no-files-found: warn
+
+  # 报告汇总：拉取所有平台的 artifact，合并写回 history.json + Job Summary。
+  report:
+    name: Publish combined report
+    needs: [benchmark-interpreter, benchmark-jit]
+    if: always() && needs.benchmark-interpreter.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Download all benchmark artifacts
+        uses: actions/download-artifact@v7
+        with:
+          path: bench-results
+          pattern: bench-result-*
+          merge-multiple: false
+
+      - name: Merge into history.json and publish Job Summary
+        env:
+          BENCH_RESULTS_DIR: bench-results
+        run: bun benchmarks/regression/publish.js
+
+      - name: Upload combined history artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: benchmark-regression-history
+          path: benchmarks/regression/history.json
+          retention-days: 30

@@ -1,0 +1,49 @@
+use ulua_ast::records::location::Location;
+use ulua_cli_lib::functions::report::report as report_default;
+
+use crate::enums::report_format::ReportFormat;
+
+/// cpp `Analyze.cpp` luacheck 分支硬编码值：跨行诊断没有可靠的单行 end column，
+/// 用 `100` 伪造列尾（`hope for the best`），提为常量避免魔法数字漂移。
+const MULTILINE_FAKE_END_COLUMN: u32 = 100;
+
+pub fn report(format: ReportFormat, name: &str, loc: &Location, r#type: &str, message: &str) {
+  match format {
+    // `name(line,col): Type: message` 写 stderr：与 bytecode/compile CLI 共用的
+    // `ulua_cli_lib::functions::report` 门面同一形态，排版单点收口。
+    ReportFormat::Default => report_default(name, loc, r#type, message),
+    ReportFormat::Luacheck => {
+      // Note: luacheck's end column is inclusive but our end column is exclusive
+      // In addition, luacheck doesn't support multi-line messages, so if the error is multiline we'll fake end column as 100 and hope for the best
+      let column_end = if loc.begin.line == loc.end.line {
+        loc.end.column
+      } else {
+        MULTILINE_FAKE_END_COLUMN
+      };
+
+      // Use stdout to match luacheck behavior
+      println!(
+        "{}:{}:{}-{}: (W0) {}: {}",
+        name,
+        loc.begin.line + 1,
+        loc.begin.column + 1,
+        column_end,
+        r#type,
+        message
+      );
+    }
+    ReportFormat::Gnu => {
+      // Note: GNU end column is inclusive but our end column is exclusive
+      eprintln!(
+        "{}:{}.{}-{}.{}: {}: {}",
+        name,
+        loc.begin.line + 1,
+        loc.begin.column + 1,
+        loc.end.line + 1,
+        loc.end.column,
+        r#type,
+        message
+      );
+    }
+  }
+}
