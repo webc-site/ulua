@@ -32,7 +32,7 @@ pub(crate) unsafe fn rehash(l: *mut LuaState, t: *mut LuaTable, ek: &TValue) {
     totaluse += hashuse;
 
     // 额外键（即将插入、尚未落表的键）
-    if let ValueView::Number(k) = ValueView::from_tvalue(&*ek) {
+    if let ValueView::Number(k) = ValueView::from_tvalue(ek) {
       nasize += countint(k, &mut nums);
     }
     totaluse += 1;
