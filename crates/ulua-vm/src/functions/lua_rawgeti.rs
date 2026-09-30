@@ -22,7 +22,7 @@ pub unsafe fn lua_rawgeti(l: *mut LuaState, idx: i32, n: i32) -> i32 {
     let t: StkId = index_2_addr(l, idx);
     api_check!(l, (*t).is_table());
 
-    setobj_2_s!(l, (*l).top, lua_h_getnum((*t).as_table_ptr(), n));
+    setobj_2_s!(l, (*l).top, lua_h_getnum(&*(*t).as_table_ptr(), n));
     api_incr_top!(l);
 
     ttype!((*l).top.sub(1)) as i32

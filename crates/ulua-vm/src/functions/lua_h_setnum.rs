@@ -34,7 +34,7 @@ pub unsafe fn lua_h_setnum(l: *mut LuaState, t: *mut LuaTable, key: i32) -> *mut
     }
 
     // hash fallback
-    let p = lua_h_getnum(t, key);
+    let p = lua_h_getnum(&*t, key);
     if p != LUA_O_NILOBJECT {
       p as *mut TValue
     } else {

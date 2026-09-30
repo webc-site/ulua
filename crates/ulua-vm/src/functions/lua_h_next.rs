@@ -10,20 +10,21 @@ use crate::{
 };
 
 /// # Safety
-/// `l` 须为存活 `LuaState`；`t` 须为存活 `LuaTable`（其 `array[0..sizearray]` 与 hash 部分
-/// `node[0..sizenode]` 均可读）；`key` 须指向栈上可作为前一键读入、并写回键/值两格（`key` 与 `key.add(1)`）
-/// 的 StkId。`findindex` 会读 `key` 当前值。cpp `ltable.cpp:379`。
-pub(crate) unsafe fn lua_h_next(l: *mut LuaState, t: *mut LuaTable, key: StkId) -> i32 {
+/// `l` 须为存活 `LuaState`；`t` 须为存活 `LuaTable` 的共享只读借用（其 `array[0..sizearray]` 与 hash 部分
+/// `node[0..sizenode]` 均可读，本函数不写表）；`key` 须指向栈上可作为前一键读入、并写回键/值两格（`key` 与 `key.add(1)`）
+/// 的 StkId（出参写点保留裸指针形态，不借降级隐藏）。`findindex` 会读 `key` 当前值。cpp `ltable.cpp:379`。
+pub(crate) unsafe fn lua_h_next(l: *mut LuaState, t: &LuaTable, key: StkId) -> i32 {
   unsafe {
     // cpp ltable.cpp:379 luaH_next：i = findindex(...) + 1 后先扫数组部分。
     // 查询键的 tag 读链（含 dead key 判定）已全部收敛在 findindex（B2a 已 match 化）；
     // 本函数对表槽位仅剩值轴 nil 判定，改用 B1 的 ValueView。
-    let i = findindex(l, t, key) + 1;
-    let sizearray = (*t).sizearray;
+    // findindex 只读查询键，从出参槽即时借用（写回发生在其后）。
+    let i = findindex(l, t, &*key) + 1;
+    let sizearray = t.sizearray;
 
     // try first array part
     for i in i..sizearray {
-      let e = (*t).array.add(i as usize);
+      let e = t.array.add(i as usize);
       if !matches!(ValueView::from_tvalue(&*e), ValueView::Nil) {
         setnvalue!(key, (i + 1) as f64);
         setobj_2_s!(l, key.add(1), e);

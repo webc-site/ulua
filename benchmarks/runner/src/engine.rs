@@ -2,7 +2,7 @@
 //!
 //! 设计：全部引擎（exec / compile / analysis 三组）收敛为一个 [`EngineImpl`]
 //! 枚举——类型集编译期封闭（每个 variant 对应一个已知引擎），故用 enum match
-//! 派发而非 `dyn Trait` 虚分派，单态调用点 + 零 `dyn`。[`EngineSpec`] 是引擎的
+//! 派发而非 trait 对象虚分派，调用点单态化。[`EngineSpec`] 是引擎的
 //! 静态元数据 + 可选实现，注册表按 `cfg` 在编译期组装，未编译进当前二进制的
 //! 后端引擎保留元数据（供 JSON 引擎清单）但不带实现；测量路径统一走
 //! [`LiveEngine`]（spec + 实现按值配对），「实测引擎」由类型承载而非运行期
@@ -16,6 +16,8 @@
 //! （f64 用最短往返 `Display`，确定性），三个 C 后端与 ulua 侧共用同一格式定义。
 
 use ulua::{Lua, Value};
+
+use crate::{analysis, compile};
 
 /// 返回值指纹的引擎无关中间表示（各后端 Value 形状同构但类型不同构）。
 pub(crate) enum FVal {
@@ -56,14 +58,16 @@ fn ulua_eval(src: &str, jit: bool) -> Result<Option<String>, String> {
     lua.enable_jit(true).map_err(|e| format!("{e:?}"))?;
   }
   let values: ulua::MultiValue = lua.load(src).eval().map_err(|e| format!("{e:?}"))?;
-  Ok(Some(format_fvals(values.into_iter().map(|value| match value {
-    Value::Nil => FVal::Nil,
-    Value::Boolean(b) => FVal::Bool(b),
-    Value::Integer(i) => FVal::Int(i),
-    Value::Number(f) => FVal::Num(f),
-    Value::String(s) => FVal::Str(s.to_string_lossy()),
-    other => FVal::Other(format!("{other:?}")),
-  }))))
+  Ok(Some(format_fvals(values.into_iter().map(
+    |value| match value {
+      Value::Nil => FVal::Nil,
+      Value::Boolean(b) => FVal::Bool(b),
+      Value::Integer(i) => FVal::Int(i),
+      Value::Number(f) => FVal::Num(f),
+      Value::String(s) => FVal::Str(s.to_string_lossy()),
+      other => FVal::Other(format!("{other:?}")),
+    },
+  ))))
 }
 
 // ---------------------------------------------------------------------------
@@ -79,16 +83,18 @@ mod backend_luau {
     let lua = mlua_luau::Lua::new();
     lua.enable_jit(jit);
     let values: mlua_luau::MultiValue = lua.load(src).eval().map_err(|e| format!("{e:?}"))?;
-    Ok(Some(format_fvals(values.into_iter().map(|value| match value {
-      mlua_luau::Value::Nil => FVal::Nil,
-      mlua_luau::Value::Boolean(b) => FVal::Bool(b),
-      mlua_luau::Value::Integer(i) => FVal::Int(i),
-      mlua_luau::Value::Number(f) => FVal::Num(f),
-      mlua_luau::Value::String(s) => {
-        FVal::Str(String::from_utf8_lossy(&s.as_bytes()).into_owned())
-      }
-      other => FVal::Other(format!("{other:?}")),
-    }))))
+    Ok(Some(format_fvals(values.into_iter().map(
+      |value| match value {
+        mlua_luau::Value::Nil => FVal::Nil,
+        mlua_luau::Value::Boolean(b) => FVal::Bool(b),
+        mlua_luau::Value::Integer(i) => FVal::Int(i),
+        mlua_luau::Value::Number(f) => FVal::Num(f),
+        mlua_luau::Value::String(s) => {
+          FVal::Str(String::from_utf8_lossy(&s.as_bytes()).into_owned())
+        }
+        other => FVal::Other(format!("{other:?}")),
+      },
+    ))))
   }
 }
 
@@ -101,16 +107,18 @@ mod backend_luajit {
     // mlua-luajit 无 enable_jit 高层 API，用 Lua 侧 jit.on/off 等价开关。
     let _ = lua.load(if jit { "jit.on()" } else { "jit.off()" }).exec();
     let values: mlua_luajit::MultiValue = lua.load(src).eval().map_err(|e| format!("{e:?}"))?;
-    Ok(Some(format_fvals(values.into_iter().map(|value| match value {
-      mlua_luajit::Value::Nil => FVal::Nil,
-      mlua_luajit::Value::Boolean(b) => FVal::Bool(b),
-      mlua_luajit::Value::Integer(i) => FVal::Int(i),
-      mlua_luajit::Value::Number(f) => FVal::Num(f),
-      mlua_luajit::Value::String(s) => {
-        FVal::Str(String::from_utf8_lossy(&s.as_bytes()).into_owned())
-      }
-      other => FVal::Other(format!("{other:?}")),
-    }))))
+    Ok(Some(format_fvals(values.into_iter().map(
+      |value| match value {
+        mlua_luajit::Value::Nil => FVal::Nil,
+        mlua_luajit::Value::Boolean(b) => FVal::Bool(b),
+        mlua_luajit::Value::Integer(i) => FVal::Int(i),
+        mlua_luajit::Value::Number(f) => FVal::Num(f),
+        mlua_luajit::Value::String(s) => {
+          FVal::Str(String::from_utf8_lossy(&s.as_bytes()).into_owned())
+        }
+        other => FVal::Other(format!("{other:?}")),
+      },
+    ))))
   }
 }
 
@@ -121,16 +129,18 @@ mod backend_lua54 {
   pub(super) fn eval(src: &str) -> Result<Option<String>, String> {
     let lua = mlua_lua54::Lua::new();
     let values: mlua_lua54::MultiValue = lua.load(src).eval().map_err(|e| format!("{e:?}"))?;
-    Ok(Some(format_fvals(values.into_iter().map(|value| match value {
-      mlua_lua54::Value::Nil => FVal::Nil,
-      mlua_lua54::Value::Boolean(b) => FVal::Bool(b),
-      mlua_lua54::Value::Integer(i) => FVal::Int(i),
-      mlua_lua54::Value::Number(f) => FVal::Num(f),
-      mlua_lua54::Value::String(s) => {
-        FVal::Str(String::from_utf8_lossy(&s.as_bytes()).into_owned())
-      }
-      other => FVal::Other(format!("{other:?}")),
-    }))))
+    Ok(Some(format_fvals(values.into_iter().map(
+      |value| match value {
+        mlua_lua54::Value::Nil => FVal::Nil,
+        mlua_lua54::Value::Boolean(b) => FVal::Bool(b),
+        mlua_lua54::Value::Integer(i) => FVal::Int(i),
+        mlua_lua54::Value::Number(f) => FVal::Num(f),
+        mlua_lua54::Value::String(s) => {
+          FVal::Str(String::from_utf8_lossy(&s.as_bytes()).into_owned())
+        }
+        other => FVal::Other(format!("{other:?}")),
+      },
+    ))))
   }
 }
 
@@ -176,12 +186,12 @@ impl EngineImpl {
       Self::LuaJitJit => backend_luajit::eval(src, true),
       #[cfg(feature = "engine-lua54")]
       Self::Lua54Interp => backend_lua54::eval(src),
-      Self::UluaParse => crate::compile::run_parse(src),
-      Self::UluaCompile => crate::compile::run_compile(src),
+      Self::UluaParse => compile::run_parse(src),
+      Self::UluaCompile => compile::run_compile(src),
       #[cfg(feature = "engine-luau")]
-      Self::LuauCppCompile => crate::compile::run_luau_cpp_compile(src),
-      Self::AnalysisGlobals => crate::analysis::run(false, src),
-      Self::AnalysisCheck => crate::analysis::run(true, src),
+      Self::LuauCppCompile => compile::run_luau_cpp_compile(src),
+      Self::AnalysisGlobals => analysis::run(false, src),
+      Self::AnalysisCheck => analysis::run(true, src),
     }
   }
 }

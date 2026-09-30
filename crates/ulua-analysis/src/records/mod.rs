@@ -191,7 +191,6 @@ pub mod indexer_index_collector;
 pub mod inference;
 pub mod inference_pack;
 pub mod infinite_type_finder;
-pub mod inplace_demoter;
 pub mod instance_collector;
 pub mod instance_collector_2;
 pub mod instantiate_generics_on_non_function;

@@ -6,18 +6,13 @@ use crate::{
   enums::lua_status::LuaStatus,
   functions::lua_d_pcall::lua_d_pcall,
   macros::{savestack::savestack, setnilvalue::setnilvalue},
-  records::{lua_state::LuaState, lua_table::LuaTable, resolve_import::ResolveImport},
+  records::{lua_state::LuaState, resolve_import::ResolveImport},
   type_aliases::t_value::TValue,
 };
 
 /// # Safety
 /// `l` 必须指向存活 `LuaState`，操作数 `*const TValue`/`StkId` 指针可读/可写且对齐，TM 调用协议（res 槽、栈余量）满足。
-pub(crate) unsafe fn resolve_import_safe(
-  l: *mut LuaState,
-  _env: *mut LuaTable,
-  k: *mut TValue,
-  id: u32,
-) {
+pub(crate) unsafe fn resolve_import_safe(l: *mut LuaState, k: *mut TValue, id: u32) {
   // SAFETY: 契约保证 `l` 为存活调用帧且对应 pc 的导入空间已建立，解析出的模块表压入栈顶且表可读
   unsafe {
     let mut ri = ResolveImport { k, id };

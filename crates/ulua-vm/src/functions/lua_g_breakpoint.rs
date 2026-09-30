@@ -30,7 +30,7 @@ pub(crate) unsafe fn lua_g_breakpoint(l: *mut LuaState, p: *mut Proto, line: i32
         .enumerate()
         .find_map(|(i, &insn)| {
           (luau_insn_op(insn) != LuauOpcode::LOP_PREPVARARGS as u32
-            && lua_g_getline(p, i as i32) == line)
+            && lua_g_getline(&*p, i as i32) == line)
             .then_some(i)
         });
 

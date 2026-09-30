@@ -87,7 +87,7 @@ impl SubtypingEnvironment {
   /// - `ice_reporter` 必须非 null 且指向存活的 `InternalErrorReporter`——对应 C++
   ///   `getMappedTypeBounds(TypeId, InternalErrorReporter&)` 的引用形参，调用方从不传 null。
   /// - `ty` 经 `follow` 解引用，须指向类型 arena 中存活节点。
-  pub unsafe fn get_mapped_type_bounds(
+  pub(crate) unsafe fn get_mapped_type_bounds(
     &mut self,
     ty: TypeId,
     ice_reporter: *mut InternalErrorReporter,

@@ -75,7 +75,7 @@ pub unsafe fn lua_h_getn(t: *mut LuaTable) -> i32 {
       maybesetaboundary(t, boundary);
       boundary
     } else {
-      LUAU_ASSERT!(eq((*t).node, dummynode) || (*lua_h_getnum(t, j + 1)).is_nil());
+      LUAU_ASSERT!(eq((*t).node, dummynode) || (*lua_h_getnum(&*t, j + 1)).is_nil());
       j
     }
   }

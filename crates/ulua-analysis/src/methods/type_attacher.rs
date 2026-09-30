@@ -123,7 +123,7 @@ impl TypeAttacher {
   /// 调用方须保证 `local` 非空、对齐，指向 attach 期间存活、地址稳定的 `AstLocal`；本函数读 `annotation`/
   /// `location` 并在命中时**写回** `(*local).annotation`，故须对该 arena 节点持有独占可变访问、无并存借用。
   /// cpp `Analysis/src/TypeAttach.cpp:595`（`bool TypeAttacher::visitLocal(AstLocal*)`）。单线程。
-  pub unsafe fn visit_local(&mut self, local: *mut AstLocal) -> bool {
+  pub(crate) unsafe fn visit_local(&mut self, local: *mut AstLocal) -> bool {
     // C++ `AstType* annotation = local->annotation;`
     let annotation = unsafe { (*local).annotation };
     if annotation.is_null() {

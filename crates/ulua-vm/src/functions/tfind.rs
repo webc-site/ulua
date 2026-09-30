@@ -25,7 +25,7 @@ pub unsafe fn tfind(l: *mut LuaState) -> i32 {
 
     let mut i = init;
     loop {
-      let e: *const TValue = lua_h_getnum(t, i);
+      let e: *const TValue = lua_h_getnum(&*t, i);
       if (*e).is_nil() {
         break;
       }

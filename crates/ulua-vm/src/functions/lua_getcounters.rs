@@ -36,6 +36,7 @@ pub unsafe fn lua_getcounters(
     let lcl = addr_of!((*cl).inner.l).cast::<LClosure>();
     let p = (*lcl).p;
 
-    getcounters(l, p, context, functionvisit, countervisit);
+    // 契约保证闭包 `p` 指向存活 Proto；降共享引用透传给只读内部函数
+    getcounters(l, &*p, context, functionvisit, countervisit);
   }
 }

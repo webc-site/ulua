@@ -26,7 +26,8 @@ pub unsafe fn lua_breakpoint(l: *mut LuaState, funcindex: i32, line: i32, enable
     let lcl = addr_of!((*cl).inner.l).cast::<LClosure>();
     let p: *mut Proto = (*lcl).p;
 
-    let target = getnextline(p, line);
+    // 契约保证闭包 `p` 指向存活 Proto；降共享引用透传给只读内部函数
+    let target = getnextline(&*p, line);
 
     if target != -1 {
       lua_g_breakpoint(l, p, target, enabled != 0);

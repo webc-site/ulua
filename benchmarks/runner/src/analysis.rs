@@ -13,7 +13,6 @@ use ulua_analysis::{
 use ulua_ast::enums::mode::Mode;
 use ulua_config::records::config::Config as LuauConfig;
 
-
 /// 把当前被测源码喂给 Frontend 的内存版 FileResolver（实现公开 trait，无 internals）。
 struct BenchFileResolver {
   source: String,
@@ -102,4 +101,3 @@ pub(crate) fn run(check: bool, src: &str) -> Result<Option<String>, String> {
   }
   Ok(None)
 }
-

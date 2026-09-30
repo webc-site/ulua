@@ -6,18 +6,15 @@ use crate::{
 };
 
 /// # Safety
-/// `p` 须为存活 `Proto`：当 `(*p).lineinfo` 非空时 `(*p).code[0..sizecode]` 须为有效指令数组，
-/// 且子原型数组 `(*p).p[0..sizep]` 每个元素须为存活 `Proto`（递归调用）；`line` 为查询行号。
-/// cpp `ldebug.cpp:507`。
-pub(crate) unsafe fn getnextline(p: *mut Proto, line: i32) -> i32 {
+/// `p` 须为指向存活 `Proto` 的共享引用：当 `p.lineinfo` 非空时 `p.code[0..sizecode]` 须为有效指令数组，
+/// 且子原型数组 `p.p[0..sizep]` 每个元素须为存活 `Proto`（递归下传）；`line` 为查询行号。
+/// 本函数纯读，不写 Proto。cpp `ldebug.cpp:507`。
+pub(crate) unsafe fn getnextline(p: &Proto, line: i32) -> i32 {
   unsafe {
     let mut closest = -1;
 
-    if !(*p).lineinfo.is_null() {
-      for (i, &insn) in c_slice((*p).code, (*p).sizecode as usize)
-        .iter()
-        .enumerate()
-      {
+    if !p.lineinfo.is_null() {
+      for (i, &insn) in c_slice(p.code, p.sizecode as usize).iter().enumerate() {
         if luau_insn_op(insn) == LuauOpcode::LOP_PREPVARARGS as u32 {
           continue;
         }
@@ -34,8 +31,8 @@ pub(crate) unsafe fn getnextline(p: *mut Proto, line: i32) -> i32 {
       }
     }
 
-    for &sub in c_slice((*p).p, (*p).sizep as usize) {
-      let candidate = getnextline(sub, line);
+    for &sub in c_slice(p.p, p.sizep as usize) {
+      let candidate = getnextline(&*sub, line);
 
       if candidate == line {
         return line;

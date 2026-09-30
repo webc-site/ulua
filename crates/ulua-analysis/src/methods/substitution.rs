@@ -132,7 +132,7 @@ impl Substitution {
   /// [`SubstitutionVtable`](crate::records::tarjan::SubstitutionVtable). The
   /// first `follow` is `log->follow`; the second is `Luau::follow` (the free
   /// function `follow_type_id`).
-  pub unsafe fn found_dirty_type_id(&mut self, ty: TypeId) {
+  pub(crate) unsafe fn found_dirty_type_id(&mut self, ty: TypeId) {
     // Safety: `self.base.log` 为构造 Substitution 时接线的非空 `*const TxnLog`（进程级
     // `TxnLog::empty()` 单例或调用方传入的活 log），比本 Substitution 长寿；`follow_type_id`
     // 为 `&self` 只读，`ty` 是存活类型句柄。单线程求解循环中重建共享引用无并发别名。
@@ -173,7 +173,7 @@ impl Substitution {
   ///
   /// See [`Substitution::found_dirty_type_id`] for the dispatch/`follow`
   /// details; this is the type-pack twin.
-  pub unsafe fn found_dirty_type_pack_id(&mut self, tp: TypePackId) {
+  pub(crate) unsafe fn found_dirty_type_pack_id(&mut self, tp: TypePackId) {
     // Safety: 同类型孪生——`self.base.log` 为非空存活的 `*const TxnLog`，`follow_type_pack_id`
     // 为 `&self` 只读，`tp` 是存活类型包句柄；单线程求解中无并发别名。
     let tp = unsafe { (*self.base.log).follow_type_pack_id(tp) };

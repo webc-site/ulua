@@ -81,7 +81,7 @@ pub(crate) unsafe fn cleartable(l: *mut LuaState, mut list: *mut GCObject) -> us
         }
       }
 
-      let modev = gettablemode((*l).global, h);
+      let modev = gettablemode((*l).global, &*h);
       if !modev.is_null() && contains_s(modev) && activevalues < hsize * 3 / 8 {
         tableresizeprotected(l, h, activevalues);
       }

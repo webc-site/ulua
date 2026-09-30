@@ -69,7 +69,8 @@ pub unsafe fn luau_callhook(l: *mut LuaState, hook: LuaHook, userdata: Option<*m
         let l = &(*cl).inner.l;
         l.p
       };
-      lua_g_getline(p, pcRel!((*(*l).ci).savedpc, p))
+      // pcRel! 需按裸指针比对 code 基址，仍传 `p`；取行号本身降共享引用（纯读）
+      lua_g_getline(&*p, pcRel!((*(*l).ci).savedpc, p))
     };
     ar.userdata = userdata.unwrap_or(null_mut());
 

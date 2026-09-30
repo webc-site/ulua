@@ -26,7 +26,7 @@ pub(crate) unsafe fn traversetable(g: *mut global_State, h: *mut LuaTable) -> i3
 
     // is there a weak mode?
     // C++ `strchr(modev, 'k'/'v') != NULL`：contains 等价（mode 串仅 1~2 字节）
-    let modev = gettablemode(g, h);
+    let modev = gettablemode(g, &*h);
     let (weakkey, weakvalue) = if modev.is_null() {
       (0, 0)
     } else {

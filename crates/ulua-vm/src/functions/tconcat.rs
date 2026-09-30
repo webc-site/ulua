@@ -23,6 +23,8 @@ pub unsafe fn tconcat(l: *mut LuaState) -> i32 {
     let last = lua_l_optinteger(l, 4, last);
 
     let t = (*(*l).base).as_table_ptr();
+    // 可空位点降级：NULL 表指针（JIT 空表）→ None，非空 → 共享只读借用
+    let t = if t.is_null() { None } else { Some(&*t) };
 
     let mut b = LuaLStrbuf::new();
     lua_l_buffinit(l, &mut b);

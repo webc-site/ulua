@@ -16,7 +16,7 @@ use crate::{
 pub(crate) unsafe fn mainposition(t: *const LuaTable, key: *const TValue) -> *mut LuaNode {
   unsafe {
     match ttype!(key) {
-      x if x == LuaType::Number as u32 => hashnum(t as *mut LuaTable, (*key).as_number()),
+      x if x == LuaType::Number as u32 => hashnum(&*t, (*key).as_number()),
       x if x == LuaType::Integer as u32 => hashint(t, lvalue!(key)),
       x if x == LuaType::Vector as u32 => hashvec(t, (*key).as_vector_ref().as_ptr()),
       x if x == LuaType::String as u32 => hashstr!(t, (*key).as_string()),

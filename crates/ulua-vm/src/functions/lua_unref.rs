@@ -25,7 +25,7 @@ pub unsafe fn lua_unref(l: *mut LuaState, ref_: i32) {
     let reg_tvalue_ptr: *const TValue = registry!(l);
     let reg: *mut LuaTable = (*reg_tvalue_ptr).as_table_ptr() as *const _ as *mut LuaTable;
 
-    let slot: *const TValue = lua_h_getnum(reg, ref_);
+    let slot: *const TValue = lua_h_getnum(&*reg, ref_);
 
     api_check!(l, slot != LUA_O_NILOBJECT);
 

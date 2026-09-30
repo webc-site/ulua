@@ -96,9 +96,8 @@ pub(crate) unsafe fn propagatemark(g: *mut global_State) -> usize {
           + size_of::<CallInfo>() * th.size_ci as usize
       }
       Some(GcViewMut::Proto(p)) => {
-        let p_ptr = p as *mut Proto;
         (*g).gray = p.gclist;
-        traverseproto(g, p_ptr);
+        traverseproto(g, p);
 
         size_of::<Proto>()
           + size_of::<Instruction>() * p.sizecode as usize

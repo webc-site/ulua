@@ -98,10 +98,7 @@ pub(crate) fn measure_and_tabulate(
             values_ok = false;
             eprintln!(
               "\n[{}] 返回值分歧: {} = {:?}（此前为 {:?}）",
-              case.id,
-              engine.spec.meta.key,
-              value,
-              first
+              case.id, engine.spec.meta.key, value, first
             );
           }
           Some(_) => {}

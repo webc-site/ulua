@@ -6,13 +6,15 @@ use crate::{
 };
 
 /// # Safety
-/// `t` 须为存活 `LuaTable`：读 `(*t).node`/`(*t).sizearray` 判定数组边界，并沿 `lua_h_getnum(t,size+1)` 探测
+/// `t` 须为存活 `LuaTable` 的共享只读借用：读 `t.node`/`t.sizearray` 判定数组边界，并沿 `lua_h_getnum(t,size+1)` 探测
 /// 数组段（`size` 增长受 `tbound`（node 非 dummynode 或 size<sizearray）与 `size!=i32::MAX` 约束，避免越界/溢出）；
-/// `ek` 允许 NULL（此时 ekindex=-1 不探测），非空时须指向存活 `TValue` 且仅当为数字才解引用取值。纯查询，不写表、不分配。
+/// `ek` 为可空只读裸指针（上游 rehash/lua_h_resizearray 以裸指针传递，改 `Option<&TValue>` 会把判空推给全部调用点，
+/// 故按可空口径保留）：允许 NULL（此时 ekindex=-1 不探测），非空时须指向存活 `TValue` 且仅当为数字才解引用取值。
+/// 纯查询，不写表、不分配。
 /// cpp VM/src/ltable.cpp:679
-pub(crate) unsafe fn adjustasize(t: *mut LuaTable, mut size: i32, ek: *const TValue) -> i32 {
+pub(crate) unsafe fn adjustasize(t: &LuaTable, mut size: i32, ek: *const TValue) -> i32 {
   unsafe {
-    let tbound = (*t).node != dummynode.cast_mut() || size < (*t).sizearray;
+    let tbound = t.node != dummynode.cast_mut() || size < t.sizearray;
     let ekindex = if !ek.is_null() && (*ek).is_number() {
       arrayindex((*ek).as_number())
     } else {

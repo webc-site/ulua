@@ -211,7 +211,7 @@ pub fn export_group_json(
   let mut geomean_map: BTreeMap<String, f64> = BTreeMap::new();
   geomean_map.insert(baseline.meta.key.to_owned(), 1.0);
   for engine in engines.iter().skip(1) {
-    if let Some(ratio) = geomean_ratio(baseline.key, engine.meta.key, cases, &data_map) {
+    if let Some(ratio) = geomean_ratio(baseline.meta.key, engine.meta.key, cases, &data_map) {
       geomean_map.insert(engine.meta.key.to_owned(), ratio);
     }
   }
@@ -226,8 +226,8 @@ pub fn export_group_json(
     engines: engines
       .iter()
       .map(|e| GroupEngineItem {
-        key: e.key,
-        label: e.label,
+        key: e.meta.key,
+        label: e.meta.label,
       })
       .collect(),
     data: data_map,

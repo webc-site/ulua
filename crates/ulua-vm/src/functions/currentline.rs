@@ -15,6 +15,6 @@ pub(crate) unsafe fn currentline(ci: *mut CallInfo) -> i32 {
   unsafe {
     let cl = ci_func!(ci);
     let lcl = addr_of!((*cl).inner.l).cast::<LClosure>();
-    lua_g_getline((*lcl).p, currentpc(ci))
+    lua_g_getline(&*(*lcl).p, currentpc(ci))
   }
 }

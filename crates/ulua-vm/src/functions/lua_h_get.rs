@@ -24,7 +24,7 @@ pub unsafe fn lua_h_get(t: *mut LuaTable, key: *const TValue) -> *const TValue {
         let n = (*key).as_number();
         let k = n as i32;
         if luai_numeq(k as f64, n) {
-          return lua_h_getnum(t, k);
+          return lua_h_getnum(&*t, k);
         }
         // 非整数数值键落到下方 hash 慢路径（cpp `goto hash`）
       }

@@ -80,7 +80,12 @@ pub static GROUPS: &[&GroupSpec] = &[&EXEC_GROUP, &COMPILE_GROUP, &ANALYSIS_GROU
 
 fn compile_engines() -> Vec<engine::EngineSpec> {
   let mut engines = vec![
-    engine::group_spec("ulua-parse", "ulua parse", true, Some(EngineImpl::UluaParse)),
+    engine::group_spec(
+      "ulua-parse",
+      "ulua parse",
+      true,
+      Some(EngineImpl::UluaParse),
+    ),
     engine::group_spec(
       "ulua-compile",
       "ulua parse+compile",
@@ -96,7 +101,12 @@ fn compile_engines() -> Vec<engine::EngineSpec> {
     Some(EngineImpl::LuauCppCompile),
   ));
   #[cfg(not(feature = "engine-luau"))]
-  engines.push(engine::group_spec("mlua-compile", "mlua/luau compile", false, None));
+  engines.push(engine::group_spec(
+    "mlua-compile",
+    "mlua/luau compile",
+    false,
+    None,
+  ));
   engines
 }
 

@@ -19,9 +19,11 @@ use crate::{
 };
 
 /// # Safety
-/// `l` 必须指向存活 `lua_State` 且所查询的调用帧/Proto/输出记录按约定存活可写。
+/// `p` 须为指向存活 `Proto` 的共享引用（子原型数组元素亦须存活，递归下传）；`buffer..buffer+size`
+/// 为调用方可写输出区且长度覆盖行号上界；`callback` 型别约定与 `context` 匹配。本函数只读 Proto，
+/// 写操作仅落在 `buffer`。
 pub(crate) unsafe fn getcoverage(
-  p: *mut Proto,
+  p: &Proto,
   depth: i32,
   buffer: *mut i32,
   size: usize,
@@ -32,11 +34,7 @@ pub(crate) unsafe fn getcoverage(
   unsafe {
     write_bytes(buffer, 0xFF, size);
 
-    let p_ref = &*p;
-    for (i, &insn) in c_slice(p_ref.code, p_ref.sizecode as usize)
-      .iter()
-      .enumerate()
-    {
+    for (i, &insn) in c_slice(p.code, p.sizecode as usize).iter().enumerate() {
       if luau_insn_op(insn) != LuauOpcode::LOP_COVERAGE as u32 {
         continue;
       }
@@ -51,19 +49,19 @@ pub(crate) unsafe fn getcoverage(
       }
     }
 
-    let debugname = if !p_ref.debugname.is_null() {
-      getstr(p_ref.debugname)
+    let debugname = if !p.debugname.is_null() {
+      getstr(p.debugname)
     } else {
       null()
     };
-    let linedefined = p_ref.linedefined;
+    let linedefined = p.linedefined;
 
     if let Some(cb) = callback {
       cb(context, debugname, linedefined, depth, buffer, size);
     }
 
-    for &sub in c_slice(p_ref.p, p_ref.sizep as usize) {
-      getcoverage(sub, depth + 1, buffer, size, context, callback);
+    for &sub in c_slice(p.p, p.sizep as usize) {
+      getcoverage(&*sub, depth + 1, buffer, size, context, callback);
     }
   }
 }

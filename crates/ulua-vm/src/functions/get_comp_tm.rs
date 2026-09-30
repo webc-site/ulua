@@ -11,10 +11,12 @@ use crate::{
 /// # Safety
 ///
 /// `l` 必须指向存活 `lua_State`，操作数 `*const TValue`/`StkId` 指针可读/可写且对齐，TM 调用协议（res 槽、栈余量）满足。
+/// `mt1`/`mt2` 为可空只读裸指针（元表缺席即 NULL，与 `fasttm` 的可空入约同形）：非空时须指向存活 `LuaTable`；
+/// 本函数仅读二者判定同表与取元方法，不写表。
 pub(crate) unsafe fn get_comp_tm(
   l: *mut LuaState,
-  mt1: *mut LuaTable,
-  mt2: *mut LuaTable,
+  mt1: *const LuaTable,
+  mt2: *const LuaTable,
   event: TMS,
 ) -> *const TValue {
   // SAFETY: 契约保证 `l` 的 global 比较函数表存活且成员 comp 字段为已注册的非空函数指针，取回后调用约定匹配操作数类型

@@ -22,7 +22,7 @@ pub unsafe fn lua_h_resizearray(l: *mut LuaState, t: *mut LuaTable, nasize: i32)
       sizenode!(t)
     };
 
-    let asize = adjustasize(t, nasize, null());
+    let asize = adjustasize(&*t, nasize, null());
 
     resize(l, t, asize, nsize);
   }

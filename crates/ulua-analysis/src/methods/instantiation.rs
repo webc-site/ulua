@@ -18,9 +18,7 @@ use crate::{
 };
 
 impl Instantiation {
-  /// # Safety
-  /// 调用方须保证满足 C++ 原实现定义的内部不变量。
-  pub unsafe fn clean_type_id(&mut self, ty: TypeId) -> TypeId {
+  pub fn clean_type_id(&mut self, ty: TypeId) -> TypeId {
     // Safety: self.base.base.log 是 Substitution 构造期（Replacer::new 等）接线的
     // TxnLog 指针——要么指向进程级单例 TxnLog::empty()，要么指向驱动本次实例化的
     // 模块 log，两者均非空且比 self 长寿；重建只读借用调 &self 安全方法，无别名。

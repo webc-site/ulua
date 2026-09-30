@@ -167,7 +167,6 @@ pub mod incorrect_generic_parameter_count;
 pub mod index_collector_visit_expected_type_visitor;
 pub mod indexer_index_collector_visit_expected_type_visitor;
 pub mod infinite_type_finder;
-pub mod inplace_demoter;
 pub mod instance_collector;
 pub mod instance_collector_2;
 pub mod instantiation;

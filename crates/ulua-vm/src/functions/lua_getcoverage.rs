@@ -29,14 +29,15 @@ pub unsafe fn lua_getcoverage(
     let lcl = addr_of!((*cl).inner.l).cast::<LClosure>();
     let p = (*lcl).p;
 
-    let size = getmaxline(p) as usize + 1;
+    // 契约保证闭包 `p` 指向存活 Proto；降共享引用透传给只读内部函数
+    let size = getmaxline(&*p) as usize + 1;
     if size == 0 {
       return;
     }
 
     let buffer = luaM_newarray!(l, size, i32, 0);
 
-    getcoverage(p, 0, buffer, size, context, callback);
+    getcoverage(&*p, 0, buffer, size, context, callback);
 
     luaM_freearray!(l, buffer as *mut c_void, size, i32, 0);
   }

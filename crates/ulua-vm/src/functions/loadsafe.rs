@@ -493,7 +493,7 @@ pub(crate) unsafe fn loadsafe(
 
           LBC_CONSTANT_IMPORT_U8 => {
             let iid = read_value!(u32, "import constant");
-            resolve_import_safe(l, envt, (*p).k, iid);
+            resolve_import_safe(l, (*p).k, iid);
             setobj!(l, k, (*l).top.sub(1));
             (*l).top = (*l).top.sub(1);
           }

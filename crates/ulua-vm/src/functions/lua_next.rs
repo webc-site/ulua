@@ -23,7 +23,7 @@ pub unsafe fn lua_next(l: *mut LuaState, idx: i32) -> i32 {
     let t: StkId = index_2_addr(l, idx);
     api_check!(l, (*t).is_table());
 
-    let more = lua_h_next(l, (*t).as_table_ptr(), (*l).top.sub(1));
+    let more = lua_h_next(l, &*(*t).as_table_ptr(), (*l).top.sub(1));
     if more != 0 {
       api_incr_top!(l);
     } else {

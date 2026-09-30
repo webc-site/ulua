@@ -12,10 +12,11 @@ use crate::{
 };
 
 /// # Safety
-/// `l` 必须指向存活 `LuaState` 且所查询的调用帧/Proto/输出记录按约定存活可写。
+/// `l` 必须指向存活 `LuaState`；`p` 须为指向存活 `Proto` 的共享引用（子原型数组元素亦须存活，递归下传），
+/// 且所查询的输出记录按约定存活可写。本函数只读 Proto，仅经 C ABI 回调边界转手一次可变指针（见体内注释）。
 pub(crate) unsafe fn getcounters(
   l: *mut LuaState,
-  p: *mut Proto,
+  p: &Proto,
   context: *mut c_void,
   functionvisit: LuaCounterFunction,
   countervisit: LuaCounterValue,
@@ -26,8 +27,7 @@ pub(crate) unsafe fn getcounters(
 
   // SAFETY: 契约保证 `p` 为存活 Proto、execdata 非空时反馈向量与 sizecode 一致，`counters` 为调用方可写输出数组
   unsafe {
-    let p_ref = &*p;
-    if !p_ref.execdata.is_null() {
+    if !p.execdata.is_null() {
       let l_ref = &*l;
       let global = l_ref.global;
       // if let 替代 is_none + unwrap，Option 由类型系统收口非空
@@ -35,15 +35,18 @@ pub(crate) unsafe fn getcounters(
         && let Some(getcounterdata) = (*global).ecb.getcounterdata
       {
         let mut count: usize = 0;
-        let data = getcounterdata(l, p, &mut count as *mut usize);
+        // SAFETY(review §2): `getcounterdata` 为 C ABI 宿主回调，签名固定收 `*mut Proto`；
+        // 其契约为「只量取计数数据、不改 Proto」，故此处的可变指针只跨越该外部调用边界，
+        // 本函数不据此解写。
+        let data = getcounterdata(l, (p as *const Proto).cast_mut(), &mut count as *mut usize);
 
         if !data.is_null() && count != 0 {
-          let debugname = if !p_ref.debugname.is_null() {
-            getstr(p_ref.debugname)
+          let debugname = if !p.debugname.is_null() {
+            getstr(p.debugname)
           } else {
             null()
           };
-          let linedefined = p_ref.linedefined;
+          let linedefined = p.linedefined;
 
           if let Some(fv) = functionvisit {
             fv(context, debugname, linedefined);
@@ -57,7 +60,7 @@ pub(crate) unsafe fn getcounters(
             let hits = read_unaligned(slot[size_of::<u32>() * 2..].as_ptr() as *const u64);
 
             let line = if pcpos == !0u32 {
-              p_ref.linedefined
+              p.linedefined
             } else {
               lua_g_getline(p, pcpos as i32)
             };
@@ -71,8 +74,8 @@ pub(crate) unsafe fn getcounters(
     }
 
     // SAFETY:p 为有效 Proto，sizep 与子 proto 数组分配一致。
-    for &child in c_slice(p_ref.p, p_ref.sizep as usize) {
-      getcounters(l, child, context, functionvisit, countervisit);
+    for &child in c_slice(p.p, p.sizep as usize) {
+      getcounters(l, &*child, context, functionvisit, countervisit);
     }
   }
 }

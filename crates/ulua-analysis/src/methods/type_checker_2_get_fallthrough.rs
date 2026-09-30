@@ -69,8 +69,7 @@ impl TypeChecker2 {
         {
           return None;
         }
-        self
-          .type_checker_2_get_fallthrough(&stat.body.get().base)?;
+        self.type_checker_2_get_fallthrough(&stat.body.get().base)?;
         Some(node)
       }
 

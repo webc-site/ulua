@@ -6,7 +6,9 @@ use crate::{
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn correctstack(l: *mut LuaState, oldstack: *mut TValue) {
+/// `oldstack` 为栈搬迁前的旧基址，仅取地址参与偏移换算、从不解引用（realloc 后旧区可能已释放，
+/// 故保持裸指针形态而非 `&TValue`），只读即可。
+pub(crate) unsafe fn correctstack(l: *mut LuaState, oldstack: *const TValue) {
   unsafe {
     let stack_bytes = (*l).stack as *mut u8;
     let oldstack_addr = oldstack as isize;

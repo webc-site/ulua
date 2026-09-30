@@ -41,7 +41,7 @@ pub(crate) unsafe fn rehash(l: *mut LuaState, t: *mut LuaTable, ek: *const TValu
     let mut nh = totaluse - na;
 
     // enforce the boundary invariant; for performance, only do hash lookups if we must
-    let nadjusted = adjustasize(t, nasize, ek);
+    let nadjusted = adjustasize(&*t, nasize, ek);
     // count how many extra elements belong to array part instead of hash part
     let aextra = nadjusted - nasize;
 
@@ -49,7 +49,7 @@ pub(crate) unsafe fn rehash(l: *mut LuaState, t: *mut LuaTable, ek: *const TValu
       // 那些额外元素不再需要哈希部分的槽位；且因哈希节点是数组节点的两倍大，
       // 省下的内存可交回数组部分（size 变更后需再次强制边界不变式）
       nh -= aextra;
-      nasize = adjustasize(t, nadjusted + aextra, ek);
+      nasize = adjustasize(&*t, nadjusted + aextra, ek);
     }
 
     resize(l, t, nasize, nh);
