@@ -215,7 +215,6 @@ pub mod metatable_type;
 pub mod module;
 pub mod multiple_nonviable_overloads;
 pub mod native_stack_guard;
-pub mod nearest_statement_finder_visit;
 pub mod negation_type_finder_visit_unifier;
 pub mod non_exceptional_recursion_limiter;
 pub mod non_strict_context;

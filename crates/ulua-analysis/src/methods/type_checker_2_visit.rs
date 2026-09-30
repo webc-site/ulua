@@ -735,12 +735,9 @@ impl TypeChecker2 {
         self.visit_type_pack(fn_ref.vararg_annotation.as_ref());
       }
 
-      // Safety: fn_ref.body 是 &AstExprFunction 形参的 arena 子指针（parser 对
-      // 无函数体的语法错误节点也会补空 block），传给 get_fallthrough 仅作
-      // 指针身份查表，且返回前不与其它借用冲突。
-      let reaches_implicit_return = !self
-        .type_checker_2_get_fallthrough(fn_ref.body.cast::<AstStat>().as_ptr())
-        .is_null();
+      let reaches_implicit_return = self
+        .type_checker_2_get_fallthrough(&fn_ref.body.get().base)
+        .is_some();
       if reaches_implicit_return
         && !self.allows_no_return_values(follow_type_pack::follow(inferred_ftv.ret_types))
       {
