@@ -53,4 +53,3 @@ version = "0.1.4"
 [dev-dependencies.ulua-cli-lib]
 path = "../ulua-cli-lib"
 features = [ "test-utils" ]
-version = "0.1.4"

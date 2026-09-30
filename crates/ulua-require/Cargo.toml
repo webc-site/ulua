@@ -42,12 +42,9 @@ version = "0.1.4"
 
 [dev-dependencies.ulua-ast]
 path = "../ulua-ast"
-version = "0.1.4"
 
 [dev-dependencies.ulua-bytecode]
 path = "../ulua-bytecode"
-version = "0.1.4"
 
 [dev-dependencies.ulua-compiler]
 path = "../ulua-compiler"
-version = "0.1.4"

@@ -67,7 +67,6 @@ version = "0.1.4"
 
 [dev-dependencies.ulua-unit-test]
 path = "../ulua-unit-test"
-version = "0.1.4"
 
 [target."cfg(windows)".dependencies.windows-sys]
 workspace = true

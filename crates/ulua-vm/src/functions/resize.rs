@@ -1,6 +1,6 @@
 use core::{
   mem::size_of,
-  ptr::{addr_of, addr_of_mut, eq},
+  ptr::{addr_of_mut, eq},
 };
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
