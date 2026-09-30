@@ -49,7 +49,7 @@ impl ApplyMappedGenerics {
   /// `ty` 为类型 arena bump 节点句柄；本函数经 `self.env`/`self.builtin_types`/`self.arena`
   /// 三个裸指针（由 apply_mapped_generics 每轮从调用方独占借用的 `&mut` 接线，比本遍历长寿）
   /// 解引用读取。调用方须保证这些指针非空、对齐且在此遍历期内不被其他可变借用。单线程独占。对应
-  pub fn clean_type_id(&mut self, ty: TypeId) -> TypeId {
+  pub(crate) fn clean_type_id(&mut self, ty: TypeId) -> TypeId {
     // Safety: builtin_types 由 apply_mapped_generics 在每轮映射前从调用方存活的
     // &mut BuiltinTypes（C++ NotNull 语义）接线为非空裸指针，比本遍历长寿；取共享
     // 引用仅读常量 TypeId，与 env 指向的对象不重叠。

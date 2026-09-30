@@ -40,7 +40,7 @@ fn type_owning_arena(ty: TypeId) -> ArenaId {
 impl ClonePublicInterface {
   /// # Safety
   /// 调用方须保证满足 C++ 原实现定义的内部不变量。
-  pub fn is_dirty_type_pack_id(&mut self, tp: TypePackId) -> bool {
+  pub(crate) fn is_dirty_type_pack_id(&mut self, tp: TypePackId) -> bool {
     // Safety: `self.module` 为构造期接线的非空存活 `*mut Module`，取共享引用只读其
     // `internal_types` arena 字段，本对象存活期内 module 一直有效（同 `is_dirty_type_id`）。
     let module = unsafe { &*self.module };
