@@ -19,7 +19,8 @@ use crate::{
     luai_gcstepmul::LUAI_GCSTEPMUL, luai_gcstepsize::LUAI_GCSTEPSIZE, white_0_bit::WHITE0BIT,
   },
   records::{
-    lg::LG, lua_execution_callback_storage::LUA_EXECUTION_CALLBACK_STORAGE, lua_state::LuaState,
+    global_state::PTRENCKEY_INIT, lg::LG,
+    lua_execution_callback_storage::LUA_EXECUTION_CALLBACK_STORAGE, lua_state::LuaState,
   },
   type_aliases::lua_alloc::LuaAlloc,
 };
@@ -72,7 +73,7 @@ pub unsafe fn lua_newstate(f: LuaAlloc, ud: *mut c_void) -> *mut LuaState {
   g.gc_threshold = 0; // mark it as unfinished state
   g.registryfree = 0;
   g.rngstate = 0;
-  g.ptrenckey = [1, 0, 0, 0];
+  g.ptrenckey = PTRENCKEY_INIT;
   g.strt.size = 0;
   g.strt.nuse = 0;
   // 既有约定（review.md §2）：LG 堆对象 POD 字段初值 + GC 页/块链表与灰/弱链表头结构哨兵（strt.hash/gray/grayagain/weak/freepages/allpages/mt 等）；alloc 回调返回 null 的契约见上方 SAFETY 注（46-47 行），此处裸指针均作空/未挂链哨兵，勿改 Option
