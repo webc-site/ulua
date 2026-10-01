@@ -32,6 +32,8 @@ use ulua_common::{
   },
 };
 
+#[cfg(feature = "vm-opcount")]
+use crate::functions::op_count;
 use crate::{
   enums::{lua_type::LuaType, tms::TMS, value_view::ValueView},
   functions::{
@@ -55,24 +57,60 @@ use crate::{
     set_iterator_done::set_iterator_done, set_iterator_index::set_iterator_index,
   },
   macros::{
-    classvalue::classvalue, fastnotm::fastnotm, gcvalue::gcvalue, getnodekey::getnodekey,
-    gkey::gval, gnext::gnext, gval_2_slot::gval2slot, incr_ci::incr_ci, is_lua::isLua,
-    lightuserdatatag::lightuserdatatag, lu_tag_iterator::LU_TAG_ITERATOR,
-    lua_c_barrier::lua_c_barrier, lua_c_barrierfast::lua_c_barrierfast,
+    classvalue::classvalue,
+    fastnotm::fastnotm,
+    gcvalue::gcvalue,
+    getnodekey::getnodekey,
+    gkey::gval,
+    gnext::gnext,
+    gval_2_slot::gval2slot,
+    incr_ci::incr_ci,
+    is_lua::isLua,
+    lightuserdatatag::lightuserdatatag,
+    lu_tag_iterator::LU_TAG_ITERATOR,
+    lua_c_barrier::lua_c_barrier,
+    lua_c_barrierfast::lua_c_barrierfast,
     lua_c_barriert::{luaC_barriert, luaC_barriert_pending},
-    lua_c_check_gc::lua_c_check_gc, lua_c_needs_gc::luaC_needsGC,
-    lua_callinfo_native::LUA_CALLINFO_NATIVE, lua_callinfo_return::LUA_CALLINFO_RETURN,
-    lua_d_checkstack::luaD_checkstack, lua_d_checkstackfornewci::lua_d_checkstackfornewci,
-    lua_g_typeerror::luaG_typeerror, lua_multret::LUA_MULTRET, lua_o_nilobject::LUA_O_NILOBJECT,
-    lua_r_lookupmemberatoffset::luaR_lookupmemberatoffset, luai_maxccalls::LUAI_MAXCCALLS,
-    luau_f_table::LUAU_F_TABLE, lvalue::lvalue, objectvalue::objectvalue, pvalue::pvalue,
-    setbvalue::setbvalue, setclassvalue::setclassvalue, setclvalue::setclvalue,
-    sethvalue::sethvalue, setnilvalue::setnilvalue, setnvalue::setnvalue, setobj::setobj,
-    setobj_2_s::setobj_2_s, setobj_2_t::setobj2t, setupvalue::setupvalue, setvvalue::setvvalue,
-    sizenode::sizenode, ttype::ttype, upvalue::upvalue, vm_check_gc::VM_CHECK_GC,
-    vm_interrupt::VM_INTERRUPT, vm_kv::VM_KV, vm_patch_aux::vm_patch_aux,
-    vm_patch_aux_slot::vm_patch_aux_slot, vm_patch_c::vm_patch_c, vm_patch_e::vm_patch_e,
-    vm_patch_op::vm_patch_op, vm_protect::vm_protect, vm_reg::VM_REG, vm_uv::VM_UV,
+    lua_c_check_gc::lua_c_check_gc,
+    lua_c_needs_gc::luaC_needsGC,
+    lua_callinfo_native::LUA_CALLINFO_NATIVE,
+    lua_callinfo_return::LUA_CALLINFO_RETURN,
+    lua_d_checkstack::luaD_checkstack,
+    lua_d_checkstackfornewci::lua_d_checkstackfornewci,
+    lua_g_typeerror::luaG_typeerror,
+    lua_multret::LUA_MULTRET,
+    lua_o_nilobject::LUA_O_NILOBJECT,
+    lua_r_lookupmemberatoffset::luaR_lookupmemberatoffset,
+    luai_maxccalls::LUAI_MAXCCALLS,
+    luau_f_table::LUAU_F_TABLE,
+    lvalue::lvalue,
+    objectvalue::objectvalue,
+    pvalue::pvalue,
+    setbvalue::setbvalue,
+    setclassvalue::setclassvalue,
+    setclvalue::setclvalue,
+    sethvalue::sethvalue,
+    setnilvalue::setnilvalue,
+    setnvalue::setnvalue,
+    setobj::setobj,
+    setobj_2_s::setobj_2_s,
+    setobj_2_t::setobj2t,
+    setupvalue::setupvalue,
+    setvvalue::setvvalue,
+    sizenode::sizenode,
+    ttype::ttype,
+    upvalue::upvalue,
+    vm_check_gc::VM_CHECK_GC,
+    vm_interrupt::VM_INTERRUPT,
+    vm_kv::VM_KV,
+    vm_patch_aux::vm_patch_aux,
+    vm_patch_aux_slot::vm_patch_aux_slot,
+    vm_patch_c::vm_patch_c,
+    vm_patch_e::vm_patch_e,
+    vm_patch_op::vm_patch_op,
+    vm_protect::vm_protect,
+    vm_reg::VM_REG,
+    vm_uv::VM_UV,
   },
   records::{
     closure::{Closure, LClosure},
@@ -86,9 +124,6 @@ use crate::{
     t_value::TValue,
   },
 };
-
-#[cfg(feature = "vm-opcount")]
-use crate::functions::op_count;
 
 /// cpp `cl->l.p` 的固定三连收敛：取闭包 `cl` 的 Proto 指针。
 /// 执行循环里 30+ 个 opcode 臂与断言都要读它，统一走这一个入口。
@@ -781,27 +816,33 @@ macro_rules! vm_next {
 ///
 /// 入选标准不是猜测，而是 `vm-opcount` 特性在 7 个回归用例上的**动态**指令直方图
 /// 累计占比 ≥95% 的集合（工具见 `op_count.rs`）。
-const HOT_ARMS: &[(LuauOpcode, VmFn)] = &[  (LuauOpcode::LOP_JUMP, h_jump::<false>), 
-  (LuauOpcode::LOP_JUMPIF, h_jumpif::<false>), 
-  (LuauOpcode::LOP_JUMPIFNOT, h_jumpifnot::<false>), 
-  (LuauOpcode::LOP_JUMPBACK, h_jumpback::<false>), 
-  (LuauOpcode::LOP_FORNPREP, h_fornprep::<false>), 
-  (LuauOpcode::LOP_FORNLOOP, h_fornloop::<false>), 
-  (LuauOpcode::LOP_NEWTABLE, h_newtable::<false>),   (LuauOpcode::LOP_ADD, h_add::<false>), 
-  (LuauOpcode::LOP_SUB, h_sub::<false>), 
-  (LuauOpcode::LOP_MUL, h_mul::<false>), 
-  (LuauOpcode::LOP_ADDK, h_addk::<false>), 
-  (LuauOpcode::LOP_SUBK, h_subk::<false>), 
-  (LuauOpcode::LOP_MULK, h_mulk::<false>), 
-  (LuauOpcode::LOP_MODK, h_modk::<false>),   (LuauOpcode::LOP_GETTABLEN, h_gettablen::<false>), 
-  (LuauOpcode::LOP_SETTABLEN, h_settablen::<false>), 
-  (LuauOpcode::LOP_SETTABLE, h_settable::<false>),   (LuauOpcode::LOP_LOADNIL, h_loadnil::<false>), 
-  (LuauOpcode::LOP_LOADB, h_loadb::<false>), 
-  (LuauOpcode::LOP_LOADN, h_loadn::<false>), 
-  (LuauOpcode::LOP_LOADK, h_loadk::<false>), 
-  (LuauOpcode::LOP_MOVE, h_move::<false>), 
-  (LuauOpcode::LOP_GETUPVAL, h_getupval::<false>), 
-  (LuauOpcode::LOP_SETUPVAL, h_setupval::<false>), (LuauOpcode::LOP_GETTABLE, h_gettable::<false>)];
+const HOT_ARMS: &[(LuauOpcode, VmFn)] = &[
+  (LuauOpcode::LOP_JUMP, h_jump::<false>),
+  (LuauOpcode::LOP_JUMPIF, h_jumpif::<false>),
+  (LuauOpcode::LOP_JUMPIFNOT, h_jumpifnot::<false>),
+  (LuauOpcode::LOP_JUMPBACK, h_jumpback::<false>),
+  (LuauOpcode::LOP_FORNPREP, h_fornprep::<false>),
+  (LuauOpcode::LOP_FORNLOOP, h_fornloop::<false>),
+  (LuauOpcode::LOP_NEWTABLE, h_newtable::<false>),
+  (LuauOpcode::LOP_ADD, h_add::<false>),
+  (LuauOpcode::LOP_SUB, h_sub::<false>),
+  (LuauOpcode::LOP_MUL, h_mul::<false>),
+  (LuauOpcode::LOP_ADDK, h_addk::<false>),
+  (LuauOpcode::LOP_SUBK, h_subk::<false>),
+  (LuauOpcode::LOP_MULK, h_mulk::<false>),
+  (LuauOpcode::LOP_MODK, h_modk::<false>),
+  (LuauOpcode::LOP_GETTABLEN, h_gettablen::<false>),
+  (LuauOpcode::LOP_SETTABLEN, h_settablen::<false>),
+  (LuauOpcode::LOP_SETTABLE, h_settable::<false>),
+  (LuauOpcode::LOP_LOADNIL, h_loadnil::<false>),
+  (LuauOpcode::LOP_LOADB, h_loadb::<false>),
+  (LuauOpcode::LOP_LOADN, h_loadn::<false>),
+  (LuauOpcode::LOP_LOADK, h_loadk::<false>),
+  (LuauOpcode::LOP_MOVE, h_move::<false>),
+  (LuauOpcode::LOP_GETUPVAL, h_getupval::<false>),
+  (LuauOpcode::LOP_SETUPVAL, h_setupval::<false>),
+  (LuauOpcode::LOP_GETTABLE, h_gettable::<false>),
+];
 
 /// opcode → 热层 handler；未入选的槽位回冷层循环头 [`tier_cold`]。
 ///
@@ -964,7 +1005,6 @@ unsafe fn s_gettable<const SINGLE_STEP: bool>(
   }
 }
 
-
 /// C++ computed-goto 的 handler 单元：LOP_SETUPVAL（原冷层 `match` 臂体，逐行同构）。
 ///
 /// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
@@ -985,7 +1025,6 @@ unsafe fn h_setupval<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:450
     let insn = *pc;
     pc = pc.add(1);
@@ -999,7 +1038,6 @@ unsafe fn h_setupval<const SINGLE_STEP: bool>(
     vm_next!(SINGLE_STEP, l, pc, base, k, cl);
   }
 }
-
 
 /// C++ computed-goto 的 handler 单元：LOP_GETUPVAL（原冷层 `match` 臂体，逐行同构）。
 ///
@@ -1021,23 +1059,21 @@ unsafe fn h_getupval<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:439
     let insn = *pc;
     pc = pc.add(1);
     let ra = VM_REG!(luau_insn_a(insn), l, base);
     let ur = VM_UV!(luau_insn_b(insn), cl);
     let v = if (*ur).is_upval() {
-    (*upvalue!(ur)).v
+      (*upvalue!(ur)).v
     } else {
-    ur
+      ur
     };
 
     setobj_2_s!(l, ra, v);
     vm_next!(SINGLE_STEP, l, pc, base, k, cl);
   }
 }
-
 
 /// C++ computed-goto 的 handler 单元：LOP_MOVE（原冷层 `match` 臂体，逐行同构）。
 ///
@@ -1059,7 +1095,6 @@ unsafe fn h_move<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:366
     let insn = *pc;
     pc = pc.add(1);
@@ -1070,7 +1105,6 @@ unsafe fn h_move<const SINGLE_STEP: bool>(
     vm_next!(SINGLE_STEP, l, pc, base, k, cl);
   }
 }
-
 
 /// C++ computed-goto 的 handler 单元：LOP_LOADK（原冷层 `match` 臂体，逐行同构）。
 ///
@@ -1092,7 +1126,6 @@ unsafe fn h_loadk<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:356
     let insn = *pc;
     pc = pc.add(1);
@@ -1103,7 +1136,6 @@ unsafe fn h_loadk<const SINGLE_STEP: bool>(
     vm_next!(SINGLE_STEP, l, pc, base, k, cl);
   }
 }
-
 
 /// C++ computed-goto 的 handler 单元：LOP_LOADN（原冷层 `match` 臂体，逐行同构）。
 ///
@@ -1125,7 +1157,6 @@ unsafe fn h_loadn<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:347
     let insn = *pc;
     pc = pc.add(1);
@@ -1135,7 +1166,6 @@ unsafe fn h_loadn<const SINGLE_STEP: bool>(
     vm_next!(SINGLE_STEP, l, pc, base, k, cl);
   }
 }
-
 
 /// C++ computed-goto 的 handler 单元：LOP_LOADB（原冷层 `match` 臂体，逐行同构）。
 ///
@@ -1157,7 +1187,6 @@ unsafe fn h_loadb<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:335
     let insn = *pc;
     pc = pc.add(1);
@@ -1171,7 +1200,6 @@ unsafe fn h_loadb<const SINGLE_STEP: bool>(
     vm_next!(SINGLE_STEP, l, pc, base, k, cl);
   }
 }
-
 
 /// C++ computed-goto 的 handler 单元：LOP_LOADNIL（原冷层 `match` 臂体，逐行同构）。
 ///
@@ -1193,7 +1221,6 @@ unsafe fn h_loadnil<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:326
     let insn = *pc;
     pc = pc.add(1);
@@ -1203,7 +1230,6 @@ unsafe fn h_loadnil<const SINGLE_STEP: bool>(
     vm_next!(SINGLE_STEP, l, pc, base, k, cl);
   }
 }
-
 
 /// C++ computed-goto 的 handler 单元：LOP_SETTABLEN（原冷层 `match` 臂体，逐行同构）。
 ///
@@ -1225,7 +1251,6 @@ unsafe fn h_settablen<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:830
     let insn = *pc;
     pc = pc.add(1);
@@ -1235,21 +1260,18 @@ unsafe fn h_settablen<const SINGLE_STEP: bool>(
 
     // fast-path: array access
     if (*rb).is_table() {
-    let h = (*rb).as_table_ptr();
+      let h = (*rb).as_table_ptr();
 
-    if (c as u32) < (*h).sizearray as u32
-    && (*h).metatable.is_null()
-    && (*h).readonly == 0
-    {
-    setobj2t!(l, (*h).array.add(c as usize), ra);
-    // 写屏障的谓词（值可回收 / 表已黑 / 值还白）本身无调用，就地判；只有真要
-    // mark 时才交 [`s_settablen_bar`] 跑那次 call —— 留在热臂会让 LLVM 给本函数
-    // 加入口帧，把一次性 prologue 变成每条指令的 stp/ldp（理由同 [`s_add`]）。
-    if luaC_barriert_pending!(h, ra) {
-    become s_settablen_bar::<SINGLE_STEP>(l, pc, base, k, cl);
-    }
-    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
-    }
+      if (c as u32) < (*h).sizearray as u32 && (*h).metatable.is_null() && (*h).readonly == 0 {
+        setobj2t!(l, (*h).array.add(c as usize), ra);
+        // 写屏障的谓词（值可回收 / 表已黑 / 值还白）本身无调用，就地判；只有真要
+        // mark 时才交 [`s_settablen_bar`] 跑那次 call —— 留在热臂会让 LLVM 给本函数
+        // 加入口帧，把一次性 prologue 变成每条指令的 stp/ldp（理由同 [`s_add`]）。
+        if luaC_barriert_pending!(h, ra) {
+          become s_settablen_bar::<SINGLE_STEP>(l, pc, base, k, cl);
+        }
+        vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      }
     }
 
     // 越界 / 元表 / readonly：慢路交 [`s_settablen`]，本函数保持无栈帧叶函数
@@ -1323,7 +1345,6 @@ unsafe fn s_settablen<const SINGLE_STEP: bool>(
   }
 }
 
-
 /// C++ computed-goto 的 handler 单元：LOP_GETTABLEN（原冷层 `match` 臂体，逐行同构）。
 ///
 /// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
@@ -1344,7 +1365,6 @@ unsafe fn h_gettablen<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:802
     let insn = *pc;
     pc = pc.add(1);
@@ -1354,12 +1374,12 @@ unsafe fn h_gettablen<const SINGLE_STEP: bool>(
 
     // fast-path: array access
     if (*rb).is_table() {
-    let h = (*rb).as_table_ptr();
+      let h = (*rb).as_table_ptr();
 
-    if (c as u32) < (*h).sizearray as u32 && (*h).metatable.is_null() {
-    setobj_2_s!(l, ra, (*h).array.add(c as usize));
-    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
-    }
+      if (c as u32) < (*h).sizearray as u32 && (*h).metatable.is_null() {
+        setobj_2_s!(l, ra, (*h).array.add(c as usize));
+        vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      }
     }
 
     // 越界 / 元表：慢路交 [`s_gettablen`]，本函数保持无栈帧叶函数
@@ -1404,7 +1424,6 @@ unsafe fn s_gettablen<const SINGLE_STEP: bool>(
   }
 }
 
-
 /// C++ computed-goto 的 handler 单元：LOP_SETTABLE（原冷层 `match` 臂体，逐行同构）。
 ///
 /// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
@@ -1425,7 +1444,6 @@ unsafe fn h_settable<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:771
     let insn = *pc;
     pc = pc.add(1);
@@ -1435,23 +1453,23 @@ unsafe fn h_settable<const SINGLE_STEP: bool>(
 
     // fast-path: array access
     if (*rb).is_table() && (*rc).is_number() {
-    let h = (*rb).as_table_ptr();
-    let indexd = (*rc).as_number();
-    let index = indexd as i32;
+      let h = (*rb).as_table_ptr();
+      let indexd = (*rc).as_number();
+      let index = indexd as i32;
 
-    // index has to be an exact integer and in-bounds for the array portion
-    if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32
-    && (*h).metatable.is_null()
-    && (*h).readonly == 0
-    && index as f64 == indexd
-    {
-    setobj2t!(l, (*h).array.add((index - 1) as u32 as usize), ra);
-    // 同 [`h_settablen`]：屏障谓词无调用、就地判，只有真要 mark 才交续延
-    if luaC_barriert_pending!(h, ra) {
-    become s_settable_bar::<SINGLE_STEP>(l, pc, base, k, cl);
-    }
-    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
-    }
+      // index has to be an exact integer and in-bounds for the array portion
+      if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32
+        && (*h).metatable.is_null()
+        && (*h).readonly == 0
+        && index as f64 == indexd
+      {
+        setobj2t!(l, (*h).array.add((index - 1) as u32 as usize), ra);
+        // 同 [`h_settablen`]：屏障谓词无调用、就地判，只有真要 mark 才交续延
+        if luaC_barriert_pending!(h, ra) {
+          become s_settable_bar::<SINGLE_STEP>(l, pc, base, k, cl);
+        }
+        vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      }
     }
 
     // 非数组命中：慢路交 [`s_settable`]，本函数保持无栈帧叶函数
@@ -1514,7 +1532,6 @@ unsafe fn s_settable<const SINGLE_STEP: bool>(
   }
 }
 
-
 /// C++ computed-goto 的 handler 单元：LOP_MODK（原冷层 `match` 臂体，逐行同构）。
 ///
 /// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
@@ -1535,7 +1552,6 @@ unsafe fn h_modk<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:2256
     let insn = *pc;
     pc = pc.add(1);
@@ -1544,10 +1560,10 @@ unsafe fn h_modk<const SINGLE_STEP: bool>(
     let kv = VM_KV!(luau_insn_c(insn), cl, k);
 
     if (*rb).is_number() {
-    let nb = (*rb).as_number();
-    let nk = (*kv).as_number();
-    setnvalue!(ra, luai_nummod(nb, nk));
-    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      let nb = (*rb).as_number();
+      let nk = (*kv).as_number();
+      setnvalue!(ra, luai_nummod(nb, nk));
+      vm_next!(SINGLE_STEP, l, pc, base, k, cl);
     }
     // 非数字 rb：`__mod`/ coercion 慢路交 [`s_modk`]，本函数保持叶函数
     become s_modk::<SINGLE_STEP>(l, pc, base, k, cl);
@@ -1580,7 +1596,6 @@ unsafe fn s_modk<const SINGLE_STEP: bool>(
   }
 }
 
-
 /// C++ computed-goto 的 handler 单元：LOP_MULK（原冷层 `match` 臂体，逐行同构）。
 ///
 /// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
@@ -1603,7 +1618,6 @@ unsafe fn h_mulk<const SINGLE_STEP: bool>(
   unsafe {
     let frame = VmFrame::new(l);
 
-
     // lvmexecute.cpp:2112
     let insn = *pc;
     pc = pc.add(1);
@@ -1612,10 +1626,19 @@ unsafe fn h_mulk<const SINGLE_STEP: bool>(
     let kv = VM_KV!(luau_insn_c(insn), cl, k);
 
     if (*rb).is_number() {
-    setnvalue!(ra, (*rb).as_number() * (*kv).as_number());
-    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      setnvalue!(ra, (*rb).as_number() * (*kv).as_number());
+      vm_next!(SINGLE_STEP, l, pc, base, k, cl);
     } else if (*rb).is_vector() {
-    vec_scalar_op!(frame, ra, rb, (*kv).as_number() as f32, |a: f32, b: f32| a * b, { vm_next!(SINGLE_STEP, l, pc, base, k, cl); });
+      vec_scalar_op!(
+        frame,
+        ra,
+        rb,
+        (*kv).as_number() as f32,
+        |a: f32, b: f32| a * b,
+        {
+          vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+        }
+      );
     }
     // 其余类型：`__mul` 元方法 / coercion 慢路交 [`s_mulk`]，本函数保持叶函数
     become s_mulk::<SINGLE_STEP>(l, pc, base, k, cl);
@@ -1653,7 +1676,6 @@ unsafe fn s_mulk<const SINGLE_STEP: bool>(
   }
 }
 
-
 /// C++ computed-goto 的 handler 单元：LOP_SUBK（原冷层 `match` 臂体，逐行同构）。
 ///
 /// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
@@ -1674,7 +1696,6 @@ unsafe fn h_subk<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:2091
     let insn = *pc;
     pc = pc.add(1);
@@ -1683,8 +1704,8 @@ unsafe fn h_subk<const SINGLE_STEP: bool>(
     let kv = VM_KV!(luau_insn_c(insn), cl, k);
 
     if (*rb).is_number() {
-    setnvalue!(ra, (*rb).as_number() - (*kv).as_number());
-    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      setnvalue!(ra, (*rb).as_number() - (*kv).as_number());
+      vm_next!(SINGLE_STEP, l, pc, base, k, cl);
     }
     // 非数字 rb：`__sub`/ coercion 慢路交 [`s_subk`]，本函数保持叶函数
     become s_subk::<SINGLE_STEP>(l, pc, base, k, cl);
@@ -1717,7 +1738,6 @@ unsafe fn s_subk<const SINGLE_STEP: bool>(
   }
 }
 
-
 /// C++ computed-goto 的 handler 单元：LOP_ADDK（原冷层 `match` 臂体，逐行同构）。
 ///
 /// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
@@ -1738,7 +1758,6 @@ unsafe fn h_addk<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:2070
     let insn = *pc;
     pc = pc.add(1);
@@ -1747,8 +1766,8 @@ unsafe fn h_addk<const SINGLE_STEP: bool>(
     let kv = VM_KV!(luau_insn_c(insn), cl, k);
 
     if (*rb).is_number() {
-    setnvalue!(ra, (*rb).as_number() + (*kv).as_number());
-    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      setnvalue!(ra, (*rb).as_number() + (*kv).as_number());
+      vm_next!(SINGLE_STEP, l, pc, base, k, cl);
     }
     // 非数字 rb：`__add`/ coercion 慢路交 [`s_addk`]，本函数保持叶函数
     become s_addk::<SINGLE_STEP>(l, pc, base, k, cl);
@@ -1781,7 +1800,6 @@ unsafe fn s_addk<const SINGLE_STEP: bool>(
   }
 }
 
-
 /// C++ computed-goto 的 handler 单元：LOP_MUL（原冷层 `match` 臂体，逐行同构）。
 ///
 /// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
@@ -1804,7 +1822,6 @@ unsafe fn h_mul<const SINGLE_STEP: bool>(
   unsafe {
     let frame = VmFrame::new(l);
 
-
     // lvmexecute.cpp:1851
     let insn = *pc;
     pc = pc.add(1);
@@ -1814,33 +1831,35 @@ unsafe fn h_mul<const SINGLE_STEP: bool>(
 
     // fast-path: number
     if (*rb).is_number() && (*rc).is_number() {
-    setnvalue!(ra, (*rb).as_number() * (*rc).as_number());
-    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      setnvalue!(ra, (*rb).as_number() * (*rc).as_number());
+      vm_next!(SINGLE_STEP, l, pc, base, k, cl);
     } else if (*rb).is_vector() && (*rc).is_number() {
-    let vc = (*rc).as_number() as f32;
-    vec_scalar_op!(frame, ra, rb, vc, |a: f32, b: f32| a * b, { vm_next!(SINGLE_STEP, l, pc, base, k, cl); });
+      let vc = (*rc).as_number() as f32;
+      vec_scalar_op!(frame, ra, rb, vc, |a: f32, b: f32| a * b, {
+        vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      });
     } else if (*rb).is_vector() && (*rc).is_vector() {
-    let vb = frame.lanes(rb);
-    let vc = frame.lanes(rc);
-    setvvalue!(
-    ra,
-    vb[0] * vc[0],
-    vb[1] * vc[1],
-    vb[2] * vc[2],
-    frame.lane_at(rb, 3) * frame.lane_at(rc, 3)
-    );
-    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      let vb = frame.lanes(rb);
+      let vc = frame.lanes(rc);
+      setvvalue!(
+        ra,
+        vb[0] * vc[0],
+        vb[1] * vc[1],
+        vb[2] * vc[2],
+        frame.lane_at(rb, 3) * frame.lane_at(rc, 3)
+      );
+      vm_next!(SINGLE_STEP, l, pc, base, k, cl);
     } else if (*rb).is_number() && (*rc).is_vector() {
-    let vb = (*rb).as_number() as f32;
-    let vc = frame.lanes(rc);
-    setvvalue!(
-    ra,
-    vb * vc[0],
-    vb * vc[1],
-    vb * vc[2],
-    vb * frame.lane_at(rc, 3)
-    );
-    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      let vb = (*rb).as_number() as f32;
+      let vc = frame.lanes(rc);
+      setvvalue!(
+        ra,
+        vb * vc[0],
+        vb * vc[1],
+        vb * vc[2],
+        vb * frame.lane_at(rc, 3)
+      );
+      vm_next!(SINGLE_STEP, l, pc, base, k, cl);
     }
     // `__mul` 元方法 / 其余混合类型：交 [`s_mul`] 续延，本函数保持叶函数
     become s_mul::<SINGLE_STEP>(l, pc, base, k, cl);
@@ -1879,7 +1898,6 @@ unsafe fn s_mul<const SINGLE_STEP: bool>(
   }
 }
 
-
 /// C++ computed-goto 的 handler 单元：LOP_SUB（原冷层 `match` 臂体，逐行同构）。
 ///
 /// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
@@ -1902,7 +1920,6 @@ unsafe fn h_sub<const SINGLE_STEP: bool>(
   unsafe {
     let frame = VmFrame::new(l);
 
-
     // lvmexecute.cpp:1805
     let insn = *pc;
     pc = pc.add(1);
@@ -1912,19 +1929,19 @@ unsafe fn h_sub<const SINGLE_STEP: bool>(
 
     // fast-path: number
     if (*rb).is_number() && (*rc).is_number() {
-    setnvalue!(ra, (*rb).as_number() - (*rc).as_number());
-    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      setnvalue!(ra, (*rb).as_number() - (*rc).as_number());
+      vm_next!(SINGLE_STEP, l, pc, base, k, cl);
     } else if (*rb).is_vector() && (*rc).is_vector() {
-    let vb = frame.lanes(rb);
-    let vc = frame.lanes(rc);
-    setvvalue!(
-    ra,
-    vb[0] - vc[0],
-    vb[1] - vc[1],
-    vb[2] - vc[2],
-    frame.lane_at(rb, 3) - frame.lane_at(rc, 3)
-    );
-    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      let vb = frame.lanes(rb);
+      let vc = frame.lanes(rc);
+      setvvalue!(
+        ra,
+        vb[0] - vc[0],
+        vb[1] - vc[1],
+        vb[2] - vc[2],
+        frame.lane_at(rb, 3) - frame.lane_at(rc, 3)
+      );
+      vm_next!(SINGLE_STEP, l, pc, base, k, cl);
     }
     // `__sub` 元方法 / 混合类型：交 [`s_sub`] 续延，本函数保持叶函数（见其文档）
     become s_sub::<SINGLE_STEP>(l, pc, base, k, cl);
@@ -1961,7 +1978,6 @@ unsafe fn s_sub<const SINGLE_STEP: bool>(
     vm_next!(SINGLE_STEP, l, pc, base, k, cl);
   }
 }
-
 
 /// C++ computed-goto 的 handler 单元：LOP_ADD（原冷层 `match` 臂体，逐行同构）。
 ///
@@ -2048,7 +2064,6 @@ unsafe fn s_add<const SINGLE_STEP: bool>(
   }
 }
 
-
 /// 回边前置（`VM_INTERRUPT` + `LuauBackedgeHeapCheck` 门控的 `VM_CHECK_GC`）在当前
 /// 状态下是否必然为 no-op。
 ///
@@ -2064,8 +2079,10 @@ unsafe fn backedge_idle(l: *mut LuaState) -> bool {
   // SAFETY: 契约同热 handler —— l 指向存活 LuaState，global 为其稳定字段指针
   unsafe {
     let hooked = (*(*l).global).cb.interrupt.is_some();
-    let gc_may_step =
-      fflag::LuauBackedgeHeapCheck.get_unshadowed().unwrap_or(true) && luaC_needsGC!(l);
+    let gc_may_step = fflag::LuauBackedgeHeapCheck
+      .get_unshadowed()
+      .unwrap_or(true)
+      && luaC_needsGC!(l);
     !hooked && !gc_may_step
   }
 }
@@ -2140,7 +2157,6 @@ unsafe fn s_jumpback<const SINGLE_STEP: bool>(
     vm_next!(SINGLE_STEP, l, pc, base, k, cl);
   }
 }
-
 
 /// C++ computed-goto 的 handler 单元：LOP_FORNLOOP（原冷层 `match` 臂体，逐行同构）。
 ///
@@ -2354,7 +2370,6 @@ unsafe fn fornprep_step(
   }
 }
 
-
 /// C++ computed-goto 的 handler 单元：LOP_NEWTABLE（原冷层 `match` 臂体，逐行同构）。
 ///
 /// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
@@ -2375,7 +2390,6 @@ unsafe fn h_newtable<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:2458
     let insn = *pc;
     pc = pc.add(1);
@@ -2387,17 +2401,16 @@ unsafe fn h_newtable<const SINGLE_STEP: bool>(
     (*(*l).ci).savedpc = pc; // vm_protect_pc(): lua_h_new may fail due to OOM
 
     sethvalue!(
-    l,
-    ra,
-    lua_h_new(l, aux as i32, if b == 0 { 0 } else { 1 << (b - 1) })
+      l,
+      ra,
+      lua_h_new(l, aux as i32, if b == 0 { 0 } else { 1 << (b - 1) })
     );
     vm_protect!(l, pc, base, {
-    lua_c_check_gc!(l);
+      lua_c_check_gc!(l);
     });
     vm_next!(SINGLE_STEP, l, pc, base, k, cl);
   }
 }
-
 
 /// C++ computed-goto 的 handler 单元：LOP_JUMPIFNOT（原冷层 `match` 臂体，逐行同构）。
 ///
@@ -2419,7 +2432,6 @@ unsafe fn h_jumpifnot<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:1351
     let insn = *pc;
     pc = pc.add(1);
@@ -2438,7 +2450,6 @@ unsafe fn h_jumpifnot<const SINGLE_STEP: bool>(
     );
   }
 }
-
 
 /// C++ computed-goto 的 handler 单元：LOP_JUMPIF（原冷层 `match` 臂体，逐行同构）。
 ///
@@ -2460,7 +2471,6 @@ unsafe fn h_jumpif<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:1341
     let insn = *pc;
     pc = pc.add(1);
@@ -2479,7 +2489,6 @@ unsafe fn h_jumpif<const SINGLE_STEP: bool>(
     );
   }
 }
-
 
 /// C++ computed-goto 的 handler 单元：LOP_JUMP（原冷层 `match` 臂体，逐行同构）。
 ///
@@ -2501,7 +2510,6 @@ unsafe fn h_jump<const SINGLE_STEP: bool>(
 ) {
   // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
   unsafe {
-
     // lvmexecute.cpp:1332
     let insn = *pc;
     pc = pc.add(1);
@@ -3568,7 +3576,9 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
               continue 'dispatch;
             } else if (*rb).is_vector() && (*rc).is_number() {
               let vc = (*rc).as_number() as f32;
-              vec_scalar_op!(frame, ra, rb, vc, |a: f32, b: f32| a / b, { continue 'dispatch; });
+              vec_scalar_op!(frame, ra, rb, vc, |a: f32, b: f32| a / b, {
+                continue 'dispatch;
+              });
             } else if (*rb).is_vector() && (*rc).is_vector() {
               let vb = frame.lanes(rb);
               let vc = frame.lanes(rc);
@@ -3617,7 +3627,16 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
               continue 'dispatch;
             } else if (*rb).is_vector() && (*rc).is_number() {
               let vc = (*rc).as_number() as f32;
-              vec_scalar_op!(frame, ra, rb, vc, |a: f32, b: f32| luai_numidiv(a as f64, b as f64) as f32, { continue 'dispatch; });
+              vec_scalar_op!(
+                frame,
+                ra,
+                rb,
+                vc,
+                |a: f32, b: f32| luai_numidiv(a as f64, b as f64) as f32,
+                {
+                  continue 'dispatch;
+                }
+              );
             } else {
               let rbc = if (*rb).is_number() { rc } else { rb };
               if let Some(fn_tm) = frame.c_tm_by_obj(rbc, TMS::TmIDiv) {
@@ -3688,7 +3707,16 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
               setnvalue!(ra, (*rb).as_number() / (*kv).as_number());
               continue 'dispatch;
             } else if (*rb).is_vector() {
-              vec_scalar_op!(frame, ra, rb, (*kv).as_number() as f32, |a: f32, b: f32| a / b, { continue 'dispatch; });
+              vec_scalar_op!(
+                frame,
+                ra,
+                rb,
+                (*kv).as_number() as f32,
+                |a: f32, b: f32| a / b,
+                {
+                  continue 'dispatch;
+                }
+              );
             } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmDiv) {
               base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
               continue 'dispatch;
@@ -3710,7 +3738,16 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
               setnvalue!(ra, luai_numidiv((*rb).as_number(), (*kv).as_number()));
               continue 'dispatch;
             } else if (*rb).is_vector() {
-              vec_scalar_op!(frame, ra, rb, (*kv).as_number() as f32, |a: f32, b: f32| luai_numidiv(a as f64, b as f64) as f32, { continue 'dispatch; });
+              vec_scalar_op!(
+                frame,
+                ra,
+                rb,
+                (*kv).as_number() as f32,
+                |a: f32, b: f32| luai_numidiv(a as f64, b as f64) as f32,
+                {
+                  continue 'dispatch;
+                }
+              );
             } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmIDiv) {
               base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
               continue 'dispatch;
