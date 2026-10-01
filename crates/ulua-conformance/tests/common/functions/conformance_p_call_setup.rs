@@ -1,27 +1,24 @@
-use ulua_vm::{functions::lua_pushcclosurek::lua_pushcclosurek, records::lua_state::LuaState};
+use ulua_vm::records::lua_state::LuaState;
 
 use crate::common::functions::{
-  conformance_p_call_resume_error::conformance_p_call_resume_error, cstr::cstr, cxxthrow::cxxthrow,
+  conformance_p_call_resume_error::conformance_p_call_resume_error, cxxthrow::cxxthrow,
+  safe_api::{pushcclosurek, state_mut},
 };
 /// # Safety
 ///
 /// Pointer arguments must be valid, aligned, and properly initialized.
 pub unsafe extern "C-unwind" fn conformance_p_call_setup(l: *mut LuaState) {
-  // Safety: `l` 为本用例存活的 LuaState；用 NUL 结尾静态名建 `cxxthrow` 闭包并登记为全局。
-  unsafe {
-    lua_pushcclosurek(l, Some(cxxthrow), cstr(b"cxxthrow\0"), 0, None);
-    (*l).set_global_str("cxxthrow");
-  }
+  // 用 NUL 结尾静态名建 `cxxthrow` 闭包并登记为全局。
+  pushcclosurek(l, Some(cxxthrow), Some(b"cxxthrow\0"), 0, None);
+  state_mut(l).set_global_str("cxxthrow");
 
-  // Safety: 同上——登记 `resumeerror` 闭包（桩为 `extern "C-unwind"`）。
-  unsafe {
-    lua_pushcclosurek(
-      l,
-      Some(conformance_p_call_resume_error),
-      cstr(b"resumeerror\0"),
-      0,
-      None,
-    );
-    (*l).set_global_str("resumeerror");
-  }
+  // 同上——登记 `resumeerror` 闭包（桩为 `extern "C-unwind"`）。
+  pushcclosurek(
+    l,
+    Some(conformance_p_call_resume_error),
+    Some(b"resumeerror\0"),
+    0,
+    None,
+  );
+  state_mut(l).set_global_str("resumeerror");
 }

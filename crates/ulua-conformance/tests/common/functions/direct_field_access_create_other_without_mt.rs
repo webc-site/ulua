@@ -1,11 +1,9 @@
 use core::{ffi::c_int, mem::size_of};
 
-use ulua_vm::{
-  functions::lua_newuserdatatagged::lua_newuserdatatagged, records::lua_state::LuaState,
-};
+use ulua_vm::records::lua_state::LuaState;
 
 use crate::common::{
-  functions::direct_field_access_k_tag_other::K_TAG_OTHER,
+  functions::{direct_field_access_k_tag_other::K_TAG_OTHER, safe_api::newuserdatatagged},
   records::vec_2_direct_field_access_test::Vec2,
 };
 /// # Safety
@@ -14,9 +12,6 @@ use crate::common::{
 pub unsafe extern "C-unwind" fn direct_field_access_create_other_without_mt(
   l: *mut LuaState,
 ) -> c_int {
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  unsafe {
-    lua_newuserdatatagged(l, size_of::<Vec2>(), K_TAG_OTHER);
-    1
-  }
+  newuserdatatagged(l, size_of::<Vec2>(), K_TAG_OTHER);
+  1
 }

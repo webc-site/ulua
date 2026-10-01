@@ -3,14 +3,14 @@ use core::{
   mem::size_of,
 };
 
-use ulua_vm::{
-  functions::lua_pushvector_lapi::lua_pushvector_lua_state_f32_f32_f32,
-  macros::lua_l_error::luaL_error, records::lua_state::LuaState,
-};
+use ulua_vm::{macros::lua_l_error::luaL_error, records::lua_state::LuaState};
 
 use crate::common::{
   enums::direct_slot::DirectSlot,
-  functions::{lua_vec_2_push::lua_vec_2_push, update_direct_slot::update_direct_slot},
+  functions::{
+    lua_vec_2_push::lua_vec_2_push, safe_api::{pushvector3, state_mut},
+    update_direct_slot::update_direct_slot,
+  },
   records::vertex::Vertex,
 };
 /// # Safety
@@ -42,13 +42,13 @@ pub unsafe extern "C-unwind" fn vertex_direct_index(
       // Safety: `self_ptr` 是 VM 交回的存活 Vertex 数据指针，pos 三分量可读。
       let pos = unsafe { (*self_ptr).pos };
       // Safety: `l` 存活；pushvector 只接收已取出的三个分量值。
-      unsafe { lua_pushvector_lua_state_f32_f32_f32(l, pos[0], pos[1], pos[2]) }
+      pushvector3(l, pos[0], pos[1], pos[2])
     }
     Some(DirectSlot::Normal) => {
       // Safety: `self_ptr` 是 VM 交回的存活 Vertex 数据指针，normal 三分量可读。
       let normal = unsafe { (*self_ptr).normal };
       // Safety: `l` 存活；pushvector 只接收已取出的三个分量值。
-      unsafe { lua_pushvector_lua_state_f32_f32_f32(l, normal[0], normal[1], normal[2]) }
+      pushvector3(l, normal[0], normal[1], normal[2])
     }
     Some(DirectSlot::UV) => {
       // Safety: `self_ptr` 存活，uv 两分量可读。
@@ -63,11 +63,11 @@ pub unsafe extern "C-unwind" fn vertex_direct_index(
     }
     Some(DirectSlot::Sizeof) => {
       // Safety: `l` 存活；压入静态 `size_of` 结果，无指针解引用。
-      unsafe { (*l).push_number(size_of::<Vertex>() as f64) }
+      state_mut(l).push_number(size_of::<Vertex>() as f64)
     }
     _ => {
       // Safety: `l` 存活；参数 2 为串时返回 UTF-8 切片（否则抛 Lua 错误）。
-      let name = unsafe { (*l).check_str(2) };
+      let name = state_mut(l).check_str(2);
       // Safety: 按 cpp 抛「非成员」Lua 错误，该调用不返回。
       unsafe { luaL_error!(l, "{name} is not a valid member of vertex") }
     }

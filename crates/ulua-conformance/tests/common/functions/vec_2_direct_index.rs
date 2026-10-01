@@ -7,7 +7,10 @@ use ulua_vm::{macros::lua_l_error::luaL_error, records::lua_state::LuaState};
 
 use crate::common::{
   enums::direct_slot::DirectSlot,
-  functions::{lua_vec_2_push::lua_vec_2_push, update_direct_slot::update_direct_slot},
+  functions::{
+    lua_vec_2_push::lua_vec_2_push, safe_api::state_mut,
+    update_direct_slot::update_direct_slot,
+  },
   records::vec_2_conformance_ir_hooks::Vec2,
 };
 /// # Safety
@@ -37,11 +40,11 @@ pub unsafe extern "C-unwind" fn vec_2_direct_index(
   match DirectSlot::from_u16(slot) {
     Some(DirectSlot::X) => {
       // Safety: `self_ptr` 是 VM 交回的存活 Vec2 数据指针，x 可读；`l` 存活。
-      unsafe { (*l).push_number((*self_ptr).x as f64) }
+      state_mut(l).push_number(unsafe { (*self_ptr).x } as f64)
     }
     Some(DirectSlot::Y) => {
       // Safety: `self_ptr` 是 VM 交回的存活 Vec2 数据指针，y 可读；`l` 存活。
-      unsafe { (*l).push_number((*self_ptr).y as f64) }
+      state_mut(l).push_number(unsafe { (*self_ptr).y } as f64)
     }
     Some(DirectSlot::Magnitude) => {
       // Safety: `self_ptr` 存活，两分量可读；压入的是纯算术结果。
@@ -65,11 +68,11 @@ pub unsafe extern "C-unwind" fn vec_2_direct_index(
     }
     Some(DirectSlot::Sizeof) => {
       // Safety: `l` 存活；压入静态 `size_of` 结果，无指针解引用。
-      unsafe { (*l).push_number(size_of::<Vec2>() as f64) }
+      state_mut(l).push_number(size_of::<Vec2>() as f64)
     }
     _ => {
       // Safety: `l` 存活；参数 2 为串时返回 UTF-8 切片（否则抛 Lua 错误）。
-      let name = unsafe { (*l).check_str(2) };
+      let name = state_mut(l).check_str(2);
       // Safety: 按 cpp 抛「非成员」Lua 错误，该调用不返回。
       unsafe { luaL_error!(l, "{name} is not a valid member of vec2") }
     }

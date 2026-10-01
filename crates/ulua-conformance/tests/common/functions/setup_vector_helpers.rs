@@ -1,57 +1,43 @@
-use core::{ffi::c_int, ptr::null};
+use core::ffi::c_int;
 
 use ulua_vm::{
-  functions::{
-    lua_pushcclosurek::lua_pushcclosurek,
-    lua_pushvector_lapi::{
-      lua_pushvector_lua_state_f32_f32_f32, lua_pushvector_lua_state_f32_f32_f32_f32,
-    },
-    lua_settable::lua_settable,
-  },
   macros::lua_vector_size::LUA_VECTOR_SIZE,
   records::lua_state::LuaState,
 };
 
 use crate::common::functions::{
   lua_vector_index::lua_vector_index, lua_vector_namecall::lua_vector_namecall,
+  safe_api::{pushcclosurek, pushvector3, pushvector4, settable, state_mut},
 };
 /// # Safety
 ///
 /// Pointer arguments must be valid, aligned, and properly initialized.
-pub unsafe fn setup_vector_helpers(l: *mut LuaState) {
+pub fn setup_vector_helpers(l: *mut LuaState) {
   const METHODS: [(&[u8], unsafe extern "C-unwind" fn(*mut LuaState) -> c_int); 2] = [
     (b"__index", lua_vector_index),
     (b"__namecall", lua_vector_namecall),
   ];
 
-  // Safety: `l` 为本用例存活的 LuaState；按构建期 LUA_VECTOR_SIZE 压入零向量
-  // （两条分支各自写全部分量，无悬垂指针）。
-  unsafe {
-    if LUA_VECTOR_SIZE == 4 {
-      lua_pushvector_lua_state_f32_f32_f32_f32(l, 0.0, 0.0, 0.0, 0.0);
-    } else {
-      lua_pushvector_lua_state_f32_f32_f32(l, 0.0, 0.0, 0.0);
-    }
+  // 按构建期 LUA_VECTOR_SIZE 压入零向量（两条分支各自写全部分量）。
+  if LUA_VECTOR_SIZE == 4 {
+    pushvector4(l, 0.0, 0.0, 0.0, 0.0);
+  } else {
+    pushvector3(l, 0.0, 0.0, 0.0);
   }
 
-  // Safety: `l` 存活；建/取 vector metatable，置于栈顶。
-  unsafe { (*l).new_metatable_by_str("vector") };
+  // 建/取 vector metatable，置于栈顶。
+  state_mut(l).new_metatable_by_str("vector");
 
-  // Safety: `l` 存活且栈顶为 metatable；循环内 push string + pushcclosurek 后
-  // lua_settable(-3) 消费两者，栈形不变，`METHODS` 的名字 NUL 结尾、函数为
-  // `extern "C-unwind"` 桩。
-  unsafe {
-    for &(name, func) in &METHODS {
-      (*l).push_bytes(name);
-      lua_pushcclosurek(l, Some(func), null(), 0, None);
-      lua_settable(l, -3);
-    }
+  // 循环内 push string + pushcclosurek 后 settable(-3) 消费两者，栈形不变，
+  // `METHODS` 的名字为 NUL 结尾静态串、函数为 `extern "C-unwind"` 桩。
+  for &(name, func) in &METHODS {
+    state_mut(l).push_bytes(name);
+    pushcclosurek(l, Some(func), None, 0, None);
+    settable(l, -3);
   }
 
-  // Safety: `l` 存活且栈顶仍是 metatable、其下为向量对象：置只读、给向量绑元表后弹掉元表。
-  unsafe {
-    (*l).set_readonly(-1, true);
-    (*l).set_metatable(-2);
-    (*l).pop(1);
-  }
+  // 栈顶仍是 metatable、其下为向量对象：置只读、给向量绑元表后弹掉元表。
+  state_mut(l).set_readonly(-1, true);
+  state_mut(l).set_metatable(-2);
+  state_mut(l).pop(1);
 }

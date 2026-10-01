@@ -9,7 +9,7 @@ use ulua_analysis::{
 use ulua_common::fflag;
 use ulua_vm::records::lua_state::LuaState;
 
-use crate::common::functions::populate_rtti::populate_rtti;
+use crate::common::functions::{populate_rtti::populate_rtti, safe_api::state_mut};
 /// # Safety
 ///
 /// Pointer arguments must be valid, aligned, and properly initialized.
@@ -39,17 +39,19 @@ pub unsafe extern "C-unwind" fn conformance_types_setup(l: *mut LuaState) {
   frontend.register_builtin_globals(false);
   freeze(frontend.globals.global_types_mut());
 
-  // Safety: `l` 为本用例存活的 LuaState；建空表作为 RTTI 容器。
-  unsafe { (*l).new_table() };
+  // `l` 为本用例存活的 LuaState；建空表作为 RTTI 容器。
+  state_mut(l).new_table();
 
   let global_scope = frontend.globals.global_scope();
   for (name, binding) in &global_scope.bindings {
-    // Safety: `l` 存活且栈顶为上面的 RTTI 表；`binding.type_id` 来自刚完成分析的
-    // global scope（`populate_rtti` 自行压入类型描述）。
+    // `l` 存活且栈顶为上面的 RTTI 表；`binding.type_id` 来自刚完成分析的
+    // global scope（`populate_rtti` 自行压入类型描述，其 `# Safety` 契约由
+    // 本入口的 C ABI 契约转承）。
+    // Safety: 见上——`l` 存活、type_id 为 arena 存活类型。
     unsafe { populate_rtti(l, binding.type_id) };
-    unsafe { (*l).set_field_bytes(-2, name.ast_name().as_bytes()) };
+    state_mut(l).set_field_bytes(-2, name.ast_name().as_bytes());
   }
 
-  // Safety: `l` 存活；把栈顶 RTTI 表登记为全局，与 cpp 一致。
-  unsafe { (*l).set_global_str("RTTI") };
+  // 把栈顶 RTTI 表登记为全局，与 cpp 一致。
+  state_mut(l).set_global_str("RTTI");
 }

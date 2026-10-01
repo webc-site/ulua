@@ -1,18 +1,12 @@
 // 边界契约测试：null 系 c-API 合法实参（既有约定 review.md §2）
-use core::{
-  ffi::{c_int, c_void},
-  ptr::null_mut,
-};
+use core::ffi::{c_int, c_void};
 
-use ulua_vm::{
-  functions::lua_namecallatom::lua_namecallatom, macros::lua_l_error::luaL_error,
-  records::lua_state::LuaState,
-};
+use ulua_vm::{macros::lua_l_error::luaL_error, records::lua_state::LuaState};
 
 use crate::common::{
   enums::direct_slot::DirectSlot,
   functions::{
-    cstr_text::cstr_text, lua_vertex_clone::lua_vertex_clone,
+    cstr_text::cstr_text, lua_vertex_clone::lua_vertex_clone, safe_api::namecallatom,
     update_direct_slot::update_direct_slot,
   },
   records::vertex::Vertex,
@@ -48,7 +42,7 @@ pub unsafe extern "C-unwind" fn vertex_direct_namecall(
       // Safety: `l` 存活；`lua_namecallatom` 返回 namecall 方法名的 NUL 结尾指针或 null
       // （第二实参 null_mut() 表示不取 arg 计数）。
       // FFI: c-API 要求 NULL
-      let method = unsafe { lua_namecallatom(l, null_mut()) };
+      let method = namecallatom(l, None);
       // Safety: 空指针按空串处理；非空时 `lua_namecallatom` 保证 NUL 结尾。
       let method = unsafe { cstr_text(method) };
       // Safety: 按 cpp 抛「非方法」Lua 错误（`l` 存活、格式串为已校验的 `method`），

@@ -2,13 +2,12 @@ use core::{ffi::c_int, ptr::null};
 
 use ulua_vm::{
   enums::lua_gc_op::LuaGcOp,
-  functions::{
-    lua_gc::lua_gc, lua_l_checkoption::lua_l_checkoption, lua_l_optinteger::lua_l_optinteger,
-  },
   records::lua_state::LuaState,
 };
 
-use crate::common::functions::cstr::cstr;
+use crate::common::functions::{
+  cstr::cstr, safe_api::{gc, l_checkoption, l_optinteger, state_mut},
+};
 pub(crate) extern "C-unwind" fn lua_collectgarbage(l: *mut LuaState) -> i32 {
   let opts = [
     cstr(b"stop\0"),
@@ -35,25 +34,16 @@ pub(crate) extern "C-unwind" fn lua_collectgarbage(l: *mut LuaState) -> i32 {
     LuaGcOp::Setstepsize as c_int,
   ];
 
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`opts` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  let o = unsafe { lua_l_checkoption(l, 1, cstr(b"collect\0"), opts.as_ptr()) };
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`opts` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  let ex = unsafe { lua_l_optinteger(l, 2, 0) };
+  let o = l_checkoption(l, 1, cstr(b"collect\0"), opts.as_ptr());
+  let ex = l_optinteger(l, 2, 0);
   let op = optsnum[o as usize];
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`opts` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  let res = unsafe { lua_gc(l, op, ex) };
+  let res = gc(l, op, ex);
 
   if op == LuaGcOp::Step as c_int || op == LuaGcOp::Isrunning as c_int {
-    // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`opts` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-    unsafe {
-      (*l).push_boolean(res != 0);
-    }
+    state_mut(l).push_boolean(res != 0);
     1
   } else {
-    // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`opts` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-    unsafe {
-      (*l).push_number(res as f64);
-    }
+    state_mut(l).push_number(res as f64);
     1
   }
 }

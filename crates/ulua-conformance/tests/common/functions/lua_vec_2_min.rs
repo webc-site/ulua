@@ -6,8 +6,8 @@ use crate::common::{
 };
 
 pub(crate) fn lua_vec_2_min(l: *mut LuaState, self_ptr: *mut Vec2) -> i32 {
-  // Safety: `l` 存活；`lua_vec_2_get` 校验参数 2 为 Vec2 userdata 并返回其数据指针。
-  let b_ptr = unsafe { lua_vec_2_get(l, 2) };
+  // `lua_vec_2_get` 是 safe 门面：校验参数 2 为 Vec2 userdata 并返回其数据指针。
+  let b_ptr = lua_vec_2_get(l, 2);
   // `lua_vec_2_push` 是 safe 门面：新建 Vec2 userdata 并返回其数据指针。
   let data = lua_vec_2_push(l);
 

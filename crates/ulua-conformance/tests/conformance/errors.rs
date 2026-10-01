@@ -25,59 +25,56 @@ fn conformance_errors() {
 
 #[test]
 fn conformance_exception_object() {
-  use ulua_vm::functions::lua_newstate::lua_newstate;
 
   use crate::common::functions::{
     conformance_exception_object_capture_exception::conformance_exception_object_capture_exception,
     ends_with::ends_with, limited_realloc::limited_realloc, run_conformance::run_conformance,
+    safe_api::newstate,
   };
 
-  // Safety: run_conformance 按其契约接管 `lua_newstate` 产出的 state（limited_realloc 自定义分配器、ud=NULL 遵 c-API）；l 于返回后存活
-  let global_state = unsafe {
-    run_conformance(
-      "exceptions.luau",
-      None,
-      None,
-      // FFI: c-API 要求 NULL
-      Some(lua_newstate(Some(limited_realloc), null_mut())),
-      None,
-      false,
-      None,
-    )
-  };
+  // run_conformance 按其契约接管 `newstate` 产出的 state（limited_realloc 自定义
+  // 分配器、ud 遵 C 侧 NULL 哨兵）；`l` 于返回后存活。
+  // FFI: c-API 要求 NULL
+  let global_state = run_conformance(
+    "exceptions.luau",
+    None,
+    None,
+    Some(newstate(Some(limited_realloc), null_mut())),
+    None,
+    false,
+    None,
+  );
   let l = global_state.as_ptr();
 
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 为 run_conformance 构造的存活 lua_State，
-  // 捕获桩在其上建临时线程跑具名函数，返回 owned 的 ExceptionResult。
-  let result = unsafe {
-    conformance_exception_object_capture_exception(l, cstr(b"infinite_recursion_error\0"))
-  };
+  // 捕获桩在 `l` 上建临时线程跑具名函数，返回 owned 的 ExceptionResult。
+  let result =
+    conformance_exception_object_capture_exception(l, cstr(b"infinite_recursion_error\0"));
   assert!(result.exception_generated);
 
-  // Safety: 同上；empty_function 正常返回，不产生异常。
+  // empty_function 正常返回，不产生异常。
   let result =
-    unsafe { conformance_exception_object_capture_exception(l, cstr(b"empty_function\0")) };
+    conformance_exception_object_capture_exception(l, cstr(b"empty_function\0"));
   assert!(!result.exception_generated);
 
-  // Safety: 同上；数字参数进 error 产生异常，描述尾为 "42"。
+  // 数字参数进 error 产生异常，描述尾为 "42"。
   let result =
-    unsafe { conformance_exception_object_capture_exception(l, cstr(b"pass_number_to_error\0")) };
+    conformance_exception_object_capture_exception(l, cstr(b"pass_number_to_error\0"));
   assert!(result.exception_generated);
   assert!(ends_with(&result.description, "42"));
 
-  // Safety: 同上；字符串参数进 error 产生异常，描述尾为参数串。
+  // 字符串参数进 error 产生异常，描述尾为参数串。
   let result =
-    unsafe { conformance_exception_object_capture_exception(l, cstr(b"pass_string_to_error\0")) };
+    conformance_exception_object_capture_exception(l, cstr(b"pass_string_to_error\0"));
   assert!(result.exception_generated);
   assert!(ends_with(&result.description, "string argument"));
 
-  // Safety: 同上；表参数进 error 同样产生异常。
+  // 表参数进 error 同样产生异常。
   let result =
-    unsafe { conformance_exception_object_capture_exception(l, cstr(b"pass_table_to_error\0")) };
+    conformance_exception_object_capture_exception(l, cstr(b"pass_table_to_error\0"));
   assert!(result.exception_generated);
 
-  // Safety: 同上；large_allocation_error 触发分配失败异常。
+  // large_allocation_error 触发分配失败异常。
   let result =
-    unsafe { conformance_exception_object_capture_exception(l, cstr(b"large_allocation_error\0")) };
+    conformance_exception_object_capture_exception(l, cstr(b"large_allocation_error\0"));
   assert!(result.exception_generated);
 }

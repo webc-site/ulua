@@ -3,12 +3,11 @@ use core::ptr::null_mut;
 use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
 use ulua_common::{fflag, fint};
 use ulua_vm::{
-  functions::lua_newstate::lua_newstate,
   records::{closure::Closure, lua_state::LuaState, proto::Proto},
 };
 
 use crate::common::{
-  functions::alloc::alloc as luau_alloc,
+  functions::alloc::alloc as luau_alloc, functions::safe_api::newstate,
   records::state_ref::StateRef,
   type_aliases::{scoped_fast_flag::ScopedFastFlag, scoped_fast_int::ScopedFastInt},
 };
@@ -46,8 +45,8 @@ pub struct FeedbackVectorFixture<'a> {
 
 impl<'a> FeedbackVectorFixture<'a> {
   pub fn new() -> Self {
-    // FFI: c-API 要求 NULL
-    let state = unsafe { lua_newstate(Some(luau_alloc), null_mut()) };
+    // 分配器载荷传 C 侧 NULL 哨兵（newstate 门面契约）。
+    let state = newstate(Some(luau_alloc), null_mut());
     let l = StateRef::new(state).expect("lua_newstate failed");
 
     Self {

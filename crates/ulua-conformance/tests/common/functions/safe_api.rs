@@ -18,59 +18,92 @@
 
 use alloc::string::String;
 use core::{
-  ffi::{c_char, c_int, c_void},
+  ffi::{c_char, c_int, c_uint, c_void},
+  mem::zeroed,
   ptr::{from_mut, null, null_mut, write},
+  slice::from_raw_parts,
 };
 
 use ulua_ast::records::parse_options::ParseOptions;
 use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
 use ulua_code_gen::{
-  functions::{compile_internal::compile_internal, luau_codegen_create::luau_codegen_create},
-  records::{compilation_options::CompilationOptions, compilation_result::CompilationResult},
+  functions::{
+    compile_internal::compile_internal, get_assembly::get_assembly,
+    luau_codegen_create::luau_codegen_create,
+  },
+  records::{
+    assembly_options::AssemblyOptions, compilation_options::CompilationOptions,
+    compilation_result::CompilationResult, compilation_stats::CompilationStats,
+    lowering_stats::LoweringStats,
+  },
+  type_aliases::module_id::ModuleId,
 };
 use ulua_common::functions::c_str::cstr_bytes;
 use ulua_compiler::{functions::compile::compile, records::compile_options::CompileOptions};
 use ulua_vm::{
   enums::lua_type::LuaType,
   functions::{
+    lua_break::lua_break, lua_breakpoint::lua_breakpoint,
     lua_c_dump::lua_c_dump, lua_c_enumheap::lua_c_enumheap, lua_c_fullgc::lua_c_fullgc,
-    lua_c_validate::lua_c_validate, lua_callbacks::lua_callbacks, lua_checkstack::lua_checkstack,
+    lua_c_validate::lua_c_validate, lua_callyieldable_impl::lua_callyieldable,
+    lua_callbacks::lua_callbacks, lua_checkstack::lua_checkstack,
     lua_cleartable::lua_cleartable, lua_clonefunction::lua_clonefunction,
     lua_clonetable::lua_clonetable, lua_cpcall::lua_cpcall, lua_createtable::lua_createtable,
     lua_debugtrace::lua_debugtrace, lua_equal::lua_equal, lua_gc::lua_gc,
-    lua_getallocf::lua_getallocf, lua_getlightuserdataname::lua_getlightuserdataname,
-    lua_getreadonly::lua_getreadonly, lua_gettable::lua_gettable,
+    lua_getallocf::lua_getallocf, lua_getargument::lua_getargument,
+    lua_getcoverage::lua_getcoverage, lua_getinfo::lua_getinfo, lua_getlocal::lua_getlocal,
+    lua_getlightuserdataname::lua_getlightuserdataname, lua_getreadonly::lua_getreadonly,
+    lua_gettable::lua_gettable, lua_getupvalue::lua_getupvalue,
     lua_getuserdatadtor::lua_getuserdatadtor, lua_getuserdatametatable::lua_getuserdatametatable,
+    lua_g_isnative::lua_g_isnative, lua_is_lfunction::lua_is_lfunction,
     lua_isnumber::lua_isnumber, lua_isstring::lua_isstring, lua_isuserdata::lua_isuserdata,
-    lua_l_checkbuffer::lua_l_checkbuffer, lua_l_checkstack::lua_l_checkstack,
-    lua_l_checkudata::lua_l_checkudata, lua_l_openlibs::lua_l_openlibs,
-    lua_l_register::lua_l_register, lua_l_sandbox::lua_l_sandbox,
-    lua_l_sandboxthread::lua_l_sandboxthread, lua_l_typename::lua_l_typename,
-    lua_lightuserdatatag::lua_lightuserdatatag, lua_newbuffer::lua_newbuffer,
-    lua_newstate::lua_newstate, lua_newthread::lua_newthread,
+    lua_isyieldable::lua_isyieldable, lua_l_checkbuffer::lua_l_checkbuffer,
+    lua_l_checklstring::lua_l_checklstring_ref, lua_l_checkoption::lua_l_checkoption,
+    lua_l_checkstack::lua_l_checkstack, lua_l_checkudata::lua_l_checkudata,
+    lua_l_checkunsigned::lua_l_checkunsigned, lua_l_checkvector::lua_l_checkvector,
+    lua_l_openlibs::lua_l_openlibs, lua_l_optboolean::lua_l_optboolean,
+    lua_l_optinteger::lua_l_optinteger, lua_l_register::lua_l_register,
+    lua_l_sandbox::lua_l_sandbox, lua_l_sandboxthread::lua_l_sandboxthread,
+    lua_l_typeerror_l::lua_l_typeerror_l, lua_l_typename::lua_l_typename,
+    lua_lightuserdatatag::lua_lightuserdatatag, lua_namecallatom::lua_namecallatom,
+    lua_newbuffer::lua_newbuffer, lua_newstate::lua_newstate, lua_newthread::lua_newthread,
     lua_newuserdatadtor::lua_newuserdatadtor, lua_newuserdatatagged::lua_newuserdatatagged,
     lua_newuserdatataggedwithmetatable::lua_newuserdatataggedwithmetatable,
-    lua_pushcclosurek::lua_pushcclosurek, lua_pushlightuserdatatagged::lua_pushlightuserdatatagged,
+    lua_pcallyieldable::lua_pcallyieldable, lua_pushcclosurek::lua_pushcclosurek,
+    lua_pushlightuserdatatagged::lua_pushlightuserdatatagged,
+    lua_pushlstring::lua_pushlstring_bytes,
+    lua_pushvector_lapi::lua_pushvector_lua_state_f32_f32_f32,
+    lua_pushvector_lapi::lua_pushvector_lua_state_f32_f32_f32_f32,
     lua_rawget::lua_rawget, lua_rawgetfield::lua_rawgetfield_bytes, lua_rawgeti::lua_rawgeti,
     lua_rawgetptagged::lua_rawgetptagged, lua_rawiter::lua_rawiter,
     lua_rawsetfield::lua_rawsetfield_bytes, lua_rawseti::lua_rawseti,
     lua_rawsetptagged::lua_rawsetptagged, lua_ref::lua_ref,
+    lua_registeruserdatadirectaccess::lua_registeruserdatadirectaccess,
     lua_registeruserdatadirectfieldget::lua_registeruserdatadirectfieldget,
     lua_resumeerror::lua_resumeerror, lua_setfenv::lua_setfenv,
-    lua_setlightuserdataname::lua_setlightuserdataname, lua_settable::lua_settable,
-    lua_setuserdatadtor::lua_setuserdatadtor, lua_setuserdatametatable::lua_setuserdatametatable,
-    lua_setuserdatatag::lua_setuserdatatag, lua_status::lua_status, lua_tobuffer::lua_tobuffer,
+    lua_setlightuserdataname::lua_setlightuserdataname, lua_setsafeenv::lua_setsafeenv,
+    lua_settable::lua_settable, lua_setuserdatadtor::lua_setuserdatadtor,
+    lua_setuserdatametatable::lua_setuserdatametatable, lua_setuserdatatag::lua_setuserdatatag,
+    lua_singlestep::lua_singlestep, lua_status::lua_status, lua_tobuffer::lua_tobuffer,
     lua_tolightuserdata::lua_tolightuserdata, lua_tolightuserdatatagged::lua_tolightuserdatatagged,
     lua_tolstring::lua_tolstring, lua_tonumberx::lua_tonumberx, lua_topointer::lua_topointer,
-    lua_tostringatom::lua_tostringatom, lua_touserdata::lua_touserdata,
+    lua_tostringatom::lua_tostringatom, lua_tothread::lua_tothread, lua_touserdata::lua_touserdata,
     lua_touserdatatagged::lua_touserdatatagged, lua_type::lua_type, lua_typename::lua_typename,
-    lua_unref::lua_unref, lua_userdatatag::lua_userdatatag, luaopen_base::luaopen_base,
-    luau_load::luau_load,
+    lua_unref::lua_unref, lua_userdatadirectfield_setboolean::lua_userdatadirectfield_setboolean,
+    lua_userdatadirectfield_setnumber::lua_userdatadirectfield_setnumber,
+    lua_userdatatag::lua_userdatatag, lua_xmove::lua_xmove, lua_yield::lua_yield,
+    luaopen_base::luaopen_base, luau_callhook::luau_callhook, luau_load::luau_load,
   },
-  records::{lua_l_reg::LuaLReg, lua_state::LuaState},
+  macros::lua_vector_size::LUA_VECTOR_SIZE,
+  records::{
+    lua_callbacks::LuaCallbacks, lua_debug::LuaDebug, lua_l_reg::LuaLReg, lua_state::LuaState,
+  },
   type_aliases::{
     lua_alloc::LuaAlloc, lua_c_function::LuaCFunction, lua_continuation::LuaContinuation,
-    lua_destructor::LuaDestructor, lua_userdata_direct_field_get::LuaUserdataDirectFieldGet,
+    lua_coverage::LuaCoverage, lua_destructor::LuaDestructor, lua_hook::LuaHook,
+    lua_userdata_direct_access::LuaUserdataDirectAccess,
+    lua_userdata_direct_field_get::LuaUserdataDirectFieldGet,
+    lua_userdata_direct_namecall::LuaUserdataDirectNamecall,
   },
 };
 
@@ -78,6 +111,37 @@ use crate::common::functions::{cpcall_test::cpcall_test, cstr::cstr, cstr_text::
 
 /// C ABI 状态句柄别名；仅在本门面内部被解引用（每函数恰一次 `unsafe`）。
 pub type L = *mut LuaState;
+
+/// 「判空 + 引用重建」单点收口：把 [`L`] 转回 `&LuaState`，供 `LuaState` 的固有
+/// 安全方法与 ulua-vm 已收口的引用形 `lua_*` 自由函数直接调用。
+///
+/// 这是全 conformance 对 `(*l)` 共享解引用的**唯一**发生点（对照 ulua-rt 的
+/// `StateView` 驱动视图：以 NonNull 编码非空、单一收口点恢复引用语义；测试侧
+/// 无 `Rc` 句柄可锚定生命周期，故以模块级 `l` 契约 + 判空断言承担同等论证）。
+/// 空指针是调用方违约，当场 panic（比后续空指针解引用 UB 更响亮的等价失败）。
+pub fn state_ref<'a>(l: L) -> &'a LuaState {
+  assert!(!l.is_null(), "LuaState handle must not be null");
+  // Safety: 模块级 `l` 契约（存活、本用例独占驱动）由判空断言 + 调用点维持。
+  unsafe { &*l }
+}
+
+/// [`state_ref`] 的独占形态：全 conformance 对 `(*l)` 可变解引用的唯一发生点。
+///
+/// 返回引用的生命周期不由编译器证明（裸指针进、引用出），其正确性即模块级
+/// `l` 契约：同一 state 的引用只在单线程串行驱动中顺序使用，从不重叠持有——
+/// 与 ulua-rt `StateView::deref_mut` 的驱动契约同语义。
+pub fn state_mut<'a>(l: L) -> &'a mut LuaState {
+  assert!(!l.is_null(), "LuaState handle must not be null");
+  // Safety: 同 [`state_ref`]；独占由测试单线程串行驱动纪律保证。
+  unsafe { &mut *l }
+}
+
+/// `lua_callbacks` 的单点收口：交回该状态的回调表可变引用（判空 + 引用重建）。
+/// 调用方只做具名字段赋值（`interrupt`/`debugbreak`/...），不再解引用裸表指针。
+pub fn callbacks_mut<'a>(l: L) -> &'a mut LuaCallbacks {
+  // Safety: 模块级 `l` 契约；`lua_callbacks` 返回随 `l` 存活的回调表指针。
+  unsafe { &mut *lua_callbacks(l) }
+}
 
 /// `lua_newuserdatadtor` 的内联析构类型（VM 侧同名 type alias 未导出，此处镜像）。
 pub type UserdataDtorRaw = Option<unsafe extern "C-unwind" fn(*mut c_void)>;
@@ -92,20 +156,17 @@ pub type AtomAssignFn = Option<unsafe extern "C-unwind" fn(L, *const c_char, usi
 
 /// `lua_gettop`：当前栈深。
 pub fn gettop(l: L) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).get_top() }
+  state_ref(l).get_top()
 }
 
 /// `lua_settop`：截断 / 填充到 `idx`。
 pub fn settop(l: L, idx: c_int) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).set_top(idx) }
+  state_mut(l).set_top(idx)
 }
 
 /// `lua_pop`：弹掉栈顶 `n` 槽。
 pub fn pop(l: L, n: c_int) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).pop(n) }
+  state_mut(l).pop(n)
 }
 
 /// `lua_checkstack`：尝试扩容 `size` 槽，返回 C 侧布尔（0/非 0）。
@@ -122,39 +183,33 @@ pub fn l_checkstack(l: L, space: c_int, msg: &str) {
 
 /// `lua_pushvalue`：复制槽 `idx` 压栈。
 pub fn pushvalue(l: L, idx: c_int) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).push_value(idx) }
+  state_mut(l).push_value(idx)
 }
 
 /// `lua_pushnumber`。
 pub fn pushnumber(l: L, n: f64) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).push_number(n) }
+  state_mut(l).push_number(n)
 }
 
 /// `lua_pushinteger`。
 pub fn pushinteger(l: L, n: c_int) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).push_integer(n) }
+  state_mut(l).push_integer(n)
 }
 
 /// `lua_pushboolean`（保持 C 侧 `int` 参数语义）。
 pub fn pushboolean(l: L, b: c_int) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).push_boolean(b != 0) }
+  state_mut(l).push_boolean(b != 0)
 }
 
 /// `lua_pushnil`。
 pub fn pushnil(l: L) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).push_nil() }
+  state_mut(l).push_nil()
 }
 
 /// `lua_pushstring`，名字参数为静态字节串。
 pub fn pushstr(l: L, s: &'static [u8]) {
   let s = s.strip_suffix(b"\0").unwrap_or(s);
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).push_bytes(s) }
+  state_mut(l).push_bytes(s)
 }
 
 /// `lua_pushcclosurek` 的 `nup=0`、无 continuation 形态（cpp `lua_pushcfunction`，
@@ -181,7 +236,7 @@ pub fn pushcclosurek(
 /// 设置状态回调表的 `useratom`（字符串 atom 分配钩子）。
 pub fn set_useratom(l: L, f: AtomAssignFn) {
   // Safety: `l` 存活；`lua_callbacks` 返回该状态持有的回调表指针；`f` 遵循 C ABI。
-  unsafe { (*lua_callbacks(l)).useratom = f }
+  callbacks_mut(l).useratom = f
 }
 
 // ---------------------------------------------------------------------------
@@ -224,10 +279,10 @@ pub fn c_validate(l: L) {
   unsafe { lua_c_validate(l) }
 }
 
-/// `lua_resumeerror(l, NULL)`：向协程注入错误的恢复（c-API NULL 实参边界契约，既有约定 review.md §2）。
-pub fn resumeerror(l: L) -> c_int {
-  // Safety: `l` 存活；`from` 传 C 侧 NULL（主状态恢复，vm 契约明许）。
-  unsafe { lua_resumeerror(l, null_mut()) }
+/// `lua_resumeerror(co, from)`：向协程 `co` 注入来自 `from` 的错误恢复。
+pub fn resumeerror(co: L, from: L) -> c_int {
+  // Safety: `co`/`from` 均存活且同属一个 VM（模块级契约 + 用例布线）。
+  unsafe { lua_resumeerror(co, from) }
 }
 
 // ---------------------------------------------------------------------------
@@ -280,8 +335,7 @@ pub fn debugtrace_text(l: L) -> String {
 
 /// `lua_newtable`。
 pub fn newtable(l: L) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).new_table() }
+  state_mut(l).new_table()
 }
 
 /// `lua_newthread`：在 `l` 上派生线程栈并压栈，返回其裸指针（用例随后按 [`L`] 用）。
@@ -292,14 +346,12 @@ pub fn newthread(l: L) -> L {
 
 /// `lua_newuserdata`（tag 0）：返回数据块裸指针，由 VM 持有。
 pub fn newuserdata(l: L, sz: usize) -> *mut c_void {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).new_userdata(sz) }
+  state_mut(l).new_userdata(sz)
 }
 
 /// `lua_concat`。
 pub fn concat(l: L, n: c_int) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).concat(n) }
+  state_mut(l).concat(n)
 }
 
 // ---------------------------------------------------------------------------
@@ -308,14 +360,12 @@ pub fn concat(l: L, n: c_int) {
 
 /// `lua_call`： unprotected 调用（Lua 侧错误会经 unwind 穿出本层，与直调一致）。
 pub fn call(l: L, nargs: c_int, nresults: c_int) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).call(nargs, nresults) }
+  state_mut(l).call(nargs, nresults)
 }
 
 /// `lua_pcall`：返回 [`LuaStatus`] 编码的 `c_int`。
 pub fn pcall(l: L, nargs: c_int, nresults: c_int, errfunc: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).pcall(nargs, nresults, errfunc) }
+  state_mut(l).pcall(nargs, nresults, errfunc)
 }
 
 /// cpp `cpcalltest` 场景：以 `should_fail` 的裸指针为载荷 protected 调用。
@@ -361,8 +411,8 @@ pub fn l_typename_bytes<'a>(l: L, idx: c_int) -> &'a [u8] {
 
 /// `lua_tostring!(l, idx)` + 原始字节收口（要求 `idx` 为字符串，与旧断言同前提）。
 pub fn to_bytes<'a>(l: L, idx: c_int) -> &'a [u8] {
-  // Safety: `l` 存活且 `idx` 为字符串槽（用例断言前置）；返回 NUL 结尾 VM 缓冲。
-  unsafe { (*l).to_bytes(idx).unwrap_or_default() }
+  // `idx` 为字符串槽（用例断言前置）；返回 NUL 结尾 VM 缓冲。
+  state_mut(l).to_bytes(idx).unwrap_or_default()
 }
 
 /// `lua_tostringatom` 的成对读取：返回字符串原始字节与 atom 命中计数。
@@ -377,8 +427,7 @@ pub fn tostratom<'a>(l: L, idx: c_int) -> (&'a [u8], c_int) {
 
 /// `luaL_checkstring!(l, idx)` + 原始字节收口（非字符串即抛 Lua 错误，同 C 语义）。
 pub fn l_checkstring_bytes<'a>(l: L, idx: c_int) -> &'a [u8] {
-  // Safety: `l` 存活；返回 NUL 结尾栈内串。
-  unsafe { (*l).check_bytes(idx) }
+  state_mut(l).check_bytes(idx)
 }
 
 /// `lua_tonumber!(l, idx)`（`lua_tonumberx(..).unwrap_or(0.0)`）。
@@ -389,14 +438,12 @@ pub fn tonumber(l: L, idx: c_int) -> f64 {
 
 /// `lua_l_checkinteger`：非整数即抛 Lua 错误。
 pub fn l_checkinteger(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).check_integer(idx) }
+  state_mut(l).check_integer(idx)
 }
 
 /// `lua_toboolean`。
 pub fn toboolean(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).to_boolean(idx) as c_int }
+  state_ref(l).to_boolean(idx) as c_int
 }
 
 /// `lua_isstring`（C 侧 0/非 0）。
@@ -413,8 +460,8 @@ pub fn isnumber(l: L, idx: c_int) -> c_int {
 
 /// `lua_status`。
 pub fn status(l: L) -> c_int {
-  // Safety: `l` 存活（模块级契约），`&*l` 只读引用重建前提成立。
-  unsafe { lua_status(&*l) }
+  // `lua_status` 已是 ulua-vm 安全签名（`&LuaState`），经单点重建直接调用。
+  lua_status(state_ref(l))
 }
 
 /// `lua_equal`（C 侧 0/1）。
@@ -425,8 +472,7 @@ pub fn equal(l: L, a: c_int, b: c_int) -> c_int {
 
 /// `lua_objlen`。
 pub fn objlen(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).obj_len(idx) as c_int }
+  state_ref(l).obj_len(idx) as c_int
 }
 
 /// `lua_gc`：`what` 传 [`LuaGcOp`] 的 C 编码值。
@@ -441,8 +487,7 @@ pub fn gc(l: L, what: c_int, data: c_int) -> c_int {
 
 /// `lua_next` 游标步进。
 pub fn next(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).next(idx) as c_int }
+  state_mut(l).next(idx) as c_int
 }
 
 /// `lua_rawiter` 索引遍历。
@@ -454,15 +499,15 @@ pub fn rawiter(l: L, idx: c_int, iter: c_int) -> c_int {
 /// `lua_getfield`。
 pub fn getfield(l: L, idx: c_int, k: &'static [u8]) -> c_int {
   let key = k.strip_suffix(b"\0").unwrap_or(k);
-  // Safety: `l` 存活（模块级契约）；`key` 切片在调用返回前有效，被调侧不得逃逸
-  unsafe { (*l).get_field_bytes(idx, key) }
+  // `key` 切片在调用返回前有效，被调侧不得逃逸。
+  state_mut(l).get_field_bytes(idx, key)
 }
 
 /// `lua_setfield`。
 pub fn setfield(l: L, idx: c_int, k: &'static [u8]) {
   let key = k.strip_suffix(b"\0").unwrap_or(k);
-  // Safety: `l` 存活（模块级契约）；`key` 切片在调用返回前有效，被调侧不得逃逸
-  unsafe { (*l).set_field_bytes(idx, key) }
+  // `key` 切片在调用返回前有效，被调侧不得逃逸。
+  state_mut(l).set_field_bytes(idx, key)
 }
 
 /// `lua_isboolean!`：栈位是否为 boolean（复用 [`type_]`，不新增边界）。
@@ -473,8 +518,7 @@ pub fn isboolean(l: L, idx: c_int) -> bool {
 /// `luaL_newmetatable(l, name)`：压入该名字的元表并返回存在性码。
 pub fn newmetatable(l: L, name: &'static [u8]) -> c_int {
   let name = name.strip_suffix(b"\0").unwrap_or(name);
-  // Safety: `l` 存活（模块级契约）；`name` 为去 NUL 后的合法字节串。
-  unsafe { (*l).new_metatable_by_bytes(name) }
+  state_mut(l).new_metatable_by_bytes(name)
 }
 
 /// `LUA_PUSHCFUNCTION(l, f, name)`：把带调试名的 C 函数压栈（不挂全局，供元方法等落位）。
@@ -547,8 +591,7 @@ pub fn getlightuserdataname<'a>(l: L, tag: c_int) -> Option<&'a [u8]> {
 
 /// `lua_rawequal(l, a, b)`。
 pub fn rawequal(l: L, a: c_int, b: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).raw_equal(a, b) as c_int }
+  state_ref(l).raw_equal(a, b) as c_int
 }
 
 /// `lua_createtable(l, narray, nrec)`。
@@ -626,8 +669,7 @@ pub fn getuserdatametatable(l: L, tag: c_int) {
 /// `luaL_getmetatable(l, name)`：把注册表里该名字的元表压栈。
 pub fn l_getmetatable(l: L, name: &'static [u8]) -> c_int {
   let name = name.strip_suffix(b"\0").unwrap_or(name);
-  // Safety: `l` 存活（模块级契约）；`name` 为去 NUL 后的合法字节串。
-  unsafe { (*l).get_metatable_by_bytes(name) }
+  state_mut(l).get_metatable_by_bytes(name)
 }
 
 /// `luaL_checkudata(l, idx, tname)`：按元表名校验 userdata，返回数据块裸指针。
@@ -725,8 +767,7 @@ pub fn cleartable(l: L, idx: c_int) {
 
 /// `lua_setmetatable`。
 pub fn setmetatable(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { (*l).set_metatable(idx) }
+  state_mut(l).set_metatable(idx)
 }
 
 /// `lua_setfenv`。
@@ -782,8 +823,8 @@ pub fn topointer(l: L, idx: c_int) -> *const c_void {
 /// `lua_setglobal`：把栈顶值写入全局 `k` 并弹栈。
 pub fn setglobal(l: L, k: &'static [u8]) {
   let key = k.strip_suffix(b"\0").unwrap_or(k);
-  // Safety: `l` 存活（模块级契约）；`key` 切片在调用返回前有效，被调侧不得逃逸
-  unsafe { (*l).set_global_bytes(key) }
+  // `key` 切片在调用返回前有效，被调侧不得逃逸。
+  state_mut(l).set_global_bytes(key)
 }
 
 // ---------------------------------------------------------------------------
@@ -818,8 +859,8 @@ pub fn isbuffer(l: L, idx: c_int) -> bool {
 
 /// `lua_tostring` 的 `Option<&'a str>` 视图：非字符串槽得 `None`。
 pub fn to_str<'a>(l: L, idx: c_int) -> Option<&'a str> {
-  // Safety: `l` 存活（模块级契约）；返回借用指向 VM 栈缓冲。
-  unsafe { (*l).to_str(idx) }
+  // 返回借用指向 VM 栈缓冲。
+  state_mut(l).to_str(idx)
 }
 
 /// `lua_getreadonly(l, idx)`（C 侧 0/非 0）。
@@ -834,8 +875,8 @@ pub fn getreadonly(l: L, idx: c_int) -> c_int {
 
 /// `lua_setfield` with `&str` 名。
 pub fn set_field_str(l: L, idx: c_int, k: &str) {
-  // Safety: `l` 存活（模块级契约）；`k` 借用仅在调用期内有效。
-  unsafe { (*l).set_field_str(idx, k) }
+  // `k` 借用仅在调用期内有效。
+  state_mut(l).set_field_str(idx, k)
 }
 
 // ---------------------------------------------------------------------------
@@ -844,8 +885,8 @@ pub fn set_field_str(l: L, idx: c_int, k: &str) {
 
 /// `lua_getref(l, ref)`：把引用句柄压栈。
 pub fn getref(l: L, r: c_int) {
-  // Safety: `l` 存活；`r` 为本用例先前 `lua_ref` 交回的引用句柄。
-  unsafe { (*l).get_ref(r) }
+  // `r` 为本用例先前 `lua_ref` 交回的引用句柄。
+  state_mut(l).get_ref(r)
 }
 
 /// `lua_ref(l, idx)`：给 `idx` 处对象建引用并弹栈。
@@ -922,4 +963,275 @@ pub fn dump(
 ) {
   // Safety: `l` 存活；`f` 在使用点仍指向可写目标；`category_name` 为 None 即 C 侧 NULL。
   unsafe { lua_c_dump(l, f, category_name) }
+}
+
+// ---------------------------------------------------------------------------
+// yield / 可让出调用族（cpcall×call 的可 yield 形态，cpp Conformance.test.cpp
+// 「passthrough call」/「multiple yields」用例的回调侧收口）
+// ---------------------------------------------------------------------------
+
+/// `lua_isyieldable`（C 侧 0/非 0）。
+pub fn isyieldable(l: L) -> c_int {
+  // Safety: `l` 存活（模块级契约）；只读当前上下文的可让出位。
+  unsafe { lua_isyieldable(l) }
+}
+
+/// `lua_yield`：以栈顶 `nresults` 个值让出回宿主（只应在可 yield 的 C 回调内调用）。
+pub fn yield_(l: L, nresults: c_int) -> c_int {
+  // Safety: `l` 存活且处于可让出点（用例均在 continuation 回调内调用）。
+  unsafe { lua_yield(l, nresults) }
+}
+
+/// `lua_callyieldable`：调用栈上函数，可在其内 yield。
+pub fn callyieldable(l: L, nargs: c_int, nresults: c_int) -> c_int {
+  // Safety: `l` 存活；`nargs`/`nresults` 满足 `lua_call` 栈元素约束（用例配平）。
+  unsafe { lua_callyieldable(l, nargs, nresults) }
+}
+
+/// `lua_pcallyieldable`：受保护的可 yield 调用。
+pub fn pcallyieldable(l: L, nargs: c_int, nresults: c_int, errfunc: c_int) -> c_int {
+  // Safety: 同 [`callyieldable`]；pcall 恢复链由 VM 维护。
+  unsafe { lua_pcallyieldable(l, nargs, nresults, errfunc) }
+}
+
+// ---------------------------------------------------------------------------
+// 调试 / 回溯 / 覆盖率族（debugger、interrupt inspection、coverage 用例）
+// ---------------------------------------------------------------------------
+
+/// `lua_Debug ar = {}` 的等价收口：`repr(C)` 记录全零初始化（各字段的全零位模式
+/// 均合法），随后由 [`getinfo`] 按 what 掩码填写。
+pub fn zero_debug() -> LuaDebug {
+  // Safety: `LuaDebug` 为全字段可全零表示的 repr(C) 记录（与 cpp `{}` 同形）。
+  unsafe { zeroed() }
+}
+
+/// `lua_getinfo`：按 `what` 掩码（NUL 结尾静态串，如 `b"f\0"`）填充 `ar`；
+/// 返回 0 表示该 `level` 无函数帧。
+pub fn getinfo(l: L, level: c_int, what: &'static [u8], ar: &mut LuaDebug) -> c_int {
+  // Safety: `l` 存活且调用栈深度覆盖 `level`；`what` 为 NUL 结尾静态串；`ar` 为
+  // 本帧存活记录（模块级契约 + 用例栈形）。
+  unsafe { lua_getinfo(l, level, cstr(what), ar) }
+}
+
+/// `lua_getlocal`：取 `level` 帧第 `n` 个局部变量名字（并压值入栈）；越界得 NULL。
+pub fn getlocal(l: L, level: c_int, n: c_int) -> *const c_char {
+  // Safety: `l` 存活、`level`/`n` 由用例按 getinfo 结果限定。
+  unsafe { lua_getlocal(l, level, n) }
+}
+
+/// `lua_getupvalue`：取 `funcindex` 闭包第 `n` 个上值名字（并压值入栈）；越界得 NULL。
+pub fn getupvalue(l: L, funcindex: c_int, n: c_int) -> *const c_char {
+  // Safety: `l` 存活、`funcindex` 为闭包槽（用例断言前置）。
+  unsafe { lua_getupvalue(l, funcindex, n) }
+}
+
+/// `lua_getargument`：取 `level` 帧第 `n` 个实参（C 侧 0/非 0）。
+pub fn getargument(l: L, level: c_int, n: c_int) -> c_int {
+  // Safety: `l` 存活、`level` 为用例核过的帧层级。
+  unsafe { lua_getargument(l, level, n) }
+}
+
+/// `lua_getcoverage`：按行覆盖回调遍历 `funcindex` 处 Lua 函数。
+pub fn getcoverage(l: L, funcindex: c_int, context: *mut c_void, callback: LuaCoverage) {
+  // Safety: `l` 存活、`funcindex` 为 Lua 函数槽；`context` 为用例独占载荷指针，
+  // 遍历期间对回调全程有效。
+  unsafe { lua_getcoverage(l, funcindex, context, callback) }
+}
+
+/// `luau_callhook`：以受保护边界临时装一个调用钩子。
+pub fn callhook(l: L, hook: LuaHook, userdata: Option<*mut c_void>) {
+  // Safety: `l` 存活；钩子签名遵循 C ABI，重入调用后栈形由 VM 恢复。
+  unsafe { luau_callhook(l, hook, userdata) }
+}
+
+/// `lua_break`：请求在下一个安全点打断执行。
+pub fn brk(l: L) -> c_int {
+  // Safety: `l` 存活（模块级契约）；只置中断请求位。
+  unsafe { lua_break(l) }
+}
+
+/// `lua_breakpoint`：对 `funcindex` 闭包的 `line` 行启用/禁用断点。
+pub fn breakpoint(l: L, funcindex: c_int, line: c_int, enabled: c_int) -> c_int {
+  // Safety: `l` 存活、`funcindex` 处为 Lua 闭包（用例断言前置）。
+  unsafe { lua_breakpoint(l, funcindex, line, enabled) }
+}
+
+/// `lua_debugtrace` 的原始指针形态：交回 VM 诊断串（或 NULL），由调用侧自行解码。
+pub fn debugtrace_raw(l: L) -> *const c_char {
+  // Safety: `l` 存活；只读栈打印调用栈诊断，不改动栈。
+  unsafe { lua_debugtrace(l) }
+}
+
+/// `lua_singlestep`：开关单步执行（已是 ulua-vm 安全签名，经单点重建直调）。
+pub fn singlestep(l: L, enabled: bool) {
+  lua_singlestep(state_mut(l), enabled as c_int);
+}
+
+/// `lua_g_isnative`（C 侧 0/非 0）：`level` 帧是否为原生编译帧。
+pub fn g_isnative(l: L, level: c_int) -> c_int {
+  // Safety: `l` 存活；`level` 由用例按栈深限定，只读帧槽。
+  unsafe { lua_g_isnative(l, level) }
+}
+
+/// `lua_is_lfunction`（C 侧 0/非 0）：`idx` 是否为 Lua 闭包。
+pub fn is_lfunction(l: L, idx: c_int) -> c_int {
+  // Safety: `l` 存活；只读槽位类型标签。
+  unsafe { lua_is_lfunction(l, idx) }
+}
+
+// ---------------------------------------------------------------------------
+// aux 库补集（collectgarbage/loadstring/tables/vector 用例回调侧）
+// ---------------------------------------------------------------------------
+
+/// `luaL_checkoption`：在 `lst`（NULL 收尾的 C 串数组）中匹配 `narg` 字符串选项，
+/// 返回命中下标（缺省走 `def`，失配抛 Lua 错误）。
+pub fn l_checkoption(
+  l: L,
+  narg: c_int,
+  def: *const c_char,
+  lst: *const *const c_char,
+) -> c_int {
+  // Safety: `l` 存活；`lst` 为调用方在本帧持有的 NULL 收尾静态选项表。
+  unsafe { lua_l_checkoption(l, narg, def, lst) }
+}
+
+/// `luaL_checkunsigned`：非数值即抛 Lua 错误。
+pub fn l_checkunsigned(l: L, narg: c_int) -> c_uint {
+  // Safety: `l` 存活；`narg` 槽可读。
+  unsafe { lua_l_checkunsigned(l, narg) }
+}
+
+/// `luaL_optboolean`：nil 时取 `def`，其余按布尔语义读取。
+pub fn l_optboolean(l: L, narg: c_int, def: bool) -> bool {
+  // Safety: `l` 存活；`narg` 槽可读。
+  unsafe { lua_l_optboolean(l, narg, def) }
+}
+
+/// `luaL_optinteger`：nil 时取 `def`，否则按整数读取（失配抛 Lua 错误）。
+pub fn l_optinteger(l: L, narg: c_int, def: c_int) -> c_int {
+  // Safety: `l` 存活；`narg` 槽可读。
+  unsafe { lua_l_optinteger(l, narg, def) }
+}
+
+/// `luaL_checklstring!` 的字节切片形态：非字符串即抛 Lua 错误。
+pub fn l_checklstring<'a>(l: L, narg: c_int) -> &'a [u8] {
+  // Safety: `l` 存活；返回借用指向 VM 栈内串，调用点即时消费。
+  unsafe { lua_l_checklstring_ref(l, narg) }
+}
+
+/// `luaL_typeerror`：按类型名抛 Lua 错误（不返回）。
+pub fn l_typeerror(l: L, narg: c_int, tname: &str) -> ! {
+  // Safety: `l` 为存活受保护帧；抛错经 VM 展开发散。
+  unsafe { lua_l_typeerror_l(l, narg, tname) }
+}
+
+/// `luaL_checkvector` 的切片形态：返回参数 `narg` 处 vector 的
+/// `LUA_VECTOR_SIZE` 个 f32 分量（失配抛 Lua 错误）。
+pub fn l_checkvector<'a>(l: L, narg: c_int) -> &'a [f32] {
+  // Safety: `l` 存活且 `narg` 为 vector 槽（checkvector 失配即抛错）；返回指针
+  // 指向该 vector 的分量缓冲，本帧内有效。
+  unsafe { from_raw_parts(lua_l_checkvector(l, narg), LUA_VECTOR_SIZE as usize) }
+}
+
+/// `lua_pushvector`（3 分量形态，第 4 分量按构建期布局补 0 由 VM 侧处理）。
+pub fn pushvector3(l: L, x: f32, y: f32, z: f32) {
+  // Safety: `l` 存活；三个 f32 标量无借用前提，栈头寸由 VM 侧扩容。
+  unsafe { lua_pushvector_lua_state_f32_f32_f32(l, x, y, z) }
+}
+
+/// `lua_pushvector`（4 分量形态）。
+pub fn pushvector4(l: L, x: f32, y: f32, z: f32, w: f32) {
+  // Safety: 同 [`pushvector3`]。
+  unsafe { lua_pushvector_lua_state_f32_f32_f32_f32(l, x, y, z, w) }
+}
+
+/// `lua_pushlstring` 的切片形态（拷贝语义，净压一层）。
+pub fn pushlstring(l: L, s: &[u8]) {
+  // Safety: `l` 存活；`s` 为本帧合法切片，VM 侧整段拷入堆串。
+  unsafe { lua_pushlstring_bytes(l, s) }
+}
+
+// ---------------------------------------------------------------------------
+// 线程 / 环境杂项
+// ---------------------------------------------------------------------------
+
+/// `lua_tothread`：`idx` 处 thread 的状态指针（非 thread 得 `None`）。
+pub fn tothread(l: L, idx: c_int) -> Option<L> {
+  // Safety: `l` 存活；只读槽位，返回线程状态随该 thread 对象存活。
+  unsafe { lua_tothread(l, idx) }
+}
+
+/// `lua_xmove`：同 VM 内两线程间搬 `n` 个栈值。
+pub fn xmove(from: L, to: L, n: c_int) {
+  // Safety: 两侧同属一个存活 VM 且为不同 state、`from` 顶恰有 `n` 个待搬值
+  //（用例配平契约）。
+  unsafe { lua_xmove(from, to, n) }
+}
+
+/// `lua_setsafeenv`：切换 `objindex` 处环境表的 safeenv 标志。
+pub fn setsafeenv(l: L, objindex: c_int, enabled: bool) {
+  // Safety: `l` 存活、`objindex` 处为 table（用例契约），只翻 safeenv 标志位。
+  unsafe { lua_setsafeenv(l, objindex, enabled as c_int) }
+}
+
+/// `lua_namecallatom`：读 namecall 原子串（`atom` 出参可选）；非 namecall 调用得 NULL。
+pub fn namecallatom(l: L, atom: Option<&mut c_int>) -> *const c_char {
+  // Safety: `l` 存活；`atom` 为本帧可写出参（或 None 即不取计数）。
+  unsafe { lua_namecallatom(l, atom.map_or_else(null_mut, from_mut)) }
+}
+
+// ---------------------------------------------------------------------------
+// userdata 直接访问族（DirectAccess 用例回调侧）
+// ---------------------------------------------------------------------------
+
+/// `lua_registeruserdatadirectaccess(l, tag, get, set, namecall)`。
+pub fn registeruserdatadirectaccess(
+  l: L,
+  tag: c_int,
+  get: LuaUserdataDirectAccess,
+  set: LuaUserdataDirectAccess,
+  namecall: LuaUserdataDirectNamecall,
+) -> c_int {
+  // Safety: `l` 存活、`tag` 界内；三个回调均为本用例的 `extern "C-unwind"` 桩。
+  unsafe { lua_registeruserdatadirectaccess(l, tag, get, set, namecall) }
+}
+
+/// `lua_userdatadirectfield_setnumber(result, n)`：向 direct-field-get 结果槽写数值。
+pub fn udfield_setnumber(result: *mut c_void, n: f64) {
+  // Safety: `result` 指向本次回调期内独占可写、按 TValue 对齐的槽（回调契约）。
+  unsafe { lua_userdatadirectfield_setnumber(result, n) }
+}
+
+/// `lua_userdatadirectfield_setboolean(result, b)`：向结果槽写布尔。
+pub fn udfield_setboolean(result: *mut c_void, b: c_int) {
+  // Safety: 同 [`udfield_setnumber`]。
+  unsafe { lua_userdatadirectfield_setboolean(result, b) }
+}
+
+// ---------------------------------------------------------------------------
+// codegen 门面补集（compile_internal 全参形态 / get_assembly）
+// ---------------------------------------------------------------------------
+
+/// `compile_internal` 全参形态：对 `idx` 处闭包做原生编译，返回主编译结果。
+pub fn codegen_compile(
+  module_id: &Option<ModuleId>,
+  l: L,
+  idx: c_int,
+  options: &CompilationOptions,
+  stats: Option<&mut CompilationStats>,
+) -> CompilationResult {
+  // Safety: `l` 存活、`idx` 为已加载 proto（用例断言前置）；`stats` 为本帧可写结构。
+  unsafe { compile_internal(module_id, l, idx, options, stats) }
+}
+
+/// `get_assembly`：对 `idx` 处 Lua 闭包按 `options` 反汇编，交回汇编文本。
+pub fn assembly(
+  l: L,
+  idx: c_int,
+  options: AssemblyOptions,
+  stats: Option<&mut LoweringStats>,
+) -> Vec<u8> {
+  // Safety: `l` 存活、`idx` 为 Lua 函数槽（cpp `getAssembly` 的 LUAU_ASSERT 同前提）；
+  // `stats` 为本帧可写结构。
+  unsafe { get_assembly(l, idx, options, stats) }
 }

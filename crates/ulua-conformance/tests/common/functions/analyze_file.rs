@@ -11,9 +11,9 @@ use ulua_compiler::{
   functions::compile_or_throw_compiler::compile_or_throw_bytecode_builder_string_compile_options_parse_options,
   records::compile_options::CompileOptions,
 };
-use ulua_vm::{functions::luau_load::luau_load, records::lua_state::LuaState};
+use ulua_vm::records::lua_state::LuaState;
 
-use crate::common::functions::new_state::new_state;
+use crate::common::functions::{new_state::new_state, safe_api::load_bytes};
 
 pub fn analyze_file(
   source: &str,
@@ -40,14 +40,13 @@ pub fn analyze_file(
 
   let bytecode = bytecode_builder.get_bytecode();
 
-  // `StateRef` 负责 `lua_close`：`luau_load` 失败 panic 时也不会泄漏整个 LuaState。
+  // `StateRef` 负责 `lua_close`：`load_bytes` 失败 panic 时也不会泄漏整个 LuaState。
   let global_state = new_state();
   let l: *mut LuaState = global_state.as_ptr();
 
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  let result = unsafe { luau_load(l, "source", bytecode, 0) };
+  let result = load_bytes(l, "source", bytecode, 0);
   assert_eq!(result, 0, "analyze_file fixture failed to load bytecode");
 
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`bytecode` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  // Safety: `summarize_bytecode` 只读栈顶刚加载的 proto 与其字节码缓冲。
   unsafe { summarize_bytecode(l, -1, nesting_limit) }
 }

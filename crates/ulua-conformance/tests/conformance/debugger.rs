@@ -6,9 +6,6 @@
 // `lua_resume` 的 from 参数传 `null_mut()` 表示「无 host 上下文/无父线程」，
 // 与 cpp 原样一致，不可安全化。
 
-use core::{mem::zeroed, ptr::null_mut};
-
-use crate::common::functions::cstr::cstr;
 
 #[test]
 fn conformance_coverage() {
@@ -48,22 +45,18 @@ fn conformance_debug() {
 
 #[test]
 fn conformance_debug_api() {
-  use ulua_vm::{functions::lua_getinfo::lua_getinfo, records::lua_debug::LuaDebug};
-
-  use crate::common::functions::new_state::new_state;
+  use crate::common::functions::{new_state::new_state, safe_api::{getinfo, state_mut, zero_debug}};
 
   let global_state = new_state();
   let l = global_state.as_ptr();
 
-  unsafe {
-    (*l).push_number(10.0);
+  state_mut(l).push_number(10.0);
 
-    // Safety: LuaDebug 为 repr(C)，全零位模式对每字段（null 指针/0/空数组）皆合法，
-    // 且 lua_getinfo 按 what 串负责填写。
-    let mut ar: LuaDebug = zeroed();
-    assert_eq!(lua_getinfo(l, -1, cstr(b"f\0"), &mut ar), 0);
-    assert_eq!(lua_getinfo(l, -10, cstr(b"f\0"), &mut ar), 0);
-  }
+  // `zero_debug` 交出全零 LuaDebug（repr(C) 各字段全零位模式皆合法），
+  // getinfo 按 what 串负责填写。
+  let mut ar = zero_debug();
+  assert_eq!(getinfo(l, -1, b"f\0", &mut ar), 0);
+  assert_eq!(getinfo(l, -10, b"f\0", &mut ar), 0);
 }
 
 #[test]
@@ -122,19 +115,13 @@ fn conformance_interrupt() {
   use core::ffi::c_int;
 
   use ulua_compiler::records::compile_options::CompileOptions;
-  use ulua_vm::{
-    enums::lua_status::LuaStatus,
-    functions::{
-      lua_callbacks::lua_callbacks, lua_l_checklstring::lua_l_checklstring,
-      lua_newthread::lua_newthread,
-    },
-    macros::lua_globalsindex::LUA_GLOBALSINDEX,
-  };
+  use ulua_vm::{enums::lua_status::LuaStatus, macros::lua_globalsindex::LUA_GLOBALSINDEX};
 
   use crate::common::{
     functions::{
-      conformance_interrupt_interrupt::conformance_interrupt_interrupt, cstr_text::cstr_text,
+      conformance_interrupt_interrupt::conformance_interrupt_interrupt,
       default_compile_options::default_compile_options, run_conformance::run_conformance,
+      safe_api::{callbacks_mut, l_checklstring, newthread, pop, resume, state_mut},
     },
     records::conformance_interrupt_state::{
       CONFORMANCE_INTERRUPT_MODE_EXPECTED_HITS, CONFORMANCE_INTERRUPT_MODE_HANG,
@@ -170,62 +157,47 @@ fn conformance_interrupt() {
   );
   let l = global_state.as_ptr();
 
-  // Safety: `l` 为 `run_conformance` 返回的存活状态；把 interrupt 钩子登记进
+  // `l` 为 `run_conformance` 返回的存活状态；把 interrupt 钩子登记进
   // callbacks 是 cpp `Interrupt` 用例同款的裸函数指针写入。
-  unsafe {
-    (*lua_callbacks(l)).interrupt = Some(conformance_interrupt_interrupt);
-  }
+  callbacks_mut(l).interrupt = Some(conformance_interrupt_interrupt);
 
   // 用例①（cpp `Interrupt` 的 `test` 线程块）：两段 resume 分别停在 yield 与
-  // 终点，核对中断计数落点。
-  // Safety: `t` 为新建线程，`test` 由 interrupt.luau 注入全局表；字面量 null 结尾。
-  let t = unsafe {
-    let t = lua_newthread(l);
-    (*t).get_field_str(LUA_GLOBALSINDEX, "test");
-    t
-  };
+  // 终点，核对中断计数落点。`t` 为新建线程，`test` 由 interrupt.luau 注入全局表。
+  let t = newthread(l);
+  state_mut(t).get_field_str(LUA_GLOBALSINDEX, "test");
 
   CONFORMANCE_INTERRUPT_STATE.reset(CONFORMANCE_INTERRUPT_MODE_EXPECTED_HITS);
 
-  // Safety: 两次 resume 在同一存活线程 `t` 上顺序执行（global_state 覆盖本块）；
+  // 两次 resume 在同一存活线程 `t` 上顺序执行（global_state 覆盖本块）；
   // `index()` 读的是中断回调留下的原子快照。
-  unsafe {
-    // FFI: c-API 要求 NULL
-    let mut status = (*t).resume(null_mut(), 0);
-    assert_eq!(status, LuaStatus::Yield as c_int);
-    assert_eq!(CONFORMANCE_INTERRUPT_STATE.index(), 4);
+  // FFI: c-API 要求 NULL（resume 的 from 为无父线程哨兵，与 cpp 原样一致）。
+  let status = resume(t, None, 0);
+  assert_eq!(status, LuaStatus::Yield as c_int);
+  assert_eq!(CONFORMANCE_INTERRUPT_STATE.index(), 4);
 
-    // FFI: c-API 要求 NULL
-    status = (*t).resume(null_mut(), 0);
-    assert_eq!(status, LuaStatus::Ok as c_int);
-    assert_eq!(CONFORMANCE_INTERRUPT_STATE.index(), 22);
+  let status = resume(t, None, 0);
+  assert_eq!(status, LuaStatus::Ok as c_int);
+  assert_eq!(CONFORMANCE_INTERRUPT_STATE.index(), 22);
 
-    (*l).pop(1);
-  }
+  pop(l, 1);
 
   // 用例②（cpp `Interrupt` 的 `for (test = 1; test <= 10)`）：infloop1..10 每次
   // 中断都命中，resume 以 yield 收场。
   for test in 1..=10 {
     let name = format!("infloop{test}");
 
-    // Safety: 同用例①，`t` 为本轮新线程，栈上仅有 infloop{test} 函数。
-    let t = unsafe {
-      let t = lua_newthread(l);
-      (*t).get_field_str(LUA_GLOBALSINDEX, &name);
-      t
-    };
+    // 同用例①，`t` 为本轮新线程，栈上仅有 infloop{test} 函数。
+    let t = newthread(l);
+    state_mut(t).get_field_str(LUA_GLOBALSINDEX, &name);
 
     CONFORMANCE_INTERRUPT_STATE.reset(CONFORMANCE_INTERRUPT_MODE_INFLOOP);
 
-    // Safety: `t` 存活；yield 状态与中断落点由 interrupt.luau 固定。
-    unsafe {
-      // FFI: c-API 要求 NULL
-      let status = (*t).resume(null_mut(), 0);
-      assert_eq!(status, LuaStatus::Yield as c_int);
-      assert_eq!(CONFORMANCE_INTERRUPT_STATE.index(), 11);
+    // yield 状态与中断落点由 interrupt.luau 固定。
+    let status = resume(t, None, 0);
+    assert_eq!(status, LuaStatus::Yield as c_int);
+    assert_eq!(CONFORMANCE_INTERRUPT_STATE.index(), 11);
 
-      (*l).pop(1);
-    }
+    pop(l, 1);
   }
 
   CONFORMANCE_INTERRUPT_STATE.reset(CONFORMANCE_INTERRUPT_MODE_HANG);
@@ -236,69 +208,50 @@ fn conformance_interrupt() {
   for test in 1..=7 {
     let name = format!("hang{test}");
 
-    // Safety: 同用例①，`t` 为本轮新线程，栈上仅有 hang{test} 函数。
-    let t = unsafe {
-      let t = lua_newthread(l);
-      (*t).get_field_str(LUA_GLOBALSINDEX, &name);
-      t
-    };
+    // 同用例①，`t` 为本轮新线程，栈上仅有 hang{test} 函数。
+    let t = newthread(l);
+    state_mut(t).get_field_str(LUA_GLOBALSINDEX, &name);
 
     CONFORMANCE_INTERRUPT_STATE.reset(CONFORMANCE_INTERRUPT_MODE_HANG);
 
-    // Safety: `t` 为本轮新线程；resume 的出错状态即 cpp 中断计时器应产生的 ErrRun。
-    unsafe {
-      // FFI: c-API 要求 NULL
-      let status = (*t).resume(null_mut(), 0);
-      assert_eq!(status, LuaStatus::ErrRun as c_int);
-    }
+    // resume 的出错状态即 cpp 中断计时器应产生的 ErrRun。
+    let status = resume(t, None, 0);
+    assert_eq!(status, LuaStatus::ErrRun as c_int);
 
-    // Safety: `t` 出错后栈顶为错误字符串，`lua_l_checklstring` 读 -1、长度写回
-    // `len`；`cstr_text` 借用仍存活的 VM 栈缓冲并立即转 owned；`lua_pop`
+    // `t` 出错后栈顶为错误字符串，读 -1 的字节切片（非串即抛）；
+    // `cstr_text` 借用仍存活的 VM 栈缓冲并立即转 owned；`pop`
     // 回收父栈上的线程引用。
-    unsafe {
-      let mut len = 0usize;
-      let error = lua_l_checklstring(t, -1, &mut len);
-      let error = cstr_text(error);
-      assert!(
-        error.contains("timeout"),
-        "expected timeout error, got {error}"
-      );
+    let error = String::from_utf8_lossy(&l_checklstring(t, -1)).into_owned();
+    assert!(
+      error.contains("timeout"),
+      "expected timeout error, got {error}"
+    );
 
-      (*l).pop(1);
-    }
+    pop(l, 1);
   }
 
   // 用例④（cpp `Interrupt` 的 hangpcall 块）：HANG_PCALL 模式每 1000 次中断抛一次
   // timeout 并重新计数，hangpcall 的百轮 `pcall(...)` 每轮都把它吞下，最终 resume 应 Ok。
-  // Safety: 同用例①，`t` 为新建线程且全程存活；本线程的中断错误均由被测脚本的 pcall 消化。
-  unsafe {
-    let t = lua_newthread(l);
-    (*t).get_field_str(LUA_GLOBALSINDEX, "hangpcall");
+  // 同用例①，`t` 为新建线程且全程存活；本线程的中断错误均由被测脚本的 pcall 消化。
+  let t = newthread(l);
+  state_mut(t).get_field_str(LUA_GLOBALSINDEX, "hangpcall");
 
-    CONFORMANCE_INTERRUPT_STATE.reset(CONFORMANCE_INTERRUPT_MODE_HANG_PCALL);
-    // FFI: c-API 要求 NULL
-    let status = (*t).resume(null_mut(), 0);
-    assert_eq!(status, LuaStatus::Ok as c_int);
+  CONFORMANCE_INTERRUPT_STATE.reset(CONFORMANCE_INTERRUPT_MODE_HANG_PCALL);
+  let status = resume(t, None, 0);
+  assert_eq!(status, LuaStatus::Ok as c_int);
 
-    (*l).pop(1);
-  }
+  pop(l, 1);
 }
 
 #[test]
 fn conformance_interrupt_error_inspection() {
-  use ulua_vm::{
-    functions::{
-      lua_callbacks::lua_callbacks, lua_getinfo::lua_getinfo, luau_callhook::luau_callhook,
-    },
-    records::lua_debug::LuaDebug,
-  };
-
   use crate::common::{
     functions::{
       compile_and_load::compile_and_load,
       conformance_interrupt_error_inspection_interrupt::conformance_interrupt_error_inspection_interrupt,
       conformance_interrupt_inspection_hook::conformance_interrupt_inspection_hook,
       new_state::new_state, openlibs_and_sandbox::openlibs_and_sandbox,
+      safe_api::{callhook, callbacks_mut, getinfo, resume, zero_debug},
     },
     records::conformance_interrupt_error_inspection_state::CONFORMANCE_INTERRUPT_ERROR_INSPECTION_STATE,
   };
@@ -320,23 +273,17 @@ fib(5)
     openlibs_and_sandbox(l);
     compile_and_load(l, source, "=InterruptErrorInspection", None);
 
-    // Safety: 登记 interrupt 钩子后在主线程上 resume——钩子在第 `target` 次中断处
-    // yield，模拟「错误传播途中做栈内省」的场景；resume 的 null from 为无父线程哨兵。
-    unsafe {
-      (*lua_callbacks(l)).interrupt = Some(conformance_interrupt_error_inspection_interrupt);
+    // 登记 interrupt 钩子后在主线程上 resume——钩子在第 `target` 次中断处
+    // yield，模拟「错误传播途中做栈内省」的场景；resume 的 from 为无父线程哨兵。
+    callbacks_mut(l).interrupt = Some(conformance_interrupt_error_inspection_interrupt);
+    resume(l, None, 0);
 
-      // FFI: c-API 要求 NULL
-      (*l).resume(null_mut(), 0);
-    }
+    // `zero_debug` 交出全零 LuaDebug，getinfo 按 what 串负责填写；
+    // callhook 的 ud 传 null 与钩子签名一致。
+    let mut ar = zero_debug();
+    assert_ne!(0, getinfo(l, 0, b"nsl\0", &mut ar));
 
-    // Safety: LuaDebug 为 repr(C)，全零位模式对每字段（null 指针/0/空数组）皆合法，
-    // lua_getinfo 按 what 串负责填写；callhook 的 ud 传 null 与钩子签名一致。
-    unsafe {
-      let mut ar: LuaDebug = zeroed();
-      assert_ne!(0, lua_getinfo(l, 0, cstr(b"nsl\0"), &mut ar));
-
-      luau_callhook(l, Some(conformance_interrupt_inspection_hook), None);
-    }
+    callhook(l, Some(conformance_interrupt_inspection_hook), None);
   }
 }
 

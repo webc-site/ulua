@@ -1,13 +1,13 @@
 use core::ffi::{c_int, c_void};
 
-use ulua_vm::{
-  functions::lua_l_checkvector::lua_l_checkvector, macros::lua_l_error::luaL_error,
-  records::lua_state::LuaState,
-};
+use ulua_vm::{macros::lua_l_error::luaL_error, records::lua_state::LuaState};
 
 use crate::common::{
   enums::direct_slot::DirectSlot,
-  functions::{lua_vec_2_get::lua_vec_2_get, update_direct_slot::update_direct_slot},
+  functions::{
+    lua_vec_2_get::lua_vec_2_get, safe_api::{l_checkvector, state_mut},
+    update_direct_slot::update_direct_slot,
+  },
   records::vertex::Vertex,
 };
 /// # Safety
@@ -37,27 +37,27 @@ pub unsafe extern "C-unwind" fn vertex_direct_newindex(
   match DirectSlot::from_u16(slot) {
     Some(DirectSlot::Pos) => {
       // Safety: `l` 存活；参数 3 为 vector 时返回其 3 分量缓冲指针（否则抛 Lua 错误）。
-      let pos = unsafe { lua_l_checkvector(l, 3) };
+      let pos = l_checkvector(l, 3);
       // Safety: `self_ptr` 是 VM 交回的存活 Vertex 数据指针可写，`pos` 为 3 分量缓冲可读。
       unsafe {
-        (*self_ptr).pos[0] = *pos.add(0);
-        (*self_ptr).pos[1] = *pos.add(1);
-        (*self_ptr).pos[2] = *pos.add(2);
+        (*self_ptr).pos[0] = pos[0];
+        (*self_ptr).pos[1] = pos[1];
+        (*self_ptr).pos[2] = pos[2];
       }
     }
     Some(DirectSlot::Normal) => {
       // Safety: `l` 存活；参数 3 为 vector 时返回其 3 分量缓冲指针（否则抛 Lua 错误）。
-      let normal = unsafe { lua_l_checkvector(l, 3) };
+      let normal = l_checkvector(l, 3);
       // Safety: `self_ptr` 存活可写，`normal` 为 3 分量缓冲可读。
       unsafe {
-        (*self_ptr).normal[0] = *normal.add(0);
-        (*self_ptr).normal[1] = *normal.add(1);
-        (*self_ptr).normal[2] = *normal.add(2);
+        (*self_ptr).normal[0] = normal[0];
+        (*self_ptr).normal[1] = normal[1];
+        (*self_ptr).normal[2] = normal[2];
       }
     }
     Some(DirectSlot::UV) => {
       // Safety: `l` 存活；`lua_vec_2_get` 校验参数 3 为 Vec2 userdata 并交回数据指针。
-      let uv = unsafe { lua_vec_2_get(l, 3) };
+      let uv = lua_vec_2_get(l, 3);
       // Safety: `uv` 指向存活 Vec2 数据（两分量可读），`self_ptr` 存活可写。
       unsafe {
         (*self_ptr).uv[0] = (*uv).x;
@@ -66,7 +66,7 @@ pub unsafe extern "C-unwind" fn vertex_direct_newindex(
     }
     _ => {
       // Safety: `l` 存活；参数 2 为串时返回 UTF-8 切片（否则抛 Lua 错误）。
-      let name = unsafe { (*l).check_str(2) };
+      let name = state_mut(l).check_str(2);
       // Safety: 按 cpp 抛「不可写成员」Lua 错误，该调用不返回。
       unsafe { luaL_error!(l, "{name} is not a writable member of vertex") }
     }

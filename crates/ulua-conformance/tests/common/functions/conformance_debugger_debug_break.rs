@@ -1,11 +1,11 @@
 use core::sync::atomic::Ordering;
 
-use ulua_vm::{
-  functions::{lua_break::lua_break, lua_debugtrace::lua_debugtrace},
-  records::{lua_debug::LuaDebug, lua_state::LuaState},
-};
+use ulua_vm::records::{lua_debug::LuaDebug, lua_state::LuaState};
 
-use crate::common::records::conformance_debugger_state::CONFORMANCE_DEBUGGER_STATE;
+use crate::common::{
+  functions::safe_api::{brk, debugtrace_raw},
+  records::conformance_debugger_state::CONFORMANCE_DEBUGGER_STATE,
+};
 /// # Safety
 ///
 /// Pointer arguments must be valid, aligned, and properly initialized.
@@ -19,11 +19,11 @@ pub unsafe extern "C-unwind" fn conformance_debugger_debug_break(
     .fetch_add(1, Ordering::SeqCst)
     + 1;
 
-  // Safety: `l` 为本用例存活的 LuaState；`lua_debugtrace` 只读栈打印调用栈诊断，不改动栈。
-  unsafe { lua_debugtrace(l) };
+  // `lua_debugtrace` 只读栈打印调用栈诊断，不改动栈；cpp 同位置对返回值取 void。
+  debugtrace_raw(l);
 
   if breakhits % 2 == 1 {
-    // Safety: `l` 存活；请求在下一个安全点打断执行。
-    unsafe { lua_break(l) };
+    // 请求在下一个安全点打断执行。
+    brk(l);
   }
 }

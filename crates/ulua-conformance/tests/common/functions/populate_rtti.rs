@@ -5,15 +5,12 @@ use ulua_analysis::{
 use ulua_common::{LUAU_ASSERT, fflag::LuauIntegerType2};
 use ulua_vm::records::lua_state::LuaState;
 
-/// # Safety
-///
-/// `l` 须为活跃 `LuaState` 指针（conformance 测试侧模块级契约，同 [`populate_rtti`]）。
-unsafe fn push_literal(l: *mut LuaState, value: &'static [u8]) {
+use crate::common::functions::safe_api::state_mut;
+
+/// 压入静态字面量（`l` 须为活跃 `LuaState` 指针——conformance 测试侧模块级契约）。
+fn push_literal(l: *mut LuaState, value: &'static [u8]) {
   let value = value.strip_suffix(b"\0").unwrap_or(value);
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  unsafe {
-    (*l).push_bytes(value);
-  }
+  state_mut(l).push_bytes(value);
 }
 
 /// # Safety
@@ -40,23 +37,23 @@ unsafe fn populate_rtti_variant(l: *mut LuaState, variant: &TypeVariant) {
   match variant {
     TypeVariant::Primitive(PrimitiveType { r#type, .. }) => match r#type {
       // Safety: 各叶子仅要求 `l` 活跃且字面量为静态 NUL 结尾串（入口契约转承）。
-      PrimitiveKind::Boolean => unsafe { push_literal(l, b"boolean\0") },
-      PrimitiveKind::NilType => unsafe { push_literal(l, b"nil\0") },
-      PrimitiveKind::Number => unsafe { push_literal(l, b"number\0") },
+      PrimitiveKind::Boolean => push_literal(l, b"boolean\0"),
+      PrimitiveKind::NilType => push_literal(l, b"nil\0"),
+      PrimitiveKind::Number => push_literal(l, b"number\0"),
       PrimitiveKind::Integer => {
         if LuauIntegerType2.get() {
           // Safety: 同上。
-          unsafe { push_literal(l, b"integer\0") };
+          push_literal(l, b"integer\0");
         }
       }
-      PrimitiveKind::String => unsafe { push_literal(l, b"string\0") },
-      PrimitiveKind::Thread => unsafe { push_literal(l, b"thread\0") },
-      PrimitiveKind::Buffer => unsafe { push_literal(l, b"buffer\0") },
+      PrimitiveKind::String => push_literal(l, b"string\0"),
+      PrimitiveKind::Thread => push_literal(l, b"thread\0"),
+      PrimitiveKind::Buffer => push_literal(l, b"buffer\0"),
       _ => LUAU_ASSERT!(false, "Unknown primitive type"),
     },
     TypeVariant::Table(table) => {
-      // Safety: `l` 活跃，newtable 压入的表由下方 setfield 逐属性填充、最终留在栈上。
-      unsafe { (*l).new_table() };
+      // newtable 压入的表由下方 setfield 逐属性填充、最终留在栈上。
+      state_mut(l).new_table();
 
       for (name, prop) in &table.props {
         // cpp 语义等价：read_ty 优先、write_ty 兜底，两者皆无则跳过该属性。
@@ -64,29 +61,28 @@ unsafe fn populate_rtti_variant(l: *mut LuaState, variant: &TypeVariant) {
           continue;
         };
 
-        // Safety: `l` 活跃；`prop_ty` 指向 arena 存活 Type（递归入口同契约）。
+        // `prop_ty` 指向 arena 存活 Type（递归入口同契约）。
+        // Safety: `populate_rtti` 的 `# Safety` 契约由本函数契约转承。
         unsafe { populate_rtti(l, prop_ty) };
 
-        unsafe {
-          (*l).set_field_str(-2, name.as_str());
-        }
+        state_mut(l).set_field_str(-2, name.as_str());
       }
     }
-    // Safety: 入口契约转承：`l` 活跃，字面量为静态 NUL 结尾串
-    TypeVariant::Function(_) => unsafe { push_literal(l, b"function\0") },
-    TypeVariant::Any(_) => unsafe { push_literal(l, b"any\0") },
+    // 入口契约转承：`l` 活跃，字面量为静态 NUL 结尾串。
+    TypeVariant::Function(_) => push_literal(l, b"function\0"),
+    TypeVariant::Any(_) => push_literal(l, b"any\0"),
     TypeVariant::Intersection(intersection) => {
       for part in &intersection.parts {
         // Safety: 交集各 part 指向 arena 存活 Type（本函数 `# Safety` 契约）。
         LUAU_ASSERT!(unsafe { matches!((*(*part)).ty, TypeVariant::Function(_)) });
       }
 
-      unsafe { push_literal(l, b"function\0") };
+      push_literal(l, b"function\0");
     }
     TypeVariant::Extern(extern_ty) => {
       let name = extern_ty.name.as_str();
-      // Safety: `l` 活跃；直接以 `push_str` 压入外部类型名。
-      unsafe { (*l).push_str(name) };
+      // 直接以 `push_str` 压入外部类型名。
+      state_mut(l).push_str(name);
     }
     _ => LUAU_ASSERT!(false, "Unknown type"),
   }

@@ -2,35 +2,27 @@ use core::ffi::c_int;
 
 use ulua_code_gen::functions::luau_codegen_supported::luau_codegen_supported;
 use ulua_vm::{
-  functions::{lua_g_isnative::lua_g_isnative, lua_pushcclosurek::lua_pushcclosurek},
   records::lua_state::LuaState,
   type_aliases::lua_c_function::LuaCFunction,
 };
 
-use crate::common::functions::{cstr::cstr, run_conformance::codegen};
+use crate::common::functions::{run_conformance::codegen, safe_api::{g_isnative, pushcclosurek, state_mut}};
 unsafe extern "C-unwind" fn is_native(l: *mut LuaState) -> c_int {
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  unsafe {
-    (*l).push_boolean(lua_g_isnative(l, 1) != 0);
-    1
-  }
+  state_mut(l).push_boolean(g_isnative(l, 1) != 0);
+  1
 }
 
 unsafe extern "C-unwind" fn is_native_if_supported(l: *mut LuaState) -> c_int {
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  unsafe {
-    if !codegen() || luau_codegen_supported() == 0 {
-      (*l).push_boolean(true);
-    } else {
-      (*l).push_boolean(lua_g_isnative(l, 1) != 0);
-    }
-
-    1
+  if !codegen() || luau_codegen_supported() == 0 {
+    state_mut(l).push_boolean(true);
+  } else {
+    state_mut(l).push_boolean(g_isnative(l, 1) != 0);
   }
+  1
 }
 /// # Safety
 ///
-/// Pointer arguments must be valid, aligned, and properly initialized.
+/// `l` 为存活 `LuaState`（fixture 注册类型即 C ABI 钩子签名）。
 pub unsafe extern "C-unwind" fn setup_native_helpers(l: *mut LuaState) {
   // 两个闭包指针是纯 Rust 形式转换（`as` 同签名 upcast），不触碰 `l`。
   let is_native_fn: LuaCFunction =
@@ -38,21 +30,17 @@ pub unsafe extern "C-unwind" fn setup_native_helpers(l: *mut LuaState) {
   let is_native_if_supported_fn: LuaCFunction =
     Some(is_native_if_supported as unsafe extern "C-unwind" fn(*mut LuaState) -> c_int);
 
-  // Safety: `l` 为本用例存活的 LuaState；用 NUL 结尾静态名建闭包并登记为全局 `is_native`。
-  unsafe {
-    lua_pushcclosurek(l, is_native_fn, cstr(b"is_native\0"), 0, None);
-    (*l).set_global_str("is_native");
-  }
+  // 用 NUL 结尾静态名建闭包并登记为全局 `is_native`。
+  pushcclosurek(l, is_native_fn, Some(b"is_native\0"), 0, None);
+  state_mut(l).set_global_str("is_native");
 
-  // Safety: 同上——登记为全局 `is_native_if_supported`。
-  unsafe {
-    lua_pushcclosurek(
-      l,
-      is_native_if_supported_fn,
-      cstr(b"is_native_if_supported\0"),
-      0,
-      None,
-    );
-    (*l).set_global_str("is_native_if_supported");
-  }
+  // 同上——登记为全局 `is_native_if_supported`。
+  pushcclosurek(
+    l,
+    is_native_if_supported_fn,
+    Some(b"is_native_if_supported\0"),
+    0,
+    None,
+  );
+  state_mut(l).set_global_str("is_native_if_supported");
 }

@@ -4,30 +4,29 @@ use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
 
 use ulua_common::functions::c_str::cstr_bytes;
 use ulua_vm::{
-  functions::{lua_is_lfunction::lua_is_lfunction, lua_newthread::lua_newthread},
   macros::lua_globalsindex::LUA_GLOBALSINDEX,
   records::{lua_exception::lua_exception, lua_state::LuaState},
 };
 
-use crate::common::{functions::cstr_text::cstr_text, records::exception_result::ExceptionResult};
-/// # Safety
-///
-/// Pointer arguments must be valid, aligned, and properly initialized.
-pub unsafe fn conformance_exception_object_capture_exception(
+use crate::common::{
+  functions::{cstr_text::cstr_text, safe_api::{is_lfunction, newthread, state_mut}},
+  records::exception_result::ExceptionResult,
+};
+pub fn conformance_exception_object_capture_exception(
   l: *mut LuaState,
   function_to_run: *const c_char,
 ) -> ExceptionResult {
-  // Safety: `l` 为本用例存活的 LuaState；闭包内全为 C ABI 调用——`lua_newthread` 在 `l`
-  // 上创建线程态（对象由 `l` 的 GC 持有，跨本帧使用），随后在该线程上取全局函数、
-  // 断言可调用并 `lua_call`。Lua 错误经 `lua_exception` 以 unwind 抛出，由 catch_unwind 收。
-  let result = unsafe {
-    catch_unwind(AssertUnwindSafe(|| {
-      let thread_state = lua_newthread(l);
-      (*thread_state).get_field_bytes(LUA_GLOBALSINDEX, cstr_bytes(function_to_run));
-      assert_ne!(lua_is_lfunction(thread_state, -1), 0);
-      (*thread_state).call(0, 0);
-    }))
-  };
+  // 闭包内全经 safe_api 门面：`newthread` 在 `l` 上创建线程态（对象由 `l` 的 GC
+  // 持有，跨本帧使用），随后在该线程上取全局函数、断言可 callable 并 `lua_call`。
+  // Lua 错误经 `lua_exception` 以 unwind 抛出，由 catch_unwind 收。
+  let result = catch_unwind(AssertUnwindSafe(|| {
+    let thread_state = newthread(l);
+    // Safety: `function_to_run` 为调用方传入的 NUL 结尾 C 串（cstr 产物），仅本行解码一次。
+    let name = unsafe { cstr_bytes(function_to_run) };
+    state_mut(thread_state).get_field_bytes(LUA_GLOBALSINDEX, name);
+    assert_ne!(is_lfunction(thread_state, -1), 0);
+    state_mut(thread_state).call(0, 0);
+  }));
 
   match result {
     Ok(()) => ExceptionResult {

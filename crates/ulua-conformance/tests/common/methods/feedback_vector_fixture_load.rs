@@ -1,20 +1,20 @@
-use ulua_vm::{functions::luau_load::luau_load, records::proto::Proto};
+use ulua_vm::records::proto::Proto;
 
-use crate::common::records::feedback_vector_fixture::FeedbackVectorFixture;
+use crate::common::{
+  functions::safe_api::{load_bytes, state_mut},
+  records::feedback_vector_fixture::FeedbackVectorFixture,
+};
 impl<'a> FeedbackVectorFixture<'a> {
   pub fn load(&mut self) -> *mut Proto {
     let bytecode = self.bcb.get_bytecode();
     let l = self.lua_state();
 
-    // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`self` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-    unsafe {
-      let res = luau_load(l, "=FeedbackVectorTest", bytecode, 0);
+    let res = load_bytes(l, "=FeedbackVectorTest", bytecode, 0);
 
-      assert!(res == 0 && (*l).is_function(-1));
+    assert!(res == 0 && state_mut(l).is_function(-1));
 
-      let top = (*(*l).top.sub(1)).as_closure();
-
-      top.inner.l.p
-    }
+    // Safety: `top` 为栈顶闭包槽（上一行断言为函数）；`sub(1)` 即 top-1 槽位，
+    // as_closure 取其闭包指针（VM 内部结构边界，feedback_vector_api 门面契约）。
+    unsafe { (*(*l).top.sub(1)).as_closure().inner.l.p }
   }
 }

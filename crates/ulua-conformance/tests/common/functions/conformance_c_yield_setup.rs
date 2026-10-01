@@ -1,7 +1,7 @@
 use core::ffi::c_int;
 
 use ulua_vm::{
-  functions::lua_pushcclosurek::lua_pushcclosurek, records::lua_state::LuaState,
+  records::lua_state::LuaState,
   type_aliases::lua_c_function::LuaCFunction,
 };
 
@@ -19,22 +19,20 @@ use crate::common::functions::{
   passthrough_call_with_state::passthrough_call_with_state,
   passthrough_call_with_state_continuation::passthrough_call_with_state_continuation,
   pcall_then_x_call::pcall_then_x_call,
-  pcall_then_x_call_continuation::pcall_then_x_call_continuation, single_yield::single_yield,
+  pcall_then_x_call_continuation::pcall_then_x_call_continuation,
+  safe_api::{pushcclosurek, state_mut}, single_yield::single_yield,
   single_yield_continuation::single_yield_continuation,
 };
 
 /// 注册无 upvalue 的全局 C 函数（名称同时用作 closure debugname 与全局名）。
-unsafe fn push_global_fn(
+fn push_global_fn(
   l: *mut LuaState,
   name: &'static [u8],
   f: LuaCFunction,
   cont: Option<unsafe extern "C-unwind" fn(*mut LuaState, i32) -> i32>,
 ) {
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  unsafe {
-    lua_pushcclosurek(l, f, name.as_ptr().cast(), 0, cont);
-    (*l).set_global_bytes(name.strip_suffix(b"\0").unwrap_or(name));
-  }
+  pushcclosurek(l, f, Some(name), 0, cont);
+  state_mut(l).set_global_bytes(name.strip_suffix(b"\0").unwrap_or(name));
 }
 
 /// K 续体槽位类型（与 [`push_global_fn`] 的 `cont` 参数同形）。
@@ -104,22 +102,17 @@ const INT_UPVALUE_FNS: &[(&[u8], LuaCFunction, c_int, Continuation)] = &[
 
 /// 注册带一个 integer upvalue 的全局 C 函数（upvalue 先压栈、闭包计 1）。
 ///
-/// # Safety
-///
-/// `l` 为活跃 VM 状态；`name`/`f`/`cont` 满足 [`push_global_fn`] 同名参数契约。
-unsafe fn push_global_int_fn(
+/// 栈序列与逐条展开的原写法一致；表项均为 'static 指针/函数项。
+fn push_global_int_fn(
   l: *mut LuaState,
   name: &'static [u8],
   f: LuaCFunction,
   upvalue: c_int,
   cont: Continuation,
 ) {
-  // Safety: 本函数 `# Safety` 契约保证 `l` 活跃；栈序列与逐条展开的原写法一致。
-  unsafe {
-    (*l).push_integer(upvalue);
-    lua_pushcclosurek(l, f, name.as_ptr().cast(), 1, cont);
-    (*l).set_global_bytes(name.strip_suffix(b"\0").unwrap_or(name));
-  }
+  state_mut(l).push_integer(upvalue);
+  pushcclosurek(l, f, Some(name), 1, cont);
+  state_mut(l).set_global_bytes(name.strip_suffix(b"\0").unwrap_or(name));
 }
 
 /// # Safety
@@ -127,14 +120,10 @@ unsafe fn push_global_int_fn(
 /// Pointer arguments must be valid, aligned, and properly initialized.
 pub unsafe extern "C-unwind" fn conformance_c_yield_setup(l: *mut LuaState) {
   for (name, f, cont) in GLOBAL_FNS {
-    // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 在本用例作用域内取得/构造，至本行
-    // 使用前不释放；表项均为 'static 指针/函数项，满足 [`push_global_fn`] 契约。
-    unsafe { push_global_fn(l, name, *f, *cont) };
+    push_global_fn(l, name, *f, *cont);
   }
 
   for (name, f, upvalue, cont) in INT_UPVALUE_FNS {
-    // Safety: `l` 为活跃状态机（同上）；表项均为 'static，满足
-    // [`push_global_int_fn`] 契约。
-    unsafe { push_global_int_fn(l, name, *f, *upvalue, *cont) };
+    push_global_int_fn(l, name, *f, *upvalue, *cont);
   }
 }

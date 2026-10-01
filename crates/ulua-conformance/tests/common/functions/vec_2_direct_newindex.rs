@@ -3,7 +3,8 @@ use core::ffi::{c_int, c_void};
 use ulua_vm::{macros::lua_l_error::luaL_error, records::lua_state::LuaState};
 
 use crate::common::{
-  enums::direct_slot::DirectSlot, functions::update_direct_slot::update_direct_slot,
+  enums::direct_slot::DirectSlot,
+  functions::{safe_api::state_mut, update_direct_slot::update_direct_slot},
   records::vec_2_conformance_ir_hooks::Vec2,
 };
 /// # Safety
@@ -33,15 +34,19 @@ pub unsafe extern "C-unwind" fn vec_2_direct_newindex(
   match DirectSlot::from_u16(slot) {
     Some(DirectSlot::X) => {
       // Safety: `l` 存活；参数 3 为数字时返回值（否则抛 Lua 错误），`self_ptr` 存活可写 x。
-      unsafe { (*self_ptr).x = (*l).check_number(3) as f32 }
+      let value = state_mut(l).check_number(3) as f32;
+      // Safety: `self_ptr` 是 VM 交回的存活 Vec2 数据指针，x 可写。
+      unsafe { (*self_ptr).x = value }
     }
     Some(DirectSlot::Y) => {
       // Safety: 同上——读参数 3 的数值，写 `self_ptr` 的 y 分量。
-      unsafe { (*self_ptr).y = (*l).check_number(3) as f32 }
+      let value = state_mut(l).check_number(3) as f32;
+      // Safety: 同上——y 可写。
+      unsafe { (*self_ptr).y = value }
     }
     _ => {
       // Safety: `l` 存活；参数 2 为串时返回 UTF-8 切片（否则抛 Lua 错误）。
-      let name = unsafe { (*l).check_str(2) };
+      let name = state_mut(l).check_str(2);
       // Safety: 按 cpp 抛「不可写成员」Lua 错误，该调用不返回。
       unsafe { luaL_error!(l, "{name} is not a writable member of vec2") }
     }

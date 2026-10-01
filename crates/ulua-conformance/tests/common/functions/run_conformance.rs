@@ -1,5 +1,5 @@
 use alloc::string::String;
-use core::ffi::c_int;
+use core::{ffi::c_int, ptr::null_mut};
 use std::{
   env::{var, var_os},
   fs::read,
@@ -388,7 +388,7 @@ pub fn run_conformance(
     // 契约提供，`l` 至本处仍存活（StateRef 接管）。
     let resume_error = unsafe { yield_cb(l) };
     status = if resume_error {
-      safe_api::resumeerror(l)
+      safe_api::resumeerror(l, null_mut())
     } else {
       safe_api::resume(l, None, 0)
     };

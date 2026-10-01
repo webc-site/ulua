@@ -1,21 +1,19 @@
-use ulua_vm::{functions::lua_pushcclosurek::lua_pushcclosurek, records::lua_state::LuaState};
+use ulua_vm::records::lua_state::LuaState;
 
 use crate::common::functions::{
-  conformance_gc_set_block_allocations::conformance_gc_set_block_allocations, cstr::cstr,
+  conformance_gc_set_block_allocations::conformance_gc_set_block_allocations,
+  safe_api::{pushcclosurek, state_mut},
 };
 /// # Safety
 ///
 /// Pointer arguments must be valid, aligned, and properly initialized.
 pub unsafe extern "C-unwind" fn conformance_gc_setup(l: *mut LuaState) {
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  unsafe {
-    lua_pushcclosurek(
-      l,
-      Some(conformance_gc_set_block_allocations),
-      cstr(b"setblockallocations\0"),
-      0,
-      None,
-    );
-    (*l).set_global_str("setblockallocations");
-  }
+  pushcclosurek(
+    l,
+    Some(conformance_gc_set_block_allocations),
+    Some(b"setblockallocations\0"),
+    0,
+    None,
+  );
+  state_mut(l).set_global_str("setblockallocations");
 }

@@ -1,18 +1,17 @@
 use core::mem::size_of;
 
-use ulua_vm::{
-  functions::lua_newuserdatatagged::lua_newuserdatatagged, records::lua_state::LuaState,
+use ulua_vm::records::lua_state::LuaState;
+
+use crate::common::{
+  functions::{k_int_64_tag::K_INT_64_TAG, safe_api::{newuserdatatagged, state_mut}},
 };
-
-use crate::common::functions::k_int_64_tag::K_INT_64_TAG;
 pub(crate) fn push_int_64(l: *mut LuaState, value: i64) {
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  unsafe {
-    let p = lua_newuserdatatagged(l, size_of::<i64>(), K_INT_64_TAG);
+  let p = newuserdatatagged(l, size_of::<i64>(), K_INT_64_TAG);
 
-    (*l).get_metatable_by_str("int64");
-    (*l).set_metatable(-2);
+  state_mut(l).get_metatable_by_str("int64");
+  state_mut(l).set_metatable(-2);
 
-    *(p as *mut i64) = value;
-  }
+  // `p` 为刚分配的 K_INT_64_TAG userdata 数据区，容量即 size_of::<i64>()。
+  // Safety: 尺寸/对齐由上一行 size_of 实参配对保证，仅本行写一次。
+  unsafe { *(p as *mut i64) = value };
 }

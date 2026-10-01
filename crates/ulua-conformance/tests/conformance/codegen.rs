@@ -15,27 +15,21 @@ use ulua_code_gen::{
 /// `new_state → luau_codegen_create → compile_and_load → compile_internal` 四步样板；
 /// 每次调用独立开/关状态机，与原闭包逐字等价。
 ///
-/// # Safety
-/// 用例独占状态机、无并发共享；`l` 借自本函数内创建的 `StateRef`，编译对象是本函数
-/// 刚载入栈顶的字节码。
-unsafe fn native_code_size(source: &str, options: &CompilationOptions) -> usize {
-  use ulua_code_gen::{
-    functions::{compile_internal::compile_internal, luau_codegen_create::luau_codegen_create},
-    records::compilation_stats::CompilationStats,
-  };
+fn native_code_size(source: &str, options: &CompilationOptions) -> usize {
+  use ulua_code_gen::records::compilation_stats::CompilationStats;
 
-  use crate::common::functions::{compile_and_load::compile_and_load, new_state::new_state};
+  use crate::common::functions::{
+    compile_and_load::compile_and_load, new_state::new_state, safe_api::{codegen_compile, codegen_create},
+  };
 
   let global_state = new_state();
   let l = global_state.as_ptr();
   let mut stats = CompilationStats::default();
 
-  // Safety: `l` 于使用点存活（文件级 l 契约），被调 C API 前置条件满足
-  unsafe {
-    luau_codegen_create(l);
-    compile_and_load(l, source, "=test", None);
-    let _ = compile_internal(&None, l, -1, options, Some(&mut stats));
-  }
+  // `l` 于使用点存活（文件级 l 契约），四步全经 safe_api 门面。
+  codegen_create(l);
+  compile_and_load(l, source, "=test", None);
+  let _ = codegen_compile(&None, l, -1, options, Some(&mut stats));
   stats.native_code_size_bytes
 }
 
@@ -54,8 +48,7 @@ fn conformance_codegen_nop_padding_deterministic_off() {
         return add(1, 2)
     "#;
 
-  // Safety: native_code_size 的 `# Safety` 契约由其内部满足（自建 StateRef、编译对象为其刚载入的栈顶字节码）；本处仅传入帧内有效的 source/options
-  let compile = || unsafe { native_code_size(source, &CompilationOptions::default()) };
+  let compile = || native_code_size(source, &CompilationOptions::default());
 
   assert_eq!(compile(), compile());
 }
@@ -83,8 +76,7 @@ fn conformance_codegen_randomize_code_size_non_decreasing() {
         return classify(1)
     "#;
 
-  // Safety: native_code_size 的 `# Safety` 契约由其内部满足（自建 StateRef、编译对象为其刚载入的栈顶字节码）；本处仅传入帧内有效的 source/options
-  let compile = |nop_padding: bool| unsafe {
+  let compile = |nop_padding: bool| {
     native_code_size(
       source,
       &CompilationOptions {
@@ -99,14 +91,12 @@ fn conformance_codegen_randomize_code_size_non_decreasing() {
 
 #[test]
 fn conformance_codegen_randomize_functional_correctness() {
-  use ulua_code_gen::{
-    functions::{compile_internal::compile_internal, luau_codegen_create::luau_codegen_create},
-    records::compilation_options::CompilationOptions,
-  };
+  use ulua_code_gen::records::compilation_options::CompilationOptions;
 
   use crate::common::functions::{
     compile_and_load::compile_and_load, cstr_text::lua_tostring_text, new_state::new_state,
     openlibs_and_sandbox::openlibs_and_sandbox, run_conformance::codegen_skipped,
+    safe_api::{codegen_compile, codegen_create, pcall, state_mut},
   };
 
   if codegen_skipped() {
@@ -121,35 +111,29 @@ fn conformance_codegen_randomize_functional_correctness() {
   let global_state = new_state();
   let l = global_state.as_ptr();
 
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 为 `global_state` 借出的活跃状态机。
-  unsafe {
-    luau_codegen_create(l);
-    openlibs_and_sandbox(l);
-
-    compile_and_load(l, source, "=test", None);
-  }
+  // `l` 为 `global_state` 借出的活跃状态机。
+  codegen_create(l);
+  openlibs_and_sandbox(l);
+  compile_and_load(l, source, "=test", None);
 
   let nop_options = CompilationOptions {
     nop_padding: true,
     ..Default::default()
   };
 
-  // Safety: 同上；编译对象为栈顶字节码，stats 传 null 与 cpp 缺省一致。
-  unsafe {
-    // FFI: c-API 要求 NULL
-    let _ = compile_internal(&None, l, -1, &nop_options, None);
+  // 编译对象为栈顶字节码，stats 传 null 与 cpp 缺省一致。
+  // FFI: c-API 要求 NULL（统计出参）
+  let _ = codegen_compile(&None, l, -1, &nop_options, None);
+
+  // pcall 失败分支只读本帧栈顶错误串。
+  let call_result = pcall(l, 0, 1, 0);
+  if call_result != 0 {
+    // Safety: `lua_tostring_text` 为 VM 栈缓冲读取的既有 unsafe 门面（cstr_text 模块契约）。
+    let message = unsafe { lua_tostring_text(l, -1) };
+    panic!("lua_pcall failed: {message}");
   }
 
-  // Safety: 同上；pcall 失败分支只读本帧栈顶错误串。
-  unsafe {
-    let call_result = (*l).pcall(0, 1, 0);
-    if call_result != 0 {
-      let message = lua_tostring_text(l, -1);
-      panic!("lua_pcall failed: {message}");
-    }
-
-    assert_eq!(42.0, (*l).to_number(-1).unwrap_or(0.0));
-  }
+  assert_eq!(42.0, state_mut(l).to_number(-1).unwrap_or(0.0));
 }
 
 #[test]
@@ -171,7 +155,6 @@ fn conformance_ir_instruction_limit() {
 
   use ulua_code_gen::{
     enums::code_gen_compilation_result::CodeGenCompilationResult,
-    functions::{compile_internal::compile_internal, luau_codegen_create::luau_codegen_create},
     records::compilation_stats::CompilationStats,
   };
   use ulua_common::fint;
@@ -180,7 +163,7 @@ fn conformance_ir_instruction_limit() {
     functions::{
       compile_and_load::compile_and_load, default_codegen_options::default_codegen_options,
       new_state::new_state, openlibs_and_sandbox::openlibs_and_sandbox,
-      run_conformance::codegen_skipped,
+      run_conformance::codegen_skipped, safe_api::{codegen_compile, codegen_create},
     },
     type_aliases::scoped_fast_int::ScopedFastInt,
   };
@@ -210,20 +193,15 @@ fn conformance_ir_instruction_limit() {
   let global_state = new_state();
   let l = global_state.as_ptr();
 
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 为 `global_state` 借出的活跃状态机。
-  unsafe {
-    luau_codegen_create(l);
+  // `l` 为 `global_state` 借出的活跃状态机。
+  codegen_create(l);
+  openlibs_and_sandbox(l);
+  compile_and_load(l, &source, "=HugeFunction", None);
 
-    openlibs_and_sandbox(l);
-
-    compile_and_load(l, &source, "=HugeFunction", None);
-  }
-
-  // Safety: 同上；编译对象为栈顶大函数模块。
+  // 编译对象为栈顶大函数模块。
   let native_options = default_codegen_options();
   let mut native_stats = CompilationStats::default();
-  let native_result =
-    unsafe { compile_internal(&None, l, -1, &native_options, Some(&mut native_stats)) };
+  let native_result = codegen_compile(&None, l, -1, &native_options, Some(&mut native_stats));
 
   // 断言只读取返回值与本地 stats 结构，无指针操作。
   assert_eq!(CodeGenCompilationResult::Success, native_result.result);
@@ -244,18 +222,16 @@ fn conformance_ir_instruction_limit() {
 
 #[test]
 fn conformance_jit_inliner() {
-  use core::{ffi::c_int, ptr::null_mut, sync::atomic::Ordering};
+  use core::{ffi::c_int, sync::atomic::Ordering};
 
   use ulua_common::fflag;
-  use ulua_vm::{
-    enums::lua_status::LuaStatus,
-    functions::{lua_callbacks::lua_callbacks, lua_newthread::lua_newthread},
-  };
+  use ulua_vm::enums::lua_status::LuaStatus;
 
   use crate::common::{
     functions::{
       conformance_jit_inliner_interrupt::{JIT_INLINER_INDEX, conformance_jit_inliner_interrupt},
       run_conformance::run_conformance,
+      safe_api::{callbacks_mut, newthread, pop, resume, state_mut},
     },
     records::state_ref::StateRef,
     type_aliases::scoped_fast_flag::ScopedFastFlag,
@@ -271,10 +247,8 @@ fn conformance_jit_inliner() {
     run_conformance("jit_inliner.luau", None, None, None, None, true, None);
   let l = global_state.as_ptr();
 
-  // Safety: `l` 存活；lua_callbacks 返回的回调表槽位为 VM 公开契约，测试帧内独占替换
-  unsafe {
-    (*lua_callbacks(l)).interrupt = Some(conformance_jit_inliner_interrupt);
-  }
+  // callbacks 表槽位为 VM 公开契约，测试帧内独占替换。
+  callbacks_mut(l).interrupt = Some(conformance_jit_inliner_interrupt);
 
   // 对应 C++ 的 "fuzzfail_infinite" + std::to_string(test)；cpp
   // `Conformance.test.cpp:1476` 为 test <= 3。第三段 fuzzfail_infinite3
@@ -282,18 +256,17 @@ fn conformance_jit_inliner() {
   // 删除，实测当前 VM 可跑（中断计时器如预期以 timeout 终止），已恢复对齐。
   let global_name = |test: u32| format!("fuzzfail_infinite{test}");
   for test in 1..=3 {
-    let t = unsafe { lua_newthread(l) };
+    let t = newthread(l);
 
     let name = global_name(test);
-    // Safety: `t` 为存活线程；name.as_bytes() 字节切片传入 get_global_bytes。
-    unsafe { (*t).get_global_bytes(name.as_bytes()) };
+    // `t` 为存活线程；name.as_bytes() 字节切片传入 get_global_bytes。
+    state_mut(t).get_global_bytes(name.as_bytes());
 
     JIT_INLINER_INDEX.store(0, Ordering::SeqCst);
-    // FFI: c-API 要求 NULL
-    let status = unsafe { (*t).resume(null_mut(), 0) };
+    let status = resume(t, None, 0);
     assert_eq!(status, LuaStatus::ErrRun as c_int);
 
-    let top = unsafe { (*t).to_str(-1) };
+    let top = state_mut(t).to_str(-1);
     assert!(top.is_some());
     let text = top.unwrap();
     assert!(
@@ -301,8 +274,8 @@ fn conformance_jit_inliner() {
       "expected timeout error, got {text}"
     );
 
-    // Safety: `l` 存活（文件级 l 契约）：弹掉本帧压入的一个槽
-    unsafe { (*l).pop(1) };
+    // `l` 存活（文件级 l 契约）：弹掉本帧压入的一个槽
+    pop(l, 1);
   }
 }
 
@@ -376,14 +349,13 @@ fn conformance_native_checked_o2() {
 fn conformance_native_attribute() {
   use ulua_code_gen::{
     enums::code_gen_compilation_result::CodeGenCompilationResult,
-    functions::{compile_internal::compile_internal, luau_codegen_create::luau_codegen_create},
     records::compilation_stats::CompilationStats,
   };
 
   use crate::common::functions::{
     compile_and_load::compile_and_load, default_codegen_options::default_codegen_options,
     new_state::new_state, openlibs_and_sandbox::openlibs_and_sandbox,
-    run_conformance::codegen_skipped,
+    run_conformance::codegen_skipped, safe_api::{codegen_compile, codegen_create},
   };
 
   if codegen_skipped() {
@@ -410,20 +382,15 @@ fn conformance_native_attribute() {
   let global_state = new_state();
   let l = global_state.as_ptr();
 
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 为 `global_state` 借出的活跃状态机。
-  unsafe {
-    luau_codegen_create(l);
+  // `l` 为 `global_state` 借出的活跃状态机。
+  codegen_create(l);
+  openlibs_and_sandbox(l);
+  compile_and_load(l, source, "=Code", None);
 
-    openlibs_and_sandbox(l);
-
-    compile_and_load(l, source, "=Code", None);
-  }
-
-  // Safety: 同上；编译对象为栈顶 @native 标注模块。
+  // 编译对象为栈顶 @native 标注模块。
   let native_options = default_codegen_options();
   let mut native_stats = CompilationStats::default();
-  let native_result =
-    unsafe { compile_internal(&None, l, -1, &native_options, Some(&mut native_stats)) };
+  let native_result = codegen_compile(&None, l, -1, &native_options, Some(&mut native_stats));
 
   // 断言只读取返回值与本地 stats 结构，无指针操作。
   assert_eq!(CodeGenCompilationResult::Success, native_result.result);
@@ -573,10 +540,7 @@ fn conformance_large_module_a64() {
       code_gen_compilation_result::CodeGenCompilationResult,
       function_stats_flags::FunctionStatsFlags, target::Target,
     },
-    functions::{
-      compile_internal::compile_internal, get_assembly::get_assembly,
-      luau_codegen_create::luau_codegen_create, luau_codegen_supported::luau_codegen_supported,
-    },
+    functions::luau_codegen_supported::luau_codegen_supported,
     records::{
       assembly_options::AssemblyOptions, compilation_stats::CompilationStats,
       lowering_stats::LoweringStats,
@@ -584,13 +548,13 @@ fn conformance_large_module_a64() {
   };
   use ulua_common::fflag;
   use ulua_compiler::records::compile_options::CompileOptions;
-  use ulua_vm::functions::lua_l_openlibs::lua_l_openlibs;
 
   use crate::common::{
     functions::{
       compile_and_load::compile_and_load, default_codegen_options::default_codegen_options,
       default_compile_options::default_compile_options, new_state::new_state,
       run_conformance::codegen,
+      safe_api::{assembly, codegen_compile, codegen_create, openlibs, resume, state_mut},
     },
     type_aliases::scoped_fast_flag::ScopedFastFlag,
   };
@@ -625,15 +589,11 @@ fn conformance_large_module_a64() {
   let global_state = new_state();
   let l = global_state.as_ptr();
 
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 为 `global_state` 借出的活跃状态机，
-  // 支持位探测/代码段创建只作用于该状态。
-  unsafe {
-    if luau_codegen_supported() != 0 {
-      luau_codegen_create(l);
-    }
-
-    lua_l_openlibs(l);
+  // `l` 为 `global_state` 借出的活跃状态机，支持位探测/代码段创建只作用于该状态。
+  if luau_codegen_supported() != 0 {
+    codegen_create(l);
   }
+  openlibs(l);
 
   // cpp `Conformance.test.cpp:4956-4957`：`opts = defaultOptions();` 后固定 O2。
   let mut opts = CompileOptions {
@@ -669,24 +629,22 @@ fn conformance_large_module_a64() {
     annotator_context: null_mut(),
   };
 
-  // Safety: 同上；反汇编只读栈顶闭包，`stats` 为其写出的本地结构。
-  unsafe {
-    if luau_codegen_supported() != 0 {
-      let a64 = get_assembly(l, -1, assembly_options, Some(&mut stats));
-      assert!(!a64.is_empty());
-      assert_eq!(0, stats.reg_alloc_errors);
-      assert_eq!(0, stats.lowering_errors);
-    }
+  // 反汇编只读栈顶闭包，`stats` 为其写出的本地结构。
+  if luau_codegen_supported() != 0 {
+    let a64 = assembly(l, -1, assembly_options, Some(&mut stats));
+    assert!(!a64.is_empty());
+    assert_eq!(0, stats.reg_alloc_errors);
+    assert_eq!(0, stats.lowering_errors);
   }
 
-  // Safety: 同上；分支内原生编译只读栈顶闭包，native_options/native_stats 为本帧
-  // 局部、在 compile_internal 调用期内存活，返回的 CompilationResult 为 owned 数据。
+  // 分支内原生编译只读栈顶闭包，native_options/native_stats 为本帧
+  // 局部、在 codegen_compile 调用期内存活，返回的 CompilationResult 为 owned 数据。
   if codegen() && luau_codegen_supported() != 0 {
-    let native_result = unsafe {
+    let native_result = {
       let mut native_options = default_codegen_options();
       native_options.flags = CodeGenFlags::CodeGenColdFunctions as u32;
       let mut native_stats = CompilationStats::default();
-      compile_internal(&None, l, -1, &native_options, Some(&mut native_stats))
+      codegen_compile(&None, l, -1, &native_options, Some(&mut native_stats))
     };
 
     assert_eq!(CodeGenCompilationResult::Success, native_result.result);
@@ -707,11 +665,8 @@ fn conformance_large_module_a64() {
     }
   }
 
-  // Safety: 同上；resume 跑的是本用例载入并压栈的 main 线程。
-  unsafe {
-    // FFI: c-API 要求 NULL
-    let status = (*l).resume(null_mut(), 0);
-    assert_eq!(0, status);
-    assert_eq!(EXPECTED_RESULT, (*l).to_number(-1).unwrap_or(0.0));
-  }
+  // resume 跑的是本用例载入并压栈的 main 线程。
+  let status = resume(l, None, 0);
+  assert_eq!(0, status);
+  assert_eq!(EXPECTED_RESULT, state_mut(l).to_number(-1).unwrap_or(0.0));
 }
