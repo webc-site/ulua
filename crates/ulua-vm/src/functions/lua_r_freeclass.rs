@@ -2,11 +2,8 @@ use core::mem::size_of;
 
 use crate::{
   functions::lua_m_freegco::lua_m_freegco,
-  macros::lua_m_freearray::luaM_freearray,
-  records::{
-    gc_object::GCObject, lua_page::lua_Page, lua_state::LuaState, luau_class::LuauClass,
-    t_string::tstring,
-  },
+  macros::{lua_m_freearray::luaM_freearray, obj_2_gco::obj2gco},
+  records::{lua_page::lua_Page, lua_state::LuaState, luau_class::LuauClass, t_string::tstring},
   type_aliases::t_value::TValue,
 };
 
@@ -34,9 +31,10 @@ pub(crate) unsafe fn lua_r_freeclass(
       *mut tstring,
       memcat
     );
+    // GC 释放链收口形（镜像 r11-vmud/fef1e75）：裸 `as *mut GCObject` 改 obj2gco!
     lua_m_freegco(
       l,
-      classobject as *mut GCObject,
+      obj2gco!(classobject),
       size_of::<LuauClass>(),
       memcat,
       page,

@@ -3,7 +3,7 @@ use ulua_common::LUAU_ASSERT;
 use crate::{
   enums::{tms::TMS, value_view::ValueView},
   functions::{
-    lua_h_getstr::lua_h_getstr, lua_h_new::lua_h_new, lua_h_setstr::lua_h_setstr,
+    c_slice_mut, lua_h_getstr::lua_h_getstr, lua_h_new::lua_h_new, lua_h_setstr::lua_h_setstr,
     lua_s_newlstr::lua_s_newlstr,
   },
   macros::{
@@ -54,9 +54,14 @@ pub(crate) unsafe fn lua_r_addclassmember(
     );
     setobj2class!(
       l,
-      (*classobject)
-        .staticmembers
-        .add((offsetint - (*classobject).numberofinstancemembers) as usize),
+      // 静态成员窗界 = numberofallmembers - numberofinstancemembers（契约断言
+      // offsetint ∈ [inst, all)）；裸 `.add` 改切片定位，越界由 UB 降 panic
+      // （镜像 r11-vmud/fef1e75 形）
+      c_slice_mut(
+        (*classobject).staticmembers,
+        ((*classobject).numberofallmembers - (*classobject).numberofinstancemembers) as usize,
+      )[(offsetint - (*classobject).numberofinstancemembers) as usize..]
+        .as_mut_ptr(),
       value
     );
     lua_c_barrier!(l, classobject, value);

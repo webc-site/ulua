@@ -30,9 +30,13 @@ unsafe fn lua_r_registerstaticmember(
 ) {
   // SAFETY: 契约保证 child/parent 为存活开放类、静态成员偏移落在已分配数组界内，写引用处补写屏障
   unsafe {
-    let dest = (*class_object)
-      .staticmembers
-      .add(static_member_offset as usize);
+    // 静态成员窗界 = numberofallmembers - numberofinstancemembers（类不变量即分配
+    // 真值）；切片定位替代裸 `.add`，越界由 UB 降 panic（镜像 r11-vmud/fef1e75 形）
+    let nstatic_members =
+      ((*class_object).numberofallmembers - (*class_object).numberofinstancemembers) as usize;
+    let dest = c_slice_mut((*class_object).staticmembers, nstatic_members)
+      [static_member_offset as usize..]
+      .as_mut_ptr();
     setobj2class!(l, dest, val);
     lua_c_barrier!(l, class_object, dest);
 
@@ -42,10 +46,12 @@ unsafe fn lua_r_registerstaticmember(
     setnvalue!(offset_val, offset_in_child_int as f64);
     lua_c_barrier!(l, (*class_object).memberstooffset, offset_val);
 
-    // And add it to offsettomember
-    *(*class_object)
-      .offsettomember
-      .add(offset_in_child_int as usize) = member_name;
+    // And add it to offsettomember（窗界=numberofallmembers；静态偏移 < 窗界 ⇒
+    // inst+偏移 < all，契约保证界内）
+    c_slice_mut(
+      (*class_object).offsettomember,
+      (*class_object).numberofallmembers as usize,
+    )[offset_in_child_int as usize] = member_name;
   }
 }
 
@@ -138,11 +144,13 @@ pub(crate) unsafe fn lua_r_inheritclass(
 
     // Count how many static members we'll actually need to copy from parent,
     // ie non-overridden ones（自 parent 实例段起只看静态成员；lua_h_getstr 为纯读
-    // 无副作用，计数改 filter+count 链，遍历序与抛错点与原循环逐位一致）
-    let static_names = c_slice(
-      (*parent).offsettomember.add(parent_inst as usize),
-      ((*parent).numberofallmembers - parent_inst).max(0) as usize,
-    );
+    // 无副作用，计数改 filter+count 链，遍历序与抛错点与原循环逐位一致）。
+    // 父静态名窗改「全数组切片去实例段」：类不变量 inst≤all 下与原
+    // `offsettomember.add(inst)` 起点+`(all-inst).max(0)` 界长同窗，越界由 UB 降 panic
+    let static_names = &c_slice(
+      (*parent).offsettomember,
+      (*parent).numberofallmembers as usize,
+    )[parent_inst as usize..];
     let num_static_members_to_copy: u32 = static_names
       .iter()
       // B2-2a 任务B：同窗口即时判空——is_none_or 承接 miss(None)=原 nil 哨兵放行
@@ -216,6 +224,9 @@ pub(crate) unsafe fn lua_r_inheritclass(
     // 读侧全程为 parent 数组的共享切片，写侧只落 child 的数组/表——两对象分配互不
     // 重叠（cpp 同款前提），无别名冲突
     let mut num_static_members_copied: i32 = 0;
+    // 父静态值窗与 static_names 窗等长（all-inst），rel 即窗内下标——裸 `.add(rel)`
+    // 改切片定位，越界由 UB 降 panic
+    let parent_static_window = c_slice((*parent).staticmembers, static_names.len());
     for (rel, &member_name) in static_names.iter().enumerate() {
       // This lookup duplicates the one we did earlier, when we counted how
       // many static members we needed to copy.（cpp 同款重复查表并注明）
@@ -226,7 +237,7 @@ pub(crate) unsafe fn lua_r_inheritclass(
         let static_member_offset_in_child =
           child_declared_static_members + num_static_members_copied;
 
-        let parent_val = (*parent).staticmembers.add(rel);
+        let parent_val = parent_static_window[rel..].as_ptr();
 
         lua_r_registerstaticmember(
           l,
