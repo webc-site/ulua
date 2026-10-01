@@ -1,16 +1,15 @@
 //! buffer 库的共享访问窗口：cpp `lbuflib.cpp` 里 `luaL_checkbuffer` → 偏移 →
 //! `checkRead`/`checkWrite` → 按字节 memcpy 的同形骨架。
 //!
-//! r11 R-C T1 窄腰：全部真实逻辑落在切片核心（[`buffer_data_ref`] / [`buffer_at_ref`] /
-//! [`buffer_read_window_ref`] 与签名安全的 [`load_scalar_ref`] / [`store_scalar_ref`]），
-//! 旧裸指针形降为委托垫片——把借用折回 `(*mut u8, usize)` / `*mut u8` 裸形仅供簇 B/C
-//! 既有调用点零改动过渡，T9 收口时随消费方迁移删除。窗口派生的唯一 unsafe 点在
+//! r11 R-C T1 窄腰 + r12 T9 读写侧提前收口：全部真实逻辑落在切片核心
+//! （[`buffer_data_ref`] / [`buffer_at_ref`] / [`buffer_read_window_ref`] 与签名安全的
+//! [`load_scalar_ref`] / [`store_scalar_ref`]）——T2–T5/T8 消费方迁移完毕后，旧裸指针
+//! 委托垫片已全部清零。窗口派生的唯一 unsafe 点在
 //! `lua_tobuffer_bytes_ref`（lua_tobuffer.rs），本模块不再出现任何数据窗裸构造。
 
 use core::{
   mem::size_of,
   ptr::{read_unaligned, write_unaligned},
-  slice::{from_raw_parts, from_raw_parts_mut},
 };
 
 use ulua_common::macros::luau_big_endian::LUAU_BIG_ENDIAN;
@@ -39,19 +38,6 @@ pub(crate) unsafe fn buffer_data_ref<'a>(l: *mut LuaState, narg: i32) -> &'a mut
   unsafe { lua_l_checkbuffer_ref(&mut *l, narg) }
 }
 
-/// 栈窗口取 buffer 实参（旧裸指针形垫片）：折回 [`buffer_data_ref`] 切片为
-/// `(*mut u8, usize)` 元组，仅供簇 B/C 既有调用点过渡；T9 收口时随消费方迁移删除。
-///
-/// # Safety
-/// `l` 须为正在执行的 buffer 库 C 函数帧的存活 `LuaState`，`narg` 为其合法栈索引。
-#[inline]
-pub(crate) unsafe fn buffer_data(l: *mut LuaState, narg: i32) -> (*mut u8, usize) {
-  unsafe {
-    let bytes = buffer_data_ref(l, narg);
-    (bytes.as_mut_ptr(), bytes.len())
-  }
-}
-
 /// 界校验并定位（切片核心）：`[offset, offset + size)` 完整落在数据界内时返回子切片，
 /// 否则抛 "buffer access out of bounds"（cpp `checkRead`/`checkWrite` 的单点收口）。
 ///
@@ -77,25 +63,6 @@ pub(crate) unsafe fn buffer_at_ref<'a>(
   &mut buf[offset as u32 as usize..][..size]
 }
 
-/// 界校验并定位（旧裸指针形垫片）：以 `buf`/`len` 折出瞬时切片喂给 [`buffer_at_ref`]，
-/// 再把结果借用折回裸指针；T9 收口时随消费方迁移删除。
-///
-/// # Safety
-/// `buf`/`len` 须取自 [`buffer_data`]（同一 userdata 自洽的数据界，故折出的切片视图
-/// 自洽）；抛错路径要求 `l` 处于可捕获错误的受保护帧。
-#[inline]
-pub(crate) unsafe fn buffer_at(
-  l: *mut LuaState,
-  buf: *mut u8,
-  len: usize,
-  offset: i32,
-  size: usize,
-) -> *mut u8 {
-  // SAFETY: 契约保证 `buf`/`len` 是同一存活 buffer 自洽数据界（非空、可读写字节数足额），
-  // 折出的切片与裸窗逐位同界；越界路径在 buffer_at_ref 内抛错不返回
-  unsafe { buffer_at_ref(l, from_raw_parts_mut(buf, len), offset, size).as_mut_ptr() }
-}
-
 /// 栈窗口一步到位（切片核心）：[`buffer_data_ref`]`(l, 1)` +
 /// [`buffer_at_ref`]`(.., l.check_integer(2), size)`。
 ///
@@ -113,18 +80,6 @@ pub(crate) unsafe fn buffer_read_window_ref<'a>(l: *mut LuaState, size: usize) -
 
     buffer_at_ref(l, buf, offset, size)
   }
-}
-
-/// 栈窗口一步到位（旧裸指针形垫片）：折回 [`buffer_read_window_ref`] 的借用地址；
-/// T9 收口时随簇 C 读取方迁移删除。
-///
-/// # Safety
-/// 同 [`buffer_read_window_ref`]：`l` 为存活 C 函数帧，索引 1 为 buffer、索引 2 为偏移。
-#[inline]
-pub(crate) unsafe fn buffer_read_window(l: *mut LuaState, size: usize) -> *mut u8 {
-  // SAFETY: 借用折回裸形由 ref 核心契约（栈槽钉住存活期）支撑，观察序
-  // （typeerror→checkinteger→oob）由 ref 核心原样承载
-  unsafe { buffer_read_window_ref(l, size).as_mut_ptr() }
 }
 
 /// 定宽标量的按字节装载（切片核心，签名安全）：cpp `memcpy(&val, p, sizeof(T))` +
@@ -167,28 +122,6 @@ pub(crate) fn store_scalar_ref<T: SwapBe>(dst: &mut [u8], mut val: T) {
 
   // SAFETY: 上方断言保证 `dst` 起 size_of::<T>() 字节可写；T 为 POD（SwapBe: Copy）
   unsafe { write_unaligned(dst.as_mut_ptr().cast::<T>(), val) };
-}
-
-/// 定宽标量的按字节装载（旧裸指针形垫片）：以 `src` 起 `size_of::<T>()` 字节折出
-/// 切片视图喂给 [`load_scalar_ref`]；T9 收口时随簇 C 消费方迁移删除。
-///
-/// # Safety
-/// `src` 须指向 `size_of::<T>()` 个可读字节（由 [`buffer_at`] 的界校验保证）。
-#[inline]
-pub(crate) unsafe fn load_scalar<T: SwapBe>(src: *const u8) -> T {
-  // SAFETY: 契约保证 src 起 size_of::<T>() 字节可读，折出的切片视图自洽
-  unsafe { load_scalar_ref(from_raw_parts(src, size_of::<T>())) }
-}
-
-/// 定宽标量的按字节回写（[`load_scalar`] 的对偶，旧裸指针形垫片）：折出可写切片
-/// 视图喂给 [`store_scalar_ref`]；T9 收口时随簇 C 消费方迁移删除。
-///
-/// # Safety
-/// `dst` 须指向 `size_of::<T>()` 个可写字节（由 [`buffer_at`] 的界校验保证）。
-#[inline]
-pub(crate) unsafe fn store_scalar<T: SwapBe>(dst: *mut u8, val: T) {
-  // SAFETY: 契约保证 dst 起 size_of::<T>() 字节可写，折出的切片视图自洽
-  unsafe { store_scalar_ref(from_raw_parts_mut(dst, size_of::<T>()), val) }
 }
 
 /// cpp `static_assert(sizeof(T) == sizeof(StorageType))`：const 块在单态化期求值，
