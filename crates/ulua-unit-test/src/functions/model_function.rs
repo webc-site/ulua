@@ -3,9 +3,10 @@ use alloc::vec::Vec;
 use ulua_ast::{
   records::{
     allocator::Allocator, ast_local::AstLocal, ast_name_table::AstNameTable,
-    ast_stat_function::AstStatFunction, parse_options::ParseOptions, parser::Parser,
+    ast_stat_function::AstStatFunction, node_handle::OptNode, parse_options::ParseOptions,
+    parser::Parser,
   },
-  rtti::AstNodePtr,
+  rtti::AstNodeViewMut,
 };
 use ulua_compiler::functions::model_cost_cost_model::model_cost_ast_node_ast_local_usize;
 
@@ -21,21 +22,19 @@ pub fn model_function(source: &str) -> u64 {
   );
   assert!(!result.root.is_null());
 
-  // `body[0]` 已是 Node 句柄（`(&*root)` 物化仍是上方 is_null 断言过的
-  // fixture arena 存活根）：下转走句柄上生命周期正确的 `try_as`，借用半径由
-  // 该局部句柄供给，不再锻造假 'static（原 `ast_node_as + is_null 断言 + &*`
-  // 三步样板的收口点）。
-  let first = unsafe { (&*result.root).body[0] };
+  // `body[0]` 已是 Node 句柄（root 经 OptNode 判空物化为 fixture arena 存活根），
+  // Node 为 Copy 值，下转走句柄上生命周期正确的 `try_as`，零 unsafe。
+  let root = OptNode::from_ptr(result.root);
+  let first = root.get().expect("上方已断言根块非空").body[0];
   let func = first
     .try_as::<AstStatFunction>()
     .expect("首条语句应为函数声明");
-  let function = func.func;
+  let mut function = func.func;
 
   // `func.func` 已句柄化为 Node：Deref 即安全只读视图，vars 抽取不再需要 unsafe。
   let vars: Vec<*mut AstLocal> = function.args.iter_nodes().map(|n| n.as_ptr()).collect();
 
-  // Safety: function 由 parser 布线为非空 AstExprFunction 指针（AST 子指针不变式），
-  // body 为非空块句柄；基类上转收口在 `AstNodePtr::as_ast_node` 门面（repr(C)
-  // 基址重合），model_cost 按只读遍历 AST 计成本，不写不逃逸。
-  unsafe { model_cost_ast_node_ast_local_usize(&mut *function.body.as_ast_node(), &vars) }
+  // 独占视图经 `Node::get_mut` + `AstNodeViewMut::as_ast_node_mut` 安全上转
+  // （repr(C) 基址重合），model_cost 按只读遍历 AST 计成本，不写不逃逸。
+  model_cost_ast_node_ast_local_usize(function.body.get_mut().as_ast_node_mut(), &vars)
 }

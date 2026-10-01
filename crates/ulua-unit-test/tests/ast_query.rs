@@ -133,7 +133,7 @@ if true then
     find_ast_ancestry_of_position(source_module, Position { line: 2, column: 4 }, false);
 
   assert!(ancestry.len() >= 2);
-  let parent_stat = ancestry[ancestry.len() - 2];
+  let parent_stat = OptNode::from_ptr(ancestry[ancestry.len() - 2]);
   assert!(parent_stat.as_node::<AstStatIf>().is_some());
 }
 
@@ -647,7 +647,8 @@ pub(crate) mod ast_query_support {
       ast_expr_constant_bool::AstExprConstantBool, ast_expr_constant_number::AstExprConstantNumber,
       ast_expr_function::AstExprFunction, ast_expr_index_name::AstExprIndexName,
       ast_expr_local::AstExprLocal, ast_node::AstNode, ast_stat_if::AstStatIf,
-      ast_stat_local::AstStatLocal, location::Location, position::Position,
+      ast_stat_local::AstStatLocal, location::Location, node_handle::OptNode,
+      position::Position,
     },
     rtti::AstNodeClass,
   };
@@ -656,10 +657,12 @@ pub(crate) mod ast_query_support {
     records::{documentation_symbol_fixture::DocumentationSymbolFixture, fixture::Fixture},
   };
 
-  /// `ancestry.last().copied().unwrap().as_node::<T>().is_some()` 的收敛门面：
-  /// 末位节点判型成功与否；`unwrap` 语义逐字保留（空 ancestry 照样 panic）。
+  /// `ancestry.last()` 末位节点判型成功与否的收敛门面：判空收口在
+  /// `OptNode::from_ptr`，`unwrap` 语义逐字保留（空 ancestry 照样 panic）。
   pub(crate) fn last_is_ast<T: AstNodeClass>(a: &[*mut AstNode]) -> bool {
-    a.last().copied().unwrap().as_node::<T>().is_some()
+    OptNode::from_ptr(a.last().copied().unwrap())
+      .as_node::<T>()
+      .is_some()
   }
 }
 

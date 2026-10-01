@@ -24,10 +24,11 @@ use ulua_ast::{
   },
   visit::AstVisitable,
 };
+use ulua_ast::records::node_handle::OptNode;
 use ulua_common::fint;
 use ulua_unit_test::{
   functions::{
-    ast_node_ref::{CstNodePtr, NodePtr, PtrMutRef, PtrRef, as_node_at, deref_at, elem, node_key},
+    ast_node_ref::{CstNodePtr, NodePtr, as_node_at, deref_at, elem, node_key},
     check_first_error_for_attributes::check_first_error_for_attributes,
   },
   records::{count_ast_nodes::CountAstNodes, fixture::Fixture},
@@ -120,15 +121,16 @@ mod parser_recovery_of_parenthesized_expressions {
 
   /// cpp `sourceModule->root->visit(&counter)`：统计当前根块的节点数。
   fn count_ast_nodes(fix: &Fixture) -> u32 {
-    // `as_mut_ref_opt` 需要指针槽可变（独占借用的来源），故 `root` 声明为 `mut`。
-    let mut root = fix
-      .source_module
-      .as_deref()
-      .expect("sourceModule 必须存在")
-      .root;
+    // visit 需要独占借用：cpp `AstNode::visit(AstVisitor*)` 的 this 非 const，
+    // 独占性经 `&mut` 句柄局部给出（测试内单线程遍历）。
+    let mut root = OptNode::from_ptr(
+      fix.source_module
+        .as_deref()
+        .expect("sourceModule 必须存在")
+        .root,
+    );
     let mut counter = CountAstNodes::default();
-    // visit 需要独占借用：cpp `AstNode::visit(AstVisitor*)` 的 this 非 const。
-    root.as_mut_ref_opt().expect("根块非空").visit(&mut counter);
+    root.get_mut().expect("根块非空").visit(&mut counter);
     counter.count
   }
 
@@ -227,13 +229,13 @@ fn parser_return_type_is_an_intersection_type_if_led_with_one_parenthesized_type
 
   let local = as_node_at::<AstStatLocal, _>(&block.body, 0).expect("body[0] 应为 AstStatLocal");
   let var = deref_at(&local.vars, 0).expect("vars[0] 存在");
-  let annotation = var
-    .annotation
+  let annot = OptNode::from_ptr(var.annotation);
+  let annotation = annot
     .as_node::<AstTypeFunction>()
     .expect("annotation 应为 AstTypeFunction");
 
-  let return_pack = annotation
-    .return_types
+  let ret_ty = OptNode::from_ptr(annotation.return_types);
+  let return_pack = ret_ty
     .as_node::<AstTypePackExplicit>()
     .expect("returnTypes 应为 AstTypePackExplicit");
   let first = as_node_at::<AstTypeIntersection, _>(&return_pack.type_list.types, 0)
@@ -271,22 +273,23 @@ fn parser_short_array_types() {
 
   let local = as_node_at::<AstStatLocal, _>(&block.body, 0).expect("body[0] 应为 AstStatLocal");
   let var = deref_at(&local.vars, 0).expect("vars[0] 存在");
-  let annotation = var
-    .annotation
+  let annot = OptNode::from_ptr(var.annotation);
+  let annotation = annot
     .as_node::<AstTypeTable>()
     .expect("annotation 应为 AstTypeTable");
 
   assert_eq!(0, annotation.props.size);
-  let indexer = annotation.indexer.as_ref_opt().expect("indexer 必须存在");
+  let indexer_slot = OptNode::from_ptr(annotation.indexer);
+  let indexer = indexer_slot.get().expect("indexer 必须存在");
 
-  let index_type = indexer
-    .index_type
+  let index_ty = OptNode::from_ptr(indexer.index_type);
+  let index_type = index_ty
     .as_node::<AstTypeReference>()
     .expect("indexType 应为 AstTypeReference");
   assert_eq!(index_type.name, "number");
 
-  let result_type = indexer
-    .result_type
+  let result_ty = OptNode::from_ptr(indexer.result_type);
+  let result_type = result_ty
     .as_node::<AstTypeReference>()
     .expect("resultType 应为 AstTypeReference");
   assert_eq!(result_type.name, "string");
@@ -311,8 +314,8 @@ fn parser_short_array_types_do_not_break_field_names() {
 
   let local = as_node_at::<AstStatLocal, _>(&block.body, 0).expect("body[0] 应为 AstStatLocal");
   let var = deref_at(&local.vars, 0).expect("vars[0] 存在");
-  let annotation = var
-    .annotation
+  let annot = OptNode::from_ptr(var.annotation);
+  let annotation = annot
     .as_node::<AstTypeTable>()
     .expect("annotation 应为 AstTypeTable");
 
@@ -321,8 +324,8 @@ fn parser_short_array_types_do_not_break_field_names() {
 
   let prop = elem(&annotation.props, 0);
   assert_eq!(prop.name, "string");
-  let prop_type = prop
-    .r#type
+  let prop_ty = OptNode::from_ptr(prop.r#type);
+  let prop_type = prop_ty
     .as_node::<AstTypeReference>()
     .expect("prop.type 应为 AstTypeReference");
   assert_eq!(prop_type.name, "number");
@@ -741,8 +744,8 @@ fn parser_type_group_with_cst() {
 
   let type_alias =
     as_node_at::<AstStatTypeAlias, _>(&root.body, 0).expect("body[0] 应为 AstStatTypeAlias");
-  let group = type_alias
-    .type_ptr
+  let alias_ty = OptNode::from_ptr(type_alias.type_ptr);
+  let group = alias_ty
     .as_node::<AstTypeGroup>()
     .expect("type 应为 AstTypeGroup");
 
@@ -750,7 +753,10 @@ fn parser_type_group_with_cst() {
     .cst_node_map
     .find(&node_key(group))
     .expect("CST 节点必须登记");
-  let group_cst = cst_ptr.as_cst::<CstTypeGroup>().expect("应为 CstTypeGroup");
+  let group_cst_slot = OptNode::from_ptr(cst_ptr);
+  let group_cst = group_cst_slot
+    .as_cst::<CstTypeGroup>()
+    .expect("应为 CstTypeGroup");
   assert_eq!(Position::new(1, 24), group_cst.close_position);
 }
 

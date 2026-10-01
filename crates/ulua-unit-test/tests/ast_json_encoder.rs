@@ -101,11 +101,9 @@ fn ast_json_encoder_encode_ast_expr_error() {
     ParseOptions::default(),
   );
 
-  // root 经 PtrRef::as_ref_opt 安全物化只读借用（fixture arena 保活至用例末）。
-  let root = parse_result
-    .root
-    .as_ref_opt()
-    .expect("expected parse root block");
+  // root 经句柄安全物化只读借用（fixture arena 保活至用例末）。
+  let root_slot = OptNode::from_ptr(parse_result.root);
+  let root = root_slot.get().expect("expected parse root block");
   assert_eq!(1, root.body.len());
   // `as_slice()[i]` 读 arena 元素指针，替代 `data.add(i)` 裸指针算术。
   let stat = root.body.as_slice()[0];
@@ -311,7 +309,7 @@ fn ast_json_encoder_encode_ast_generic_type() {
     "#,
   );
 
-  let root_ref = root.as_ref_opt().expect("expected parse root block");
+  let root_ref = root.get();
   assert_eq!(1, root_ref.body.len());
 
   assert_eq!(
@@ -333,7 +331,7 @@ fn ast_json_encoder_encode_ast_generic_type_pack() {
     "#,
   );
 
-  let root_ref = root.as_ref_opt().expect("expected parse root block");
+  let root_ref = root.get();
   assert_eq!(1, root_ref.body.len());
 
   assert_eq!(
@@ -354,7 +352,7 @@ fn ast_json_encoder_encode_ast_generic_type_pack_with_default() {
     "#,
   );
 
-  let root_ref = root.as_ref_opt().expect("expected parse root block");
+  let root_ref = root.get();
   assert_eq!(1, root_ref.body.len());
 
   assert_eq!(
@@ -375,7 +373,7 @@ fn ast_json_encoder_encode_ast_generic_type_with_default() {
     "#,
   );
 
-  let root_ref = root.as_ref_opt().expect("expected parse root block");
+  let root_ref = root.get();
   assert_eq!(1, root_ref.body.len());
 
   assert_eq!(
@@ -476,7 +474,7 @@ fn ast_json_encoder_encode_ast_stat_declare_class() {
     "#,
   );
 
-  let root_ref = root.as_ref_opt().expect("expected parse root block");
+  let root_ref = root.get();
   assert_eq!(2, root_ref.body.len());
 
   assert_eq!(
@@ -623,10 +621,8 @@ fn ast_json_encoder_encode_ast_type_error() {
 
   let mut fixture = JsonEncoderFixture::new();
   let parse_result = fixture.parse("type T = ");
-  let root_ref = parse_result
-    .root
-    .as_ref_opt()
-    .expect("expected parse root block");
+  let root_slot = OptNode::from_ptr(parse_result.root);
+  let root_ref = root_slot.get().expect("expected parse root block");
   assert_eq!(1, root_ref.body.len());
 
   let statement = block_statement(root_ref, 0);
@@ -664,7 +660,7 @@ fn ast_json_encoder_encode_ast_type_optional() {
         "#,
   );
 
-  let root_ref = root.as_ref_opt().expect("expected parse root block");
+  let root_ref = root.get();
   assert_eq!(1, root_ref.body.len());
 
   assert_eq!(
@@ -686,7 +682,7 @@ fn ast_json_encoder_encode_ast_type_pack_explicit() {
     "#,
   );
 
-  let root_ref = root.as_ref_opt().expect("expected parse root block");
+  let root_ref = root.get();
   assert_eq!(2, root_ref.body.len());
 
   assert_eq!(
@@ -963,6 +959,7 @@ pub(crate) mod ast_json_encoder_support {
       parser::Parser,
     },
   };
+  pub use ulua_ast::records::node_handle::OptNode;
   pub use ulua_unit_test::{
     functions::{
       ast_json_encoder_array::array,
@@ -971,7 +968,7 @@ pub(crate) mod ast_json_encoder_support {
       ast_json_encoder_byte_array::byte_array,
       ast_json_encoder_json::json,
       ast_json_encoder_json_ref::json_ref,
-      ast_node_ref::{NodePtr, PtrRef},
+      ast_node_ref::NodePtr,
     },
     records::json_encoder_fixture::JsonEncoderFixture,
   };
