@@ -4,16 +4,17 @@ use ulua_analysis::{
   functions::trace_requires::trace_requires,
   records::{require_trace_result::RequireTraceResult, type_check_limits::TypeCheckLimits},
 };
-use ulua_ast::{
-  records::{
-    ast_expr_call::AstExprCall, ast_expr_global::AstExprGlobal,
-    ast_expr_index_name::AstExprIndexName, ast_stat_block::AstStatBlock,
-    ast_stat_function::AstStatFunction, ast_stat_local::AstStatLocal,
-    ast_type_pack_explicit::AstTypePackExplicit, ast_type_typeof::AstTypeTypeof,
-    node_handle::Node,
-  },
+use ulua_ast::records::{
+  ast_expr_call::AstExprCall,
+  ast_expr_global::AstExprGlobal,
+  ast_expr_index_name::AstExprIndexName,
+  ast_stat_block::AstStatBlock,
+  ast_stat_function::AstStatFunction,
+  ast_stat_local::AstStatLocal,
+  ast_type_pack_explicit::AstTypePackExplicit,
+  ast_type_typeof::AstTypeTypeof,
+  node_handle::{Node, OptNode},
 };
-use ulua_ast::records::node_handle::OptNode;
 use ulua_unit_test::{
   functions::ast_node_ref::{NodePtr, as_node_at, deref_at},
   methods::{

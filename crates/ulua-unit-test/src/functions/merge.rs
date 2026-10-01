@@ -17,12 +17,7 @@ pub fn merge(arena: &mut TypeArena, l: &mut RefinementMap, r: &RefinementMap) {
     let mut options: Vec<TypeId> = Vec::new();
     for ty in [a, b] {
       match get_type::get::<UnionType>(follow_type::follow(ty)) {
-        Some(union) => options.extend(
-          union
-            .options
-            .iter()
-            .filter(|option| seen.insert(**option)),
-        ),
+        Some(union) => options.extend(union.options.iter().filter(|option| seen.insert(**option))),
         None => {
           if seen.insert(ty) {
             options.push(ty);

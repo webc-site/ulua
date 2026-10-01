@@ -510,7 +510,11 @@ fn parser_parse_simple_ast_type_group() {
   let group = alias_ty
     .as_node::<AstTypeGroup>()
     .expect("别名右侧应为类型分组");
-  assert!(OptNode::from_ptr(group.type_).as_node::<AstTypeReference>().is_some());
+  assert!(
+    OptNode::from_ptr(group.type_)
+      .as_node::<AstTypeReference>()
+      .is_some()
+  );
 }
 
 #[test]

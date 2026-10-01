@@ -21,12 +21,11 @@ use ulua_ast::{
     ast_stat_expr::AstStatExpr, ast_stat_function::AstStatFunction, ast_stat_local::AstStatLocal,
     ast_stat_local_function::AstStatLocalFunction, ast_stat_return::AstStatReturn,
     ast_stat_type_alias::AstStatTypeAlias, ast_type_function::AstTypeFunction,
-    node_handle::OptNode,
     ast_type_group::AstTypeGroup, ast_type_intersection::AstTypeIntersection,
     ast_type_optional::AstTypeOptional, ast_type_reference::AstTypeReference,
     ast_type_table::AstTypeTable, ast_type_union::AstTypeUnion, lexeme::Lexeme, lexer::Lexer,
-    location::Location, parse_error::ParseError, parse_options::ParseOptions, parser::Parser,
-    position::Position,
+    location::Location, node_handle::OptNode, parse_error::ParseError, parse_options::ParseOptions,
+    parser::Parser, position::Position,
   },
 };
 use ulua_common::fflag;
@@ -71,7 +70,12 @@ fn parser_moved_out_allocator_can_still_be_used() {
 
   // NOLINTNEXTLINE(bugprone-use-after-move) -- verifying moved-from state
   let i = outer.alloc::<i32>(55);
-  assert_eq!(&55, OptNode::from_ptr(i).get().expect("moved-from allocator 仍可分配"));
+  assert_eq!(
+    &55,
+    OptNode::from_ptr(i)
+      .get()
+      .expect("moved-from allocator 仍可分配")
+  );
 }
 
 // ------------------------------------------------------------------ ParserTests
@@ -251,7 +255,11 @@ fn parser_grouped_function_type() {
 
   // cpp：`groupTy` 是 `(() -> ())`，`types[1]` 是 `?`。
   let group_ty = as_node_at::<AstTypeGroup, _>(&union_ty.types, 0).expect("types[0] 应为分组");
-  assert!(OptNode::from_ptr(group_ty.type_).as_node::<AstTypeFunction>().is_some());
+  assert!(
+    OptNode::from_ptr(group_ty.type_)
+      .as_node::<AstTypeFunction>()
+      .is_some()
+  );
   assert!(as_node_at::<AstTypeOptional, _>(&union_ty.types, 1).is_some());
 }
 
@@ -1019,9 +1027,7 @@ declare bit32: {
   let glob = as_node_at::<AstStatDeclareGlobal, _>(&root_block.body, 0)
     .expect("body[0] 应为 declare global");
   let glob_ty = OptNode::from_ptr(glob.type_);
-  let tbl = glob_ty
-    .as_node::<AstTypeTable>()
-    .expect("类型应为表类型");
+  let tbl = glob_ty.as_node::<AstTypeTable>().expect("类型应为表类型");
   assert_eq!(1, tbl.props.size);
 
   let prop = elem(&tbl.props, 0);
@@ -1111,14 +1117,22 @@ fn parser_parse_class_declarations() {
   assert_eq!(Some("prop"), prop.name.as_str());
   assert_eq!(loc((2, 12), (2, 16)), prop.name_location);
   assert_eq!(loc((2, 12), (2, 24)), prop.location);
-  assert!(OptNode::from_ptr(prop.ty).as_node::<AstTypeReference>().is_some());
+  assert!(
+    OptNode::from_ptr(prop.ty)
+      .as_node::<AstTypeReference>()
+      .is_some()
+  );
 
   let method = elem(&foo.props, 1);
   assert_eq!(Some("method"), method.name.as_str());
   assert_eq!(loc((3, 21), (3, 27)), method.name_location);
   assert_eq!(loc((3, 12), (3, 54)), method.location);
   assert!(method.is_method);
-  assert!(OptNode::from_ptr(method.ty).as_node::<AstTypeFunction>().is_some());
+  assert!(
+    OptNode::from_ptr(method.ty)
+      .as_node::<AstTypeFunction>()
+      .is_some()
+  );
 
   let bar =
     as_node_at::<AstStatDeclareExternType, _>(&root.body, 1).expect("body[1] 应为 extern type");
@@ -1134,5 +1148,9 @@ fn parser_parse_class_declarations() {
   assert_eq!(Some("prop2"), prop2.name.as_str());
   assert_eq!(loc((7, 12), (7, 17)), prop2.name_location);
   assert_eq!(loc((7, 12), (7, 25)), prop2.location);
-  assert!(OptNode::from_ptr(prop2.ty).as_node::<AstTypeReference>().is_some());
+  assert!(
+    OptNode::from_ptr(prop2.ty)
+      .as_node::<AstTypeReference>()
+      .is_some()
+  );
 }

@@ -27,7 +27,10 @@ use ulua_ast::records::{
   ast_expr_index_name::AstExprIndexName, node_handle::OptNode,
 };
 
-use crate::functions::{ast_node_ref::{NodePtr, PtrRef}, raw_handle::raw_handle};
+use crate::functions::{
+  ast_node_ref::{NodePtr, PtrRef},
+  raw_handle::raw_handle,
+};
 fn magic_instance_is_a_handle_old_solver(
   type_checker: &mut TypeChecker,
   scope: &Arc<Scope>,

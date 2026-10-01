@@ -20,11 +20,11 @@ use ulua_ast::{
     ast_type_group::AstTypeGroup, ast_type_intersection::AstTypeIntersection,
     ast_type_pack_explicit::AstTypePackExplicit, ast_type_reference::AstTypeReference,
     ast_type_table::AstTypeTable, cst_type_group::CstTypeGroup, location::Location,
-    parse_errors::ParseErrors, parse_options::ParseOptions, position::Position,
+    node_handle::OptNode, parse_errors::ParseErrors, parse_options::ParseOptions,
+    position::Position,
   },
   visit::AstVisitable,
 };
-use ulua_ast::records::node_handle::OptNode;
 use ulua_common::fint;
 use ulua_unit_test::{
   functions::{
@@ -124,7 +124,8 @@ mod parser_recovery_of_parenthesized_expressions {
     // visit 需要独占借用：cpp `AstNode::visit(AstVisitor*)` 的 this 非 const，
     // 独占性经 `&mut` 句柄局部给出（测试内单线程遍历）。
     let mut root = OptNode::from_ptr(
-      fix.source_module
+      fix
+        .source_module
         .as_deref()
         .expect("sourceModule 必须存在")
         .root,

@@ -807,7 +807,11 @@ fn parser_parse_extern_type_declarations() {
     Location::new(Position::new(2, 12), Position::new(2, 16)),
     prop.name_location
   );
-  assert!(OptNode::from_ptr(prop.ty).as_node::<AstTypeReference>().is_some());
+  assert!(
+    OptNode::from_ptr(prop.ty)
+      .as_node::<AstTypeReference>()
+      .is_some()
+  );
   assert_eq!(
     Location::new(Position::new(2, 12), Position::new(2, 24)),
     prop.location
@@ -819,7 +823,11 @@ fn parser_parse_extern_type_declarations() {
     Location::new(Position::new(3, 21), Position::new(3, 27)),
     method.name_location
   );
-  assert!(OptNode::from_ptr(method.ty).as_node::<AstTypeFunction>().is_some());
+  assert!(
+    OptNode::from_ptr(method.ty)
+      .as_node::<AstTypeFunction>()
+      .is_some()
+  );
   assert_eq!(
     Location::new(Position::new(3, 12), Position::new(3, 54)),
     method.location
@@ -838,7 +846,11 @@ fn parser_parse_extern_type_declarations() {
     Location::new(Position::new(7, 12), Position::new(7, 17)),
     prop2.name_location
   );
-  assert!(OptNode::from_ptr(prop2.ty).as_node::<AstTypeReference>().is_some());
+  assert!(
+    OptNode::from_ptr(prop2.ty)
+      .as_node::<AstTypeReference>()
+      .is_some()
+  );
   assert_eq!(
     Location::new(Position::new(7, 12), Position::new(7, 25)),
     prop2.location
@@ -898,7 +910,11 @@ fn parser_parse_extern_type_declarations_missing_with() {
     Location::new(Position::new(2, 12), Position::new(2, 16)),
     prop.name_location
   );
-  assert!(OptNode::from_ptr(prop.ty).as_node::<AstTypeReference>().is_some());
+  assert!(
+    OptNode::from_ptr(prop.ty)
+      .as_node::<AstTypeReference>()
+      .is_some()
+  );
   assert_eq!(
     Location::new(Position::new(2, 12), Position::new(2, 24)),
     prop.location
@@ -910,7 +926,11 @@ fn parser_parse_extern_type_declarations_missing_with() {
     Location::new(Position::new(3, 21), Position::new(3, 27)),
     method.name_location
   );
-  assert!(OptNode::from_ptr(method.ty).as_node::<AstTypeFunction>().is_some());
+  assert!(
+    OptNode::from_ptr(method.ty)
+      .as_node::<AstTypeFunction>()
+      .is_some()
+  );
   assert_eq!(
     Location::new(Position::new(3, 12), Position::new(3, 54)),
     method.location
@@ -929,7 +949,11 @@ fn parser_parse_extern_type_declarations_missing_with() {
     Location::new(Position::new(7, 12), Position::new(7, 17)),
     prop2.name_location
   );
-  assert!(OptNode::from_ptr(prop2.ty).as_node::<AstTypeReference>().is_some());
+  assert!(
+    OptNode::from_ptr(prop2.ty)
+      .as_node::<AstTypeReference>()
+      .is_some()
+  );
   assert_eq!(
     Location::new(Position::new(7, 12), Position::new(7, 25)),
     prop2.location
@@ -965,7 +989,11 @@ fn parser_parse_global_declaration_called_class() {
   let global =
     as_node_at::<AstStatDeclareGlobal, _>(&stat.body, 0).expect("body[0] 应为全局变量声明");
   assert_eq!(global.name, "class");
-  assert!(OptNode::from_ptr(global.type_).as_node::<AstTypeTable>().is_some());
+  assert!(
+    OptNode::from_ptr(global.type_)
+      .as_node::<AstTypeTable>()
+      .is_some()
+  );
 }
 
 mod parser_parse_if_else_expression {
@@ -1273,5 +1301,9 @@ fn parser_parse_nested_ast_type_group() {
   let group2 = group1_ty
     .as_node::<AstTypeGroup>()
     .expect("内层仍应为分组类型");
-  assert!(OptNode::from_ptr(group2.type_).as_node::<AstTypeReference>().is_some());
+  assert!(
+    OptNode::from_ptr(group2.type_)
+      .as_node::<AstTypeReference>()
+      .is_some()
+  );
 }

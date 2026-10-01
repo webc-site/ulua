@@ -647,8 +647,7 @@ pub(crate) mod ast_query_support {
       ast_expr_constant_bool::AstExprConstantBool, ast_expr_constant_number::AstExprConstantNumber,
       ast_expr_function::AstExprFunction, ast_expr_index_name::AstExprIndexName,
       ast_expr_local::AstExprLocal, ast_node::AstNode, ast_stat_if::AstStatIf,
-      ast_stat_local::AstStatLocal, location::Location, node_handle::OptNode,
-      position::Position,
+      ast_stat_local::AstStatLocal, location::Location, node_handle::OptNode, position::Position,
     },
     rtti::AstNodeClass,
   };

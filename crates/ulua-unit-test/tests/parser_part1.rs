@@ -85,7 +85,13 @@ fn parser_allocator_can_be_moved() {
   let _a = Allocator::move_from(&mut inner());
 
   let counter_ptr = c.expect("counter 已分配");
-  assert_eq!(1, OptNode::from_ptr(counter_ptr).get().expect("counter 必须存活").id);
+  assert_eq!(
+    1,
+    OptNode::from_ptr(counter_ptr)
+      .get()
+      .expect("counter 必须存活")
+      .id
+  );
 }
 #[test]
 fn parser_allow_unicode_in_string() {
@@ -632,10 +638,7 @@ fn parser_class_method_missing_end_error() {
 #[test]
 fn parser_class_method_properties() {
   use ulua_ast::records::ast_stat_declare_extern_type::AstStatDeclareExternType;
-  use ulua_unit_test::{
-    functions::ast_node_ref::as_node_at,
-    records::fixture::Fixture,
-  };
+  use ulua_unit_test::{functions::ast_node_ref::as_node_at, records::fixture::Fixture};
 
   let mut fixture = Fixture::default();
   let result1 = fixture.match_parse_error(
@@ -1041,8 +1044,7 @@ fn parser_classes_work_after_other_statements() {
   use ulua_ast::records::{ast_stat_class::AstStatClass, parse_options::ParseOptions};
   use ulua_common::fflag;
   use ulua_unit_test::{
-    functions::ast_node_ref::as_node_at,
-    records::fixture::Fixture,
+    functions::ast_node_ref::as_node_at, records::fixture::Fixture,
     type_aliases::scoped_fast_flag::ScopedFastFlag,
   };
 

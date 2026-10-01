@@ -954,21 +954,16 @@ pub(crate) mod ast_json_encoder_support {
       ast_stat_block::AstStatBlock,
       ast_stat_local::AstStatLocal,
       location::Location,
-      node_handle::{Node, Nodes},
+      node_handle::{Node, Nodes, OptNode},
       parse_options::ParseOptions,
       parser::Parser,
     },
   };
-  pub use ulua_ast::records::node_handle::OptNode;
   pub use ulua_unit_test::{
     functions::{
-      ast_json_encoder_array::array,
-      ast_json_encoder_ast_name::ast_name,
-      ast_json_encoder_block_statement::block_statement,
-      ast_json_encoder_byte_array::byte_array,
-      ast_json_encoder_json::json,
-      ast_json_encoder_json_ref::json_ref,
-      ast_node_ref::NodePtr,
+      ast_json_encoder_array::array, ast_json_encoder_ast_name::ast_name,
+      ast_json_encoder_block_statement::block_statement, ast_json_encoder_byte_array::byte_array,
+      ast_json_encoder_json::json, ast_json_encoder_json_ref::json_ref, ast_node_ref::NodePtr,
     },
     records::json_encoder_fixture::JsonEncoderFixture,
   };

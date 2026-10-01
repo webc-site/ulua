@@ -914,7 +914,6 @@ fn parser_function_type_named_arguments() {
     OptNode::from_ptr(decl.type_ptr)
   }
 
-
   /// cpp `REQUIRE(array.data[i]) && CHECK_EQ(array.data[i]->first, name)`。
   fn named_arg(func: &AstTypeFunction, index: usize) -> AstName {
     let (name, _) = elem(&func.arg_names, index)

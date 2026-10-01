@@ -361,10 +361,8 @@ t
       // 夹具作用域覆盖本行；下游只读遍历绑定链。
       let result = frag.result.as_ref().unwrap();
       assert!(!result.fresh_scope.is_null());
-      let opt = linear_search_for_binding(
-        OptNode::from_ptr(result.fresh_scope).get().unwrap(),
-        "t",
-      );
+      let opt =
+        linear_search_for_binding(OptNode::from_ptr(result.fresh_scope).get().unwrap(), "t");
       LUAU_ASSERT!(opt.is_some());
       assert_eq!("number", to_string_type_id(opt.unwrap()));
     },
@@ -394,10 +392,8 @@ t@1
       // 夹具作用域覆盖本行；下游只读遍历绑定链。
       let result = frag.result.as_ref().unwrap();
       assert!(!result.fresh_scope.is_null());
-      let opt = linear_search_for_binding(
-        OptNode::from_ptr(result.fresh_scope).get().unwrap(),
-        "t",
-      );
+      let opt =
+        linear_search_for_binding(OptNode::from_ptr(result.fresh_scope).get().unwrap(), "t");
       LUAU_ASSERT!(opt.is_some());
       assert_eq!("number", to_string_type_id(opt.unwrap()));
     },
@@ -1580,7 +1576,12 @@ end
   // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
   assert_eq!(
     "self",
-    OptNode::from_ptr(last).get().unwrap().name.as_str().unwrap()
+    OptNode::from_ptr(last)
+      .get()
+      .unwrap()
+      .name
+      .as_str()
+      .unwrap()
   );
 }
 
@@ -1786,7 +1787,12 @@ end
   // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
   assert_eq!(
     "z",
-    OptNode::from_ptr(last).get().unwrap().name.as_str().unwrap()
+    OptNode::from_ptr(last)
+      .get()
+      .unwrap()
+      .name
+      .as_str()
+      .unwrap()
   );
 
   // 门面一步下转+判型+物化（原 `ast_node_as + is_null + &*` 三步）。
@@ -1827,7 +1833,12 @@ end
   // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
   assert_eq!(
     "y",
-    OptNode::from_ptr(last).get().unwrap().name.as_str().unwrap()
+    OptNode::from_ptr(last)
+      .get()
+      .unwrap()
+      .name
+      .as_str()
+      .unwrap()
   );
 
   // 门面一步下转+判型+物化（原 `ast_node_as + is_null + &*` 三步）。
@@ -4137,7 +4148,12 @@ local function bar() return x + foo() end
   // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
   assert_eq!(
     "bar",
-    OptNode::from_ptr(last).get().unwrap().name.as_str().unwrap()
+    OptNode::from_ptr(last)
+      .get()
+      .unwrap()
+      .name
+      .as_str()
+      .unwrap()
   );
   assert!(crate::is_nearest::<AstStatReturn>(result.nearest_statement));
 }
@@ -4821,7 +4837,12 @@ if x == 4 then
   // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
   assert_eq!(
     "y",
-    OptNode::from_ptr(last).get().unwrap().name.as_str().unwrap()
+    OptNode::from_ptr(last)
+      .get()
+      .unwrap()
+      .name
+      .as_str()
+      .unwrap()
   );
 
   assert!(crate::is_nearest::<AstStatIf>(result.nearest_statement));
@@ -5868,7 +5889,10 @@ fn fragment_autocomplete_statement_in_empty_fragment_is_non_null() {
   assert_eq!("", fragment.fragment_to_parse);
   assert_eq!(1, fragment.ancestry.len());
   assert!(!fragment.root.is_null());
-  assert_eq!(0, OptNode::from_ptr(fragment.root).get().unwrap().body.len());
+  assert_eq!(
+    0,
+    OptNode::from_ptr(fragment.root).get().unwrap().body.len()
+  );
 }
 
 // Source: `tests/FragmentAutocomplete.test.cpp`

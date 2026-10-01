@@ -18,8 +18,7 @@ use ulua_ast::{
 };
 use ulua_common::fflag;
 use ulua_unit_test::{
-  functions::ast_node_ref::NodePtr,
-  records::fixture::Fixture,
+  functions::ast_node_ref::NodePtr, records::fixture::Fixture,
   type_aliases::scoped_fast_flag::ScopedFastFlag,
 };
 

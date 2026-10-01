@@ -7,8 +7,7 @@ use ulua_analysis::{records::module_info::ModuleInfo, type_aliases::module_name_
 use ulua_ast::{
   records::{
     ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_expr_constant_string::AstExprConstantString,
-    ast_expr_global::AstExprGlobal, ast_expr_index_name::AstExprIndexName,
-    node_handle::OptNode,
+    ast_expr_global::AstExprGlobal, ast_expr_index_name::AstExprIndexName, node_handle::OptNode,
   },
   rtti::ast_node_try_as,
 };
