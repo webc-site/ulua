@@ -192,10 +192,11 @@ impl Compiler {
     if self.options.optimization_level >= 1 {
       self.bc_mut().fold_jumps();
     }
-    // cpp Compiler.cpp:586-589：trampoline 展开后仍超 JUMPX 射程须报错，
+    // cpp Compiler.cpp:596-600：trampoline 展开后仍超 JUMPX 射程须无条件报错
+    // （上游 0.740 已删除 LuauCompileExpandLimit 旗标），
     // 否则 24 位偏移静默截断产生坏字节码
     let has_long_jump_error = self.bc_mut().expand_jumps();
-    if fflag::LuauCompileExpandLimit.get() && has_long_jump_error {
+    if has_long_jump_error {
       CompileError::raise(
         &func_ref.base.base.location,
         format_args!("{ERR_EXCEEDED_JUMP_DISTANCE_LIMIT}"),

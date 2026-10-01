@@ -138,8 +138,6 @@ luau_flag_module! {
   // Compiler/src/Types.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_COMPILE_RECURSIVE_ALIASES, LuauCompileRecursiveAliases);
   // Bytecode/src/BytecodeBuilder.cpp
-  LUAU_FASTFLAGVARIABLE!(LUAU_COMPILE_EXPAND_LIMIT, LuauCompileExpandLimit);
-  // Bytecode/src/BytecodeBuilder.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_VIRTUAL_BC_BUILDER, LuauVirtualBcBuilder);
   // Bytecode/src/BytecodeBuilder.cpp（LUAU_FLAGVERSION(..., 2) 见 register_flags）
   LUAU_FASTFLAGVARIABLE!(LUAU_BYTECODE_COST_MODEL, LuauBytecodeCostModel), version = 2;
