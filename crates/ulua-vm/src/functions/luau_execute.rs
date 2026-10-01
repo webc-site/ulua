@@ -867,12 +867,13 @@ unsafe fn fuse_jumpifnot(
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
-    if !fuse_ok(l) {
-      return pc;
-    }
-
+    // 判定顺序：先比 opcode（未命中是本函数唯一的代价），`fuse_ok` 的两项许可只在
+    // 真要融合时才付——热边未命中的臂（例如纯算术循环）因此只多付一次取指 + 比较。
     let insn = *pc;
     if luau_insn_op(insn) != LuauOpcode::LOP_JUMPIFNOT as u32 {
+      return pc;
+    }
+    if !fuse_ok(l) {
       return pc;
     }
 
@@ -884,6 +885,64 @@ unsafe fn fuse_jumpifnot(
       let p = cl_proto!(cl);
       LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
     }
+    pc
+  }
+}
+
+/// 热后继 `LOP_GETTABLE` 的尾融合：只吃数组快路那一支。
+///
+/// 实测边权（`vm-opcount` 转移表）：`FORNLOOP → GETTABLE` 在 `microbig_gettable`
+/// 4.61M/16.3M ≈ 28%、`micro_gettable` 691K/2.46M ≈ 28%、`matmul` 2.76M/17.2M ≈ 16%；
+/// `ADDK → GETTABLE` 在 `life` 2.10M/13.3M ≈ 16%。融合命中时这条 GETTABLE 完全不进
+/// 派发头，且顺势再试一次 [`fuse_jumpifnot`]，于是 `life` 内层的三元
+/// `ADDK → GETTABLE → JUMPIFNOT` 只付一次派发。
+///
+/// 只做与 [`h_gettable`] 快路**逐位一致**的数组命中判定：任何未命中（哈希键、越界、
+/// 带元表、非数字下标）都把 `pc` 原样交回，由环里的 GETTABLE 臂重走原路径（含慢路），
+/// 因此本函数不可能观察到与不融合不同的副作用。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的派发 handler）
+///
+/// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
+#[inline(always)]
+unsafe fn fuse_succ_gettable(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  base: StkId,
+  cl: *mut Closure,
+) -> *const Instruction {
+  // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
+  unsafe {
+    // 判定顺序与 [`fuse_jumpifnot`] 一致：opcode 不匹配就立刻交回，许可判据留到真要
+    // 融合的路径上再付
+    let insn = *pc;
+    if luau_insn_op(insn) != LuauOpcode::LOP_GETTABLE as u32 {
+      return pc;
+    }
+    if !fuse_ok(l) {
+      return pc;
+    }
+
+    // 判定顺序与 [`h_gettable`] 一致；未走快路时不推进 pc，交回环头重做本条指令
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+
+    // fast-path: array access
+    if (*rb).is_table() && (*rc).is_number() {
+      let h = (*rb).as_table_ptr();
+      let indexd = (*rc).as_number();
+      let index = indexd as i32;
+
+      if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32
+        && (*h).metatable.is_null()
+        && index as f64 == indexd
+      {
+        setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
+        return fuse_jumpifnot(l, pc.add(1), base, cl);
+      }
+    }
+
     pc
   }
 }
@@ -1803,6 +1862,7 @@ unsafe fn h_addk(
 
     if (*rb).is_number() {
       setnvalue!(ra, (*rb).as_number() + (*kv).as_number());
+      pc = fuse_succ_gettable(l, pc, base, cl);
       vm_next!(pc, base, k, cl);
     }
     // 非数字 rb：`__add`/ coercion 慢路交 [`s_addk`]，本函数保持叶函数
@@ -2229,8 +2289,18 @@ unsafe fn h_fornloop(
     pc = pc.add(1);
     let ra = VM_REG!(luau_insn_a(insn), l, base);
     let (cont, backedge) = fornloop_step(pc, cl, insn, ra);
-    // 见 [`jump_split!`]：回边与退出两条路各带一份独立取指尾调用
-    jump_split!(l, pc, cl, cont, backedge, base, k);
+    // 见 [`jump_split!`]：回边与退出两条路各带一份独立取指尾块（把 FP 比较留在尾块
+    // 之外，不挂进取指地址依赖链）。两条尾块各再试一次 GETTABLE 尾融合：实测
+    // `FORNLOOP → GETTABLE` 是表格访问用例里权重最大的一条边。
+    if cont {
+      let npc = pc.offset(backedge);
+      let p = cl_proto!(cl);
+      LUAU_ASSERT!((npc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+      vm_next!(fuse_succ_gettable(l, npc, base, cl), base, k, cl);
+    }
+    let p = cl_proto!(cl);
+    LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+    vm_next!(fuse_succ_gettable(l, pc, base, cl), base, k, cl);
   }
 }
 
