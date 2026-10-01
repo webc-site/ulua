@@ -322,7 +322,7 @@ pub(crate) fn push_int(mut state: StateView<'_>, n: i32) {
 pub(crate) fn register_slot(state: StateView<'_>, idx: i32) -> i32 {
   // Safety: 族级契约;`lua_ref` 对存活 state + 有效索引登记并返回正 id,
   // 不越界读写、不动栈深。
-  unsafe { lua_ref(state.as_mut_ptr(), idx) }
+  unsafe { lua_ref(&mut *state.as_mut_ptr(), idx) }
 }
 
 /// `LUA_MULTRET` 收集路径（`Function::call`、`Lua::exec_raw`、协程 resume）
@@ -531,21 +531,21 @@ pub(crate) fn raise_from_top(state: StateView<'_>) -> ! {
   // `lua_error` 沿该边界展开、发散不返回。
   // Safety: 函数头契约即全部前提——受保护边界内驱动 + 栈顶有错误对象,
   // `lua_error` 沿该边界展开、发散不返回。
-  unsafe { lua_error(state.as_mut_ptr()) }
+  unsafe { lua_error(&mut *state.as_mut_ptr()) }
 }
 
 /// 裸取 `idx` 表键值（栈顶为 key，成功后弹 key 压 value；返回值的类型标签）。
 #[inline]
 pub(crate) fn raw_get_at(state: StateView<'_>, idx: i32) -> i32 {
   // Safety: 族级契约;`idx` 处须是 table,栈顶 key 由调用点压入。
-  unsafe { lua_rawget(state.as_mut_ptr(), idx) }
+  unsafe { lua_rawget(&mut *state.as_mut_ptr(), idx) }
 }
 
 /// 裸存 `idx` 表键值（栈布局 `key, value`，成功后弹出两者）。
 #[inline]
 pub(crate) fn raw_set_at(state: StateView<'_>, idx: i32) {
   // Safety: 族级契约;`idx` 处须是 table,栈顶两槽由调用点压入。
-  unsafe { lua_rawset(state.as_mut_ptr(), idx) }
+  unsafe { lua_rawset(&mut *state.as_mut_ptr(), idx) }
 }
 
 /// 把 `idx` 表的整数键 `n` 对应值净压栈顶（`lua_rawgeti` 收口点，VM 侧自带 1 层头寸）。
@@ -556,14 +556,14 @@ pub(crate) fn raw_set_at(state: StateView<'_>, idx: i32) {
 pub(crate) fn raw_geti(state: StateView<'_>, idx: i32, n: i32) {
   // Safety: 族级契约;`lua_rawgeti` 自带 `ensure_stack(l, 1)`,越界键读出 nil
   // 亦只净压一层、不越栈读写。
-  unsafe { lua_rawgeti(state.as_mut_ptr(), idx, n) };
+  unsafe { lua_rawgeti(&mut *state.as_mut_ptr(), idx, n) };
 }
 
 /// 比较两栈槽是否 VM 等值（`lua_equal` 收口点，对 nil/数字/字符串按 Lua 语义）。
 #[inline]
 pub(crate) fn slots_equal(state: StateView<'_>, a: i32, b: i32) -> bool {
-  // Safety: 族级契约;只读两槽,不抛错。
-  unsafe { lua_equal(state.as_ptr().cast_mut(), a, b) != 0 }
+  // Safety: 族级契约;只读两槽,不抛错。本帧由裸指针重建引用,借用窗口即时结束。
+  unsafe { lua_equal(&mut *state.as_ptr().cast_mut(), a, b) != 0 }
 }
 
 /// 读 `idx` 处 table 的只读标志（`lua_getreadonly` 收口点）。
@@ -686,7 +686,7 @@ pub(crate) fn get_field_named(mut state: StateView<'_>, idx: i32, name: &str) {
 #[inline]
 pub(crate) fn unref_registry_slot(state: StateView<'_>, id: i32) {
   // Safety: 族级契约;`id` 为已登记未释放槽,`lua_unref` 只释放该槽、不越界读写。
-  unsafe { lua_unref(state.as_mut_ptr(), id) }
+  unsafe { lua_unref(&mut *state.as_mut_ptr(), id) }
 }
 
 /// 探测 `state` 栈能否再容纳 `slots` 层（只报告头寸，不实际越界读写）。

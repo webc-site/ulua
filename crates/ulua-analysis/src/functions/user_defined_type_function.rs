@@ -317,7 +317,7 @@ pub fn user_defined_type_function(
       // LUA_PUSHLIGHTUSERDATA(l, curr.first);
       // lua_gettable(l, LUA_REGISTRYINDEX);
       (*l_vm).push_lightuserdata(curr_ptr.cast());
-      lua_gettable(l_vm, LUA_REGISTRYINDEX);
+      lua_gettable(&mut *l_vm, LUA_REGISTRYINDEX);
 
       // if (!lua_isfunction(l, -1))
       if !(*l_vm).is_function(-1) {
@@ -331,7 +331,7 @@ pub fn user_defined_type_function(
       // Build up the environment of the current function, where some might not be visible
       // lua_getfenv(l, -1);
       // lua_setreadonly(l, -1, false);
-      lua_getfenv(l_vm, -1);
+      lua_getfenv(&mut *l_vm, -1);
       (*l_vm).set_readonly(-1, false);
 
       // for (auto& [name, definition] : typeFunction->userFuncData.environmentFunction)
@@ -349,7 +349,7 @@ pub fn user_defined_type_function(
           // LUA_PUSHLIGHTUSERDATA(l, definition.first);
           // lua_gettable(l, LUA_REGISTRYINDEX);
           (*l_vm).push_lightuserdata(def_ptr.cast());
-          lua_gettable(l_vm, LUA_REGISTRYINDEX);
+          lua_gettable(&mut *l_vm, LUA_REGISTRYINDEX);
 
           // if (!lua_isfunction(l, -1)) break;
           if !(*l_vm).is_function(-1) {
@@ -451,7 +451,7 @@ pub fn user_defined_type_function(
     // LUA_PUSHLIGHTUSERDATA(l, typeFunction->userFuncData.definition);
     // lua_gettable(l, LUA_REGISTRYINDEX);
     (*l_vm).push_lightuserdata((type_function.user_func_data.definition as *mut ()).cast());
-    lua_gettable(l_vm, LUA_REGISTRYINDEX);
+    lua_gettable(&mut *l_vm, LUA_REGISTRYINDEX);
 
     // if (!lua_isfunction(l, -1))
     if !(*l_vm).is_function(-1) {

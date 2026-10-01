@@ -13,7 +13,7 @@ use crate::{
 pub(crate) unsafe fn bit_map1(l: *mut LuaState, f: impl Fn(BUint) -> BUint) -> i32 {
   // SAFETY: 契约保证 `l` 指向本次 binary32 C 函数调用的存活 LuaState，实参栈槽按索引可读、栈顶留有压入结果的 LUA_MINSTACK 余量
   unsafe {
-    let v = lua_l_checkunsigned(l, 1) as BUint;
+    let v = lua_l_checkunsigned(&mut *l, 1) as BUint;
     lua_pushunsigned(l, f(v));
     1
   }

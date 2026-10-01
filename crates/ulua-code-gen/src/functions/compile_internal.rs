@@ -105,7 +105,7 @@ pub unsafe fn compile_internal(
   }
   // Safety: 同上，且上一条断言确认该栈位是 Lua 闭包，`as_closure` 的 TValue→GCObject→
   // Closure 解引用链由此前提保证；`inner.l.p` 为构造期接线的非空 root Proto*。
-  let root: *mut Proto = unsafe { (*lua_a_toobject(l, idx)).as_closure().inner.l.p };
+  let root: *mut Proto = unsafe { (*lua_a_toobject(&*l, idx)).as_closure().inner.l.p };
   // Safety: `root` 为存活 Proto*（C-ABI 契约），此处只取 flags 快照供后续判定，
   // 避免整段流程反复解引用裸指针。
   let root_flags = unsafe { (*root).flags };

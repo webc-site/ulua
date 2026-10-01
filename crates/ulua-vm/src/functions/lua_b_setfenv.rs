@@ -19,9 +19,9 @@ pub(crate) unsafe fn lua_b_setfenv(l: *mut LuaState) -> i32 {
     if (*l).is_number(1) && (*l).to_number(1).unwrap_or(0.0) == 0.0 {
       lua_pushthread(&mut *l);
       (*l).insert(-2);
-      lua_setfenv(l, -2);
+      lua_setfenv(&mut *l, -2);
       return 0;
-    } else if lua_iscfunction(&*l, -2) != 0 || lua_setfenv(l, -2) == 0 {
+    } else if lua_iscfunction(&*l, -2) != 0 || lua_setfenv(&mut *l, -2) == 0 {
       luaL_error!(l, "'setfenv' cannot change environment of given object");
     }
     1

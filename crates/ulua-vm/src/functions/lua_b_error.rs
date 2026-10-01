@@ -15,14 +15,14 @@ use crate::{
 /// cpp/VM/src/lbaselib.cpp:75 luaB_error。
 pub(crate) unsafe fn lua_b_error(l: *mut LuaState) -> i32 {
   unsafe {
-    let level = lua_l_optinteger(l, 2, 1);
+    let level = lua_l_optinteger(&mut *l, 2, 1);
     (*l).set_top(1);
-    if lua_isstring(l, 1) != 0 && level > 0 {
+    if lua_isstring(&*l, 1) != 0 && level > 0 {
       lua_l_where(l, level);
       (*l).push_value(1);
       (*l).concat(2);
     }
-    lua_error(l);
+    lua_error(&mut *l);
   }
 }
 

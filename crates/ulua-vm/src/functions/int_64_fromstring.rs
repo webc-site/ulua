@@ -14,7 +14,7 @@ use crate::{
 pub unsafe fn int64_fromstring(l: *mut LuaState) -> i32 {
   unsafe {
     let s = (*l).check_bytes(1);
-    let base = lua_l_optinteger(l, 2, 10);
+    let base = lua_l_optinteger(&mut *l, 2, 10);
     (*l).arg_check((2..=36).contains(&base), 2, "base out of range");
 
     // SAFETY: check_bytes 返回栈上存活字符串切片

@@ -15,7 +15,7 @@ use crate::{
 /// [`lua_l_getmetafield`] 的前置即此）。
 unsafe fn metafield_rawget(l: *mut LuaState) -> i32 {
   unsafe {
-    lua_rawget(l, -2);
+    lua_rawget(&mut *l, -2);
 
     if (*l).is_nil(-1) {
       (*l).pop(2); // remove metatable and metafield

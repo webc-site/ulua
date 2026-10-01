@@ -13,7 +13,5 @@ use crate::{
 /// 内部经硬化的 `index_2_addr` 解析索引，越界返回 `None`（与 cpp 越界正索引
 /// 行为一致），不抛错/不分配。
 pub(crate) fn lua_tounsignedx(l: &LuaState, idx: i32) -> Option<u32> {
-  // SAFETY: `l` 存活（引用形保证）；lua_tonumberx 只读（index_2_addr 已硬化，
-  // 伪索引读最多物化 global.pseudotemp，不写 `l`），`read_ptr` 只读转发契约成立。
-  unsafe { lua_tonumberx(l.read_ptr(), idx) }.map(luai_num2unsigned)
+  lua_tonumberx(l, idx).map(luai_num2unsigned)
 }

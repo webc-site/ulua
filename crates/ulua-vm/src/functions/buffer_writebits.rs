@@ -19,7 +19,7 @@ pub(crate) unsafe fn buffer_writebits(l: *mut LuaState) -> i32 {
     let (buf, len) = buffer_data(l, 1);
     let bitoffset = (*l).check_number(2) as i64;
     let bitcount = (*l).check_integer(3);
-    let value = lua_l_checkunsigned(l, 4);
+    let value = lua_l_checkunsigned(&mut *l, 4);
     let (startbyte, endbyte) = buffer_bit_bounds(l, len, bitoffset, bitcount);
 
     // 字节区间装入 u64（与 buffer_readbits 共享同一装载逻辑）

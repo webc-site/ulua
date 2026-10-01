@@ -32,7 +32,7 @@ use crate::{
 pub(crate) unsafe fn buffer_data(l: *mut LuaState, narg: i32) -> (*mut u8, usize) {
   let mut len: usize = 0;
   // SAFETY: 契约保证 `l`/`narg` 满足 `luaL_checkbuffer` 的帧与索引约定，`len` 为本帧可写 usize 槽
-  let buf = unsafe { lua_l_checkbuffer(l, narg, &mut len) };
+  let buf = unsafe { lua_l_checkbuffer(&mut *l, narg, &mut len) };
   (buf.cast::<u8>(), len)
 }
 

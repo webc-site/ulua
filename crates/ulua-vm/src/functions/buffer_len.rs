@@ -10,7 +10,7 @@ pub(crate) unsafe fn buffer_len(l: *mut LuaState) -> i32 {
   let mut len: usize = 0;
   // SAFETY: 契约保证 `l` 存活且实参 1 为已检查 buffer userdata，其 len 字段即数据界
   unsafe {
-    lua_l_checkbuffer(l, 1, &mut len);
+    lua_l_checkbuffer(&mut *l, 1, &mut len);
     (*l).push_number(len as f64);
   }
   1

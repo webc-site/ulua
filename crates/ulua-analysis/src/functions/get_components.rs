@@ -40,7 +40,7 @@ pub(crate) unsafe fn get_components(l: *mut LuaState) -> i32 {
       lua_createtable(vm_l, components.len() as i32, 0);
       for (i, &component) in components.iter().enumerate() {
         alloc_type_user_data(l, (*component).type_variant.clone(), false);
-        lua_rawseti(vm_l, -2, i as i32 + 1);
+        lua_rawseti(&mut *vm_l, -2, i as i32 + 1);
       }
 
       return 1;
@@ -53,7 +53,7 @@ pub(crate) unsafe fn get_components(l: *mut LuaState) -> i32 {
       lua_createtable(vm_l, components.len() as i32, 0);
       for (i, &component) in components.iter().enumerate() {
         alloc_type_user_data(l, (*component).type_variant.clone(), false);
-        lua_rawseti(vm_l, -2, i as i32 + 1);
+        lua_rawseti(&mut *vm_l, -2, i as i32 + 1);
       }
 
       return 1;

@@ -13,7 +13,7 @@ use crate::{
 /// `l` 必须指向存活的 `LuaState`，`idx` 为合法（伪）索引。
 pub unsafe fn lua_usesexport(l: *mut LuaState, idx: i32) -> i32 {
   // SAFETY: C API 契约由调用方保证 `l`/`idx` 合法，index_2_addr 返回有效栈槽。
-  let o: StkId = unsafe { index_2_addr(l, idx) };
+  let o: StkId = unsafe { index_2_addr(&*l, idx) };
   // cpp `isLfunction(o)`：是闭包且非 C 函数
   if !unsafe { (*o).is_function() } || unsafe { iscfunction!(o) } {
     return 0;

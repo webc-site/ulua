@@ -10,7 +10,7 @@ use crate::{
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub(crate) unsafe fn lua_objlen(l: *mut LuaState, idx: i32) -> i32 {
   unsafe {
-    let o: StkId = index_2_addr(l, idx);
+    let o: StkId = index_2_addr(&*l, idx);
     let tt = ttype!(o);
 
     // tag 判别经 `LuaType::from_c_int`（const fn）取判别式：原 `tt == LuaType::X as u32`

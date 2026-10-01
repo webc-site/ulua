@@ -83,7 +83,7 @@ pub(crate) unsafe fn create_singleton(l: *mut LuaState) -> i32 {
     // 上游修正后的消息：luaL_typename 按栈上值的实际类型取名
     // Safety: `lua_l_typename` 对存活 `vm_l` 索引 1 恒返回静态 NUL 结尾串
     // （"no value" 或对象类型名），`cstr_cow` 因此有效且不接管所有权。
-    let type_name = unsafe { cstr_cow(lua_l_typename(vm_l, 1)) };
+    let type_name = unsafe { cstr_cow(lua_l_typename(&*vm_l, 1)) };
     // Safety: `vm_l` 存活；错误经 throw_type_error 收口，消息为其类型名（经
     // `format_args!` 安全转发）；`throw_type_error` 返回 `!`，此分支不再落到函数末尾。
     unsafe {

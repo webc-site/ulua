@@ -135,7 +135,7 @@ pub(crate) unsafe fn load(
       // Safety: 同上，l 为活跃调用帧，错误宏按 C API 发散。
       unsafe { luaL_error!(l, "module can not yield") };
     // Safety: `lua_isstring` 为 unsafe 导出；ml 存活且 resume 出错后 -1 为错误消息槽位。
-    } else if unsafe { lua_isstring(ml, -1) } == 0 {
+    } else if lua_isstring(ml, -1) == 0 {
       // Safety: 同上，l 为活跃调用帧，错误宏按 C API 发散。
       unsafe { luaL_error!(l, "unknown error while running module") };
     } else {

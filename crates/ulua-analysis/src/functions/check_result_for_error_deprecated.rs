@@ -27,7 +27,7 @@ pub fn check_result_for_error_deprecated(
       } else if unsafe {
         // Safety: 同上，`l` 存活；gettop != 0 保证 -1 为合法栈索引，
         // lua_isstring 只做 lua_type 分类读取。
-        lua_isstring(l as *mut lua_state::LuaState, -1) != 0
+        lua_isstring(&*(l as *mut lua_state::LuaState), -1) != 0
       } {
         let err_str = alias(l as *mut lua_state::LuaState)
           .to_str(-1)

@@ -28,38 +28,32 @@ impl LuaState {
 
   #[inline(always)]
   pub fn get_table(&mut self, idx: i32) -> i32 {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_gettable(self.as_mut_ptr(), idx) }
+    lua_gettable(self, idx)
   }
 
   #[inline(always)]
   pub fn set_table(&mut self, idx: i32) {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_settable(self.as_mut_ptr(), idx) }
+    lua_settable(self, idx)
   }
 
   #[inline(always)]
   pub fn raw_get(&mut self, idx: i32) -> i32 {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_rawget(self.as_mut_ptr(), idx) }
+    lua_rawget(self, idx)
   }
 
   #[inline(always)]
   pub fn raw_set(&mut self, idx: i32) {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_rawset(self.as_mut_ptr(), idx) }
+    lua_rawset(self, idx)
   }
 
   #[inline(always)]
   pub(crate) fn raw_get_i(&mut self, idx: i32, n: i32) -> i32 {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_rawgeti(self.as_mut_ptr(), idx, n) }
+    lua_rawgeti(self, idx, n)
   }
 
   #[inline(always)]
   pub fn set_field_bytes(&mut self, idx: i32, k: &[u8]) {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_setfield_bytes(self.as_mut_ptr(), idx, k) }
+    lua_setfield_bytes(self, idx, k)
   }
 
   #[inline(always)]
@@ -69,8 +63,7 @@ impl LuaState {
 
   #[inline(always)]
   pub fn get_field_bytes(&mut self, idx: i32, k: &[u8]) -> i32 {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_getfield_bytes(self.as_mut_ptr(), idx, k) }
+    lua_getfield_bytes(self, idx, k)
   }
 
   #[inline(always)]
@@ -102,16 +95,16 @@ impl LuaState {
   /// `idx` 为合法表索引，`p` 为有效指针。
   #[inline(always)]
   pub unsafe fn raw_get_ptr(&mut self, idx: i32, p: *mut c_void) -> i32 {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_rawgetptagged(self.as_mut_ptr(), idx, p, 0) }
+    // SAFETY: `p` 的有效性由本方法 `# Safety` 契约承载（调用方保证），本帧重建可变引用即结束借用窗口。
+    unsafe { lua_rawgetptagged(self, idx, p, 0) }
   }
 
   /// # Safety
   /// `idx` 为合法表索引，`p` 为有效指针。
   #[inline(always)]
   pub unsafe fn raw_set_ptr(&mut self, idx: i32, p: *mut c_void) {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_rawsetptagged(self.as_mut_ptr(), idx, p, 0) }
+    // SAFETY: `p` 的有效性由本方法 `# Safety` 契约承载（调用方保证），本帧重建可变引用即结束借用窗口。
+    unsafe { lua_rawsetptagged(self, idx, p, 0) }
   }
 
   #[inline(always)]

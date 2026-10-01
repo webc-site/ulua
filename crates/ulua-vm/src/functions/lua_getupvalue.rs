@@ -19,7 +19,7 @@ pub unsafe fn lua_getupvalue(l: *mut LuaState, funcindex: i32, n: i32) -> *const
     lua_c_threadbarrier_lapi(l);
     // cpp `ensure_stack(L, 1)`：写 L->top 只在 name 非空的分支里发生
     ensure_stack(l, 1);
-    match aux_upvalue(index_2_addr(l, funcindex), n) {
+    match aux_upvalue(index_2_addr(&*l, funcindex), n) {
       Some((name, val)) => {
         setobj_2_s!(l, (*l).top, val);
         api_incr_top!(l);

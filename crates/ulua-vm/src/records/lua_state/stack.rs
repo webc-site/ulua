@@ -111,9 +111,7 @@ impl LuaState {
 
   #[inline(always)]
   pub fn push_value(&mut self, idx: i32) {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 的有效指针；其余前提（合法索引/栈界）
-    // 与被转发的 `pub unsafe fn` 的 `# Safety` 文档一致，由本方法调用方按文档保证。
-    unsafe { lua_pushvalue(self.as_mut_ptr(), idx) }
+    lua_pushvalue(self, idx)
   }
 
   #[inline(always)]
@@ -130,9 +128,7 @@ impl LuaState {
 
   #[inline(always)]
   pub fn set_top(&mut self, idx: i32) {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 的有效指针；其余前提（合法索引/栈界）
-    // 与被转发的 `pub unsafe fn` 的 `# Safety` 文档一致，由本方法调用方按文档保证。
-    unsafe { lua_settop(self.as_mut_ptr(), idx) }
+    lua_settop(self, idx)
   }
 
   #[inline(always)]
@@ -212,9 +208,7 @@ impl LuaState {
 
   #[inline(always)]
   pub fn pcall(&mut self, nargs: i32, nresults: i32, errfunc: i32) -> i32 {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 的有效指针；其余前提（合法索引/栈界）
-    // 与被转发的 `pub unsafe fn` 的 `# Safety` 文档一致，由本方法调用方按文档保证。
-    unsafe { lua_pcall(self.as_mut_ptr(), nargs, nresults, errfunc) }
+    lua_pcall(self, nargs, nresults, errfunc)
   }
 
   #[inline(always)]

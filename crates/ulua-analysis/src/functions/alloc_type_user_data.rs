@@ -40,7 +40,7 @@ pub(crate) unsafe fn alloc_type_user_data(
   // TypeFunctionTypeId 即 *const TypeFunctionType 裸值，转 *mut 后写 frozen 指向的是该 arena
   // 可变内存；TYPE 为 NUL 结尾字节串，元表缺失时 lua_setmetatable 为无操作。
   unsafe {
-    lua_l_checkstack(l as *mut lua_state::LuaState, 2, "allocating type");
+    lua_l_checkstack(&mut *(l as *mut lua_state::LuaState), 2, "allocating type");
 
     let ptr = lua_newuserdatatagged(
       l as *mut lua_state::LuaState,

@@ -4,15 +4,15 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// # Safety
+/// 调用序契约（正确性，非内存安全——`l` 的存活前提已由 `&mut` 接收者类型承载）：
 /// `l` 须为存活 LuaState 并处于可抛错的受保护帧；`narg` 为合法栈索引，`lua_type` 读其类型，非 Integer 时经
 /// `tag_error` 抛错并 unwind（此时不返回）；通过后 `lua_tointeger_64` 取 64 位整数值。cpp/VM/src/laux.cpp:235 luaL_checkinteger64。
-pub unsafe fn lua_l_checkinteger_64(l: *mut LuaState, narg: i32) -> i64 {
+pub fn lua_l_checkinteger_64(l: &mut LuaState, narg: i32) -> i64 {
   unsafe {
     if lua_type(l, narg) != (LuaType::Integer as i32) {
       tag_error(l, narg, LuaType::Integer as i32);
     }
 
-    lua_tointeger_64(&*l, narg)
+    lua_tointeger_64(l, narg)
   }
 }

@@ -89,8 +89,8 @@ pub(crate) unsafe fn lua_requireinternal<C: RequireHost>(
     Status::Cached => return 1,
     Status::ErrorReported => {
       push_c_str(l, &resolved_require.error);
-      // Safety: l 存活，lua_error 由 VM 状态机接续（`!` 发散收敛为 i32）。
-      unsafe { lua_error(l) }
+      // l 存活，lua_error 由 VM 状态机接续（`!` 发散收敛为 i32）。
+      lua_error(&mut *l)
     }
     _ => {}
   }

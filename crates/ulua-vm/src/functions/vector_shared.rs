@@ -47,7 +47,7 @@ pub(crate) fn vector_components(v: *const f32) -> [f32; 4] {
 fn check_vector(l: &mut LuaState, narg: i32) -> [f32; 4] {
   // SAFETY: 契约保证 narg 槽为可读 vector（失配抛错不返回），返回指针仅指向
   // 该槽内联 vector 数据并立即拷贝成分量数组。
-  vector_components(unsafe { lua_l_checkvector(l.as_mut_ptr(), narg) })
+  vector_components(lua_l_checkvector(l, narg))
 }
 
 /// 分量写回窗口门面：4 分量配置压全部 4 位，3 分量配置压前 3 位（三参重载自身把 w 补成

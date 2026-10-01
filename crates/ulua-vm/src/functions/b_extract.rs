@@ -14,7 +14,7 @@ use crate::{
 pub(crate) unsafe fn b_extract(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证 `l` 为存活调用帧且实参 1..=3 可读，字段位区间经 argcheck 在 [0,64) 界内
   unsafe {
-    let r: BUint = lua_l_checkunsigned(l, 1);
+    let r: BUint = lua_l_checkunsigned(&mut *l, 1);
     let (f, w) = fieldargs(l, 2);
     let r = (r >> f) & mask(w);
     lua_pushunsigned(l, r);

@@ -15,8 +15,8 @@ use crate::{
 pub(crate) unsafe fn vector_lerp(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证索引 1/2 为 vector（分量窗口读 [0..=3]）、索引 3 为数值；压栈需 top 后 ≥1 空槽
   unsafe {
-    let a = vector_components(lua_l_checkvector(l, 1));
-    let b = vector_components(lua_l_checkvector(l, 2));
+    let a = vector_components(lua_l_checkvector(&mut *l, 1));
+    let b = vector_components(lua_l_checkvector(&mut *l, 2));
     let t = (*l).check_number(3) as f32;
 
     // luai_lerpf 为纯算术：3 分量配置下第 4 位（两端皆 0.0）算出即弃

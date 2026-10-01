@@ -72,7 +72,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let n = (*t).get_top();
     println!("script returned {n} value(s):");
     for i in 1..=n {
-      if let Some(v) = lua_tonumberx(t, i) {
+      if let Some(v) = lua_tonumberx(&*t, i) {
         println!("  [{i}] = {v}");
       }
     }

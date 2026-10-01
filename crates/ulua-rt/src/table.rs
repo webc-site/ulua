@@ -784,8 +784,8 @@ pub(crate) fn create_table_with_capacity(lua: &Lua, narr: usize, nrec: usize) ->
 #[inline]
 pub(crate) fn number_at(state: StateView<'_>, idx: i32) -> Option<Number> {
   // Safety: 族级契约;`lua_tonumberx` 只读该槽、不动栈深,`Option` 返回值即
-  // cpp `isnum` 出参的收口。
-  unsafe { lua_tonumberx(state.as_ptr().cast_mut(), idx) }
+  // cpp `isnum` 出参的收口。本帧由裸指针重建引用,借用窗口即时结束。
+  unsafe { lua_tonumberx(&*state.as_ptr(), idx) }
 }
 
 /// 收口门面：读出栈顶的 [`Value`]（引用型值由 `value_from_stack` 登记注册表引用），
@@ -838,7 +838,7 @@ unsafe extern "C-unwind" fn c_gettable(raw: *mut LuaState) -> i32 {
   // ensure_stack(3) 与压栈序列保证，故槽 1 为有效表索引；返回 1 声明留下结果
   // 一槽，与 gettable 行为一致。
   unsafe {
-    lua_gettable(state.as_mut_ptr(), 1);
+    lua_gettable(&mut *state.as_mut_ptr(), 1);
     1
   }
 }
@@ -854,7 +854,7 @@ unsafe extern "C-unwind" fn c_settable(raw: *mut LuaState) -> i32 {
   // Safety: 调用方 `Table::set` 预留头寸并压入 `[table, key, value]`，槽 1 为有效表；
   // `lua_settable` 消费 key+value，返回 0 声明无结果留下，与 pcall nresults=0 一致。
   unsafe {
-    lua_settable(state.as_mut_ptr(), 1);
+    lua_settable(&mut *state.as_mut_ptr(), 1);
     0
   }
 }
@@ -878,8 +878,8 @@ unsafe extern "C-unwind" fn c_len(raw: *mut LuaState) -> i32 {
   unsafe {
     push_nil(state); // 结果槽
     let l = state.as_mut_ptr();
-    let ra = index_2_addr(l, stack_top(state));
-    let rb = index_2_addr(l, 1);
+    let ra = index_2_addr(&*l, stack_top(state));
+    let rb = index_2_addr(&*l, 1);
     lua_v_dolen_export(l, ra, rb);
     1
   }

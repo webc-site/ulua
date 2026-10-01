@@ -14,7 +14,7 @@ pub(crate) unsafe fn b_rshift(l: *mut LuaState) -> i32 {
     // treats the magnitude via unsigned_abs, so the wrapped value is handled.
     b_shift(
       l,
-      lua_l_checkunsigned(l, 1),
+      lua_l_checkunsigned(&mut *l, 1),
       (*l).check_integer(2).wrapping_neg(),
     )
   }

@@ -44,7 +44,7 @@ pub(crate) unsafe fn str_format(l: *mut LuaState) -> i32 {
     let top = (*l).get_top();
     let mut arg: i32 = 1;
     // 借用切片形态取格式串：出参 len 由切片长度承接，游标全程按下标推进
-    let f = lua_l_checklstring_ref(l, arg);
+    let f = lua_l_checklstring_ref(&mut *l, arg);
 
     let mut b = LuaLStrbuf::new();
     lua_l_buffinit(&mut *l, &mut b);
@@ -127,7 +127,7 @@ pub(crate) unsafe fn str_format(l: *mut LuaState) -> i32 {
             addquoted(l, &mut b, arg);
           }
           b's' => {
-            let s = lua_l_checklstring_ref(l, arg);
+            let s = lua_l_checklstring_ref(&mut *l, arg);
             // no precision and string too long to format, or no format necessary
             if p == 0 || (spec.precision.is_none() && s.len() >= DIRECT_APPEND_MIN_LEN) {
               lua_l_addlstring(&mut b, s);

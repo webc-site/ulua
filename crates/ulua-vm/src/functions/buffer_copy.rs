@@ -16,18 +16,18 @@ pub(crate) unsafe fn buffer_copy(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证源/目标偏移与长度经 argcheck 落在各自 buffer 界内，memmove 允许区间重叠
   unsafe {
     let mut tlen: usize = 0;
-    let tbuf = lua_l_checkbuffer(l, 1, &mut tlen).cast::<u8>();
+    let tbuf = lua_l_checkbuffer(&mut *l, 1, &mut tlen).cast::<u8>();
     let toffset = (*l).check_integer(2);
 
     let mut slen: usize = 0;
-    let sbuf = lua_l_checkbuffer(l, 3, &mut slen).cast::<u8>();
-    let soffset = lua_l_optinteger(l, 4, 0);
+    let sbuf = lua_l_checkbuffer(&mut *l, 3, &mut slen).cast::<u8>();
+    let soffset = lua_l_optinteger(&mut *l, 4, 0);
 
     // C++ evaluates `int(slen) - soffset` as the default eagerly (signed overflow
     // is UB upstream for soffset = INT_MIN); wrapping_sub reproduces the two's-
     // complement value C++ relies on, which the `size < 0` / isoutofbounds checks
     // below then reject. (Upstream UBSan: lbuflib.cpp:257.)
-    let size = lua_l_optinteger(l, 5, (slen as i32).wrapping_sub(soffset));
+    let size = lua_l_optinteger(&mut *l, 5, (slen as i32).wrapping_sub(soffset));
 
     if size < 0 {
       buffer_oob_error(l);

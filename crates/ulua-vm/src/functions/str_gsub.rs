@@ -25,10 +25,10 @@ use crate::{
 /// cpp lstrlib.cpp:831 `str_gsub`。
 pub(crate) unsafe fn str_gsub(l: *mut LuaState) -> i32 {
   unsafe {
-    let src = lua_l_checklstring_ref(l, 1);
-    let pat = lua_l_checklstring_ref(l, 2);
+    let src = lua_l_checklstring_ref(&mut *l, 1);
+    let pat = lua_l_checklstring_ref(&mut *l, 2);
     let tr = (*l).type_of(3);
-    let max_s = lua_l_optinteger(l, 4, src.len() as i32 + 1);
+    let max_s = lua_l_optinteger(&mut *l, 4, src.len() as i32 + 1);
     // cpp: `int anchor = (*p == '^')` —— 空 pattern 时 cpp 读终止 NUL，必不为 '^'，
     // 与切片 `first()` 无值同点位
     let anchor = pat.first() == Some(&b'^');

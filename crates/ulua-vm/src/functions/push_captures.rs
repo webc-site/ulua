@@ -19,7 +19,8 @@ pub(crate) fn push_captures(ms: &mut MatchState, s: Option<usize>, e: Option<usi
 
   // SAFETY: 对象不变式（`prepstate` 建立的存活 `lua_State`）保证 `ms.l` 可承接栈扩容，
   // 容量不足时其内部经 lua_error 抛 "too many captures" 且不返回
-  unsafe { lua_l_checkstack(ms.l, nlevels, "too many captures") };
+  // SAFETY: `ms.l` 为 prepstate 建立的存活 `lua_State` 裸指针，本帧重建可变引用即结束借用窗口
+  unsafe { lua_l_checkstack(&mut *ms.l, nlevels, "too many captures") };
 
   // 保留下标遍历：i 即捕获层级编号本身——push_onecapture 拿它比对 ms.level 并寻址
   // ms.capture[i]；且该调用可变借用 ms，无法同时持有捕获数组的切片借用

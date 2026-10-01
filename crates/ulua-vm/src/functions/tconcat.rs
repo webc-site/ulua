@@ -16,11 +16,11 @@ use crate::{
 pub unsafe fn tconcat(l: *mut LuaState) -> i32 {
   unsafe {
     let mut lsep: usize = 0;
-    let sep = lua_l_optlstring(l, 2, null(), &mut lsep);
+    let sep = lua_l_optlstring(&mut *l, 2, null(), &mut lsep);
     (*l).check_type(1, LuaType::Table);
-    let i = lua_l_optinteger(l, 3, 1);
+    let i = lua_l_optinteger(&mut *l, 3, 1);
     let last = (*l).obj_len(1) as i32;
-    let last = lua_l_optinteger(l, 4, last);
+    let last = lua_l_optinteger(&mut *l, 4, last);
 
     let t = (*(*l).base).as_table_ptr();
     // 可空位点降级：NULL 表指针（JIT 空表）→ None，非空 → 共享只读借用

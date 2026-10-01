@@ -15,11 +15,11 @@ const SEP_COMMA: &[u8] = b",";
 pub unsafe fn str_split(l: *mut LuaState) -> i32 {
   unsafe {
     // 借用切片形态取源串/分隔符：出参 len 由切片长度承接，游走全程按下标，免指针算术
-    let hay = lua_l_checklstring_ref(l, 1);
+    let hay = lua_l_checklstring_ref(&mut *l, 1);
     let nee = if (*l).is_none_or_nil(2) {
       SEP_COMMA
     } else {
-      lua_l_checklstring_ref(l, 2)
+      lua_l_checklstring_ref(&mut *l, 2)
     };
     let haystack_len = hay.len();
     let needle_len = nee.len();
@@ -41,7 +41,7 @@ pub unsafe fn str_split(l: *mut LuaState) -> i32 {
         (*l).push_integer(num_matches);
         // span_start ≤ iter ≤ haystack_len，切片区间恒界内
         lua_pushlstring_bytes(l, &hay[span_start..iter]);
-        lua_settable(l, -3);
+        lua_settable(&mut *l, -3);
 
         span_start = iter + needle_len;
         if needle_len > 0 {
@@ -56,7 +56,7 @@ pub unsafe fn str_split(l: *mut LuaState) -> i32 {
       (*l).push_integer(num_matches);
       // span_start ≤ haystack_len（仅 needle_len>0 时推进过界内命中位）
       lua_pushlstring_bytes(l, &hay[span_start..]);
-      lua_settable(l, -3);
+      lua_settable(&mut *l, -3);
     }
 
     1

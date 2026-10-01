@@ -54,7 +54,7 @@ pub(crate) unsafe fn get_function_generics(l: *mut LuaState) -> i32 {
 
     for el in &(*tfft).generics {
       alloc_type_user_data(l, (*(*el)).type_variant.clone(), false);
-      lua_rawseti(vm_l, -2, pos);
+      lua_rawseti(&mut *vm_l, -2, pos);
       pos += 1;
     }
 
@@ -70,7 +70,7 @@ pub(crate) unsafe fn get_function_generics(l: *mut LuaState) -> i32 {
         }),
         false,
       );
-      lua_rawseti(vm_l, -2, pos);
+      lua_rawseti(&mut *vm_l, -2, pos);
       pos += 1;
     }
 

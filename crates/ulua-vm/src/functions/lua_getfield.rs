@@ -13,11 +13,11 @@ use crate::{
   type_aliases::stk_id::StkId,
 };
 
-/// # Safety
-/// `l` 须为存活 LuaState 并处于可分配/GC/可抛错的受保护帧，`(*l).top` 之后经 `ensure_stack(l, 1)` 留 1 空槽（结果写入并 `api_incr_top`）；
+/// `lua_getfield` 核心（cpp `lapi.cpp:846`）。调用序契约（正确性，非内存安全）：
+/// `l` 处于可分配/GC/可抛错的受保护帧，`l.top` 之后经 `ensure_stack(l, 1)` 留 1 空槽（结果写入并 `api_incr_top`）；
 /// `idx` 经 `index_2_addr` 解析为指向可索引值（table/带 __index 元表者）的栈槽且非 `LUA_O_NILOBJECT`（`api_check`）；
 /// `k` 为字节切片，`lua_s_new` 会 intern（可分配）。
-pub(crate) unsafe fn lua_getfield_bytes(l: *mut LuaState, idx: i32, k: &[u8]) -> i32 {
+pub(crate) fn lua_getfield_bytes(l: &mut LuaState, idx: i32, k: &[u8]) -> i32 {
   unsafe {
     lua_c_threadbarrier_lapi(l);
     ensure_stack(l, 1);
@@ -31,10 +31,10 @@ pub(crate) unsafe fn lua_getfield_bytes(l: *mut LuaState, idx: i32, k: &[u8]) ->
       l,
       Slot::from_raw(t),
       Slot::from_mut(&mut key),
-      Slot::from_raw((*l).top),
+      Slot::from_raw(l.top),
     );
     api_incr_top!(l);
 
-    ttype!((*l).top.sub(1)) as i32
+    ttype!(l.top.sub(1)) as i32
   }
 }

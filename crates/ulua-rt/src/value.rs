@@ -509,7 +509,7 @@ fn vector_at(state: StateView<'_>, idx: i32) -> Value {
   // Safety: `idx` 有效（`value_from_stack` 共用前置）且 tag 已判为 Vector，
   // `lua_tovector` 返回的分量数组指针非空即活过本次读取（不外借）。
   let comps = unsafe {
-    let p = lua_tovector(state.as_ptr().cast_mut(), idx);
+    let p = lua_tovector(&*state.as_ptr(), idx);
     if p.is_null() {
       return Value::Nil;
     }

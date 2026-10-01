@@ -412,7 +412,7 @@ impl RequireHost for MemHost {
           }
         } else if run_status == LuaStatus::Yield as i32 {
           luaL_error!(l, "module can not yield");
-        } else if lua_isstring(ml, -1) == 0 {
+        } else if lua_isstring(&*ml, -1) == 0 {
           luaL_error!(l, "unknown error while running module");
         } else {
           let msg = (*ml).to_str(-1).unwrap_or_default().to_owned();
@@ -468,7 +468,7 @@ impl Fixture {
         let msg = (*self.l()).to_str(-1).unwrap_or_default().to_owned();
         return Err(msg);
       }
-      if lua_pcall(self.l(), 0, 0, 0) != 0 {
+      if lua_pcall(&mut *self.l(), 0, 0, 0) != 0 {
         let msg = (*self.l()).to_str(-1).unwrap_or_default().to_owned();
         (*self.l()).set_top(0);
         return Err(msg);

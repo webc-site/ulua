@@ -9,15 +9,15 @@ use crate::{
   type_aliases::stk_id::StkId,
 };
 
-/// # Safety
-/// `l` 须为存活 LuaState 并处于可 GC/可分配（thread barrier）的受保护帧，`ensure_stack(l, 1)` 保证 `(*l).top` 之后留 1 空槽；
-/// `idx` 经 `index2addr` 解析为栈内存活 StkId（`setobj2s` 从该槽拷入 `(*l).top` 并 `api_incr_top`）。cpp/VM/src/lapi.cpp:330 lua_pushvalue。
-pub(crate) unsafe fn lua_pushvalue(l: *mut LuaState, idx: i32) {
+/// `lua_pushvalue` 核心（cpp/VM/src/lapi.cpp:330）。调用序契约（正确性，非内存安全）：
+/// `l` 处于可 GC/可分配（thread barrier）的受保护帧，`ensure_stack(l, 1)` 保证 `l.top` 之后留 1 空槽；
+/// `idx` 经 `index2addr` 解析为栈内存活 StkId（`setobj2s` 从该槽拷入 `l.top` 并 `api_incr_top`）。
+pub(crate) fn lua_pushvalue(l: &mut LuaState, idx: i32) {
   unsafe {
     lua_c_threadbarrier_lapi(l);
     ensure_stack(l, 1);
     let o: StkId = index_2_addr(l, idx);
-    setobj_2_s!(l, (*l).top, o);
+    setobj_2_s!(l, l.top, o);
     api_incr_top!(l);
   }
 }

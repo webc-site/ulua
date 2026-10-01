@@ -12,7 +12,7 @@ use crate::{
 pub(crate) unsafe fn vector_magnitude(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证索引 1 为 vector，其分量窗口只读 [0..=3]，不写栈
   unsafe {
-    let v = vector_components(lua_l_checkvector(l, 1));
+    let v = vector_components(lua_l_checkvector(&mut *l, 1));
 
     (*l).push_number(sum_squares(v).sqrt() as f64);
     1

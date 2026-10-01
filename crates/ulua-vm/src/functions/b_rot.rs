@@ -11,7 +11,7 @@ use crate::{
 pub(crate) unsafe fn b_rot(l: *mut LuaState, mut i: i32) -> i32 {
   // SAFETY: 契约保证 `l` 为存活调用帧且实参 2 可读，旋转量归一后纯数值运算无指针访问
   unsafe {
-    let mut r: BUint = lua_l_checkunsigned(l, 1);
+    let mut r: BUint = lua_l_checkunsigned(&mut *l, 1);
 
     // i = i % NBITS (avoid undefined shift when i == 0)
     i &= NBITS - 1;

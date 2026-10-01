@@ -23,7 +23,7 @@ where
   unsafe {
     let (buf, len) = buffer_data(l, 1);
     let offset = (*l).check_integer(2);
-    let value = lua_l_checkunsigned(l, 3);
+    let value = lua_l_checkunsigned(&mut *l, 3);
 
     // cpp `T val = T(value)`：数值截断，端序无关
     store_scalar(

@@ -22,7 +22,7 @@ pub(crate) unsafe fn bitfold(
     let mut r = init;
 
     for i in 1..=n {
-      r = op(r, lua_l_checkunsigned(l, i));
+      r = op(r, lua_l_checkunsigned(&mut *l, i));
     }
 
     trim(r)

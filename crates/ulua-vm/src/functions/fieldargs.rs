@@ -14,7 +14,7 @@ pub(crate) unsafe fn fieldargs(l: *mut LuaState, farg: i32) -> (i32, i32) {
   // SAFETY: 契约保证 `l` 为存活调用帧、farg 索引可读；checklstring 返回的串数据与长度在本调用期间有效
   unsafe {
     let f = (*l).check_integer(farg);
-    let w = lua_l_optinteger(l, farg + 1, 1);
+    let w = lua_l_optinteger(&mut *l, farg + 1, 1);
 
     (*l).arg_check(0 <= f, farg, "field cannot be negative");
     (*l).arg_check(0 < w, farg + 1, "width must be positive");

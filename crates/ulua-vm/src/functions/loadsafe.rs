@@ -251,7 +251,7 @@ pub(crate) unsafe fn loadsafe(
     let envt = if env == 0 {
       (*l).gt
     } else {
-      (*lua_a_toobject(l, env)).as_table_ptr()
+      (*lua_a_toobject(&*l, env)).as_table_ptr()
     };
 
     // cpp: `TString* source = luaS_new(L, chunkname)` —— 宏体里的长度是

@@ -176,7 +176,7 @@ pub(crate) fn populate_placeholder(l: &mut LuaState, placeholder_idx: i32, resul
   // 索引为调用方契约保证的同一帧表槽，无指针解引用。
   let mut cursor = 0;
   loop {
-    cursor = unsafe { lua_rawiter(l.as_mut_ptr(), result_idx, cursor) };
+    cursor = lua_rawiter(l, result_idx, cursor);
     if cursor < 0 {
       break;
     }

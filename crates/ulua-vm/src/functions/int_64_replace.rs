@@ -13,7 +13,7 @@ pub unsafe fn int64_replace(l: *mut LuaState) -> i32 {
     let n = (*l).check_integer_64(1);
     let r = (*l).check_integer_64(2);
     let f = (*l).check_integer_64(3);
-    let w = lua_l_optinteger_64(l, 4, 1);
+    let w = lua_l_optinteger_64(&mut *l, 4, 1);
 
     // cpp lintlib.cpp:453：replace 签名为 (value, replacement, field, width)，
     // f 取自第 3 槽，报错 argnum 必须是 3

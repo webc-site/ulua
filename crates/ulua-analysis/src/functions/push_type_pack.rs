@@ -48,7 +48,7 @@ pub(crate) unsafe fn push_type_pack(l: *mut LuaState, tp: TypeFunctionTypePackId
         lua_createtable(vm_l, (*tftp).head.len() as i32, 0);
         for (idx, el) in (*tftp).head.iter().enumerate() {
           alloc_type_user_data(l, (**el).type_variant.clone(), false);
-          lua_rawseti(vm_l, -2, (idx + 1) as i32);
+          lua_rawseti(&mut *vm_l, -2, (idx + 1) as i32);
         }
 
         (*vm_l).set_field_bytes(-2, FIELD_HEAD);

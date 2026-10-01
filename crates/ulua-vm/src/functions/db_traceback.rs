@@ -22,7 +22,7 @@ pub(crate) unsafe fn db_traceback(l: *mut LuaState) -> i32 {
 
     // 对应 cpp ldblib.cpp 的 luaL_optstring(L, arg + 1, NULL)，
     // 即 lua_l_optlstring 不取长度（len 传 null）
-    let msg_ptr = lua_l_optlstring(l, arg + 1, null(), null_mut());
+    let msg_ptr = lua_l_optlstring(&mut *l, arg + 1, null(), null_mut());
     let msg = if msg_ptr.is_null() {
       None
     } else {
@@ -30,7 +30,7 @@ pub(crate) unsafe fn db_traceback(l: *mut LuaState) -> i32 {
     };
 
     let default_level = if l == l1 { 1 } else { 0 };
-    let level = lua_l_optinteger(l, arg + 2, default_level);
+    let level = lua_l_optinteger(&mut *l, arg + 2, default_level);
 
     (*l).arg_check(level >= 0, arg + 2, "level can't be negative");
 

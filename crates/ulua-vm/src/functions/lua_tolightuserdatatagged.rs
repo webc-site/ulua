@@ -23,7 +23,7 @@ pub unsafe fn lua_tolightuserdatatagged(
   tag: i32,
 ) -> Option<*mut c_void> {
   unsafe {
-    let o: StkId = index_2_addr(l, idx);
+    let o: StkId = index_2_addr(&*l, idx);
 
     match ValueView::from_tvalue(&*o) {
       ValueView::LightUserdata { pointer, tag: t } if t == tag => Some(pointer),

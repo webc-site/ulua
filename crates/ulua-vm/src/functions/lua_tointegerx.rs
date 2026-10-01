@@ -9,10 +9,8 @@ use crate::{functions::lua_tonumberx::lua_tonumberx, records::lua_state::LuaStat
 /// [`ValueView`](crate::enums::value_view::ValueView) match 链，对应 cpp
 /// `tonumber(o,&n)` + `nvalue(o)` 两步。
 ///
-/// # Safety
-/// `l` 须为存活 `LuaState` 且 `idx` 为合法（伪）索引，使 `lua_tonumberx` 内的
-/// `index2addr` 返回指向栈上有效 TValue 的指针。cpp `lapi.cpp:432`。
-pub unsafe fn lua_tointegerx(l: *mut LuaState, idx: i32) -> Option<i32> {
-  // SAFETY: 契约随 `lua_tonumberx` 的 `# Safety` 原样透传。
-  unsafe { lua_tonumberx(l, idx).map(|n| n as i32) }
+/// `l` 以引用传入（存活由类型保证）；仅读槽值，不写栈、不分配、不抛错。
+/// cpp `lapi.cpp:432`。
+pub fn lua_tointegerx(l: &LuaState, idx: i32) -> Option<i32> {
+  lua_tonumberx(l, idx).map(|n| n as i32)
 }

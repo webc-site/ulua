@@ -52,7 +52,7 @@ pub(crate) unsafe fn get_generics(
       let mut i: i32 = 1;
       while i <= (*vm_l).obj_len(-1) as i32 {
         (*vm_l).push_integer(i);
-        lua_gettable(vm_l, -2);
+        lua_gettable(&mut *vm_l, -2);
 
         if (*vm_l).is_nil(-1) {
           (*vm_l).pop(1);

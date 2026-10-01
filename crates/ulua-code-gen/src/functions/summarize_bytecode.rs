@@ -27,7 +27,7 @@ pub unsafe fn summarize_bytecode(
 
   // Safety: 依契约——栈位类型与 TValue 读数均走 Lua C-ABI。
   unsafe { CODEGEN_ASSERT!(lua_is_lfunction(l, idx) != 0) };
-  let func: *const TValue = unsafe { lua_a_toobject(l, idx) };
+  let func: *const TValue = unsafe { lua_a_toobject(&*l, idx) };
 
   // Safety: 依契约——经 as_closure 将 func 视作存活 LClosure*，inner.l.p 为构造接线的非空 Proto*。
   let root: *mut Proto = unsafe { (*func).as_closure().inner.l.p };

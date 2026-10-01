@@ -18,7 +18,7 @@ pub(crate) fn lua_remove(l: &mut LuaState, idx: i32) {
   // 前提（p 与 top 同属一块栈区）由调用序契约与 VM 栈不变式成立。
   unsafe {
     let lp = l.as_mut_ptr();
-    let p: StkId = index_2_addr(lp, idx);
+    let p: StkId = index_2_addr(&*lp, idx);
     api_check!(lp, !eq(p, LUA_O_NILOBJECT));
     let count = (*lp).top.offset_from(p) - 1;
     if count > 0 {

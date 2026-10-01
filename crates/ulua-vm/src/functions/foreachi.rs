@@ -19,7 +19,7 @@ pub unsafe fn foreachi(l: *mut LuaState) -> i32 {
     for i in 1..=n {
       (*l).push_value(2); // function
       (*l).push_integer(i); // 1st argument
-      lua_rawgeti(l, 1, i); // 2nd argument
+      lua_rawgeti(&mut *l, 1, i); // 2nd argument
       (*l).call(2, 1);
 
       if !(*l).is_nil(-1) {
