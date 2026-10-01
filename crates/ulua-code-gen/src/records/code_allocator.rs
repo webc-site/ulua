@@ -66,8 +66,9 @@ pub struct CodeAllocator {
   pub(crate) block_end: usize,
   /// 历次映射块的基址（地址），`destroy` 时逐个解除映射。
   pub(crate) blocks: Vec<usize>,
-  /// 历次映射块的 unwind 信息句柄（由 `create_block_unwind_info` 产出）。
-  pub(crate) unwind_infos: Vec<*mut c_void>,
+  /// 历次映射块的 unwind 信息句柄（由 `create_block_unwind_info` 产出，产出点经
+  /// `NonNull::new` 收编，恒非空；`destroy` 时逐个交回 C 回调——裸形只在该 ABI 边界还原）。
+  pub(crate) unwind_infos: Vec<NonNull<c_void>>,
   pub(crate) block_size: usize,
   pub(crate) max_total_size: usize,
   pub(crate) live_allocations: usize,
@@ -100,10 +101,12 @@ impl CodeAllocator {
   /// unwind 建表三处重复的 `32` 魔法数（review.md §4 编译期化）。
   pub(crate) const K_CODE_ALIGNMENT: usize = 32;
 
-  /// 当前块剩余可写字节数（纯地址差，无活动块时为 0）。
+  /// 当前块剩余可写字节数（纯地址差，无活动块时为 0）。即便 `block_pos`/`block_end`
+  /// 的不变量被破坏也饱和到 0 而非回绕成巨值，令后续分配安全落入
+  /// `allocate_new_block` 路径（cpp `size_t(blockEnd - blockPos)` 的防御化等价）。
   #[inline]
   pub(crate) fn block_remaining(&self) -> usize {
-    self.block_end.wrapping_sub(self.block_pos)
+    self.block_end.saturating_sub(self.block_pos)
   }
 
   pub fn align_to_page_size(size: usize) -> usize {
@@ -112,7 +115,7 @@ impl CodeAllocator {
 
     #[cfg(not(target_os = "windows"))]
     // Safety: getpagesize 为 POSIX C ABI 无参函数，调用不含指针/长度前提，返回内核页大小
-    // 正整数；extern 声明与 libc 签名一致，转 usize 仅用于其后的对齐掩码算术。
+    // 正整数；extern 声明与 libc 签名一致，转 usize 仅用于其后的对齐算术。
     let page_size = unsafe {
       unsafe extern "C" {
         fn getpagesize() -> i32;
@@ -121,7 +124,9 @@ impl CodeAllocator {
       getpagesize() as usize
     };
 
-    (size + page_size - 1) & !(page_size - 1)
+    // 标准库「向上取整到倍数」（页大小恒为 2 的幂，与原掩码公式逐位一致，
+    // 且不引入 `size + page_size - 1` 的中间溢出）。
+    size.next_multiple_of(page_size)
   }
 
   /// 以当前游标为基派生块内绝对地址（可执行页边界，见 records::code_allocator 模块注释）。
@@ -214,8 +219,8 @@ impl CodeAllocator {
         total_size = ts;
       }
     } else {
-      let aligned_data_size =
-        (data_size + (Self::K_CODE_ALIGNMENT - 1)) & !(Self::K_CODE_ALIGNMENT - 1);
+      // 'Round up' 保留 code 对齐（cpp 同段），标准库取倍无中间溢出。
+      let aligned_data_size = data_size.next_multiple_of(Self::K_CODE_ALIGNMENT);
       let ts = aligned_data_size + code_size;
 
       if ts > self.block_size - Self::K_MAX_RESERVED_DATA_SIZE {
@@ -344,13 +349,15 @@ impl CodeAllocator {
         )
       };
 
-      start_offset = (start_offset + (Self::K_CODE_ALIGNMENT - 1)) & !(Self::K_CODE_ALIGNMENT - 1);
+      // 'Round up' 对齐改用标准库取倍（同 cpp 注释语义，见 align_to_page_size 论证）。
+      start_offset = start_offset.next_multiple_of(Self::K_CODE_ALIGNMENT);
 
       CODEGEN_ASSERT!(start_offset <= CodeAllocator::K_MAX_RESERVED_DATA_SIZE);
 
-      if unwind_info.is_null() {
-        return None;
-      }
+      // cpp `if (!unwindInfo) return false` 的空哨兵判定：句柄在此边界收编为非空，
+      // 内部存储不再出现可空裸指针（失败即放弃本块，与 cpp 一致不回滚已登记的
+      // block/游标）。
+      let unwind_info = NonNull::new(unwind_info)?;
 
       self.unwind_infos.push(unwind_info);
     }
@@ -420,13 +427,14 @@ impl CodeAllocator {
     self.destroyed = true;
 
     if let Some(destroy_block_unwind_info_fn) = self.destroy_block_unwind_info {
-      for unwind_info in &self.unwind_infos {
+      for &unwind_info in &self.unwind_infos {
         // Safety: destroy_block_unwind_info 为本 crate 提供的 extern "C-unwind" 回调，契约接受
         // (context, unwind_data, unwind_block_size)；self.context 为构造期接线的 unwind_builder cast 指针、
-        // *unwind_info 为先前 create_block_unwind_info 登记的存活块基址，self.block_size 是该块的
-        // 映射长度下限，遍历清空前二者仍有效（free_pages 在下方才执行）。
+        // unwind_info.as_ptr() 为先前 create_block_unwind_info 登记的存活块基址（NonNull 句柄
+        // 在此 ABI 边界还原为 c_void* 裸形），self.block_size 是该块的映射长度下限，
+        // 遍历清空前二者仍有效（free_pages 在下方才执行）。
         unsafe {
-          destroy_block_unwind_info_fn(self.context, *unwind_info, self.block_size);
+          destroy_block_unwind_info_fn(self.context, unwind_info.as_ptr(), self.block_size);
         }
       }
     }
