@@ -8,16 +8,16 @@
 # ulua
 
 ulua 是 [Luau](https://luau.org) 的 Rust 实现。
-🎮 **在线体验**：[webc-site.github.io/ulua](https://webc-site.github.io/ulua/) —— 在浏览器中即时运行与类型检查 Luau。
+**在线体验**：[webc-site.github.io/ulua](https://webc-site.github.io/ulua/) —— 在浏览器中即时运行与类型检查 Luau。
 
-本项目是基于 [luau-rs/luau](https://github.com/luau-rs/luau) 的全面重构。上游 [luau-rs/luau](https://github.com/luau-rs/luau) 将 Roblox 的 C++ 源码 [luau-lang/luau](https://github.com/luau-lang/luau) 转写为了 Rust。
+本项目基于 [pjankiewicz/luaur](https://github.com/pjankiewicz/luaur) 进行全面深度重构与面向 Rust 的优化。其根源 [pjankiewicz/luaur](https://github.com/pjankiewicz/luaur) 将 Roblox 官方 C++ 源码 [luau-lang/luau](https://github.com/luau-lang/luau) 转译为了 Rust。
 
-在此基础上，本项目进行了深度重构与代码现代化：
+在此基础上，本项目开展了深度重构与面向 Rust 的优化：
 
-- **删除所有 `allow`**：彻底清理所有编译警告忽略属性（`#![allow(...)]`），直面并解决潜在隐患；
-- **Rust 惯用化重写**：用纯正的 Rust 方式改写 C 风格代码；
-- **消除 Clippy 告警**：遵循严格规范，全面避免并修复 Clippy 报警；
-- **精简 `unsafe`**：大幅减少 `unsafe` 代码块，持续强化内存安全。
+- **删除所有 `allow` 属性**：彻底清理所有编译警告忽略属性（`#![allow(...)]`），解决底层潜在隐患；
+- **Rust 惯用化重写**：用纯正的 Rust 惯用法与安全抽象改写 C 转译风格代码；
+- **严格 Clippy 规范**：遵循 Rust 最佳实践，全库消除 Clippy 告警；
+- **精简 `unsafe`**：大幅减少 `unsafe` 代码块，严格限制在 FFI 与 VM 核心边界，持续强化内存安全。
 
 - [项目功能介绍](#项目功能介绍)
 - [使用演示](#使用演示)
@@ -25,7 +25,7 @@ ulua 是 [Luau](https://luau.org) 的 Rust 实现。
   - [即时编译与解释执行切换](#即时编译与解释执行切换)
   - [Rust 调用 Lua 函数（参数传递与多返回值）](#rust-调用-lua-函数参数传递与多返回值)
   - [Lua 调用 Rust 函数与闭包](#lua-调用-rust-函数与闭包)
-  - [宿主对象与面向对象 (UserData)](#宿主对象与面向对象-userdata)
+  - [宿主对象与面向对象](#宿主对象与面向对象)
   - [静态类型检查](#静态类型检查)
 - [性能基准评测](#性能基准评测)
 - [特性介绍](#特性介绍)
@@ -44,7 +44,7 @@ ulua 是 [Luau](https://luau.org) 的 Rust 实现。
 
 ## 项目功能介绍
 
-ulua 将 Luau 语言由 C++ 直接转译至 Rust，无需外部动态链接库绑定或 C 语言编译环境。
+ulua 为纯 Rust 实现的 Luau 语言环境，无需外部 C/C++ 动态链接库绑定或 C 编译工具链。
 
 项目覆盖完整的语言处理管线：词法分析、语法解析、字节码编译、寄存器虚拟机执行、双向静态类型推导以及底层机器码生成。
 
@@ -119,19 +119,22 @@ fn main() -> Result<()> {
 
 #### 2. CLI 命令行控制
 
-在命令行终端中，通过 `--codegen` 开关或环境变量启用 JIT：
+在命令行终端中，通过 `--codegen` 开关启用 JIT：
 
 - **解释执行（默认）**：
   ```bash
-  ulua script.luau               # 解释执行
-  ulua-repl-cli                  # 交互式 REPL (解释模式)
+  ulua script.luau               # 解释执行脚本
+  ulua                           # 交互式 REPL (解释模式)
+  ulua-repl                      # 独立 REPL 工具
   ```
 - **即时编译**：
   ```bash
   ulua --codegen script.luau     # 启用 A64/X64 JIT 编译执行
-  ulua-repl-cli --codegen        # 交互式 REPL (JIT 模式)
-  LUAU_CODEGEN=1 ulua script.luau # 通过环境变量启用 JIT
+  ulua --codegen                 # 交互式 REPL (JIT 模式)
+  ulua-repl --codegen            # 独立 REPL 工具 (JIT 模式)
   ```
+
+在规范符合性测试中，亦支持通过环境变量 `LUAU_CODEGEN=1` 触发 JIT 测试套件。
 
 #### 3. 与主流 Lua 运行时的 JIT 开关对照
 
@@ -245,7 +248,7 @@ fn main() -> Result<()> {
 }
 ```
 
-### 宿主对象与面向对象
+### 宿主对象与面向对象 (UserData)
 
 向脚本环境注册原生结构体，暴露实例方法（不可变借用 `&this` 与就地修改 `&mut this`）与运算符元方法：
 
@@ -386,42 +389,45 @@ Luau 运行时为动态类型语言，**核心编译与执行链路实行类型�
 
 ```mermaid
 graph TD
-  Source["源码文本 (.luau)"] --> AST["ulua-ast (语法解析与AST)"]
+  Source["源码文本 (.luau)"] --> AST["ulua-ast (词法与语法解析)"]
   AST --> Compiler["ulua-compiler (字节码编译器)"]
-  Compiler --> CodeGen["ulua-code-gen (指令生成优化)"]
-  CodeGen --> Bytecode["ulua-bytecode (字节码序列化)"]
-  Bytecode --> VM["ulua-vm (寄存器虚拟机与GC)"]
-  VM --> RT["ulua-rt (宿主安全句柄封装)"]
-  RT --> Umbrella["ulua (统一门面库)"]
+  Compiler --> Bytecode["ulua-bytecode (字节码定义与编解码)"]
+  Bytecode --> VM["ulua-vm (寄存器虚拟机与分代GC)"]
+  Bytecode -. JIT 编译 .-> CodeGen["ulua-code-gen (A64/X64 本地机器码生成)"]
+  CodeGen -. 机器码加速 .-> VM
+  VM --> RT["ulua-rt (宿主安全运行时封装)"]
+  RT --> Umbrella["ulua (统一门面库与CLI)"]
 
-  subgraph 核心基础辅助
-    Common["ulua-common (基础数据结构)"] -.-> AST
+  subgraph 核心辅助
+    Common["ulua-common (基础数据结构与FastFlags)"] -.-> AST
     Common -.-> VM
-    Config["ulua-config (层级配置)"] -.-> RT
-    Require["ulua-require (模块加载)"] -.-> VM
+    Config["ulua-config (层级配置解析)"] -.-> RT
+    Require["ulua-require (模块加载解析)"] -.-> VM
   end
 
-  subgraph 外围分析与语言服务 [完全解耦·按需使用]
+  subgraph 外围分析与语言服务 [解耦·按需使用]
     AST -.-> Analysis["ulua-analysis (双向类型推导/LSP)"]
-    Analysis -.-> CLI_Analyze["ulua-analyze-cli"]
+    Analysis -.-> CLI_Analyze["ulua-analyze-cli (类型检查CLI)"]
   end
 
   subgraph 外围绑定
-    VM -.-> CAPI["ulua-capi (C ABI 动态库壳)"]
+    VM -.-> CAPI["ulua-capi (纯 C ABI 导出壳)"]
     VM -.-> Web["ulua-web (WASM 浏览器环境)"]
   end
 ```
 
 - **词法与语法分析 (`ulua-ast`)**：将源码转换为基于 Arena 内存池分配的高效抽象语法树。
-- **字节码编译与优化 (`ulua-compiler` + `ulua-code-gen` + `ulua-bytecode`)**：
-  进行常量折叠、局部变量存活期分析与寄存器分配，由底层生成器压制为紧凑的字节码指令流。
+- **字节码编译与优化 (`ulua-compiler` + `ulua-bytecode`)**：
+  进行常量折叠、局部变量存活期分析与寄存器分配，由编译器生成紧凑的字节码指令流。
 - **寄存器虚拟机执行 (`ulua-vm`)**：
   载入字节码，基于寄存器式调度器执行指令，配合分代垃圾回收（GC）与内置标准库驱动执行。
+- **即时机器码生成 (`ulua-code-gen`)**：
+  为 Apple Silicon (AArch64) 与 x86_64 架构提供纯 Rust JIT 编译，直接将字节码编译为本地机器指令并加速执行。
 - **宿主安全运行时封装 (`ulua-rt`)**：
   提供符合 RAII 原则的安全句柄（`Lua`, `Table`, `Function`, `UserData`），接管引用计数、生命周期与恐慌隔离。
 - **解耦设计**：
   - **核心包**：仅包含执行必需模块，零冗余依赖，极致轻量与高安全性。
-  - **`ulua-analysis`**：专门承担离线静态类型检查（LSP 自动补全、跳转定义、报错诊断），不参与任何运行时，与核心执行管线解耦。
+  - **`ulua-analysis`**：专门承担离线静态类型检查（LSP 自动补全、跳转定义、报错诊断），不参与任何运行时，与核心执行管线完全解耦。
   - **`ulua-capi` / `ulua-web`**：面向外部 C 程序与 WebAssembly 的边界适配外壳。
 
 ## 模块划分
@@ -430,34 +436,35 @@ graph TD
 
 ### 1. 核心执行引擎
 
-- `ulua`：项目统一门面入口库，提供轻量易用的顶层 API。
+- `ulua`：项目统一门面入口库，提供轻量易用的顶层 API 及统一命令行入口。
 - `ulua-ast`：词法解析器、语法分析器、内存池以及抽象语法树定义。
 - `ulua-compiler`：字节码编译器与多轮优化流水线。
-- `ulua-code-gen`：底层字节码指令生成与本地架构适配后端。
+- `ulua-code-gen`：AArch64 与 x86_64 本地机器码即时编译生成器（JIT 后端）。
 - `ulua-bytecode`：指令集定义、字节码打包、序列化与解码器。
 - `ulua-vm`：寄存器虚拟机、内存分配器、分代垃圾回收器及内置标准库。
 - `ulua-rt`：符合 Rust 人体工程学的高阶安全运行时封装、UserData 映射与异常桥接。
-- `ulua-common`：跨模块共享数据结构、DenseHashTable、SBO 向量与全局特性开关。
+- `ulua-common`：跨模块共享数据结构、DenseHashTable、SBO 向量与 FastFlags 全局特性开关。
 - `ulua-config`：层级 `.luau.toml` 配置文件解析器。
 - `ulua-require`：字符串模块路径解析与别名定位器。
-- `ulua-checked-macros`：编译期类型校验与宏展开。
+- `ulua-checked-macros`：编译期静态类型校验与宏展开（`ulua!`、`ulua_file!`）。
 - `ulua-rt-derive`：`UserData` 及 `FromLua` 派生宏。
 
 ### 2. 分析与绑定
 
 - `ulua-analysis`：双向静态类型推导引擎、约束求解器、子类型判定与语言服务支撑（离线与开发期工具，非运行必需）。
 - `ulua-capi`：纯 C ABI 导出壳，提供与 C 语言原生接口对齐的动态链接符号。
-- `ulua-web`：浏览器与 WebAssembly 前端交互绑定，支持在浏览器中执行与调试 Luau 脚本。
+- `ulua-web`：浏览器与 WebAssembly 前端交互绑定，支持在浏览器中即时运行与类型检查 Luau。
 
 ### 3. 命令行工具
 
-- `ulua-repl-cli`：交互式 REPL 命令行终端。
-- `ulua-analyze-cli`：代码静态类型分析与语法合规检查工具。
-- `ulua-compile-cli`：独立字节码编译器二进制。
-- `ulua-bytecode-cli`：字节码查看与反汇编分析工具。
-- `ulua-ast-cli`：抽象语法树（AST）检查工具。
-- `ulua-reduce-cli`：脚本最小化精简工具（用于 Bug 复现与隔离）。
-- `ulua-cli-lib`：命令行工具集共享的基础库。
+- `ulua`（位于 `ulua`）：统一命令行工具，集成交互式 REPL 与脚本执行。
+- `ulua-repl-cli`（提供 `ulua-repl`）：交互式 REPL 命令行终端与执行器实现。
+- `ulua-analyze-cli`（提供 `ulua-analyze`）：代码静态类型分析与语法合规检查工具。
+- `ulua-compile-cli`（提供 `ulua-compile`）：独立字节码编译器二进制。
+- `ulua-bytecode-cli`（提供 `ulua-bytecode`）：字节码查看与反汇编分析工具。
+- `ulua-ast-cli`（提供 `ulua-ast`）：抽象语法树（AST）检查工具。
+- `ulua-reduce-cli`（提供 `ulua-reduce`）：测试用例精简工具（用于 Bug 复现与隔离）。
+- `ulua-cli-lib`：命令行工具集共享的基础库与宏。
 
 ### 4. 测试套件
 
@@ -473,14 +480,14 @@ graph TD
 - `compile(source: &str) -> Result<Vec<u8>, Error>`：编译 Luau 脚本源码为底层二进制字节码切片。
 - `eval(source: &str) -> Result<(), Error>`：创建隔离的虚拟机实例，加载标准库并执行源码脚本，返回执行状态。
 - `eval_bytecode(bytecode: &[u8]) -> Result<(), Error>`：创建隔离的虚拟机实例，加载标准库并直接执行预编译二进制字节码。
-- `check(source: &str) -> Result<(), Vec<TypeDiagnostic>>`：执行静态类型检查，若存在类型错误则返回详细诊断信息。
+- `check(source: &str) -> Result<(), Vec<TypeDiagnostic>>`：执行静态类型检查，若存在类型错误则返回结构化诊断信息。
 - `check_with_definitions(source: &str, defs: &str) -> Result<(), Vec<TypeDiagnostic>>`：结合预设类型声明定义对源码进行静态校验。
 - `check_modules(...)` / `check_modules_with_definitions(...)`：在模块依赖树中批量校验相互引用的多个脚本。
 
 ### 过程宏
 
 - `ulua!`：在 Rust 编译阶段对内嵌脚本进行语法与静态类型合规性校验。
-- `ulua_file!`：在编译期对指定路径文件及其依赖模块图实施类型校验。
+- `ulua_file!`：在编译期对指定路径文件及其依赖模块图实施类型校验并展开为源码字符串。
 
 ### 核心运行时类型与特征
 
@@ -489,8 +496,9 @@ graph TD
 - `Function`：可执行函数句柄，支持多参数传参与结果解构。
 - `UserData`：允许将宿主自定义结构体安全暴露至脚本环境的核心特征。
 - `UserDataMethods`：方法注册器，用于挂载只读方法、可变修改方法以及元方法。
+- `UserDataFields`：字段注册器，用于挂载只读/可读写结构体字段。
 - `Value`：动态值枚举，涵盖所有有效的语言数据表现形态。
 - `Chunk`：待执行脚本/字节码块封装，提供求值、执行及静态检查功能。
 - `FromLua` / `IntoLua`：定义宿主与虚拟机环境之间的数据类型转换规范。
-- `TypeDiagnostic`：结构化类型诊断对象，记录行号、列号与违规描述。
+- `TypeDiagnostic`：结构化类型诊断对象，记录模块、行号、列号与违规描述。
 - `Error` / `Result`：统一错误结果集，涵盖语法解析、虚拟机执行及类型约束失败。

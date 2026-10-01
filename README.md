@@ -11,39 +11,16 @@
 # ulua
 
 ulua is a Rust implementation of [Luau](https://luau.org).
-🎮 **Live Playground**: [webc-site.github.io/ulua](https://webc-site.github.io/ulua/) — Run and type-check Luau in your browser.
+**Live Playground**: [webc-site.github.io/ulua](https://webc-site.github.io/ulua/) — Run and type-check Luau in your browser.
 
-This project is a comprehensive refactor based on [luau-rs/luau](https://github.com/luau-rs/luau). Upstream [luau-rs/luau](https://github.com/luau-rs/luau) translated Roblox's original C++ implementation [luau-lang/luau](https://github.com/luau-lang/luau) into Rust.
+This project is a comprehensive refactor and Rust-focused optimization based on [pjankiewicz/luaur](https://github.com/pjankiewicz/luaur), which originally translated Roblox's official C++ implementation [luau-lang/luau](https://github.com/luau-lang/luau) into Rust.
 
-Building upon that foundation, this project conducts a deep idiomatic refactor and codebase modernization:
+Building upon that foundation, this project conducts a deep idiomatic refactor and Rust-focused optimizations:
 
 - **Removed all `allow` attributes**: Eliminated all `#![allow(...)]` warning suppressions and resolved the underlying issues;
-- **Rewritten in idiomatic Rust**: Replaced transliterated C-style code with idiomatic Rust patterns;
+- **Rewritten in idiomatic Rust**: Replaced transliterated C-style code with idiomatic Rust patterns and safe abstractions;
 - **Clean Clippy checks**: Strictly adhered to Rust best practices to avoid and eliminate Clippy warnings;
-- **Reduced `unsafe`**: Minimized `unsafe` blocks to shrink the trusted base and enhance memory safety.
-
-- [Features Overview](#features-overview)
-- [Usage Demonstration](#usage-demonstration)
-  - [Direct Script & Bytecode Execution](#direct-script--bytecode-execution)
-  - [JIT Native Acceleration & Switching](#jit-native-acceleration--switching)
-  - [Rust Calling Lua Functions (Arguments & Multi-Return)](#rust-calling-lua-functions-arguments--multi-return)
-  - [Lua Calling Rust Functions & Closures](#lua-calling-rust-functions--closures)
-  - [Host Objects & UserData (Methods & Metamethods)](#host-objects--userdata-methods--metamethods)
-  - [Static Type Checking](#static-type-checking)
-- [Performance Benchmarks](#performance-benchmarks)
-- [Key Features](#key-features)
-- [Differences Between Luau and Lua](#differences-between-luau-and-lua)
-- [Design Architecture & Execution Pipeline](#design-architecture-execution-pipeline)
-  - [1. Core Execution Pipeline](#1-core-execution-pipeline)
-- [Module Architecture](#module-architecture)
-  - [1. Core Execution Engine (Core)](#1-core-execution-engine-core)
-  - [2. Analysis & Bindings](#2-analysis-bindings)
-  - [3. Command-Line Tools (CLI)](#3-command-line-tools-cli)
-  - [4. Test Suites](#4-test-suites)
-- [API Reference](#api-reference)
-  - [Top-Level Helper Functions](#top-level-helper-functions)
-  - [Procedural Macros](#procedural-macros)
-  - [Core Runtime Types and Traits](#core-runtime-types-and-traits)
+- **Reduced `unsafe`**: Minimized `unsafe` blocks, strictly confining unsafe code to FFI and VM core boundaries to enhance memory safety.
 
 - [Features Overview](#features-overview)
 - [Usage Demonstration](#usage-demonstration)
@@ -77,7 +54,7 @@ Building upon that foundation, this project conducts a deep idiomatic refactor a
 
 ## Features Overview
 
-ulua translates Roblox's Luau language directly from C++ into Rust without foreign function bindings or C toolchain dependencies.
+ulua is a pure-Rust implementation of the Luau language, requiring zero C/C++ toolchains, external dynamic libraries, or foreign function bindings.
 
 The system encompasses the complete Luau pipeline: lexical analysis, AST parsing, bytecode compilation, register virtual machine execution, static bidirectional type inference, and native machine code generation.
 
@@ -152,19 +129,22 @@ fn main() -> Result<()> {
 
 #### 2. CLI Command-Line Control
 
-Use the `--codegen` flag to toggle JIT execution:
+Use the `--codegen` flag in the command line to toggle JIT execution:
 
 - **Interpreter (Default)**:
   ```bash
   ulua script.luau               # Pure interpretation
-  ulua-repl-cli                  # Interactive REPL (interpreter mode)
+  ulua                           # Interactive REPL (interpreter mode)
+  ulua-repl                      # Standalone REPL binary
   ```
 - **JIT Native Acceleration**:
   ```bash
   ulua --codegen script.luau     # A64/X64 JIT compilation and execution
-  ulua-repl-cli --codegen        # Interactive REPL (JIT mode)
-  LUAU_CODEGEN=1 ulua script.luau # Enable via environment variable
+  ulua --codegen                 # Interactive REPL (JIT mode)
+  ulua-repl --codegen            # Standalone REPL binary (JIT mode)
   ```
+
+When running conformance test suites, the `LUAU_CODEGEN=1` environment variable can also be used to trigger JIT execution.
 
 #### 3. JIT Control Comparison with Major Lua Runtimes
 
@@ -417,24 +397,25 @@ The Luau runtime is dynamically typed; **the core compilation and VM execution p
 
 ```mermaid
 graph TD
-  Source["Source Code (.luau)"] --> AST["ulua-ast (Parser & AST)"]
-  AST --> Compiler["ulua-compiler (Compiler)"]
-  Compiler --> CodeGen["ulua-code-gen (CodeGen Backend)"]
-  CodeGen --> Bytecode["ulua-bytecode (Bytecode Format)"]
-  Bytecode --> VM["ulua-vm (Register VM & GC)"]
-  VM --> RT["ulua-rt (Safe Host Encapsulation)"]
-  RT --> Umbrella["ulua (Unified Facade)"]
+  Source["Source Code (.luau)"] --> AST["ulua-ast (Lexer, Parser & AST)"]
+  AST --> Compiler["ulua-compiler (Bytecode Compiler)"]
+  Compiler --> Bytecode["ulua-bytecode (Bytecode Format & Codec)"]
+  Bytecode --> VM["ulua-vm (Register VM & Generational GC)"]
+  Bytecode -. JIT Compilation .-> CodeGen["ulua-code-gen (A64/X64 Native CodeGen)"]
+  CodeGen -. Native Acceleration .-> VM
+  VM --> RT["ulua-rt (Safe Host Runtime Abstraction)"]
+  RT --> Umbrella["ulua (Unified Facade & CLI)"]
 
   subgraph Core Foundation
-    Common["ulua-common (Data Structures)"] -.-> AST
+    Common["ulua-common (Data Structures & FastFlags)"] -.-> AST
     Common -.-> VM
-    Config["ulua-config (Configuration)"] -.-> RT
-    Require["ulua-require (Module Loader)"] -.-> VM
+    Config["ulua-config (Hierarchical Configuration)"] -.-> RT
+    Require["ulua-require (Module Path Resolution)"] -.-> VM
   end
 
   subgraph Out-of-Core Analysis & Tooling [Decoupled · On-Demand]
     AST -.-> Analysis["ulua-analysis (Bidirectional Type Inference/LSP)"]
-    Analysis -.-> CLI_Analyze["ulua-analyze-cli"]
+    Analysis -.-> CLI_Analyze["ulua-analyze-cli (Type-checker CLI)"]
   end
 
   subgraph Out-of-Core Bindings
@@ -444,10 +425,12 @@ graph TD
 ```
 
 - **Lexical & Syntax Parsing (`ulua-ast`)**: Converts source code into an arena-allocated abstract syntax tree.
-- **Bytecode Compilation & Optimization (`ulua-compiler` + `ulua-code-gen` + `ulua-bytecode`)**:
+- **Bytecode Compilation & Optimization (`ulua-compiler` + `ulua-bytecode`)**:
   Applies constant folding, liveness analysis, and register allocation to generate compact bytecode instructions.
 - **Register VM Execution (`ulua-vm`)**:
   Loads bytecode streams and drives register-based dispatch with generational garbage collection and built-in standard libraries.
+- **Native JIT Code Generation (`ulua-code-gen`)**:
+  Provides pure-Rust JIT compilation for Apple Silicon (AArch64) and x86_64 architectures, compiling bytecode into native machine instructions for runtime acceleration.
 - **Safe Host Runtime (`ulua-rt`)**:
   Provides ergonomic RAII handles (`Lua`, `Table`, `Function`, `UserData`), managing references, lifetimes, and panic boundaries.
 - **Architectural Decoupling**:
@@ -461,17 +444,17 @@ Target Standard: Luau 0.737 compatible specification.
 
 ### 1. Core Execution Engine (Core)
 
-- `ulua`: Unified umbrella entry point providing top-level APIs.
+- `ulua`: Unified umbrella entry point providing top-level APIs and unified CLI.
 - `ulua-ast`: Lexer, parser, arena memory allocator, and AST definitions.
 - `ulua-compiler`: Bytecode compiler and multi-pass optimizer.
-- `ulua-code-gen`: Low-level bytecode generation and platform backend.
+- `ulua-code-gen`: Native AArch64 and x86_64 JIT machine code generation backend.
 - `ulua-bytecode`: Instruction definitions, bytecode packaging, serialization, and decoding.
 - `ulua-vm`: Register-based virtual machine, garbage collector, and standard libraries.
 - `ulua-rt`: Ergonomic safe runtime abstractions, UserData binding, and panic protection.
 - `ulua-common`: Cross-module utilities, DenseHashTable, SBO vectors, and FastFlags.
 - `ulua-config`: Hierarchical `.luau.toml` configuration parser.
 - `ulua-require`: String-based module resolution and alias resolution.
-- `ulua-checked-macros`: Compile-time syntax/type verification procedural macros.
+- `ulua-checked-macros`: Compile-time syntax and type verification procedural macros (`ulua!`, `ulua_file!`).
 - `ulua-rt-derive`: Derive procedural macros for `UserData` and `FromLua`.
 
 ### 2. Analysis & Bindings
@@ -482,13 +465,14 @@ Target Standard: Luau 0.737 compatible specification.
 
 ### 3. Command-Line Tools (CLI)
 
-- `ulua-repl-cli`: Interactive REPL command-line terminal.
-- `ulua-analyze-cli`: Static type analysis and syntax diagnostics CLI.
-- `ulua-compile-cli`: Standalone bytecode compiler binary.
-- `ulua-bytecode-cli`: Bytecode disassembler and inspection tool.
-- `ulua-ast-cli`: Abstract syntax tree inspector.
-- `ulua-reduce-cli`: Luau code test-case reduction tool.
-- `ulua-cli-lib`: Shared foundation for CLI binaries.
+- `ulua` (in `ulua`): Unified CLI tool for script execution and interactive REPL.
+- `ulua-repl-cli` (provides `ulua-repl`): Interactive REPL command-line terminal and runner implementation.
+- `ulua-analyze-cli` (provides `ulua-analyze`): Static type analysis and syntax diagnostics CLI.
+- `ulua-compile-cli` (provides `ulua-compile`): Standalone bytecode compiler binary.
+- `ulua-bytecode-cli` (provides `ulua-bytecode`): Bytecode disassembler and inspection tool.
+- `ulua-ast-cli` (provides `ulua-ast`): Abstract syntax tree inspector.
+- `ulua-reduce-cli` (provides `ulua-reduce`): Luau test-case reduction tool.
+- `ulua-cli-lib`: Shared foundation and macros for CLI binaries.
 
 ### 4. Test Suites
 
@@ -504,14 +488,14 @@ Target Standard: Luau 0.737 compatible specification.
 - `compile(source: &str) -> Result<Vec<u8>, Error>`: Compiles Luau source code into raw bytecode bytes.
 - `eval(source: &str) -> Result<(), Error>`: Instantiates an isolated VM state, loads the standard library, executes code, and returns execution status.
 - `eval_bytecode(bytecode: &[u8]) -> Result<(), Error>`: Instantiates an isolated VM state, loads the standard library, directly executes precompiled bytecode, and returns execution status.
-- `check(source: &str) -> Result<(), Vec<TypeDiagnostic>>`: Performs static type checking and returns diagnostics on failure.
+- `check(source: &str) -> Result<(), Vec<TypeDiagnostic>>`: Performs static type checking and returns structured diagnostics on failure.
 - `check_with_definitions(source: &str, defs: &str) -> Result<(), Vec<TypeDiagnostic>>`: Validates source against external declaration definitions.
 - `check_modules(...)` / `check_modules_with_definitions(...)`: Validates multiple interconnected scripts across a module dependency tree.
 
 ### Procedural Macros
 
 - `ulua!`: Validates embedded script syntax and type correctness during Rust compilation.
-- `ulua_file!`: Validates filesystem script files and dependency graphs at compile time.
+- `ulua_file!`: Validates filesystem script files and dependency graphs at compile time and expands to source string.
 
 ### Core Runtime Types and Traits
 
@@ -520,9 +504,10 @@ Target Standard: Luau 0.737 compatible specification.
 - `Function`: Executable function reference supporting invocation with variable argument and return types.
 - `UserData`: Trait enabling Rust structs to be passed to and manipulated by Luau scripts.
 - `UserDataMethods`: Method builder for registering immutable, mutable, and meta-methods on custom userdata.
+- `UserDataFields`: Field builder for registering read-only and mutable fields on custom userdata.
 - `Value`: Dynamic enum representing all valid Luau value variants.
 - `Chunk`: Execution wrapper for scripts and precompiled bytecode supporting evaluation, execution, and type checking.
 - `FromLua` / `IntoLua`: Conversion traits for bidirectional data marshaling between Rust and Luau.
-- `TypeDiagnostic`: Structured diagnostic item indicating line, column, and description of static type violations.
+- `TypeDiagnostic`: Structured diagnostic item indicating module, line, column, and description of static type violations.
 - `Error` / `Result`: Unified error types encompassing syntax, runtime, memory, and type failure states.
 
