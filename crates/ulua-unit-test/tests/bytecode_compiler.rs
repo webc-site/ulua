@@ -1182,15 +1182,15 @@ fn bytecode_compiler_fastpcall_roundtrip() {
 }
 
 // Source: `tests/BytecodeCompiler.test.cpp`
-// "jump_expand_limits" (line 929).
+// "jump_expand_limits" (line 924).
 #[test]
 fn bytecode_compiler_jump_expand_limits() {
   use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
-  use ulua_common::{enums::luau_opcode::LuauOpcode, fflag::LuauCompileExpandLimit};
-  use ulua_unit_test::type_aliases::scoped_fast_flag::ScopedFastFlag;
+  use ulua_common::enums::luau_opcode::LuauOpcode;
 
-  // Takes too long to run without optimizations enabled
-  let _luau_compile_expand_limit = ScopedFastFlag::new(&LuauCompileExpandLimit, true);
+  // cpp 用例的构建期门槛（`#if !(defined(_DEBUG) || defined(_NOOPT))`）：
+  // 本移植无 _NOOPT 构型，直接运行；上游同步已删除运行期旗标
+  // LuauCompileExpandLimit，expandJumps 报错路径不再有旗标门控。
 
   let mut bcb = BytecodeBuilder::new(None);
   bcb.begin_function(0, false);
@@ -1218,7 +1218,9 @@ fn bytecode_compiler_jump_expand_limits() {
 }
 
 // 缺口（未移植，对照 `tests/BytecodeCompiler.test.cpp`，共 1 例）：
-// - jump_expand_short_limits（:959）——依赖 FFlag `LuauCompileExpandShortLimit`
-//   及 BytecodeBuilder 的 short-jump 扩张预算分支，本移植未定义该 FFlag
-//   （crates/ulua-common/src/fflag.rs 仅有 LuauCompileExpandLimit），
-//   `expandJumps` 无 short-limit 路径可言，让位登记。
+// - jump_expand_short_limits（:952）——旧票面称其依赖 FFlag
+//   `LuauCompileExpandShortLimit` 及 BytecodeBuilder 的 short-jump 扩张预算分支；
+//   0.740 同步后 cpp 源码已无该旗标（`LuauCompileExpandLimit` 亦已删除、
+//   本仓 fflag.rs 随之移除），`expandJumps` 两侧均无 short-limit 分支，
+//   cpp 用例现仅校验 `CHECK(!error)`。本移植未补该正向用例，让位登记，
+//   留待后续波次按 cpp :952 语义补 port。
