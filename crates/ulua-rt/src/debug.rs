@@ -24,7 +24,10 @@ use core::{ffi::c_char, mem::zeroed};
 
 use ulua_common::functions::c_str::cstr_cow;
 
-use crate::{state::Lua, sys::*};
+use crate::{
+  state::{Lua, StateView},
+  sys::*,
+};
 
 /// `lua_getinfo` 的选项串：`n`（名字）+ `s`（源/类型）+ `l`（当前行）。
 /// 静态 NUL 结尾字节串，收口点交给 `*const c_char` 契约 API。
@@ -51,7 +54,7 @@ pub(crate) fn debug_cstr(p: *const c_char) -> Option<String> {
 /// 约定）；`options` 为含结尾 NUL 的 `'static` 模板串且不含 `f` 选项（含 `f` 会
 /// 向栈压值，本门面不做栈配平）。
 pub(crate) fn get_info(
-  state: *mut LuaState,
+  state: StateView<'_>,
   level: i32,
   options: &'static [u8],
 ) -> Option<LuaDebug> {
@@ -66,7 +69,14 @@ pub(crate) fn get_info(
   // 对齐存活的局部；`options.as_ptr().cast()` 是上面 debug_assert 兜底的静态
   // NUL 模板串，满足 `what` 形参存续期契约；VM 只向该 out 参数写非空或保持
   // null 的 `*const c_char` 内部串指针（消费侧 `debug_cstr` 自带 null 判据）。
-  let ok = unsafe { lua_getinfo(state, level, options.as_ptr().cast(), &mut ar) };
+  let ok = unsafe {
+    lua_getinfo(
+      state.as_ptr().cast_mut(),
+      level,
+      options.as_ptr().cast(),
+      &mut ar,
+    )
+  };
   (ok != 0).then_some(ar)
 }
 

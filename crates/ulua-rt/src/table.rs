@@ -10,10 +10,10 @@ use crate::{
   error::{Error, Result},
   registry::RegHandle,
   state::{
-    Lua, LuaRef, clone_slot_to_top, ensure_stack, ensure_stack_or_panic, get_metatable_at,
-    insert_at, is_integer64_at, next_pair, pop_stack, push_int64, push_named_closure, push_nil,
-    push_number, raw_get_at, raw_set_at, readonly_at, run_pcall, set_metatable_at, set_readonly_at,
-    slot_length, slots_equal, stack_top, with_reference_pushed,
+    Lua, LuaRef, StateView, clone_slot_to_top, ensure_stack, ensure_stack_or_panic,
+    get_metatable_at, insert_at, is_integer64_at, next_pair, pop_stack, push_int64,
+    push_named_closure, push_nil, push_number, raw_get_at, raw_set_at, readonly_at, run_pcall,
+    set_metatable_at, set_readonly_at, slot_length, slots_equal, stack_top, with_reference_pushed,
   },
   sync::{NOT_SYNC, NotSync, XRc},
   sys::*,
@@ -758,9 +758,8 @@ pub(crate) fn create_table_with_capacity(lua: &Lua, narr: usize, nrec: usize) ->
   // C API 参数本身即 `int`，比它更大无法表达，饱和是唯一不越界的方向。
   let narr = i32::try_from(narr).unwrap_or(i32::MAX);
   let nrec = i32::try_from(nrec).unwrap_or(i32::MAX);
-  // Safety: `state` 存活且由当前线程驱动（`&Lua` 句柄保证）；上一行预留了 lua_createtable
-  // 压入新表所需的一层。
-  unsafe { lua_createtable(state, narr, nrec) };
+  // Safety: 族级契约(state 引用即存活+当前线程驱动);上一行已预留新表所需的一层。
+  unsafe { lua_createtable(state.as_mut_ptr(), narr, nrec) };
   // `pop_ref` 是带契约的 safe 门面：弹出刚压入的栈顶表值并登记为注册表引用。
   Table::from_ref(lua.pop_ref())
 }
@@ -783,10 +782,10 @@ pub(crate) fn create_table_with_capacity(lua: &Lua, narr: usize, nrec: usize) ->
 /// `isnum` 出参的收口。与 `stack_top`/`register_slot` 同族的 safe 门面，
 /// unsafe 只在此处一次 C-ABI 边界。
 #[inline]
-pub(crate) fn number_at(state: *mut LuaState, idx: i32) -> Option<Number> {
-  // Safety: 契约要求 `state` 存活、由当前线程驱动，`idx` 为有效栈索引；
-  // `lua_tonumberx` 对这样的输入只读栈槽值，不越界读写、不动栈深、不抛错。
-  unsafe { lua_tonumberx(state, idx) }
+pub(crate) fn number_at(state: StateView<'_>, idx: i32) -> Option<Number> {
+  // Safety: 族级契约;`lua_tonumberx` 只读该槽、不动栈深,`Option` 返回值即
+  // cpp `isnum` 出参的收口。
+  unsafe { lua_tonumberx(state.as_ptr().cast_mut(), idx) }
 }
 
 /// 收口门面：读出栈顶的 [`Value`]（引用型值由 `value_from_stack` 登记注册表引用），
@@ -816,7 +815,7 @@ fn take_top(lua: &Lua) -> Result<Value> {
 /// -2 即其下方的 `t[src]`，`clone_slot_to_top` 复制它再净压一层（峰值用满）；
 /// rawset 消费「dst 键 + 值副本」写回 `t[dst]`（raw 路径，不触发 metamethod）；
 /// 最后弹掉第 2 步读出的 `t[src]`，栈深回到进入时。
-fn raw_copy_slot(state: *mut LuaState, t: i32, src: i64, dst: i64) {
+fn raw_copy_slot(state: StateView<'_>, t: i32, src: i64, dst: i64) {
   push_number(state, src as Number);
   raw_get_at(state, t);
   push_number(state, dst as Number);
@@ -831,13 +830,15 @@ fn raw_copy_slot(state: *mut LuaState, t: i32, src: i64, dst: i64) {
 /// # Safety
 /// 仅由 [`protected_table_op`] 在 `lua_pcall` 下调用：`state` 为该帧正在执行的
 /// 协程状态，栈布局 `[table, key]` 由 [`Table::get`] 的压栈序列保证。
-unsafe extern "C-unwind" fn c_gettable(state: *mut LuaState) -> i32 {
-  // Safety: 本函数只经 protected_table_op 在 lua_pcall 下被 VM 调用——`state` 是 pcall 帧内正在
-  // 执行的协程状态，栈布局 `[table, key]`（+ 其下闭包槽）由调用方 `Table::get` 的 ensure_stack(3)
-  // 与压栈序列保证，故 `lua_gettable(state, 1)` 的槽 1 为有效表索引；返回 1 声明留下结果一槽，
-  // 与 gettable 行为一致。
+unsafe extern "C-unwind" fn c_gettable(raw: *mut LuaState) -> i32 {
+  // Safety: C-ABI 边界点(pcall 帧实参):本函数只经 protected_table_op 在 lua_pcall
+  // 下被 VM 调用,`raw` 是该帧内正在执行的协程状态;一次转视图,只在本次调用内。
+  let state = unsafe { StateView::from_raw(raw) };
+  // Safety: 栈布局 `[table, key]`（+ 其下闭包槽）由调用方 `Table::get` 的
+  // ensure_stack(3) 与压栈序列保证，故槽 1 为有效表索引；返回 1 声明留下结果
+  // 一槽，与 gettable 行为一致。
   unsafe {
-    lua_gettable(state, 1);
+    lua_gettable(state.as_mut_ptr(), 1);
     1
   }
 }
@@ -847,12 +848,13 @@ unsafe extern "C-unwind" fn c_gettable(state: *mut LuaState) -> i32 {
 /// # Safety
 /// 仅由 [`protected_table_op`] 在 `lua_pcall` 下调用：`state` 为该帧正在执行的
 /// 协程状态，栈布局 `[table, key, value]` 由 [`Table::set`] 的压栈序列保证。
-unsafe extern "C-unwind" fn c_settable(state: *mut LuaState) -> i32 {
-  // Safety: 与 c_gettable 同理——只在 protected_table_op 的 lua_pcall 下运行；调用方 `Table::set`
-  // 预留头寸并压入 `[table, key, value]`，槽 1 为有效表；`lua_settable` 消费 key+value，返回 0
-  // 声明无结果留下，与 pcall nresults=0 一致。
+unsafe extern "C-unwind" fn c_settable(raw: *mut LuaState) -> i32 {
+  // Safety: C-ABI 边界点(pcall 帧实参),同 `c_gettable`;一次转视图,只在本次调用内。
+  let state = unsafe { StateView::from_raw(raw) };
+  // Safety: 调用方 `Table::set` 预留头寸并压入 `[table, key, value]`，槽 1 为有效表；
+  // `lua_settable` 消费 key+value，返回 0 声明无结果留下，与 pcall nresults=0 一致。
   unsafe {
-    lua_settable(state, 1);
+    lua_settable(state.as_mut_ptr(), 1);
     0
   }
 }
@@ -865,16 +867,20 @@ unsafe extern "C-unwind" fn c_settable(state: *mut LuaState) -> i32 {
 /// # Safety
 /// 仅由 [`protected_table_op`] 在 `lua_pcall` 下调用：`state` 为该帧正在执行的
 /// 协程状态，栈布局 `[table]` 由 [`Table::len`] 的压栈序列保证。
-unsafe extern "C-unwind" fn c_len(state: *mut LuaState) -> i32 {
-  // Safety: 仅在 protected_table_op 的 pcall 内被 VM 调用，`state` 为该帧正在执行的协程；栈为
-  // `[table(槽1), nil 结果槽]`——pushnil 占一层且在 `Table::len` 的 ensure_stack(3) 头寸内；
-  // `index_2_addr` 对刚验证有效的槽 1 与栈顶返回活 Table*，lua_v_dolen_export 按 VM 契约把结果写进
-  // ra 所指槽；返回 1 声明留下 nil 槽改写成的数值结果。
+unsafe extern "C-unwind" fn c_len(raw: *mut LuaState) -> i32 {
+  // Safety: C-ABI 边界点(pcall 帧实参):仅在 protected_table_op 的 pcall 内被 VM
+  // 调用,`raw` 为该帧正在执行的协程;一次转视图,只在本次调用内。
+  let state = unsafe { StateView::from_raw(raw) };
+  // Safety: 栈为 `[table(槽1), nil 结果槽]`——pushnil 占一层且在 `Table::len` 的
+  // ensure_stack(3) 头寸内;`index_2_addr` 对刚验证有效的槽 1 与栈顶返回活 Table*,
+  // lua_v_dolen_export 按 VM 契约把结果写进 ra 所指槽;返回 1 声明留下 nil 槽改写
+  // 成的数值结果。
   unsafe {
     push_nil(state); // 结果槽
-    let ra = index_2_addr(state, stack_top(state));
-    let rb = index_2_addr(state, 1);
-    lua_v_dolen_export(state, ra, rb);
+    let l = state.as_mut_ptr();
+    let ra = index_2_addr(l, stack_top(state));
+    let rb = index_2_addr(l, 1);
+    lua_v_dolen_export(l, ra, rb);
     1
   }
 }
@@ -925,7 +931,7 @@ impl TableOp {
 /// trampoline 与 `b".."` NUL 结尾静态名；`insert_at`(-3/-4/-2) 落在「刚压闭包 +
 /// nargs 实参」窗口内，仅换位、不增减栈深；`run_pcall` 在受保护帧内运行，元方法
 /// 抛错呈为状态码。
-fn protected_table_op(state: *mut LuaState, op: TableOp) -> i32 {
+fn protected_table_op(state: StateView<'_>, op: TableOp) -> i32 {
   let (name, nargs, nresults, insert) = op.frame();
   push_named_closure(state, Some(op.trampoline()), name, 0);
   insert_at(state, insert);

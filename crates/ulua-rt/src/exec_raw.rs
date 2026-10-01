@@ -16,7 +16,7 @@ use crate::{
   error::{Error, Result},
   function::Function,
   multi::MultiValue,
-  state::{Lua, ensure_stack, push_named_closure, run_pcall, stack_top},
+  state::{Lua, StateView, ensure_stack, push_named_closure, run_pcall, stack_top},
   sys::*,
   traits::{FromLuaMulti, IntoLuaMulti},
   userdata::{alloc_userdata_slot, init_userdata_slot, typed_userdata},
@@ -71,10 +71,13 @@ unsafe extern "C-unwind" fn raw_fn_dtor<F>(ptr: *mut c_void) {
 /// 仅由 VM 作为 `lua_CFunction` 在受保护边界内调用：`state` 存活且正由当前线程
 /// 驱动，upvalue 1 是 `exec_raw::<F>` 注册的 `RawFnSlot<F>` userdata（同一 `F`
 /// 单态化，创建方保证恰有 1 个 upvalue）。
-unsafe extern "C-unwind" fn exec_raw_trampoline<F>(state: *mut LuaState) -> i32
+unsafe extern "C-unwind" fn exec_raw_trampoline<F>(raw: *mut LuaState) -> i32
 where
   F: FnOnce(*mut LuaState),
 {
+  // Safety: C-ABI 边界点(`lua_CFunction` 实参):VM 实时传入存活 state,本帧
+  // 一次转视图,视图只在本次 trampoline 调用内使用、不跨帧存放。
+  let state = unsafe { StateView::from_raw(raw) };
   // `typed_userdata`（userdata.rs 的类型化下转 safe 门面）：闸门（userdata 类型 /
   // 载荷非空 / 长度覆盖 `RawFnSlot<F>`）与 `cast`/`as_ref` 边界全收口在其函数体
   // 一处。解读的布局即写入布局——同一 `F` 单态化配对、脚本不可替换该 upvalue；
@@ -88,10 +91,11 @@ where
   let f = slot.slot.take();
   // `stack_top` 是带契约的 safe 门面：只读当前栈深（`state` 存活）。
   let base = stack_top(state);
-  // `f(state)` 的栈操作合法性由 `exec_raw` 的 `unsafe fn` 契约约束（调用方闭包
-  // 自负栈一致）；取出的 `Box` 在本帧末 drop，捕获随栈帧回收。
+  // `f(raw)` 的栈操作合法性由 `exec_raw` 的 `unsafe fn` 契约约束（调用方闭包
+  // 自负栈一致）；取出的 `Box` 在本帧末 drop，捕获随栈帧回收。闭包契约形参即
+  // 裸指针(公开 FFI 形态),此处经 `as_mut_ptr` 还原。
   if let Some(f) = f {
-    f(state);
+    f(raw);
   }
   // `stack_top`（safe 门面）只读栈深。
   let top = stack_top(state);

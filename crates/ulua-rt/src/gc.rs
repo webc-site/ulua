@@ -21,7 +21,11 @@
 //! 回读）; passing `Generational` is a no-op that returns the current
 //! (incremental) mode, matching the only behavior Luau can honor.
 
-use crate::{error::Result, state::Lua, sys::*};
+use crate::{
+  error::Result,
+  state::{Lua, run_gc},
+  sys::*,
+};
 
 /// Parameters for Luau's incremental GC, mirroring `mlua::state::GcIncParams`.
 ///
@@ -100,49 +104,46 @@ impl Lua {
   /// The number of bytes currently used by the VM. Mirrors
   /// `mlua::Lua::used_memory` (ulua's `totalbytes`).
   pub fn used_memory(&self) -> usize {
-    // Safety: `self.state()` 是存活 VM 的主状态；其 `global` 字段在
-    // `lua_newstate` 初始化时接线、`lua_close` 前不移除，且 `global_State`
-    // 生命周期覆盖整个 VM（含所有协程），比 `&self` 借用长。`totalbytes`
-    // 是纯 usize 计数字段，任意时刻读数都有定义。
-    unsafe {
-      let g = &*(*self.state()).global;
-      g.totalbytes
-    }
+    // Safety: `self.state()` 是存活 VM 的主状态;其 `global` 字段在
+    // `lua_newstate` 初始化时接线、`lua_close` 前不移除,且 `global_State`
+    // 生命周期覆盖整个 VM(含所有协程),比 `&self` 借用长。`totalbytes`
+    // 是纯 usize 计数字段,任意时刻读数都有定义。
+    let g = unsafe { &*self.state().global };
+    g.totalbytes
   }
 
   /// Whether the GC is currently running. Mirrors `mlua::Lua::gc_is_running`.
   pub fn gc_is_running(&self) -> bool {
-    // Safety: `state` 存活；`Isrunning as i32` 是 VM 认识的 `lua_gc` op 码，
-    // 该查询只读 GC 阶段标志、不触发收集，也不压栈。
-    unsafe { lua_gc(self.state(), LuaGcOp::Isrunning as i32, 0) != 0 }
+    // `run_gc`(state.rs safe 门面,`lua_gc` 收口点):`Isrunning` 查询只读
+    // GC 阶段标志、不触发收集,也不压栈。
+    run_gc(self.state(), LuaGcOp::Isrunning as i32, 0) != 0
   }
 
   /// Stop the GC. Mirrors `mlua::Lua::gc_stop`.
   pub fn gc_stop(&self) {
-    // Safety: 同 `gc_is_running`——`Stop` 为合法 op 码，宿主调用点不在 GC 步进
-    // 中途（安全 API 层由用户线程驱动），只翻转暂停标志。
-    unsafe { lua_gc(self.state(), LuaGcOp::Stop as i32, 0) };
+    // `run_gc` 门面:`Stop` 只翻转暂停标志,无栈/堆副作用。
+    run_gc(self.state(), LuaGcOp::Stop as i32, 0);
   }
 
   /// Restart the GC. Mirrors `mlua::Lua::gc_restart`.
   pub fn gc_restart(&self) {
-    // Safety: 同 `gc_stop`，`Restart` 只恢复暂停标志，无栈/堆副作用。
-    unsafe { lua_gc(self.state(), LuaGcOp::Restart as i32, 0) };
+    // `run_gc` 门面:`Restart` 只恢复暂停标志,无栈/堆副作用。
+    run_gc(self.state(), LuaGcOp::Restart as i32, 0);
   }
 
   /// The total memory in use, in KB (the `LUA_GCCOUNT` op). mlua 0.12.1 has
   /// no `gc_count`; the name follows mlua's historical API.
   pub fn gc_count(&self) -> usize {
-    // Safety: `state` 存活，`Count` 为纯读数 op（totalbytes>>10，不压栈不改
-    // 状态）；返回值非负，`.max(0)` 只是与 mlua 一致的对 i32 防御。
-    unsafe { lua_gc(self.state(), LuaGcOp::Count as i32, 0).max(0) as usize }
+    // `run_gc` 门面:`Count` 为纯读数 op(totalbytes>>10,不压栈不改状态);
+    // 返回值非负,`.max(0)` 只是与 mlua 一致的对 i32 防御。
+    run_gc(self.state(), LuaGcOp::Count as i32, 0).max(0) as usize
   }
 
   /// Run a default-size incremental GC step. Mirrors `mlua::Lua::gc_step`.
   pub fn gc_step(&self) -> Result<bool> {
-    // Safety: `Step` op 在宿主驱动点推进增量收集一小段；此处不持有栈上裸引用，
-    // GC 期间对象移动不涉及（Luau GC 不移动对象），返回值仅表示是否完成一轮。
-    Ok(unsafe { lua_gc(self.state(), LuaGcOp::Step as i32, 0) != 0 })
+    // `run_gc` 门面:`Step` 在宿主驱动点推进增量收集一小段;此处不持有栈上裸
+    // 引用,Luau GC 不移动对象,返回值仅表示是否完成一轮。
+    Ok(run_gc(self.state(), LuaGcOp::Step as i32, 0) != 0)
   }
 
   /// Apply incremental-GC parameters (goal / step multiplier / step size).
@@ -177,17 +178,15 @@ impl Lua {
   /// 回读 VM 当前增量 GC 参数；step size 按 KB 计，与 `lua_gc` Setstepsize
   /// 的字节↔KB 换算（`>> 10`，cpp lapi.cpp 同款字面量）一致。
   fn current_inc_params(&self) -> GcIncParams {
-    // Safety: `(*state).global` 的解引用前提同 `used_memory`（构造期接线、
-    // 比持有者长寿）。`gcgoal/gcstepmul/gcstepsize` 是 `global_State` 的整型
-    // 调参字段，任意位模式读取都有定义；`max(0)` 吸收 u32 域外值，
-    // `>> 10` 与 `lua_gc` Setstepsize 的字节↔KB 换算（cpp lapi.cpp）保持一致。
-    unsafe {
-      let g = &*(*self.state()).global;
-      GcIncParams {
-        goal: Some(g.gcgoal.max(0) as u32),
-        step_multiplier: Some(g.gcstepmul.max(0) as u32),
-        step_size: Some((g.gcstepsize >> 10).max(0) as u32),
-      }
+    // Safety: `state.global` 的解引用前提同 `used_memory`(构造期接线、比持有者
+    // 长寿)。`gcgoal/gcstepmul/gcstepsize` 是 `global_State` 的整型调参字段,
+    // 任意位模式读取都有定义;`max(0)` 吸收 u32 域外值,`>> 10` 与 `lua_gc`
+    // Setstepsize 的字节↔KB 换算(cpp lapi.cpp)保持一致。
+    let g = unsafe { &*self.state().global };
+    GcIncParams {
+      goal: Some(g.gcgoal.max(0) as u32),
+      step_multiplier: Some(g.gcstepmul.max(0) as u32),
+      step_size: Some((g.gcstepsize >> 10).max(0) as u32),
     }
   }
 
@@ -200,24 +199,24 @@ impl Lua {
     // 这里照单收集；未被本次设置的字段以 global_State 回读补齐。
     let state = self.state();
     let mut prev = self.current_inc_params();
-    // Safety: `state` 存活；`Setgoal/Setstepmul/Setstepsize` 是 VM 认识的写参 op，
-    // 各只改一个 `global_State` 整型字段并返回旧值，无栈/GC 副作用。`u32 as i32`
-    // 传参在 ABI 层恒合法（超大值由 VM 侧钳位处理，是行为而非内存问题）；各调用之间
-    // 无中间态解引用，`prev` 的收集顺序不影响安全性。
+    // `run_gc` 门面:`Setgoal/Setstepmul/Setstepsize` 是 VM 认识的写参 op,
+    // 各只改一个 `global_State` 整型字段并返回旧值,无栈/GC 副作用。`u32 as i32`
+    // 传参在 ABI 层恒合法(超大值由 VM 侧钳位处理,是行为而非内存问题);各调用
+    // 之间无中间态解引用,`prev` 的收集顺序不影响正确性。
     if let Some(goal) = p.goal {
-      // Safety: 同上——`Setgoal` 写 `gcgoal` 字段并返回旧值。
-      let old = unsafe { lua_gc(state, LuaGcOp::Setgoal as i32, goal as i32) };
+      // `Setgoal` 写 `gcgoal` 字段并返回旧值。
+      let old = run_gc(state, LuaGcOp::Setgoal as i32, goal as i32);
       prev.goal = Some(old.max(0) as u32);
     }
     if let Some(mul) = p.step_multiplier {
-      // Safety: 同上——`Setstepmul` 写 `gcstepmul` 字段并返回旧值。
-      let old = unsafe { lua_gc(state, LuaGcOp::Setstepmul as i32, mul as i32) };
+      // `Setstepmul` 写 `gcstepmul` 字段并返回旧值。
+      let old = run_gc(state, LuaGcOp::Setstepmul as i32, mul as i32);
       prev.step_multiplier = Some(old.max(0) as u32);
     }
     if let Some(sz) = p.step_size {
-      // Safety: 同上——`Setstepsize` 写 `gcstepsize` 字段并返回旧值。
-      // Setstepsize 的返回旧值已按 KB 计（>>10），与本字段单位一致。
-      let old = unsafe { lua_gc(state, LuaGcOp::Setstepsize as i32, sz as i32) };
+      // `Setstepsize` 写 `gcstepsize` 字段并返回旧值;返回旧值已按 KB 计(>>10),
+      // 与本字段单位一致。
+      let old = run_gc(state, LuaGcOp::Setstepsize as i32, sz as i32);
       prev.step_size = Some(old.max(0) as u32);
     }
     prev

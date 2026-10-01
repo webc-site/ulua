@@ -25,7 +25,7 @@
 
 use core::{
   fmt::{self, Debug, Formatter},
-  ptr::NonNull,
+  ptr::{NonNull, eq},
 };
 
 #[cfg(feature = "async")]
@@ -40,7 +40,7 @@ use crate::{
   multi::MultiValue,
   registry::RegHandle,
   state::{
-    Lua, LuaRef, co_status, ensure_stack, ensure_stack_or_panic, move_slots, pop_stack,
+    Lua, LuaRef, StateView, co_status, ensure_stack, ensure_stack_or_panic, move_slots, pop_stack,
     push_globals_to_stack, push_own_thread, replace_globals_from_top, reset_co, resume_co,
     resume_co_error, set_stack_top, spawn_thread, stack_top, thread_at, thread_status,
   },
@@ -107,11 +107,11 @@ unsafe impl Send for Thread {}
 /// `let co = self.thread_state.as_ptr(); let parent = lua.state();` 裸指针散传，
 /// 收进一个带 `'lua` 生命周期的最小门面：`'lua` 即「宿主 VM 与本协程对象在本次操作
 /// 全程存活」的编码契约——`Thread` 持注册表引用钉住协程对象、`&'lua Lua` 钉住其
-/// `XRc<LuaInner>`。裸指针只在 [`co_ptr`](Self::co_ptr)/[`parent_ptr`](Self::parent_ptr)
-/// 两个收口点、紧贴一次 `lua_*` C-ABI 调用出现；`unsafe` 亦只在那一处 FFI 边界，业务
-/// 方法经本门面的安全方法装配，自身不再出现 `unsafe`（沿用 `ensure_stack`/
-/// `push_value`/`pop_error`/`collect_results_above` 一族的既有「安全门面 + 内部单点
-/// `// Safety`」约定）。
+/// `XRc<LuaInner>`。state 经 [`co_state`](Self::co_state)/
+/// [`parent_state`](Self::parent_state) 两个收口点取 [`StateView`] 驱动视图;
+/// 裸指针只在视图的 `as_ptr`/`as_mut_ptr` FFI 实参位、紧贴一次 `lua_*` C-ABI
+/// 调用出现,业务方法经本门面的安全方法装配（沿用 `ensure_stack`/
+/// `push_value`/`pop_error`/`collect_results_above` 一族的既有「安全门面」约定）。
 ///
 /// 栈深度/搬运量/协程挂起态是**正确性**约定（非内存安全）：违反最坏是 VM 断言/报错，
 /// 而非 Rust 层的悬垂引用或数据竞争——后者已由 `'lua` 存活不变量挡在类型之外。故各方法
@@ -136,16 +136,17 @@ impl<'lua> CoWindow<'lua> {
     self.parent
   }
 
-  /// FFI 收口点：parent（调用方驱动的）state 裸指针，只在即将调用 `lua_*` 时读出。
+  /// parent（调用方驱动的）state 驱动视图：经 [`Lua::state`] 收口点取得。
   #[inline]
-  fn parent_ptr(&self) -> *mut LuaState {
+  fn parent_state(&self) -> StateView<'_> {
     self.parent.state()
   }
 
-  /// FFI 收口点：本协程 state 裸指针，只在即将调用 `lua_*` 时读出。
+  /// 本协程 state 的驱动视图（[`StateView`]:协程对象由 `Thread` 的注册表引用
+  /// 锚定存活，驱动契约由视图类型承载）。纯指针拷贝,无 `unsafe`。
   #[inline]
-  fn co_ptr(&self) -> *mut LuaState {
-    self.co.as_ptr()
+  fn co_state(&self) -> StateView<'_> {
+    StateView::from_handle(self.co)
   }
 
   // -------------------------------------------------------------------------
@@ -158,7 +159,7 @@ impl<'lua> CoWindow<'lua> {
     // `thread_status` 是 `crate::state` 的 safe 只读门面：`co` 随 `'lua` 关联的
     // `Lua` 的 `XRc<LuaInner>` 与 `Thread` 注册表引用共同锚定存活，解引用与只读
     // 字段访问的 `// Safety` 论证收在其函数头一处。
-    thread_status(self.co_ptr())
+    thread_status(self.co_state())
   }
 
   /// `lua_costatus(parent, co)`：co 相对 parent 的角色码（只读）。
@@ -166,20 +167,20 @@ impl<'lua> CoWindow<'lua> {
   fn costatus(&self) -> i32 {
     // `co_status` 是 safe 只读门面：`parent`/`co` 同属一存活 VM（`'lua` 与
     // `Thread` 句柄共享同一 `XRc<LuaInner>`），只读查询的存活论证收在函数头一处。
-    co_status(self.parent_ptr(), self.co_ptr())
+    co_status(self.parent_state(), self.co_state())
   }
 
   /// co 当前栈深（只读）。
   #[inline]
   fn top(&self) -> i32 {
     // `stack_top` 是 `crate::state` 的 safe 只读门面（存活论证在其函数头）。
-    stack_top(self.co_ptr())
+    stack_top(self.co_state())
   }
 
   /// parent 当前栈深（只读）。
   #[inline]
   fn parent_top(&self) -> i32 {
-    stack_top(self.parent_ptr())
+    stack_top(self.parent_state())
   }
 
   /// co 侧能否再容纳 `slots` 层（只报告头寸，不实际读写越界）。
@@ -187,7 +188,7 @@ impl<'lua> CoWindow<'lua> {
   #[inline]
   fn check_stack(&self, slots: i32) -> bool {
     // `has_stack_room` 是 safe 门面：`co` 存活论证收在函数头一处，本身只报告头寸。
-    has_stack_room(self.co_ptr(), slots)
+    has_stack_room(self.co_state(), slots)
   }
 
   /// parent 侧能否再容纳 `slots` 层（只报告头寸）。
@@ -195,7 +196,7 @@ impl<'lua> CoWindow<'lua> {
   #[inline]
   fn parent_check_stack(&self, slots: i32) -> bool {
     // `has_stack_room` 是 safe 门面；`parent` 存活（`'lua` 的 `XRc<LuaInner>`）。
-    has_stack_room(self.parent_ptr(), slots)
+    has_stack_room(self.parent_state(), slots)
   }
 
   // -------------------------------------------------------------------------
@@ -211,7 +212,7 @@ impl<'lua> CoWindow<'lua> {
     // `move_slots` 是 safe 搬运门面：两侧同存活 VM（`'lua` 与 `Thread` 注册表引用共
     // 锚定），调用序前提（co 挂起、parent 头寸预留、`n` 在预留内）由文档所列调用点维持，
     // 其内部一次 `lua_xmove` 的 `// Safety` 论证收在函数头一处。
-    move_slots(self.co_ptr(), self.parent_ptr(), n)
+    move_slots(self.co_state(), self.parent_state(), n)
   }
 
   /// 把 parent 栈顶 `n` 个值搬到 co。
@@ -219,7 +220,7 @@ impl<'lua> CoWindow<'lua> {
   #[inline]
   fn xmove_from_parent(&self, n: i32) {
     // `move_slots` 门面，前提（parent 顶有 n 值、co 头寸预留）由文档所列调用点维持。
-    move_slots(self.parent_ptr(), self.co_ptr(), n)
+    move_slots(self.parent_state(), self.co_state(), n)
   }
 
   /// 把 co 栈截断到深度 `top`。
@@ -229,7 +230,7 @@ impl<'lua> CoWindow<'lua> {
   #[inline]
   fn set_top(&self, top: i32) {
     // `set_stack_top` 是 safe 门面；调用序前提（co 挂起、`top` 合法）由 async 收尾路径维持。
-    set_stack_top(self.co_ptr(), top)
+    set_stack_top(self.co_state(), top)
   }
 
   /// 把 parent 栈截断到深度 `top`。
@@ -237,7 +238,7 @@ impl<'lua> CoWindow<'lua> {
   #[inline]
   fn set_parent_top(&self, top: i32) {
     // `set_stack_top` 是 safe 门面；`top` 为搬运前记录的合法深度。
-    set_stack_top(self.parent_ptr(), top)
+    set_stack_top(self.parent_state(), top)
   }
 
   /// 对 co 跑 `lua_resume(co, parent, nargs)`，返回 raw 状态码。
@@ -248,7 +249,7 @@ impl<'lua> CoWindow<'lua> {
     // `resume_co` 是 safe 门面：调用序前提（status 预检、实参就位、头寸预留）由
     // `resume_inner`/`resume_for_async`/`terminate_async` 三处维持；解引用存活 co、
     // `from` 同 VM 的 `// Safety` 收在其函数头一处。
-    resume_co(self.co_ptr(), self.parent_ptr(), nargs)
+    resume_co(self.co_state(), self.parent_state(), nargs)
   }
 
   /// 以「立即 raise 栈顶错误」的方式 resume（上游 `auxresume` 的 `lua_resumeerror`）。
@@ -257,7 +258,7 @@ impl<'lua> CoWindow<'lua> {
   fn resumeerror(&self) -> i32 {
     // `resume_co_error` 是 safe 门面，前提由 `resume_error` 维持（status 预检 + 栈顶
     // 即错误对象 + 头寸预留），其内部 C-ABI 边界的 `// Safety` 收在函数头一处。
-    resume_co_error(self.co_ptr(), self.parent_ptr())
+    resume_co_error(self.co_state(), self.parent_state())
   }
 
   /// `lua_resetthread(co)`：清空 co 栈并回到可复用状态。
@@ -266,7 +267,7 @@ impl<'lua> CoWindow<'lua> {
   fn reset_thread(&self) {
     // `reset_co` 是 safe 门面：`co` 由句柄锚定存活、调用方已挡 Running/Normal，
     // 其内部 `lua_resetthread` 的 `// Safety` 收在函数头一处。
-    reset_co(self.co_ptr())
+    reset_co(self.co_state())
   }
 
   /// 把 parent 的全局表（`LUA_GLOBALSINDEX` 伪索引）净压一层到 parent 栈顶。
@@ -274,7 +275,7 @@ impl<'lua> CoWindow<'lua> {
   #[inline]
   fn push_parent_globals(&self) {
     // 与 `Lua::globals` 共用同一收口点（`LUA_GLOBALSINDEX` 伪索引 → 净压一层）。
-    push_globals_to_stack(self.parent_ptr())
+    push_globals_to_stack(self.parent_state())
   }
 
   /// 把 co 栈顶值消费并落到 co 的 `LUA_GLOBALSINDEX` 伪索引。
@@ -282,7 +283,7 @@ impl<'lua> CoWindow<'lua> {
   #[inline]
   fn replace_co_globals(&self) {
     // co 栈顶即刚搬入的全局表；收口点消费该层并落 `LUA_GLOBALSINDEX` 伪索引。
-    replace_globals_from_top(self.co_ptr())
+    replace_globals_from_top(self.co_state())
   }
 
   // -------------------------------------------------------------------------
@@ -300,8 +301,8 @@ impl<'lua> CoWindow<'lua> {
   /// 调用序前提：本窗口取自与 `args` 同一存活 VM 的 `Thread`，co 是可 resume 的协程。
   fn move_args_to_co(&self, args: &MultiValue) -> Result<i32> {
     let nargs = args.len() as i32;
-    ensure_stack(self.parent_ptr(), nargs.saturating_add(2))?;
-    ensure_stack(self.co_ptr(), nargs)?;
+    ensure_stack(self.parent_state(), nargs.saturating_add(2))?;
+    ensure_stack(self.co_state(), nargs)?;
     for v in args.iter() {
       self.parent().push_value(v)?;
     }
@@ -324,7 +325,7 @@ impl<'lua> CoWindow<'lua> {
   /// 调用序前提：co 处于挂起态、其栈上只有 resume 产出的结果值（活寄存器窗口已不存活）。
   fn move_results_to_parent(&self) -> Result<i32> {
     let nres = self.top();
-    ensure_stack(self.parent_ptr(), nres.saturating_add(1))?;
+    ensure_stack(self.parent_state(), nres.saturating_add(1))?;
     let base = self.parent_top();
     if nres > 0 {
       self.xmove_to_parent(nres);
@@ -423,6 +424,12 @@ impl Thread {
     self.thread_state.as_ptr()
   }
 
+  /// 协程 state 的 crate 内驱动视图（[`StateView`]:协程对象由本句柄的注册表
+  /// 引用锚定存活、值可达期间不被 GC，驱动契约由视图类型承载）。纯指针拷贝。
+  pub(crate) fn co_state(&self) -> StateView<'_> {
+    StateView::from_handle(self.thread_state)
+  }
+
   /// Resume the coroutine, passing `args` and converting its yielded/returned
   /// values to `R`. Mirrors `mlua::Thread::resume`.
   ///
@@ -460,8 +467,8 @@ impl Thread {
     let win = CoWindow::new(&lua, self.thread_state);
     // 同 `resume`：错误对象落在 parent 上，co 侧提前探测以免 xmove 内部扩容
     // 失败在本安全边界上抛错。
-    ensure_stack(win.parent_ptr(), 2)?;
-    ensure_stack(win.co_ptr(), 1)?;
+    ensure_stack(win.parent_state(), 2)?;
+    ensure_stack(win.co_state(), 1)?;
     lua.push_value(&err_value)?;
     // 上面两条 `ensure_stack` 先行（失败经 `?` 转 `Err`，门面不会见到缺头寸的一侧），
     // push 1 + xmove 1 的搬运量与预留一致；`resumeerror` 是上游 `auxresume` 错误注入的
@@ -494,8 +501,8 @@ impl Thread {
     // 会在参数多于 ~`LUA_MINSTACK` 个时越过 parent 的 `ci->top`/`stack_last`
     // 写栈，超 `LUAI_MAXSTACK` 时 panic 穿透 `Future::poll` 而非 `Err`。对齐
     // `move_args_to_co` 的双侧预留纪律（parent 侧 nargs+2、co 侧同理）。
-    ensure_stack(win.parent_ptr(), nargs.saturating_add(2))?;
-    ensure_stack(win.co_ptr(), nargs.saturating_add(2))?;
+    ensure_stack(win.parent_state(), nargs.saturating_add(2))?;
+    ensure_stack(win.co_state(), nargs.saturating_add(2))?;
     for v in &args {
       lua.push_value(v)?;
     }
@@ -529,7 +536,7 @@ impl Thread {
 
     // Detect the single-light-userdata pending marker (top of the
     // coroutine stack) on a yield.
-    if yielded && nres == 1 && PollKind::Pending.is_at(win.co_ptr(), -1) {
+    if yielded && nres == 1 && PollKind::Pending.is_at(win.co_state(), -1) {
       // co 挂起且栈顶即 pending 标记（寄存器窗口不存活），截空丢弃它。
       win.set_top(0);
       return Ok(AsyncResume::Pending);
@@ -568,7 +575,7 @@ impl Thread {
     }
     // terminate 标记先落在 parent 再 xmove 到 co（`PollKind::push` 是带契约的 safe
     // 门面：压的是 static 地址 token，只比较、从不解引用）。
-    PollKind::Terminate.push(win.parent_ptr());
+    PollKind::Terminate.push(win.parent_state());
     // 上一行的头寸探测覆盖本句——parent 栈顶正是刚压入的标记，co 侧留 2 层；搬运量 1
     // 与预留一致（parent -1 / co +1，两侧同 VM）。
     win.xmove_from_parent(1);
@@ -597,7 +604,7 @@ impl Thread {
     let lua = self.lua();
     let win = CoWindow::new(&lua, self.thread_state);
     // A thread whose state is the currently-running state is "Running".
-    if win.co_ptr() == win.parent_ptr() {
+    if eq(win.co_state().as_ptr(), win.parent_state().as_ptr()) {
       return ThreadStatus::Running;
     }
     // `parent`、`co` 都是存活的 `LuaState`——前者由 lua 的 `XRc<LuaInner>` 持有，
@@ -680,7 +687,7 @@ impl Thread {
     let lua = self.lua();
     let win = CoWindow::new(&lua, self.thread_state);
     // 逐步 push/xmove：parent 栈峰值 1 层（函数/全局表各压一次随即 xmove 到 co）。
-    ensure_stack(win.parent_ptr(), 1)?;
+    ensure_stack(win.parent_state(), 1)?;
     // 每步 parent 峰值 1 层、净变化为零（紧邻的 `ensure_stack(parent, 1)` 即该余量），
     // 重置后的新函数体最终留在 co 栈上使线程可 resume。
     //
@@ -775,7 +782,9 @@ impl Lua {
     func.push_to_stack(); // pushes onto parent stack
     // `move_slots(state, co, 1)` 是 safe 搬运门面：两侧同 VM（co 是刚创建的空栈新协程，
     // 非空已由 `NonNull` 确认），写入一层即函数体，无越界或覆盖，`// Safety` 收在函数头一处。
-    move_slots(state, co.as_ptr(), 1);
+    // Safety: co 与 state 是同 VM 的不同对象(刚 spawn 的空栈协程),视图只在
+    // 本次搬运内(驱动契约见 [`StateView`])。
+    move_slots(state, unsafe { StateView::from_raw(co.as_ptr()) }, 1);
     Ok(thread)
   }
 
@@ -794,15 +803,19 @@ impl Lua {
     // owner thread that issued the call.
     #[cfg(feature = "async")]
     if let Some(owner) = implicit_thread_owner(state) {
+      // owner 是 per-VM 表登记的存活协程 state(创建点登记、随其驱动方存活),
+      // 非空由 `NonNull` 表达。
+      // Safety: VM 自引用图的既定驱动契约(见 [`StateView`]);视图只在本分支内。
+      let owner_state = unsafe { StateView::from_raw(owner.as_ptr()) };
       // `push_own_thread(owner)` + `move_slots` 是 safe 门面，同存活 VM 的 `// Safety`
       // 各收在其函数头一处：上方 `ensure_stack_or_panic` 已为落到 state 的一层预留头寸；
       // `push_own_thread` 净压 owner 自身线程值一层，`move` 把该层搬到 state
-      // （owner==state 时 `move_slots` 对同状态搬运是空操作，此处显式跳过）。
-      push_own_thread(owner);
+      // （owner==state 时为同对象搬运，此处显式跳过）。
+      push_own_thread(owner_state);
       // The owner-thread value is on the owner's stack; move it to this
       // state so we can take a ref to it from here.
-      if owner != state {
-        move_slots(owner, state, 1);
+      if !eq(owner_state.as_ptr(), state.as_ptr()) {
+        move_slots(owner_state, state, 1);
       }
       // `pop_ref`（safe 门面）弹走压入/搬入的线程值并登记注册表引用，净栈变化为零。
       return Thread::from_ref(self.pop_ref());

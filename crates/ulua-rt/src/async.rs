@@ -85,8 +85,8 @@ use crate::{
   multi::MultiValue,
   registry::RegHandle,
   state::{
-    Lua, ensure_stack, is_table_at, lightuserdata_at, push_int, push_lightuserdata_tagged,
-    push_named_closure, push_nil, raw_geti, replace_slot, stack_top,
+    Lua, StateView, ensure_stack, is_table_at, lightuserdata_at, push_int,
+    push_lightuserdata_tagged, push_named_closure, push_nil, raw_geti, replace_slot, stack_top,
   },
   sync::MaybeSend,
   sys::*,
@@ -139,7 +139,7 @@ impl PollKind {
   ///
   /// `push_lightuserdata_tagged` 是带契约的 safe 门面：token 是 static 地址（只比较、
   /// 从不解引用），state 存活 + 压栈只写新栈槽的 `// Safety` 收在其函数头一处。
-  pub(crate) fn push(self, state: *mut LuaState) {
+  pub(crate) fn push(self, state: StateView<'_>) {
     push_lightuserdata_tagged(state, self.token().as_ptr(), 0);
   }
 
@@ -148,7 +148,7 @@ impl PollKind {
   /// `lightuserdata_at` 是带契约的 safe 门面：对任意 idx 有界读取（非 lud 一律返回
   /// null，不越栈不解引用），state 存活契约同 [`Self::push`]；token 恒非 null，
   /// 故 null（缺省）必不等于任何 token，比较语义与原 `== Some(token)` 逐字一致。
-  pub(crate) fn is_at(self, state: *mut LuaState, idx: i32) -> bool {
+  pub(crate) fn is_at(self, state: StateView<'_>, idx: i32) -> bool {
     lightuserdata_at(state, idx) == self.token().as_ptr()
   }
 }
@@ -208,7 +208,7 @@ impl Drop for WakerGuard {
 /// Set the current waker for `state`'s VM, returning a guard that restores the
 /// previous one. Keyed by the VM global state, so it is found again from any
 /// coroutine state during the resume.
-pub(crate) fn set_current_waker(state: *mut LuaState, waker: Waker) -> WakerGuard {
+pub(crate) fn set_current_waker(state: StateView<'_>, waker: Waker) -> WakerGuard {
   // 存活前提见 `vm_key`（safe 门面）：调用点是正被驱动的 poll trampoline。
   let key = vm_key(state);
   let prev = AsyncStore::with(|m| m.entry(key).or_default().waker.replace(waker));
@@ -216,46 +216,47 @@ pub(crate) fn set_current_waker(state: *mut LuaState, waker: Waker) -> WakerGuar
 }
 
 /// Register `co_state` as an implicit thread owned (transitively) by `owner`.
-pub(crate) fn register_implicit_thread(co_state: *mut LuaState, owner: *mut LuaState) {
+pub(crate) fn register_implicit_thread(co_state: StateView<'_>, owner: StateView<'_>) {
   // 存活前提见 `vm_key`（safe 门面）：co_state 是刚创建、调用方持有的协程 state。
   let key = vm_key(co_state);
-  let owner = owner as usize;
+  let owner = owner.as_ptr() as usize;
   AsyncStore::with(|m| {
     let s = m.entry(key).or_default();
     // Chain to the root owner if `owner` is itself implicit.
     let root = s.ownership.get(&owner).copied().unwrap_or(owner);
-    s.ownership.insert(co_state as usize, root);
+    s.ownership.insert(co_state.as_ptr() as usize, root);
   });
 }
 
 /// Forget the implicit-thread registration for `co_state` (on driver drop).
-pub(crate) fn unregister_implicit_thread(co_state: *mut LuaState) {
+pub(crate) fn unregister_implicit_thread(co_state: StateView<'_>) {
   // 存活前提见 `vm_key`（safe 门面）：driver drop 时 co_state 仍存活（close 前）。
   let key = vm_key(co_state);
   AsyncStore::with(|m| {
     if let Some(s) = m.get_mut(&key) {
-      s.ownership.remove(&(co_state as usize));
+      s.ownership.remove(&(co_state.as_ptr() as usize));
     }
   });
 }
 
 /// The owner state for `state`, if `state` is a registered implicit thread.
-pub(crate) fn implicit_thread_owner(state: *mut LuaState) -> Option<*mut LuaState> {
+pub(crate) fn implicit_thread_owner(state: StateView<'_>) -> Option<NonNull<LuaState>> {
   // 存活前提见 `vm_key`（safe 门面）：调用点在受保护 C 边界内持存活 state。
   let key = vm_key(state);
   AsyncStore::with(|m| {
     m.get(&key)
-      .and_then(|s| s.ownership.get(&(state as usize)).copied())
-      // 地址→指针转换只能 `as`（from_exposed_addr 未稳定），刻意保留。
-      .map(|p| p as *mut LuaState)
+      .and_then(|s| s.ownership.get(&(state.as_ptr() as usize)).copied())
+      // 地址→指针转换只能 `as`（from_exposed_addr 未稳定），刻意保留;
+      // null(未登记)与非空都归一进 `NonNull` 的 `Option`。
+      .and_then(|p| NonNull::new(p as *mut LuaState))
   })
 }
 
 /// Drop this VM's entire async-state entry. Called from `LuaInner::drop` (the
 /// global state is still valid there), mirroring `app_data::clear_app_data`.
-pub(crate) fn clear_async_state(state: *mut LuaState) {
-  // 存活前提见 `vm_key`（safe 门面）：LuaInner::drop 时 global state 仍有效（同 app_data）。
-  let key = vm_key(state);
+pub(crate) fn clear_async_state(key: VmKey) {
+  // 唯一调用点在 `LuaInner::drop` 的 clear 序列、`lua_close` 之前,key 已在彼处
+  // 由存活 state 算出。
   let _ = AsyncStore::try_with(|m| {
     m.remove(&key);
   });
@@ -264,7 +265,7 @@ pub(crate) fn clear_async_state(state: *mut LuaState) {
 /// A clone of the current waker for `state`'s VM, or a no-op waker if none is
 /// installed (e.g. the async function was resumed synchronously via
 /// `Thread::resume`, matching mlua's "noop waker outside an executor" behavior).
-fn current_waker(state: *mut LuaState) -> Waker {
+fn current_waker(state: StateView<'_>) -> Waker {
   // 存活前提见 `vm_key`（safe 门面）：调用点在受保护 C 边界内持存活 state。
   let key = vm_key(state);
   AsyncStore::with(|m| m.get(&key).and_then(|s| s.waker.clone())).unwrap_or_else(noop_waker)
@@ -398,7 +399,7 @@ impl<F> UpvalueTagged for AsyncCallbackUpvalue<F> {
 /// 边界全部收口在 `userdata.rs` 的 safe 门面 [`typed_userdata_mut`] 一处，
 /// 本函数只剩纯 Rust 的标签比对。
 fn checked_upvalue<'a, T: UpvalueTagged>(
-  state: *mut LuaState,
+  state: StateView<'_>,
   idx: i32,
   tag: UpvalueTag,
 ) -> Option<&'a mut T> {
@@ -421,12 +422,15 @@ fn checked_upvalue<'a, T: UpvalueTagged>(
 /// 仅由 VM 作为 `lua_CFunction` 在受保护边界内调用：`state` 存活且正由当前线程
 /// 驱动，upvalue 1 是 `create_async_function` 注册的 `AsyncCallbackUpvalue<F>`
 /// userdata（类型标签 + 长度双重校验后才解引用）。
-unsafe extern "C-unwind" fn get_future_c<F, A, FR>(state: *mut LuaState) -> i32
+unsafe extern "C-unwind" fn get_future_c<F, A, FR>(raw: *mut LuaState) -> i32
 where
   F: Fn(Lua, A) -> FR + 'static,
   A: FromLuaMulti,
   FR: Future + 'static,
 {
+  // Safety: C-ABI 边界点(`lua_CFunction` 实参):VM 实时传入存活 state,本帧
+  // 一次转视图,视图只在本次 trampoline 调用内使用、不跨帧存放。
+  let state = unsafe { StateView::from_raw(raw) };
   // 本函数的共用前置（下面每个边界块都引它）：VM 按 `lua_CFunction` 约定在受保护
   // 边界内实时传入 `state`，故其存活且正由当前线程驱动，错误路径的 push 由 CI 帧的
   // LUA_MINSTACK 头寸覆盖；upvalue/实参一律经 `checked_upvalue` 的类型标签 + 长度
@@ -445,7 +449,7 @@ where
 
   // `Lua::from_borrowed` 是带契约的 safe 门面（只存指针不解引用）：本 trampoline 的
   // 运行区间即「state 存活期覆盖句柄及其克隆」。
-  let lua = Lua::from_borrowed(state);
+  let lua = Lua::from_borrowed(raw);
   // `stack_top` 是带契约的 safe 门面：只读当前栈深（存活 state），故 `1..=nargs`
   // 是有效槽位，正是 `collect_stack_args` 的头注释前提；收集本身是 safe fn，无
   // 边界块，转换失败经 `raise`（safe 门面）发散。
@@ -509,11 +513,14 @@ where
 /// 仅由 VM 作为 `lua_CFunction` 在受保护边界内调用：`state` 存活且正由当前线程
 /// 驱动；实参 1 必须是 `get_future_c` 产出的 `AsyncPollUpvalue<FR>` userdata
 /// （类型标签 + 长度校验后才解引用），其余实参按 poller 循环约定压栈。
-unsafe extern "C-unwind" fn poll_c<FR, R>(state: *mut LuaState) -> i32
+unsafe extern "C-unwind" fn poll_c<FR, R>(raw: *mut LuaState) -> i32
 where
   FR: Future<Output = Result<R>> + 'static,
   R: IntoLuaMulti,
 {
+  // Safety: C-ABI 边界点(`lua_CFunction` 实参):VM 实时传入存活 state,本帧
+  // 一次转视图,视图只在本次 trampoline 调用内使用、不跨帧存放。
+  let state = unsafe { StateView::from_raw(raw) };
   // 本函数的共用前置（下面每个边界块都引它）：VM 按 `lua_CFunction` 约定在受保护
   // 边界内实时传入 `state`，故其存活且正由当前线程驱动；栈头寸由 poller 的 C 帧
   // （LUA_MINSTACK）覆盖；实参一律过类型/长度/标签闸门后才触碰；发散点全走
@@ -548,7 +555,7 @@ where
 
   // 纯 Rust：`from_borrowed`/`current_waker` 都是带契约的 safe 门面（前者只存指针，
   // 后者内部按 `vm_key` 契约读 per-VM waker 槽）。
-  let lua = Lua::from_borrowed(state);
+  let lua = Lua::from_borrowed(raw);
   let waker = current_waker(state);
   let mut cx = Context::from_waker(&waker);
 
@@ -671,10 +678,9 @@ fn report_ready<R: IntoLuaMulti>(lua: &Lua, result: Result<R>) -> i32 {
 /// 前提是 `state` 存活、`idx` 为其上的栈索引；`lua_tointegerx` 对该前提下的任意
 /// 索引都有定义（非数字、越界索引一律 `None`，不越栈读写），故 C 边界读取收在
 /// 本函数体这一处，调用点是安全读值。
-fn integer_at(state: *mut LuaState, idx: i32) -> Option<i32> {
-  // Safety: `state` 存活由调用点（受保护 C 边界内正被驱动的 state）给出；
-  // `lua_tointegerx` 只读该槽值、不动栈深。
-  unsafe { lua_tointegerx(state, idx) }
+fn integer_at(state: StateView<'_>, idx: i32) -> Option<i32> {
+  // Safety: `lua_tointegerx` 只读该槽值、不动栈深。
+  unsafe { lua_tointegerx(state.as_ptr().cast_mut(), idx) }
 }
 
 /// `unpack(t, n)`: push `t[1]..t[n]` onto the stack and return `n`.
@@ -686,7 +692,10 @@ fn integer_at(state: *mut LuaState, idx: i32) -> Option<i32> {
 /// # Safety
 /// 仅由 VM 作为 `lua_CFunction` 在受保护边界内调用：`state` 存活且正由当前线程
 /// 驱动；实参类型（表 + 非负整数）在解引用前已逐项校验，不合规则由 `raise` 发散。
-unsafe extern "C-unwind" fn unpack_c(state: *mut LuaState) -> i32 {
+unsafe extern "C-unwind" fn unpack_c(raw: *mut LuaState) -> i32 {
+  // Safety: C-ABI 边界点(`lua_CFunction` 实参):VM 实时传入存活 state,本帧
+  // 一次转视图,视图只在本次 trampoline 调用内使用、不跨帧存放。
+  let state = unsafe { StateView::from_raw(raw) };
   // 共用前置（下面每个边界块都引它）：VM 按 `lua_CFunction` 约定在受保护边界内实时
   // 传入存活 `state`；实参逐项过闸门后才 rawgeti；不合规一律由 `raise` 发散。
   // `is_table_at` 是带契约的 safe 只读门面：槽 1 的类型查询，不动栈、不触发 GC，
@@ -728,7 +737,7 @@ unsafe extern "C-unwind" fn unpack_c(state: *mut LuaState) -> i32 {
 /// 前提（由全部调用点满足，越界调用即为违约）：`state` 存活、正由当前线程在
 /// `lua_CFunction`/hook 的**受保护**边界内驱动，且栈上留有至少 1 个空位供压入错误
 /// 对象。cpp 侧对应 `luaB_error`/`lua_error` 的同一用法。
-fn raise(state: *mut LuaState, msg: &str) -> ! {
+fn raise(state: StateView<'_>, msg: &str) -> ! {
   // `raise_lua_error` 是带契约的 safe 门面：上述前提即其函数头契约的全部内容；
   // `msg` 是被调方当场拷贝的合法字节切片（空串的指针亦非 null）。
   raise_lua_error(state, msg)
@@ -1136,7 +1145,9 @@ impl<R> Drop for AsyncThread<R> {
       self.thread.terminate_async();
     }
     if self.implicit {
-      unregister_implicit_thread(self.thread.state());
+      // `co_state` 是 `Thread` 内 `NonNull → &mut` 的带契约收口点;此刻协程
+      // 对象仍由 `thread` 的注册表引用锚定存活(driver drop 在 VM close 前)。
+      unregister_implicit_thread(self.thread.co_state());
     }
   }
 }

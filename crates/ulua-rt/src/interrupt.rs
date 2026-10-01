@@ -28,7 +28,7 @@ use ulua_vm::functions::lua_break::lua_break;
 use crate::{
   callback::{panic_error_message, raise_lua_error},
   error::{Error, Result},
-  state::{Lua, is_yieldable, raw_reserve_stack},
+  state::{Lua, StateView, is_yieldable, raw_reserve_stack},
   sync::MaybeSend,
   sys::*,
   vm_store::{VmKey, define_vm_store, vm_key},
@@ -106,15 +106,15 @@ type InterruptHook = Option<unsafe extern "C-unwind" fn(state: *mut LuaState, gc
 
 /// 写/清本 VM 的 interrupt 钩子槽（`&mut *lua_callbacks(state)` 的唯一收口点）。
 ///
-/// 调用序契约（正确性，非内存安全）：`state` 存活且由当前线程驱动（`&self` 的
+/// 调用序契约（正确性，非内存安全）：state 正由当前线程驱动（`&self` 的
 /// `XRc<LuaInner>` 保证），`global` 构造期接线非空。`install`/`remove` 分别传
 /// `Some(interrupt_trampoline)` / `None`；表项先于钩子就位（调用方维持）。
 #[inline]
-fn set_interrupt_hook(state: *mut LuaState, hook: InterruptHook) {
+fn set_interrupt_hook(state: StateView<'_>, hook: InterruptHook) {
   // Safety: `lua_callbacks(state)` 返回 `&mut global_State.cb`——`global` 非空且比
   // 持有者长寿，字段内嵌于 `global_State`，地址稳定。写 `interrupt` 槽与读它的
   // safepoint 都发生在当前驱动 VM 的线程上（`send` 契约为移动而非并发），无并发写。
-  unsafe { (*lua_callbacks(state)).interrupt = hook };
+  unsafe { (*lua_callbacks(state.as_mut_ptr())).interrupt = hook };
 }
 
 /// 请求在当前可让出点让出协程（`lua_break` 收口点）。
@@ -122,24 +122,24 @@ fn set_interrupt_hook(state: *mut LuaState, hook: InterruptHook) {
 /// 调用序契约：仅由 [`interrupt_trampoline`] 在 [`is_yieldable`] 为真后调用——越过非
 /// 让出点本会 raise「attempt to break across metamethod/C-call boundary」，该错误已被
 /// 调用侧的让出闸门挡下。
-fn break_thread(state: *mut LuaState) {
+fn break_thread(state: StateView<'_>) {
   // Safety: `state` 为 safepoint 上正在执行的线程（VM 回调参数），且调用侧已确认可
   // 让出点；`lua_break` 只在该点设状态标记令 VM 展开回 `lua_resume`，不触指针。
-  let _ = unsafe { lua_break(state) };
+  let _ = unsafe { lua_break(state.as_mut_ptr()) };
 }
 
 impl Lua {
   /// Install an interrupt callback. Mirrors `mlua::Lua::set_interrupt`.
   ///
-  /// The callback runs at VM safepoints; returning [`VmState::Yield`] yields
-  /// the running coroutine, and returning `Err` raises a Lua error.
+  /// The callback runs at VM safepoints; returning [`VmState::Yield`] yields the
+  /// running coroutine, and returning `Err` raises a Lua error.
   pub fn set_interrupt<F>(&self, callback: F)
   where
     F: Fn(&Lua) -> Result<VmState> + MaybeSend + 'static,
   {
     let state = self.state();
-    // `state` 为存活 VM 状态（`&self` 的 `XRc<LuaInner>` 持有），`global` 构造期
-    // 接线非空——满足 `vm_key`（safe 门面）的调用序契约。
+    // `state` 引用即「存活且由当前线程驱动」(见 [`Lua::state`] 契约),`global`
+    // 构造期接线非空——满足 `vm_key`(safe 门面)的前提。
     let key = vm_key(state);
     InterruptStore::with(|m| {
       m.insert(key, Box::new(callback));
@@ -154,7 +154,7 @@ impl Lua {
   /// `mlua::Lua::remove_interrupt`.
   pub fn remove_interrupt(&self) {
     let state = self.state();
-    // 存活前提同 `set_interrupt`：`state` 存活，`global` 非空长寿。
+    // 前提同 `set_interrupt`。
     let key = vm_key(state);
     InterruptStore::with(|m| {
       m.remove(&key);
@@ -170,10 +170,9 @@ impl Lua {
 /// (and anything it captured) is released and the per-VM map entry does not leak
 /// one slot per state created. (If a closure captured Lua handles it would pin
 /// the VM and this never runs — but the common case captures non-Lua state.)
-pub(crate) fn clear_interrupt(state: *mut LuaState) {
-  // 唯一调用点是 `LuaInner::drop` 中 `lua_close` **之前**的 clear 序列（见
-  // `state.rs` Drop），此刻 state 与 `global` 均存活，满足 `vm_key` 调用序契约。
-  let key = vm_key(state);
+pub(crate) fn clear_interrupt(key: VmKey) {
+  // 唯一调用点是 `LuaInner::drop` 中 `lua_close` **之前**的 clear 序列,key 已在
+  // 彼处由存活 state 算出。
   let _ = InterruptStore::try_with(|m| {
     m.remove(&key);
   });
@@ -189,14 +188,16 @@ pub(crate) fn clear_interrupt(state: *mut LuaState) {
 /// 仅由 VM 在 safepoint 回调：`state` 存活且正由当前线程驱动，其 `global` 即本
 /// VM 的 `vm_key`；安装/摘除 trampoline 与查表都走同一 key，表项生命周期由
 /// `InterruptStore` 同 per-VM 表保证。
-unsafe extern "C-unwind" fn interrupt_trampoline(state: *mut LuaState, gc: i32) {
+unsafe extern "C-unwind" fn interrupt_trampoline(raw: *mut LuaState, gc: i32) {
   if gc >= 0 {
     // GC step interrupt — not surfaced to the user callback.
     return;
   }
-  // `state` 由 VM 在 safepoint 回调内提供（gc<0 分支只在指令 safepoint 到达），
-  // 存活且正由当前线程驱动；其 `global` 即本 VM 的表 key，满足 `vm_key` 调用序
-  // 契约；trampoline 装表与摘表（`remove_interrupt`/`clear_interrupt`）同 key。
+  // Safety: C-ABI 边界点(safepoint 回调实参):VM 实时传入存活且正由当前线程
+  // 驱动的 state;本帧一次转视图,视图只在本次 trampoline 调用内使用、不跨帧存放。
+  let state = unsafe { StateView::from_raw(raw) };
+  // 其 `global` 即本 VM 的表 key,满足 `vm_key` 的前提;trampoline 装表与摘表
+  // （`remove_interrupt`/`clear_interrupt`）同 key。
   let key = vm_key(state);
   // Take the closure out of the map for the duration of the call so a
   // re-entrant `set_interrupt` from inside the callback can't alias the
@@ -211,7 +212,7 @@ unsafe extern "C-unwind" fn interrupt_trampoline(state: *mut LuaState, gc: i32) 
   // 本次调用全程存活（VM 正驱动到 safepoint），覆盖返回句柄及其克隆——
   // 借用语义（`owned:false`）保证该句柄 drop 时不会关 VM；与 `callback.rs`
   // trampoline 同纪律：闭包不得把克隆出的句柄寄存到超出本次回调。
-  let lua = Lua::from_borrowed(state);
+  let lua = Lua::from_borrowed(raw);
   // The callback is user code: a panic must not unwind through the VM's
   // frames (it would corrupt the interpreter state mid-safepoint). Convert it
   // into a catchable Lua error instead, like the callback trampoline does.
@@ -266,11 +267,11 @@ unsafe extern "C-unwind" fn interrupt_trampoline(state: *mut LuaState, gc: i32) 
 /// push + `lua_error` 样板复用 [`raise_lua_error`]。
 ///
 /// 调用序契约（正确性，非内存安全，同 [`raise_lua_error`]）：`state` 必须正处在可
-/// 吸收 `lua_error` 展开的执行点（VM 中断/回调的 C 边界内）且存活、由当前线程驱动。
+/// 吸收 `lua_error` 展开的执行点（VM 中断/回调的 C 边界内）且由当前线程驱动。
 /// 栈空位由本函数经 [`raw_reserve_stack`] 自行预留，调用方无需额外保证。收口的 C
 /// 边界（`lua_error` 的 longjmp 展开）在 [`raise_lua_error`]（safe 门面）一处，
 /// 故本函数自身是 safe fn、无边界块。
-fn raise_error(state: *mut LuaState, e: &Error) -> ! {
+fn raise_error(state: StateView<'_>, e: &Error) -> ! {
   // Use the bare message for a runtime error (so it round-trips back through
   // `pop_error` as `RuntimeError(msg)` without a doubled "runtime error: "
   // prefix); fall back to the full Display for other error kinds.

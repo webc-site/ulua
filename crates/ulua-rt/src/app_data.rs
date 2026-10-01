@@ -32,8 +32,7 @@ use crate::{
   error::{Error, Result},
   state::Lua,
   sync::{MaybeSend, XRc},
-  sys::LuaState,
-  vm_store::{define_vm_store, vm_key, vm_key_of},
+  vm_store::{VmKey, define_vm_store, vm_key_of},
 };
 
 /// The type-erased payload of one entry.
@@ -402,10 +401,9 @@ impl Lua {
 }
 
 /// Drop this VM's entire application-data store. Called from `LuaInner::drop`.
-pub(crate) fn clear_app_data(state: *mut LuaState) {
-  // 唯一调用点在 `LuaInner::drop` 的 clear 序列、`lua_close` 之前（见 `state.rs`），
-  // 此刻 state/`global` 存活，满足 `vm_key`（safe 门面）的调用序契约。
-  let key = vm_key(state);
+pub(crate) fn clear_app_data(key: VmKey) {
+  // 唯一调用点在 `LuaInner::drop` 的 clear 序列、`lua_close` 之前（见 `state.rs`）,
+  // key 已在彼处由存活 state 算出。
   let _ = AppDataStore::try_with(|outer| {
     outer.remove(&key);
   });

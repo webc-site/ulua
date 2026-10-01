@@ -44,8 +44,8 @@ use crate::{
   multi::MultiValue,
   registry::RegHandle,
   state::{
-    Lua, LuaRef, allocate_userdata, is_userdata_at, pop_stack, set_metatable_at, slot_length,
-    slots_equal, userdata_at, with_reference_pushed,
+    Lua, LuaRef, StateView, allocate_userdata, is_userdata_at, pop_stack, set_metatable_at,
+    slot_length, slots_equal, userdata_at, with_reference_pushed,
   },
   sync::{MaybeSend, MaybeSync, NOT_SYNC, NotSync, XRc},
   sys::*,
@@ -438,7 +438,7 @@ struct DataCell<T> {
 /// 有效栈索引。与 `state.rs` 门面族同范式：三道闸门全是 `idx` 槽上的只读查询，
 /// `unsafe` 已内聚在 `is_userdata_at`/`slot_length`/`userdata_at` 门面体内，本
 /// 函数与调用点均无需再论证。
-fn checked_payload(state: *mut LuaState, idx: i32, size: usize) -> Option<NonNull<c_void>> {
+fn checked_payload(state: StateView<'_>, idx: i32, size: usize) -> Option<NonNull<c_void>> {
   // `LuaState::obj_len` 对 userdata 返回存储长度（`lua_newuserdatadtor` 会在其后
   // 附加 dtor 指针，所以本 crate 自己的 userdata 总是比 `DataCell<T>` 更宽）；
   // 长度不足直接拒。
@@ -473,7 +473,7 @@ pub(crate) fn init_userdata_slot<T>(slot: NonNull<T>, value: T) {
 /// 有效栈索引；返回引用的生命周期由调用方保证——该 userdata 在期内被栈槽/注册表
 /// 引用钉住、GC 不移动 userdata（与 [`data_header`] 同范式）；`T` 必须是该槽
 /// 实际写入的载荷类型（各 trampoline 与写入方同单态化配对）。
-pub(crate) fn typed_userdata<'a, T>(state: *mut LuaState, idx: i32) -> Option<&'a T> {
+pub(crate) fn typed_userdata<'a, T>(state: StateView<'_>, idx: i32) -> Option<&'a T> {
   let _: () = AlignOk::<T>::CHECK;
   let payload = checked_payload(state, idx, size_of::<T>())?;
   // Safety: 闸门保证载荷非空且覆盖整个 `T`；`AlignOk` 编译期排除对齐 >8 的类型，
@@ -486,7 +486,7 @@ pub(crate) fn typed_userdata<'a, T>(state: *mut LuaState, idx: i32) -> Option<&'
 /// 调用序契约额外要求：`T` 内含 `Cell`/`RefCell` 或调用方保证无并存别名
 /// （现用点：async upvalue 的 tag 校验、`destruct_callback` 的 scope 退出单线程
 /// 取盒，均满足）。
-pub(crate) fn typed_userdata_mut<'a, T>(state: *mut LuaState, idx: i32) -> Option<&'a mut T> {
+pub(crate) fn typed_userdata_mut<'a, T>(state: StateView<'_>, idx: i32) -> Option<&'a mut T> {
   let _: () = AlignOk::<T>::CHECK;
   let payload = checked_payload(state, idx, size_of::<T>())?;
   // Safety: 同 [`typed_userdata`]；无并存别名前提由函数头契约限定。
@@ -498,7 +498,7 @@ pub(crate) fn typed_userdata_mut<'a, T>(state: *mut LuaState, idx: i32) -> Optio
 /// 调用序契约（正确性，非内存安全）：除 [`checked_payload`] 的前提外，返回引用
 /// 的生命周期必须由调用方保证——该 userdata 在期内被 registry 引用钉住、且 GC
 /// 不会移动 userdata。
-fn data_header<'a>(state: *mut LuaState, idx: i32) -> Option<&'a DataHeader> {
+fn data_header<'a>(state: StateView<'_>, idx: i32) -> Option<&'a DataHeader> {
   // `typed_userdata` 收口全部闸门 + 裸指针边界；`DataHeader` 是任意
   // `DataCell<T>` 的 `#[repr(C)]` 公共前缀，比对垃圾位值只做整数比较。
   typed_userdata::<DataHeader>(state, idx)
@@ -509,7 +509,7 @@ fn data_header<'a>(state: *mut LuaState, idx: i32) -> Option<&'a DataHeader> {
 ///
 /// 调用序契约（正确性，非内存安全）：同 [`data_header`]；`key` 必须是对应 `T`
 /// 的真实键（`Typed(TypeId::of::<T>())` 或该 `T` 被分配时发放的 `Scoped` 标记）。
-fn data_cell<'a, T>(state: *mut LuaState, idx: i32, key: CellKey) -> Result<&'a DataCell<T>> {
+fn data_cell<'a, T>(state: StateView<'_>, idx: i32, key: CellKey) -> Result<&'a DataCell<T>> {
   // `typed_userdata` 收口三道闸门 + `AlignOk` + 唯一的 `cast`/`as_ref` 边界；
   // 键不等即拒绝，杜绝把 A 类型载荷按 `DataCell<B>` 读出。`RefCell` 守卫生命周期
   // 内的可变别名；存活前提同 [`data_header`]。
@@ -1017,7 +1017,7 @@ impl<T> AlignOk<T> {
 /// `dtor` 必须与 `T` 同单态化配对：调用点写入成功后，`T` 的 drop 责任恰好移交
 /// 给它（VM 保证恰调用一次）。`unsafe` 已内聚在 `allocate_userdata` 门面体内。
 pub(crate) fn alloc_userdata_slot<T>(
-  state: *mut LuaState,
+  state: StateView<'_>,
   dtor: unsafe extern "C-unwind" fn(*mut c_void),
 ) -> Option<NonNull<T>> {
   let _: () = AlignOk::<T>::CHECK;

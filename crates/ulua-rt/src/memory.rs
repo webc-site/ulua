@@ -200,12 +200,12 @@ impl Lua {
     // 创建即恒传入非空 frealloc（Luau falloc 契约），本函数只在存活 state
     // 上首次安装限额；frealloc 为 null 仅出现在未初始化/已销毁内存，
     // 借用生命周期已挡——expect 不可达。
-    // Safety: `state` 存活且由当前线程驱动（句柄 XRc<LuaInner> + NotSync 纪律），
-    // `(*state).global` 构造期接线非空。`global_State` 地址全程稳定，`&mut` 重建
-    // 无别名冲突——`g` 只被当前驱动线程经本方法可变访问，其后的哈希表写入不触碰
-    // `g`，且 Rust 侧哈希表的分配走全局 Rust allocator、不经 VM `frealloc` 钩子，
-    // 回调不可能在持有 `&mut g` 期间重入本帧。
-    let g = unsafe { &mut *(*state).global };
+    // Safety: `state.global` 构造期接线非空。`global_State` 地址全程稳定，`&mut`
+    // 重建无别名冲突——`g` 只被当前驱动线程经本方法可变访问，其后的哈希表写入
+    // 不触碰 `g`，且 Rust 侧哈希表的分配走全局 Rust allocator、不经 VM `frealloc`
+    // 钩子，回调不可能在持有 `&mut g` 期间重入本帧。
+    let global_ptr = state.global;
+    let g = unsafe { &mut *global_ptr };
     // 以下字段读、`Box` 构造、`from_mut`/`from_ref` 取址皆是纯 Rust 操作（`base`
     // 仅是拷贝一个 fn 指针值，`expect` 由构造期不变式挡下 null：state 只能经
     // lua_newstate/lua_l_newstate 族诞生、创建即恒传入非空 frealloc）。
@@ -273,10 +273,10 @@ impl Lua {
       Ok(id)
     })?;
     // Safety: `id < MAX_USER_CATEGORIES (255)` 由上方分配逻辑保证，是
-    // `lua_setmemcat` 接受的 8-bit 类别域内值；`state` 存活，该调用只写
+    // `lua_setmemcat` 接受的 8-bit 类别域内值；该调用只写
     // `global_State::activememcat` 一个字段，不触碰栈。
     unsafe {
-      lua_setmemcat(state, id as i32);
+      lua_setmemcat(state.as_mut_ptr(), id as i32);
     }
     Ok(())
   }
@@ -286,15 +286,12 @@ impl Lua {
   /// this only via `heap_dump`, which ulua cannot back — see the module).
   pub fn memory_category_bytes(&self, name: &str) -> Option<usize> {
     let state = self.state();
-    // `state` 为存活 VM 状态（同 `set_memory_category`），满足 `vm_key` 调用序契约。
+    // 前提同 `set_memory_category`。
     let key = vm_key(state);
     let id = MemoryCategories::with(|map| map.get(&key).and_then(|c| c.get(name).copied()))?;
-    // Safety: `state` 仍存活（借用检查保证 `&self` 有效期内 VM 未 close），
-    // `global` 非空且长寿；`id` 由类别表分配，恒 `< 255 < 256 = memcatbytes`
-    // 数组长度，索引在界内；纯读数无别名要求。
-    unsafe {
-      let g = &*(*state).global;
-      Some(g.memcatbytes[id as usize])
-    }
+    // Safety: `global` 非空且长寿;`id` 由类别表分配,恒
+    // `< 255 < 256 = memcatbytes` 数组长度,索引在界内;纯读数无别名要求。
+    let g = unsafe { &*state.global };
+    Some(g.memcatbytes[id as usize])
   }
 }

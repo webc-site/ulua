@@ -33,7 +33,7 @@
 
 use ulua_common::collections::HashMap;
 
-use crate::{state::Lua, sys::LuaState};
+use crate::state::{Lua, StateView};
 
 /// A per-VM side-table key: the VM's `global_State` address as an integer.
 ///
@@ -51,22 +51,18 @@ pub(crate) type VmMap<T> = HashMap<VmKey, T>;
 /// of the VM's coroutine states, so a hook reached from any of them — a C
 /// callback, the interrupt trampoline, the allocator — computes the same key.
 ///
-/// 调用序契约（正确性，非内存安全）：`state` 必须是存活 VM 的 `LuaState`。
-/// 与 `stack_top`/`register_slot` 同族的 safe 门面：本读取只把 `global` 字段
-/// 的地址转成整数 key，不解引用该指针；unsafe 只在此处一次，各调用点不再重复
-/// 「state 存活」的 `// Safety` 论证。
+/// 与 `stack_top`/`register_slot` 同族的 safe 门面:形参是引用(state 存活由
+/// 类型表达),`global` 是 `pub` 字段、一次只读字段访问;返回的整数 key 只作
+/// 查表比较、从不解引用。
 #[inline]
-pub(crate) fn vm_key(state: *mut LuaState) -> VmKey {
-  // Safety: 契约要求 `state` 为存活 VM 的 `LuaState`，故 `global` 字段可读；
-  // 只把地址转成整数当 key，不解引用。
-  unsafe { (*state).global as usize }
+pub(crate) fn vm_key(state: StateView<'_>) -> VmKey {
+  state.global as usize
 }
 
 /// `&Lua` 句柄 → 全局状态整数 key：各 per-VM 侧表（app_data、luau_ext 等）
 /// 「按句柄取 key 再操作侧表」的调用点共用这一处最小封装。
 #[inline]
 pub(crate) fn vm_key_of(lua: &Lua) -> VmKey {
-  // `state` 存活（`lua` 的 `XRc<LuaInner>` 持有），满足 `vm_key` 的调用序契约。
   vm_key(lua.state())
 }
 

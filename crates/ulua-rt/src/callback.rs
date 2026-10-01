@@ -57,8 +57,8 @@ use crate::{
   multi::MultiValue,
   registry::RegHandle,
   state::{
-    Lua, ensure_stack, pop_stack, push_bytes, push_named_closure, push_upvalue, raise_from_top,
-    stack_top,
+    Lua, StateView, ensure_stack, pop_stack, push_bytes, push_named_closure, push_upvalue,
+    raise_from_top, stack_top,
   },
   sys::*,
   traits::{FromLuaMulti, IntoLuaMulti},
@@ -143,7 +143,7 @@ pub(crate) fn is_structured(err: &Error) -> bool {
 /// 空位——`lua_error` 沿 VM 的 longjmp 式展开逃逸本函数，只有站在受保护的 C 调用
 /// 内部才可吸收。与 `Lua::from_borrowed` 同范式：契约前移到调用点，本函数是
 /// safe 门面，`lua_error` 边界收在 `state::raise_from_top` 一处。
-pub(crate) fn raise_structured_error(state: *mut LuaState, err: Error) -> ! {
+pub(crate) fn raise_structured_error(state: StateView<'_>, err: Error) -> ! {
   // 先构造载荷再分配：`Box::new(err)` 若发生在分配之后，装箱失败（或 panic）会留下
   // 「已注册 dtor 但槽位未初始化」的窗口，GC 稍后对垃圾执行 `drop_in_place`。
   // 提前构造使可失败点全部落在分配之前（review.md §2 所有权显式转手）。
@@ -176,7 +176,7 @@ pub(crate) fn raise_structured_error(state: *mut LuaState, err: Error) -> ! {
 /// 调用序契约（正确性，非内存安全）：`state` 存活且由当前线程驱动、`idx` 为有效
 /// （绝对）栈索引。与 `stack_top`/`number_at` 同族的 safe 门面：闸门与下转边界
 /// 全收口在 `userdata.rs` 的 [`typed_userdata`]，调用点不再重复 `// Safety` 论证。
-pub(crate) fn recover_wrapped_error(state: *mut LuaState, idx: i32) -> Option<Error> {
+pub(crate) fn recover_wrapped_error(state: StateView<'_>, idx: i32) -> Option<Error> {
   // `typed_userdata`（userdata.rs 的类型化下转 safe 门面）内聚三道闸门
   // （userdata 类型/载荷非空/长度覆盖 `WrappedError`，脚本可 `error(newproxy())`
   // 抛出 0 字节载荷，必须先过长度闸门）与唯一的 `cast`/`as_ref` 边界；
@@ -228,13 +228,16 @@ unsafe extern "C-unwind" fn callback_dtor<F>(ptr: *mut c_void) {
 /// 仅由 VM 作为 `LuaCFunction` 调用：`state` 必须是正在受保护 C 边界内驱动的
 /// 存活 `LuaState`，且 upvalue 1 是该闭包注册的 `CallbackSlot<F>` userdata
 /// （布局由同一 `F` 单态化确定，脚本不可替换）。
-unsafe extern "C-unwind" fn trampoline<F, A, R>(state: *mut LuaState) -> i32
+unsafe extern "C-unwind" fn trampoline<F, A, R>(raw: *mut LuaState) -> i32
 where
   F: Fn(&Lua, A) -> Result<R>,
   A: FromLuaMulti,
   R: IntoLuaMulti,
 {
-  // 本函数的共用前置（下面每个 `raise_*` 调用点都引它）：VM 按 `LuaCFunction`
+  // Safety: C-ABI 边界点(`lua_CFunction` 实参):VM 实时传入存活 state,本帧
+  // 一次转视图,视图只在本次 trampoline 调用内使用、不跨帧存放。
+  let state = unsafe { StateView::from_raw(raw) };
+  // 本函数的共用前置（下面每个 `raise_*` 调用点都引它）：VM 按 `lua_CFunction`
   // 约定实时传入 `state`，故其存活且正由当前线程在受保护 C 边界内驱动；CI 帧
   // 建立时预留的 LUA_MINSTACK 头寸满足错误对象的 push。用户闭包连同 `A`/`R`
   // 转换都在 `catch_unwind` 内，panic 不会裸跨 C-unwind 边界；结果路径先
@@ -263,7 +266,7 @@ where
   // 3. Build a borrowed Lua handle for the calling thread (must NOT close it).
   // `Lua::from_borrowed` 是带契约的 safe fn（只存指针不解引用）：`state` 由 VM
   // 实时传入即满足「存活期覆盖句柄及其克隆」。
-  let lua = Lua::from_borrowed(state);
+  let lua = Lua::from_borrowed(raw);
 
   // 4. Pull the arguments off the stack into a MultiValue. They occupy
   //    stack indices 1..=nargs.
@@ -352,7 +355,7 @@ pub(crate) fn collect_stack_args(lua: &Lua, nargs: i32) -> Result<MultiValue> {
 /// 的 C 调用内部才可吸收；且栈上须有至少 1 个空位供 push 错误对象。与
 /// `Lua::from_borrowed` 同范式：契约前移到调用点，本函数是 safe 门面，
 /// `lua_error` 边界收在 `state::raise_from_top` 一处。
-pub(crate) fn raise_lua_error(state: *mut LuaState, msg: &str) -> ! {
+pub(crate) fn raise_lua_error(state: StateView<'_>, msg: &str) -> ! {
   // 函数头契约即本函数全部前提。`msg` 的字节切片合法可读（空串长度为 0，
   // VM 按长度读、不触碰指针），`push_bytes`（safe 门面）把内容拷成内部 TString、
   // 不寄存借用指针；`raise_from_top`（`lua_error` 的收口门面）按契约以 VM 的
