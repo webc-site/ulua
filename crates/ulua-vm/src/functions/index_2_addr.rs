@@ -11,8 +11,9 @@ use crate::{
 
 /// # Safety
 /// `l` 须为存活 LuaState 且当前帧 `(*(*l).ci).top`、`(*l).base`、`(*l).top` 指向同一栈数组并保持
-/// `base <= top` 不变式；`idx` 为合法 Lua 栈索引（正数不超帧顶、负数在 `LUA_REGISTRYINDEX` 之上、伪索引走
-/// `pseudo_2_addr`），越界正索引按语义返回 `LUA_O_NILOBJECT`。返回的 StkId 仅在栈未重分配前有效。
+/// `base <= top` 不变式。`idx` 为任意 i32：正索引越界（≥ top）与负索引越界（0 或落到 `base` 之下）
+/// 都按语义返回 `LUA_O_NILOBJECT` 哨兵；伪索引走 `pseudo_2_addr`（越界 upvalue 伪索引同样返回
+/// 哨兵）。返回的 StkId 仅在栈未重分配前有效。
 /// cpp/VM/src/lapi.cpp:115 index2addr。
 pub unsafe fn index_2_addr(l: *mut LuaState, idx: i32) -> StkId {
   unsafe {
@@ -28,11 +29,21 @@ pub unsafe fn index_2_addr(l: *mut LuaState, idx: i32) -> StkId {
         (*l).base.add(off)
       }
     } else if idx > LUA_REGISTRYINDEX {
-      api_check!(
-        l,
-        idx != 0 && (-idx) as isize <= (*l).top.offset_from((*l).base)
-      );
-      (*l).top.offset(idx as isize)
+      // 负索引（或 0）：`top + idx` 仅当 `idx != 0` 且结果落在 `[base, top)` 内
+      // 才是合法指针算术。cpp 仅以 debug 断言表达该契约，release 下对越界负索
+      // 引直接做出栈数组下界的指针算术（UB，无 oracle 输出）。
+      // DELIBERATE DEVIATION（cpp lapi.cpp:126-129）：越界（含 idx==0）返回
+      // `LUA_O_NILOBJECT` 哨兵——与 cpp 正索引越界同款降级（消费方如 lua_type
+      // 得到确定的 LUA_TNONE），不再产生栈外指针。断言条件改写为非移项形式
+      // （cpp 的 `-idx` 对 i32::MIN 是符号溢出），定义域内与 cpp 逐位一致；
+      // 快路径仅多一次 isize 加法比较，正常路径零额外间接。
+      let rel = (idx as isize) + (*l).top.offset_from((*l).base);
+      api_check!(l, idx != 0 && rel >= 0);
+      if idx != 0 && rel >= 0 {
+        (*l).top.offset(idx as isize)
+      } else {
+        LUA_O_NILOBJECT as *mut TValue
+      }
     } else {
       pseudo_2_addr(l, idx)
     }

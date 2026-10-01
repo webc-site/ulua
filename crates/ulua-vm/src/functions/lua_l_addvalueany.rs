@@ -54,7 +54,7 @@ pub(crate) unsafe fn lua_l_addvalueany(b: &mut LuaLStrbuf, idx: i32) {
         }
       }
       LuaType::Integer => {
-        let n = lua_tointeger_64(l, idx);
+        let n = lua_tointeger_64(&*l, idx);
         let mut s = [0u8; LUAI_MAXINT2STR as usize];
         let len = luai_int2str(&mut s, n);
         lua_l_addlstring(b, &s[..len]);

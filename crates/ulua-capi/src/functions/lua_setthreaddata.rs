@@ -22,5 +22,5 @@ use ulua_vm::{functions::lua_setthreaddata, records::lua_state::LuaState};
 pub unsafe extern "C-unwind" fn lua_setthreaddata(l: *mut LuaState, data: *mut c_void) {
   // Safety: 契约声明 `l` 为本次调用期内独占驱动的合法 `LuaState`，`&mut *l` 重建满足排他
   // 借用前提；`data` 只转手存储不解引用；被调方为 safe fn，仅写 `userdata` 一个字段。
-  unsafe { lua_setthreaddata::lua_setthreaddata(&mut *l, data) }
+  lua_setthreaddata::lua_setthreaddata(unsafe { &mut *l }, data)
 }

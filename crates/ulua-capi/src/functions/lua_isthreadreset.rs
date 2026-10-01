@@ -19,5 +19,5 @@ pub unsafe extern "C-unwind" fn lua_isthreadreset(l: *mut LuaState) -> c_int {
   // Safety: 契约声明 `l` 为整个调用期间存活的合法 `LuaState`；被调方仅比较 `ci`/`base_ci`/
   // `base`/`top` 指针字段值与 `status` 一个 `u8` 字段、不解引用所指集合，本帧 `&*l` 重建
   // 即时结束借用窗口。
-  unsafe { lua_isthreadreset::lua_isthreadreset(&*l) }
+  lua_isthreadreset::lua_isthreadreset(unsafe { &*l })
 }

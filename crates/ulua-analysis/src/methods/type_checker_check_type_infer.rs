@@ -1508,10 +1508,9 @@ impl TypeChecker {
       return ControlFlow::None;
     };
 
-    if !declared_extern_type.indexer.is_null() {
-      let indexer = alias_ref(declared_extern_type.indexer);
-      let index_type = self.resolve_type(scope.clone(), alias_ref(indexer.index_type));
-      let result_type = self.resolve_type(scope.clone(), alias_ref(indexer.result_type));
+    if let Some(indexer) = declared_extern_type.indexer.get() {
+      let index_type = self.resolve_type(scope.clone(), indexer.index_type.get());
+      let result_type = self.resolve_type(scope.clone(), indexer.result_type.get());
       etv.indexer = Some(TableIndexer {
         index_type,
         index_result_type: result_type,

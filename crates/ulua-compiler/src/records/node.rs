@@ -79,6 +79,13 @@ impl<T> Node<T> {
     Self::new(p.cast_mut())
   }
 
+  /// ulua-ast 句柄（`Node::from_raw` 已证非空）升格为本 crate 地址句柄：
+  /// 表索引器子图句柄化后，AST 字段即句柄形态，身份同源（同一 arena 地址）。
+  #[inline]
+  pub(crate) fn from_ast_handle(node: ulua_ast::records::node_handle::Node<T>) -> Self {
+    Self::new(node.as_ptr())
+  }
+
   /// 交回等价的裸节点地址，供 ulua-ast 的指针形参 API（visit/deref 门面）使用。
   #[inline]
   pub(crate) fn as_ptr(self) -> *mut T {

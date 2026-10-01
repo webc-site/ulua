@@ -1698,11 +1698,11 @@ impl TypeChecker2 {
 
     // SAFETY: indexer 由 parser 判空写位（缺失索引器为 null），非空即 arena 存活；
     // 其 index_type/result_type 子指针同寿。
-    // indexer 可空（cpp 判空后解引用）：alias_opt 折叠；index/result 为
-    // indexer 自有的恒非空子指针，alias_ref 换存活引用。
-    if let Some(indexer) = alias_opt(table.indexer) {
-      self.visit_type(alias_ref(indexer.index_type));
-      self.visit_type(alias_ref(indexer.result_type));
+    // indexer 可空（cpp 判空后解引用）：句柄 `get` 折叠；index/result 为
+    // indexer 自有的恒非空句柄，`get` 直接换存活引用。
+    if let Some(indexer) = table.indexer.get() {
+      self.visit_type(indexer.index_type.get());
+      self.visit_type(indexer.result_type.get());
     }
   }
 

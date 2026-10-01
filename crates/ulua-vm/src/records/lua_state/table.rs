@@ -155,20 +155,17 @@ impl LuaState {
 
   #[inline(always)]
   pub fn set_metatable(&mut self, idx: i32) -> i32 {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_setmetatable(self.as_mut_ptr(), idx) }
+    lua_setmetatable(self, idx)
   }
 
   #[inline(always)]
   pub fn get_metatable(&mut self, idx: i32) -> bool {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_getmetatable(self.as_mut_ptr(), idx) != 0 }
+    lua_getmetatable(self, idx) != 0
   }
 
   #[inline(always)]
   pub fn next(&mut self, idx: i32) -> bool {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_next(self.as_mut_ptr(), idx) != 0 }
+    lua_next(self, idx) != 0
   }
 
   /// 查 `obj` 元表的 `event` 元方法；命中时元方法留在栈顶并移除元表。

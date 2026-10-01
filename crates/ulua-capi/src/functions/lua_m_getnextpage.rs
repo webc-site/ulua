@@ -1,4 +1,4 @@
-//! 本文件由 `crates/ulua-capi/tools/gen_capi.py` 自动生成（源：ulua-vm/src/functions/lua_m_getnextpage.rs）。
+//! 本文件对应 `ulua_luaM_getnextpage` 导出符号（源：ulua-vm/src/functions/lua_m_getnextpage.rs）。
 //! 导出壳与 ulua-vm 对应函数签名一致，除把 `page` 裸指针重建为 `&lua_Page` 后透传外，零业务逻辑。
 use ulua_vm::{functions::lua_m_getnextpage, records::lua_page::lua_Page};
 

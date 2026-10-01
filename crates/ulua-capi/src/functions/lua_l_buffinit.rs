@@ -19,5 +19,5 @@ use ulua_vm::{
 pub unsafe extern "C-unwind" fn lua_l_buffinit(l: *mut LuaState, b: *mut LuaLStrbuf) {
   // Safety: 契约声明 `l` 为整个调用期间存活的合法 `LuaState`；本帧引用重建
   // 即时结束借用窗口。
-  unsafe { lua_l_buffinit::lua_l_buffinit(&mut *l, &mut *b) }
+  lua_l_buffinit::lua_l_buffinit(unsafe { &mut *l }, unsafe { &mut *b })
 }

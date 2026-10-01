@@ -13,6 +13,6 @@ pub unsafe fn lua_l_checkinteger_64(l: *mut LuaState, narg: i32) -> i64 {
       tag_error(l, narg, LuaType::Integer as i32);
     }
 
-    lua_tointeger_64(l, narg)
+    lua_tointeger_64(&*l, narg)
   }
 }

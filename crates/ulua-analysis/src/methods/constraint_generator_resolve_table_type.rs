@@ -11,11 +11,8 @@ use crate::{
   enums::{polarity::Polarity, table_state::TableState},
   functions::{get_mutable_type, polarity_of_access::polarity_of_access},
   records::{
-    arena_handle::{alias_opt, alias_ref},
-    constraint_generator::ConstraintGenerator,
-    generic_error::GenericError,
-    property_type::Property,
-    table_indexer::TableIndexer,
+    arena_handle::alias_ref, constraint_generator::ConstraintGenerator,
+    generic_error::GenericError, property_type::Property, table_indexer::TableIndexer,
     table_type::TableType,
   },
   type_aliases::{
@@ -73,7 +70,7 @@ impl ConstraintGenerator {
       }
     }
 
-    if let Some(ast_indexer) = alias_opt(tab.indexer) {
+    if let Some(ast_indexer) = tab.indexer.get() {
       let indexer_access = ast_indexer.access;
 
       if indexer_access == AstTableAccess::Read {
@@ -92,7 +89,7 @@ impl ConstraintGenerator {
           let cur_polarity = self.polarity;
           let index_ty = self.resolve_type(
             scope,
-            alias_ref(ast_indexer.index_type),
+            ast_indexer.index_type.get(),
             in_type_arguments,
             false,
             cur_polarity,
@@ -100,7 +97,7 @@ impl ConstraintGenerator {
           let cur_polarity2 = self.polarity;
           let result_ty = self.resolve_type(
             scope,
-            alias_ref(ast_indexer.result_type),
+            ast_indexer.result_type.get(),
             in_type_arguments,
             false,
             cur_polarity2,
@@ -126,7 +123,7 @@ impl ConstraintGenerator {
         let cur_polarity = self.polarity;
         let index_ty = self.resolve_type(
           scope,
-          alias_ref(ast_indexer.index_type),
+          ast_indexer.index_type.get(),
           in_type_arguments,
           false,
           cur_polarity,
@@ -134,7 +131,7 @@ impl ConstraintGenerator {
         let cur_polarity2 = self.polarity;
         let result_ty = self.resolve_type(
           scope,
-          alias_ref(ast_indexer.result_type),
+          ast_indexer.result_type.get(),
           in_type_arguments,
           false,
           cur_polarity2,
