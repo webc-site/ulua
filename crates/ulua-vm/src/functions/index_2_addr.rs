@@ -15,14 +15,16 @@ use crate::{
 /// 返回的 StkId 仅在栈未重分配前有效。cpp/VM/src/lapi.cpp:115 index2addr。
 pub fn index_2_addr(l: &LuaState, idx: i32) -> StkId {
   if idx > 0 {
-    // SAFETY:`base`/`top` 指向同一栈数组且 `base <= top` 是 `lua_State` 结构不变式
-    // （与 [`LuaState::get_top`] 同一前提），`offset_from` 仅作距离读数不解引用。
-    let used = unsafe { l.top.offset_from(l.base) };
-    api_check!(l, idx as isize <= used);
+    // SAFETY: `(*l.ci).top` 与 `base` 指向同一栈数组，`l.ci` 有效存活，`offset_from` 仅作距离读数不解引用。
+    api_check!(
+      l,
+      idx as isize <= unsafe { (*l.ci).top.offset_from(l.base) }
+    );
     // 先比较再偏移：C++ 里 `base + (idx - 1)` 只是个悬垂指针，随后与 top 比
     // 较返回 nilobject（lua_type(L, 1000) 是合法调用）；Rust 里对越界 off 做
     // `add` 本身就是 UB，所以用偏移量比较替代指针比较。
     let off = (idx - 1) as usize;
+    let used = unsafe { l.top.offset_from(l.base) };
     if off >= used as usize {
       LUA_O_NILOBJECT as *mut TValue
     } else {

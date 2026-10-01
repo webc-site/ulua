@@ -2,8 +2,7 @@ use core::ptr::{eq, null};
 
 pub use crate::macros::lua_o_nilobject::LUA_O_NILOBJECT;
 use crate::{
-  functions::index_2_addr::index_2_addr,
-  records::lua_state::LuaState,
+  functions::index_2_addr::index_2_addr, records::lua_state::LuaState,
   type_aliases::t_value::TValue,
 };
 
@@ -13,9 +12,5 @@ use crate::{
 pub fn lua_a_toobject(l: &LuaState, idx: i32) -> *const TValue {
   let p = index_2_addr(l, idx);
 
-  if eq(p, LUA_O_NILOBJECT) {
-    null()
-  } else {
-    p
-  }
+  if eq(p, LUA_O_NILOBJECT) { null() } else { p }
 }

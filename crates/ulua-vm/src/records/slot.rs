@@ -28,10 +28,7 @@
 //!
 //! [`StkId`]: crate::type_aliases::stk_id::StkId
 
-use core::{
-  marker::PhantomData,
-  ptr::NonNull,
-};
+use core::{marker::PhantomData, ptr::NonNull};
 
 use crate::{
   functions::index_2_addr::index_2_addr, records::lua_state::LuaState,

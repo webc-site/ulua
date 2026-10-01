@@ -1,8 +1,7 @@
 use core::ptr::null;
 
 use crate::{
-  enums::value_view::ValueView, functions::index_2_addr::index_2_addr,
-  records::lua_state::LuaState,
+  enums::value_view::ValueView, functions::index_2_addr::index_2_addr, records::lua_state::LuaState,
 };
 
 /// `lua_tovector` 核心（cpp `lapi.cpp:567`）。`l` 以引用传入（存活由类型保证）；

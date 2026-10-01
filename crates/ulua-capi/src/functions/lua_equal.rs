@@ -15,11 +15,7 @@ use ulua_vm::{functions::lua_equal, records::lua_state::LuaState};
 ///   状态的其它访问单线程驱动（不得跨 OS 线程并发）——引用重建前提；
 /// - 其余安全前置条件与被调方文档所列调用序契约一致（`__eq` 元方法路径须处于受保护帧）。
 #[unsafe(export_name = "ulua_lua_equal")]
-pub unsafe extern "C-unwind" fn lua_equal(
-  l: *mut LuaState,
-  index1: c_int,
-  index2: c_int,
-) -> c_int {
+pub unsafe extern "C-unwind" fn lua_equal(l: *mut LuaState, index1: c_int, index2: c_int) -> c_int {
   // Safety: 契约声明 `l` 为整个调用期间存活的合法 `LuaState`；本帧引用重建
   // 即时结束借用窗口。
   unsafe { lua_equal::lua_equal(&mut *l, index1, index2) }
