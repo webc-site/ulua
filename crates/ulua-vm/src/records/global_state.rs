@@ -45,6 +45,12 @@ const UDATA_TAGS: usize = 128;
 /// cpp `LUA_LUTAG_LIMIT`（luaconf.h:106）：lightuserdata tag 上限，
 /// `lightuserdataname` 按 tag 各一名槽（lstate.h:253）。
 const LIGHTUSERDATA_TAGS: usize = 128;
+/// cpp `lstate.h:237` `uint64_t ptrenckey[4]`：指针混淆密钥槽数；
+/// `lua_encodepointer` 按「两段乘数 + 两段加数」乘加后异或。
+pub(crate) const PTRENCKEY_LEN: usize = 4;
+/// 建态时的 `ptrenckey` 初值（唯一写点在 `lua_newstate`）：key[0]=1 为乘法单位元、
+/// 其余 0 为加法单位元；密钥轮换移植前编码退化为恒等透传。
+pub(crate) const PTRENCKEY_INIT: [u64; PTRENCKEY_LEN] = [1, 0, 0, 0];
 
 /// 全局 VM 状态。`#[repr(C)]` 与字段顺序是 code-gen JIT 的 ABI 契约
 /// （`offset_of!(global_State, totalbytes/gc_threshold/cb/ecbdata/tmname)` 直接进机器码），不得重排。
@@ -88,7 +94,7 @@ pub struct global_State {
   pub registry: TValue,
   pub registryfree: i32,
   pub rngstate: u64,
-  pub ptrenckey: [u64; 4],
+  pub ptrenckey: [u64; PTRENCKEY_LEN],
   pub cb: LuaCallbacks,
   pub ecb: LuaExecutionCallbacks,
   pub ecbdata: LuaExecutionCallbackStorage, // LUA_EXECUTION_CALLBACK_STORAGE

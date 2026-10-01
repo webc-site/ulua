@@ -1,4 +1,9 @@
-use core::{ffi::c_void, mem::size_of, ptr::copy_nonoverlapping};
+use core::{
+  ffi::c_void,
+  mem::size_of,
+  ptr::write_unaligned,
+  slice::from_raw_parts_mut,
+};
 
 use crate::{
   enums::lua_type::LuaType,
@@ -8,9 +13,9 @@ use crate::{
   },
   macros::{
     api_check::api_check, api_incr_top::api_incr_top, checkliveness::checkliveness,
-    lua_c_check_gc::lua_c_check_gc, utag_idtor::UTAG_IDTOR,
+    lua_c_check_gc::lua_c_check_gc, obj_2_gco::obj2gco, utag_idtor::UTAG_IDTOR,
   },
-  records::{gc_object::GCObject, lua_state::LuaState},
+  records::lua_state::LuaState,
   type_aliases::lua_destructor::LuaDestructor,
 };
 
@@ -26,20 +31,16 @@ pub unsafe fn lua_newuserdatadtor(l: *mut LuaState, sz: usize, dtor: LuaDestruct
     ensure_stack(l, 1);
 
     let dtor_size = size_of::<LuaDestructor>();
-    let as_ = if sz < usize::MAX - dtor_size {
-      sz + dtor_size
-    } else {
-      usize::MAX
-    };
+    // 溢出钳位：cpp `sz + sizeof(LuaDestructor)` 的回绕保护，等价 `saturating_add`
+    let as_ = sz.saturating_add(dtor_size);
 
     let u = lua_u_newudata(l, as_, UTAG_IDTOR);
-    copy_nonoverlapping(
-      (&dtor as *const LuaDestructor).cast::<u8>(),
-      (*u).data.as_mut_ptr().add(sz).cast::<u8>(),
-      dtor_size,
-    );
+    // 析构指针以值镜像非对齐存于 payload 尾部（`lua_u_freeudata` 对称 `read_unaligned`
+    // 读回）。切片视图把界长交给 `as_` 做边界检查，替代手写 `.add(sz)` 裸指针算术
+    let payload = from_raw_parts_mut((*u).data.as_mut_ptr().cast::<u8>(), as_);
+    write_unaligned(payload[sz..].as_mut_ptr().cast::<LuaDestructor>(), dtor);
 
-    (*(*l).top).value.gc = u as *mut GCObject;
+    (*(*l).top).value.gc = obj2gco!(u);
     (*(*l).top).tt = LuaType::UserData as i32;
     checkliveness!((*l).global, (*l).top);
     api_incr_top!(l);
