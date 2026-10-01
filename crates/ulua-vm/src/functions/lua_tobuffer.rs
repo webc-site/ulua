@@ -1,38 +1,69 @@
-use core::ffi::c_void;
+use core::{ffi::c_void, slice::from_raw_parts_mut};
 
 use crate::{
   enums::value_view::ValueView, functions::index_2_addr::index_2_addr,
   records::lua_state::LuaState, type_aliases::stk_id::StkId,
 };
 
-/// cpp `lua_tobuffer`（`VM/src/lapi.cpp`）：`idx` 槽为 buffer 时返回其数据块首字节可变引用，
-/// 并把数据长度写进 `len` 出参（`len` 可为 null，此时仅取址不写长度，与 cpp 传 `nullptr` 一致）；
-/// 非 buffer 返回 `None`。
+/// buffer 全家族唯一的窗口派生 unsafe 点（r11 R-C T1 窄腰核心）：`idx` 槽为 buffer
+/// userdata 时返回其内联数据块的可变借用切片，非 buffer 返回 `None`。
 ///
-/// 空指针哨兵收口为 `Option<&'a mut c_void>`：数据块是 VM 持有的真实可写内存，引用寿命
-/// `'a` 随槽解耦（同 `VmFrame::slots_mut`）。长度出参保持 cpp 的 `size_t*` C 签名（可选出参），
-/// 仅 `Some` 路径写入，与 `None` 时不触碰 `*len` 的既有行为逐位一致。
+/// C 形 `size_t* len` 出参收口为切片长度本身；出参形态的折回由 [`lua_tobuffer`]
+/// 垫片独家承接。Rust 侧一切数据窗借用都自本函数派生（review.md §2：unsafe 关进
+/// 有契约的最小边界，不得渗透到业务逻辑）。
 ///
 /// # Safety
-/// `l` 须为存活 LuaState；`idx` 经 `index_2_addr` 解析为栈内合法 StkId；`len` 须为可写 `usize`
-/// 槽或 null。返回引用指向 buffer 自有内存，在该 buffer 存活期间有效。
+/// 契约三要素（借出上界的论证与 ulua-rt/src/buffer.rs 的 `as_slice` 同源）：
+/// 1. buffer 定长不 resize——`data`/`len` 在 `lua_b_newbuffer` 一次性分配后恒定，
+///    窗口路径不存在重分配或失效面；
+/// 2. GC 不移动对象——收集器只标记/清扫，存活 buffer 的内联数据块地址稳定；
+/// 3. 栈槽/注册表引用钉住存活期——借用寿命 `'a` 与 `l` 的借用解耦，要求 `a` 有效期内
+///    该 buffer 值始终作为存活栈槽值（或注册表引用）被钉住，否则悬垂借用。
+///
+/// 另 `l` 须为存活 LuaState；`idx` 经 `index_2_addr` 解析为栈内合法 StkId。
+pub unsafe fn lua_tobuffer_bytes_ref<'a>(l: &mut LuaState, idx: i32) -> Option<&'a mut [u8]> {
+  unsafe {
+    let o: StkId = index_2_addr(l, idx);
+
+    match ValueView::from_tvalue(&*o) {
+      ValueView::Buffer(b) => {
+        // SAFETY: 契约保证 `b` 指向存活 LuauBuffer，其 `data` 内联块起 `len` 字节可读写、
+        // 地址稳定（要素 1/2），存活期由栈槽钉住（要素 3）；柔性数组首址恒非空可解引用。
+        Some(from_raw_parts_mut(
+          (*b).data.as_mut_ptr().cast::<u8>(),
+          (*b).len as usize,
+        ))
+      }
+      _ => None,
+    }
+  }
+}
+
+/// C-ABI 镜像垫片：把 [`lua_tobuffer_bytes_ref`] 的切片折回 cpp `lua_tobuffer`
+/// （`VM/src/lapi.cpp`）的 `(void*, size_t* len)` 出参形——`idx` 槽为 buffer 时返回其
+/// 数据块首字节可变引用并把数据长度写进 `len`（`len` 可为 null，此时仅取址不写长度，
+/// 与 cpp 传 `nullptr` 一致）；非 buffer 返回 `None` 且不触碰 `*len`。
+///
+/// 仅供跨 crate（ulua-rt）与测试门面的既有 C 形消费点使用；T9 收口时随消费方迁移删除。
+///
+/// # Safety
+/// `l` 须为存活 LuaState；`idx` 经 `index_2_addr` 解析为栈内合法 StkId；`len` 须为可写
+/// `usize` 槽或 null。返回引用指向 buffer 自有内存，在该 buffer 存活期间有效
+/// （[`lua_tobuffer_bytes_ref`] 契约三要素）。
 pub unsafe fn lua_tobuffer<'a>(
   l: *mut LuaState,
   idx: i32,
   len: *mut usize,
 ) -> Option<&'a mut c_void> {
   unsafe {
-    let o: StkId = index_2_addr(&*l, idx);
+    let bytes = lua_tobuffer_bytes_ref(&mut *l, idx)?;
 
-    match ValueView::from_tvalue(&*o) {
-      ValueView::Buffer(b) => {
-        if !len.is_null() {
-          *len = (*b).len as usize;
-        }
-        (*b).data.as_ptr() as *mut c_void
-      }
-      _ => return None,
+    // SAFETY: 契约保证 `len` 非空即指向可写 usize 槽；仅成功路径写入（与旧派生可观察逐点一致）
+    if !len.is_null() {
+      *len = bytes.len();
     }
-    .as_mut()
+    // SAFETY: 内联数据块首址恒非空且对齐 1；借用寿命 `'a` 由栈槽钉住
+    // （[`lua_tobuffer_bytes_ref`] 契约），折回裸引用与旧 `as_ptr().as_mut()` 同形。
+    Some(&mut *bytes.as_mut_ptr().cast::<c_void>())
   }
 }
