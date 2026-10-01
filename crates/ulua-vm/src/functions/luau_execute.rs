@@ -990,7 +990,54 @@ unsafe fn fuse_succ_addk(
     let kv = VM_KV!(luau_insn_c(insn), cl, k);
     setnvalue!(ra, (*rb).as_number() + (*kv).as_number());
 
-    fuse_succ_gettable(l, pc.add(1), base, cl)
+    let pc = fuse_succ_gettable(l, pc.add(1), base, cl);
+    fuse_succ_fornloop(l, pc, base, cl)
+  }
+}
+
+/// 热后继 `LOP_FORNLOOP` 的尾融合：跑掉 `for` 循环的回边，命中后顺势再接
+/// [`fuse_succ_gettable`]（`FORNLOOP → GETTABLE` 是表格访问用例里权重最大的一条边）。
+///
+/// 实测边权（`vm-opcount` 转移表）：`SETTABLE → FORNLOOP` 在 `matmul` 2.80M/17.2M ≈ 16%、
+/// `nsieve` 1.19M/5.65M ≈ 21%、`life` 355K/13.3M；`JUMPIFNOT → FORNLOOP` 在
+/// `microbig_gettable` 2.76M/16.3M ≈ 17%；`ADDK → FORNLOOP` 同处 1.84M ≈ 11%。
+///
+/// 前置与 [`h_fornloop`] 逐位一致：`backedge_idle` 为假（interrupt 待处理，需要环头那次
+/// `VM_INTERRUPT`）时**不产生任何副作用**就交回，由环走 [`s_fornloop`] 的完整路径；
+/// 其余情形共用 [`fornloop_step`]，继续则取回边、退出则取下一条，两条出口的断言与本臂
+/// 同址同判。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的派发 handler 或融合链）
+///
+/// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
+#[inline(always)]
+unsafe fn fuse_succ_fornloop(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  base: StkId,
+  cl: *mut Closure,
+) -> *const Instruction {
+  // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
+  unsafe {
+    let insn = *pc;
+    if luau_insn_op(insn) != LuauOpcode::LOP_FORNLOOP as u32 {
+      return pc;
+    }
+    if !fuse_ok(l) || !backedge_idle(l) {
+      return pc;
+    }
+
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let npc = pc.add(1);
+    let (cont, backedge) = fornloop_step(npc, cl, insn, ra);
+    let p = cl_proto!(cl);
+    if cont {
+      let bp = npc.offset(backedge);
+      LUAU_ASSERT!((bp.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+      return fuse_succ_gettable(l, bp, base, cl);
+    }
+    LUAU_ASSERT!((npc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+    fuse_succ_gettable(l, npc, base, cl)
   }
 }
 
@@ -1606,6 +1653,7 @@ unsafe fn h_settable(
         if luaC_barriert_pending!(h, ra) {
           return s_settable_bar(l, pc, base, k, cl);
         }
+        pc = fuse_succ_fornloop(l, pc, base, cl);
         vm_next!(pc, base, k, cl);
       }
     }
@@ -1911,6 +1959,7 @@ unsafe fn h_addk(
     if (*rb).is_number() {
       setnvalue!(ra, (*rb).as_number() + (*kv).as_number());
       pc = fuse_succ_gettable(l, pc, base, cl);
+      pc = fuse_succ_fornloop(l, pc, base, cl);
       vm_next!(pc, base, k, cl);
     }
     // 非数字 rb：`__add`/ coercion 慢路交 [`s_addk`]，本函数保持叶函数
@@ -2600,8 +2649,8 @@ unsafe fn h_jumpifnot(
     let ra = VM_REG!(luau_insn_a(insn), l, base);
 
     // 与 [`jump_split!] 同形：跳转与顺序两条路各带一份独立的续延出口（各自的取指
-    // 尾部分支预测上下文独立）。差别只在顺序路尾部多试一次 ADDK 尾融合——
-    // `JUMPIFNOT → ADDK` 是 `micro*_gettable` 内层的热线。
+    // 尾部分支预测上下文独立）。差别只在顺序路尾部多试两次尾融合——`JUMPIFNOT → ADDK`
+    // 与 `JUMPIFNOT → FORNLOOP` 是 `micro*_gettable` 内层的两条热线。
     if (*ra).is_falsy() {
       let npc = pc.offset(luau_insn_d(insn) as isize);
       let p = cl_proto!(cl);
@@ -2609,6 +2658,7 @@ unsafe fn h_jumpifnot(
       vm_next!(npc, base, k, cl);
     }
     pc = fuse_succ_addk(l, pc, base, k, cl);
+    pc = fuse_succ_fornloop(l, pc, base, cl);
     vm_next!(pc, base, k, cl);
   }
 }
