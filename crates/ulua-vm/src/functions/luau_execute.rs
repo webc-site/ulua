@@ -1094,6 +1094,92 @@ unsafe fn fuse_succ_settable(
   }
 }
 
+/// 热后继 `LOP_ADD`（寄存器-寄存器）的尾融合：只吃数字快路，命中后顺势接
+/// [`fuse_succ_settable`]。
+///
+/// 实测边权：`MUL → ADD` 在 `matmul` 2.74M/17.2M ≈ 16%（`s = s + a*b` 的累加），
+/// `MULK → ADD` 在 `micro_arith` 2.0M/18.0M ≈ 11%。
+///
+/// 判定与 [`h_add`] 的数字分支逐条一致——两个操作数都是数字才写，其余（向量、
+/// 字符串拼接、`__add` 元方法）整个交回环里的 ADD 臂。本指令在 cpp 里也没有
+/// `VM_INTERRUPT` 检查点，不写 `savedpc`，无分配、无可抛错调用，因此融合零额外纪律。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方是本模块的 [`h_mul`]/[`h_mulk`] 臂与该臂的融合链）
+///
+/// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
+#[inline(always)]
+unsafe fn fuse_succ_add(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  base: StkId,
+  cl: *mut Closure,
+) -> *const Instruction {
+  // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
+  unsafe {
+    let insn = *pc;
+    if luau_insn_op(insn) != LuauOpcode::LOP_ADD as u32 {
+      return pc;
+    }
+    if !fuse_ok(l) {
+      return pc;
+    }
+
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+    if !((*rb).is_number() && (*rc).is_number()) {
+      return pc;
+    }
+    setnvalue!(ra, (*rb).as_number() + (*rc).as_number());
+
+    fuse_succ_settable(l, pc.add(1), base, cl)
+  }
+}
+
+/// 热后继 `LOP_MUL`（寄存器-寄存器）的尾融合：只吃数字快路，命中后顺势接
+/// [`fuse_succ_add`]。
+///
+/// 实测边权：`GETTABLE → MUL` 在 `matmul` 2.74M/17.2M ≈ 16%（`a[i][k] * b[k][j]`）。
+/// 与 [`fuse_succ_add`] 同纪律：cpp 的 `LOP_MUL` 无 `VM_INTERRUPT` 检查点，数字快路
+/// 不分配、不抛错，判定与 [`h_mul`] 第一分支逐条一致（向量与 `__mul` 元方法交回臂里重走）。
+///
+/// **本函数只允许在 opcode 臂里调用**（[`h_gettable`] 快路、[`s_gettable`] 尾、[`h_mul`]
+/// 数字快路），融合链内部不接它。理由：`MUL → ADD → SETTABLE → FORNLOOP → GETTABLE`
+/// 已经成环，若 GETTABLE 的后继再吃掉 MUL，`matmul` 内层每条指令都会被无限吞掉，
+/// 链深无上界还会读出 `sizecode` 之外。链只在臂点起、在 [`fuse_jumpifnot`] 收口。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的派发 handler）
+///
+/// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
+#[inline(always)]
+unsafe fn fuse_succ_mul(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  base: StkId,
+  cl: *mut Closure,
+) -> *const Instruction {
+  // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
+  unsafe {
+    let insn = *pc;
+    if luau_insn_op(insn) != LuauOpcode::LOP_MUL as u32 {
+      return pc;
+    }
+    if !fuse_ok(l) {
+      return pc;
+    }
+
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+    if !((*rb).is_number() && (*rc).is_number()) {
+      return pc;
+    }
+    setnvalue!(ra, (*rb).as_number() * (*rc).as_number());
+
+    fuse_succ_add(l, pc.add(1), base, cl)
+  }
+}
+
 /// C++ `reentry:` 标签的状态来源：解释器循环局部量全部从 `L->ci` 重取（原生返回、
 /// 协程恢复、native-call 之后都是这个口径），不与调用点的旧值掺混。
 ///
@@ -1196,6 +1282,8 @@ unsafe fn h_gettable(
       {
         setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
         pc = fuse_jumpifnot(l, pc, base, cl);
+        // `GETTABLE → MUL` 是 `matmul` 内层 `a[i][k] * b[k][j]` 的那条边；链只在臂点起
+        pc = fuse_succ_mul(l, pc, base, cl);
         vm_next!(pc, base, k, cl);
       }
     }
@@ -1229,6 +1317,7 @@ unsafe fn s_gettable(
 
     base = gettable_slow(l, pc, ra, rb, rc);
     pc = fuse_jumpifnot(l, pc, base, cl);
+    pc = fuse_succ_mul(l, pc, base, cl);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -1872,6 +1961,8 @@ unsafe fn h_mulk(
 
     if (*rb).is_number() {
       setnvalue!(ra, (*rb).as_number() * (*kv).as_number());
+      // `MULK → ADD` 是 `micro_arith` 内层的一条边（2.0M/18.0M ≈ 11%）
+      pc = fuse_succ_add(l, pc, base, cl);
       vm_next!(pc, base, k, cl);
     } else if (*rb).is_vector() {
       vec_scalar_op!(
@@ -2082,6 +2173,8 @@ unsafe fn h_mul(
     // fast-path: number
     if (*rb).is_number() && (*rc).is_number() {
       setnvalue!(ra, (*rb).as_number() * (*rc).as_number());
+      // `MUL → ADD` 是 `matmul` 内层 `s = s + a*b` 的那条边
+      pc = fuse_succ_add(l, pc, base, cl);
       vm_next!(pc, base, k, cl);
     } else if (*rb).is_vector() && (*rc).is_number() {
       let vc = (*rc).as_number() as f32;
