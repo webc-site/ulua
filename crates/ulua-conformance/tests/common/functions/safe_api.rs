@@ -199,8 +199,8 @@ pub fn callbacks_mut<'a>(l: L) -> &'a mut LuaCallbacks {
   unsafe { &mut *lua_callbacks(l) }
 }
 
-/// `lua_newuserdatadtor` 的内联析构类型（VM 侧同名 type alias 未导出，此处镜像）。
-pub type UserdataDtorRaw = Option<unsafe extern "C-unwind" fn(*mut c_void)>;
+/// `lua_newuserdatadtor` 的内联析构类型（与 `LuaDestructor` 一致）。
+pub type UserdataDtorRaw = LuaDestructor;
 
 /// `lua_newthread` 的返回值同样是存活线程栈，归父状态持有；用例经门面取得后
 /// 可安全作为后续 [`L`] 参数。

@@ -29,6 +29,14 @@ pub unsafe fn lua_l_sandbox(l: *mut LuaState) {
       (*l).pop(1);
     }
 
+    crate::functions::vector_shared::vector_push(l, [0.0, 0.0, 0.0, 0.0]);
+    if (*l).get_metatable(-1) {
+      (*l).set_readonly(-1, true);
+      (*l).pop(2);
+    } else {
+      (*l).pop(1);
+    }
+
     // set globals to readonly and activate safeenv since the env is immutable
     (*l).set_readonly(LUA_GLOBALSINDEX, true);
     lua_setsafeenv(l, LUA_GLOBALSINDEX, 1);

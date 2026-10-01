@@ -13,20 +13,20 @@ use crate::{
   records::{gc_object::GCObject, lua_state::LuaState},
 };
 
-type UserdataDtor = Option<unsafe extern "C-unwind" fn(*mut c_void)>;
+use crate::type_aliases::lua_destructor::LuaDestructor;
 
 /// # Safety
 /// `l` 须为存活 `LuaState`；`dtor` 须为 `Some`（`api_check`，其函数指针在 udata 回收时被调），`sz`
-/// 为请求的 payload 字节数（`sz+size_of::<UserdataDtor>()` 不得溢出，内部已钳位）；`lua_c_check_gc`/
+/// 为请求的 payload 字节数（`sz+size_of::<LuaDestructor>()` 不得溢出，内部已钳位）；`lua_c_check_gc`/
 /// `lua_u_newudata`/`ensure_stack` 可分配并把 udata 挂到 `(*l).top`，须在受保护帧内调用。cpp `lapi.cpp:1671`。
-pub unsafe fn lua_newuserdatadtor(l: *mut LuaState, sz: usize, dtor: UserdataDtor) -> *mut c_void {
+pub unsafe fn lua_newuserdatadtor(l: *mut LuaState, sz: usize, dtor: LuaDestructor) -> *mut c_void {
   unsafe {
     api_check!(l, dtor.is_some());
     lua_c_check_gc!(l);
     lua_c_threadbarrier_lapi(l);
     ensure_stack(l, 1);
 
-    let dtor_size = size_of::<UserdataDtor>();
+    let dtor_size = size_of::<LuaDestructor>();
     let as_ = if sz < usize::MAX - dtor_size {
       sz + dtor_size
     } else {
@@ -35,7 +35,7 @@ pub unsafe fn lua_newuserdatadtor(l: *mut LuaState, sz: usize, dtor: UserdataDto
 
     let u = lua_u_newudata(l, as_, UTAG_IDTOR);
     copy_nonoverlapping(
-      (&dtor as *const UserdataDtor).cast::<u8>(),
+      (&dtor as *const LuaDestructor).cast::<u8>(),
       (*u).data.as_mut_ptr().add(sz).cast::<u8>(),
       dtor_size,
     );
