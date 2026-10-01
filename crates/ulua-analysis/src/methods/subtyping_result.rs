@@ -15,9 +15,7 @@ use crate::{
     path::Path, subtyping_reasoning::SubtypingReasoning, subtyping_result::SubtypingResult,
     type_error::TypeError,
   },
-  type_aliases::{
-    component::Component, constraint_v::ConstraintV, error_vec::ErrorVec,
-  },
+  type_aliases::{component::Component, constraint_v::ConstraintV, error_vec::ErrorVec},
 };
 
 impl SubtypingResult {
