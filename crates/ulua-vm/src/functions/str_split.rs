@@ -1,3 +1,5 @@
+use core::slice::from_ref;
+
 use crate::{
   functions::{
     lua_createtable::lua_createtable, lua_l_checklstring::lua_l_checklstring_ref,
@@ -33,7 +35,7 @@ pub unsafe fn str_split(l: *mut LuaState) -> i32 {
       lua_createtable(l, haystack_len as i32, 0);
 
       for (idx, ch) in hay.iter().enumerate() {
-        lua_pushlstring_bytes(l, core::slice::from_ref(ch));
+        lua_pushlstring_bytes(l, from_ref(ch));
         lua_rawseti(&mut *l, -2, idx as i32 + 1);
       }
 
