@@ -14,6 +14,8 @@ use ulua_common::functions::c_str::cstr_bytes;
 use crate::async_support::{
   AsyncThread, LuaNativeAsyncFn, WrappedAsync, register_implicit_thread, unregister_implicit_thread,
 };
+#[cfg(feature = "async")]
+use crate::state::StateView;
 use crate::{
   debug::{debug_cstr, get_info},
   error::{ExternalError, Result},
@@ -172,7 +174,9 @@ impl Function {
       // The coroutine is *implicit* (created by `call_async`): register it
       // so `Lua::current_thread` running on it resolves to the owner (the
       // thread that issued this call). Mirrors mlua's thread-ownership map.
-      register_implicit_thread(thread.state(), lua.state());
+      // `co_state` 是 `Thread` 内 `NonNull → &mut` 的带契约收口点;登记/撤销
+      // 只把地址写进/移出 per-VM ownership 表(usize key,从不解引用)。
+      register_implicit_thread(thread.co_state(), lua.state());
       // 注册后任何失败都必须撤销登记：否则 ownership 表项泄漏到
       // `LuaInner::drop`，期间同地址新协程会被 `current_thread` 误判。
       let co_state = thread.state();
@@ -183,7 +187,9 @@ impl Function {
           Ok(th)
         }
         Err(e) => {
-          unregister_implicit_thread(co_state);
+          // Safety: co_state 是刚 spawn、由 `thread` 注册表引用锚定存活的协程
+          // state 指针;视图只在本撤销调用内。
+          unregister_implicit_thread(unsafe { StateView::from_raw(co_state) });
           Err(e)
         }
       }
@@ -279,7 +285,7 @@ impl Function {
     let env = if self.is_lua_closure() {
       // Safety: `state` 存活、由当前线程驱动，-1 是刚压入的 Lua 闭包；
       // `lua_getfenv(state, -1)` 压一层该闭包的环境表。
-      unsafe { lua_getfenv(state, -1) };
+      unsafe { lua_getfenv(state.as_mut_ptr(), -1) };
       // 栈顶是刚压入的环境值，`is_table_at`（safe 门面）只读其类型标记、不动栈。
       let is_table = is_table_at(state, -1);
       // 命中表时 `pop_ref`（safe fn）登记引用并弹掉这一层；否则留待下面 settop 收口。
@@ -318,7 +324,7 @@ impl Function {
       env.push_to_stack();
       // Safety: 栈布局 [func, env]，-2 正指刚压入的本 Lua 闭包；`lua_setfenv` 按
       // C API 约定消费栈顶环境表写入函数原型，返回是否成功。
-      unsafe { lua_setfenv(state, -2) != 0 }
+      unsafe { lua_setfenv(state.as_mut_ptr(), -2) != 0 }
     } else {
       false
     };

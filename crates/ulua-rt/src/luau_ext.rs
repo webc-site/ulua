@@ -19,7 +19,7 @@ use crate::{
   thread::Thread,
   value::Value,
   vector::Vector,
-  vm_store::{define_vm_store, vm_key, vm_key_of},
+  vm_store::{VmKey, define_vm_store, vm_key_of},
 };
 
 define_vm_store! {
@@ -50,10 +50,9 @@ const SANDBOX_SAVED_GLOBALS_NAME: &str = "__ulua_sandbox_saved_globals";
 /// leak one slot per state created. Called from `LuaInner::drop`. (These hold no
 /// Lua handle, so the state drops normally and this runs; the saved-globals table
 /// lives in the registry and is freed with the state on `lua_close`.)
-pub(crate) fn clear_vm_state(state: *mut LuaState) {
-  // 本函数只在 `LuaInner::drop` 里、`lua_close` 之前调用，`state` 是该存活 VM
-  // 的 main state，满足 `vm_key`（safe 门面）的调用序契约。
-  let key = vm_key(state);
+pub(crate) fn clear_vm_state(key: VmKey) {
+  // 唯一调用点在 `LuaInner::drop` 的 clear 序列、`lua_close` 之前,key 已在彼处
+  // 由存活 state 算出。
   let _ = VmCompilers::try_with(|m| {
     m.remove(&key);
   });
@@ -232,11 +231,11 @@ impl Thread {
   /// state so global writes inside the coroutine stay local to it. Mirrors
   /// `mlua::Thread::sandbox`.
   pub fn sandbox(&self) -> Result<()> {
-    let co = self.thread_state.as_ptr();
-    // `sandbox_thread` 是带契约的 safe 门面（`lua_l_sandboxthread` 收口点）：`co` 存活
-    // ——Thread 的注册表引用锚定其线程值，值可达期间协程对象不被 GC（`Thread::from_ref`
-    // 的构造接线）。只对该协程自身的 `LUA_GLOBALSINDEX` 安装代理表，push/replace 自平衡。
-    sandbox_thread(co);
+    // `co_state` 是 `Thread` 内 `NonNull → &mut` 的带契约收口点;`sandbox_thread`
+    // 是带契约的 safe 门面（`lua_l_sandboxthread` 收口点）：Thread 的注册表引用
+    // 锚定其线程值，值可达期间协程对象不被 GC；只对该协程自身的
+    // `LUA_GLOBALSINDEX` 安装代理表，push/replace 自平衡。
+    sandbox_thread(self.co_state());
     Ok(())
   }
 }

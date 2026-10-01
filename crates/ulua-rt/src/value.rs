@@ -29,8 +29,9 @@ use crate::{
   light_userdata::LightUserData,
   registry::RegHandle,
   state::{
-    Lua, LuaRef, boolean_at, check_int64_at, clone_slot_to_top, lightuserdata_at, push_boolean,
-    push_bytes, push_int64, push_lightuserdata_tagged, push_nil, push_number, push_vector, type_at,
+    Lua, LuaRef, StateView, boolean_at, check_int64_at, clone_slot_to_top, lightuserdata_at,
+    push_boolean, push_bytes, push_int64, push_lightuserdata_tagged, push_nil, push_number,
+    push_vector, type_at,
   },
   string::LuaString,
   sys::*,
@@ -504,11 +505,11 @@ pub(crate) fn value_from_stack(lua: &Lua, idx: i32) -> Result<Value> {
 /// ulua is a 3-wide vector build：`lua_tovector` 要么 null，要么指向 TValue
 /// 内联的 `Vector::SIZE` 个 f32 分量；f32 按 TValue 存储自然对齐，栈值在 GC 前
 /// 不移动，切片在函数体内即时消费、不外泄。
-fn vector_at(state: *mut LuaState, idx: i32) -> Value {
-  // Safety: `state` 存活、`idx` 有效（`value_from_stack` 共用前置）且 tag 已判为
-  // Vector，`lua_tovector` 返回的分量数组指针非空即活过本次读取（不外借）。
+fn vector_at(state: StateView<'_>, idx: i32) -> Value {
+  // Safety: `idx` 有效（`value_from_stack` 共用前置）且 tag 已判为 Vector，
+  // `lua_tovector` 返回的分量数组指针非空即活过本次读取（不外借）。
   let comps = unsafe {
-    let p = lua_tovector(state, idx);
+    let p = lua_tovector(state.as_ptr().cast_mut(), idx);
     if p.is_null() {
       return Value::Nil;
     }

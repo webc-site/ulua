@@ -22,8 +22,8 @@ use crate::{
   error::Result,
   registry::RegHandle,
   state::{
-    Lua, LuaRef, ensure_stack, ensure_stack_or_panic, pop_stack, push_named_closure, push_number,
-    run_pcall, set_stack_top,
+    Lua, LuaRef, StateView, ensure_stack, ensure_stack_or_panic, pop_stack, push_named_closure,
+    push_number, run_pcall, set_stack_top,
   },
   sync::{NOT_SYNC, NotSync, XRc},
   sys::*,
@@ -192,7 +192,7 @@ impl Buffer {
     // `lua_tobuffer(-1)` 对刚压入的 buffer 值返回其内联数据指针与真实长度
     // （非 buffer 才返回 `None`，`expect` 收口为 panic 而非 UB）；`pop_stack`
     // 后指针仍有效——对象由注册表引用钉住、GC 不移动，栈槽只是视图。
-    let buf = unsafe { lua_tobuffer(state, -1, &mut size) };
+    let buf = unsafe { lua_tobuffer(state.as_mut_ptr(), -1, &mut size) };
     pop_stack(state, 1);
     // `ptr::from_mut` 取代旧 `&mut c_void as *mut c_void` 裸 cast（§3 C 习语退役）。
     (
@@ -304,19 +304,20 @@ const NEWBUFFER_NAME: &[u8] = b"ulua-rt-newbuffer\0";
 /// # Safety
 /// 仅由 `lua_pcall` 在被调闭包帧内调用：`state` 存活且带 `LUA_MINSTACK` 头寸，
 /// 栈槽 1 是 `create_buffer_with_capacity` 压入的 number 实参。
-unsafe extern "C-unwind" fn c_newbuffer(state: *mut LuaState) -> i32 {
-  // Safety: `state` 由 `lua_pcall` 在被调闭包内提供（存活，且帧带
-  // `LUA_MINSTACK` 头寸）。栈槽 1 由创建方 `create_buffer_with_capacity`
-  // 压入的 number 实参占据（契约"栈为 [size]"），经 `number_at` 只读消费；
-  // 理论上的非数值形态回落到 0，与旧形 `lua_tonumberx(.., NULL)` 对非数值
-  // 返 0.0 的取值逐位一致，`f64 as usize` 饱和转换是 Rust 定义行为。
-  // `lua_settop(state, 0)` 丢弃实参后 `lua_newbuffer` 在空帧上分配并压回
-  // 恰好一个值（其 toobig 错误经外层受保护调用转成非零 status，不跨帧
-  // unwind），返回 1 与之相符。
+unsafe extern "C-unwind" fn c_newbuffer(raw: *mut LuaState) -> i32 {
+  // Safety: C-ABI 边界点(pcall 被调闭包帧实参):`raw` 由 `lua_pcall` 在被调
+  // 闭包内提供（存活，且帧带 `LUA_MINSTACK` 头寸）;一次转视图,只在本次调用内。
+  let state = unsafe { StateView::from_raw(raw) };
+  // Safety: 栈槽 1 由创建方 `create_buffer_with_capacity` 压入的 number 实参
+  // 占据（契约"栈为 [size]"），经 `number_at` 只读消费；理论上的非数值形态
+  // 回落到 0，与旧形 `lua_tonumberx(.., NULL)` 对非数值返 0.0 的取值逐位一致，
+  // `f64 as usize` 饱和转换是 Rust 定义行为。`lua_settop(state, 0)` 丢弃实参后
+  // `lua_newbuffer` 在空帧上分配并压回恰好一个值（其 toobig 错误经外层受保护
+  // 调用转成非零 status，不跨帧 unwind），返回 1 与之相符。
   unsafe {
     let size = number_at(state, 1).unwrap_or(0.0) as usize;
     set_stack_top(state, 0);
-    lua_newbuffer(state, size);
+    lua_newbuffer(state.as_mut_ptr(), size);
     1
   }
 }

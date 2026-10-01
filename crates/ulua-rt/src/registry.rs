@@ -13,7 +13,10 @@
 //! which [`Lua`] minted it so a key used with the wrong instance is rejected
 //! with [`Error::MismatchedRegistryKey`].
 
-use core::fmt::{self, Debug, Formatter};
+use core::{
+  fmt::{self, Debug, Formatter},
+  ptr::eq,
+};
 use std::hash::{Hash, Hasher};
 
 use crate::{
@@ -83,7 +86,10 @@ impl Debug for RegistryKey {
 // it hashes/compares equal; keys for distinct values use distinct slots.
 impl PartialEq for RegistryKey {
   fn eq(&self, other: &Self) -> bool {
-    self.reference.state() == other.reference.state() && self.reference.id() == other.reference.id()
+    eq(
+      self.reference.state().as_ptr(),
+      other.reference.state().as_ptr(),
+    ) && self.reference.id() == other.reference.id()
   }
 }
 
@@ -91,7 +97,7 @@ impl Eq for RegistryKey {}
 
 impl Hash for RegistryKey {
   fn hash<H: Hasher>(&self, state: &mut H) {
-    (self.reference.state() as usize).hash(state);
+    (self.reference.state().as_ptr() as usize).hash(state);
     self.reference.id().hash(state);
   }
 }
@@ -175,7 +181,7 @@ impl Lua {
     // Two `Lua` handles share the same VM iff their inner state pointers are
     // equal (cloning a `Lua` shares the `Rc<LuaInner>`; a separate
     // `Lua::new()` has a distinct state).
-    key.reference.state() == self.state()
+    eq(key.reference.state().as_ptr(), self.state().as_ptr())
   }
 
   /// Expire any [`RegistryKey`]s whose strong handles have all been dropped.
@@ -238,7 +244,7 @@ impl IntoLua for RegistryKey {
 
 impl IntoLua for &RegistryKey {
   fn into_lua(self, lua: &Lua) -> Result<Value> {
-    if self.reference.state() != lua.state() {
+    if !eq(self.reference.state().as_ptr(), lua.state().as_ptr()) {
       return Err(Error::MismatchedRegistryKey);
     }
     // 同 `registry_value`：走 `with_reference_pushed` 门面，成功/失败皆弹回压入层，

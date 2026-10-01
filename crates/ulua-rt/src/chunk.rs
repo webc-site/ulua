@@ -162,7 +162,7 @@ impl Chunk {
     // 传 `c_str()` 的取长度方式一致。`bytecode` 是有效 `&[u8]`，`luau_load` 只读
     // 该切片、在返回前完整消费。成功时把一个函数留在栈顶（rc==0 才继续），失败时
     // 留错误消息（走 `pop_error`），两条路径栈平衡都由 rc 唯一决定。
-    let rc = unsafe { luau_load(state, chunkname, bytecode, 0) };
+    let rc = unsafe { luau_load(state.as_mut_ptr(), chunkname, bytecode, 0) };
     if rc != 0 {
       // luau_load failure leaves an error message on the stack; `pop_error` 消费之。
       return Err(self.lua.pop_error(rc));
@@ -173,7 +173,7 @@ impl Chunk {
       // 纪律）；-1 正指上一句 `luau_load` 刚压到栈顶的闭包，`luau_codegen_compile`
       // 只为该闭包原型生成 native 代码，不改栈深、不抛错。
       unsafe {
-        luau_codegen_compile(state, -1);
+        luau_codegen_compile(state.as_mut_ptr(), -1);
       }
     }
     // 栈顶即 luau_load 留下的函数；`pop_ref`（safe fn）弹走并登记注册表引用。
