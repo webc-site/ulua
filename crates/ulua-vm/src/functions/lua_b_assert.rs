@@ -4,19 +4,24 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn lua_b_assert(l: *mut LuaState) -> i32 {
-  unsafe {
-    (*l).check_any(1);
-    if !(*l).to_boolean(1) {
-      let mut len = 0;
-      let msg = lua_l_optlstring(l, 2, cstr(b"assertion failed!\0"), &mut len);
-      let msg = cstr_cow(msg);
-      luaL_error!(l, "{}", msg);
-    }
-    (*l).get_top()
+/// base 库 `assert` 核心。调用序契约（正确性，非内存安全）：以 Lua 库函数约定被调
+/// （实参自 1 号槽布栈、受保护帧内执行），否则抛错路径的文案槽读取失真。
+/// cpp VM/src/lbaselib.cpp luaB_assert。
+pub fn lua_b_assert(l: &mut LuaState) -> i32 {
+  l.check_any(1);
+  if !l.to_boolean(1) {
+    let mut len = 0;
+    // SAFETY: `l` 存活（引用形保证）；`lua_l_optlstring` 的 `# Safety` 其余前提
+    // （2 号槽可读或无值、默认串为 NUL 结尾字面量）由库函数约定与实参成立。
+    let msg =
+      unsafe { lua_l_optlstring(l.as_mut_ptr(), 2, cstr(b"assertion failed!\0"), &mut len) };
+    // SAFETY: `msg` 为 `lua_l_optlstring` 返回的 NUL 结尾串指针（默认串或 2 号槽串），
+    // 本调用内未被回收；cstr_cow 只读建立字节串视图。
+    let msg = unsafe { cstr_cow(msg) };
+    // SAFETY: 抛错族契约——`l` 存活且处于受保护帧（库函数调用约定），本调用不返回。
+    unsafe { luaL_error!(l.as_mut_ptr(), "{}", msg) };
   }
+  l.get_top()
 }
 
-lua_lib_fn!(pub fn lua_b_assert, lua_b_assert_arm);
+lua_lib_fn!(pub fn lua_b_assert @ref, lua_b_assert_arm);

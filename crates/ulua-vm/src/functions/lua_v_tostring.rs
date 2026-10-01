@@ -46,14 +46,14 @@ pub(crate) unsafe fn lua_v_tostring(l: *mut LuaState, obj: Slot<'_>) -> i32 {
     if let Some(v) = lua_v_int_fast(n) {
       let mut b = Buffer::new();
       let s = b.format(v);
-      setsvalue!(l, obj.as_ptr(), lua_s_newlstr(l, s.as_bytes()));
+      setsvalue!(l, obj.as_ptr(), lua_s_newlstr(&mut *l, s.as_bytes()));
       return 1;
     }
 
     let mut s = [0u8; LUAI_MAXNUM2STR as usize];
     let len = luai_num2str_buf(&mut s, n);
     LUAU_ASSERT!(len < s.len());
-    setsvalue!(l, obj.as_ptr(), lua_s_newlstr(l, &s[..len]));
+    setsvalue!(l, obj.as_ptr(), lua_s_newlstr(&mut *l, &s[..len]));
     1
   }
 }

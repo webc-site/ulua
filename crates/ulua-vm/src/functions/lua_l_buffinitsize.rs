@@ -12,7 +12,7 @@ pub(crate) unsafe fn lua_l_buffinitsize(
 ) -> *mut u8 {
   // SAFETY: 契约保证 `L`/`b` 一致且 size 经溢出防护，块内分配的缓冲挂回栈值并同步 L->top 引用
   unsafe {
-    lua_l_buffinit(l, b);
+    lua_l_buffinit(&mut *l, &mut *b);
     lua_l_prepbuffsize(b, size)
   }
 }

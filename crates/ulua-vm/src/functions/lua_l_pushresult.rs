@@ -32,7 +32,7 @@ pub(crate) unsafe fn lua_l_pushresult(b: *mut LuaLStrbuf) {
         setsvalue!(
           l,
           (*l).top.offset(-1),
-          lua_s_newlstr(l, from_raw_parts(storage_data, len))
+          lua_s_newlstr(&mut *l, from_raw_parts(storage_data, len))
         );
       }
     } else {

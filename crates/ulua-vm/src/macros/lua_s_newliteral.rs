@@ -12,5 +12,5 @@ use crate::{
 /// `l` 必须指向存活的 `LuaState`。
 pub unsafe fn lua_s_newliteral(l: *mut LuaState, s: &[u8]) -> *mut tstring {
   // SAFETY: 契约保证 `l` 存活可完成字符串驻留
-  unsafe { lua_s_newlstr(l, s) }
+  unsafe { lua_s_newlstr(&mut *l, s) }
 }

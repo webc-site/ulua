@@ -25,7 +25,7 @@ pub unsafe fn tclone(l: *mut LuaState) -> i32 {
 
     let mut v = TValue::default();
     sethvalue!(l, &mut v, tt);
-    lua_a_pushvalue(l, &v);
+    lua_a_pushvalue(&mut *l, &v);
 
     1
   }

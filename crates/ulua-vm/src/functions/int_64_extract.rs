@@ -20,7 +20,10 @@ pub unsafe fn int64_extract(l: *mut LuaState) -> i32 {
       luaL_error!(l, "trying to access non-existent bits");
     }
 
-    lua_pushinteger_64(l, (((n as u64) >> f as u32) & mask64(w as i32)) as i64);
+    lua_pushinteger_64(
+      &mut *l,
+      (((n as u64) >> f as u32) & mask64(w as i32)) as i64,
+    );
 
     1
   }

@@ -61,11 +61,11 @@ pub(crate) unsafe fn lua_r_addclassmember(
     );
     lua_c_barrier!(l, classobject, value);
 
-    (*classobject).hasuserinitinchain |= name == lua_s_newlstr(l, b"__init");
+    (*classobject).hasuserinitinchain |= name == lua_s_newlstr(&mut *l, b"__init");
 
     // Only metamethods in the parser's allowlist are supported (see ALLOWED_METAMETHODS in Parser.cpp)
     let g: *mut global_State = (*l).global;
-    let is_metamethod = name == lua_s_newlstr(l, b"__tostring")
+    let is_metamethod = name == lua_s_newlstr(&mut *l, b"__tostring")
       || (*g)
         .tmname
         .iter()

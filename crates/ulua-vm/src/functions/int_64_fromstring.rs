@@ -19,7 +19,7 @@ pub unsafe fn int64_fromstring(l: *mut LuaState) -> i32 {
 
     // SAFETY: check_bytes 返回栈上存活字符串切片
     match lua_o_str_2_l(s, base) {
-      Some(result) => lua_pushinteger_64(l, result),
+      Some(result) => lua_pushinteger_64(&mut *l, result),
       None => (*l).push_nil(),
     }
 

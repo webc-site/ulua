@@ -27,7 +27,7 @@ pub unsafe fn tconcat(l: *mut LuaState) -> i32 {
     let t = if t.is_null() { None } else { Some(&*t) };
 
     let mut b = LuaLStrbuf::new();
-    lua_l_buffinit(l, &mut b);
+    lua_l_buffinit(&mut *l, &mut b);
     // 尾元素前的每字段后随分隔符（cpp `while current_i < last` 游走收为区间
     // 迭代）；收尾判定 i <= last 与原循环退出时 `current_i == last` 等价
     //（i > last 时区间为空且两判定同假，字段一个不输出）

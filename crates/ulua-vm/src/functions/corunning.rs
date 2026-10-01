@@ -8,7 +8,7 @@ use crate::{
 /// 且处于可分配/GC 的受保护帧。cpp/VM/src/lcorolib.cpp:354 corunning。
 pub(crate) unsafe fn corunning(l: *mut LuaState) -> i32 {
   unsafe {
-    if lua_pushthread(l) != 0 {
+    if lua_pushthread(&mut *l) != 0 {
       (*l).push_nil(); // main thread is not a coroutine
     }
     1

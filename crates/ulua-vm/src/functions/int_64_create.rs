@@ -17,7 +17,7 @@ pub unsafe fn int64_create(l: *mut LuaState) -> i32 {
 
       // C++: if (((double)l) == x)
       if (val as f64) == x {
-        lua_pushinteger_64(l, val);
+        lua_pushinteger_64(&mut *l, val);
         return 1;
       }
     }

@@ -46,7 +46,7 @@ pub(crate) unsafe fn str_gsub(l: *mut LuaState) -> i32 {
       "string/function/table",
     );
 
-    lua_l_buffinit(l, &mut b);
+    lua_l_buffinit(&mut *l, &mut b);
 
     // cpp: `if (anchor) { p++; lp--; }` —— 借用切片右移一格跳过锚定字符（`first()`
     // 已证首字节为 '^'，故 [1..] 界内）

@@ -22,7 +22,7 @@ pub unsafe fn lua_pushlstring_bytes(l: *mut LuaState, s: &[u8]) {
     lua_c_check_gc!(l);
     lua_c_threadbarrier_lapi(l);
     ensure_stack(l, 1);
-    setsvalue!(l, (*l).top, lua_s_newlstr(l, s));
+    setsvalue!(l, (*l).top, lua_s_newlstr(&mut *l, s));
     api_incr_top!(l);
   }
 }

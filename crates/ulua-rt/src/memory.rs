@@ -246,7 +246,7 @@ impl Lua {
         "invalid memory category name: {name:?}"
       )));
     }
-    let state = self.state();
+    let mut state = self.state();
     // `state` 为存活 VM 状态（`self.state()` 经 `Rc<LuaInner>` 持有），满足
     // `vm_key`（safe 门面）的调用序契约。
     let key = vm_key(state);
@@ -272,12 +272,10 @@ impl Lua {
       cats.insert(name.to_string(), id);
       Ok(id)
     })?;
-    // Safety: `id < MAX_USER_CATEGORIES (255)` 由上方分配逻辑保证，是
-    // `lua_setmemcat` 接受的 8-bit 类别域内值；该调用只写
-    // `global_State::activememcat` 一个字段，不触碰栈。
-    unsafe {
-      lua_setmemcat(state.as_mut_ptr(), id as i32);
-    }
+    // `id < MAX_USER_CATEGORIES (255)` 由上方分配逻辑保证，是 `lua_setmemcat`
+    // 接受的 8-bit 类别域内值；该调用只写 `global_State::activememcat` 一个字段，
+    // 不触碰栈（ulua-vm 已前移为安全签名，`&mut state` 经 DerefMut 协变）。
+    lua_setmemcat(&mut state, id as i32);
     Ok(())
   }
 

@@ -36,7 +36,7 @@ pub unsafe fn int64_replace(l: *mut LuaState) -> i32 {
     let replacement = (r & base_mask) << f;
     let mask = u64::MAX ^ (base_mask << f);
 
-    lua_pushinteger_64(l, ((n & mask) | replacement) as i64);
+    lua_pushinteger_64(&mut *l, ((n & mask) | replacement) as i64);
 
     1
   }
