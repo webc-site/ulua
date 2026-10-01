@@ -1,16 +1,25 @@
 [package]
 name = "ulua-capi"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-authors.workspace = true
-repository.workspace = true
+version = "0.1.5"
 description = "The Luau VM C ABI symbol export shell (Rust)."
-keywords = ["luau", "lua", "vm", "ffi", "c-abi"]
-categories = ["external-ffi-bindings", "emulators"]
+keywords = [ "luau", "lua", "vm", "ffi", "c-abi" ]
+categories = [ "external-ffi-bindings", "emulators" ]
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
 
 [lib]
-crate-type = ["rlib"]
+crate-type = [ "rlib" ]
 
-[dependencies]
-ulua-vm = { path = "../ulua-vm", version = "0.1.4" }
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.5"

@@ -12,7 +12,7 @@ use ulua_vm::{
 };
 
 use crate::{
-  functions::{state_ref::state, ZERO_DEBUG},
+  functions::{ZERO_DEBUG, state_ref::state},
   records::profiler::{GC_STATE_COUNT, ProfilerMain, ProfilerShared},
 };
 

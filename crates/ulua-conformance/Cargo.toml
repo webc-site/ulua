@@ -1,21 +1,44 @@
 [package]
 name = "ulua-conformance"
-version.workspace = true
-edition.workspace = true
+version = "0.1.4"
 publish = false
 
-[dependencies]
-hashbrown = { workspace = true }
-foldhash = { workspace = true }
-strum = { workspace = true }
-ulua-analysis = { path = "../ulua-analysis", version = "0.1.4" }
-ulua-ast = { path = "../ulua-ast", version = "0.1.4" }
-ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.4" }
-ulua-code-gen = { path = "../ulua-code-gen", version = "0.1.4" }
-ulua-common = { path = "../ulua-common", version = "0.1.4" }
-ulua-compiler = { path = "../ulua-compiler", version = "0.1.4" }
-ulua-vm = { path = "../ulua-vm", version = "0.1.4" }
+[package.edition]
+workspace = true
 
-# 旧 [features] 段的 default/std/wasm 为零消费点空特性（无 cfg 门控、无
-# 下游转发），删除虚假 no_std 特性面（对齐 ulua-bytecode 先例）。
+[dependencies.hashbrown]
+workspace = true
 
+[dependencies.foldhash]
+workspace = true
+
+[dependencies.strum]
+workspace = true
+
+[dependencies.ulua-analysis]
+path = "../ulua-analysis"
+version = "0.1.5"
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.5"
+
+[dependencies.ulua-bytecode]
+path = "../ulua-bytecode"
+version = "0.1.5"
+
+[dependencies.ulua-code-gen]
+path = "../ulua-code-gen"
+version = "0.1.5"
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.5"
+
+[dependencies.ulua-compiler]
+path = "../ulua-compiler"
+version = "0.1.5"
+
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.5"

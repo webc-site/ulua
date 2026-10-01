@@ -1,23 +1,43 @@
 [package]
 name = "ulua-compiler"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-authors.workspace = true
-repository.workspace = true
+version = "0.1.5"
 description = "Luau source-to-bytecode compiler (Rust)."
-keywords = ["luau", "lua", "compiler", "bytecode"]
-categories = ["compilers"]
+keywords = [ "luau", "lua", "compiler", "bytecode" ]
+categories = [ "compilers" ]
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
 
 [lib]
-crate-type = ["rlib"]
+crate-type = [ "rlib" ]
 
-[dependencies]
-memchr = { workspace = true, default-features = false }
-museair = { workspace = true }
-thiserror = { workspace = true }
-ulua-ast = { path = "../ulua-ast", version = "0.1.4" }
-ulua-bytecode = { path = "../ulua-bytecode", version = "0.1.4" }
-ulua-common = { path = "../ulua-common", version = "0.1.4" }
+[dependencies.memchr]
+workspace = true
+default-features = false
 
+[dependencies.museair]
+workspace = true
 
+[dependencies.thiserror]
+workspace = true
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.5"
+
+[dependencies.ulua-bytecode]
+path = "../ulua-bytecode"
+version = "0.1.5"
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.5"
