@@ -13,7 +13,8 @@ use crate::records::{debug_local_bytecode_builder::DebugLocal, typed_local::Type
 
 // ── abs-r139：并自 `methods/bytecode_builder_expand_jumps.rs` ──
 /// PC 区间可重映射的局部记录（`DebugLocal` / `TypedLocal` 共有形状）。
-trait PcRangeRemap {
+/// `pub(super)` 供同族 `emit.rs` 的 undo_emit 区间收缩复用。
+pub(super) trait PcRangeRemap {
   fn pc_range(&mut self) -> (&mut u32, &mut u32);
 }
 
@@ -79,19 +80,20 @@ impl<'a> BytecodeBuilder<'a> {
 
     LUAU_ASSERT!(self.insns.len() == self.lines.len());
 
-    let mut current_jump: usize = 0;
+    // cpp 的 currentJump 下标游标 → Peekable 迭代器：jump 已按 source 排序，
+    // 指令流扫到 pc 时按序领用一条。
     let mut pending_trampolines: usize = 0;
+    let mut jumps = self.jumps.iter().peekable();
 
     // 变步长扫描收口到 scan::stepped（与 dump.rs 的两处扫描同一先例）：
-    // i 是 pc 数据（与 `jumps[current_jump].source` 匹配、切 remap 旧槽窗口都要用），
+    // i 是 pc 数据（与 peek 到的 jump.source 匹配、切 remap 旧槽窗口都要用），
     // `end` 即 pc + 本指令字长，替代手工 `i += oplen` 推进。
     for (i, end, insn) in super::scan::stepped(self.instructions(), 0) {
       let op = insn.op();
       LUAU_ASSERT!(op < LuauOpcode::LOP__COUNT as u8);
 
-      if current_jump < self.jumps.len() && self.jumps[current_jump].source == i as u32 {
-        let offset =
-          (self.jumps[current_jump].target as i32) - (self.jumps[current_jump].source as i32) - 1;
+      if let Some(jump) = jumps.peek().copied().filter(|j| j.source == i as u32) {
+        let offset = jump.target as i32 - jump.source as i32 - 1;
 
         if offset.abs() >= K_MAX_JUMP_DISTANCE_CONSERVATIVE {
           // insert jump trampoline as described above; we keep JUMPX offset uninitialized in this pass
@@ -104,7 +106,9 @@ impl<'a> BytecodeBuilder<'a> {
           pending_trampolines += 1;
         }
 
-        current_jump += 1;
+        // LUAU_ASSERT 关闭时不执行内部表达式，领用动作先行、断言只复核
+        let advance = jumps.next();
+        LUAU_ASSERT!(advance.is_some());
       }
 
       let oplen = end - i;
@@ -119,7 +123,7 @@ impl<'a> BytecodeBuilder<'a> {
       }
     }
 
-    LUAU_ASSERT!(current_jump == self.jumps.len());
+    LUAU_ASSERT!(jumps.peek().is_none());
     LUAU_ASSERT!(pending_trampolines > 0);
 
     // now we need to recompute offsets for jump instructions - we could not do this in the first pass because the offsets are between *target*
@@ -207,7 +211,7 @@ impl<'a> BytecodeBuilder<'a> {
       let mut target_insn = Instruction(self.insns[target_label as usize]);
 
       while target_insn.opcode() == Some(LuauOpcode::LOP_JUMP) && target_insn.d() >= 0 {
-        target_label = target_label + 1 + target_insn.d() as i32;
+        target_label += 1 + target_insn.d() as i32;
         LUAU_ASSERT!((target_label as usize) < self.insns.len());
         target_insn = Instruction(self.insns[target_label as usize]);
       }

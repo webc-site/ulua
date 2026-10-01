@@ -66,7 +66,7 @@ macro_rules! rust_flags {
   };
 }
 
-/// 全表清单（182 条）。生成自四个模块的宏定义，顺序与源文件一致。
+/// 全表清单（220 条）。生成自四个模块的宏定义，顺序与源文件一致。
 fn rust_table() -> Vec<FlagEntry> {
   rust_flags! {
     // ---- fflag.rs ----
