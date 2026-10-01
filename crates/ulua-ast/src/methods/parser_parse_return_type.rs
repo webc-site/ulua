@@ -18,7 +18,7 @@ use crate::{
     ast_type_pack_explicit::AstTypePackExplicit, ast_type_union::AstTypeUnion,
     cst_type_function::CstTypeFunction, cst_type_group::CstTypeGroup,
     cst_type_pack_explicit::CstTypePackExplicit, location::Location, match_lexeme::MatchLexeme,
-    parser::Parser, position::Position, temp_vector::TempVector,
+    node_handle::Node, parser::Parser, position::Position, temp_vector::TempVector,
   },
   rtti::ast_node_is,
   type_aliases::ast_argument_name::AstArgumentName,
@@ -89,7 +89,7 @@ impl Parser {
           let is_type_follow =
             curr_type == Type::PIPE || curr_type == Type::QUESTION || curr_type == Type::AMPERSAND;
           if vararg_annotation.is_none() && is_type_follow {
-            inner = self.alloc_type(AstTypeGroup::new(location, result[0]));
+            inner = self.alloc_type(AstTypeGroup::new(location, Node::from_raw(result[0])));
             parens_belong_to_inner_group = true;
             if self.options.store_cst_data {
               self.attach_cst(inner, |alloc| {
@@ -103,7 +103,7 @@ impl Parser {
           }
         } else {
           inner = if vararg_annotation.is_none() {
-            self.alloc_type(AstTypeGroup::new(location, result[0]))
+            self.alloc_type(AstTypeGroup::new(location, Node::from_raw(result[0])))
           } else {
             result[0]
           };

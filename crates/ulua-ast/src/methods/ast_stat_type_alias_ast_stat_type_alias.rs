@@ -3,6 +3,7 @@ use crate::{
     ast_array::AstArray, ast_generic_type::AstGenericType,
     ast_generic_type_pack::AstGenericTypePack, ast_name::AstName, ast_stat::AstStat,
     ast_stat_type_alias::AstStatTypeAlias, ast_type::AstType, location::Location,
+    node_handle::Node,
   },
   rtti::AstNodeClass,
 };
@@ -14,7 +15,7 @@ impl AstStatTypeAlias {
     name_location: Location,
     generics: AstArray<*mut AstGenericType>,
     generic_packs: AstArray<*mut AstGenericTypePack>,
-    type_: *mut AstType,
+    type_: Node<AstType>,
     exported: bool,
   ) -> Self {
     Self {

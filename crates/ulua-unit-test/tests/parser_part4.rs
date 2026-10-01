@@ -328,8 +328,9 @@ fn parser_parse_declarations() {
   );
   assert_eq!(1, func.params.types.size);
 
-  let ret_ty = OptNode::from_ptr(func.ret_types);
-  let ret_type_pack = ret_ty
+  // ret_types 槽已句柄化（declare 文法对缺省返回类型现场补建显式空 pack）。
+  let ret_type_pack = func
+    .ret_types
     .as_node::<AstTypePackExplicit>()
     .expect("返回类型应为显式 type pack");
   assert_eq!(1, ret_type_pack.type_list.types.size);
@@ -1293,17 +1294,13 @@ fn parser_parse_nested_ast_type_group() {
   assert_eq!(1, stat.body.len());
   let alias1 = as_node_at::<AstStatTypeAlias, _>(&stat.body, 0).expect("body[0] 应为类型别名");
 
-  let alias_ty = OptNode::from_ptr(alias1.type_ptr);
-  let group1 = alias_ty
+  let group1 = alias1
+    .type_ptr
     .as_node::<AstTypeGroup>()
     .expect("别名右侧应为分组类型");
-  let group1_ty = OptNode::from_ptr(group1.type_);
-  let group2 = group1_ty
+  let group2 = group1
+    .type_
     .as_node::<AstTypeGroup>()
     .expect("内层仍应为分组类型");
-  assert!(
-    OptNode::from_ptr(group2.type_)
-      .as_node::<AstTypeReference>()
-      .is_some()
-  );
+  assert!(group2.type_.as_node::<AstTypeReference>().is_some());
 }

@@ -8,7 +8,7 @@ use crate::{
   records::{
     ast_array::AstArray, ast_attr::AstAttr, ast_generic_type::AstGenericType,
     ast_generic_type_pack::AstGenericTypePack, ast_type::AstType, ast_type_list::AstTypeList,
-    ast_type_pack::AstTypePack,
+    ast_type_pack::AstTypePack, node_handle::Node,
   },
   type_aliases::ast_argument_name::AstArgumentName,
 };
@@ -22,5 +22,8 @@ pub struct AstTypeFunction {
   pub generic_packs: AstArray<*mut AstGenericTypePack>,
   pub arg_types: AstTypeList,
   pub arg_names: AstArray<Option<AstArgumentName>>,
-  pub return_types: *mut AstTypePack,
+  /// cpp `AstTypePack* returnTypes`（`Ast.h:1283`）：三处构造（`Parser.cpp:1797/3105`、
+  /// `TypeAttach.cpp:379`）均接线 `parseReturnType` 或显式空 pack（declare 路径在
+  /// `Parser.cpp:1843-1846` 对 `parseOptionalReturnType` 的 null 结果现场补建），恒非空。
+  pub return_types: Node<AstTypePack>,
 }

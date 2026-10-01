@@ -482,12 +482,12 @@ fn parser_parse_return_type_ast_type_pack_explicit() {
   assert_eq!(1, block.body.len());
 
   let alias = as_node_at::<AstStatTypeAlias, _>(&block.body, 0).expect("body[0] 应为类型别名");
-  let alias_ty = OptNode::from_ptr(alias.type_ptr);
-  let func_type = alias_ty
+  let func_type = alias
+    .type_ptr
     .as_node::<AstTypeFunction>()
     .expect("别名右侧应为函数类型");
-  let ret_ty = OptNode::from_ptr(func_type.return_types);
-  let return_pack = ret_ty
+  let return_pack = func_type
+    .return_types
     .as_node::<AstTypePackExplicit>()
     .expect("返回类型应为显式 type pack");
 
@@ -506,15 +506,11 @@ fn parser_parse_simple_ast_type_group() {
   assert_eq!(1, block.body.len());
 
   let alias = as_node_at::<AstStatTypeAlias, _>(&block.body, 0).expect("body[0] 应为类型别名");
-  let alias_ty = OptNode::from_ptr(alias.type_ptr);
-  let group = alias_ty
+  let group = alias
+    .type_ptr
     .as_node::<AstTypeGroup>()
     .expect("别名右侧应为类型分组");
-  assert!(
-    OptNode::from_ptr(group.type_)
-      .as_node::<AstTypeReference>()
-      .is_some()
-  );
+  assert!(group.type_.as_node::<AstTypeReference>().is_some());
 }
 
 #[test]
@@ -593,8 +589,8 @@ fn parser_parse_type_name() {
   assert_eq!(1, fun.generics.size);
   assert_eq!(3, fun.arg_types.types.size);
 
-  let ret_ty = OptNode::from_ptr(fun.return_types);
-  let return_pack = ret_ty
+  let return_pack = fun
+    .return_types
     .as_node::<AstTypePackExplicit>()
     .expect("返回类型应为显式 type pack");
   assert_eq!(1, return_pack.type_list.types.size);
@@ -672,27 +668,28 @@ fn parser_parse_variadics() {
   assert!(func.vararg_annotation.as_ref_opt().is_some());
 
   let foo = as_node_at::<AstStatTypeAlias, _>(&root.body, 1).expect("body[1] 应为类型别名");
-  let foo_ty = OptNode::from_ptr(foo.type_ptr);
-  let foo_fn = foo_ty
+  let foo_fn = foo
+    .type_ptr
     .as_node::<AstTypeFunction>()
     .expect("Foo 应为函数类型");
   assert_eq!(2, foo_fn.arg_types.types.size);
   assert!(OptNode::from_ptr(foo_fn.arg_types.tail_type).is_some());
   assert!(
-    OptNode::from_ptr(foo_fn.return_types)
+    foo_fn
+      .return_types
       .as_node::<AstTypePackVariadic>()
       .is_some()
   );
 
   let bar = as_node_at::<AstStatTypeAlias, _>(&root.body, 2).expect("body[2] 应为类型别名");
-  let bar_ty = OptNode::from_ptr(bar.type_ptr);
-  let bar_fn = bar_ty
+  let bar_fn = bar
+    .type_ptr
     .as_node::<AstTypeFunction>()
     .expect("Bar 应为函数类型");
   assert_eq!(0, bar_fn.arg_types.types.size);
   assert!(OptNode::from_ptr(bar_fn.arg_types.tail_type).is_none());
-  let ret_ty = OptNode::from_ptr(bar_fn.return_types);
-  let return_pack = ret_ty
+  let return_pack = bar_fn
+    .return_types
     .as_node::<AstTypePackExplicit>()
     .expect("Bar 返回类型应为显式 type pack");
   assert_eq!(1, return_pack.type_list.types.size);

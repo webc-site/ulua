@@ -16,8 +16,8 @@ use crate::{
     ast_type_reference::AstTypeReference, ast_type_singleton_bool::AstTypeSingletonBool,
     ast_type_singleton_string::AstTypeSingletonString, ast_type_typeof::AstTypeTypeof,
     cst_type_reference::CstTypeReference, cst_type_singleton_string::CstTypeSingletonString,
-    cst_type_typeof::CstTypeTypeof, location::Location, match_lexeme::MatchLexeme, parser::Parser,
-    position::Position, temp_vector::TempVector,
+    cst_type_typeof::CstTypeTypeof, location::Location, match_lexeme::MatchLexeme,
+    node_handle::Node, parser::Parser, position::Position, temp_vector::TempVector,
   },
 };
 
@@ -146,7 +146,7 @@ impl Parser {
 
           let node = self.alloc_type(AstTypeTypeof::new(
             Location::new(start.begin, end.end),
-            expr,
+            Node::from_raw(expr),
           ));
           self.attach_cst(node, |alloc| {
             alloc.alloc(CstTypeTypeof::new(

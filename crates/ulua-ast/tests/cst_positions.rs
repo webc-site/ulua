@@ -13,10 +13,10 @@ use ulua_ast::{
     allocator::Allocator, ast_name_table::AstNameTable, ast_node::AstNode,
     ast_stat_block::AstStatBlock, ast_stat_type_alias::AstStatTypeAlias,
     ast_type_function::AstTypeFunction, ast_type_group::AstTypeGroup,
-    ast_type_optional::AstTypeOptional, ast_type_pack::AstTypePack,
-    ast_type_pack_explicit::AstTypePackExplicit, ast_type_union::AstTypeUnion,
-    cst_type_pack_explicit::CstTypePackExplicit, node_handle::OptNode, parse_options::ParseOptions,
-    parse_result::ParseResult, parser::Parser, position::Position,
+    ast_type_optional::AstTypeOptional, ast_type_pack_explicit::AstTypePackExplicit,
+    ast_type_union::AstTypeUnion, cst_type_pack_explicit::CstTypePackExplicit,
+    node_handle::OptNode, parse_options::ParseOptions, parse_result::ParseResult, parser::Parser,
+    position::Position,
   },
   rtti::{AstNodeView, CstNodeClass, ast_node_try_as, cst_node_try_as},
 };
@@ -89,23 +89,22 @@ fn type_pack_explicit_with_cst() {
 
     let alias = ast_node_try_as::<AstStatTypeAlias>(block.body.get(0).unwrap().as_ast_node())
       .expect("首条语句应为 AstStatTypeAlias");
-    // `type_ptr`/`return_types` 槽仍是裸指针：经句柄门面 `OptNode::from_ptr`
-    // 折叠可空性，下转走生命周期正确的句柄 `try_as`，借用半径由局部句柄供给。
-    let type_handle = OptNode::from_ptr(alias.type_ptr);
-    let fun = type_handle
+    // `type_ptr`/`return_types` 槽已句柄化：直接走句柄 `try_as` 下转，
+    // 借用半径由 `&alias` 供给，全程无裸指针。
+    let fun = alias
+      .type_ptr
       .try_as::<AstTypeFunction>()
       .expect("别名类型应为 AstTypeFunction");
 
-    let pack_ptr: *mut AstTypePack = fun.return_types;
-    let pack_handle = OptNode::from_ptr(pack_ptr);
-    let pack = pack_handle
+    let pack = fun
+      .return_types
       .try_as::<AstTypePackExplicit>()
       .expect("返回类型应为显式 type pack");
     assert_eq!(pack.type_list.types.size, 1);
     assert!(pack.type_list.tail().is_some(), "应有 ...string 尾注");
 
-    let cst =
-      cst_of::<CstTypePackExplicit>(result, pack_ptr.cast()).expect("显式 type pack 应有 CST 节点");
+    let cst = cst_of::<CstTypePackExplicit>(result, fun.return_types.as_ptr().cast())
+      .expect("显式 type pack 应有 CST 节点");
     assert_eq!(cst.open_parentheses_position, p(0, 15));
     assert_eq!(cst.close_parentheses_position, p(0, 33));
     assert_eq!(cst.comma_positions.size, 1);
@@ -125,16 +124,15 @@ fn optional_return_type_pack_with_cst_func_return() {
 
     let alias = ast_node_try_as::<AstStatTypeAlias>(block.body.get(0).unwrap().as_ast_node())
       .expect("首条语句应为 AstStatTypeAlias");
-    // `type_ptr`/`return_types` 槽仍是裸指针：经句柄门面 `OptNode::from_ptr`
-    // 折叠可空性，下转走生命周期正确的句柄 `try_as`，借用半径由局部句柄供给。
-    let type_handle = OptNode::from_ptr(alias.type_ptr);
-    let fun = type_handle
+    // `type_ptr`/`return_types` 槽已句柄化：直接走句柄 `try_as` 下转，
+    // 借用半径由 `&alias` 供给，全程无裸指针。
+    let fun = alias
+      .type_ptr
       .try_as::<AstTypeFunction>()
       .expect("别名类型应为 AstTypeFunction");
 
-    let pack_ptr: *mut AstTypePack = fun.return_types;
-    let pack_handle = OptNode::from_ptr(pack_ptr);
-    let pack = pack_handle
+    let pack = fun
+      .return_types
       .try_as::<AstTypePackExplicit>()
       .expect("返回类型应为显式 type pack");
     assert_eq!(pack.type_list.types.size, 1);
@@ -156,8 +154,8 @@ fn optional_return_type_pack_with_cst_func_return() {
       .expect("union[1] 应为 AstTypeOptional（?）");
 
     // 括号属于 group 而非返回 type pack：pack 侧 CST 位置缺失。
-    let cst =
-      cst_of::<CstTypePackExplicit>(result, pack_ptr.cast()).expect("显式 type pack 应有 CST 节点");
+    let cst = cst_of::<CstTypePackExplicit>(result, fun.return_types.as_ptr().cast())
+      .expect("显式 type pack 应有 CST 节点");
     assert_eq!(cst.open_parentheses_position, Position::missing());
     assert_eq!(cst.close_parentheses_position, Position::missing());
   });

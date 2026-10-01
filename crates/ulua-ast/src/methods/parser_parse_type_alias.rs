@@ -11,8 +11,8 @@ use crate::{
   functions::optional_node::slot_ref,
   records::{
     ast_stat::AstStat, ast_stat_type_alias::AstStatTypeAlias,
-    cst_stat_type_alias::CstStatTypeAlias, location::Location, name::Name, parser::Parser,
-    position::Position, temp_vector::TempVector,
+    cst_stat_type_alias::CstStatTypeAlias, location::Location, name::Name, node_handle::Node,
+    parser::Parser, position::Position, temp_vector::TempVector,
   },
 };
 
@@ -64,7 +64,7 @@ impl Parser {
       name.location,
       generics,
       generic_packs,
-      type_,
+      Node::from_raw(type_),
       exported,
     ));
 

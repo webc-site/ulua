@@ -8,7 +8,7 @@ use crate::{
   records::{
     ast_array::AstArray, ast_attr::AstAttr, ast_generic_type::AstGenericType,
     ast_generic_type_pack::AstGenericTypePack, ast_name::AstName, ast_stat::AstStat,
-    ast_type_list::AstTypeList, ast_type_pack::AstTypePack, location::Location,
+    ast_type_list::AstTypeList, ast_type_pack::AstTypePack, location::Location, node_handle::Node,
   },
   type_aliases::ast_argument_name::AstArgumentName,
 };
@@ -26,5 +26,8 @@ pub struct AstStatDeclareFunction {
   pub param_names: AstArray<AstArgumentName>,
   pub vararg: bool,
   pub vararg_location: Location,
-  pub ret_types: *mut AstTypePack,
+  /// cpp `AstTypePack* retTypes`（`Ast.h:1097`）：唯一构造点 `Parser.cpp:1860` 在
+  /// `parseOptionalReturnType` 返回 null 时现场补建显式空 pack（`Parser.cpp:1843-1846`），
+  /// 恒非空。
+  pub ret_types: Node<AstTypePack>,
 }

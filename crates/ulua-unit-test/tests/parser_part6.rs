@@ -235,8 +235,8 @@ fn parser_return_type_is_an_intersection_type_if_led_with_one_parenthesized_type
     .as_node::<AstTypeFunction>()
     .expect("annotation 应为 AstTypeFunction");
 
-  let ret_ty = OptNode::from_ptr(annotation.return_types);
-  let return_pack = ret_ty
+  let return_pack = annotation
+    .return_types
     .as_node::<AstTypePackExplicit>()
     .expect("returnTypes 应为 AstTypePackExplicit");
   let first = as_node_at::<AstTypeIntersection, _>(&return_pack.type_list.types, 0)
@@ -744,8 +744,8 @@ fn parser_type_group_with_cst() {
 
   let type_alias =
     as_node_at::<AstStatTypeAlias, _>(&root.body, 0).expect("body[0] 应为 AstStatTypeAlias");
-  let alias_ty = OptNode::from_ptr(type_alias.type_ptr);
-  let group = alias_ty
+  let group = type_alias
+    .type_ptr
     .as_node::<AstTypeGroup>()
     .expect("type 应为 AstTypeGroup");
 

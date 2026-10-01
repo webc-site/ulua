@@ -172,7 +172,8 @@ fn follow_typeof() {
   let typeof_annotation = annotation
     .as_node::<AstTypeTypeof>()
     .expect("annotation 应为 typeof");
-  let typeof_expr = OptNode::from_ptr(typeof_annotation.expr);
+  // typeof.expr 槽已句柄化（typeof(expr) 文法必带表达式），直接链式下转。
+  let typeof_expr = typeof_annotation.expr;
   let index_name = typeof_expr
     .as_node::<AstExprIndexName>()
     .expect("typeof.expr 应为索引名");
@@ -207,7 +208,8 @@ fn follow_typeof_in_return_type() {
 
   let typeof_annotation =
     as_node_at::<AstTypeTypeof, _>(&tp.type_list.types, 0).expect("types[0] 应为 typeof");
-  let typeof_expr = OptNode::from_ptr(typeof_annotation.expr);
+  // typeof.expr 槽已句柄化（typeof(expr) 文法必带表达式），直接链式下转。
+  let typeof_expr = typeof_annotation.expr;
   let index_name = typeof_expr
     .as_node::<AstExprIndexName>()
     .expect("typeof.expr 应为索引名");

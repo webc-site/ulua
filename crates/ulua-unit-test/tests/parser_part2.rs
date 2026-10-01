@@ -1,7 +1,11 @@
 extern crate alloc;
 
 use ulua_ast::{
-  records::{ast_array::AstArray, node_handle::OptNode, position::Position},
+  records::{
+    ast_array::AstArray,
+    node_handle::{Node, OptNode},
+    position::Position,
+  },
   rtti::{AstNodeClass, AstNodeView},
 };
 use ulua_unit_test::functions::ast_node_ref::{
@@ -826,8 +830,8 @@ fn parser_function_return_type_should_parse_as_function_type_annotation_with_no_
     "参数不应有尾部 type pack"
   );
 
-  let fun_return_ty = OptNode::from_ptr(fun_ty.return_types);
-  let fun_return_pack = fun_return_ty
+  let fun_return_pack = fun_ty
+    .return_types
     .as_node::<AstTypePackExplicit>()
     .expect("返回值应为显式 type pack");
   assert!(
@@ -907,11 +911,11 @@ fn parser_function_type_named_arguments() {
   /// cpp 各块共有的前奏：`parseEx(src)` -> 根块 -> 类型别名 -> `AstTypeFunction`。
   /// 返回 `OptNode` 句柄（Copy、无借用半径），调用点自行下转，句柄与 `block`
   /// 同属 fixture arena，存活期一致。
-  fn func_type(fixture: &mut Fixture, source: &str) -> OptNode<AstType> {
+  fn func_type(fixture: &mut Fixture, source: &str) -> Node<AstType> {
     let result = fixture.parse_ex(source, &ParseOptions::default());
     let block = result.root_block().expect("根块必须存在");
     let decl = node_as::<AstStatTypeAlias, _>(&block.body, 0);
-    OptNode::from_ptr(decl.type_ptr)
+    decl.type_ptr
   }
 
   /// cpp `REQUIRE(array.data[i]) && CHECK_EQ(array.data[i]->first, name)`。
@@ -979,8 +983,8 @@ fn parser_function_type_named_arguments() {
     assert_eq!(func.arg_names.size, 3);
     assert_eq!(Some("c"), named_arg(func, 2).as_str());
 
-    let ret_ty = OptNode::from_ptr(func.return_types);
-    let explicit_pack = ret_ty
+    let explicit_pack = func
+      .return_types
       .as_node::<AstTypePackExplicit>()
       .expect("返回值应为显式 type pack");
     let func_ret = node_as::<AstTypeFunction, _>(&explicit_pack.type_list.types, 0);
@@ -1164,8 +1168,8 @@ fn parser_generic_pack_parsing() {
   assert_eq!(Some("a"), vararg_annot.generic_name.as_str());
 
   let alias = node_as::<AstStatTypeAlias, _>(&block.body, 1);
-  let alias_ty = OptNode::from_ptr(alias.type_ptr);
-  let fn_ty = alias_ty
+  let fn_ty = alias
+    .type_ptr
     .as_node::<AstTypeFunction>()
     .expect("别名右侧应为函数类型");
 
@@ -1175,8 +1179,8 @@ fn parser_generic_pack_parsing() {
     .expect("参数尾包应为 generic type pack");
   assert_eq!(Some("a"), arg_annot.generic_name.as_str());
 
-  let ret_ty = OptNode::from_ptr(fn_ty.return_types);
-  let ret_annot = ret_ty
+  let ret_annot = fn_ty
+    .return_types
     .as_node::<AstTypePackGeneric>()
     .expect("返回值应为 generic type pack");
   assert_eq!(Some("b"), ret_annot.generic_name.as_str());

@@ -1,6 +1,6 @@
 use crate::{
   records::{ast_stat_type_alias::AstStatTypeAlias, ast_visitor::AstVisitor},
-  visit::{AstNodeRefMut, AstVisitable, ast_node_visit, ast_type_visit},
+  visit::{AstNodeRefMut, AstVisitable, ast_node_visit, ast_type_visit_ref},
 };
 
 impl_visitable!(AstStatTypeAlias, StatTypeAlias, |this, visitor| {
@@ -19,9 +19,7 @@ impl_visitable!(AstStatTypeAlias, StatTypeAlias, |this, visitor| {
     }
   }
 
-  // Safety: `type_ptr` 是 parser 保证非空的别名右侧类型指针（arena 存活、地址稳定），
-  // `ast_type_visit` 沿子指针只读遍历，不构造指向节点的 `&mut`。
-  unsafe {
-    ast_type_visit(this.type_ptr, visitor);
-  }
+  // type_ptr 槽已句柄化：get_mut 沿 &mut self 交出独占子节点引用（parser 保证
+  // 非空），引用门面沿子指针只读遍历，不构造指向节点的 `&mut`。
+  ast_type_visit_ref(this.type_ptr.get_mut(), visitor);
 });

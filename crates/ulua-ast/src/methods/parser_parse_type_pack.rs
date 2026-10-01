@@ -8,7 +8,7 @@ use crate::{
   records::{
     ast_type_pack::AstTypePack, ast_type_pack_generic::AstTypePackGeneric,
     ast_type_pack_variadic::AstTypePackVariadic, cst_type_pack_generic::CstTypePackGeneric,
-    location::Location, parser::Parser,
+    location::Location, node_handle::Node, parser::Parser,
   },
 };
 
@@ -28,7 +28,7 @@ impl Parser {
         // `parse_type` 依 parser 契约返回 arena 中存活的非空 `*mut AstType`；
         // slot_ref 只读其 repr(C) 首字段 base.location 作为 pack 节点坐标。
         Location::new(start.begin, slot_ref(vararg_ty).base.location.end),
-        vararg_ty,
+        Node::from_raw(vararg_ty),
       )))
     } else if self.lexer.current().r#type == Type::NAME
       && self.lexer.lookahead().r#type == Type::DOT3

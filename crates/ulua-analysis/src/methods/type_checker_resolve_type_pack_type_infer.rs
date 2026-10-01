@@ -61,13 +61,10 @@ impl TypeChecker {
         self.resolve_type_pack_scope_ptr_ast_type_list(scope, &explicit.type_list)
       }
       AstTypePackRef::Variadic(variadic) => {
-        let ty = if variadic.variadic_type.is_null() {
-          self.error_recovery_type_scope_ptr(&scope)
-        } else {
-          // Safety: 本分支保证 variadic_type 非空；它指向解析 arena 的类型标注
-          // 节点（parser 随 variadic 标注分配），存活期与解析树等长，只读借用。
-          self.resolve_type(scope.clone(), alias_ref(variadic.variadic_type))
-        };
+        // variadic_type 槽已句柄化（`...T` 文法必建 T）；cpp
+        // `resolveType_(scope, var->variadicType, ...)`（ConstraintGenerator.cpp:4881）
+        // 不判 null 直接递归，get() 即同一行为。
+        let ty = self.resolve_type(scope.clone(), variadic.variadic_type.get());
 
         self.add_type_pack_type_pack_var(TypePackVar::from(VariadicTypePack { ty, hidden: false }))
       }

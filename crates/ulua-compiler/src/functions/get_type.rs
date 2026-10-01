@@ -72,12 +72,13 @@ pub(crate) fn get_type<G: GenericList + ?Sized>(
       }
 
       // 递归/非递归两臂只差解析后是否回溯撤销登记：插入→解析→按旗标抹除
-      // 收口为一条路径，alias.type_ptr 的递归调用点只保留一份。
-      // type_ptr 缺席（cpp 的 null）由 `Node::try_new` 归一为 None => ANY。
+      // 收口为一条路径，alias.type_ptr 的递归调用点只保留一份。cpp
+      // `getType((*alias)->type, ...)`（Types.cpp:72/79）不判 null 直接递归，
+      // type_ptr 槽已句柄化为非空 `Node`，无需再经 `try_new` 折叠 null。
       let recursive = fflag::LuauCompileRecursiveAliases.get();
       seen_aliases.insert(ref_node.name);
       let resolved = get_type(
-        Node::try_new(alias.type_ptr),
+        Some(Node::from_ast_handle(alias.type_ptr)),
         &alias.generics,
         type_aliases,
         host_vector_type,
@@ -165,10 +166,10 @@ pub(crate) fn get_type<G: GenericList + ?Sized>(
   } else if ast_node_is::<AstTypeIntersection>(&ty_ref.base) {
     return LuauBytecodeType::LBC_TYPE_ANY;
   } else if let Some(group) = ast_node_try_as::<AstTypeGroup>(&ty_ref.base) {
-    // group.type_ 为 parser 保证非空存活的被括号包裹类型节点；
-    // `Node::try_new` 把 null 兜底归一为 ANY。
+    // group.type_ 为 parser 保证非空存活的被括号包裹类型节点，槽已句柄化
+    // 为非空 `Node`（cpp `getType(group->type, ...)` 同样不判 null）。
     return get_type(
-      Node::try_new(group.type_),
+      Some(Node::from_ast_handle(group.type_)),
       generics,
       type_aliases,
       host_vector_type,

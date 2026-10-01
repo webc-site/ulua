@@ -154,9 +154,9 @@ fn parser_get_a_nice_error_when_there_is_an_extra_comma_at_the_end_of_a_generic_
   assert_eq!(1, root.body.len());
 
   let alias = as_node_at::<AstStatTypeAlias, _>(&root.body, 0).expect("body[0] 应为 type alias");
-  // cpp 走的是 alias 的右侧类型（`t->type`），即函数类型本身。
-  let alias_ty = OptNode::from_ptr(alias.type_ptr);
-  let func_type = alias_ty
+  // cpp 走的是 alias 的右侧类型（`t->type`），即函数类型本身（槽已句柄化）。
+  let func_type = alias
+    .type_ptr
     .as_node::<AstTypeFunction>()
     .expect("alias 类型应为函数类型");
   assert_eq!(2, func_type.generics.size);
@@ -255,11 +255,7 @@ fn parser_grouped_function_type() {
 
   // cpp：`groupTy` 是 `(() -> ())`，`types[1]` 是 `?`。
   let group_ty = as_node_at::<AstTypeGroup, _>(&union_ty.types, 0).expect("types[0] 应为分组");
-  assert!(
-    OptNode::from_ptr(group_ty.type_)
-      .as_node::<AstTypeFunction>()
-      .is_some()
-  );
+  assert!(group_ty.type_.as_node::<AstTypeFunction>().is_some());
   assert!(as_node_at::<AstTypeOptional, _>(&union_ty.types, 1).is_some());
 }
 
@@ -548,15 +544,15 @@ fn parser_leading_union_intersection_with_single_type_preserves_the_union_inters
   assert_eq!(2, block.body.len());
 
   let alias1 = as_node_at::<AstStatTypeAlias, _>(&block.body, 0).expect("body[0] 应为 alias");
-  let alias1_ty = OptNode::from_ptr(alias1.type_ptr);
-  let union_type = alias1_ty
+  let union_type = alias1
+    .type_ptr
     .as_node::<AstTypeUnion>()
     .expect("应为 union 类型");
   assert_eq!(1, union_type.types.size);
 
   let alias2 = as_node_at::<AstStatTypeAlias, _>(&block.body, 1).expect("body[1] 应为 alias");
-  let alias2_ty = OptNode::from_ptr(alias2.type_ptr);
-  let intersection_type = alias2_ty
+  let intersection_type = alias2
+    .type_ptr
     .as_node::<AstTypeIntersection>()
     .expect("应为交叉类型");
   assert_eq!(1, intersection_type.types.size);

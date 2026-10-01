@@ -52,8 +52,9 @@ pub(crate) fn find_type_element_at_ast_type_list_type_pack_id_position(
         if let Some(tail_id) = tail
           && let Some(vtp) =
             get_type_pack::get::<VariadicTypePack>(follow_type_pack::follow(tail_id))
-          && let Some(variadic_type) = alias_opt(variadic.variadic_type)
         {
+          // variadic_type 槽已句柄化（`...T` 文法必建 T），get() 直接给出存活引用。
+          let variadic_type = variadic.variadic_type.get();
           return find_type_element_at_ast_type_type_id_position(variadic_type, vtp.ty, position);
         }
       }
@@ -87,14 +88,9 @@ pub(crate) unsafe fn find_type_element_at_ast_type_pack_type_pack_id_position(
         if let Some(tail_id) = tail {
           let follow_tp = follow_type_pack::follow(tail_id);
           if let Some(vtp) = get_type_pack::get::<VariadicTypePack>(follow_tp) {
-            let variadic_type = alias_ref(variadic).variadic_type;
-            if let Some(variadic_type) = alias_opt(variadic_type) {
-              return find_type_element_at_ast_type_type_id_position(
-                variadic_type,
-                vtp.ty,
-                position,
-              );
-            }
+            // variadic_type 槽已句柄化（`...T` 文法必建 T），get() 直接给出存活引用。
+            let variadic_type = alias_ref(variadic).variadic_type.get();
+            return find_type_element_at_ast_type_type_id_position(variadic_type, vtp.ty, position);
           }
         }
       }
@@ -127,7 +123,9 @@ pub(crate) fn find_type_element_at_ast_type_type_id_position(
       return Some(element);
     }
 
-    let return_types = type_function.return_types;
+    // return_types 槽已句柄化（parseReturnType/补建空 pack 恒非空），as_ptr 交出
+    // 既有指针形参 API 的原址。
+    let return_types = type_function.return_types.as_ptr();
     let ret_types_tp = ftv.ret_types;
 
     if let Some(element) = unsafe {

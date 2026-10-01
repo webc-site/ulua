@@ -8,11 +8,8 @@ use ulua_ast::records::{
 use crate::{
   functions::invert_polarity::invert_polarity,
   records::{
-    arena_handle::{alias_opt, alias_ref},
-    constraint_generator::ConstraintGenerator,
-    function_argument::FunctionArgument,
-    function_type::FunctionType,
-    r#type::Type,
+    arena_handle::alias_opt, constraint_generator::ConstraintGenerator,
+    function_argument::FunctionArgument, function_type::FunctionType, r#type::Type,
     type_level::TypeLevel,
   },
   type_aliases::{scope_ptr_type::ScopePtr, type_id::TypeId, type_variant::TypeVariant},
@@ -69,10 +66,10 @@ impl ConstraintGenerator {
     self.polarity = p;
 
     // fn_node.return_types 由 parser 保证为非空存活 AstTypePack 节点
-    //（类型函数语法必选返回类型段），alias_ref 收口为共享引用。
+    //（类型函数语法必选返回类型段），槽已句柄化，get() 直接给出共享引用。
     let return_types = self.resolve_type_pack_scope_ptr_ast_type_pack_bool_bool(
       &signature_scope,
-      alias_ref(fn_node.return_types),
+      fn_node.return_types.get(),
       in_type_arguments,
       replace_error_with_fresh,
     );

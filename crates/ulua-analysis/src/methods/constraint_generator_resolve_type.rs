@@ -63,8 +63,8 @@ impl ConstraintGenerator {
       ),
       AstTypeRef::Typeof(tof) => {
         // tof.expr 是存活类型节点名下的 arena 子表达式（parser 保证非空），
-        // alias_ref 收口为共享引用递归。
-        self.check_expr(scope, alias_ref(tof.expr)).ty
+        // 槽已句柄化，get() 直接给出共享引用递归。
+        self.check_expr(scope, tof.expr.get()).ty
       }
       AstTypeRef::Optional(_) => bt.nil_type,
       AstTypeRef::Union(union_annotation) => {
@@ -94,7 +94,7 @@ impl ConstraintGenerator {
         }
       }
       AstTypeRef::Group(type_group_annotation) => {
-        let inner = alias_ref(type_group_annotation.type_);
+        let inner = type_group_annotation.type_.get();
         self.resolve_type_inner(scope, inner, in_type_arguments, false)
       }
       AstTypeRef::SingletonBool(bool_annotation) => {

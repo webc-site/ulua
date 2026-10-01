@@ -73,7 +73,8 @@ impl ConstraintGenerator {
     } else if let Some(variadic) = ast_node_try_as::<AstTypePackVariadic>(tp) {
       let ty: TypeId = self.resolve_type_inner(
         scope,
-        alias_ref(variadic.variadic_type),
+        // variadic_type 槽已句柄化（`...T` 文法必建 T），get() 给出共享引用。
+        variadic.variadic_type.get(),
         in_type_argument,
         replace_error_with_fresh,
       );

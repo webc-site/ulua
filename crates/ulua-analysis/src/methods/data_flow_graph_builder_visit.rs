@@ -550,8 +550,8 @@ impl DataFlowGraphBuilder {
 
     self.visit_generics(t.generics);
     self.visit_generic_packs(t.generic_packs);
-    let ty = arena_ref(t.type_ptr, "AstStatTypeAlias.type_ptr");
-    self.visit_type(ty);
+    // type_ptr 槽已句柄化（别名右值 parser 必建），get() 直取。
+    self.visit_type(t.type_ptr.get());
 
     ps.pop();
 
@@ -611,8 +611,8 @@ impl DataFlowGraphBuilder {
     self.visit_generics(d.generics);
     self.visit_generic_packs(d.generic_packs);
     self.visit_type_list(d.params);
-    let ret_types = arena_ref(d.ret_types, "AstStatDeclareFunction.ret_types");
-    self.visit_type_pack(ret_types);
+    // ret_types 槽已句柄化（declare 文法对缺省返回类型现场补建显式空 pack），get() 直取。
+    self.visit_type_pack(d.ret_types.get());
 
     ControlFlow::None
   }

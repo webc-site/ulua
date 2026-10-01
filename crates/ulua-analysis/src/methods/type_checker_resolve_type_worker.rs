@@ -28,7 +28,6 @@ use crate::{
     table_indexer::TableIndexer,
     table_type::TableType,
     type_checker::TypeChecker,
-    type_pack,
     type_pack::TypePack,
     union_type::UnionType,
     unknown_symbol::{Context, UnknownSymbol},
@@ -43,7 +42,8 @@ impl TypeChecker {
     let node = annotation;
 
     match node.as_type_ref() {
-      AstTypeRef::Group(group) => self.resolve_type(scope, alias_ref(group.type_)),
+      // group.type_ 槽已句柄化（分组必有内层类型），get() 直出共享引用。
+      AstTypeRef::Group(group) => self.resolve_type(scope, group.type_.get()),
       AstTypeRef::Error(_) => self.error_recovery_type_scope_ptr(&scope),
       AstTypeRef::Reference(reference) => {
         let name: Name = reference.name.as_str_or_empty().to_string();
@@ -340,14 +340,11 @@ impl TypeChecker {
 
         let arg_types =
           self.resolve_type_pack_scope_ptr_ast_type_list(func_scope.clone(), &func.arg_types);
-        let ret_types = if func.return_types.is_null() {
-          self.add_type_pack_type_pack(type_pack::TypePack::empty())
-        } else {
-          self.resolve_type_pack_scope_ptr_ast_type_pack(
-            func_scope.clone(),
-            alias_ref(func.return_types),
-          )
-        };
+        // return_types 槽已句柄化（parseReturnType/补建空 pack 恒非空）；cpp
+        // `resolveTypePack(funcScope, *func->returnTypes)`（TypeInfer.cpp:5897）
+        // 不判 null 直接解引用，get() 即同一行为。
+        let ret_types = self
+          .resolve_type_pack_scope_ptr_ast_type_pack(func_scope.clone(), func.return_types.get());
 
         let mut ftv = FunctionType::function_type_new(arg_types, ret_types, None, false);
         ftv.level = func_scope.level;
@@ -373,8 +370,9 @@ impl TypeChecker {
         self.add_type(&ftv)
       }
       AstTypeRef::Typeof(type_of) => {
+        // expr 槽已句柄化（typeof(expr) 文法必带表达式），get() 直出共享引用。
         self
-          .check_expr(&scope, alias_ref(type_of.expr), None, false)
+          .check_expr(&scope, type_of.expr.get(), None, false)
           .r#type
       }
       AstTypeRef::Union(union) => {

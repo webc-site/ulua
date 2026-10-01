@@ -10,14 +10,14 @@ use core::ptr::NonNull;
 
 use crate::{
   enums::{ast_table_access::AstTableAccess, type_lexer::Type},
-  functions::optional_node::{node_opt, opt_node},
+  functions::optional_node::node_opt,
   records::{
     ast_array::AstArray, ast_attr::AstAttr,
     ast_declared_extern_type_property::AstDeclaredExternTypeProperty,
     ast_generic_type::AstGenericType, ast_generic_type_pack::AstGenericTypePack,
     ast_type_function::AstTypeFunction, ast_type_list::AstTypeList, ast_type_pack::AstTypePack,
     ast_type_pack_explicit::AstTypePackExplicit, location::Location, match_lexeme::MatchLexeme,
-    parser::Parser, temp_vector::TempVector,
+    node_handle::Node, parser::Parser, temp_vector::TempVector,
   },
 };
 
@@ -52,14 +52,15 @@ impl Parser {
 
     self.expect_match_and_consume(')', &MatchLexeme::new(&match_paren), false);
 
-    let mut ret_types = self.parse_optional_return_type(None);
-    if ret_types.is_none() {
-      let loc = self.lexer.current().location;
-      ret_types = node_opt(self.alloc_type_pack(AstTypePackExplicit::new(
-        loc,
+    // cpp `if (!retTypes) retTypes = alloc<AstTypePackExplicit>(...)`（Parser.cpp:1836-1838）：
+    // 缺省返回类型现场补建显式空 pack，两条路都产出非空槽位，直接以 Node 接线。
+    let ret_types = match self.parse_optional_return_type(None) {
+      Some(ret) => Node::from_non_null(ret),
+      None => Node::from_raw(self.alloc_type_pack(AstTypePackExplicit::new(
+        self.lexer.current().location,
         AstTypeList::new(AstArray::EMPTY, None),
-      )));
-    }
+      ))),
+    };
     let end = *self.lexer.previous_location();
 
     let mut vars = TempVector::new(&mut self.scratch_type);
@@ -116,7 +117,7 @@ impl Parser {
                 generic_packs,
                 arg_types,
                 arg_names,
-                opt_node(ret_types),
+                ret_types,
             ));
 
     AstDeclaredExternTypeProperty {

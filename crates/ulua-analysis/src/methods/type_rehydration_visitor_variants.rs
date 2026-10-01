@@ -547,7 +547,9 @@ impl TypeRehydrationVisitor {
                 tail_type: arg_tail_annotation,
             },
             arg_names_array,
-            return_annotation,
+            // return_annotation 为上方现场分配的显式空 pack（cpp TypeAttach.cpp:379
+            // `returnAnnotation` 同源），恒非空，Node::from_raw 建槽。
+            Node::from_raw(return_annotation),
         );
 
     allocator.alloc(func_type).cast::<AstType>()
