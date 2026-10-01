@@ -1,10 +1,10 @@
 use alloc::vec::Vec;
+use core::ptr::from_ref;
 
 use ulua_ast::{
   enums::{ast_expr_ref::AstExprRef, ast_stat_ref::AstStatRef},
   records::{
-    ast_class_method::AstClassMethod, ast_class_property::AstClassProperty, ast_expr::AstExpr,
-    ast_expr_function::AstExprFunction, ast_local::AstLocal, ast_stat::AstStat,
+    ast_class_method::AstClassMethod, ast_class_property::AstClassProperty, ast_stat::AstStat,
     ast_stat_assign::AstStatAssign, ast_stat_block::AstStatBlock, ast_stat_break::AstStatBreak,
     ast_stat_class::AstStatClass, ast_stat_compound_assign::AstStatCompoundAssign,
     ast_stat_continue::AstStatContinue, ast_stat_declare_extern_type::AstStatDeclareExternType,
@@ -65,6 +65,18 @@ impl DataFlowGraphBuilder {
   /// 写 self，见 methods/dfg_scope.rs）。
   fn inherit_into_current_scope(&mut self, child: *const DfgScope) {
     self.with_current_scope_mut(|scope| scope.inherit(alias_ref(child)));
+  }
+
+  /// `join` 的调用点收口（本文件四个 visit 分支共用）：p 恒取弹栈后的栈顶
+  /// （cpp `join(currentScope(), ...)` 家族），a/b 为本帧 `make_child_scope` 划出
+  /// 的 PinnedStorage 活单元；循环可零次执行形态的 p==a 重叠由 join 实现的
+  /// 「先快照 a/b 再写 p」消化（契约见 `DataFlowGraphBuilder::join`）。
+  fn join_into_current(&mut self, a: *mut DfgScope, b: *mut DfgScope) {
+    let p = self.current_scope();
+    // SAFETY: p 经 current_scope、a/b 经 make_child_scope 产出，均为 builder
+    // 自有 PinnedStorage 的存活非空 scope 单元（地址稳定、单线程独占），满足
+    // join 的前置契约；p 与 a 重叠（while/for/forin 形态）在契约显式容忍内。
+    unsafe { self.join(p, a, b) };
   }
 }
 
@@ -148,11 +160,8 @@ impl DataFlowGraphBuilder {
       // 只换继承方向（then 分支未终止时把 then_scope 吸回父帧）。
       self.inherit_into_current_scope(then_scope);
     } else if (then_cf | else_cf) == ControlFlow::None {
-      let scope = self.current_scope();
-      // SAFETY: join(p,a,b) 要求三指针非空且为活 scope；then/else 分支均线性
-      // 落空时三者（含 current_scope 栈顶）互异且存活，join 内部对 a/b 取快照
-      // 后再写 *p（见 join_bindings/join_props 文件头）。
-      unsafe { self.join(scope, then_scope, else_scope) };
+      // then/else 分支均线性落空：三 scope 互异且存活，phi 合并进栈顶。
+      self.join_into_current(then_scope, else_scope);
     }
 
     if then_cf == else_cf {
@@ -181,12 +190,11 @@ impl DataFlowGraphBuilder {
       cf
     };
 
-    let scope = self.current_scope();
     if !matches(cf, ControlFlow::Returns) && !matches(cf, ControlFlow::Throws) {
-      // SAFETY: 循环可零次执行，父帧与自身 join 取 phi（cpp join(currentScope(),
-      // currentScope(), whileScope) 同此 p==a 形状）；join_bindings/join_props
-      // 的实现正是按 p 与 a/b 重叠设计——先把 a/b 快照为 owned Vec 再经 *p 写入。
-      unsafe { self.join(scope, scope, while_scope) };
+      // 循环可零次执行，父帧与自身 join 取 phi（cpp join(currentScope(),
+      // currentScope(), whileScope) 同此 p==a 形状）。
+      let current = self.current_scope();
+      self.join_into_current(current, while_scope);
     }
 
     ControlFlow::None
@@ -274,12 +282,14 @@ impl DataFlowGraphBuilder {
       // We need to create a new def to intentionally avoid alias tracking, but we'd like to
       // make sure that the non-aliased defs are also marked as a subscript for refinements.
       let subscripted = i < defs.len() && contains_subscripted_definition(defs[i]);
-      let local_ptr: *mut AstLocal = (local as *const AstLocal).cast_mut();
-      let mut def = self.def_arena.get_mut().fresh_cell(
-        Symbol::from_local(local_ptr),
-        local.location,
-        subscripted,
-      );
+      // 持有借用（&AstLocal）走引用臂建 symbol；local_defs 键取同址身份键。
+      let symbol = Symbol::from_local_ref(local);
+      let local_key = from_ref(local);
+      let mut def =
+        self
+          .def_arena
+          .get_mut()
+          .fresh_cell(symbol.clone(), local.location, subscripted);
 
       if i < values.len() {
         let expr = arena_ref(values[i], "AstStatLocal.values 元素");
@@ -288,13 +298,9 @@ impl DataFlowGraphBuilder {
         }
       }
 
-      *self.graph.local_defs.get_or_insert(local_ptr as *const _) = def;
-      self.bind_current_scope(Symbol::from_local(local_ptr), def);
-      self
-        .captures
-        .get_or_insert(Symbol::from_local(local_ptr))
-        .all_versions
-        .push(def);
+      *self.graph.local_defs.get_or_insert(local_key) = def;
+      self.bind_current_scope(symbol.clone(), def);
+      self.captures.get_or_insert(symbol).all_versions.push(def);
     }
 
     ControlFlow::None
@@ -308,7 +314,7 @@ fn returns_or_throws(cf: ControlFlow) -> bool {
 impl DataFlowGraphBuilder {
   /// cpp `visit(AstStatFor*)`。
   pub(crate) fn visit_stat_for(&mut self, f: &AstStatFor) -> ControlFlow {
-    let for_scope: *mut DfgScope = self.make_child_scope(ScopeType::Loop);
+    let for_scope = self.make_child_scope(ScopeType::Loop);
 
     // from/to 已句柄化为非空 Node（parser 必建上下界，非空由类型层承载），
     // `.get()` 直出存活引用，arena_ref 判空 panic 门面消失；step 落可空
@@ -332,28 +338,25 @@ impl DataFlowGraphBuilder {
         self.visit_type(annotation);
       }
 
-      let var_ptr: *mut AstLocal = f.var.as_ptr();
-      let def =
-        self
-          .def_arena
-          .get_mut()
-          .fresh_cell(Symbol::from_local(var_ptr), var.location, false);
-      *self.graph.local_defs.get_or_insert(var_ptr as *const _) = def;
-      self.bind_current_scope(Symbol::from_local(var_ptr), def);
-      self
-        .captures
-        .get_or_insert(Symbol::from_local(var_ptr))
-        .all_versions
-        .push(def);
+      // symbol 经 Node 的 as_ptr 桥接（指针身份），local_defs 键取同址
+      //（可变句柄到共享键型的极性弱化隐式完成）。
+      let var_ptr = f.var.as_ptr();
+      let symbol = Symbol::from_local(var_ptr);
+      let def = self
+        .def_arena
+        .get_mut()
+        .fresh_cell(symbol.clone(), var.location, false);
+      *self.graph.local_defs.get_or_insert(var_ptr) = def;
+      self.bind_current_scope(symbol.clone(), def);
+      self.captures.get_or_insert(symbol).all_versions.push(def);
 
       cf = self.visit_stat_block(f.body.get());
     }
 
-    let scope = self.current_scope();
     if !returns_or_throws(cf) {
-      // SAFETY: p==a 形状即 cpp join(currentScope(), currentScope(), forScope)；
-      // 三指针皆 PinnedStorage 活 scope，join 实现先快照 a/b 再写 *p。
-      unsafe { self.join(scope, scope, for_scope) };
+      // p==a 形状即 cpp join(currentScope(), currentScope(), forScope)。
+      let current = self.current_scope();
+      self.join_into_current(current, for_scope);
     }
 
     ControlFlow::None
@@ -361,7 +364,7 @@ impl DataFlowGraphBuilder {
 
   /// cpp `visit(AstStatForIn*)`。
   pub(crate) fn visit_stat_for_in(&mut self, f: &AstStatForIn) -> ControlFlow {
-    let for_scope: *mut DfgScope = self.make_child_scope(ScopeType::Loop);
+    let for_scope = self.make_child_scope(ScopeType::Loop);
 
     let cf;
     {
@@ -375,19 +378,16 @@ impl DataFlowGraphBuilder {
           self.visit_type(annotation);
         }
 
-        let local_ptr: *mut AstLocal = (local as *const AstLocal).cast_mut();
-        let def =
-          self
-            .def_arena
-            .get_mut()
-            .fresh_cell(Symbol::from_local(local_ptr), local.location, false);
-        *self.graph.local_defs.get_or_insert(local_ptr as *const _) = def;
-        self.bind_current_scope(Symbol::from_local(local_ptr), def);
-        self
-          .captures
-          .get_or_insert(Symbol::from_local(local_ptr))
-          .all_versions
-          .push(def);
+        // 持有借用（&AstLocal）走引用臂建 symbol；local_defs 键取同址身份键。
+        let symbol = Symbol::from_local_ref(local);
+        let local_key = from_ref(local);
+        let def = self
+          .def_arena
+          .get_mut()
+          .fresh_cell(symbol.clone(), local.location, false);
+        *self.graph.local_defs.get_or_insert(local_key) = def;
+        self.bind_current_scope(symbol.clone(), def);
+        self.captures.get_or_insert(symbol).all_versions.push(def);
       }
 
       for expr in f.values.iter_nodes() {
@@ -398,10 +398,10 @@ impl DataFlowGraphBuilder {
       cf = self.visit_stat_block(f.body.get());
     }
 
-    let scope = self.current_scope();
     if !returns_or_throws(cf) {
-      // SAFETY: 同 visit_stat_for——p==a 重叠由 join 实现的快照式读写消化。
-      unsafe { self.join(scope, scope, for_scope) };
+      // 同 visit_stat_for——p==a 重叠由 join 实现的快照式读写消化。
+      let current = self.current_scope();
+      self.join_into_current(current, for_scope);
     }
 
     ControlFlow::None
@@ -469,11 +469,10 @@ impl DataFlowGraphBuilder {
     // （name/func 已句柄化为 Node，非空由类型层兑现，原 `if !f.name.is_null()` /
     // `if !f.func.is_null()` 守卫在引用语义下恒真，删除。）
 
-    let signature_scope: *mut DfgScope = self.make_child_scope(ScopeType::Function);
+    let signature_scope = self.make_child_scope(ScopeType::Function);
     let _ps = PushScope::new(&mut self.scope_stack, signature_scope);
 
-    let name_ptr: *const AstExpr = name as *const AstExpr;
-    let name_def = self.graph.get_def_ast_expr(name_ptr);
+    let name_def = self.graph.get_def_ast_expr(from_ref(name));
 
     match name.as_expr_ref() {
       AstExprRef::Global(global) => {
@@ -506,11 +505,7 @@ impl DataFlowGraphBuilder {
     }
 
     // visitFunction(f->func, NotNull{signatureScope});
-    let func_ptr: *mut AstExprFunction = (func as *const AstExprFunction).cast_mut();
-    // SAFETY: func 是 arena_ref 判空后的活函数节点，取同址裸指针即原入参
-    // 本身；signature_scope 为本帧压栈的 PinnedStorage 活单元，满足
-    // visit_function 对两指针非空存活的契约。
-    let _ = unsafe { self.visit_function(func_ptr, signature_scope) };
+    let _ = self.visit_function(func, signature_scope);
 
     if let AstExprRef::Local(local) = name.as_expr_ref() {
       let capture = self
@@ -526,14 +521,15 @@ impl DataFlowGraphBuilder {
   /// cpp `visit(AstStatLocalFunction*)`。
   pub(crate) fn visit_stat_local_function(&mut self, l: &AstStatLocalFunction) -> ControlFlow {
     // name/func 已句柄化为 Node（类型层非空 + arena 存活契约），`as_ptr` 直供
-    // 指针身份键，`arena_ref` 判空 panic 门面随非空类型消失。
-    let name_ptr: *mut AstLocal = l.name.as_ptr();
+    // 指针身份键，`arena_ref` 判空 panic 门面随非空类型消失；local_defs 键的
+    // 极性弱化（可变句柄→共享键型）隐式完成。
+    let name_ptr = l.name.as_ptr();
     let symbol = Symbol::from_local(name_ptr);
     let def = self
       .def_arena
       .get_mut()
       .fresh_cell(symbol.clone(), l.base.base.location, false);
-    *self.graph.local_defs.get_or_insert(name_ptr as *const _) = def;
+    *self.graph.local_defs.get_or_insert(name_ptr) = def;
     // 栈顶 scope 的 bindings 写经 bind_current_scope 收口点（其契约覆盖
     // build() 根 push + PinnedStorage 地址稳定前提）。
     self.bind_current_scope(symbol.clone(), def);
@@ -582,9 +578,9 @@ impl DataFlowGraphBuilder {
       .def_arena
       .get_mut()
       .fresh_cell(symbol.clone(), d.name_location, false);
-    // declared_defs 以 `d as *const AstStat` 作身份键：repr(C) 派生节点与
-    // AstStat 子对象同址，从引用取同址等价原指针形态。
-    let d_stat_ptr: *const AstStat = (d as *const AstStatDeclareGlobal).cast();
+    // declared_defs 以派生节点的 AstStat 子对象地址作身份键：repr(C) 首字段
+    // 使其与本节点同址，`from_ref` + `cast` 取同址等价原指针形态。
+    let d_stat_ptr = from_ref(d).cast::<AstStat>();
     *self.graph.declared_defs.get_or_insert(d_stat_ptr) = def;
     self.bind_current_scope(symbol.clone(), def);
     self.captures.get_or_insert(symbol).all_versions.push(def);
@@ -604,12 +600,12 @@ impl DataFlowGraphBuilder {
       .def_arena
       .get_mut()
       .fresh_cell(symbol.clone(), d.name_location, false);
-    let d_stat_ptr: *const AstStat = (d as *const AstStatDeclareFunction).cast();
+    let d_stat_ptr = from_ref(d).cast::<AstStat>();
     *self.graph.declared_defs.get_or_insert(d_stat_ptr) = def;
     self.bind_current_scope(symbol.clone(), def);
     self.captures.get_or_insert(symbol).all_versions.push(def);
 
-    let unreachable: *mut DfgScope = self.make_child_scope(ScopeType::Linear);
+    let unreachable = self.make_child_scope(ScopeType::Linear);
     let _ps = PushScope::new(&mut self.scope_stack, unreachable);
 
     self.visit_generics(d.generics);
@@ -645,20 +641,19 @@ impl DataFlowGraphBuilder {
     LUAU_ASSERT!(fflag::DebugLuauUserDefinedClasses.get());
 
     // parser 为 class 语句必绑定非空 AstLocal（cpp `d->name->name` 的链式
-    // 解引用同款前提）。
+    // 解引用同款前提）；持有借用走引用臂建 symbol，local_defs 键取同址身份键。
     let name = arena_ref(d.name, "AstStatClass.name");
-    let name_ptr: *mut AstLocal = (name as *const AstLocal).cast_mut();
     // cpp:874 freshCell 以 AstLocal*（local symbol）建 def；但 cpp:876-877
     // bindings/captures 键是 `d->name->name`（AstName→global symbol），
     // 使用处 `Bar` 解析为 AstExprGlobal 才查得同类 def。
-    let symbol = Symbol::from_local(name_ptr);
+    let symbol = Symbol::from_local_ref(name);
     let name_symbol = Symbol::from_global(name.name);
     let def = self
       .def_arena
       .get_mut()
       .fresh_cell(symbol, name.location, false);
 
-    *self.graph.local_defs.get_or_insert(name_ptr as *const _) = def;
+    *self.graph.local_defs.get_or_insert(from_ref(name)) = def;
     self.bind_current_scope(name_symbol.clone(), def);
     self
       .captures
@@ -690,7 +685,7 @@ impl DataFlowGraphBuilder {
 
   /// 对照 cpp `DataFlowGraph::visit(AstStatError*)`（DataFlowGraph.cpp:905-917）。
   pub(crate) fn visit_stat_error(&mut self, error: &AstStatError) -> ControlFlow {
-    let unreachable: *mut DfgScope = self.make_child_scope(ScopeType::Linear);
+    let unreachable = self.make_child_scope(ScopeType::Linear);
     let mut ps = PushScope::new(&mut self.scope_stack, unreachable);
 
     for s in error.statements.iter_nodes() {

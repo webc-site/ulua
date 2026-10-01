@@ -19,8 +19,12 @@ use crate::{
 };
 
 impl TypeRehydrationVisitor {
-  /// C++ `bool hasSeen(const void* tv)`.
-  pub fn has_seen(&mut self, tv: *const ()) -> bool {
+  /// C++ `bool hasSeen(const void* tv)`：以类型变体节点的地址身份判环。
+  ///
+  /// 形参取 `&T`（调用点持有的是变体借用），地址折算收口在
+  /// [`VisitKey::from_ptr`]（`&T` 在实参处隐式弱化为指针，调用点不再手写
+  /// 指针转铸）。
+  pub fn has_seen<T>(&mut self, tv: &T) -> bool {
     let key = VisitKey::from_ptr(tv);
     if let Some(&count) = self.seen.get(&key)
       && count < self.count

@@ -245,11 +245,7 @@ impl DataFlowGraphBuilder {
     let signature_scope = self.make_child_scope(ScopeType::Function);
     let _ps = PushScope::new(&mut self.scope_stack, signature_scope);
 
-    let f_ptr: *mut AstExprFunction = (f as *const AstExprFunction).cast_mut();
-    // SAFETY: `f` 是调用方受检的存活函数节点，取同址裸指针即原入参本身；
-    // signature_scope 是上一步 make_child_scope 从 PinnedStorage 划出的单元
-    // （非空、地址稳定，存活至 builder 析构），正对 visit_function 的契约。
-    unsafe { self.visit_function(f_ptr, signature_scope) }
+    self.visit_function(f, signature_scope)
   }
 
   /// cpp `visitExpr(AstExprTable*)`：为表字面量造 cell def，并把字符串键的项
