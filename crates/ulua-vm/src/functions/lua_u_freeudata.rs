@@ -1,12 +1,11 @@
-use core::{ffi::c_void, mem::size_of};
+use core::mem::size_of;
 
 use crate::{
   functions::lua_m_freegco::lua_m_freegco,
   macros::{lua_utag_limit::LUA_UTAG_LIMIT, sizeudata::sizeudata, utag_idtor::UTAG_IDTOR},
   records::{gc_object::GCObject, lua_page::lua_Page, lua_state::LuaState, udata::Udata},
+  type_aliases::lua_destructor::LuaDestructor,
 };
-
-use crate::type_aliases::lua_destructor::LuaDestructor;
 
 /// # Safety
 /// `l` 须为存活 LuaState 且 `(*l).global.udatagc[..LUA_UTAG_LIMIT]` 可寻址；`u` 须指向正在回收的存活 Udata，

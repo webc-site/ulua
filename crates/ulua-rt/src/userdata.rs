@@ -820,7 +820,7 @@ impl<T> UserDataFields<T> for Collector<'_, T> {
 /// 仅由 VM 作为 `lua_newuserdatadtor` 注册的终结器调用：`ptr` 必须为 null，或
 /// 指向 `alloc_cell::<T>` 按同一 `T` 单态化写入、尚未 drop 的载荷（长度覆盖
 /// `DataCell<T>`，`AlignOk` 编译期已断言对齐）；VM 保证其恰被调用一次。
-unsafe extern "C-unwind" fn data_dtor<T>(ptr: *mut c_void) {
+unsafe extern "C-unwind" fn data_dtor<T>(_l: *mut LuaState, ptr: *mut c_void) {
   if !ptr.is_null() {
     // Safety: `ptr` 由 VM 在终结此 userdata 时传入，只能是
     // `lua_newuserdatadtor(size_of::<DataCell<T>>(), data_dtor::<T>)` 配对的
@@ -1018,7 +1018,7 @@ impl<T> AlignOk<T> {
 /// 给它（VM 保证恰调用一次）。`unsafe` 已内聚在 `allocate_userdata` 门面体内。
 pub(crate) fn alloc_userdata_slot<T>(
   state: StateView<'_>,
-  dtor: unsafe extern "C-unwind" fn(*mut c_void),
+  dtor: unsafe extern "C-unwind" fn(*mut LuaState, *mut c_void),
 ) -> Option<NonNull<T>> {
   let _: () = AlignOk::<T>::CHECK;
   // `allocate_userdata` 已把「分配 + 判空」收口为 `Option<NonNull>`（判空哨兵就此

@@ -440,7 +440,7 @@ graph TD
 
 ## Module Architecture
 
-Target Standard: Luau 0.737 compatible specification.
+Target Standard: Luau 0.740 compatible specification.
 
 ### 1. Core Execution Engine (Core)
 

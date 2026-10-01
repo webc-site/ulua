@@ -37,7 +37,7 @@ use ulua_bytecode::{
 use ulua_common::{
   enums::{luau_bytecode_type::LuauBytecodeType, luau_opcode::LuauOpcode},
   fflag,
-  fflag::DebugLuauUserDefinedClasses,
+  fflag::{DebugLuauUserDefinedClasses, LuauCompileLoopUnrollZero},
   fint::{LuauCompileLoopUnrollThreshold, LuauCompileLoopUnrollThresholdMaxBoost},
   macros::luau_assert::LUAU_ASSERT,
   records::{dense_hash_set::DenseHashSet, variant::Variant2},
@@ -1473,6 +1473,13 @@ impl Compiler {
     let Some(trip_count) = trip_count else {
       return self.reject_with_remark(format_args!("loop unroll failed: invalid iteration count"));
     };
+
+    if LuauCompileLoopUnrollZero.get() && trip_count == 0 {
+      self
+        .bc_mut()
+        .add_debug_remark(format_args!("loop unroll succeeded: empty loop"));
+      return true;
+    }
 
     if trip_count > threshold_base {
       return self.reject_with_remark(format_args!(

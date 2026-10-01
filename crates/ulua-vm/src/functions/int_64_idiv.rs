@@ -10,13 +10,12 @@ lua_lib_arm! {
   /// `lua_pushinteger_64` 需 `(*l).top` 后 ≥1 空槽；可触发 GC。cpp VM/src/lintlib.cpp:115。
   pub fn int64_idiv(l) {
     int64_divop(unsafe { &mut *l }, check_div_args_64, |a, b| {
-        let quotient = a / b;
-        // cpp：商为负且仍有余数时再减 1（floor div）
-        if quotient < 0 && a % b != 0 {
-          quotient - 1
-        } else {
-          quotient
+        let mut result = a / b;
+        // 向下取整除法（向负无穷截断）：操作数异号且不能整除时，截断商减 1
+        if ((a ^ b) < 0) && (a % b != 0) {
+          result -= 1;
         }
+        result
       })
   }
 }

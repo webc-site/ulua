@@ -1,5 +1,6 @@
 use crate::{
-  functions::lua_setsafeenv::lua_setsafeenv, macros::lua_globalsindex::LUA_GLOBALSINDEX,
+  functions::{lua_setsafeenv::lua_setsafeenv, vector_shared::vector_push},
+  macros::lua_globalsindex::LUA_GLOBALSINDEX,
   records::lua_state::LuaState,
 };
 
@@ -29,7 +30,7 @@ pub unsafe fn lua_l_sandbox(l: *mut LuaState) {
       (*l).pop(1);
     }
 
-    crate::functions::vector_shared::vector_push(l, [0.0, 0.0, 0.0, 0.0]);
+    vector_push(l, [0.0, 0.0, 0.0, 0.0]);
     if (*l).get_metatable(-1) {
       (*l).set_readonly(-1, true);
       (*l).pop(2);

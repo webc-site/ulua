@@ -2,7 +2,10 @@
 
 use alloc::string::String;
 
-use ulua_common::{macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet};
+use ulua_common::{
+  fflag::LuauSkipUnusedTypeTraversals, macros::luau_assert::LUAU_ASSERT,
+  records::dense_hash_set::DenseHashSet,
+};
 
 use crate::{
   functions::{
@@ -22,22 +25,49 @@ use crate::{
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
 
-impl InternalTypeFunctionFinder {
+impl<'a> InternalTypeFunctionFinder<'a> {
   /// C++ `explicit InternalTypeFunctionFinder(std::vector<TypeId>& declStack)`
   /// (TypeChecker2.cpp:194), seeding `mentioned{Functions,FunctionPacks}` from a
   /// `TypeFunctionFinder` traversal of the declaration stack.
-  pub fn new(decl_stack: &mut [TypeId]) -> Self {
-    let mut f = TypeFunctionFinder::new();
-    for fn_ty in decl_stack.iter().copied() {
-      f.traverse_type_id(fn_ty);
-    }
+  pub fn new(decl_stack: &'a [TypeId]) -> Self {
+    if LuauSkipUnusedTypeTraversals.get() {
+      InternalTypeFunctionFinder {
+        base: TypeOnceVisitor::new(String::from("InternalTypeFunctionFinder"), true),
+        internal_functions: DenseHashSet::default(),
+        internal_pack_functions: DenseHashSet::default(),
+        mentioned_functions: DenseHashSet::default(),
+        mentioned_function_packs: DenseHashSet::default(),
+        unscanned_decl_stack: Some(decl_stack),
+      }
+    } else {
+      let mut f = TypeFunctionFinder::new();
+      for fn_ty in decl_stack.iter().copied() {
+        f.traverse_type_id(fn_ty);
+      }
 
-    InternalTypeFunctionFinder {
-      base: TypeOnceVisitor::new(String::from("InternalTypeFunctionFinder"), true),
-      internal_functions: DenseHashSet::default(),
-      internal_pack_functions: DenseHashSet::default(),
-      mentioned_functions: f.mentioned_functions,
-      mentioned_function_packs: f.mentioned_function_packs,
+      InternalTypeFunctionFinder {
+        base: TypeOnceVisitor::new(String::from("InternalTypeFunctionFinder"), true),
+        internal_functions: DenseHashSet::default(),
+        internal_pack_functions: DenseHashSet::default(),
+        mentioned_functions: f.mentioned_functions,
+        mentioned_function_packs: f.mentioned_function_packs,
+        unscanned_decl_stack: None,
+      }
+    }
+  }
+
+  pub(crate) fn ensure_mentioned_functions(&mut self) {
+    if LuauSkipUnusedTypeTraversals.get() {
+      if let Some(decl_stack) = self.unscanned_decl_stack.take() {
+        let mut f = TypeFunctionFinder::new();
+        for &fn_ty in decl_stack {
+          f.traverse_type_id(fn_ty);
+        }
+        self.mentioned_functions = f.mentioned_functions;
+        self.mentioned_function_packs = f.mentioned_function_packs;
+      }
+    } else {
+      LUAU_ASSERT!(self.unscanned_decl_stack.is_none());
     }
   }
 }
@@ -68,7 +98,7 @@ impl GenericTypeVisitorTrait for TypeFunctionFinder {
     true
   }
 }
-impl GenericTypeVisitorTrait for InternalTypeFunctionFinder {
+impl<'a> GenericTypeVisitorTrait for InternalTypeFunctionFinder<'a> {
   type Seen = DenseHashSet<VisitKey>;
 
   fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
@@ -81,34 +111,27 @@ impl GenericTypeVisitorTrait for InternalTypeFunctionFinder {
     ty: TypeId,
     tfit: &TypeFunctionInstanceType,
   ) -> bool {
-    let mut has_generic = false;
-
-    for &p in &tfit.type_arguments {
-      if get_type::get::<GenericType>(follow_type::follow(p)).is_some() {
-        has_generic = true;
-        break;
-      }
-    }
-
-    if !has_generic {
-      for &p in &tfit.pack_arguments {
-        if get_type_pack::get::<GenericTypePack>(follow_type_pack::follow(p)).is_some() {
-          has_generic = true;
-          break;
-        }
-      }
-    }
+    let has_generic = tfit
+      .type_arguments
+      .iter()
+      .any(|&p| get_type::get::<GenericType>(follow_type::follow(p)).is_some())
+      || tfit
+        .pack_arguments
+        .iter()
+        .any(|&p| get_type_pack::get::<GenericTypePack>(follow_type_pack::follow(p)).is_some());
 
     if has_generic {
-      for mentioned in self.mentioned_functions.iter() {
-        let mentioned_tfit = get_type::get::<TypeFunctionInstanceType>(*mentioned);
+      self.ensure_mentioned_functions();
+      let is_mentioned = self.mentioned_functions.iter().any(|&mentioned| {
+        let mentioned_tfit = get_type::get::<TypeFunctionInstanceType>(mentioned);
         LUAU_ASSERT!(mentioned_tfit.is_some());
-        if are_equivalent(
+        are_equivalent(
           tfit,
           mentioned_tfit.expect("C++ `LUAU_ASSERT(mentionedTf)` 紧邻断言蕴含必命中"),
-        ) {
-          return true;
-        }
+        )
+      });
+      if is_mentioned {
+        return true;
       }
 
       self.internal_functions.insert(ty);
@@ -123,118 +146,29 @@ impl GenericTypeVisitorTrait for InternalTypeFunctionFinder {
     tp: TypePackId,
     tfitp: &TypeFunctionInstanceTypePack,
   ) -> bool {
-    let mut has_generic = false;
-
-    for &p in &tfitp.type_arguments {
-      if get_type::get::<GenericType>(follow_type::follow(p)).is_some() {
-        has_generic = true;
-        break;
-      }
-    }
-
-    if !has_generic {
-      for &p in &tfitp.pack_arguments {
-        if get_type_pack::get::<GenericTypePack>(follow_type_pack::follow(p)).is_some() {
-          has_generic = true;
-          break;
-        }
-      }
-    }
+    let has_generic = tfitp
+      .type_arguments
+      .iter()
+      .any(|&p| get_type::get::<GenericType>(follow_type::follow(p)).is_some())
+      || tfitp
+        .pack_arguments
+        .iter()
+        .any(|&p| get_type_pack::get::<GenericTypePack>(follow_type_pack::follow(p)).is_some());
 
     if has_generic {
-      for mentioned in self.mentioned_function_packs.iter() {
-        let mentioned_tfitp = get_type_pack::get::<TypeFunctionInstanceTypePack>(*mentioned);
+      self.ensure_mentioned_functions();
+      let is_mentioned = self.mentioned_function_packs.iter().any(|&mentioned| {
+        let mentioned_tfitp = get_type_pack::get::<TypeFunctionInstanceTypePack>(mentioned);
         LUAU_ASSERT!(mentioned_tfitp.is_some());
-        if are_equivalent(
+        are_equivalent(
           tfitp,
           mentioned_tfitp.expect("C++ `LUAU_ASSERT(mentionedTf)` 紧邻断言蕴含必命中"),
-        ) {
-          return true;
-        }
+        )
+      });
+      if is_mentioned {
+        return true;
       }
 
-      self.internal_pack_functions.insert(tp);
-    }
-
-    true
-  }
-}
-
-impl InternalTypeFunctionFinder {
-  pub fn visit_type_id_type_function_instance_type(
-    &mut self,
-    ty: TypeId,
-    tfit: &TypeFunctionInstanceType,
-  ) -> bool {
-    let mut has_generic = false;
-
-    for p in &tfit.type_arguments {
-      if get_type::get::<GenericType>(follow_type::follow(*p)).is_some() {
-        has_generic = true;
-        break;
-      }
-    }
-
-    if !has_generic {
-      for p in &tfit.pack_arguments {
-        if get_type_pack::get::<GenericTypePack>(follow_type_pack::follow(*p)).is_some() {
-          has_generic = true;
-          break;
-        }
-      }
-    }
-
-    if has_generic {
-      for mentioned in self.mentioned_functions.iter() {
-        let mentioned_tfit = get_type::get::<TypeFunctionInstanceType>(*mentioned);
-        LUAU_ASSERT!(mentioned_tfit.is_some());
-        if are_equivalent(
-          tfit,
-          mentioned_tfit.expect("C++ `LUAU_ASSERT(mentionedTf)` 紧邻断言蕴含必命中"),
-        ) {
-          return true;
-        }
-      }
-      self.internal_functions.insert(ty);
-    }
-
-    true
-  }
-
-  pub fn visit_type_pack_id_type_function_instance_type_pack(
-    &mut self,
-    tp: TypePackId,
-    tfitp: &TypeFunctionInstanceTypePack,
-  ) -> bool {
-    let mut has_generic = false;
-
-    for p in &tfitp.type_arguments {
-      if get_type::get::<GenericType>(follow_type::follow(*p)).is_some() {
-        has_generic = true;
-        break;
-      }
-    }
-
-    if !has_generic {
-      for p in &tfitp.pack_arguments {
-        if get_type_pack::get::<GenericTypePack>(follow_type_pack::follow(*p)).is_some() {
-          has_generic = true;
-          break;
-        }
-      }
-    }
-
-    if has_generic {
-      for mentioned in self.mentioned_function_packs.iter() {
-        let mentioned_tfitp = get_type_pack::get::<TypeFunctionInstanceTypePack>(*mentioned);
-        LUAU_ASSERT!(mentioned_tfitp.is_some());
-        if are_equivalent(
-          tfitp,
-          mentioned_tfitp.expect("C++ `LUAU_ASSERT(mentionedTf)` 紧邻断言蕴含必命中"),
-        ) {
-          return true;
-        }
-      }
       self.internal_pack_functions.insert(tp);
     }
 

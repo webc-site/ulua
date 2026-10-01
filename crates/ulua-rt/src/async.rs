@@ -331,7 +331,7 @@ struct AsyncPollUpvalue<FR> {
 /// 仅由 VM 作为 `lua_newuserdatadtor` 注册的终结器调用：`ptr` 必须为 null，或
 /// 指向本模块按同一 `FR` 单态化布局写入、尚未 drop 的 userdata 载荷；VM 保证
 /// 其恰被调用一次。
-unsafe extern "C-unwind" fn poll_upvalue_dtor<FR>(ptr: *mut c_void) {
+unsafe extern "C-unwind" fn poll_upvalue_dtor<FR>(_l: *mut LuaState, ptr: *mut c_void) {
   if !ptr.is_null() {
     // Safety: 满足本 dtor `# Safety` 契约——null 已判；载荷由本模块按同一 FR
     // 单态化布局写入，VM 保证恰调用一次。
@@ -353,7 +353,7 @@ struct AsyncCallbackUpvalue<F> {
 /// 仅由 VM 作为 `lua_newuserdatadtor` 注册的终结器调用：`ptr` 必须为 null，或
 /// 指向本模块按同一 `F` 单态化布局写入、尚未 drop 的 userdata 载荷；VM 保证其
 /// 恰被调用一次。
-unsafe extern "C-unwind" fn callback_upvalue_dtor<F>(ptr: *mut c_void) {
+unsafe extern "C-unwind" fn callback_upvalue_dtor<F>(_l: *mut LuaState, ptr: *mut c_void) {
   if !ptr.is_null() {
     // Safety: 满足本 dtor `# Safety` 契约——null 已判；载荷由本模块按同一 F
     // 单态化布局写入，VM 保证恰调用一次。

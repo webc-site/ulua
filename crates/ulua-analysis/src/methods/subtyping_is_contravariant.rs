@@ -8,6 +8,8 @@
 /// `isCovariantWith` overload.
 use core::mem::swap;
 
+use ulua_common::fflag::LuauSubtypingSkipUnreadReasoning;
+
 use crate::{
   enums::subtyping_variance::SubtypingVariance,
   functions::{
@@ -87,6 +89,10 @@ impl Subtyping {
       sub_ty.into_cov_operand(),
       scope,
     );
+
+    if LuauSubtypingSkipUnreadReasoning.get() && result.is_subtype {
+      return result;
+    }
 
     if result.reasoning.empty() {
       result.reasoning.insert(SubtypingReasoning {

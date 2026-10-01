@@ -58,10 +58,13 @@ use crate::{
 
 impl TypeChecker2 {
   pub fn check_for_internal_type_function(&mut self, ty: TypeId, location: Location) {
-    let mut finder = InternalTypeFunctionFinder::new(&mut self.function_decl_stack);
-    finder.traverse_type_id(ty);
+    let (internal_functions, internal_pack_functions) = {
+      let mut finder = InternalTypeFunctionFinder::new(&self.function_decl_stack);
+      finder.traverse_type_id(ty);
+      (finder.internal_functions, finder.internal_pack_functions)
+    };
 
-    for internal in finder.internal_functions.iter() {
+    for internal in internal_functions.iter() {
       if self.should_suppress_uninhabited_type_function_error(*internal) {
         continue;
       }
@@ -72,7 +75,7 @@ impl TypeChecker2 {
       );
     }
 
-    for internal in finder.internal_pack_functions.iter() {
+    for internal in internal_pack_functions.iter() {
       self.report_error_type_error_data_location(
         PackWhereClauseNeeded { tp: *internal }.into(),
         &location,

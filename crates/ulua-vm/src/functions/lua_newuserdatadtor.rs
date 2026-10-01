@@ -11,9 +11,8 @@ use crate::{
     lua_c_check_gc::lua_c_check_gc, utag_idtor::UTAG_IDTOR,
   },
   records::{gc_object::GCObject, lua_state::LuaState},
+  type_aliases::lua_destructor::LuaDestructor,
 };
-
-use crate::type_aliases::lua_destructor::LuaDestructor;
 
 /// # Safety
 /// `l` 须为存活 `LuaState`；`dtor` 须为 `Some`（`api_check`，其函数指针在 udata 回收时被调），`sz`

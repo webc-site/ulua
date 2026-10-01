@@ -12,6 +12,7 @@ use core::ptr::{NonNull, from_mut, from_ref, null_mut};
 
 use ulua_common::{
   fflag,
+  fflag::LuauSkipUnusedTypeTraversals,
   macros::luau_assert::LUAU_ASSERT,
   records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet, variant::Variant3},
 };
@@ -450,6 +451,12 @@ impl ConstraintGraph {
 
     let source_dependencies = self.find_dependency_list(BlockedConstraintId::V0(source));
 
+    // 若无依赖需要复制，target 可达类型不会被使用，直接清理并跳过遍历
+    if LuauSkipUnusedTypeTraversals.get() && self.list(source_dependencies).is_empty() {
+      self.clear_reverse_dependencies_of(BlockedConstraintId::V0(source));
+      return;
+    }
+
     // C++ `shiftReferences`：先遍历 target，收集其内部的 free/blocked/PE 类型，
     // 这些类型将承接 source 原有的依赖边。
     let (mutated_types, mutated_type_packs) =
@@ -471,6 +478,12 @@ impl ConstraintGraph {
     }
 
     let source_dependencies = self.find_dependency_list(BlockedConstraintId::V1(source));
+
+    // 若无依赖需要复制，target 可达类型不会被使用，直接清理并跳过遍历
+    if LuauSkipUnusedTypeTraversals.get() && self.list(source_dependencies).is_empty() {
+      self.clear_reverse_dependencies_of(BlockedConstraintId::V1(source));
+      return;
+    }
 
     let (mutated_types, mutated_type_packs) =
       collect_reachable_types(target, |rci, tp| rci.traverse_type_pack_id(tp));

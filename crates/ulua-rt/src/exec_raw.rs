@@ -50,7 +50,7 @@ struct RawFnSlot<F> {
 /// 仅由 VM 作为 `lua_newuserdatadtor` 注册的终结器调用：`ptr` 必须为 null，或
 /// 指向 `exec_raw::<F>` 按同一 `F` 单态化布局写入的 userdata 载荷；VM 保证其恰
 /// 被调用一次。
-unsafe extern "C-unwind" fn raw_fn_dtor<F>(ptr: *mut c_void) {
+unsafe extern "C-unwind" fn raw_fn_dtor<F>(_l: *mut LuaState, ptr: *mut c_void) {
   if !ptr.is_null() {
     // Safety: `ptr` 由 `lua_newuserdatadtor` 的载荷区提供——`Udata` 以
     // `_align: [u64; 0]` 保证数据区 ≥8 字节对齐（覆盖 `Cell<Option<Box<F>>>`

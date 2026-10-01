@@ -2,6 +2,8 @@
 
 use core::mem::{swap, take};
 
+use ulua_common::fflag::LuauSubtypingSkipUnreadReasoning;
+
 use crate::{
   enums::{
     subtyping_suppression_policy::SubtypingSuppressionPolicy, subtyping_variance::SubtypingVariance,
@@ -164,6 +166,9 @@ impl SubtypingResult {
 
 impl SubtypingResult {
   pub fn with_sub_component(&mut self, component: Component) -> &mut Self {
+    if LuauSubtypingSkipUnreadReasoning.get() && self.is_subtype {
+      return self;
+    }
     prepend_component(&mut self.reasoning, component, ReasoningSide::Sub);
     self
   }
@@ -171,6 +176,9 @@ impl SubtypingResult {
 
 impl SubtypingResult {
   pub fn with_sub_path(&mut self, path: Path) -> &mut Self {
+    if LuauSubtypingSkipUnreadReasoning.get() && self.is_subtype {
+      return self;
+    }
     if self.reasoning.empty() {
       self.reasoning.insert(SubtypingReasoning {
         sub_path: path,
@@ -198,6 +206,9 @@ impl SubtypingResult {
 
 impl SubtypingResult {
   pub fn with_super_component(&mut self, component: Component) -> &mut Self {
+    if LuauSubtypingSkipUnreadReasoning.get() && self.is_subtype {
+      return self;
+    }
     prepend_component(&mut self.reasoning, component, ReasoningSide::Super);
     self
   }
@@ -205,6 +216,9 @@ impl SubtypingResult {
 
 impl SubtypingResult {
   pub fn with_super_path(&mut self, path: Path) -> &mut Self {
+    if LuauSubtypingSkipUnreadReasoning.get() && self.is_subtype {
+      return self;
+    }
     if self.reasoning.empty() {
       self.reasoning.insert(SubtypingReasoning {
         sub_path: Path::default(),

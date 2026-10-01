@@ -232,9 +232,8 @@ fn int64_div_rejects_zero_and_min_over_neg_one() {
   }
 }
 
-/// cpp lintlib.cpp:125-129：`result = a / b` 后，仅当 result < 0 且仍有余数
-/// 才 result - 1。注意被除数绝对值小于除数的负数（如 -1/2）商截断为 0、
-/// 不满足 result < 0，cpp 原样返回 0——这是 lintlib 的既定语义，须照抄。
+/// cpp lintlib.cpp:125-129：向下取整除法（向负无穷方向截断）：
+/// 操作数异号且不能整除时商减 1（如 -1 / 2 == -1）。
 #[test]
 fn int64_idiv_decrements_negative_quotient_with_remainder() {
   let lib = Lib::new();
@@ -243,7 +242,8 @@ fn int64_idiv_decrements_negative_quotient_with_remainder() {
     assert_eq!(lib.call("idiv", &[-20, 3]), -7);
     assert_eq!(lib.call("idiv", &[20, -3]), -7);
     assert_eq!(lib.call("idiv", &[-20, -3]), 6);
-    assert_eq!(lib.call("idiv", &[-1, 2]), 0);
+    assert_eq!(lib.call("idiv", &[-1, 2]), -1);
+    assert_eq!(lib.call("idiv", &[1, -2]), -1);
     assert_eq!(lib.call("idiv", &[-6, 3]), -2);
     assert_eq!(lib.call("idiv", &[1, 2]), 0);
   }

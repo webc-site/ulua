@@ -54,6 +54,10 @@ impl ConstraintList {
 }
 
 impl ConstraintList {
+  pub fn is_empty(&self) -> bool {
+    self.entries == 0
+  }
+
   pub fn size(&self) -> usize {
     self.entries
   }

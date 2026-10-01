@@ -5,10 +5,11 @@ use crate::{
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
 #[derive(Debug, Clone)]
-pub struct InternalTypeFunctionFinder {
+pub struct InternalTypeFunctionFinder<'a> {
   pub(crate) base: TypeOnceVisitor,
   pub(crate) internal_functions: DenseHashSet<TypeId>,
   pub(crate) internal_pack_functions: DenseHashSet<TypePackId>,
   pub(crate) mentioned_functions: DenseHashSet<TypeId>,
   pub(crate) mentioned_function_packs: DenseHashSet<TypePackId>,
+  pub(crate) unscanned_decl_stack: Option<&'a [TypeId]>,
 }

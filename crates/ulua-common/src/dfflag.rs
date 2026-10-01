@@ -9,4 +9,10 @@ luau_flag_module! {
   LUAU_DYNAMIC_FASTFLAGVARIABLE!(DEBUG_LUAU_REPORT_RETURN_TYPE_VARIADIC_WITH_TYPE_SUFFIX, DebugLuauReportReturnTypeVariadicWithTypeSuffix, false);
   // Require/src/RequireNavigator.cpp
   LUAU_DYNAMIC_FASTFLAGVARIABLE!(LUAU_SELF_IS_SELF_AND_ALWAYS_SELF, LuauSelfIsSelfAndAlwaysSelf, false);
+  // VM/src/lstrlib.cpp
+  LUAU_DYNAMIC_FASTFLAGVARIABLE!(LUAU_OPTIMIZE_STRING_SPLIT, LuauOptimizeStringSplit, false);
+  // VM/src/ltable.cpp
+  LUAU_DYNAMIC_FASTFLAGVARIABLE!(LUAU_SPLIT_TABLE_LOOKUPS, LuauSplitTableLookups, false);
+  // VM/src/ltable.cpp
+  LUAU_DYNAMIC_FASTFLAGVARIABLE!(LUAU_TABLE_ROBUST_OOM, LuauTableRobustOom, false);
 }

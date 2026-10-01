@@ -108,7 +108,7 @@ pub(crate) fn wrapped_error_tag() -> TypeId {
 /// 仅由 VM 作为 `lua_newuserdatadtor` 注册的终结器调用：`ptr` 必须为 null 或
 /// 指向本模块 `raise_structured_error` 按 `WrappedError` 布局写入、且尚未被
 /// drop 的 userdata 载荷；VM 保证其恰被调用一次。
-unsafe extern "C-unwind" fn wrapped_error_dtor(ptr: *mut c_void) {
+unsafe extern "C-unwind" fn wrapped_error_dtor(_l: *mut LuaState, ptr: *mut c_void) {
   if !ptr.is_null() {
     // Safety: `ptr` 由 VM 在终结该 wrapped-error userdata 时传入，只可能来自
     // `raise_structured_error` 的 `lua_newuserdatadtor(size_of::<WrappedError>(),
@@ -209,7 +209,7 @@ type CallbackSlot<F> = Option<Box<F>>;
 /// 仅由 VM 作为终结器调用：`ptr` 必须为 null，或指向
 /// `create_callback_function` 以同一 `F` 的 `CallbackSlot<F>` 布局写入、
 /// 尚未 drop 的 userdata 载荷；VM 保证其恰被调用一次。
-unsafe extern "C-unwind" fn callback_dtor<F>(ptr: *mut c_void) {
+unsafe extern "C-unwind" fn callback_dtor<F>(_l: *mut LuaState, ptr: *mut c_void) {
   if !ptr.is_null() {
     // Safety: `ptr` 由 VM 终结回调 userdata 时传入，只可能配对
     // `create_callback_function` 的 `lua_newuserdatadtor(

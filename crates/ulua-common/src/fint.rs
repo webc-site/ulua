@@ -71,6 +71,8 @@ luau_flag_module! {
   // Analysis/src/Subtyping.cpp
   LUAU_FASTINTVARIABLE!(LUAU_SUBTYPING_REASONING_LIMIT, LuauSubtypingReasoningLimit, 100);
   // Analysis/src/Linter.cpp
+  LUAU_FASTINTVARIABLE!(LUAU_LINTER_RECURSION_LIMIT, LuauLinterRecursionLimit, 128);
+  // Analysis/src/Linter.cpp
   LUAU_FASTINTVARIABLE!(LUAU_SUGGESTION_DISTANCE, LuauSuggestionDistance, 4);
   // Analysis/src/Type.cpp
   LUAU_FASTINTVARIABLE!(LUAU_TABLE_TYPE_MAXIMUM_STRINGIFIER_LENGTH, LuauTableTypeMaximumStringifierLength, 0);

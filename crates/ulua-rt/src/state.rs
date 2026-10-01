@@ -68,7 +68,7 @@ use crate::{
   registry::RegHandle,
   string::{self, LuaString},
   sync::{MaybeSend, MaybeSync, NOT_SYNC, NotSync, XRc, XWeak},
-  sys::*,
+  sys::{LuaDestructor, *},
   table::{self, Table, number_at},
   traits::{FromLua, FromLuaMulti, IntoLua, IntoLuaMulti},
   userdata::{self, AnyUserData, UserData},
@@ -609,7 +609,7 @@ pub(crate) fn userdata_at(state: StateView<'_>, idx: i32) -> Option<NonNull<c_vo
 pub(crate) fn allocate_userdata(
   state: StateView<'_>,
   size: usize,
-  dtor: Option<unsafe extern "C-unwind" fn(*mut c_void)>,
+  dtor: LuaDestructor,
 ) -> Option<NonNull<c_void>> {
   // Safety: 族级契约;分配走 VM 堆与 GC 记账,null(失败)经 `NonNull::new`
   // 归一为 `None`,非空性由类型表达。
