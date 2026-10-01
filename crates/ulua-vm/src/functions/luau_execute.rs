@@ -830,6 +830,64 @@ macro_rules! vm_hot {
   }};
 }
 
+/// 尾融合许可：两种情形必须逐条回环头，禁止把下一条指令并进本臂尾巴。
+///
+///  * `(*l).singlestep` —— C++ 在这种构建里选的是 `luau_execute<true>`，computed goto
+///    退化为 `goto &&dispatch`，目的就是让**每条**指令都过一次环头的 `debugstep` 钩子
+///    （lvmexecute.cpp:151、228-247）；融合会让被吞掉的那条指令没有钩子。
+///  * `vm-opcount` —— 计数点只在环头，融合把两条指令计成一条，热点直方图与转移表失真。
+///
+/// 判据本身是一次 `L` 热字段读 + 一条可预测分支；`cfg` 分支编译期即定。
+#[inline(always)]
+unsafe fn fuse_ok(l: *mut LuaState) -> bool {
+  // SAFETY: 契约由调用方（派发链上游）保证，l 为执行中的存活 LuaState
+  unsafe { !cfg!(feature = "vm-opcount") && !(*l).singlestep }
+}
+
+/// 热后继 `LOP_JUMPIFNOT` 的尾融合：在本臂的 `VM_NEXT` 之前把它执行掉。
+///
+/// 动机（实测转移计数）：`GETTABLE → JUMPIFNOT` 是热循环里最大的一条边（`life`
+/// 2.77M/13.3M ≈ 21%，`micro_gettable`/`microbig_gettable` ≈ 28%），环里几乎每次都走
+/// 这一条。派发一条指令的代价是环头那串**串行依赖**——取指、抽 opcode、查跳转表、
+/// 间接跳转；`samply` 实测这串占 53% self time。融合后这条边只剩一次
+/// `cmp op, JUMPIFNOT` + 一条**直接**分支（恒定命中，预测器零成本），第二次派发整体消失。
+///
+/// 未命中时只多付一次已预取的指令字比较，pc 原样交回，语义与不融合逐位一致。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的派发 handler）
+///
+/// `l` 为执行中的存活 `LuaState`，`pc` 指向**下一条待执行指令**且落在 `cl` 的 proto
+/// code 段内，`base` 为该指令可寻址的栈槽基。
+#[inline(always)]
+unsafe fn fuse_jumpifnot(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  cl: *mut Closure,
+) -> *const Instruction {
+  // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
+  unsafe {
+    if !fuse_ok(l) {
+      return pc;
+    }
+
+    let insn = *pc;
+    if luau_insn_op(insn) != LuauOpcode::LOP_JUMPIFNOT as u32 {
+      return pc;
+    }
+
+    // 与 [`h_jumpifnot`] 同一判定顺序：取 ra、先 `pc+1` 再按条件偏移
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    pc = pc.add(1);
+    if (*ra).is_falsy() {
+      pc = pc.offset(luau_insn_d(insn) as isize);
+      let p = cl_proto!(cl);
+      LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+    }
+    pc
+  }
+}
+
 /// C++ `reentry:` 标签的状态来源：解释器循环局部量全部从 `L->ci` 重取（原生返回、
 /// 协程恢复、native-call 之后都是这个口径），不与调用点的旧值掺混。
 ///
@@ -931,6 +989,7 @@ unsafe fn h_gettable(
         && index as f64 == indexd
       {
         setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
+        pc = fuse_jumpifnot(l, pc, base, cl);
         vm_next!(pc, base, k, cl);
       }
     }
@@ -950,7 +1009,7 @@ unsafe fn h_gettable(
 #[inline(never)]
 unsafe fn s_gettable(
   l: *mut LuaState,
-  pc: *const Instruction,
+  mut pc: *const Instruction,
   mut base: StkId,
   k: *mut TValue,
   cl: *mut Closure,
@@ -963,6 +1022,7 @@ unsafe fn s_gettable(
     let rc = VM_REG!(luau_insn_c(insn), l, base);
 
     base = gettable_slow(l, pc, ra, rb, rc);
+    pc = fuse_jumpifnot(l, pc, base, cl);
     vm_next!(pc, base, k, cl);
   }
 }
