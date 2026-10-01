@@ -32,7 +32,7 @@ pub(crate) unsafe fn str_pack(l: *mut LuaState) -> i32 {
     let mut totalsize: usize = 0; // accumulate total size of result
     initheader(l, &mut h);
     (*l).push_nil(); // mark to separate arguments from string buffer
-    lua_l_buffinit(l, &mut b);
+    lua_l_buffinit(&mut *l, &mut b);
     while fmt.cur() != 0 {
       let (opt, size, ntoalign) = getdetails(&mut h, totalsize, &mut fmt);
       totalsize += (ntoalign + size) as usize;

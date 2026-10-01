@@ -32,7 +32,7 @@ impl State {
   /// 入参已是切片，调用方无须再持有任何指针契约，故为安全签名。
   fn intern(&self, bytes: &[u8]) -> *mut c_void {
     // Safety: 单线程测试内 `self.l` 为存活 VM 状态；`bytes` 借用覆盖整个调用。
-    unsafe { lua_s_newlstr(self.l, bytes).cast() }
+    unsafe { lua_s_newlstr(&mut *self.l, bytes).cast() }
   }
 }
 
@@ -207,7 +207,7 @@ fn intern_empty_string() {
   unsafe {
     let a = s.intern(b"");
     assert!(!a.is_null());
-    let b = lua_s_newlstr(s.l, &[]).cast::<c_void>();
+    let b = lua_s_newlstr(&mut *s.l, &[]).cast::<c_void>();
     assert!(eq(a, b), "零长度 intern 必须命中同一对象");
   }
 }

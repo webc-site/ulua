@@ -21,7 +21,7 @@ pub(crate) unsafe fn costatus(l: *mut LuaState) -> i32 {
       (*l).type_error(1, "thread")
     };
 
-    let name = LuaCoStatus::from_c_int(lua_costatus(l, co)).map_or("dead", LuaCoStatus::as_str);
+    let name = LuaCoStatus::from_c_int(lua_costatus(&*l, &*co)).map_or("dead", LuaCoStatus::as_str);
     (*l).push_str(name);
     1
   }

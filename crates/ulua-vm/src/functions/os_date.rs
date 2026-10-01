@@ -123,7 +123,7 @@ pub(crate) unsafe fn os_date(l: *mut LuaState) -> i32 {
       }
       Some((stm, _zone)) => {
         let mut b = LuaLStrbuf::new();
-        lua_l_buffinit(l, &mut b);
+        lua_l_buffinit(&mut *l, &mut b);
 
         // 零拷贝迭代剩余格式串；peek 前瞻实现 C++ 的 *(s + 1) 判定
         let mut fmt = fmt.iter().copied().peekable();

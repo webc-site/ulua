@@ -15,11 +15,11 @@ pub unsafe fn int64_clamp(l: *mut LuaState) -> i32 {
     (*l).arg_check(mi <= mx, 3, "max must be greater than or equal to min");
 
     if a < mi {
-      lua_pushinteger_64(l, mi);
+      lua_pushinteger_64(&mut *l, mi);
     } else if a > mx {
-      lua_pushinteger_64(l, mx);
+      lua_pushinteger_64(&mut *l, mx);
     } else {
-      lua_pushinteger_64(l, a);
+      lua_pushinteger_64(&mut *l, a);
     }
 
     1

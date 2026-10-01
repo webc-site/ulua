@@ -26,7 +26,7 @@ pub(crate) unsafe fn coclose(l: *mut LuaState) -> i32 {
       (*l).type_error(1, "thread")
     };
 
-    let status = lua_costatus(l, co);
+    let status = lua_costatus(&*l, &*co);
     if status != LuaCoStatus::CoFin as i32
       && status != LuaCoStatus::CoErr as i32
       && status != LuaCoStatus::CoSus as i32

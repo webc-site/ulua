@@ -30,11 +30,11 @@ pub(crate) unsafe fn luaopen_integer(l: *mut LuaState) -> i32 {
     lua_l_register_bytes(l, Some(b"integer"), &INT64LIB);
 
     // Push LLONG_MAX and set it as "maxsigned"
-    lua_pushinteger_64(l, i64::MAX);
+    lua_pushinteger_64(&mut *l, i64::MAX);
     (*l).set_field_bytes(-2, b"maxsigned");
 
     // Push LLONG_MIN and set it as "minsigned"
-    lua_pushinteger_64(l, i64::MIN);
+    lua_pushinteger_64(&mut *l, i64::MIN);
     (*l).set_field_bytes(-2, b"minsigned");
 
     1

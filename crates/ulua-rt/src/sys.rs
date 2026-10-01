@@ -54,7 +54,6 @@ pub(crate) use ulua_vm::functions::lua_newuserdatadtor::lua_newuserdatadtor;
 // ---- async bridge (Future <-> coroutine) ---------------------------------
 
 // ---- 整数子类型（LUA_TINTEGER）精确压栈 i64（保 tag，不经 f64）------------
-pub(crate) use ulua_vm::functions::lua_pushinteger_64::lua_pushinteger_64;
 // ---- light userdata ------------------------------------------------------
 pub(crate) use ulua_vm::functions::lua_pushlightuserdatatagged::lua_pushlightuserdatatagged;
 // ---- named registry + integer-keyed raw table access ---------------------

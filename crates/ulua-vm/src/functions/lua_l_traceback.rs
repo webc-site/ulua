@@ -35,7 +35,7 @@ pub unsafe fn lua_l_traceback(l: *mut LuaState, l1: *mut LuaState, msg: Option<&
     }
 
     let mut buf = LuaLStrbuf::new();
-    lua_l_buffinit(l, &mut buf);
+    lua_l_buffinit(&mut *l, &mut buf);
 
     if let Some(msg_str) = msg {
       // cpp: `luaL_addstring(B, msg)` 即 `luaL_addlstring(B, msg, strlen(msg))`

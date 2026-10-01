@@ -112,7 +112,7 @@ pub unsafe fn lua_v_concat(l: *mut LuaState, mut total: i32, mut last: i32) {
             setsvalue!(
               l,
               top.sub(n as usize),
-              lua_s_newlstr(l, from_raw_parts(buffer.cast::<u8>(), tl))
+              lua_s_newlstr(&mut *l, from_raw_parts(buffer.cast::<u8>(), tl))
             );
           } else {
             setsvalue!(l, top.sub(n as usize), lua_s_buffinish(l, ts));

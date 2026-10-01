@@ -10,6 +10,9 @@
 //! 用法（写在核心函数所在文件，核心与壳同卫生域）：
 //! - `lua_lib_fn!(pub(crate) fn b_and, b_and_arm);` — 库 C 函数臂 `(l) -> i32`，
 //!   与 `LuaCFunction`/`LuaLReg::new` 契约同形；
+//! - `lua_lib_fn!(pub fn lua_b_type @ref, lua_b_type_arm);` — 核心已前移为
+//!   `&mut LuaState` 接收者的引用形（r3 vm 门面族），臂内一行 `&mut *l` 重建引用
+//!   后转调；`@ref` 标记即此形，契约单源不变；
 //! - `lua_cont_fn!(pub(crate) fn x_cont, x_cont_arm);` — 续延臂 `(l, status) -> i32`，
 //!   与 `LuaContinuation` 契约同形（pcall/co 族 B4 批备妥，本票先行落地）。
 //!
@@ -29,6 +32,21 @@ macro_rules! lua_lib_fn {
       l: *mut $crate::records::lua_state::LuaState,
     ) -> i32 {
       unsafe { $core(l) }
+    }
+  };
+  ($vis:vis fn $core:ident @ref, $arm:ident) => {
+    /// `extern "C-unwind"` 边界臂：一行转发本文件 Rust 核心（`&mut LuaState` 引用形），
+    /// 签名与契约由 `lua_lib_fn!` 单源。
+    ///
+    /// # Safety
+    ///
+    /// `l` 须满足核心的全部前提：本次受保护帧内存活 `LuaState`、实参栈槽按 API 索引约定
+    /// 可读、栈顶预留结果空间；解引用/抛错/GC 义务见核心自身 `# Safety` 文档（契约单源）。
+    /// 本帧把裸指针重建为独占引用（`&mut *l`），重建窗口即本次调用。
+    $vis unsafe extern "C-unwind" fn $arm(
+      l: *mut $crate::records::lua_state::LuaState,
+    ) -> i32 {
+      unsafe { $core(&mut *l) }
     }
   };
 }

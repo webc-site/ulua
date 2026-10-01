@@ -3,20 +3,19 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// # Safety
-/// `l` 须为存活 `LuaState` 且栈 index 2 为可转整数（`lua_l_checkinteger`，作当前下标）、index 1 为
-/// table（`luaL_checktype`），不符即抛错；`lua_rawgeti`/`push` 会读写栈，须在受保护帧内调用。
+/// `ipairs` 迭代步进核心。调用序契约（正确性，非内存安全）：以 Lua 库函数约定被调
+/// （2 号槽为整数下标、1 号槽为 table，不符即抛错；受保护帧）。
 /// cpp `lbaselib.cpp:238`。
-pub unsafe fn lua_b_inext(l: *mut LuaState) -> i32 {
-  unsafe {
-    let mut i = (*l).check_integer(2);
-    (*l).check_type(1, LuaType::Table);
-    i += 1; // next value
-    (*l).push_integer(i);
-    lua_rawgeti(l, 1, i);
+pub fn lua_b_inext(l: &mut LuaState) -> i32 {
+  let mut i = l.check_integer(2);
+  l.check_type(1, LuaType::Table);
+  i += 1; // next value
+  l.push_integer(i);
+  // SAFETY: `l` 存活（引用形保证）；`lua_rawgeti` 的 `# Safety` 其余前提（1 号槽为
+  // 合法正索引且上方已校验为 table）由库函数约定与 `check_type` 成立。
+  unsafe { lua_rawgeti(l.as_mut_ptr(), 1, i) };
 
-    if (*l).is_nil(-1) { 0 } else { 2 }
-  }
+  if l.is_nil(-1) { 0 } else { 2 }
 }
 
-lua_lib_fn!(pub fn lua_b_inext, lua_b_inext_arm);
+lua_lib_fn!(pub fn lua_b_inext @ref, lua_b_inext_arm);

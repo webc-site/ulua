@@ -65,7 +65,7 @@ static MATH_FUNCS: [LuaLReg; 37] = [
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub unsafe fn luaopen_math(l: *mut LuaState) -> i32 {
   unsafe {
-    let mut seed = lua_encodepointer(l, l as usize) as u64;
+    let mut seed = lua_encodepointer(&*l, l as usize) as u64;
     seed ^= 0;
     pcg_32_seed(&mut (*(*l).global).rngstate, seed);
 

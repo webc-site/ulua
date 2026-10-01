@@ -258,7 +258,7 @@ pub(crate) unsafe fn loadsafe(
     // `strlen(chunkname)`，故这里按同款规则取首个 NUL 前的字节，零拷贝交
     // `lua_s_newlstr` 驻留。
     let sname = chunkname_bytes(chunkname);
-    let source = lua_s_newlstr(l, sname);
+    let source = lua_s_newlstr(&mut *l, sname);
 
     // string table
     let string_count = read_var!("string table size");
@@ -274,7 +274,7 @@ pub(crate) unsafe fn loadsafe(
 
       // 切片区间已校验，直接交 `lua_s_newlstr` 驻留（长度即 body.len()，等于校验过的 length）
       let body = &data[offset..offset + length as usize];
-      *slot = lua_s_newlstr(l, body);
+      *slot = lua_s_newlstr(&mut *l, body);
       offset += length as usize;
     }
 

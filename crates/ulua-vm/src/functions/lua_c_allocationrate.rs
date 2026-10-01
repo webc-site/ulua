@@ -2,16 +2,19 @@ use ulua_common::clock_shim::monotonic_seconds;
 
 use crate::records::lua_state::LuaState;
 
-/// # Safety
-/// `l` 须为存活 LuaState 且 `(*l).global` 指向有效 global_State，其 `gcstate`/`totalbytes`/`gcstats.*` 时间戳字段
-/// 已随 GC 生命周期初始化（读取只用于算速率，不写对象、不抛错、不分配）。cpp/VM/src/lapi.cpp:2180 lua_allocationrate。
-pub unsafe fn lua_c_allocationrate(l: *mut LuaState) -> i64 {
+/// 读分配速率（`lua_allocationrate`）。`l` 以引用传入（存活由类型保证）；其 `global`
+/// 指向同存活期的有效 `global_State`、GC 统计字段已随 GC 生命周期初始化均为
+/// `lua_State` 结构不变量（只读算速率，不写对象、不抛错、不分配）。
+/// cpp/VM/src/lapi.cpp:2180 lua_allocationrate。
+pub fn lua_c_allocationrate(l: &LuaState) -> i64 {
+  let g = l.global;
+  let duration_threshold: f64 = 1e-3; // avoid measuring intervals smaller than 1ms
+
+  const GCS_ATOMIC: u8 = 3;
+
+  // SAFETY: `g` 为存活 LuaState 挂接的 global_State（结构不变量），块内只读
+  // gcstate/totalbytes/gcstats 统计字段。
   unsafe {
-    let g = (*l).global;
-    let duration_threshold: f64 = 1e-3; // avoid measuring intervals smaller than 1ms
-
-    const GCS_ATOMIC: u8 = 3;
-
     if (*g).gcstate <= GCS_ATOMIC {
       let duration = monotonic_seconds() - (*g).gcstats.endtimestamp;
 

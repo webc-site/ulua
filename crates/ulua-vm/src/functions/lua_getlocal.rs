@@ -49,7 +49,7 @@ pub unsafe fn lua_getlocal(l: *mut LuaState, level: i32, n: i32) -> *const c_cha
 
     if !var.is_null() {
       lua_c_threadbarrier_lapi(l);
-      lua_a_pushvalue(l, (*ci).base.offset((*var).reg as isize));
+      lua_a_pushvalue(&mut *l, &*(*ci).base.offset((*var).reg as isize));
 
       getstr((*var).varname)
     } else {

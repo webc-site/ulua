@@ -31,11 +31,11 @@ pub unsafe fn lua_getargument(l: *mut LuaState, level: i32, n: i32) -> i32 {
     if !fp.is_null() && n > 0 {
       if (n as u32) <= (*fp).numparams as u32 {
         lua_c_threadbarrier_lapi(l);
-        lua_a_pushvalue(l, (*ci).base.offset((n - 1) as isize));
+        lua_a_pushvalue(&mut *l, &*(*ci).base.offset((n - 1) as isize));
         res = 1;
       } else if (*fp).is_vararg != 0 && (n as isize) < (*ci).base.offset_from((*ci).func) {
         lua_c_threadbarrier_lapi(l);
-        lua_a_pushvalue(l, (*ci).func.offset(n as isize));
+        lua_a_pushvalue(&mut *l, &*(*ci).func.offset(n as isize));
         res = 1;
       }
     }

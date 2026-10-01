@@ -54,10 +54,10 @@ fn dedup_survives_multiple_growth_resizes() {
     (0..COUNT)
       .map(|i| {
         let k = key(i);
-        let ts = lua_s_newlstr(s.l, k.as_bytes());
+        let ts = lua_s_newlstr(&mut *s.l, k.as_bytes());
         assert!(!ts.is_null());
         assert!(
-          eq(ts, lua_s_newlstr(s.l, k.as_bytes())),
+          eq(ts, lua_s_newlstr(&mut *s.l, k.as_bytes())),
           "第 {i} 串二次 intern 未复用"
         );
         ts
@@ -69,7 +69,7 @@ fn dedup_survives_multiple_growth_resizes() {
     for (i, &ts) in pointers.iter().enumerate() {
       let k = key(i);
       assert!(
-        eq(ts, lua_s_newlstr(s.l, k.as_bytes())),
+        eq(ts, lua_s_newlstr(&mut *s.l, k.as_bytes())),
         "resize 后键 {i} 指向漂移"
       );
     }
@@ -113,12 +113,12 @@ fn gc_sweep_then_reintern_keeps_table_consistent() {
   let s = State::new();
   let transient = b"gc-transient-string-42";
   unsafe {
-    let ts1 = lua_s_newlstr(s.l, transient);
+    let ts1 = lua_s_newlstr(&mut *s.l, transient);
     assert_eq!(lua_gc(s.l, LuaGcOp::Collect as i32, 0), 0, "fullgc 失败");
     // 清扫后重 intern：无残留半摘链（若有，桶内指向已释放对象会当场失守）
-    let ts2 = lua_s_newlstr(s.l, transient);
+    let ts2 = lua_s_newlstr(&mut *s.l, transient);
     assert!(
-      eq(ts2, lua_s_newlstr(s.l, transient)),
+      eq(ts2, lua_s_newlstr(&mut *s.l, transient)),
       "清扫后重 intern 不幂等"
     );
     let _ = ts1;

@@ -23,7 +23,7 @@ pub unsafe fn utfchar(l: *mut LuaState) -> i32 {
       lua_pushlstring_bytes(l, charstr);
     } else {
       let mut b = LuaLStrbuf::new();
-      lua_l_buffinit(l, &mut b);
+      lua_l_buffinit(&mut *l, &mut b);
       for i in 1..=n {
         let charstr = buffutfchar(l, i, &mut buff);
         lua_l_addlstring(&mut b, charstr);

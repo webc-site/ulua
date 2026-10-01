@@ -29,7 +29,7 @@ pub(crate) unsafe fn lua_concat(l: *mut LuaState, n: i32) {
       lua_c_threadbarrier_lapi(l);
       // cpp `ensure_stack(L, 1)` 只在 n == 0 分支；n >= 2 由 luaV_concat 自行管栈
       ensure_stack(l, 1);
-      setsvalue!(l, (*l).top, lua_s_newlstr(l, &[]));
+      setsvalue!(l, (*l).top, lua_s_newlstr(&mut *l, &[]));
       api_incr_top!(l);
     }
   }

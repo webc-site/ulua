@@ -18,7 +18,7 @@ pub(crate) unsafe fn buffer_readlong(l: *mut LuaState) -> i32 {
   unsafe {
     let val = load_scalar::<u64>(buffer_read_window(l, size_of::<u64>()));
 
-    lua_pushinteger_64(l, val as i64);
+    lua_pushinteger_64(&mut *l, val as i64);
     1
   }
 }

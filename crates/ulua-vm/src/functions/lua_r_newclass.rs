@@ -49,7 +49,7 @@ pub(crate) unsafe fn lua_r_constructobject(l: *mut LuaState) -> i32 {
       setnilvalue!(member);
     }
 
-    let init_key = lua_s_newlstr(l, b"__init");
+    let init_key = lua_s_newlstr(&mut *l, b"__init");
     // B2-2a 任务B：getstr 折叠 Option<Slot> 后在边界还原哨兵裸形——下方契约断言
     // 与 `as_number` 读链保持原形（miss 兜底读 nil 哨兵行为逐位一致）
     let init_index =
@@ -188,7 +188,7 @@ pub(crate) fn lua_r_setupconstructor(
 ) {
   // SAFETY: 契约保证 `l`/`classobject`/`env` 存活，构造器闭包与 new 名串注册仅触及类静态区与 env 表的合法槽位
   unsafe {
-    let new_key = lua_s_newlstr(l, b"new");
+    let new_key = lua_s_newlstr(&mut *l, b"new");
     let constructor = lua_f_new_cclosure(l, 1, env);
     let ctor_c = &mut (*constructor).inner.c;
     ctor_c.f = Some(lua_r_constructobject_arm);
@@ -222,7 +222,7 @@ pub(crate) fn lua_r_setupconstructor(
     setclassvalue!(l, &mut default_ctor_c.upvals[0], classobject);
     default_ctor_c.cont = None;
 
-    let init_key = lua_s_newlstr(l, b"__init");
+    let init_key = lua_s_newlstr(&mut *l, b"__init");
     // 同上：`__init` 偏移读链原生 Option<Slot> 收口，None 臂承接 miss
     if let Some(init_index) = lua_h_getstr(&*(*classobject).memberstooffset, init_key)
       && let ValueView::Number(init_offset) = ValueView::from_tvalue(init_index.get())

@@ -83,7 +83,7 @@ pub unsafe fn lua_l_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a 
       }
       _ => {
         let ptr = lua_topointer(l, idx);
-        let enc = lua_encodepointer(l, ptr as usize);
+        let enc = lua_encodepointer(&*l, ptr as usize);
         let name = cstr_cow(lua_l_typename(l, idx));
         lua_pushfstring_l(l, format_args!("{}: 0x{:016x}", name, enc));
       }

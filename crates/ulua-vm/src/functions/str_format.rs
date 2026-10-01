@@ -47,7 +47,7 @@ pub(crate) unsafe fn str_format(l: *mut LuaState) -> i32 {
     let f = lua_l_checklstring_ref(l, arg);
 
     let mut b = LuaLStrbuf::new();
-    lua_l_buffinit(l, &mut b);
+    lua_l_buffinit(&mut *l, &mut b);
 
     let mut i: usize = 0;
     // 保留下标游走：i 随格式说明符消耗量变步（`%%` 两字节、`%*s` 三字节、

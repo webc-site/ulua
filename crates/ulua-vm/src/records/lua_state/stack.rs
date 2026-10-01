@@ -94,9 +94,7 @@ impl LuaState {
   /// 扩容由 [`lua_pushinteger_64`] 内部完成。
   #[inline(always)]
   pub fn push_integer_64(&mut self, n: i64) {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 的有效指针；契约见
-    // `lua_pushinteger_64`（内部自管扩容）。
-    unsafe { lua_pushinteger_64(self.as_mut_ptr(), n) }
+    lua_pushinteger_64(self, n)
   }
 
   #[inline(always)]

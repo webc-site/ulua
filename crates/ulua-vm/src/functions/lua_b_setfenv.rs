@@ -17,7 +17,7 @@ pub(crate) unsafe fn lua_b_setfenv(l: *mut LuaState) -> i32 {
     (*l).push_value(2);
     lua_setsafeenv(l, -1, 0);
     if (*l).is_number(1) && (*l).to_number(1).unwrap_or(0.0) == 0.0 {
-      lua_pushthread(l);
+      lua_pushthread(&mut *l);
       (*l).insert(-2);
       lua_setfenv(l, -2);
       return 0;

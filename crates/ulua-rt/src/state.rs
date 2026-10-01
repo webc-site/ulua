@@ -394,9 +394,8 @@ pub(crate) fn push_boolean(mut state: StateView<'_>, b: bool) {
 
 /// 向栈压出 i64 整数（`lua_pushinteger_64` 的收口点，保留 LUA_TINTEGER tag）。
 #[inline]
-pub(crate) fn push_int64(state: StateView<'_>, n: i64) {
-  // Safety: 族级契约;标量写入,净压一层(VM 侧自带 1 槽头寸保证)。
-  unsafe { lua_pushinteger_64(state.as_mut_ptr(), n) }
+pub(crate) fn push_int64(mut state: StateView<'_>, n: i64) {
+  state.push_integer_64(n)
 }
 
 /// 向栈压出 vector（`lua_pushvector_lua_state_f32_f32_f32_f32` 收口点）。
@@ -528,6 +527,8 @@ pub(crate) fn pointer_at(state: StateView<'_>, idx: i32) -> *const c_void {
 /// 唯一 `lua_error` 边界；发散经 VM 自身的 longjmp 式展开逃逸调用帧。
 #[inline]
 pub(crate) fn raise_from_top(state: StateView<'_>) -> ! {
+  // Safety: 函数头契约即全部前提——受保护边界内驱动 + 栈顶有错误对象,
+  // `lua_error` 沿该边界展开、发散不返回。
   // Safety: 函数头契约即全部前提——受保护边界内驱动 + 栈顶有错误对象,
   // `lua_error` 沿该边界展开、发散不返回。
   unsafe { lua_error(state.as_mut_ptr()) }
@@ -710,9 +711,9 @@ pub(crate) fn thread_status(state: StateView<'_>) -> i32 {
 /// `lua_costatus(from, co)`：`co` 相对 `from` 的角色码（只读，两侧须同属一 VM）。
 #[inline]
 pub(crate) fn co_status(from: StateView<'_>, co: StateView<'_>) -> i32 {
-  // Safety: 族级契约;另须 `from`/`co` 同属一 VM(同 `global_State`),`co` 随其
-  // thread 对象的注册表引用锚定存活;只读查询,不触栈、不抛错。
-  unsafe { lua_costatus(from.as_ptr().cast_mut(), co.as_ptr().cast_mut()) }
+  // `lua_costatus` 本就收 `&LuaState`(ulua-vm 安全签名);`&from`/`&co` 经 Deref
+  // 协变到 `&LuaState`,只读查询(调用序契约:两侧同属一 VM,见函数头)。
+  lua_costatus(&from, &co)
 }
 
 /// 把 `from` 栈顶 `n` 个值搬到 `to`（`lua_xmove` 收口点，两侧同 VM）。
@@ -775,9 +776,10 @@ pub(crate) fn spawn_thread(state: StateView<'_>) -> Option<NonNull<LuaState>> {
 
 /// 把 `state` 自身线程值净压其栈顶（`lua_pushthread` 收口点，返回主/协程判定码）。
 #[inline]
-pub(crate) fn push_own_thread(state: StateView<'_>) -> i32 {
-  // Safety: 族级契约;`lua_pushthread` 把自身线程值压到栈顶一层,无别名问题。
-  unsafe { lua_pushthread(state.as_mut_ptr()) }
+pub(crate) fn push_own_thread(mut state: StateView<'_>) -> i32 {
+  // `lua_pushthread` 已前移为 ulua-vm 安全签名(`&mut LuaState`),`&mut state`
+  // 经 DerefMut 协变;把自身线程值压到栈顶一层,无别名问题。
+  lua_pushthread(&mut state)
 }
 
 // --- Luau 沙箱 / safeenv / 匿名闭包 / null light-ud safe 门面 ---
@@ -921,7 +923,9 @@ impl Drop for LuaInner {
         // active; allocations made during teardown would otherwise be
         // accounted to it, tripping `close_state`'s debug invariant that
         // only category 0 is non-empty at shutdown.
-        lua_setmemcat(ptr, MEMCAT_MAIN as i32);
+        lua_setmemcat(&mut *ptr, MEMCAT_MAIN as i32);
+        // Safety: `lua_close` 释放整个 VM 并把 state 变为 dangling;此后本帧
+        // 不再触碰该指针(`clear_memory` 只用已捕获的整型 key)。
         lua_close(ptr)
       }
       // Now the allocator is no longer needed: drop its control block (only
