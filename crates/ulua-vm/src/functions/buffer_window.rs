@@ -1,12 +1,16 @@
 //! buffer 库的共享访问窗口：cpp `lbuflib.cpp` 里 `luaL_checkbuffer` → 偏移 →
 //! `checkRead`/`checkWrite` → 按字节 memcpy 的同形骨架。
 //!
-//! 12 个 `buffer_*` C 函数都是这一形状（只差数值语义），故把「栈窗口取数据界」「界校验
-//! 后定位」「定宽标量按字节读写」各收为单点；调用点只保留自己的实参顺序与数值处理。
+//! r11 R-C T1 窄腰：全部真实逻辑落在切片核心（[`buffer_data_ref`] / [`buffer_at_ref`] /
+//! [`buffer_read_window_ref`] 与签名安全的 [`load_scalar_ref`] / [`store_scalar_ref`]），
+//! 旧裸指针形降为委托垫片——把借用折回 `(*mut u8, usize)` / `*mut u8` 裸形仅供簇 B/C
+//! 既有调用点零改动过渡，T9 收口时随消费方迁移删除。窗口派生的唯一 unsafe 点在
+//! `lua_tobuffer_bytes_ref`（lua_tobuffer.rs），本模块不再出现任何数据窗裸构造。
 
 use core::{
   mem::size_of,
   ptr::{read_unaligned, write_unaligned},
+  slice::{from_raw_parts, from_raw_parts_mut},
 };
 
 use ulua_common::macros::luau_big_endian::LUAU_BIG_ENDIAN;
@@ -15,35 +19,70 @@ use crate::{
   functions::{
     buffer_errors::{buffer_bitcount_error, buffer_oob_error},
     buffer_swapbe::SwapBe,
-    lua_l_checkbuffer::lua_l_checkbuffer,
+    lua_l_checkbuffer::lua_l_checkbuffer_ref,
   },
   macros::isoutofbounds::isoutofbounds,
   records::lua_state::LuaState,
 };
 
-/// 栈窗口取 buffer 实参：第 `narg` 号槽的 userdata 数据块首字节与其长度。
+/// 栈窗口取 buffer 实参（切片核心）：第 `narg` 号槽 userdata 数据块的可变借用切片，
+/// 数据界即切片界——旧 `(*mut u8, usize)` 元组的出参收口形态（review.md §3）。
+/// 非 buffer 实参经 `lua_l_checkbuffer_ref` 抛 "buffer expected"、不返回。cpp laux.cpp:150。
 ///
-/// C 形 `size_t* len` 出参在此收口为元组；非 buffer 实参仍由 `luaL_checkbuffer`
-/// 经 `luaL_typeerror` 抛错、不返回（与原调用点同位置、同类别）。cpp laux.cpp:150。
+/// # Safety
+/// `l` 须为正在执行的 buffer 库 C 函数帧的存活 `LuaState`，`narg` 为其合法栈索引；
+/// 借出寿命 `'a` 由栈槽引用钉住（契约三要素见 `lua_tobuffer_bytes_ref`）。
+#[inline]
+pub(crate) unsafe fn buffer_data_ref<'a>(l: *mut LuaState, narg: i32) -> &'a mut [u8] {
+  // SAFETY: 契约与 `lua_l_checkbuffer_ref` 同（存活帧 + 合法栈索引），`&mut *l` 一次性
+  // 重借用即其期望的接收者形
+  unsafe { lua_l_checkbuffer_ref(&mut *l, narg) }
+}
+
+/// 栈窗口取 buffer 实参（旧裸指针形垫片）：折回 [`buffer_data_ref`] 切片为
+/// `(*mut u8, usize)` 元组，仅供簇 B/C 既有调用点过渡；T9 收口时随消费方迁移删除。
 ///
 /// # Safety
 /// `l` 须为正在执行的 buffer 库 C 函数帧的存活 `LuaState`，`narg` 为其合法栈索引。
 #[inline]
 pub(crate) unsafe fn buffer_data(l: *mut LuaState, narg: i32) -> (*mut u8, usize) {
-  let mut len: usize = 0;
-  // SAFETY: 契约保证 `l`/`narg` 满足 `luaL_checkbuffer` 的帧与索引约定，`len` 为本帧可写 usize 槽
-  let buf = unsafe { lua_l_checkbuffer(&mut *l, narg, &mut len) };
-  (buf.cast::<u8>(), len)
+  unsafe {
+    let bytes = buffer_data_ref(l, narg);
+    (bytes.as_mut_ptr(), bytes.len())
+  }
 }
 
-/// 界校验并定位：`[offset, offset + size)` 完整落在数据界内时返回 `buf + offset`，
+/// 界校验并定位（切片核心）：`[offset, offset + size)` 完整落在数据界内时返回子切片，
 /// 否则抛 "buffer access out of bounds"（cpp `checkRead`/`checkWrite` 的单点收口）。
 ///
-/// 负偏移按 cpp 一致方式回绕成大 `u32`，必然命中越界分支，故 `add` 只在界内到达。
+/// 负偏移按 cpp 一致方式回绕成大 `u32`，必然命中越界分支；校验通过后切片索引必然
+/// 在界内——契约违约（绕过校验）暴露为 panic 级索引，是相对旧形 UB 级 `add` 的严格改善面。
 ///
 /// # Safety
-/// `buf`/`len` 须取自 [`buffer_data`]（同一 userdata 自洽的数据界）；抛错路径要求
-/// `l` 处于可捕获错误的受保护帧。
+/// `buf` 的数据界自洽（通常取自 [`buffer_data_ref`]）；抛错路径要求 `l` 处于可捕获
+/// 错误的受保护帧。
+#[inline]
+pub(crate) unsafe fn buffer_at_ref<'a>(
+  l: *mut LuaState,
+  buf: &'a mut [u8],
+  offset: i32,
+  size: usize,
+) -> &'a mut [u8] {
+  // 纯界校验（安全 const 算术）留在 unsafe 外；仅抛错调用收进窄块。
+  if isoutofbounds(offset, buf.len(), size) {
+    // SAFETY: 契约保证 `l` 为存活调用帧，buffer_oob_error 抛错不返回
+    unsafe { buffer_oob_error(l) };
+  }
+
+  &mut buf[offset as u32 as usize..][..size]
+}
+
+/// 界校验并定位（旧裸指针形垫片）：以 `buf`/`len` 折出瞬时切片喂给 [`buffer_at_ref`]，
+/// 再把结果借用折回裸指针；T9 收口时随消费方迁移删除。
+///
+/// # Safety
+/// `buf`/`len` 须取自 [`buffer_data`]（同一 userdata 自洽的数据界，故折出的切片视图
+/// 自洽）；抛错路径要求 `l` 处于可捕获错误的受保护帧。
 #[inline]
 pub(crate) unsafe fn buffer_at(
   l: *mut LuaState,
@@ -52,44 +91,59 @@ pub(crate) unsafe fn buffer_at(
   offset: i32,
   size: usize,
 ) -> *mut u8 {
-  // 纯界校验（安全 const 算术）留在 unsafe 外；仅抛错调用与地址算术收进窄块。
-  if isoutofbounds(offset, len, size) {
-    // SAFETY: 契约保证 `l` 为存活调用帧，buffer_oob_error 抛错不返回
-    unsafe { buffer_oob_error(l) };
-  }
-
-  // SAFETY: 上方校验已排除越界，`offset as usize` 令 `add` 落在 buf..buf+len 界内
-  unsafe { buf.add(offset as usize) }
+  // SAFETY: 契约保证 `buf`/`len` 是同一存活 buffer 自洽数据界（非空、可读写字节数足额），
+  // 折出的切片与裸窗逐位同界；越界路径在 buffer_at_ref 内抛错不返回
+  unsafe { buffer_at_ref(l, from_raw_parts_mut(buf, len), offset, size).as_mut_ptr() }
 }
 
-/// 栈窗口一步到位：`buffer_data(l, 1)` + `buffer_at(.., lua_l_checkinteger(l, 2), size)`。
+/// 栈窗口一步到位（切片核心）：[`buffer_data_ref`]`(l, 1)` +
+/// [`buffer_at_ref`]`(.., l.check_integer(2), size)`。
 ///
 /// 仅适用于「先取 #1 buffer、再取 #2 偏移、随即界校验」的读取形（cpp `buffer_read*`）；
 /// 写入形需在偏移与校验之间取第 3 号实参，故仍分两步调用。
 ///
 /// # Safety
-/// 同 [`buffer_data`] 与 [`buffer_at`]：`l` 为存活 C 函数帧，索引 1 为 buffer、索引 2 为偏移。
+/// `l` 为存活 C 函数帧，索引 1 为 buffer、索引 2 为偏移（契约同 [`buffer_data_ref`]
+/// 与 [`buffer_at_ref`]）。
 #[inline]
-pub(crate) unsafe fn buffer_read_window(l: *mut LuaState, size: usize) -> *mut u8 {
-  // SAFETY: 契约保证索引 1 为 buffer（其数据界自洽）、索引 2 为读取偏移
+pub(crate) unsafe fn buffer_read_window_ref<'a>(l: *mut LuaState, size: usize) -> &'a mut [u8] {
   unsafe {
-    let (buf, len) = buffer_data(l, 1);
+    let buf = buffer_data_ref(l, 1);
     let offset = (*l).check_integer(2);
 
-    buffer_at(l, buf, len, offset, size)
+    buffer_at_ref(l, buf, offset, size)
   }
 }
 
-/// 定宽标量的按字节装载（cpp `memcpy(&val, p, sizeof(T))`；大端配置下再翻转字节序）。
-/// `read_unaligned` 与原「zeroed + copy_nonoverlapping(size_of::<T>())」逐字节等价
-/// （buffer 数据块无对齐承诺）。
+/// 栈窗口一步到位（旧裸指针形垫片）：折回 [`buffer_read_window_ref`] 的借用地址；
+/// T9 收口时随簇 C 读取方迁移删除。
 ///
 /// # Safety
-/// `src` 须指向 `size_of::<T>()` 个可读字节（由 [`buffer_at`] 的界校验保证）。
+/// 同 [`buffer_read_window_ref`]：`l` 为存活 C 函数帧，索引 1 为 buffer、索引 2 为偏移。
 #[inline]
-pub(crate) unsafe fn load_scalar<T: SwapBe>(src: *const u8) -> T {
-  // SAFETY: 契约保证 src 起 size_of::<T>() 字节可读；T 为 POD（SwapBe: Copy）
-  let mut val = unsafe { read_unaligned(src.cast::<T>()) };
+pub(crate) unsafe fn buffer_read_window(l: *mut LuaState, size: usize) -> *mut u8 {
+  // SAFETY: 借用折回裸形由 ref 核心契约（栈槽钉住存活期）支撑，观察序
+  // （typeerror→checkinteger→oob）由 ref 核心原样承载
+  unsafe { buffer_read_window_ref(l, size).as_mut_ptr() }
+}
+
+/// 定宽标量的按字节装载（切片核心，签名安全）：cpp `memcpy(&val, p, sizeof(T))` +
+/// 大端配置下 `SwapBe` 单点翻转的等价收口——buffer 规范字节布局为小端，逐字节解释与
+/// `from_le_bytes` 全域一致（`read_unaligned` 覆盖数据块的对齐不确定性，与旧形逐位同义）。
+///
+/// 入参窗口短于 `size_of::<T>()` 时以 `assert!` panic 收口——相对旧裸形契约违约的
+/// UB 是严格改善面。彻底改走 `from_le_bytes` 需为 `SwapBe` 增补关联字节数组
+/// （buffer_swapbe.rs，出 T1 文件范围），登记至 T9。
+#[inline]
+pub(crate) fn load_scalar_ref<T: SwapBe>(src: &[u8]) -> T {
+  assert!(
+    src.len() >= size_of::<T>(),
+    "load_scalar_ref: 窗口短于标量宽度"
+  );
+
+  // SAFETY: 上方断言保证 `src` 起 size_of::<T>() 字节可读；SwapBe 密封闭集全为整型
+  // （任意位模式合法），read_unaligned 无对齐承诺
+  let mut val = unsafe { read_unaligned(src.as_ptr().cast::<T>()) };
 
   if LUAU_BIG_ENDIAN {
     val = val.swap_be();
@@ -98,18 +152,43 @@ pub(crate) unsafe fn load_scalar<T: SwapBe>(src: *const u8) -> T {
   val
 }
 
-/// 定宽标量的按字节回写（[`load_scalar`] 的对偶；大端配置下先翻转字节序）。
-///
-/// # Safety
-/// `dst` 须指向 `size_of::<T>()` 个可写字节（由 [`buffer_at`] 的界校验保证）。
+/// 定宽标量的按字节回写（[`load_scalar_ref`] 的对偶，签名安全）：小端规范布局，
+/// 大端配置下经 `SwapBe` 单点翻转；窗口短于 `size_of::<T>()` 时 `assert!` panic 收口。
 #[inline]
-pub(crate) unsafe fn store_scalar<T: SwapBe>(dst: *mut u8, mut val: T) {
+pub(crate) fn store_scalar_ref<T: SwapBe>(dst: &mut [u8], mut val: T) {
+  assert!(
+    dst.len() >= size_of::<T>(),
+    "store_scalar_ref: 窗口短于标量宽度"
+  );
+
   if LUAU_BIG_ENDIAN {
     val = val.swap_be();
   }
 
-  // SAFETY: 契约保证 dst 起 size_of::<T>() 字节可写；T 为 POD（SwapBe: Copy）
-  unsafe { write_unaligned(dst.cast::<T>(), val) };
+  // SAFETY: 上方断言保证 `dst` 起 size_of::<T>() 字节可写；T 为 POD（SwapBe: Copy）
+  unsafe { write_unaligned(dst.as_mut_ptr().cast::<T>(), val) };
+}
+
+/// 定宽标量的按字节装载（旧裸指针形垫片）：以 `src` 起 `size_of::<T>()` 字节折出
+/// 切片视图喂给 [`load_scalar_ref`]；T9 收口时随簇 C 消费方迁移删除。
+///
+/// # Safety
+/// `src` 须指向 `size_of::<T>()` 个可读字节（由 [`buffer_at`] 的界校验保证）。
+#[inline]
+pub(crate) unsafe fn load_scalar<T: SwapBe>(src: *const u8) -> T {
+  // SAFETY: 契约保证 src 起 size_of::<T>() 字节可读，折出的切片视图自洽
+  unsafe { load_scalar_ref(from_raw_parts(src, size_of::<T>())) }
+}
+
+/// 定宽标量的按字节回写（[`load_scalar`] 的对偶，旧裸指针形垫片）：折出可写切片
+/// 视图喂给 [`store_scalar_ref`]；T9 收口时随簇 C 消费方迁移删除。
+///
+/// # Safety
+/// `dst` 须指向 `size_of::<T>()` 个可写字节（由 [`buffer_at`] 的界校验保证）。
+#[inline]
+pub(crate) unsafe fn store_scalar<T: SwapBe>(dst: *mut u8, val: T) {
+  // SAFETY: 契约保证 dst 起 size_of::<T>() 字节可写，折出的切片视图自洽
+  unsafe { store_scalar_ref(from_raw_parts_mut(dst, size_of::<T>()), val) }
 }
 
 /// cpp `static_assert(sizeof(T) == sizeof(StorageType))`：const 块在单态化期求值，
@@ -151,6 +230,10 @@ const _: () = assert!(
 /// readbits/writebits 共用的位窗口界校验（cpp lbuflib.cpp:300/316 两处同形检查段），
 /// 返回承载 `[bitoffset, bitoffset+bitcount)` 的字节区间；oob→bitcount→oob 的抛错顺序
 /// 保持原样（`unsigned(bitcount) > 32` 令负数位宽也命中），故实参读取留在调用点。
+///
+/// 消费方（簇 C）迁移到切片形前仍以 `buffer_data` 折出的 `len` 调本函数——签名不动，
+/// T2-T8 迁移后可与旧裸形垫片一并收敛。
+///
 /// # Safety
 /// `l` 为存活帧，`len` 取自同一 buffer 的 [`buffer_data`]。
 #[inline]
