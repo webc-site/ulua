@@ -1,3 +1,5 @@
+//! Source: `VM/src/lapi.cpp:384-393` (hand-ported)
+
 use core::ptr::eq;
 
 use crate::{
@@ -7,21 +9,25 @@ use crate::{
   type_aliases::stk_id::StkId,
 };
 
-/// # Safety
-///
-/// `l` 须为有效存活的 `LuaState`，`index1`/`index2` 须为栈内有效索引。
-pub unsafe fn lua_lessthan(l: *mut LuaState, index1: i32, index2: i32) -> i32 {
-  // SAFETY: 契约保证 `l` 为存活调用帧、索引 1/2 栈槽可读，lua_v_lessthan 与 TM 调用沿用该帧栈界
+/// `lua_lessthan` 核心（cpp `VM/src/lapi.cpp:384`）。调用序契约（正确性，非内存
+/// 安全）：`index1`/`index2` 为栈内合法（伪）索引；命中 `__lt` 元方法时可回跑
+/// Lua 代码（改栈、可抛错），须处于受保护帧。任一索引越界（硬化的
+/// `index_2_addr` 返回哨兵）直接返回 0——与 cpp 正索引越界分支逐位一致。
+pub fn lua_lessthan(l: &mut LuaState, index1: i32, index2: i32) -> i32 {
+  // SAFETY: `l` 存活（引用形保证）；index_2_addr 已对任意索引硬化（越界返回
+  // 哨兵，无栈外指针算术）；哨兵臂提前返回 0，lua_v_lessthan 仅接收非哨兵栈
+  // 槽，沿用本帧栈界与元方法回跑契约。
   unsafe {
-    let o1: StkId = index_2_addr(l, index1);
-    let o2: StkId = index_2_addr(l, index2);
+    let lp = l.as_mut_ptr();
+    let o1: StkId = index_2_addr(lp, index1);
+    let o2: StkId = index_2_addr(lp, index2);
 
     let nil_ptr = LUA_O_NILOBJECT;
 
     if eq(o1, nil_ptr) || eq(o2, nil_ptr) {
       0
     } else {
-      lua_v_lessthan(l, &*o1, &*o2)
+      lua_v_lessthan(lp, &*o1, &*o2)
     }
   }
 }

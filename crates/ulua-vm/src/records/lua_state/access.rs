@@ -88,8 +88,7 @@ impl LuaState {
 
   #[inline(always)]
   pub fn to_boolean(&self, idx: i32) -> bool {
-    // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_toboolean(self.read_ptr(), idx) != 0 }
+    lua_toboolean(self, idx) != 0
   }
 
   #[inline(always)]

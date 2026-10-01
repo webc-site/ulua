@@ -12,7 +12,7 @@ use crate::{
 pub(crate) unsafe fn lua_b_getfenv(l: *mut LuaState) -> i32 {
   unsafe {
     getfunc(l, 1);
-    if lua_iscfunction(l, -1) != 0 {
+    if lua_iscfunction(&*l, -1) != 0 {
       (*l).push_value(LUA_GLOBALSINDEX);
     } else {
       lua_getfenv(l, -1);

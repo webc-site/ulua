@@ -3,12 +3,14 @@ use crate::{
   records::lua_state::LuaState, type_aliases::stk_id::StkId,
 };
 
-/// # Safety
-/// `l` 须为存活 `LuaState` 且 `idx` 为合法（伪）索引，使 `index_2_addr` 返回指向栈上有效 TValues 的指针
-/// （随后 `iscfunction!` 读该槽判断类型）。cpp `lapi.cpp:356`。
-pub(crate) unsafe fn lua_iscfunction(l: *mut LuaState, idx: i32) -> i32 {
-  // SAFETY:index_2_addr 依赖 C API 契约 —— l 有效且 idx 为合法（伪）索引。
-  let o: StkId = unsafe { index_2_addr(l, idx) };
-  // SAFETY:o 指向栈上有效 TValue。
+/// `lua_iscfunction` 核心（cpp `lapi.cpp:356`）。只读：经硬化的
+/// `index_2_addr` 解析索引后以 `iscfunction!` 读槽判型；越界索引返回
+/// `LUA_O_NILOBJECT` 哨兵 → `iscfunction!` 判假 → 0，与 cpp 越界正索引行为
+/// 逐位一致。不写栈、不分配、不抛错；伪索引读最多物化 `global.pseudotemp`。
+pub(crate) fn lua_iscfunction(l: &LuaState, idx: i32) -> i32 {
+  // SAFETY: `l` 存活（引用形保证）；index_2_addr 已对任意 idx 硬化，`read_ptr`
+  // 只读转发契约成立（本函数不写 `l`）。
+  let o: StkId = unsafe { index_2_addr(l.read_ptr(), idx) };
+  // SAFETY:o 指向栈上有效 TValue 或只读哨兵。
   if unsafe { iscfunction!(o) } { 1 } else { 0 }
 }

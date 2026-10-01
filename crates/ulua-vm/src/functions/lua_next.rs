@@ -10,24 +10,29 @@ use crate::{
   type_aliases::stk_id::StkId,
 };
 
-/// # Safety
-/// `l` 须为存活 `LuaState`：`api_checknelems!(l,1)` 要求 `(*l).top` 前已压 1 个 key（读 `top-1`），`idx` 为合法索引且
-/// `index_2_addr` 所得槽为 table（`api_check!` is_table，`hvalue` 后存活）；`ensure_stack(l,1)` 保证有 key 时 `lua_h_next`
-/// 可写 `top` 并 `api_incr_top`、无 key 时回退 `top-1`。跨线程经 threadbarrier 同步；`lua_h_next` 可能触发 GC。
-/// cpp VM/src/lapi.cpp:1553
-pub(crate) unsafe fn lua_next(l: *mut LuaState, idx: i32) -> i32 {
+/// `lua_next` 核心（cpp `VM/src/lapi.cpp:1553`）。调用序契约（正确性，非内存安全）：
+/// 栈顶已压 1 个 key（`api_checknelems 1`，读 `top-1`）；`idx` 为指向 table 的合法
+/// （伪）索引（debug 断言 `is_table`；与 cpp 同构，release 下非 table 索引为类型
+/// 混用契约违例）；`ensure_stack(1)` 保证有 key 时 `lua_h_next` 可写 `top` 并
+/// `api_incr_top`、无 key 时回退 `top-1`；可触发 GC，须处于受保护帧；跨线程经
+/// threadbarrier 同步。
+pub(crate) fn lua_next(l: &mut LuaState, idx: i32) -> i32 {
+  // SAFETY: `l` 存活（引用形保证）；index_2_addr 已对任意索引硬化（越界返回
+  // 哨兵）；api_checknelems/api_check/lua_h_next 的指针前提由引用形、调用序契约
+  // 与 VM 栈不变式成立。
   unsafe {
-    api_checknelems!(l, 1);
-    lua_c_threadbarrier_lapi(l);
-    ensure_stack(l, 1);
-    let t: StkId = index_2_addr(l, idx);
-    api_check!(l, (*t).is_table());
+    let lp = l.as_mut_ptr();
+    api_checknelems!(lp, 1);
+    lua_c_threadbarrier_lapi(lp);
+    ensure_stack(lp, 1);
+    let t: StkId = index_2_addr(lp, idx);
+    api_check!(lp, (*t).is_table());
 
-    let more = lua_h_next(l, &*(*t).as_table_ptr(), (*l).top.sub(1));
+    let more = lua_h_next(lp, &*(*t).as_table_ptr(), (*lp).top.sub(1));
     if more != 0 {
-      api_incr_top!(l);
+      api_incr_top!(lp);
     } else {
-      (*l).top = (*l).top.sub(1);
+      (*lp).top = (*lp).top.sub(1);
     }
     more
   }
