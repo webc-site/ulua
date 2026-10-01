@@ -5,7 +5,7 @@ use ulua_cli_lib::functions::{
   safe_get_table::safe_get_table, try_replace_top_with_index::try_replace_top_with_index,
 };
 use ulua_vm::{
-  functions::{lua_checkstack::lua_checkstack, lua_pushlstring::lua_pushlstring},
+  functions::lua_checkstack::lua_checkstack,
   macros::{lua_globalsindex::LUA_GLOBALSINDEX, lua_minstack::LUA_MINSTACK},
   records::lua_state::LuaState,
 };
@@ -52,9 +52,9 @@ pub(crate) fn complete_indexer(
     let prefix = &lookup[..sep];
 
     // find the key in the table
-    // Safety: `lua_pushlstring` 为 unsafe 导出；prefix.as_ptr()/len 借自本地 &str 且
-    // lua_pushlstring 当调用拷贝。
-    unsafe { lua_pushlstring(l, prefix.as_ptr().cast(), prefix.len()) };
+    // 安全方法压键：`push_bytes` 以字节切片全长为键（无 NUL 截断/补齐），
+    // prefix 借自本帧 &str。
+    l.push_bytes(prefix.as_bytes());
     // Safety: `safe_get_table` 为 unsafe fn，前提（-2 指向栈上表、键在栈顶）恰由
     // 本轮 push 建立；其/后续 lua_remove 保持每轮 push 后移除中间键、留下查询结果。
     unsafe { safe_get_table(l, -2) };

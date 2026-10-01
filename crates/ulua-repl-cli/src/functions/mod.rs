@@ -1,6 +1,36 @@
 //! 实现层模块清单。`pub` 项一一对应 cpp `Repl.h` / `ReplRequirer.h` 的导出，
 //! `pub(crate)` 项对应同名 cpp 文件里的 `static`。
 
+use core::ptr::{null, null_mut};
+
+use ulua_vm::{macros::lua_idsize::LUA_IDSIZE, records::lua_debug::LuaDebug};
+
+/// cpp `LuaDebug ar;` / `LuaDebug ar = {}` 的零初值（profiler 采样与
+/// `stack_function_name` 共用）：整块在编译期成形，免 `mem::zeroed()` 的
+/// unsafe 与「POD 全零合法」的口头论证（与 ulua-web `run_code::ZERO_DEBUG`
+/// 同款形态）。
+///
+/// FFI: c-API 出参槽——`LuaDebug` 是 VM 的 C ABI 镜像结构（`#[repr(C)]`，出处
+/// `VM/include/lua.h:488-502`），指针字段的本体即 C 侧 `char*`/`void*`；结构
+/// 声明与 `luau_callhook` 写端均在 ulua-vm（本 crate 外），单端改「可空借用
+/// 指针」形态不成立。此处 `null()`/`null_mut()` 仅作 const POD 初值，
+/// 从不被本侧解引用。
+pub(crate) const ZERO_DEBUG: LuaDebug = LuaDebug {
+  name: null(),
+  what: null(),
+  source: null(),
+  short_src: null(),
+  linedefined: 0,
+  currentline: 0,
+  protoid: 0,
+  bytecodeid: 0,
+  nupvals: 0,
+  nparams: 0,
+  isvararg: 0,
+  userdata: null_mut(),
+  ssbuf: [0; LUA_IDSIZE as usize],
+};
+
 /// C-ABI 回调外壳单源模板。`lua_getcounters` / `lua_getcoverage` 只接受
 /// `Option<unsafe extern "C-unwind" fn(..*mut c_void..)>`（见 ulua-vm type_aliases），
 /// 而真正的计数/覆盖逻辑写在同名**安全** Rust fn 里（`coverage_callback` 还带

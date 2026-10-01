@@ -32,7 +32,7 @@ const GETINFO_SLN_OPT: &[u8] = b"sln\0";
 /// `VM/include/lua.h:488-502`），指针字段的本体即 C 侧 `char*`/`void*`，
 /// 全零初值是「出参未填即空」的 cpp 观察语义（`name/what/source/short_src`
 /// 判 null、`userdata` 宿主回调判 nullptr）。该结构声明与 `luau_callhook` 写端
-/// 均在 ulua-vm（本 crate 外），单端改 `Option<&CStr>` 形态不成立；此处
+/// 均在 ulua-vm（本 crate 外），单端改「可空借用指针」形态不成立；此处
 /// `null()`/`null_mut()` 仅作 const POD 初值，从不被本侧解引用。
 const ZERO_DEBUG: LuaDebug = LuaDebug {
   name: null(),

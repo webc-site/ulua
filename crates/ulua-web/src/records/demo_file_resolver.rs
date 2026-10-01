@@ -6,8 +6,9 @@
 //! 转发的形态属照抄 C++ vtable 的机器味结构，已合并为惯用单实现）。
 //!
 //! C++ member: `std::unordered_map<Luau::ModuleName, std::string> source;` — ported as
-//! a typed `HashMap<ModuleName, String>` (no untyped JSON)。表用 `gxhash::HashMap`
-//! （评审 r5 口径：哈希表统一 gxhash，无序语义同 std），仅 get/insert/clear、无迭代。
+//! a typed `HashMap<ModuleName, String>` (no untyped JSON)。表为 `hashbrown` +
+//! `foldhash` 固定种子别名（review.md §5：哈希统一 foldhash，无序语义同 std），
+//! 仅 get/insert/clear、无迭代。
 
 use foldhash::fast::FixedState;
 use hashbrown::HashMap as BrownHashMap;

@@ -1,4 +1,7 @@
-use core::ffi::{c_char, c_int, c_void};
+use core::{
+  ffi::{c_char, c_int, c_void},
+  ptr::from_mut,
+};
 use std::{
   fs::File,
   io::{BufWriter, Write},
@@ -90,7 +93,7 @@ pub(crate) fn coverage_dump(path: &str) {
         lua_getcoverage(
           l,
           -1,
-          &mut out as *mut BufWriter<File> as *mut c_void,
+          from_mut(&mut out).cast::<c_void>(),
           Some(coverage_callback_cb),
         )
       };

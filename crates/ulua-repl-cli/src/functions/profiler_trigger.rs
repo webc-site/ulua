@@ -1,19 +1,18 @@
 use alloc::{collections::BTreeMap, string::String};
 use core::{
   cell::RefCell,
-  mem::zeroed,
   sync::atomic::{AtomicBool, AtomicU64, Ordering},
 };
 
 use itoa::Buffer;
-use ulua_common::functions::c_str::cstr_cow;
+use ulua_common::functions::c_str::{cstr, cstr_cow};
 use ulua_vm::{
   functions::{lua_callbacks::lua_callbacks, lua_getinfo::lua_getinfo},
-  records::{lua_debug::LuaDebug, lua_state::LuaState},
+  records::lua_state::LuaState,
 };
 
 use crate::{
-  functions::state_ref::state,
+  functions::{state_ref::state, ZERO_DEBUG},
   records::profiler::{GC_STATE_COUNT, ProfilerMain, ProfilerShared},
 };
 
@@ -43,7 +42,8 @@ thread_local! {
   };
 }
 
-/// `lua_getinfo` 选项串「取 short_src+name」（NUL 结尾字节串，收口点转 C 指针）。
+/// `lua_getinfo` 选项串「取 short_src+name」（NUL 结尾字节串，经 `cstr` 收口点
+/// 转 C 指针，review.md §10：不散落 `.as_ptr().cast()`）。
 const GETINFO_SN_OPT: &[u8] = b"sn\0";
 
 /// 采样栈快照：`lua_getinfo` 逐级上爬拼 `src,line,linedefined;…` 串（真 FFI 边
@@ -51,17 +51,16 @@ const GETINFO_SN_OPT: &[u8] = b"sn\0";
 ///
 /// `l` 为 VM 线程当前有效状态；`stack` 必须是 `G_PROFILER_MAIN` 的
 /// `stack_scratch` 字段在本帧的独占借用（thread_local 单线程所有），回调期间
-/// 无其它别名——两者均以借用类型表达，本函数体内只剩 `lua_getinfo` 导出与
-/// `zeroed()` 初值两处 `unsafe`。
+/// 无其它别名——两者均以借用类型表达，本函数体内只剩 `lua_getinfo` 导出一处
+/// `unsafe`（what 串经 `cstr` 门面收口）。
 fn collect_stack(l: &mut LuaState, gc: i32, stack: &mut String) {
   stack.clear();
   if gc > 0 {
     stack.push_str("GC,GC,");
   }
 
-  // C++ `LuaDebug ar = {}`：纯 POD，全零是合法初值。
-  // Safety: LuaDebug 为 POD，zeroed() 是合法全零初值。
-  let mut ar: LuaDebug = unsafe { zeroed() };
+  // C++ `LuaDebug ar = {}`：编译期零初值（见 functions::ZERO_DEBUG）
+  let mut ar = ZERO_DEBUG;
   // 一枚复用的 itoa 栈缓冲（采样热路径，免 core::fmt 开销与逐级重初始化）
   let mut num = Buffer::new();
   // cpp `for (level = 0; lua_getinfo(...); level++)`：open-ended range 即同形，
@@ -69,8 +68,8 @@ fn collect_stack(l: &mut LuaState, gc: i32, stack: &mut String) {
   for level in 0.. {
     // Safety: `lua_getinfo` 为 unsafe 导出；`&mut ar` 以 `&mut T → *mut T` 隐式转换
     // 交出本地独占出参，getinfo 成功时把 short_src/name 填为 NUL 结尾串（串缓冲由
-    // 调用帧持有，本循环窗口内有效）。
-    if unsafe { lua_getinfo(l, level, GETINFO_SN_OPT.as_ptr().cast(), &mut ar) } == 0 {
+    // 调用帧持有，本循环窗口内有效）；what 为 NUL 结尾静态字节串（`cstr` 门面）。
+    if unsafe { lua_getinfo(l, level, cstr(GETINFO_SN_OPT), &mut ar) } == 0 {
       break;
     }
 
