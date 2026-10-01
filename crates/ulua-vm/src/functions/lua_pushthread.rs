@@ -15,6 +15,6 @@ pub fn lua_pushthread(l: &mut LuaState) -> i32 {
     ensure_stack(l.as_mut_ptr(), 1);
     setthvalue!(l, l.top, l.as_mut_ptr());
     api_incr_top!(l);
-    ((*(*l).global).mainthread == l.as_mut_ptr()) as i32
+    ((*l.global).mainthread == l.as_mut_ptr()) as i32
   }
 }

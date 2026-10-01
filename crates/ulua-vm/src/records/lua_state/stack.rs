@@ -137,23 +137,17 @@ impl LuaState {
 
   #[inline(always)]
   pub fn remove(&mut self, idx: i32) {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 的有效指针；其余前提（合法索引/栈界）
-    // 与被转发的 `pub unsafe fn` 的 `# Safety` 文档一致，由本方法调用方按文档保证。
-    unsafe { lua_remove(self.as_mut_ptr(), idx) }
+    lua_remove(self, idx)
   }
 
   #[inline(always)]
   pub fn insert(&mut self, idx: i32) {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 的有效指针；其余前提（合法索引/栈界）
-    // 与被转发的 `pub unsafe fn` 的 `# Safety` 文档一致，由本方法调用方按文档保证。
-    unsafe { lua_insert(self.as_mut_ptr(), idx) }
+    lua_insert(self, idx)
   }
 
   #[inline(always)]
   pub fn replace(&mut self, idx: i32) {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 的有效指针；其余前提（合法索引/栈界）
-    // 与被转发的 `pub unsafe fn` 的 `# Safety` 文档一致，由本方法调用方按文档保证。
-    unsafe { lua_replace(self.as_mut_ptr(), idx) }
+    lua_replace(self, idx)
   }
 
   #[inline(always)]

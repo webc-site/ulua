@@ -49,10 +49,16 @@ pub(crate) unsafe fn pseudo_2_addr(l: *mut LuaState, idx: i32) -> StkId {
       }
       _ => {
         let func = curr_func!(l);
-        let idx = LUA_GLOBALSINDEX - idx;
-        if idx <= (*func).nupvalues as i32 {
+        // cpp `LUA_GLOBALSINDEX - idx`：合法 upvalue 伪索引（`lua_upvalueindex(i)`，
+        // i≥1）折叠出 1..=255 的 i，行为不变；对垃圾超负 idx 该减法是符号溢出 UB
+        // （溢出后 `i <= nupvalues` 判真、`upvals[i-1]` 出负下标）。
+        // DELIBERATE DEVIATION（cpp lapi.cpp:103-105）：改 wrapping 折叠 +
+        // `1..=nupvalues` 闭区间判定，溢出折叠出的非正值/越界值一律返回
+        // `LUA_O_NILOBJECT` 哨兵；合法 upvalue 索引行为与 cpp 逐位一致。
+        let i = LUA_GLOBALSINDEX.wrapping_sub(idx);
+        if (1..=(*func).nupvalues as i32).contains(&i) {
           let c = &mut (*func).inner.c;
-          c.upvals.as_mut_ptr().add((idx - 1) as usize)
+          c.upvals.as_mut_ptr().add((i - 1) as usize)
         } else {
           LUA_O_NILOBJECT as *mut TValue
         }
