@@ -12,7 +12,7 @@
 
 use alloc::{format, string::String, vec::Vec};
 use core::cmp::Reverse;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicU16, AtomicU64, Ordering};
 
 use ulua_common::enums::luau_opcode::LuauOpcode;
 
@@ -22,17 +22,21 @@ const NO_PREV: u16 = 256;
 /// 每 opcode 的执行次数，下标即 opcode 字节。
 static OP_COUNT: [AtomicU64; 256] = [const { AtomicU64::new(0) }; 256];
 
-/// `(前驱, 后继)` 转移次数；行优先，`prev == NO_PREV` 行是本层首条指令。
+/// `(前驱, 后继)` 转移次数；行优先，`prev == NO_PREV` 行是整次 VM 进入的第一条指令。
 static TRANS: [AtomicU64; 257 * 256] = [const { AtomicU64::new(0) }; 257 * 256];
 
-/// 记录一条派发。`prev` 由调用方（一层循环激活）按局部变量持有：把它塞进全局会让
-/// 每条指令多一次 load/store，而转移统计只需要「本层内上一条是什么」。
+/// 全局前驱：转移统计要覆盖的是**动态指令流**，而 `vm-opcount` 下每条指令都经
+/// [`crate::functions::luau_execute::tier_cold`] 的一次独立激活（热层出口被本特性
+/// 编译掉，`vm_next!` 逐条 `become` 回冷层），按激活局部变量持有前驱会把所有边都记成
+/// `<entry>`，等于没有转移数据。测量路径多一次 relaxed swap 可接受。
+static PREV: AtomicU16 = AtomicU16::new(NO_PREV);
+
+/// 记录一条派发。
 #[inline(always)]
-pub fn record(op: u8, prev: &mut u16) {
+pub fn record(op: u8) {
   OP_COUNT[usize::from(op)].fetch_add(1, Ordering::Relaxed);
-  let idx = usize::from(*prev) * 256 + usize::from(op);
-  TRANS[idx].fetch_add(1, Ordering::Relaxed);
-  *prev = u16::from(op);
+  let prev = PREV.swap(u16::from(op), Ordering::Relaxed);
+  TRANS[usize::from(prev) * 256 + usize::from(op)].fetch_add(1, Ordering::Relaxed);
 }
 
 /// 输出直方图（按次数降序，附单次与累计占比）与转移表里次数最多的一批边。

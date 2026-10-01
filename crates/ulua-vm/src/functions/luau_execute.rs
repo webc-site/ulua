@@ -2542,10 +2542,6 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
     // 契约的方法（见 records/vm_frame.rs），臂内不再手写。
     let frame = VmFrame::new(l);
 
-    // vm-opcount：本层激活内的上一条派发 opcode（256 表「无前驱」）。
-    #[cfg(feature = "vm-opcount")]
-    let mut prev_op: u16 = 256;
-
     // C++ `dispatch:` label; `VM_NEXT()` == `continue 'dispatch`.
     //
     // C++ `VM_CONTINUE(op)` re-dispatches WITHOUT refetching `*pc`. 原先用
@@ -2585,7 +2581,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
 
       'continue_op: loop {
         #[cfg(feature = "vm-opcount")]
-        op_count::record(op, &mut prev_op);
+        op_count::record(op);
 
         // C++ 跳转表盲目索引 opcode 字节，越界时靠 `LUAU_UNREACHABLE()` 兜底
         // （等价 UB）。此处用 `From<u8>`：合法 opcode（< LopCount）结果与
