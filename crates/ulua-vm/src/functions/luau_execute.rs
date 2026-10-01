@@ -1041,6 +1041,59 @@ unsafe fn fuse_succ_fornloop(
   }
 }
 
+/// 热后继 `LOP_SETTABLE` 的尾融合：只吃数组快路，命中后顺势接 [`fuse_succ_fornloop`]。
+///
+/// 实测边权（`vm-opcount` 转移表）：`LOADB → SETTABLE` 在 `nsieve` 1.19M/5.65M ≈ 21%
+/// （`isprime[i] = false`），`ADD → SETTABLE` 在 `matmul` 2.74M/17.2M ≈ 16%（`c[i][j] = s`）。
+///
+/// 判定与 [`h_settable`] 同构，只有一处顺序差别：写屏障的判据 [`luaC_barriert_pending!`]
+/// 提到写入**之前**。该判据只看表的着色与栈上那个值，先判后写与先写后判观察不到差别；
+/// 换来的是「未命中时 `pc` 完全不推进」——需要屏障的那条指令整个交回环里的 SETTABLE 臂
+/// 重走（含 [`s_settable_bar`] 那次可能 call 的慢路），链里因此不留 call。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的派发 handler 或融合链）
+///
+/// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
+#[inline(always)]
+unsafe fn fuse_succ_settable(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  base: StkId,
+  cl: *mut Closure,
+) -> *const Instruction {
+  // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
+  unsafe {
+    let insn = *pc;
+    if luau_insn_op(insn) != LuauOpcode::LOP_SETTABLE as u32 {
+      return pc;
+    }
+    if !fuse_ok(l) {
+      return pc;
+    }
+
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+    if !((*rb).is_table() && (*rc).is_number()) {
+      return pc;
+    }
+    let h = (*rb).as_table_ptr();
+    let indexd = (*rc).as_number();
+    let index = indexd as i32;
+    if !((index as u32).wrapping_sub(1) < (*h).sizearray as u32
+      && (*h).metatable.is_null()
+      && (*h).readonly == 0
+      && index as f64 == indexd)
+      || luaC_barriert_pending!(h, ra)
+    {
+      return pc;
+    }
+    setobj2t!(l, (*h).array.add((index - 1) as u32 as usize), ra);
+
+    fuse_succ_fornloop(l, pc.add(1), base, cl)
+  }
+}
+
 /// C++ `reentry:` 标签的状态来源：解释器循环局部量全部从 `L->ci` 重取（原生返回、
 /// 协程恢复、native-call 之后都是这个口径），不与调用点的旧值掺混。
 ///
@@ -1378,6 +1431,9 @@ unsafe fn h_loadb(
     pc = pc.add(luau_insn_c(insn) as usize);
     let p = cl_proto!(cl);
     LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+    // LOADB 的跳转偏移已在上面并进来，尾融合从新 pc 起（`LOADB → SETTABLE` 是 `nsieve`
+    // 内层 `isprime[i] = false` 的那条边）
+    pc = fuse_succ_settable(l, pc, base, cl);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -2207,6 +2263,8 @@ unsafe fn h_add(
     // fast-path: number
     if (*rb).is_number() && (*rc).is_number() {
       setnvalue!(ra, (*rb).as_number() + (*rc).as_number());
+      // `ADD → SETTABLE` 是 `matmul` 内层 `c[i][j] = s` 的那条边
+      pc = fuse_succ_settable(l, pc, base, cl);
       vm_next!(pc, base, k, cl);
     } else if (*rb).is_vector() && (*rc).is_vector() {
       let vb = frame.lanes(rb);
