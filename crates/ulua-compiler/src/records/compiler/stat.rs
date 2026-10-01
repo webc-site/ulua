@@ -1448,25 +1448,26 @@ impl Compiler {
     threshold_base: i32,
     threshold_max_boost: i32,
   ) -> bool {
-    let (Constant::Number(from), Constant::Number(to)) = (
+    // cpp Compiler.cpp:4190-4203：from/to/step 任一非数值常量、或 trip count
+    // 无解，均落到同一条 remark——三处复读收成单点上报。step 与 cpp 同为
+    // 无条件求值（get_constant 纯查表，无副作用差异）。
+    let unroll = match (
       self.get_constant(stat_ref.from),
       self.get_constant(stat_ref.to),
-    ) else {
-      return self.reject_with_remark(format_args!("loop unroll failed: invalid iteration count"));
-    };
-
-    let step = match stat_ref.step.to_option() {
-      Some(s) => match self.get_constant(s) {
-        Constant::Number(v) => v,
-        _ => {
-          return self
-            .reject_with_remark(format_args!("loop unroll failed: invalid iteration count"));
-        }
+      stat_ref.step.to_option().map(|s| self.get_constant(s)),
+    ) {
+      (Constant::Number(from), Constant::Number(to), step) => match step {
+        Some(Constant::Number(v)) => Some((from, to, v)),
+        Some(_) => None,
+        None => Some((from, to, 1.0)),
       },
-      None => 1.0,
-    };
+      _ => None,
+    }
+    .and_then(|(from, to, step)| {
+      get_trip_count(from, to, step).map(|trip_count| (trip_count, from, step))
+    });
 
-    let Some(trip_count) = get_trip_count(from, to, step) else {
+    let Some((trip_count, from, step)) = unroll else {
       return self.reject_with_remark(format_args!("loop unroll failed: invalid iteration count"));
     };
 
