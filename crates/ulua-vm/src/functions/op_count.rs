@@ -11,7 +11,8 @@
 //! 构建不产生任何指令。
 
 use alloc::{format, string::String, vec::Vec};
-use core::sync_atomic::{AtomicU64, Ordering};
+use core::cmp::Reverse;
+use std::sync::atomic::{AtomicU64, Ordering};
 
 use ulua_common::enums::luau_opcode::LuauOpcode;
 
@@ -37,7 +38,7 @@ pub fn record(op: u8, prev: &mut u16) {
 /// 输出直方图（按次数降序，附单次与累计占比）与转移表里次数最多的一批边。
 pub fn dump() -> String {
   let mut counts: Vec<(u64, usize)> = (0..256).map(|op| (op_count(op), op)).collect();
-  counts.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+  counts.sort_unstable_by_key(|x| Reverse(x.0));
   let total: u64 = counts.iter().map(|(n, _)| *n).sum();
 
   let mut out = String::new();
@@ -63,7 +64,7 @@ pub fn dump() -> String {
       }
     }
   }
-  edges.sort_unstable_by(|a, b| b.0.cmp(&a.0));
+  edges.sort_unstable_by_key(|x| Reverse(x.0));
   for (n, prev, op) in edges.iter().take(40) {
     let from = if *prev == NO_PREV {
       String::from("<entry>")

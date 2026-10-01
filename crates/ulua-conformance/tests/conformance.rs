@@ -35,6 +35,9 @@ mod feedback_vector;
 #[path = "conformance/gc.rs"]
 /// GC、引用与分配失败用例
 mod gc;
+#[path = "conformance/hot_dispatch.rs"]
+/// 热层派发（become 尾调用链）定向用例
+mod hot_dispatch;
 #[path = "conformance/language.rs"]
 /// 语言基础特性 fixture 用例
 mod language;
