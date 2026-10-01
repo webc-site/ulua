@@ -12,7 +12,13 @@ pub fn lua_tovector(l: &LuaState, idx: i32) -> *const f32 {
   let o = index_2_addr(l, idx);
 
   // SAFETY:o 为栈上有效 TValue 或只读哨兵槽，仅读值。
-  match unsafe { ValueView::from_tvalue(&*o) } {
+  let view = unsafe { ValueView::from_tvalue(&*o) };
+
+  // C ABI 镜像形（cpp `lapi.cpp:567` 返回 `const float*`）：引用→分量数组指针的
+  // 唯一边界降级点。指针与来源栈槽同失效窗（栈重分配/覆写即失效），消费侧一律
+  // 经 `vector_shared::vector_components` / `from_raw_parts` 收成分量窗口
+  // （review §2「unsafe 只留边界」），本函数体内不再多出裸指针算术。
+  match view {
     ValueView::Vector(v) => v.as_ptr(),
     _ => null(),
   }
