@@ -11,6 +11,8 @@
 use std::{env::args, fs::File, io::Read, panic::set_hook, process::exit, ptr::null_mut};
 
 use ulua_common::records::f_value::set_luau_bool_flags;
+#[cfg(feature = "vm-opcount")]
+use ulua_vm::functions::op_count;
 use ulua_vm::{
   enums::lua_type::LuaType,
   functions::{
@@ -94,6 +96,11 @@ fn main() {
     for i in 1..=n {
       print_result(t, i);
     }
+
+    // vm-opcount：把本趟运行的动态 opcode 直方图 + 转移表打到 stdout。热点集合
+    // （luau_execute.rs 的 HOT_ARMS）与热/冷邻接代价都据此判读，不靠猜。
+    #[cfg(feature = "vm-opcount")]
+    print!("{}", op_count::dump());
   }
 }
 

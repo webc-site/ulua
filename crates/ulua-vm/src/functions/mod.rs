@@ -672,6 +672,8 @@ pub mod newpage;
 pub mod nospecials;
 pub mod numusearray;
 pub mod numusehash;
+#[cfg(feature = "vm-opcount")]
+pub mod op_count;
 pub mod os_clock;
 pub mod os_date;
 pub mod os_difftime;
