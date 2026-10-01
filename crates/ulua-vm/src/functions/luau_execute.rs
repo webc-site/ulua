@@ -947,6 +947,53 @@ unsafe fn fuse_succ_gettable(
   }
 }
 
+/// 热后继 `LOP_ADDK` 的尾融合：只吃数值快路那一支，命中后顺势再接
+/// [`fuse_succ_gettable`]，于是 `ADDK → GETTABLE → JUMPIFNOT` 仍是一次派发。
+///
+/// 实测边权（`vm-opcount` 转移表）：`MODK → ADDK` 在 `life` 2.09M/13.3M ≈ 16%；
+/// `JUMPIFNOT → ADDK` 在 `microbig_gettable` 1.84M/16.3M ≈ 11%、`micro_gettable`
+/// 277K/2.46M ≈ 11%。配上 [`fuse_succ_gettable`] 已覆盖的前驱，`life` 内层
+/// `MODK → ADDK → GETTABLE → JUMPIFNOT` 的四指令环从 4 次派发压到 1 次，
+/// `micro*_gettable` 的 `FORNLOOP → GETTABLE → JUMPIFNOT → ADDK` 同理。
+///
+/// 与 [`h_addk`] 数值快路**逐位一致**：`rb` 非数值（`__add` / coercion 慢路）时 `pc`
+/// 原样交回，由环里的 ADDK 臂重走，不存在重复副作用。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的派发 handler）
+///
+/// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基，
+/// `k` 为当前 proto 常量数组基址。
+#[inline(always)]
+unsafe fn fuse_succ_addk(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) -> *const Instruction {
+  // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
+  unsafe {
+    // 判定顺序同 [`fuse_succ_gettable`]：opcode 不匹配就立刻交回，许可判据延后才付
+    let insn = *pc;
+    if luau_insn_op(insn) != LuauOpcode::LOP_ADDK as u32 {
+      return pc;
+    }
+    if !fuse_ok(l) {
+      return pc;
+    }
+
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    if !(*rb).is_number() {
+      return pc;
+    }
+    let kv = VM_KV!(luau_insn_c(insn), cl, k);
+    setnvalue!(ra, (*rb).as_number() + (*kv).as_number());
+
+    fuse_succ_gettable(l, pc.add(1), base, cl)
+  }
+}
+
 /// C++ `reentry:` 标签的状态来源：解释器循环局部量全部从 `L->ci` 重取（原生返回、
 /// 协程恢复、native-call 之后都是这个口径），不与调用点的旧值掺混。
 ///
@@ -1655,6 +1702,7 @@ unsafe fn h_modk(
       let nb = (*rb).as_number();
       let nk = (*kv).as_number();
       setnvalue!(ra, luai_nummod(nb, nk));
+      pc = fuse_succ_addk(l, pc, base, k, cl);
       vm_next!(pc, base, k, cl);
     }
     // 非数字 rb：`__mod`/ coercion 慢路交 [`s_modk`]，本函数保持叶函数
@@ -2551,16 +2599,17 @@ unsafe fn h_jumpifnot(
     pc = pc.add(1);
     let ra = VM_REG!(luau_insn_a(insn), l, base);
 
-    // 见 [`jump_split!`]：跳转与顺序两条路各带一份独立取指尾调用
-    jump_split!(
-      l,
-      pc,
-      cl,
-      (*ra).is_falsy(),
-      luau_insn_d(insn) as isize,
-      base,
-      k
-    );
+    // 与 [`jump_split!] 同形：跳转与顺序两条路各带一份独立的续延出口（各自的取指
+    // 尾部分支预测上下文独立）。差别只在顺序路尾部多试一次 ADDK 尾融合——
+    // `JUMPIFNOT → ADDK` 是 `micro*_gettable` 内层的热线。
+    if (*ra).is_falsy() {
+      let npc = pc.offset(luau_insn_d(insn) as isize);
+      let p = cl_proto!(cl);
+      LUAU_ASSERT!((npc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+      vm_next!(npc, base, k, cl);
+    }
+    pc = fuse_succ_addk(l, pc, base, k, cl);
+    vm_next!(pc, base, k, cl);
   }
 }
 
