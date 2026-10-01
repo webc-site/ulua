@@ -559,17 +559,19 @@ fn parser_class_indexer() {
 
   let declared_extern_type = as_node_at::<AstStatDeclareExternType, _>(&root.body, 0)
     .expect("body[0] 应为 AstStatDeclareExternType");
-  let indexer_slot = OptNode::from_ptr(declared_extern_type.indexer);
-  let indexer = indexer_slot.get().expect("indexer 必须存在");
+  let indexer = declared_extern_type
+    .indexer
+    .get()
+    .expect("indexer 必须存在");
 
-  let index_type = OptNode::from_ptr(indexer.index_type);
-  let index_type_ref = index_type
+  let index_type_ref = indexer
+    .index_type
     .as_node::<AstTypeReference>()
     .expect("indexType 应为 AstTypeReference");
   assert_eq!(index_type_ref.name.as_str(), Some("string"));
 
-  let result_type = OptNode::from_ptr(indexer.result_type);
-  let result_type_ref = result_type
+  let result_type_ref = indexer
+    .result_type
     .as_node::<AstTypeReference>()
     .expect("resultType 应为 AstTypeReference");
   assert_eq!(result_type_ref.name.as_str(), Some("number"));
@@ -589,7 +591,7 @@ fn parser_class_indexer() {
 
   let error_declared_extern_type = as_node_at::<AstStatDeclareExternType, _>(&error_root.body, 0)
     .expect("body[0] 应为 AstStatDeclareExternType");
-  assert!(OptNode::from_ptr(error_declared_extern_type.indexer).is_some());
+  assert!(error_declared_extern_type.indexer.get().is_some());
 }
 #[test]
 fn parser_class_is_still_contextual() {

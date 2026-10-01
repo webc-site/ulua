@@ -1629,13 +1629,14 @@ impl<'a, W: Writer> Printer<'a, W> {
         self.visualize_type_pack_annotation(a.return_types, false, cst_node.is_none(), false);
       }
       AstTypeRef::Table(a) => {
-        let indexer = slot_opt(a.indexer);
-        let index_type = indexer
-          .and_then(|idx| slot_opt(idx.index_type))
-          .and_then(|t| match t.as_type_ref() {
-            AstTypeRef::Reference(r) => Some(r),
-            _ => None,
-          });
+        let indexer = a.indexer.get();
+        let index_type =
+          indexer
+            .map(|idx| idx.index_type.get())
+            .and_then(|t| match t.as_type_ref() {
+              AstTypeRef::Reference(r) => Some(r),
+              _ => None,
+            });
 
         self.writer.symbol(SYM_LBRACE);
 

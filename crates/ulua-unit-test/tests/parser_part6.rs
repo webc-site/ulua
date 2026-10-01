@@ -280,17 +280,16 @@ fn parser_short_array_types() {
     .expect("annotation 应为 AstTypeTable");
 
   assert_eq!(0, annotation.props.size);
-  let indexer_slot = OptNode::from_ptr(annotation.indexer);
-  let indexer = indexer_slot.get().expect("indexer 必须存在");
+  let indexer = annotation.indexer.get().expect("indexer 必须存在");
 
-  let index_ty = OptNode::from_ptr(indexer.index_type);
-  let index_type = index_ty
+  let index_type = indexer
+    .index_type
     .as_node::<AstTypeReference>()
     .expect("indexType 应为 AstTypeReference");
   assert_eq!(index_type.name, "number");
 
-  let result_ty = OptNode::from_ptr(indexer.result_type);
-  let result_type = result_ty
+  let result_type = indexer
+    .result_type
     .as_node::<AstTypeReference>()
     .expect("resultType 应为 AstTypeReference");
   assert_eq!(result_type.name, "string");

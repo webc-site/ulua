@@ -1,6 +1,6 @@
 use crate::records::{
   ast_array::AstArray, ast_table_indexer::AstTableIndexer, ast_table_prop::AstTableProp,
-  ast_type::AstType, ast_type_table::AstTypeTable, location::Location,
+  ast_type::AstType, ast_type_table::AstTypeTable, location::Location, node_handle::OptNode,
 };
 
 impl_ast_node_new!(
@@ -8,5 +8,5 @@ impl_ast_node_new!(
   AstType,
   location: Location,
   props: AstArray<AstTableProp>,
-  indexer: *mut AstTableIndexer,
+  indexer: OptNode<AstTableIndexer>,
 );

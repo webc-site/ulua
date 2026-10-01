@@ -179,10 +179,10 @@ impl TypeMapVisitor<'_, '_> {
     &self,
     expr: impl Into<Node<AstExpr>>,
   ) -> Option<&'static AstTableIndexer> {
-    // 表类型节点的 indexer 槽可缺席（cpp 存 null）：`ast_slot_ref` 归一为 None。
+    // 表类型节点的 indexer 槽可缺席（cpp 存 null）：句柄 `get` 归一为 None。
     self
       .try_get_table_type(expr)
-      .and_then(|table_ty| ast_slot_ref(table_ty.indexer))
+      .and_then(|table_ty| table_ty.indexer.get())
   }
 }
 
@@ -381,18 +381,32 @@ impl<'a, 'b> AstVisitor for TypeMapVisitor<'a, 'b> {
           if let Some(indexer) = self.try_get_table_indexer(arg) {
             let number_ty = self.builtin_types.number_node();
             self.record_resolved_type_ast_local_ast_type(vars[0], Some(number_ty));
-            self
-              .record_resolved_type_ast_local_ast_type(vars[1], Node::try_new(indexer.result_type));
+            self.record_resolved_type_ast_local_ast_type(
+              vars[1],
+              Some(Node::from_ast_handle(indexer.result_type)),
+            );
           }
         } else if is_matching_global(self.globals, ast_slot_ref(call.func), "pairs")
           && let Some(indexer) = self.try_get_table_indexer(arg)
         {
-          self.record_resolved_type_ast_local_ast_type(vars[0], Node::try_new(indexer.index_type));
-          self.record_resolved_type_ast_local_ast_type(vars[1], Node::try_new(indexer.result_type));
+          self.record_resolved_type_ast_local_ast_type(
+            vars[0],
+            Some(Node::from_ast_handle(indexer.index_type)),
+          );
+          self.record_resolved_type_ast_local_ast_type(
+            vars[1],
+            Some(Node::from_ast_handle(indexer.result_type)),
+          );
         }
       } else if let Some(indexer) = self.try_get_table_indexer(value_ptr) {
-        self.record_resolved_type_ast_local_ast_type(vars[0], Node::try_new(indexer.index_type));
-        self.record_resolved_type_ast_local_ast_type(vars[1], Node::try_new(indexer.result_type));
+        self.record_resolved_type_ast_local_ast_type(
+          vars[0],
+          Some(Node::from_ast_handle(indexer.index_type)),
+        );
+        self.record_resolved_type_ast_local_ast_type(
+          vars[1],
+          Some(Node::from_ast_handle(indexer.result_type)),
+        );
       }
     }
 
@@ -512,7 +526,7 @@ impl<'a, 'b> AstVisitor for TypeMapVisitor<'a, 'b> {
     // 单次查找同时完成判空与取结果类型，替代原先查两遍 try_get_table_indexer
     if let Some(indexer) = self.try_get_table_indexer(expr) {
       // 先取句柄，避免把表节点借用带进随后 &mut self 的记录调用。
-      let result_type = Node::try_new(indexer.result_type);
+      let result_type = Some(Node::from_ast_handle(indexer.result_type));
       self.record_resolved_type_ast_expr_ast_type(base_key(node), result_type);
     }
 

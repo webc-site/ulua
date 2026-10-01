@@ -43,8 +43,12 @@ pub struct Node<T> {
 impl<T> Node<T> {
   /// 从 arena 分配结果建槽:cpp 中 `new` 失败即中止,分配器返回的槽恒非空,
   /// 违例(逻辑 bug)以 panic 拦截,不再让 null 渗透进类型。
+  ///
+  /// pub 供下游(analysis 的 rehydration 等)以「`Allocator::alloc` 的返回值」
+  /// 构造句柄化字段——与 `OptNode::from_ptr` 同为裸指针进句柄的桥接口,契约
+  /// 即「`ptr` 恒为非空 arena 槽位」。
   #[inline]
-  pub(crate) fn from_raw(ptr: *mut T) -> Self {
+  pub fn from_raw(ptr: *mut T) -> Self {
     Self {
       ptr: NonNull::new(ptr).expect("arena 分配槽位恒非空(分配失败即中止)"),
     }
@@ -447,6 +451,17 @@ impl<T> From<Node<T>> for *mut T {
   #[inline]
   fn from(node: Node<T>) -> Self {
     node.as_ptr()
+  }
+}
+
+/// 非空句柄升格为可空句柄(parser 的「至多一个 indexer」局部槽定形进字段的
+/// 一步收口,`None` 即 cpp 的 `nullptr`)。
+impl<T> From<Node<T>> for OptNode<T> {
+  #[inline]
+  fn from(node: Node<T>) -> Self {
+    Self {
+      ptr: Some(node.ptr),
+    }
   }
 }
 
