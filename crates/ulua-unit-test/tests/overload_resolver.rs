@@ -6,7 +6,26 @@
 
 extern crate alloc;
 
+use ulua_analysis::records::type_arena::TypeArena;
 use ulua_ast::records::location::Location;
+use ulua_unit_test::records::overload_resolver_fixture::OverloadResolverFixture;
+
+/// `fixture.arena` 裸句柄的本文件局部可变借用门面（解引用收口到本函数一处）。
+///
+/// # Safety 契约（支撑函数体内唯一的 `&mut *` 解引用）
+/// - `OverloadResolverFixture::new` 令 `arena` 恒指向 `arena_` Box 保活的 TypeArena
+///   堆块：Box 堆地址不随 fixture 移动，测试期内存活且非空；
+/// - 返回借用生命周期与 `&mut fixture` 一致，借用规则天然排除并存别名；调用方
+///   不得让本借用跨越 fixture 其他裸指针字段（如 `empty_set`）的别名写而存活。
+///
+/// 不改 `OverloadResolverFixture.arena` 字段签名：该 `pub` 指针字段被
+/// `src/methods/overload_resolver_fixture_*.rs`（`arena_view` 等）多处消费，
+/// 外溢面超出本测试文件，按任务边界以局部门面收口而不外溢改。
+fn arena_of(fixture: &mut OverloadResolverFixture) -> &mut TypeArena {
+  // Safety: 依上述契约——arena 指向存活且非空的 TypeArena 堆块，`&mut fixture`
+  // 入参保证本借用存续期内对该 arena 独占。
+  unsafe { &mut *fixture.arena }
+}
 
 // Source: `tests/OverloadResolver.test.cpp:107-115`
 #[test]
@@ -275,36 +294,26 @@ fn new_select() {
   let any_type_pack = fixture.builtin_types.any_type_pack;
 
   let number_or_string = fixture.join(number, string);
-  // Safety: fixture.arena 指向 fixture.arena_ 持有的 TypeArena，测试期内存活。
   let generic_as: TypePackId =
-    unsafe { (*fixture.arena).add_type_pack_t(GenericTypePack::new_name(String::from("A"))) };
+    arena_of(&mut fixture).add_type_pack_t(GenericTypePack::new_name(String::from("A")));
 
   // select: <A...>(number | string, ...A) -> ...any
-  // Safety: fixture.arena 指向 fixture.arena_ 持有的 TypeArena，测试期内存活；
-  // 独占 arena 顺序追加，无其他活动借用。
-  let arg_types: TypePackId = unsafe {
-    (*fixture.arena)
-      .add_type_pack_vector_type_id_optional_type_pack_id(vec![number_or_string], Some(generic_as))
-  };
-  // Safety: 同上契约；泛型参数为本帧先前在同一 arena 构造的存活 id。
-  let select_ty: TypeId = unsafe {
-    (*fixture.arena).add_type(FunctionType::new_with_generics(
-      Vec::new(),
-      vec![generic_as],
-      arg_types,
-      any_type_pack,
-      None,
-      false,
-    ))
-  };
+  let arg_types: TypePackId = arena_of(&mut fixture)
+    .add_type_pack_vector_type_id_optional_type_pack_id(vec![number_or_string], Some(generic_as));
+  // 泛型参数为本帧先前在同一 arena 构造的存活 id。
+  let select_ty: TypeId = arena_of(&mut fixture).add_type(FunctionType::new_with_generics(
+    Vec::new(),
+    vec![generic_as],
+    arg_types,
+    any_type_pack,
+    None,
+    false,
+  ));
 
-  // Safety: fixture.arena 为 fixture 保有的 arena 指针（存活、非空），按被调 unsafe 例程的 `# Safety` 契约调用
-  let args: TypePackId = unsafe {
-    (*fixture.arena).add_type_pack_vector_type_id_optional_type_pack_id(
-      vec![number_or_string],
-      Some(any_type_pack),
-    )
-  };
+  let args: TypePackId = arena_of(&mut fixture).add_type_pack_vector_type_id_optional_type_pack_id(
+    vec![number_or_string],
+    Some(any_type_pack),
+  );
 
   let resolution = fixture.resolver.resolve_overload(
     select_ty,
@@ -350,9 +359,8 @@ fn new_pass_table_with_indexer() {
       root_scope,
       TableState::Sealed,
     );
-  // Safety: fixture.arena 指向 fixture.arena_ 独占保有的 TypeArena（测试期内
-  // 存活、无并发访问）；本行为独占 arena 的顺序追加，值已在安全区构造。
-  let any_number_table: TypeId = unsafe { (*fixture.arena).add_type(indexed_table) };
+  // 本行为独占 arena 的顺序追加，值已在安全区构造（`arena_of` 契约）。
+  let any_number_table: TypeId = arena_of(&mut fixture).add_type(indexed_table);
 
   let table_to_table = fixture.fn_type(&[any_number_table], &[any_number_table]);
   let args = fixture.pack_initializer_list_type_id(&[any_number_table]);
@@ -382,7 +390,7 @@ fn generic_higher_order_function_called_improperly() {
     records::{
       function_type::FunctionType, generic_type::GenericType, generic_type_pack::GenericTypePack,
     },
-    type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
+    type_aliases::type_id::TypeId,
   };
   use ulua_unit_test::records::overload_resolver_fixture::OverloadResolverFixture;
 
@@ -393,39 +401,33 @@ fn generic_higher_order_function_called_improperly() {
   let number = fixture.builtin_types.number_type;
 
   // apply: <A, B..., C...>((A, B...) -> C..., A) -> C...
-  // Safety: fixture.arena 为 fixture 保有的 arena 指针（存活、非空），按被调 unsafe 例程的 `# Safety` 契约调用
-  let (generic_a, generic_bs, generic_cs): (TypeId, TypePackId, TypePackId) = unsafe {
-    let generic_a = (*fixture.arena).add_type(GenericType::generic_type_name_polarity(
-      &String::from("A"),
-      Polarity::Mixed,
-    ));
-    let generic_bs = (*fixture.arena).add_type_pack_t(GenericTypePack::new_name(String::from("B")));
-    let generic_cs = (*fixture.arena).add_type_pack_t(GenericTypePack::new_name(String::from("C")));
-    (generic_a, generic_bs, generic_cs)
-  };
+  let generic_a = arena_of(&mut fixture).add_type(GenericType::generic_type_name_polarity(
+    &String::from("A"),
+    Polarity::Mixed,
+  ));
+  let generic_bs =
+    arena_of(&mut fixture).add_type_pack_t(GenericTypePack::new_name(String::from("B")));
+  let generic_cs =
+    arena_of(&mut fixture).add_type_pack_t(GenericTypePack::new_name(String::from("C")));
 
-  // Safety: fixture.arena 为 fixture 保有的 arena 指针（存活、非空），按被调 unsafe 例程的 `# Safety` 契约调用
-  let function_argument: TypeId = unsafe {
-    let arg_types = (*fixture.arena)
+  let function_argument: TypeId = {
+    let arg_types = arena_of(&mut fixture)
       .add_type_pack_vector_type_id_optional_type_pack_id(vec![generic_a], Some(generic_bs));
-    (*fixture.arena).add_type(FunctionType::function_type_new(
+    arena_of(&mut fixture).add_type(FunctionType::function_type_new(
       arg_types, generic_cs, None, false,
     ))
   };
 
   let apply_args = fixture.pack_initializer_list_type_id(&[function_argument, generic_a]);
 
-  // Safety: fixture.arena 为 fixture 保有的 arena 指针（存活、非空），按被调 unsafe 例程的 `# Safety` 契约调用
-  let apply_ty: TypeId = unsafe {
-    (*fixture.arena).add_type(FunctionType::new_with_generics(
-      vec![generic_a],
-      vec![generic_bs, generic_cs],
-      apply_args,
-      generic_cs,
-      None,
-      false,
-    ))
-  };
+  let apply_ty: TypeId = arena_of(&mut fixture).add_type(FunctionType::new_with_generics(
+    vec![generic_a],
+    vec![generic_bs, generic_cs],
+    apply_args,
+    generic_cs,
+    None,
+    false,
+  ));
 
   let call_args_pack =
     fixture.pack_initializer_list_type_id(&[fixture.number_number_to_number, number]);

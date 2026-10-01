@@ -27,15 +27,16 @@
 use ulua_code_gen::{
   functions::{
     create_native_proto_exec_data_native_proto_exec_data::create_native_proto_exec_data_u32_u32,
-    get_native_proto_exec_data_header_native_proto_exec_data::{
-      get_native_proto_exec_data_header, get_native_proto_exec_data_header_mut,
-    },
+    get_native_proto_exec_data_header_native_proto_exec_data::get_native_proto_exec_data_header,
   },
   records::{
     code_allocator::CodeAllocator, native_module::NativeModule, native_module_ref::NativeModuleRef,
     shared_code_allocator::SharedCodeAllocator,
   },
-  type_aliases::{module_id::ModuleId, native_proto_exec_data_ptr::NativeProtoExecDataPtr},
+  type_aliases::{
+    module_id::ModuleId,
+    native_proto_exec_data_ptr::{NativeProtoExecDataHeaderExt, NativeProtoExecDataPtr},
+  },
 };
 
 /// 构造以 `first_byte` 开头、其余为 0 的 16 字节 ModuleId（cpp `ModuleId{0x0a}`）。
@@ -104,22 +105,24 @@ unsafe fn module_from_raw<'a>(module: *const NativeModule) -> &'a NativeModule {
 }
 
 /// 按 cpp oracle 布局写 exec data 头部（header 紧邻 u32 数组之前的分配段）。
-fn set_proto_bytecode_id(proto: NativeProtoExecDataPtr, bytecode_id: u32) {
-  // Safety: proto 为 create_native_proto_exec_data_u32_u32 产出的存活 execdata 块，
-  // get_native_proto_exec_data_header_mut 的地址推导落在同一分配内（crate 布局契约）。
-  unsafe { (*get_native_proto_exec_data_header_mut(proto.as_ptr())).bytecode_id = bytecode_id };
+///
+/// header 读写经 `NativeProtoExecDataHeaderExt::header_mut` 安全门面
+/// （unsafe 收口在 trait 实现一处），本函数不再手写裸指针解引用。
+fn set_proto_bytecode_id(mut proto: NativeProtoExecDataPtr, bytecode_id: u32) {
+  proto.header_mut().bytecode_id = bytecode_id;
 }
 
 /// 按 cpp 形态构造 exec data：写 header 的 bytecode_id / entry_offset_or_address
 /// 并覆写前两个指令字。
 fn make_proto(bytecode_id: u32, entry: *const u8, words: [u32; 2]) -> NativeProtoExecDataPtr {
-  let proto = create_native_proto_exec_data_u32_u32(words.len() as u32, 0);
-  // Safety: proto 为本帧新建的 2 指令字 execdata 块；header 地址推导按 crate 布局
-  // 契约落在分配内；两字写入界内（bytecode_instruction_count == words.len()）。
+  let mut proto = create_native_proto_exec_data_u32_u32(words.len() as u32, 0);
+  // header 两字段经安全门面写入（借用随本语句结束，指令字覆写在其后顺序发生）。
+  let header = proto.header_mut();
+  header.bytecode_id = bytecode_id;
+  header.entry_offset_or_address = entry;
+  // Safety: proto 为本帧新建、未发布的 2 指令字 execdata 块（构造方独占），
+  // 覆写 `words.len()` 个字恰落在 bytecode_instruction_count 界内。
   unsafe {
-    let header = &mut *get_native_proto_exec_data_header_mut(proto.as_ptr());
-    header.bytecode_id = bytecode_id;
-    header.entry_offset_or_address = entry;
     for (index, word) in words.iter().enumerate() {
       proto.as_ptr().add(index).write(*word);
     }
