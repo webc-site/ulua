@@ -2,8 +2,9 @@ use core::mem::size_of;
 
 use ulua_vm::records::lua_state::LuaState;
 
-use crate::common::{
-  functions::{k_int_64_tag::K_INT_64_TAG, safe_api::{newuserdatatagged, state_mut}},
+use crate::common::functions::{
+  k_int_64_tag::K_INT_64_TAG,
+  safe_api::{newuserdatatagged, state_mut},
 };
 pub(crate) fn push_int_64(l: *mut LuaState, value: i64) {
   let p = newuserdatatagged(l, size_of::<i64>(), K_INT_64_TAG);

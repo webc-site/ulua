@@ -5,9 +5,7 @@ use ulua_vm::{
   records::lua_state::LuaState,
 };
 
-use crate::common::functions::safe_api::{
-  callyieldable, l_checkstack, pcallyieldable, state_mut,
-};
+use crate::common::functions::safe_api::{callyieldable, l_checkstack, pcallyieldable, state_mut};
 /// # Safety
 ///
 /// Pointer arguments must be valid, aligned, and properly initialized.

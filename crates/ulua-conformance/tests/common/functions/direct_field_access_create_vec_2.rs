@@ -3,7 +3,10 @@ use core::{ffi::c_int, mem::size_of};
 use ulua_vm::records::lua_state::LuaState;
 
 use crate::common::{
-  functions::{direct_field_access_k_tag_vec_2::K_TAG_VEC2, safe_api::{newuserdatatagged, state_mut}},
+  functions::{
+    direct_field_access_k_tag_vec_2::K_TAG_VEC2,
+    safe_api::{newuserdatatagged, state_mut},
+  },
   records::vec_2_direct_field_access_test::Vec2,
 };
 /// # Safety

@@ -1,15 +1,14 @@
 use core::ffi::c_int;
 
-use ulua_vm::{
-  records::lua_state::LuaState,
-  type_aliases::lua_c_function::LuaCFunction,
-};
+use ulua_vm::{records::lua_state::LuaState, type_aliases::lua_c_function::LuaCFunction};
 
 use crate::common::functions::{
-  multiple_yields::multiple_yields, multiple_yields_continuation::multiple_yields_continuation,
+  multiple_yields::multiple_yields,
+  multiple_yields_continuation::multiple_yields_continuation,
   multiple_yields_with_nested_call::multiple_yields_with_nested_call,
   multiple_yields_with_nested_call_continuation::multiple_yields_with_nested_call_continuation,
-  passthrough_call::passthrough_call, passthrough_call_arg_reuse::passthrough_call_arg_reuse,
+  passthrough_call::passthrough_call,
+  passthrough_call_arg_reuse::passthrough_call_arg_reuse,
   passthrough_call_arg_reuse_continuation::passthrough_call_arg_reuse_continuation,
   passthrough_call_continuation::passthrough_call_continuation,
   passthrough_call_more_results::passthrough_call_more_results,
@@ -20,7 +19,8 @@ use crate::common::functions::{
   passthrough_call_with_state_continuation::passthrough_call_with_state_continuation,
   pcall_then_x_call::pcall_then_x_call,
   pcall_then_x_call_continuation::pcall_then_x_call_continuation,
-  safe_api::{pushcclosurek, state_mut}, single_yield::single_yield,
+  safe_api::{pushcclosurek, state_mut},
+  single_yield::single_yield,
   single_yield_continuation::single_yield_continuation,
 };
 

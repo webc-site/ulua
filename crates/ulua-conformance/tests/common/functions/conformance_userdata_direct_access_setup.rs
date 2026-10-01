@@ -5,11 +5,15 @@ use ulua_vm::records::lua_state::LuaState;
 use crate::common::{
   functions::{
     conformance_userdata_direct_access_useratom::conformance_userdata_direct_access_useratom,
-    setup_userdata_helpers::setup_userdata_helpers, setup_vector_helpers::setup_vector_helpers,
-    vec_2_direct_index::vec_2_direct_index, vec_2_direct_namecall::vec_2_direct_namecall,
     safe_api::{callbacks_mut, registeruserdatadirectaccess},
-    vec_2_direct_newindex::vec_2_direct_newindex, vertex_direct_index::vertex_direct_index,
-    vertex_direct_namecall::vertex_direct_namecall, vertex_direct_newindex::vertex_direct_newindex,
+    setup_userdata_helpers::setup_userdata_helpers,
+    setup_vector_helpers::setup_vector_helpers,
+    vec_2_direct_index::vec_2_direct_index,
+    vec_2_direct_namecall::vec_2_direct_namecall,
+    vec_2_direct_newindex::vec_2_direct_newindex,
+    vertex_direct_index::vertex_direct_index,
+    vertex_direct_namecall::vertex_direct_namecall,
+    vertex_direct_newindex::vertex_direct_newindex,
   },
   records::userdata_tags::{K_TAG_VEC2, K_TAG_VERTEX},
 };

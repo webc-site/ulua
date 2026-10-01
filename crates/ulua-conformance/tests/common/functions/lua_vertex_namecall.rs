@@ -2,7 +2,9 @@
 use ulua_vm::{macros::lua_l_error::luaL_error, records::lua_state::LuaState};
 
 use crate::common::functions::{
-  cstr_text::cstr_text, lua_vertex_clone::lua_vertex_clone, lua_vertex_get::lua_vertex_get,
+  cstr_text::cstr_text,
+  lua_vertex_clone::lua_vertex_clone,
+  lua_vertex_get::lua_vertex_get,
   safe_api::{namecallatom, state_mut},
 };
 /// # Safety

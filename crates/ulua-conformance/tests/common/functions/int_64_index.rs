@@ -2,7 +2,10 @@ use core::{ffi::c_int, str::from_utf8};
 
 use ulua_vm::{macros::lua_l_error::luaL_error, records::lua_state::LuaState};
 
-use crate::common::functions::{k_int_64_tag::K_INT_64_TAG, safe_api::{state_mut, touserdatatagged}};
+use crate::common::functions::{
+  k_int_64_tag::K_INT_64_TAG,
+  safe_api::{state_mut, touserdatatagged},
+};
 /// # Safety
 ///
 /// Pointer arguments must be valid, aligned, and properly initialized.

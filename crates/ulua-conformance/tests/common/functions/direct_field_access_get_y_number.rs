@@ -1,6 +1,8 @@
 use core::ffi::c_void;
 
-use crate::common::{functions::safe_api::udfield_setnumber, records::vec_2_direct_field_access_test::Vec2};
+use crate::common::{
+  functions::safe_api::udfield_setnumber, records::vec_2_direct_field_access_test::Vec2,
+};
 /// # Safety
 ///
 /// Pointer arguments must be valid, aligned, and properly initialized.

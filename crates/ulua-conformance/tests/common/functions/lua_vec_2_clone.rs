@@ -1,8 +1,7 @@
 use ulua_vm::records::lua_state::LuaState;
 
 use crate::common::{
-  functions::{lua_vec_2_push::lua_vec_2_push},
-  records::vec_2_conformance_ir_hooks::Vec2,
+  functions::lua_vec_2_push::lua_vec_2_push, records::vec_2_conformance_ir_hooks::Vec2,
 };
 
 pub(crate) fn lua_vec_2_clone(l: *mut LuaState, self_ptr: *mut Vec2) -> i32 {

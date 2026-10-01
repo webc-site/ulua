@@ -4,7 +4,8 @@ use ulua_vm::records::lua_state::LuaState;
 
 use crate::common::{
   functions::{
-    get_first_luau_frame_debug_info::get_first_luau_frame_debug_info, safe_api::{brk, isyieldable},
+    get_first_luau_frame_debug_info::get_first_luau_frame_debug_info,
+    safe_api::{brk, isyieldable},
   },
   records::conformance_tag_method_error_state::CONFORMANCE_TAG_METHOD_ERROR_STATE,
 };

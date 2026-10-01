@@ -1,7 +1,9 @@
 use ulua_vm::{macros::lua_l_error::luaL_error, records::lua_state::LuaState};
 
 use crate::common::functions::{
-  cstr_text::cstr_text, lua_vector_cross::lua_vector_cross, lua_vector_dot::lua_vector_dot,
+  cstr_text::cstr_text,
+  lua_vector_cross::lua_vector_cross,
+  lua_vector_dot::lua_vector_dot,
   safe_api::{namecallatom, state_mut},
 };
 

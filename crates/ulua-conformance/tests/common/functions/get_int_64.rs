@@ -1,6 +1,9 @@
 use ulua_vm::records::lua_state::LuaState;
 
-use crate::common::functions::{k_int_64_tag::K_INT_64_TAG, safe_api::{isnumber, state_mut, touserdatatagged}};
+use crate::common::functions::{
+  k_int_64_tag::K_INT_64_TAG,
+  safe_api::{isnumber, state_mut, touserdatatagged},
+};
 
 pub(crate) fn get_int_64(l: *mut LuaState, idx: i32) -> i64 {
   // 按 tag 取参数 `idx` 的 userdata 数据指针，tag 不匹配时返回 null。

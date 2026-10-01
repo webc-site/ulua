@@ -1,6 +1,5 @@
 use crate::common::{
-  functions::safe_api::resume,
-  records::feedback_vector_fixture::FeedbackVectorFixture,
+  functions::safe_api::resume, records::feedback_vector_fixture::FeedbackVectorFixture,
 };
 impl<'a> FeedbackVectorFixture<'a> {
   pub fn run(&mut self) {

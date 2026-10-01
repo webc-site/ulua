@@ -1,9 +1,7 @@
-use core::ffi::c_int;
+use core::{ffi::c_int, str::from_utf8};
 
 use ulua_compiler::records::compile_options::CompileOptions;
-use ulua_vm::{
-  macros::lua_environindex::LUA_ENVIRONINDEX, records::lua_state::LuaState,
-};
+use ulua_vm::{macros::lua_environindex::LUA_ENVIRONINDEX, records::lua_state::LuaState};
 
 use crate::common::functions::safe_api::{load_source, setsafeenv, state_mut};
 
@@ -17,7 +15,7 @@ pub unsafe extern "C-unwind" fn lua_loadstring(l: *mut LuaState) -> c_int {
   // 把加载环境切回非沙箱（loadstring 需读全局）。
   setsafeenv(l, LUA_ENVIRONINDEX, false);
 
-  let chunkname_str = core::str::from_utf8(chunkname).unwrap_or("");
+  let chunkname_str = from_utf8(chunkname).unwrap_or("");
   // 编译产物由 `load_source` 内部生成（缺省编译选项与 cpp 的 null options 同形），
   // 加载结果非零不 panic（cpp 语义）。
   let result = load_source(l, chunkname_str, source, &mut CompileOptions::default());

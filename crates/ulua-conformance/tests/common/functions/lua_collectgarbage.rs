@@ -1,12 +1,10 @@
 use core::{ffi::c_int, ptr::null};
 
-use ulua_vm::{
-  enums::lua_gc_op::LuaGcOp,
-  records::lua_state::LuaState,
-};
+use ulua_vm::{enums::lua_gc_op::LuaGcOp, records::lua_state::LuaState};
 
 use crate::common::functions::{
-  cstr::cstr, safe_api::{gc, l_checkoption, l_optinteger, state_mut},
+  cstr::cstr,
+  safe_api::{gc, l_checkoption, l_optinteger, state_mut},
 };
 pub(crate) extern "C-unwind" fn lua_collectgarbage(l: *mut LuaState) -> i32 {
   let opts = [

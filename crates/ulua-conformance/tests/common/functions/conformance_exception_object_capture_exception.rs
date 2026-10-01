@@ -9,7 +9,10 @@ use ulua_vm::{
 };
 
 use crate::common::{
-  functions::{cstr_text::cstr_text, safe_api::{is_lfunction, newthread, state_mut}},
+  functions::{
+    cstr_text::cstr_text,
+    safe_api::{is_lfunction, newthread, state_mut},
+  },
   records::exception_result::ExceptionResult,
 };
 pub fn conformance_exception_object_capture_exception(

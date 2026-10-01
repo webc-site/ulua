@@ -1,6 +1,9 @@
 use ulua_vm::records::{lua_debug::LuaDebug, lua_state::LuaState};
 
-use crate::common::functions::{cstr_text::cstr_raw, safe_api::{getinfo, zero_debug}};
+use crate::common::functions::{
+  cstr_text::cstr_raw,
+  safe_api::{getinfo, zero_debug},
+};
 pub fn get_first_luau_frame_debug_info(l: *mut LuaState) -> Option<LuaDebug> {
   // 自 0 层起向上扫栈，直到找到首个 Lua 帧或栈尽（`getinfo` 返回 0 即 None）；
   // `level` 是栈层级，本帧局部递增。

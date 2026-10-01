@@ -6,7 +6,8 @@ use ulua_vm::{
 use crate::common::functions::{
   c_yielding_iterator::c_yielding_iterator,
   c_yielding_iterator_continuation::c_yielding_iterator_continuation,
-  safe_api::{pushcclosurek, state_mut}, setup_native_helpers::setup_native_helpers,
+  safe_api::{pushcclosurek, state_mut},
+  setup_native_helpers::setup_native_helpers,
 };
 /// # Safety
 ///
@@ -18,12 +19,6 @@ pub unsafe extern "C-unwind" fn conformance_iter_setup(l: *mut LuaState) {
   let iterator: LuaCFunction = Some(c_yielding_iterator);
   let continuation: LuaContinuation = Some(c_yielding_iterator_continuation);
 
-  pushcclosurek(
-    l,
-    iterator,
-    Some(b"cYieldingIterator\0"),
-    0,
-    continuation,
-  );
+  pushcclosurek(l, iterator, Some(b"cYieldingIterator\0"), 0, continuation);
   state_mut(l).set_global_str("cYieldingIterator");
 }

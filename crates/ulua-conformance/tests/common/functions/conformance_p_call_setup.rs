@@ -1,7 +1,8 @@
 use ulua_vm::records::lua_state::LuaState;
 
 use crate::common::functions::{
-  conformance_p_call_resume_error::conformance_p_call_resume_error, cxxthrow::cxxthrow,
+  conformance_p_call_resume_error::conformance_p_call_resume_error,
+  cxxthrow::cxxthrow,
   safe_api::{pushcclosurek, state_mut},
 };
 /// # Safety

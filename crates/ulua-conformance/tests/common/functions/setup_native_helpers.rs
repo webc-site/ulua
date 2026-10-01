@@ -1,12 +1,12 @@
 use core::ffi::c_int;
 
 use ulua_code_gen::functions::luau_codegen_supported::luau_codegen_supported;
-use ulua_vm::{
-  records::lua_state::LuaState,
-  type_aliases::lua_c_function::LuaCFunction,
-};
+use ulua_vm::{records::lua_state::LuaState, type_aliases::lua_c_function::LuaCFunction};
 
-use crate::common::functions::{run_conformance::codegen, safe_api::{g_isnative, pushcclosurek, state_mut}};
+use crate::common::functions::{
+  run_conformance::codegen,
+  safe_api::{g_isnative, pushcclosurek, state_mut},
+};
 unsafe extern "C-unwind" fn is_native(l: *mut LuaState) -> c_int {
   state_mut(l).push_boolean(g_isnative(l, 1) != 0);
   1

@@ -1,8 +1,7 @@
 use core::ffi::c_int;
 
-use ulua_vm::{macros::lua_multret::LUA_MULTRET, records::lua_state::LuaState};
-
 use ulua_compiler::records::compile_options::CompileOptions;
+use ulua_vm::{macros::lua_multret::LUA_MULTRET, records::lua_state::LuaState};
 
 use crate::common::functions::safe_api::{load_source, pcall};
 
@@ -14,12 +13,7 @@ use crate::common::functions::safe_api::{load_source, pcall};
 /// 字节整段交给 `compile`，编译产物为本帧 owned `Vec<u8>`。cpp `tests/DirectFieldAccess.test.cpp:50` `runCode`
 pub fn run_code(l: *mut LuaState, source: &str) -> c_int {
   // 缺省编译选项对应 cpp 传 nullptr options；"test" 是字面量 chunk 名。
-  let load_result = load_source(
-    l,
-    "test",
-    source.as_bytes(),
-    &mut CompileOptions::default(),
-  );
+  let load_result = load_source(l, "test", source.as_bytes(), &mut CompileOptions::default());
   if load_result != 0 {
     return -1;
   }

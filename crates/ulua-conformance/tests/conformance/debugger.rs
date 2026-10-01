@@ -6,7 +6,6 @@
 // `lua_resume` 的 from 参数传 `null_mut()` 表示「无 host 上下文/无父线程」，
 // 与 cpp 原样一致，不可安全化。
 
-
 #[test]
 fn conformance_coverage() {
   use ulua_compiler::records::compile_options::CompileOptions;
@@ -45,7 +44,10 @@ fn conformance_debug() {
 
 #[test]
 fn conformance_debug_api() {
-  use crate::common::functions::{new_state::new_state, safe_api::{getinfo, state_mut, zero_debug}};
+  use crate::common::functions::{
+    new_state::new_state,
+    safe_api::{getinfo, state_mut, zero_debug},
+  };
 
   let global_state = new_state();
   let l = global_state.as_ptr();
@@ -120,7 +122,8 @@ fn conformance_interrupt() {
   use crate::common::{
     functions::{
       conformance_interrupt_interrupt::conformance_interrupt_interrupt,
-      default_compile_options::default_compile_options, run_conformance::run_conformance,
+      default_compile_options::default_compile_options,
+      run_conformance::run_conformance,
       safe_api::{callbacks_mut, l_checklstring, newthread, pop, resume, state_mut},
     },
     records::conformance_interrupt_state::{
@@ -221,7 +224,7 @@ fn conformance_interrupt() {
     // `t` 出错后栈顶为错误字符串，读 -1 的字节切片（非串即抛）；
     // `cstr_text` 借用仍存活的 VM 栈缓冲并立即转 owned；`pop`
     // 回收父栈上的线程引用。
-    let error = String::from_utf8_lossy(&l_checklstring(t, -1)).into_owned();
+    let error = String::from_utf8_lossy(l_checklstring(t, -1)).into_owned();
     assert!(
       error.contains("timeout"),
       "expected timeout error, got {error}"
@@ -250,8 +253,9 @@ fn conformance_interrupt_error_inspection() {
       compile_and_load::compile_and_load,
       conformance_interrupt_error_inspection_interrupt::conformance_interrupt_error_inspection_interrupt,
       conformance_interrupt_inspection_hook::conformance_interrupt_inspection_hook,
-      new_state::new_state, openlibs_and_sandbox::openlibs_and_sandbox,
-      safe_api::{callhook, callbacks_mut, getinfo, resume, zero_debug},
+      new_state::new_state,
+      openlibs_and_sandbox::openlibs_and_sandbox,
+      safe_api::{callbacks_mut, callhook, getinfo, resume, zero_debug},
     },
     records::conformance_interrupt_error_inspection_state::CONFORMANCE_INTERRUPT_ERROR_INSPECTION_STATE,
   };

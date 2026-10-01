@@ -19,7 +19,9 @@ fn native_code_size(source: &str, options: &CompilationOptions) -> usize {
   use ulua_code_gen::records::compilation_stats::CompilationStats;
 
   use crate::common::functions::{
-    compile_and_load::compile_and_load, new_state::new_state, safe_api::{codegen_compile, codegen_create},
+    compile_and_load::compile_and_load,
+    new_state::new_state,
+    safe_api::{codegen_compile, codegen_create},
   };
 
   let global_state = new_state();
@@ -94,8 +96,11 @@ fn conformance_codegen_randomize_functional_correctness() {
   use ulua_code_gen::records::compilation_options::CompilationOptions;
 
   use crate::common::functions::{
-    compile_and_load::compile_and_load, cstr_text::lua_tostring_text, new_state::new_state,
-    openlibs_and_sandbox::openlibs_and_sandbox, run_conformance::codegen_skipped,
+    compile_and_load::compile_and_load,
+    cstr_text::lua_tostring_text,
+    new_state::new_state,
+    openlibs_and_sandbox::openlibs_and_sandbox,
+    run_conformance::codegen_skipped,
     safe_api::{codegen_compile, codegen_create, pcall, state_mut},
   };
 
@@ -161,9 +166,12 @@ fn conformance_ir_instruction_limit() {
 
   use crate::common::{
     functions::{
-      compile_and_load::compile_and_load, default_codegen_options::default_codegen_options,
-      new_state::new_state, openlibs_and_sandbox::openlibs_and_sandbox,
-      run_conformance::codegen_skipped, safe_api::{codegen_compile, codegen_create},
+      compile_and_load::compile_and_load,
+      default_codegen_options::default_codegen_options,
+      new_state::new_state,
+      openlibs_and_sandbox::openlibs_and_sandbox,
+      run_conformance::codegen_skipped,
+      safe_api::{codegen_compile, codegen_create},
     },
     type_aliases::scoped_fast_int::ScopedFastInt,
   };
@@ -353,9 +361,12 @@ fn conformance_native_attribute() {
   };
 
   use crate::common::functions::{
-    compile_and_load::compile_and_load, default_codegen_options::default_codegen_options,
-    new_state::new_state, openlibs_and_sandbox::openlibs_and_sandbox,
-    run_conformance::codegen_skipped, safe_api::{codegen_compile, codegen_create},
+    compile_and_load::compile_and_load,
+    default_codegen_options::default_codegen_options,
+    new_state::new_state,
+    openlibs_and_sandbox::openlibs_and_sandbox,
+    run_conformance::codegen_skipped,
+    safe_api::{codegen_compile, codegen_create},
   };
 
   if codegen_skipped() {
@@ -551,8 +562,10 @@ fn conformance_large_module_a64() {
 
   use crate::common::{
     functions::{
-      compile_and_load::compile_and_load, default_codegen_options::default_codegen_options,
-      default_compile_options::default_compile_options, new_state::new_state,
+      compile_and_load::compile_and_load,
+      default_codegen_options::default_codegen_options,
+      default_compile_options::default_compile_options,
+      new_state::new_state,
       run_conformance::codegen,
       safe_api::{assembly, codegen_compile, codegen_create, openlibs, resume, state_mut},
     },

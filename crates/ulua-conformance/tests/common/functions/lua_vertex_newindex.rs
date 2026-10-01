@@ -1,7 +1,9 @@
 use ulua_vm::{macros::lua_l_error::luaL_error, records::lua_state::LuaState};
 
 use crate::common::functions::{
-  lua_vec_2_get::lua_vec_2_get, lua_vertex_get::lua_vertex_get, safe_api::{l_checkvector, state_mut},
+  lua_vec_2_get::lua_vec_2_get,
+  lua_vertex_get::lua_vertex_get,
+  safe_api::{l_checkvector, state_mut},
 };
 /// # Safety
 ///

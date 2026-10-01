@@ -8,8 +8,7 @@ use ulua_vm::{macros::lua_l_error::luaL_error, records::lua_state::LuaState};
 use crate::common::{
   enums::direct_slot::DirectSlot,
   functions::{
-    lua_vec_2_push::lua_vec_2_push, safe_api::state_mut,
-    update_direct_slot::update_direct_slot,
+    lua_vec_2_push::lua_vec_2_push, safe_api::state_mut, update_direct_slot::update_direct_slot,
   },
   records::vec_2_conformance_ir_hooks::Vec2,
 };

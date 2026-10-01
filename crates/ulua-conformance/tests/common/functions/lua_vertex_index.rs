@@ -3,7 +3,11 @@ use core::{ffi::c_int, mem::size_of};
 use ulua_vm::{macros::lua_l_error::luaL_error, records::lua_state::LuaState};
 
 use crate::common::{
-  functions::{lua_vec_2_push::lua_vec_2_push, lua_vertex_get::lua_vertex_get, safe_api::{pushvector3, state_mut}},
+  functions::{
+    lua_vec_2_push::lua_vec_2_push,
+    lua_vertex_get::lua_vertex_get,
+    safe_api::{pushvector3, state_mut},
+  },
   records::vertex::Vertex,
 };
 /// # Safety

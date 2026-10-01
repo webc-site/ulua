@@ -1,7 +1,7 @@
 use ulua_vm::records::lua_state::LuaState;
 
-use crate::common::{
-  functions::{lua_vec_2_get::lua_vec_2_get, lua_vertex_push::lua_vertex_push, safe_api::l_checkvector},
+use crate::common::functions::{
+  lua_vec_2_get::lua_vec_2_get, lua_vertex_push::lua_vertex_push, safe_api::l_checkvector,
 };
 /// # Safety
 ///

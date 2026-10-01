@@ -1,6 +1,9 @@
 use core::{ffi::c_int, sync::atomic::Ordering};
 
-use ulua_vm::{luaL_error, records::{lua_debug::LuaDebug, lua_state::LuaState}};
+use ulua_vm::{
+  luaL_error,
+  records::{lua_debug::LuaDebug, lua_state::LuaState},
+};
 
 use crate::common::{
   functions::safe_api::{getinfo, yield_, zero_debug},

@@ -6,7 +6,8 @@ use ulua_vm::{
 };
 
 use crate::common::functions::{
-  lua_vector_dot::lua_vector_dot, safe_api::{l_checkvector, pushcclosurek, pushvector3, pushvector4, state_mut},
+  lua_vector_dot::lua_vector_dot,
+  safe_api::{l_checkvector, pushcclosurek, pushvector3, pushvector4, state_mut},
 };
 
 /// 分量平方和——保持 cpp 的固定累加次序（v0²+v1²+v2²，四维再 +v3²），

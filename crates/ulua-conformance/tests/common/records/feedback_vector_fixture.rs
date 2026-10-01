@@ -2,12 +2,10 @@ use core::ptr::null_mut;
 
 use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
 use ulua_common::{fflag, fint};
-use ulua_vm::{
-  records::{closure::Closure, lua_state::LuaState, proto::Proto},
-};
+use ulua_vm::records::{closure::Closure, lua_state::LuaState, proto::Proto};
 
 use crate::common::{
-  functions::alloc::alloc as luau_alloc, functions::safe_api::newstate,
+  functions::{alloc::alloc as luau_alloc, safe_api::newstate},
   records::state_ref::StateRef,
   type_aliases::{scoped_fast_flag::ScopedFastFlag, scoped_fast_int::ScopedFastInt},
 };

@@ -1,6 +1,4 @@
-use ulua_vm::{
-  macros::luai_maxcstack::LUAI_MAXCSTACK, records::lua_state::LuaState,
-};
+use ulua_vm::{macros::luai_maxcstack::LUAI_MAXCSTACK, records::lua_state::LuaState};
 
 use crate::common::functions::safe_api::{l_checkstack, state_mut};
 /// # Safety

@@ -1,12 +1,10 @@
 use core::ffi::c_int;
 
-use ulua_vm::{
-  macros::lua_vector_size::LUA_VECTOR_SIZE,
-  records::lua_state::LuaState,
-};
+use ulua_vm::{macros::lua_vector_size::LUA_VECTOR_SIZE, records::lua_state::LuaState};
 
 use crate::common::functions::{
-  lua_vector_index::lua_vector_index, lua_vector_namecall::lua_vector_namecall,
+  lua_vector_index::lua_vector_index,
+  lua_vector_namecall::lua_vector_namecall,
   safe_api::{pushcclosurek, pushvector3, pushvector4, settable, state_mut},
 };
 /// # Safety

@@ -1,15 +1,23 @@
 // 边界契约测试：null 系 c-API 合法实参（既有约定 review.md §2）
-use ulua_vm::{
-  records::lua_state::LuaState,
-  type_aliases::lua_c_function::LuaCFunction,
-};
+use ulua_vm::{records::lua_state::LuaState, type_aliases::lua_c_function::LuaCFunction};
 
 use crate::common::functions::{
-  int_64_add::int_64_add, int_64_ctor::int_64_ctor, int_64_div::int_64_div,
-  int_64_eq::int_64_eq, int_64_idiv::int_64_idiv, int_64_index::int_64_index, int_64_le::int_64_le,
-  int_64_lt::int_64_lt, int_64_mod::int_64_mod, int_64_mul::int_64_mul,
-  int_64_newindex::int_64_newindex, int_64_pow::int_64_pow, int_64_sub::int_64_sub,
-  int_64_tostring::int_64_tostring, int_64_unm::int_64_unm, safe_api::{pushcclosurek, state_mut},
+  int_64_add::int_64_add,
+  int_64_ctor::int_64_ctor,
+  int_64_div::int_64_div,
+  int_64_eq::int_64_eq,
+  int_64_idiv::int_64_idiv,
+  int_64_index::int_64_index,
+  int_64_le::int_64_le,
+  int_64_lt::int_64_lt,
+  int_64_mod::int_64_mod,
+  int_64_mul::int_64_mul,
+  int_64_newindex::int_64_newindex,
+  int_64_pow::int_64_pow,
+  int_64_sub::int_64_sub,
+  int_64_tostring::int_64_tostring,
+  int_64_unm::int_64_unm,
+  safe_api::{pushcclosurek, state_mut},
 };
 
 /// 在栈顶元表上登记元方法：压入 C 函数并写入 `name` 字段。

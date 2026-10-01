@@ -1,12 +1,11 @@
 use core::{ffi::c_int, ptr::null_mut, sync::atomic::Ordering};
 
-use ulua_vm::{
-  macros::lua_minstack::LUA_MINSTACK, records::lua_state::LuaState,
-};
+use ulua_vm::{macros::lua_minstack::LUA_MINSTACK, records::lua_state::LuaState};
 
 use crate::common::{
   functions::{
-    cstr_text::cstr_raw, safe_api::{checkstack, getargument, getinfo, getlocal, getupvalue, state_mut, zero_debug},
+    cstr_text::cstr_raw,
+    safe_api::{checkstack, getargument, getinfo, getlocal, getupvalue, state_mut, zero_debug},
   },
   records::conformance_debugger_state::CONFORMANCE_DEBUGGER_STATE,
 };

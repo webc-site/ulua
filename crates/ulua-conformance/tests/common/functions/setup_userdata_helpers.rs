@@ -1,16 +1,19 @@
 use core::ffi::c_int;
 
-use ulua_vm::{
-  records::lua_state::LuaState,
-  type_aliases::lua_c_function::LuaCFunction,
-};
+use ulua_vm::{records::lua_state::LuaState, type_aliases::lua_c_function::LuaCFunction};
 
 use crate::common::{
   functions::{
-    lua_vec_2::lua_vec_2, lua_vec_2_get::lua_vec_2_get, lua_vec_2_index::lua_vec_2_index,
-    lua_vec_2_namecall::lua_vec_2_namecall, lua_vec_2_newindex::lua_vec_2_newindex,
-    lua_vec_2_push::lua_vec_2_push, lua_vertex::lua_vertex, lua_vertex_index::lua_vertex_index,
-    lua_vertex_namecall::lua_vertex_namecall, lua_vertex_newindex::lua_vertex_newindex,
+    lua_vec_2::lua_vec_2,
+    lua_vec_2_get::lua_vec_2_get,
+    lua_vec_2_index::lua_vec_2_index,
+    lua_vec_2_namecall::lua_vec_2_namecall,
+    lua_vec_2_newindex::lua_vec_2_newindex,
+    lua_vec_2_push::lua_vec_2_push,
+    lua_vertex::lua_vertex,
+    lua_vertex_index::lua_vertex_index,
+    lua_vertex_namecall::lua_vertex_namecall,
+    lua_vertex_newindex::lua_vertex_newindex,
     safe_api::{pushcclosurek, setuserdatametatable, state_mut},
   },
   records::{vec_2_conformance_ir_hooks::Vec2, vertex::Vertex},

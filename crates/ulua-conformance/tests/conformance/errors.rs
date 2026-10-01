@@ -25,7 +25,6 @@ fn conformance_errors() {
 
 #[test]
 fn conformance_exception_object() {
-
   use crate::common::functions::{
     conformance_exception_object_capture_exception::conformance_exception_object_capture_exception,
     ends_with::ends_with, limited_realloc::limited_realloc, run_conformance::run_conformance,
@@ -52,29 +51,24 @@ fn conformance_exception_object() {
   assert!(result.exception_generated);
 
   // empty_function 正常返回，不产生异常。
-  let result =
-    conformance_exception_object_capture_exception(l, cstr(b"empty_function\0"));
+  let result = conformance_exception_object_capture_exception(l, cstr(b"empty_function\0"));
   assert!(!result.exception_generated);
 
   // 数字参数进 error 产生异常，描述尾为 "42"。
-  let result =
-    conformance_exception_object_capture_exception(l, cstr(b"pass_number_to_error\0"));
+  let result = conformance_exception_object_capture_exception(l, cstr(b"pass_number_to_error\0"));
   assert!(result.exception_generated);
   assert!(ends_with(&result.description, "42"));
 
   // 字符串参数进 error 产生异常，描述尾为参数串。
-  let result =
-    conformance_exception_object_capture_exception(l, cstr(b"pass_string_to_error\0"));
+  let result = conformance_exception_object_capture_exception(l, cstr(b"pass_string_to_error\0"));
   assert!(result.exception_generated);
   assert!(ends_with(&result.description, "string argument"));
 
   // 表参数进 error 同样产生异常。
-  let result =
-    conformance_exception_object_capture_exception(l, cstr(b"pass_table_to_error\0"));
+  let result = conformance_exception_object_capture_exception(l, cstr(b"pass_table_to_error\0"));
   assert!(result.exception_generated);
 
   // large_allocation_error 触发分配失败异常。
-  let result =
-    conformance_exception_object_capture_exception(l, cstr(b"large_allocation_error\0"));
+  let result = conformance_exception_object_capture_exception(l, cstr(b"large_allocation_error\0"));
   assert!(result.exception_generated);
 }
