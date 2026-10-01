@@ -1,5 +1,5 @@
 use crate::{
-  functions::lua_l_checkbuffer::lua_l_checkbuffer, macros::lua_lib_fn::lua_lib_fn,
+  functions::buffer_window::buffer_data_ref, macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
 };
 
@@ -7,11 +7,10 @@ use crate::{
 ///
 /// `l` 必须指向本次 buffer 库调用的存活 `LuaState`，索引/长度实参按约定可读，栈顶有压入结果的余量。
 pub(crate) unsafe fn buffer_len(l: *mut LuaState) -> i32 {
-  let mut len: usize = 0;
-  // SAFETY: 契约保证 `l` 存活且实参 1 为已检查 buffer userdata，其 len 字段即数据界
+  // SAFETY: 契约保证 `l` 存活且实参 1 为已检查 buffer userdata，切片长度即其数据界
   unsafe {
-    lua_l_checkbuffer(&mut *l, 1, &mut len);
-    (*l).push_number(len as f64);
+    let buf = buffer_data_ref(l, 1);
+    (*l).push_number(buf.len() as f64);
   }
   1
 }
