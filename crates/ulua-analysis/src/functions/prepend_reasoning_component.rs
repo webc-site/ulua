@@ -1,9 +1,10 @@
 //! `SubtypingResult::with_sub_component`/`with_super_component` 的同形核心：
 //! 空 reasoning 时插入单组件路径，否则整组克隆并在指定侧前置组件
 //! （cpp Subtyping.cpp 两方法逐行同形，仅 sub/super 路径字段不同）。
+use alloc::vec::Vec;
+
 use crate::{
   enums::subtyping_variance::SubtypingVariance,
-  functions::merge_reasonings::k_empty_reasoning,
   records::{path::Path, subtyping_reasoning::SubtypingReasoning},
   type_aliases::{component::Component, subtyping_reasonings::SubtypingReasonings},
 };
@@ -34,15 +35,29 @@ pub(crate) fn prepend_component(
       is_property_modifier_violation: false,
     });
   } else {
-    let mut updated = SubtypingReasonings::new(k_empty_reasoning());
-    for r in reasoning.iter() {
-      let mut r = r.clone();
-      match side {
-        ReasoningSide::Sub => r.sub_path = r.sub_path.push_front(component.clone()),
-        ReasoningSide::Super => r.super_path = r.super_path.push_front(component.clone()),
-      }
-      updated.insert(r);
+    let count = reasoning.size();
+    let mut items = Vec::with_capacity(count);
+    let mut component = Some(component);
+    for (i, r) in reasoning.iter().enumerate() {
+      let comp = if i + 1 == count {
+        component.take().unwrap()
+      } else {
+        component.as_ref().unwrap().clone()
+      };
+      let (sub_path, super_path) = match side {
+        ReasoningSide::Sub => (r.sub_path.push_front(comp), r.super_path.clone()),
+        ReasoningSide::Super => (r.sub_path.clone(), r.super_path.push_front(comp)),
+      };
+      items.push(SubtypingReasoning {
+        sub_path,
+        super_path,
+        variance: r.variance,
+        is_property_modifier_violation: r.is_property_modifier_violation,
+      });
     }
-    *reasoning = updated;
+    reasoning.clear();
+    for item in items {
+      reasoning.insert(item);
+    }
   }
 }

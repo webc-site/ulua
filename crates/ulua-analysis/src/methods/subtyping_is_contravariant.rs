@@ -6,21 +6,19 @@
 /// 已随死类型删除). We model that overload resolution
 /// with a runtime tag produced by `IntoCovOperand` and dispatch to the matching
 /// `isCovariantWith` overload.
-use core::mem::swap;
+use alloc::vec::Vec;
 
 use ulua_common::fflag::LuauSubtypingSkipUnreadReasoning;
 
 use crate::{
   enums::subtyping_variance::SubtypingVariance,
-  functions::{
-    assert_reasoning_valid_subtyping::assert_reasoning_valid, merge_reasonings::k_empty_reasoning,
-  },
+  functions::assert_reasoning_valid_subtyping::assert_reasoning_valid,
   records::{
     path::Path, scope::Scope, subtyping::Subtyping, subtyping_environment::SubtypingEnvironment,
     subtyping_reasoning::SubtypingReasoning, subtyping_result::SubtypingResult,
     table_indexer::TableIndexer,
   },
-  type_aliases::{subtyping_reasonings::SubtypingReasonings, type_id::TypeId},
+  type_aliases::type_id::TypeId,
 };
 pub enum CovOperand {
   Type(TypeId),
@@ -106,21 +104,20 @@ impl Subtyping {
       // path whenever we involve contravariance. We'll end up appending path
       // components that should belong to the supertype to the subtype, and vice
       // versa.
-      let mut updated = SubtypingReasonings::new(k_empty_reasoning());
+      let count = result.reasoning.size();
+      let mut items = Vec::with_capacity(count);
       for r in result.reasoning.iter() {
-        let mut r = r.clone();
-        swap(&mut r.sub_path, &mut r.super_path);
-
-        // Also swap covariant/contravariant, since those are also the other
-        // way around.
-        if r.variance == SubtypingVariance::Covariant {
-          r.variance = SubtypingVariance::Contravariant;
-        } else if r.variance == SubtypingVariance::Contravariant {
-          r.variance = SubtypingVariance::Covariant;
-        }
-        updated.insert(r);
+        items.push(SubtypingReasoning {
+          sub_path: r.super_path.clone(),
+          super_path: r.sub_path.clone(),
+          variance: r.variance.flipped(),
+          is_property_modifier_violation: r.is_property_modifier_violation,
+        });
       }
-      result.reasoning = updated;
+      result.reasoning.clear();
+      for item in items {
+        result.reasoning.insert(item);
+      }
     }
 
     // `assertReasoningValid(sub_ty, super_ty, ...)` is a debug-only no-op (its body

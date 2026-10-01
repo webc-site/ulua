@@ -54,7 +54,6 @@ use crate::{
   functions::{
     always_terminates::always_terminates,
     ast_slot_ref::{ast_slot_is, ast_slot_ref, ast_slot_try_as, ast_slot_try_as_mut},
-    c_const::cnum,
     compute_cost::compute_cost,
     cost_model::model_cost,
     get_builtin::get_builtin,
@@ -1449,28 +1448,25 @@ impl Compiler {
     threshold_base: i32,
     threshold_max_boost: i32,
   ) -> bool {
-    let one = cnum(1.0);
-
-    let fromc = self.get_constant(stat_ref.from);
-    let toc = self.get_constant(stat_ref.to);
-    // step 已落可空 OptNode：is_some/is_none 承接 cpp `step != nullptr`，
-    // as_ptr 桥交指针形态的 get_constant。
-    let stepc = if stat_ref.step.is_some() {
-      self.get_constant(stat_ref.step.as_ptr())
-    } else {
-      one
+    let (Constant::Number(from), Constant::Number(to)) = (
+      self.get_constant(stat_ref.from),
+      self.get_constant(stat_ref.to),
+    ) else {
+      return self.reject_with_remark(format_args!("loop unroll failed: invalid iteration count"));
     };
 
-    // 三者均为 Number 常量时才可折叠；同时缓存数值供展开编译复用
-    let mut nums = (0.0, 0.0, 0.0);
-    let trip_count = match (&fromc, &toc, &stepc) {
-      (Constant::Number(f), Constant::Number(t), Constant::Number(s)) => {
-        nums = (*f, *t, *s);
-        get_trip_count(*f, *t, *s)
-      }
-      _ => None,
+    let step = match stat_ref.step.to_option() {
+      Some(s) => match self.get_constant(s) {
+        Constant::Number(v) => v,
+        _ => {
+          return self
+            .reject_with_remark(format_args!("loop unroll failed: invalid iteration count"));
+        }
+      },
+      None => 1.0,
     };
-    let Some(trip_count) = trip_count else {
+
+    let Some(trip_count) = get_trip_count(from, to, step) else {
       return self.reject_with_remark(format_args!("loop unroll failed: invalid iteration count"));
     };
 
@@ -1532,7 +1528,7 @@ impl Compiler {
     ));
 
     // stat_ref 即入口存活借用，直接交给已降 safe 的展开编译。
-    self.compile_unrolled_for(stat_ref, trip_count, nums.0, nums.2);
+    self.compile_unrolled_for(stat_ref, trip_count, from, step);
     true
   }
 
