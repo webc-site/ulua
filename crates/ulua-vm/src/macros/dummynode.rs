@@ -37,6 +37,13 @@ pub const LUA_H_DUMMYNODE_VALUE: DummyNodeSentinel = DummyNodeSentinel(LuaNode {
 pub static LUA_H_DUMMYNODE: DummyNodeSentinel = LUA_H_DUMMYNODE_VALUE;
 
 /// C++ `#define dummynode (&dummynode)`.
+///
+/// r12-E1 起哨兵语义已收口进窗访问器：读侧 [`LuaTable::node_window`] 对哨兵表
+/// 恒返回本单格切片（与宏 `gnode!(t, 0)` 逐位一致），写侧 [`LuaTable::node_window_mut`]
+/// 对哨兵表返回空窗（哨兵为不可变 `static`，C 侧从不原地写哨兵）。
+///
+/// [`LuaTable::node_window`]: crate::records::lua_table::LuaTable::node_window
+/// [`LuaTable::node_window_mut`]: crate::records::lua_table::LuaTable::node_window_mut
 pub const DUMMYNODE: *const LuaNode = &LUA_H_DUMMYNODE.0;
 
 pub use DUMMYNODE as dummynode;
