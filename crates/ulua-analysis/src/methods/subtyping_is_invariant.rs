@@ -1,18 +1,17 @@
+use alloc::vec::Vec;
+
 use ulua_common::fflag::LuauSubtypingSkipUnreadReasoning;
 
 use crate::{
   enums::{
     subtyping_suppression_policy::SubtypingSuppressionPolicy, subtyping_variance::SubtypingVariance,
   },
-  functions::{
-    assert_reasoning_valid_subtyping::assert_reasoning_valid, merge_reasonings::k_empty_reasoning,
-  },
+  functions::assert_reasoning_valid_subtyping::assert_reasoning_valid,
   methods::subtyping_is_contravariant::IntoCovOperand,
   records::{
     path::Path, scope::Scope, subtyping::Subtyping, subtyping_environment::SubtypingEnvironment,
     subtyping_reasoning::SubtypingReasoning, subtyping_result::SubtypingResult,
   },
-  type_aliases::subtyping_reasonings::SubtypingReasonings,
 };
 
 impl Subtyping {
@@ -54,13 +53,17 @@ impl Subtyping {
         is_property_modifier_violation: false,
       });
     } else {
-      let mut updated = SubtypingReasonings::new(k_empty_reasoning());
+      let count = result.reasoning.size();
+      let mut items = Vec::with_capacity(count);
       for r in result.reasoning.iter() {
         let mut r = r.clone();
         r.variance = SubtypingVariance::Invariant;
-        updated.insert(r);
+        items.push(r);
       }
-      result.reasoning = updated;
+      result.reasoning.clear();
+      for item in items {
+        result.reasoning.insert(item);
+      }
     }
 
     // `assertReasoningValid` is a debug-only no-op; pass `sub_ty` for both args to

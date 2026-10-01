@@ -32,10 +32,9 @@ pub unsafe fn str_split(l: *mut LuaState) -> i32 {
       // 空分隔符按单字符切分源串，结果表容量确定，一次性预分配
       lua_createtable(l, haystack_len as i32, 0);
 
-      for iter in 0..haystack_len {
-        lua_pushlstring_bytes(l, &hay[iter..iter + 1]);
-        num_matches += 1;
-        lua_rawseti(&mut *l, -2, num_matches);
+      for (idx, ch) in hay.iter().enumerate() {
+        lua_pushlstring_bytes(l, core::slice::from_ref(ch));
+        lua_rawseti(&mut *l, -2, idx as i32 + 1);
       }
 
       1
@@ -67,19 +66,22 @@ pub unsafe fn str_split(l: *mut LuaState) -> i32 {
         let last_ch = nee[needle_len - 1];
 
         while iter <= last {
-          // 首尾字符内联速判，规避多数位置的完整切片比较
-          if hay[iter] == first
-            && hay[iter + needle_len - 1] == last_ch
-            && &hay[iter..iter + needle_len] == nee
-          {
-            lua_pushlstring_bytes(l, &hay[span_start..iter]);
-            num_matches += 1;
-            lua_rawseti(&mut *l, -2, num_matches);
+          // 利用 memchr 向量化跳跃首字符，并内联检查末字符与完整切片
+          if let Some(offset) = memchr::memchr(first, &hay[iter..=last]) {
+            iter += offset;
+            let cand = &hay[iter..iter + needle_len];
+            if cand[needle_len - 1] == last_ch && cand == nee {
+              lua_pushlstring_bytes(l, &hay[span_start..iter]);
+              num_matches += 1;
+              lua_rawseti(&mut *l, -2, num_matches);
 
-            span_start = iter + needle_len;
-            iter = span_start;
+              span_start = iter + needle_len;
+              iter = span_start;
+            } else {
+              iter += 1;
+            }
           } else {
-            iter += 1;
+            break;
           }
         }
       }

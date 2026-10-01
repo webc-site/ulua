@@ -1,5 +1,4 @@
-//! `subtyping_result` 方法汇总：原先按 cpp 符号逐方法拆分的同前缀小文件合并至此，行为逐字保留。
-
+use alloc::vec::Vec;
 use core::mem::{swap, take};
 
 use ulua_common::fflag::LuauSubtypingSkipUnreadReasoning;
@@ -9,7 +8,7 @@ use crate::{
     subtyping_suppression_policy::SubtypingSuppressionPolicy, subtyping_variance::SubtypingVariance,
   },
   functions::{
-    merge_reasonings::{k_empty_reasoning, merge_reasonings},
+    merge_reasonings::merge_reasonings,
     prepend_reasoning_component::{ReasoningSide, prepend_component},
   },
   records::{
@@ -18,7 +17,6 @@ use crate::{
   },
   type_aliases::{
     component::Component, constraint_v::ConstraintV, error_vec::ErrorVec,
-    subtyping_reasonings::SubtypingReasonings,
   },
 };
 
@@ -149,13 +147,20 @@ impl SubtypingResult {
 
 impl SubtypingResult {
   pub fn with_property_modifier_violation(&mut self) -> &mut Self {
-    let mut updated = SubtypingReasonings::new(k_empty_reasoning());
+    let count = self.reasoning.size();
+    if count == 0 {
+      return self;
+    }
+    let mut items = Vec::with_capacity(count);
     for r in self.reasoning.iter() {
       let mut r = r.clone();
       r.is_property_modifier_violation = true;
-      updated.insert(r);
+      items.push(r);
     }
-    self.reasoning = updated;
+    self.reasoning.clear();
+    for item in items {
+      self.reasoning.insert(item);
+    }
     self
   }
 }
@@ -187,13 +192,20 @@ impl SubtypingResult {
         is_property_modifier_violation: false,
       });
     } else {
-      let mut updated = SubtypingReasonings::new(k_empty_reasoning());
+      let count = self.reasoning.size();
+      let mut items = Vec::with_capacity(count);
       for r in self.reasoning.iter() {
-        let mut r = r.clone();
-        r.sub_path = path.append(&r.sub_path);
-        updated.insert(r);
+        items.push(SubtypingReasoning {
+          sub_path: path.append(&r.sub_path),
+          super_path: r.super_path.clone(),
+          variance: r.variance,
+          is_property_modifier_violation: r.is_property_modifier_violation,
+        });
       }
-      self.reasoning = updated;
+      self.reasoning.clear();
+      for item in items {
+        self.reasoning.insert(item);
+      }
     }
 
     self
@@ -227,13 +239,20 @@ impl SubtypingResult {
         is_property_modifier_violation: false,
       });
     } else {
-      let mut updated = SubtypingReasonings::new(k_empty_reasoning());
+      let count = self.reasoning.size();
+      let mut items = Vec::with_capacity(count);
       for r in self.reasoning.iter() {
-        let mut r = r.clone();
-        r.super_path = path.append(&r.super_path);
-        updated.insert(r);
+        items.push(SubtypingReasoning {
+          sub_path: r.sub_path.clone(),
+          super_path: path.append(&r.super_path),
+          variance: r.variance,
+          is_property_modifier_violation: r.is_property_modifier_violation,
+        });
       }
-      self.reasoning = updated;
+      self.reasoning.clear();
+      for item in items {
+        self.reasoning.insert(item);
+      }
     }
 
     self

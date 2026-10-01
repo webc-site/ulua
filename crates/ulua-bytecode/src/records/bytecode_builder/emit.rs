@@ -144,14 +144,11 @@ impl<'a> BytecodeBuilder<'a> {
     if LuauCompileUndoEmitAdjust.get() {
       let insns_len = self.insns.len() as u32;
       let adjust_local = |startpc: u32, endpc: &mut u32| {
-        if startpc == insns_len {
-          false
-        } else {
-          if *endpc == insns_len {
-            *endpc -= 1;
-          }
-          true
+        let retain = startpc != insns_len;
+        if retain {
+          *endpc -= (*endpc == insns_len) as u32;
         }
+        retain
       };
 
       self
