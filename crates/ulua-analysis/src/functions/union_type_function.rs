@@ -1,0 +1,81 @@
+use alloc::vec::Vec;
+
+use crate::{
+  functions::{follow_type, get_type, is_pending::is_pending, simplify_union::simplify_union},
+  macros::check_arity,
+  records::{
+    arena_handle::Handle, type_function_context::TypeFunctionContext,
+    type_function_instance_type::TypeFunctionInstanceType,
+    type_function_reduction_result::TypeFunctionReductionResult, union_type::UnionType,
+  },
+  type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
+};
+
+/// 契约
+/// 调用方须保证满足 C++ 原实现的调用契约。
+pub fn union_type_function(
+  _instance: TypeId,
+  type_params: &[TypeId],
+  pack_params: &[TypePackId],
+  ctx: &mut TypeFunctionContext,
+) -> TypeFunctionReductionResult {
+  check_arity!(ctx, pack_params, no_packs, "union");
+
+  if type_params.len() == 1 {
+    return TypeFunctionReductionResult::reduction(follow_type::follow(type_params[0]));
+  }
+
+  let mut options = Vec::new();
+  let mut blocking_types = Vec::new();
+  let mut worklist = type_params.to_vec();
+
+  while let Some(ty) = worklist.pop() {
+    let ty = follow_type::follow(ty);
+
+    if let Some(union_ty) = get_type::get::<UnionType>(ty).as_ref() {
+      worklist.extend(union_ty.options.iter().copied());
+      continue;
+    }
+
+    if let Some(type_function_instance) = get_type::get::<TypeFunctionInstanceType>(ty).as_ref() {
+      let function = type_function_instance.function();
+      if function.name == ctx.builtins().type_functions.union_func.name {
+        worklist.extend(type_function_instance.type_arguments.iter().copied());
+        continue;
+      }
+
+      options.push(ty);
+      blocking_types.push(ty);
+      continue;
+    }
+
+    options.push(ty);
+    // Safety: is_pending expects valid or null solver pointer
+    if is_pending(ty, ctx.solver) {
+      blocking_types.push(ty);
+    }
+  }
+
+  if !blocking_types.is_empty() {
+    return TypeFunctionReductionResult::no_reduction(blocking_types);
+  }
+
+  let mut result_ty = ctx.builtins().never_type;
+  for ty in options {
+    let simplified = simplify_union(
+      Handle::from_ref(ctx.builtins()),
+      Handle::from_mut(ctx.arena_mut()),
+      result_ty,
+      ty,
+    );
+    if !simplified.blocked_types.empty() {
+      return TypeFunctionReductionResult::no_reduction(
+        simplified.blocked_types.iter().copied().collect(),
+      );
+    }
+
+    result_ty = simplified.result;
+  }
+
+  TypeFunctionReductionResult::reduction(result_ty)
+}

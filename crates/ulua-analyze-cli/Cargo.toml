@@ -1,0 +1,59 @@
+[package]
+name = "ulua-analyze-cli"
+description = "Standalone Luau type-checker CLI (Rust)."
+keywords = [ "luau", "lua", "typechecker", "linter", "cli" ]
+categories = [ "command-line-utilities", "development-tools" ]
+
+[package.version]
+workspace = true
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[lib]
+crate-type = [ "rlib" ]
+
+[[bin]]
+name = "ulua-analyze"
+path = "src/main.rs"
+
+[dependencies.ulua-analysis]
+path = "../ulua-analysis"
+version = "0.1.4"
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.4"
+
+[dependencies.ulua-cli-lib]
+path = "../ulua-cli-lib"
+version = "0.1.4"
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.4"
+
+[dependencies.ulua-config]
+path = "../ulua-config"
+version = "0.1.4"
+
+[dependencies.ulua-require]
+path = "../ulua-require"
+version = "0.1.4"
+
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.4"
+
+[dev-dependencies.ulua-cli-lib]
+path = "../ulua-cli-lib"
+features = [ "test-utils" ]

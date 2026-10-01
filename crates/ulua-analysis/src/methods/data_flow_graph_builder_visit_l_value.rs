@@ -1,0 +1,153 @@
+use alloc::string::String;
+
+use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
+  records::{
+    ast_expr::AstExpr, ast_expr_error::AstExprError, ast_expr_global::AstExprGlobal,
+    ast_expr_index_expr::AstExprIndexExpr, ast_expr_index_name::AstExprIndexName,
+    ast_expr_local::AstExprLocal,
+  },
+};
+use ulua_common::LUAU_ASSERT;
+
+use crate::{
+  functions::{
+    arena_ref::arena_ref, contains_subscripted_definition::contains_subscripted_definition,
+  },
+  records::{arena_handle::alias, data_flow_graph_builder::DataFlowGraphBuilder, symbol::Symbol},
+  type_aliases::def_id_def::DefId,
+};
+
+impl DataFlowGraphBuilder {
+  /// cpp `visitLValue(AstExpr*, DefId)`：按左值形态分派并写回 `astDefs`。
+  pub fn visit_lvalue(&mut self, expr: &AstExpr, incoming_def: DefId) {
+    // cpp 以 `AstExpr*` 作 astDefs 身份键；从共享引用取同一地址仅作键值。
+    let expr_ptr: *const AstExpr = expr as *const AstExpr;
+
+    let def = match expr.as_expr_ref() {
+      AstExprRef::Local(l) => self.visit_lvalue_local(l, incoming_def),
+      AstExprRef::Global(g) => self.visit_lvalue_global(g, incoming_def),
+      AstExprRef::IndexName(i) => self.visit_lvalue_index_name(i, incoming_def),
+      AstExprRef::IndexExpr(i) => self.visit_lvalue_index_expr(i, incoming_def),
+      AstExprRef::Error(e) => self.visit_lvalue_error(e, incoming_def),
+      _ => {
+        LUAU_ASSERT!(false);
+        DefId::NULL
+      }
+    };
+
+    *self.graph.ast_defs.get_or_insert(expr_ptr) = def;
+  }
+
+  /// cpp `visitLValue(AstExprLocal*, DefId)`：非 upvalue 时为新值造 def 并更新
+  /// bindings/captures；upvalue 走普通表达式路径（避免别名跟踪越界）。
+  pub fn visit_lvalue_local(&mut self, l: &AstExprLocal, incoming_def: DefId) -> DefId {
+    let scope = self.current_scope();
+
+    if !l.upvalue {
+      let subscripted = contains_subscripted_definition(incoming_def);
+      let symbol = Symbol::from_local(l.local.as_ptr());
+      let updated =
+        self
+          .def_arena
+          .get_mut()
+          .fresh_cell(symbol.clone(), l.base.base.location, subscripted);
+      *alias(scope).bindings.get_or_insert(symbol.clone()) = updated;
+      self
+        .captures
+        .get_or_insert(symbol)
+        .all_versions
+        .push(updated);
+      updated
+    } else {
+      // cpp `visitExpr(static_cast<AstExpr*>(l))`：上转基类走带缓存的分派入口。
+      self.visit_expr(&l.base).def
+    }
+  }
+
+  /// cpp `visitLValue(AstExprGlobal*, DefId)`。
+  pub fn visit_lvalue_global(&mut self, g: &AstExprGlobal, incoming_def: DefId) -> DefId {
+    let scope = self.current_scope();
+    let symbol = Symbol::from_global(g.name);
+    let subscripted = contains_subscripted_definition(incoming_def);
+
+    let updated =
+      self
+        .def_arena
+        .get_mut()
+        .fresh_cell(symbol.clone(), g.base.base.location, subscripted);
+    *alias(scope).bindings.get_or_insert(symbol.clone()) = updated;
+    self
+      .captures
+      .get_or_insert(symbol)
+      .all_versions
+      .push(updated);
+    updated
+  }
+
+  /// cpp `visitLValue(AstExprIndexName*, DefId)`：
+  /// `scope->props[parentDef][i->index.value] = updated`。
+  pub fn visit_lvalue_index_name(&mut self, i: &AstExprIndexName, incoming_def: DefId) -> DefId {
+    // expr 已句柄化恒非空；arena_ref 为既有指针门面，经 as_ptr 桥接（判空 panic 分支类型端不可达）。
+    let parent_expr = arena_ref(i.expr.as_ptr(), "AstExprIndexName.expr");
+    let parent_def = self.visit_expr(parent_expr).def;
+    let scope = self.current_scope();
+    let index_str = String::from(i.index.as_str_or_empty());
+    let subscripted = contains_subscripted_definition(incoming_def);
+    let updated = self.def_arena.get_mut().fresh_cell(
+      Symbol::from_global(i.index),
+      i.base.base.location,
+      subscripted,
+    );
+    alias(scope)
+      .props
+      .get_or_insert(parent_def)
+      .insert(index_str, updated);
+    updated
+  }
+
+  /// cpp `visitLValue(AstExprIndexExpr*, DefId)`：字符串字面量下标按名登记
+  /// props，否则视为真下标访问（subscripted = true）。
+  pub fn visit_lvalue_index_expr(&mut self, i: &AstExprIndexExpr, incoming_def: DefId) -> DefId {
+    // expr/index 已句柄化恒非空；arena_ref 为既有指针门面，经 as_ptr 桥接（判空 panic 分支类型端不可达）。
+    let parent_expr = arena_ref(i.expr.as_ptr(), "AstExprIndexExpr.expr");
+    let parent_def = self.visit_expr(parent_expr).def;
+    let index_expr = arena_ref(i.index.as_ptr(), "AstExprIndexExpr.index");
+    self.visit_expr(index_expr);
+
+    let scope = self.current_scope();
+    if let AstExprRef::ConstantString(string) = index_expr.as_expr_ref() {
+      let key = String::from_utf8_lossy(string.value.as_bytes()).into_owned();
+
+      let subscripted = contains_subscripted_definition(incoming_def);
+      let updated =
+        self
+          .def_arena
+          .get_mut()
+          .fresh_cell(Symbol::default(), i.base.base.location, subscripted);
+      alias(scope)
+        .props
+        .get_or_insert(parent_def)
+        .insert(key, updated);
+      updated
+    } else {
+      let subscripted = true;
+      self
+        .def_arena
+        .get_mut()
+        .fresh_cell(Symbol::default(), i.base.base.location, subscripted)
+    }
+  }
+
+  /// cpp `visitLValue(AstExprError*, DefId)`：错误恢复左值按普通表达式回退。
+  pub fn visit_lvalue_error(&mut self, error: &AstExprError, _incoming_def: DefId) -> DefId {
+    // cpp `visitExpr(error).def`：上转基类走带缓存的分派入口。
+    self.visit_expr(&error.base).def
+  }
+}
+
+// r7-tlossy1 让位台账（本文件票面 1 枚：让 1）——:131 `String::from_utf8_lossy(...).into_owned()`
+// 源为词法字节流（可携非 UTF-8 字节，lossy 系 Rust String 表示面所需）；sink 为
+// `Props = DenseHashMap<DefId, BTreeMap<String, DefId>>` 的 String 键，BTreeMap 无
+// 借用键口，owned 下限恒 1 malloc。热面（每 IndexExpr 左值定义一次）但收口无 alloc
+// 可省；同窗 visit_constructor.rs:132 的 erase_str Cow 借用形（查询面）前票已收。

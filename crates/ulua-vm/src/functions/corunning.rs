@@ -1,0 +1,18 @@
+use crate::{
+  functions::lua_pushthread::lua_pushthread, macros::lua_lib_fn::lua_lib_fn,
+  records::lua_state::LuaState,
+};
+
+/// # Safety
+/// `l` 须为存活 LuaState，栈顶之上至少留 1 个空槽（`lua_pushthread`/`lua_pushnil` 各占一槽作返回值），
+/// 且处于可分配/GC 的受保护帧。cpp/VM/src/lcorolib.cpp:354 corunning。
+pub(crate) unsafe fn corunning(l: *mut LuaState) -> i32 {
+  unsafe {
+    if lua_pushthread(l) != 0 {
+      (*l).push_nil(); // main thread is not a coroutine
+    }
+    1
+  }
+}
+
+lua_lib_fn!(pub(crate) fn corunning, corunning_arm);

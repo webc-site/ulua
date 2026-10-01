@@ -1,0 +1,83 @@
+use alloc::string::String;
+
+use ulua_common::records::dense_hash_set::DenseHashSet;
+
+use crate::{
+  records::{
+    arena_handle::alias_ref,
+    extern_type::ExternType,
+    free_type::FreeType,
+    free_type_pack::FreeTypePack,
+    generic_type_visitor::{GenericTypeVisitor, GenericTypeVisitorTrait},
+    type_once_visitor::TypeOnceVisitor,
+    visit_key::VisitKey,
+  },
+  type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
+};
+
+#[derive(Debug, Clone)]
+pub struct HasFreeType {
+  pub base: TypeOnceVisitor,
+  pub result: bool,
+}
+
+impl HasFreeType {
+  pub fn new() -> Self {
+    Self {
+      base: TypeOnceVisitor::new(String::from("TypeOnceVisitor"), true),
+      result: false,
+    }
+  }
+
+  pub fn has_free_type_has_free_type(&mut self) {
+    *self = Self::new();
+  }
+}
+
+impl Default for HasFreeType {
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+impl GenericTypeVisitorTrait for HasFreeType {
+  type Seen = DenseHashSet<VisitKey>;
+
+  fn visitor_base(&mut self) -> &mut GenericTypeVisitor<Self::Seen> {
+    &mut self.base.base
+  }
+
+  fn visit_type_id(&mut self, ty: TypeId) -> bool {
+    HasFreeType::visit_type_id(self, ty)
+  }
+
+  fn visit_type_pack_id(&mut self, tp: TypePackId) -> bool {
+    HasFreeType::visit_type_pack_id(self, tp)
+  }
+
+  fn visit_type_id_extern_type(&mut self, _ty: TypeId, _ext: &ExternType) -> bool {
+    false
+  }
+
+  fn visit_type_id_free_type(&mut self, _ty: TypeId, _ft: &FreeType) -> bool {
+    self.result = true;
+    false
+  }
+
+  fn visit_type_pack_id_free_type_pack(&mut self, _tp: TypePackId, _ftp: &FreeTypePack) -> bool {
+    self.result = true;
+    false
+  }
+}
+
+impl HasFreeType {
+  /// # Safety
+  /// 调用方须保证满足 C++ 原实现定义的内部不变量。
+  pub(crate) fn visit_type_id(&mut self, ty: TypeId) -> bool {
+    !(self.result || alias_ref(ty).persistent)
+  }
+
+  pub fn visit_type_pack_id(&mut self, _tp: TypePackId) -> bool {
+    !self.result
+  }
+}

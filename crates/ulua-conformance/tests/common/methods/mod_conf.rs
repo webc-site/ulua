@@ -1,0 +1,19 @@
+// 由脚本生成：仅声明 conformance 用到的子模块。
+#[path = "feedback_vector_fixture_compile.rs"]
+pub mod feedback_vector_fixture_compile;
+#[path = "feedback_vector_fixture_load.rs"]
+pub mod feedback_vector_fixture_load;
+#[path = "feedback_vector_fixture_run.rs"]
+pub mod feedback_vector_fixture_run;
+#[path = "heap_find_node_by_name.rs"]
+pub mod heap_find_node_by_name;
+#[path = "heap_find_node_by_ptr.rs"]
+pub mod heap_find_node_by_ptr;
+#[path = "heap_link.rs"]
+pub mod heap_link;
+#[path = "heap_mark_edges.rs"]
+pub mod heap_mark_edges;
+#[path = "scoped_f_value_drop.rs"]
+pub mod scoped_f_value_drop;
+#[path = "scoped_f_value_new.rs"]
+pub mod scoped_f_value_new;
