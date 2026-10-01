@@ -7,3 +7,15 @@ pub enum SubtypingVariance {
   Contravariant,
   Invariant,
 }
+
+impl SubtypingVariance {
+  #[inline]
+  pub const fn flipped(self) -> Self {
+    match self {
+      Self::Covariant => Self::Contravariant,
+      Self::Contravariant => Self::Covariant,
+      other => other,
+    }
+  }
+}
+
