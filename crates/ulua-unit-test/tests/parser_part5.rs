@@ -118,6 +118,8 @@ fn return_stat<'a>(fixture: &'a mut Fixture, source: &str) -> &'a AstStatReturn 
   as_node_at::<AstStatReturn, _>(&block.body, 0).expect("body[0] 应为 return 语句")
 }
 
+use ulua_ast::records::node_handle::OptNode;
+
 #[test]
 fn parser_parse_nested_type_function() {
   // cpp `REQUIRE(stat != nullptr)`：parse 出错即 panic，非空由返回引用担保。
@@ -480,18 +482,18 @@ fn parser_parse_return_type_ast_type_pack_explicit() {
   assert_eq!(1, block.body.len());
 
   let alias = as_node_at::<AstStatTypeAlias, _>(&block.body, 0).expect("body[0] 应为类型别名");
-  let func_type = alias
-    .type_ptr
+  let alias_ty = OptNode::from_ptr(alias.type_ptr);
+  let func_type = alias_ty
     .as_node::<AstTypeFunction>()
     .expect("别名右侧应为函数类型");
-  let return_pack = func_type
-    .return_types
+  let ret_ty = OptNode::from_ptr(func_type.return_types);
+  let return_pack = ret_ty
     .as_node::<AstTypePackExplicit>()
     .expect("返回类型应为显式 type pack");
 
   assert_eq!(1, return_pack.type_list.types.size);
   assert!(
-    return_pack.type_list.tail_type.as_ref_opt().is_none(),
+    OptNode::from_ptr(return_pack.type_list.tail_type).is_none(),
     "tail_type 应为空"
   );
   assert!(as_node_at::<AstTypeReference, _>(&return_pack.type_list.types, 0).is_some());
@@ -504,11 +506,11 @@ fn parser_parse_simple_ast_type_group() {
   assert_eq!(1, block.body.len());
 
   let alias = as_node_at::<AstStatTypeAlias, _>(&block.body, 0).expect("body[0] 应为类型别名");
-  let group = alias
-    .type_ptr
+  let alias_ty = OptNode::from_ptr(alias.type_ptr);
+  let group = alias_ty
     .as_node::<AstTypeGroup>()
     .expect("别名右侧应为类型分组");
-  assert!(group.type_.as_node::<AstTypeReference>().is_some());
+  assert!(OptNode::from_ptr(group.type_).as_node::<AstTypeReference>().is_some());
 }
 
 #[test]
@@ -580,14 +582,15 @@ fn parser_parse_type_name() {
     Parser::parse_type_source(code, &mut names, &mut allocator, ParseOptions::new());
 
   assert!(result.errors.is_empty());
-  let root = result.root.as_ref_opt().expect("根类型必须存在");
+  let root_slot = OptNode::from_ptr(result.root);
+  let root = root_slot.get().expect("根类型必须存在");
 
   let fun = ast_node_try_as::<AstTypeFunction>(&root.base).expect("根类型应为函数类型");
   assert_eq!(1, fun.generics.size);
   assert_eq!(3, fun.arg_types.types.size);
 
-  let return_pack = fun
-    .return_types
+  let ret_ty = OptNode::from_ptr(fun.return_types);
+  let return_pack = ret_ty
     .as_node::<AstTypePackExplicit>()
     .expect("返回类型应为显式 type pack");
   assert_eq!(1, return_pack.type_list.types.size);
@@ -665,32 +668,31 @@ fn parser_parse_variadics() {
   assert!(func.vararg_annotation.as_ref_opt().is_some());
 
   let foo = as_node_at::<AstStatTypeAlias, _>(&root.body, 1).expect("body[1] 应为类型别名");
-  let foo_fn = foo
-    .type_ptr
+  let foo_ty = OptNode::from_ptr(foo.type_ptr);
+  let foo_fn = foo_ty
     .as_node::<AstTypeFunction>()
     .expect("Foo 应为函数类型");
   assert_eq!(2, foo_fn.arg_types.types.size);
-  assert!(foo_fn.arg_types.tail_type.as_ref_opt().is_some());
+  assert!(OptNode::from_ptr(foo_fn.arg_types.tail_type).is_some());
   assert!(
-    foo_fn
-      .return_types
+    OptNode::from_ptr(foo_fn.return_types)
       .as_node::<AstTypePackVariadic>()
       .is_some()
   );
 
   let bar = as_node_at::<AstStatTypeAlias, _>(&root.body, 2).expect("body[2] 应为类型别名");
-  let bar_fn = bar
-    .type_ptr
+  let bar_ty = OptNode::from_ptr(bar.type_ptr);
+  let bar_fn = bar_ty
     .as_node::<AstTypeFunction>()
     .expect("Bar 应为函数类型");
   assert_eq!(0, bar_fn.arg_types.types.size);
-  assert!(bar_fn.arg_types.tail_type.as_ref_opt().is_none());
-  let return_pack = bar_fn
-    .return_types
+  assert!(OptNode::from_ptr(bar_fn.arg_types.tail_type).is_none());
+  let ret_ty = OptNode::from_ptr(bar_fn.return_types);
+  let return_pack = ret_ty
     .as_node::<AstTypePackExplicit>()
     .expect("Bar 返回类型应为显式 type pack");
   assert_eq!(1, return_pack.type_list.types.size);
-  assert!(return_pack.type_list.tail_type.as_ref_opt().is_some());
+  assert!(OptNode::from_ptr(return_pack.type_list.tail_type).is_some());
 }
 
 #[test]

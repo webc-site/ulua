@@ -21,6 +21,7 @@ use ulua_ast::{
     ast_stat_expr::AstStatExpr, ast_stat_function::AstStatFunction, ast_stat_local::AstStatLocal,
     ast_stat_local_function::AstStatLocalFunction, ast_stat_return::AstStatReturn,
     ast_stat_type_alias::AstStatTypeAlias, ast_type_function::AstTypeFunction,
+    node_handle::OptNode,
     ast_type_group::AstTypeGroup, ast_type_intersection::AstTypeIntersection,
     ast_type_optional::AstTypeOptional, ast_type_reference::AstTypeReference,
     ast_type_table::AstTypeTable, ast_type_union::AstTypeUnion, lexeme::Lexeme, lexer::Lexer,
@@ -70,7 +71,7 @@ fn parser_moved_out_allocator_can_still_be_used() {
 
   // NOLINTNEXTLINE(bugprone-use-after-move) -- verifying moved-from state
   let i = outer.alloc::<i32>(55);
-  assert_eq!(&55, i.as_ref_opt().expect("moved-from allocator 仍可分配"));
+  assert_eq!(&55, OptNode::from_ptr(i).get().expect("moved-from allocator 仍可分配"));
 }
 
 // ------------------------------------------------------------------ ParserTests
@@ -150,8 +151,8 @@ fn parser_get_a_nice_error_when_there_is_an_extra_comma_at_the_end_of_a_generic_
 
   let alias = as_node_at::<AstStatTypeAlias, _>(&root.body, 0).expect("body[0] 应为 type alias");
   // cpp 走的是 alias 的右侧类型（`t->type`），即函数类型本身。
-  let func_type = alias
-    .type_ptr
+  let alias_ty = OptNode::from_ptr(alias.type_ptr);
+  let func_type = alias_ty
     .as_node::<AstTypeFunction>()
     .expect("alias 类型应为函数类型");
   assert_eq!(2, func_type.generics.size);
@@ -235,8 +236,8 @@ fn parser_grouped_function_type() {
   let binding = deref_at(&assignment.vars, 0).expect("vars[0] 应为声明");
   assert_eq!(Some("x"), binding.name.as_str());
 
-  let generic_ty = binding
-    .annotation
+  let annotation = OptNode::from_ptr(binding.annotation);
+  let generic_ty = annotation
     .as_node::<AstTypeReference>()
     .expect("标注应为类型引用");
   assert_eq!(1, generic_ty.parameters.size);
@@ -250,7 +251,7 @@ fn parser_grouped_function_type() {
 
   // cpp：`groupTy` 是 `(() -> ())`，`types[1]` 是 `?`。
   let group_ty = as_node_at::<AstTypeGroup, _>(&union_ty.types, 0).expect("types[0] 应为分组");
-  assert!(group_ty.type_.as_node::<AstTypeFunction>().is_some());
+  assert!(OptNode::from_ptr(group_ty.type_).as_node::<AstTypeFunction>().is_some());
   assert!(as_node_at::<AstTypeOptional, _>(&union_ty.types, 1).is_some());
 }
 
@@ -268,7 +269,8 @@ fn parser_incomplete_method_call() {
   let mut names = AstNameTable::new(&mut allocator);
   let result = Parser::parse(source, &mut names, &mut allocator, ParseOptions::new());
 
-  let root = result.root.as_ref_opt().expect("根块必须存在");
+  let root_slot = OptNode::from_ptr(result.root);
+  let root = root_slot.get().expect("根块必须存在");
   assert_eq!(1, root.body.len());
 
   let howdy = as_node_at::<AstStatFunction, _>(&root.body, 0).expect("body[0] 应为函数声明");
@@ -300,7 +302,8 @@ fn parser_incomplete_method_call_2() {
   let mut names = AstNameTable::new(&mut allocator);
   let result = Parser::parse(source, &mut names, &mut allocator, ParseOptions::new());
 
-  let root = result.root.as_ref_opt().expect("根块必须存在");
+  let root_slot = OptNode::from_ptr(result.root);
+  let root = root_slot.get().expect("根块必须存在");
   assert_eq!(2, root.body.len());
 
   let howdy = as_node_at::<AstStatFunction, _>(&root.body, 1).expect("body[1] 应为函数声明");
@@ -382,9 +385,11 @@ fn parser_intersection_of_two_function_types_if_no_returns() {
 
   let block = fixture.parse(source, &ParseOptions::default());
   let local = as_node_at::<AstStatLocal, _>(&block.body, 0).expect("body[0] 应为 local");
-  let annotation = deref_at(&local.vars, 0)
-    .expect("vars[0] 应为声明")
-    .annotation;
+  let annotation = OptNode::from_ptr(
+    deref_at(&local.vars, 0)
+      .expect("vars[0] 应为声明")
+      .annotation,
+  );
   let intersection = annotation
     .as_node::<AstTypeIntersection>()
     .expect("标注应为交叉类型");
@@ -403,9 +408,11 @@ fn parser_intersection_of_two_function_types_if_two_or_more_returns() {
 
   let block = fixture.parse(source, &ParseOptions::default());
   let local = as_node_at::<AstStatLocal, _>(&block.body, 0).expect("body[0] 应为 local");
-  let annotation = deref_at(&local.vars, 0)
-    .expect("vars[0] 应为声明")
-    .annotation;
+  let annotation = OptNode::from_ptr(
+    deref_at(&local.vars, 0)
+      .expect("vars[0] 应为声明")
+      .annotation,
+  );
   let intersection = annotation
     .as_node::<AstTypeIntersection>()
     .expect("标注应为交叉类型");
@@ -533,15 +540,15 @@ fn parser_leading_union_intersection_with_single_type_preserves_the_union_inters
   assert_eq!(2, block.body.len());
 
   let alias1 = as_node_at::<AstStatTypeAlias, _>(&block.body, 0).expect("body[0] 应为 alias");
-  let union_type = alias1
-    .type_ptr
+  let alias1_ty = OptNode::from_ptr(alias1.type_ptr);
+  let union_type = alias1_ty
     .as_node::<AstTypeUnion>()
     .expect("应为 union 类型");
   assert_eq!(1, union_type.types.size);
 
   let alias2 = as_node_at::<AstStatTypeAlias, _>(&block.body, 1).expect("body[1] 应为 alias");
-  let intersection_type = alias2
-    .type_ptr
+  let alias2_ty = OptNode::from_ptr(alias2.type_ptr);
+  let intersection_type = alias2_ty
     .as_node::<AstTypeIntersection>()
     .expect("应为交叉类型");
   assert_eq!(1, intersection_type.types.size);
@@ -594,7 +601,7 @@ fn parser_local_with_annotation() {
   assert_eq!(1, local.vars.size);
 
   let l = deref_at(&local.vars, 0).expect("vars[0] 应为声明");
-  assert!(l.annotation.as_ref_opt().is_some(), "标注必须存在");
+  assert!(OptNode::from_ptr(l.annotation).is_some(), "标注必须存在");
 
   assert_eq!(1, local.values.size);
   assert_eq!("foo", string_at_location(code, &l.location));
@@ -808,7 +815,7 @@ fn parser_number_literals() {
   let ret = as_node_at::<AstStatReturn, _>(&stat.body, 0).expect("body[0] 应为 return");
   assert_eq!(NUMBER_LITERALS.len(), ret.list.size);
 
-  for (&expr, want) in ret.list.iter().zip(NUMBER_LITERALS) {
+  for (expr, want) in ret.list.iter_nodes().zip(NUMBER_LITERALS) {
     let num = expr
       .as_node::<AstExprConstantNumber>()
       .expect("应为数字字面量");
@@ -1011,15 +1018,15 @@ declare bit32: {
 
   let glob = as_node_at::<AstStatDeclareGlobal, _>(&root_block.body, 0)
     .expect("body[0] 应为 declare global");
-  let tbl = glob
-    .type_
+  let glob_ty = OptNode::from_ptr(glob.type_);
+  let tbl = glob_ty
     .as_node::<AstTypeTable>()
     .expect("类型应为表类型");
   assert_eq!(1, tbl.props.size);
 
   let prop = elem(&tbl.props, 0);
-  let func = prop
-    .r#type
+  let prop_ty = OptNode::from_ptr(prop.r#type);
+  let func = prop_ty
     .as_node::<AstTypeFunction>()
     .expect("属性类型应为函数类型");
 
@@ -1104,14 +1111,14 @@ fn parser_parse_class_declarations() {
   assert_eq!(Some("prop"), prop.name.as_str());
   assert_eq!(loc((2, 12), (2, 16)), prop.name_location);
   assert_eq!(loc((2, 12), (2, 24)), prop.location);
-  assert!(prop.ty.as_node::<AstTypeReference>().is_some());
+  assert!(OptNode::from_ptr(prop.ty).as_node::<AstTypeReference>().is_some());
 
   let method = elem(&foo.props, 1);
   assert_eq!(Some("method"), method.name.as_str());
   assert_eq!(loc((3, 21), (3, 27)), method.name_location);
   assert_eq!(loc((3, 12), (3, 54)), method.location);
   assert!(method.is_method);
-  assert!(method.ty.as_node::<AstTypeFunction>().is_some());
+  assert!(OptNode::from_ptr(method.ty).as_node::<AstTypeFunction>().is_some());
 
   let bar =
     as_node_at::<AstStatDeclareExternType, _>(&root.body, 1).expect("body[1] 应为 extern type");
@@ -1127,5 +1134,5 @@ fn parser_parse_class_declarations() {
   assert_eq!(Some("prop2"), prop2.name.as_str());
   assert_eq!(loc((7, 12), (7, 17)), prop2.name_location);
   assert_eq!(loc((7, 12), (7, 25)), prop2.location);
-  assert!(prop2.ty.as_node::<AstTypeReference>().is_some());
+  assert!(OptNode::from_ptr(prop2.ty).as_node::<AstTypeReference>().is_some());
 }

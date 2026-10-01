@@ -13,12 +13,12 @@ use ulua_ast::{
   },
   records::{
     allocator::Allocator, ast_name_table::AstNameTable, ast_stat_local::AstStatLocal,
-    parse_options::ParseOptions, parser::Parser,
+    node_handle::OptNode, parse_options::ParseOptions, parser::Parser,
   },
 };
 use ulua_common::fflag;
 use ulua_unit_test::{
-  functions::ast_node_ref::{NodePtr, PtrMutRef, PtrRef},
+  functions::ast_node_ref::NodePtr,
   records::fixture::Fixture,
   type_aliases::scoped_fast_flag::ScopedFastFlag,
 };
@@ -543,13 +543,11 @@ end
   // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let mut parse_result = Parser::parse(example, &mut names, &mut allocator, parse_options);
+  let parse_result = Parser::parse(example, &mut names, &mut allocator, parse_options);
 
   assert!(!parse_result.root.is_null());
-  let root_mut = parse_result
-    .root
-    .as_mut_ref_opt()
-    .expect("expected non-null root");
+  let mut root_slot = OptNode::from_ptr(parse_result.root);
+  let root_mut = root_slot.get_mut().expect("expected non-null root");
   let _ = pretty_print_with_types_ast_stat_block(root_mut);
 }
 
@@ -861,14 +859,12 @@ fn pretty_printer_pretty_print_ast_stat_block_overload() {
   // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let mut result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
+  let result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
   assert!(!result.root.is_null());
 
-  let root_mut = result
-    .root
-    .as_mut_ref_opt()
-    .expect("expected non-null root");
+  let mut root_slot = OptNode::from_ptr(result.root);
+  let root_mut = root_slot.get_mut().expect("expected non-null root");
   let printed = pretty_print_ast_stat_block(root_mut);
   assert_eq!("local a = 1", printed);
 }
@@ -946,13 +942,11 @@ fn pretty_printer_pretty_print_error_expr() {
   // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let mut parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
+  let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
   assert!(!parse_result.root.is_null());
-  let root_mut = parse_result
-    .root
-    .as_mut_ref_opt()
-    .expect("expected non-null root");
+  let mut root_slot = OptNode::from_ptr(parse_result.root);
+  let root_mut = root_slot.get_mut().expect("expected non-null root");
   let actual = pretty_print_with_types_ast_stat_block(root_mut);
   assert_eq!("local a = (error-expr: f:%error-id%)-(error-expr)", actual);
 }
@@ -965,13 +959,11 @@ fn pretty_printer_pretty_print_error_stat() {
   // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let mut parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
+  let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
   assert!(!parse_result.root.is_null());
-  let root_mut = parse_result
-    .root
-    .as_mut_ref_opt()
-    .expect("expected non-null root");
+  let mut root_slot = OptNode::from_ptr(parse_result.root);
+  let root_mut = root_slot.get_mut().expect("expected non-null root");
   let actual = pretty_print_with_types_ast_stat_block(root_mut);
   assert_eq!("(error-stat: (error-expr))", actual);
 }
@@ -984,13 +976,11 @@ fn pretty_printer_pretty_print_error_type() {
   // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let mut parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
+  let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
   assert!(!parse_result.root.is_null());
-  let root_mut = parse_result
-    .root
-    .as_mut_ref_opt()
-    .expect("expected non-null root");
+  let mut root_slot = OptNode::from_ptr(parse_result.root);
+  let root_mut = root_slot.get_mut().expect("expected non-null root");
   let actual = pretty_print_with_types_ast_stat_block(root_mut);
   assert_eq!("local a:%error-type%", actual);
 }
@@ -1011,13 +1001,11 @@ fn pretty_printer_pretty_print_explicit_type_instantiations() {
   // Box 钉堆：AstNameTable/Lexer/Parser 捕获宿主地址，宿主移动即悬垂。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
-  let mut parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
+  let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
   assert!(parse_result.errors.is_empty(), "{:?}", parse_result.errors);
   assert!(!parse_result.root.is_null());
-  let root_mut = parse_result
-    .root
-    .as_mut_ref_opt()
-    .expect("expected non-null root");
+  let mut root_slot = OptNode::from_ptr(parse_result.root);
+  let root_mut = root_slot.get_mut().expect("expected non-null root");
   let actual = pretty_print_with_types_ast_stat_block(root_mut);
   assert_eq!(code, actual);
 
@@ -1634,16 +1622,14 @@ fn pretty_printer_pretty_print_to_string() {
   let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
   assert!(!parse_result.root.is_null());
-  let root = parse_result
-    .root
-    .as_ref_opt()
-    .expect("expected non-null root");
+  let root_slot = OptNode::from_ptr(parse_result.root);
+  let root = root_slot.get().expect("expected non-null root");
   assert_eq!(1, root.body.len());
 
-  let stat = root.body.at(0).as_ptr();
   // 门面一步下转+判型+物化（原 `ast_node_as + is_null 断言 + &*` 三步样板）：
   // stat 为 body 数组内存活语句指针（夹具 arena 单线程只读存活至用例结束）。
-  let stat_local = stat
+  let stat_slot = OptNode::from_ptr(root.body.at(0).as_ptr());
+  let stat_local = stat_slot
     .as_node::<AstStatLocal>()
     .expect("首条语句应为 AstStatLocal");
   assert_eq!(
@@ -1653,16 +1639,17 @@ fn pretty_printer_pretty_print_to_string() {
 
   assert_eq!(1, stat_local.vars.len());
   let local = stat_local.vars[0];
-  let annotation = local
-    .as_ref_opt()
+  let annotation = OptNode::from_ptr(local)
+    .get()
     .expect("expected arena-live AstLocal")
     .annotation;
   assert!(!annotation.is_null());
-  // 指针槽读法走夹具门面 PtrRef（null → None），只读借用交给 to_string_ast_node。
+  // annotation 指针槽经句柄判空物化，只读借用交给 to_string_ast_node。
   assert_eq!(
     "string",
     to_string_ast_node(
-      &PtrRef::as_ref_opt(&annotation)
+      &OptNode::from_ptr(annotation)
+        .get()
         .expect("annotation 指向 arena 存活 AstType")
         .base
     )
@@ -1673,7 +1660,8 @@ fn pretty_printer_pretty_print_to_string() {
   assert_eq!(
     "'hello'",
     to_string_ast_node(
-      &PtrRef::as_ref_opt(&expr)
+      &OptNode::from_ptr(expr)
+        .get()
         .expect("expr 是 body 元素的 arena 存活表达式节点")
         .base
     )
@@ -2148,14 +2136,12 @@ fn pretty_printer_roundtrip_generic_types() {
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
 
-  let mut parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
+  let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
   assert!(parse_result.errors.is_empty());
   assert!(!parse_result.root.is_null());
-  let root_mut = parse_result
-    .root
-    .as_mut_ref_opt()
-    .expect("expected non-null root");
+  let mut root_slot = OptNode::from_ptr(parse_result.root);
+  let root_mut = root_slot.get_mut().expect("expected non-null root");
   let actual = pretty_print_with_types_ast_stat_block(root_mut);
   assert_eq!(code, actual);
 }
@@ -2175,14 +2161,12 @@ fn pretty_printer_roundtrip_types() {
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
 
-  let mut parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
+  let parse_result = Parser::parse(code, &mut names, &mut allocator, ParseOptions::default());
 
   assert!(parse_result.errors.is_empty());
   assert!(!parse_result.root.is_null());
-  let root_mut = parse_result
-    .root
-    .as_mut_ref_opt()
-    .expect("expected non-null root");
+  let mut root_slot = OptNode::from_ptr(parse_result.root);
+  let root_mut = root_slot.get_mut().expect("expected non-null root");
   let actual = pretty_print_with_types_ast_stat_block(root_mut);
   assert_eq!(code, actual);
 }

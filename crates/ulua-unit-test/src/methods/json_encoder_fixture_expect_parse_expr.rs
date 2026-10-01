@@ -8,10 +8,7 @@ impl JsonEncoderFixture {
     let mut s = String::from("a = ");
     s.push_str(src);
     let root = self.expect_parse(&s);
-    let root_ref = unsafe {
-      // Safety: expect_parse 失败即 panic，返回恒为 fixture arena 存活的 AstStatBlock 根节点（块地址不动）；&* 物化只读借用读 body，与 cpp 测试 root-> 解引用同形。
-      &*root
-    };
+    let root_ref = root.get();
 
     ulua_common::LUAU_ASSERT!(!root_ref.body.is_empty());
     let stat = root_ref.body[0];
@@ -24,6 +21,7 @@ impl JsonEncoderFixture {
 
     ulua_common::LUAU_ASSERT!(stat_assign.values.len() == 1);
 
+    // parser 写入的实参槽恒非空；返回值只作身份桥（`json` 边界），不在测试侧解引用。
     stat_assign.values[0]
   }
 }

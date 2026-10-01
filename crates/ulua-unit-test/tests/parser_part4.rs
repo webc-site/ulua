@@ -31,6 +31,8 @@ const EXPR_RECURSION_MESSAGE: &str =
   "Exceeded allowed recursion depth; simplify your expression to make the code compile";
 
 // `cpp/tests/Parser.test.cpp:2175` `parse_class_declarations_unaffected_by_global_flag`
+use ulua_ast::records::node_handle::OptNode;
+
 #[test]
 fn parser_parse_class_declarations_unaffected_by_global_flag() {
   use ulua_ast::records::{
@@ -290,7 +292,7 @@ fn parser_parse_declarations() {
     location::Location, parse_options::ParseOptions, position::Position,
   };
   use ulua_unit_test::{
-    functions::ast_node_ref::{NodePtr, PtrRef, as_node_at},
+    functions::ast_node_ref::{NodePtr, as_node_at},
     records::fixture::Fixture,
   };
 
@@ -316,7 +318,7 @@ fn parser_parse_declarations() {
     Location::new(Position::new(1, 16), Position::new(1, 19)),
     global.name_location
   );
-  assert!(global.type_.as_ref_opt().is_some());
+  assert!(OptNode::from_ptr(global.type_).is_some());
 
   let func = as_node_at::<AstStatDeclareFunction, _>(&stat.body, 1).expect("body[1] 应为函数声明");
   assert_eq!(func.name, "bar");
@@ -326,8 +328,8 @@ fn parser_parse_declarations() {
   );
   assert_eq!(1, func.params.types.size);
 
-  let ret_type_pack = func
-    .ret_types
+  let ret_ty = OptNode::from_ptr(func.ret_types);
+  let ret_type_pack = ret_ty
     .as_node::<AstTypePackExplicit>()
     .expect("返回类型应为显式 type pack");
   assert_eq!(1, ret_type_pack.type_list.types.size);
@@ -339,7 +341,7 @@ fn parser_parse_declarations() {
     Location::new(Position::new(3, 25), Position::new(3, 28)),
     var_func.name_location
   );
-  assert!(var_func.params.tail_type.as_ref_opt().is_some());
+  assert!(OptNode::from_ptr(var_func.params.tail_type).is_some());
   assert!(var_func.vararg);
   assert_eq!(
     Location::new(Position::new(3, 29), Position::new(3, 32)),
@@ -386,15 +388,15 @@ fn parser_parse_declared_table_checked_member() {
   // C++ `AstStat* root = *(pr.root->body.data);` —— 取的是首条语句。
   let glob =
     as_node_at::<AstStatDeclareGlobal, _>(&root.body, 0).expect("body[0] 应为全局变量声明");
-  let tbl = glob
-    .type_
+  let glob_ty = OptNode::from_ptr(glob.type_);
+  let tbl = glob_ty
     .as_node::<AstTypeTable>()
     .expect("声明类型应为表类型");
   assert_eq!(1, tbl.props.size);
 
   let prop = elem(&tbl.props, 0);
-  let func = prop
-    .r#type
+  let prop_ty = OptNode::from_ptr(prop.r#type);
+  let func = prop_ty
     .as_node::<AstTypeFunction>()
     .expect("属性类型应为函数类型");
   assert!(func.is_checked_function());
@@ -805,7 +807,7 @@ fn parser_parse_extern_type_declarations() {
     Location::new(Position::new(2, 12), Position::new(2, 16)),
     prop.name_location
   );
-  assert!(prop.ty.as_node::<AstTypeReference>().is_some());
+  assert!(OptNode::from_ptr(prop.ty).as_node::<AstTypeReference>().is_some());
   assert_eq!(
     Location::new(Position::new(2, 12), Position::new(2, 24)),
     prop.location
@@ -817,7 +819,7 @@ fn parser_parse_extern_type_declarations() {
     Location::new(Position::new(3, 21), Position::new(3, 27)),
     method.name_location
   );
-  assert!(method.ty.as_node::<AstTypeFunction>().is_some());
+  assert!(OptNode::from_ptr(method.ty).as_node::<AstTypeFunction>().is_some());
   assert_eq!(
     Location::new(Position::new(3, 12), Position::new(3, 54)),
     method.location
@@ -836,7 +838,7 @@ fn parser_parse_extern_type_declarations() {
     Location::new(Position::new(7, 12), Position::new(7, 17)),
     prop2.name_location
   );
-  assert!(prop2.ty.as_node::<AstTypeReference>().is_some());
+  assert!(OptNode::from_ptr(prop2.ty).as_node::<AstTypeReference>().is_some());
   assert_eq!(
     Location::new(Position::new(7, 12), Position::new(7, 25)),
     prop2.location
@@ -896,7 +898,7 @@ fn parser_parse_extern_type_declarations_missing_with() {
     Location::new(Position::new(2, 12), Position::new(2, 16)),
     prop.name_location
   );
-  assert!(prop.ty.as_node::<AstTypeReference>().is_some());
+  assert!(OptNode::from_ptr(prop.ty).as_node::<AstTypeReference>().is_some());
   assert_eq!(
     Location::new(Position::new(2, 12), Position::new(2, 24)),
     prop.location
@@ -908,7 +910,7 @@ fn parser_parse_extern_type_declarations_missing_with() {
     Location::new(Position::new(3, 21), Position::new(3, 27)),
     method.name_location
   );
-  assert!(method.ty.as_node::<AstTypeFunction>().is_some());
+  assert!(OptNode::from_ptr(method.ty).as_node::<AstTypeFunction>().is_some());
   assert_eq!(
     Location::new(Position::new(3, 12), Position::new(3, 54)),
     method.location
@@ -927,7 +929,7 @@ fn parser_parse_extern_type_declarations_missing_with() {
     Location::new(Position::new(7, 12), Position::new(7, 17)),
     prop2.name_location
   );
-  assert!(prop2.ty.as_node::<AstTypeReference>().is_some());
+  assert!(OptNode::from_ptr(prop2.ty).as_node::<AstTypeReference>().is_some());
   assert_eq!(
     Location::new(Position::new(7, 12), Position::new(7, 25)),
     prop2.location
@@ -963,7 +965,7 @@ fn parser_parse_global_declaration_called_class() {
   let global =
     as_node_at::<AstStatDeclareGlobal, _>(&stat.body, 0).expect("body[0] 应为全局变量声明");
   assert_eq!(global.name, "class");
-  assert!(global.type_.as_node::<AstTypeTable>().is_some());
+  assert!(OptNode::from_ptr(global.type_).as_node::<AstTypeTable>().is_some());
 }
 
 mod parser_parse_if_else_expression {
@@ -1263,13 +1265,13 @@ fn parser_parse_nested_ast_type_group() {
   assert_eq!(1, stat.body.len());
   let alias1 = as_node_at::<AstStatTypeAlias, _>(&stat.body, 0).expect("body[0] 应为类型别名");
 
-  let group1 = alias1
-    .type_ptr
+  let alias_ty = OptNode::from_ptr(alias1.type_ptr);
+  let group1 = alias_ty
     .as_node::<AstTypeGroup>()
     .expect("别名右侧应为分组类型");
-  let group2 = group1
-    .type_
+  let group1_ty = OptNode::from_ptr(group1.type_);
+  let group2 = group1_ty
     .as_node::<AstTypeGroup>()
     .expect("内层仍应为分组类型");
-  assert!(group2.type_.as_node::<AstTypeReference>().is_some());
+  assert!(OptNode::from_ptr(group2.type_).as_node::<AstTypeReference>().is_some());
 }

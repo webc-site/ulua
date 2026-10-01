@@ -8,18 +8,18 @@ extern crate alloc;
 
 /// cpp 夹具 `dynamic_cast<T*>(nearestStatement) != nullptr` 惯用断言的收口：
 /// `nearestStatement` 恒为 `*mut AstStat`（夹具 arena 存活基类指针），判型/下转
-/// 走安全门面 `NodePtr::as_node`（null 与类型不符一并折叠为 `None`），调用点零
-/// `unsafe`。语义与 cpp `node->as<T>() != nullptr` 逐条对应。
+/// 经 `OptNode` 句柄走安全门面 `NodePtr::as_node`（null 与类型不符一并折叠为
+/// `None`），调用点零 `unsafe`。语义与 cpp `node->as<T>() != nullptr` 逐条对应。
 #[inline]
 fn is_nearest<T: AstNodeClass>(node: *mut AstStat) -> bool {
-  node.as_node::<T>().is_some()
+  OptNode::from_ptr(node).as_node::<T>().is_some()
 }
 
 /// cpp 夹具 `dynamic_cast<T*>(node) != nullptr` 之于 `*mut AstNode`（ancestry 元素）：
 /// 同 [`is_nearest`]，安全门面 `as_node` 收口判型与判空，调用点零 `unsafe`。
 #[inline]
 fn is_node<T: AstNodeClass>(node: *mut AstNode) -> bool {
-  node.as_node::<T>().is_some()
+  OptNode::from_ptr(node).as_node::<T>().is_some()
 }
 
 // 样板收口助手：原逐例重复的 FragmentAutocompleteFixture 构造 + get_autocomplete_region(
@@ -82,6 +82,7 @@ use ulua_ast::{
     ast_stat_return::AstStatReturn,
     ast_stat_while::AstStatWhile,
     location::Location,
+    node_handle::OptNode,
     position::Position,
   },
   rtti::AstNodeClass,
@@ -89,7 +90,7 @@ use ulua_ast::{
 use ulua_common::{fflag, fint, macros::luau_assert::LUAU_ASSERT};
 use ulua_unit_test::{
   functions::{
-    ast_node_ref::{NodePtr, PtrRef},
+    ast_node_ref::{NodePtr, deref_at},
     get_options::get_options,
     linear_search_for_binding::linear_search_for_binding,
     lookup_name::lookup_name,
@@ -360,7 +361,10 @@ t
       // 夹具作用域覆盖本行；下游只读遍历绑定链。
       let result = frag.result.as_ref().unwrap();
       assert!(!result.fresh_scope.is_null());
-      let opt = linear_search_for_binding(result.fresh_scope.as_ref_opt().unwrap(), "t");
+      let opt = linear_search_for_binding(
+        OptNode::from_ptr(result.fresh_scope).get().unwrap(),
+        "t",
+      );
       LUAU_ASSERT!(opt.is_some());
       assert_eq!("number", to_string_type_id(opt.unwrap()));
     },
@@ -390,7 +394,10 @@ t@1
       // 夹具作用域覆盖本行；下游只读遍历绑定链。
       let result = frag.result.as_ref().unwrap();
       assert!(!result.fresh_scope.is_null());
-      let opt = linear_search_for_binding(result.fresh_scope.as_ref_opt().unwrap(), "t");
+      let opt = linear_search_for_binding(
+        OptNode::from_ptr(result.fresh_scope).get().unwrap(),
+        "t",
+      );
       LUAU_ASSERT!(opt.is_some());
       assert_eq!("number", to_string_type_id(opt.unwrap()));
     },
@@ -847,8 +854,9 @@ local z = x + y
   assert_eq!("local z = x + y", fragment.fragment_to_parse);
   assert_eq!(4, fragment.ancestry.len());
   assert!(!fragment.root.is_null());
-  // Safety: fragment.root 已判空，指向夹具 arena 存活根块，仅只读。
-  let root = fragment.root.as_ref_opt().unwrap();
+  // fragment.root 已判空，经句柄物化夹具 arena 存活根块的只读借用。
+  let root_slot = OptNode::from_ptr(fragment.root);
+  let root = root_slot.get().unwrap();
   assert_eq!(
     Location {
       begin: Position { line: 3, column: 0 },
@@ -870,15 +878,16 @@ local z = x + y
   assert_eq!(1, stat.values.size);
   assert_eq!(
     "z",
-    // Binding 指针槽读法走夹具门面 PtrRef（null → None），零 unsafe。
-    PtrRef::as_ref_opt(&stat.vars.as_slice()[0])
+    // vars 元素指针数组经 deref_at 门面判空物化。
+    deref_at(&stat.vars, 0)
       .expect("vars 元素是 arena 写入的存活 Binding 指针")
       .name
       .as_str()
       .unwrap()
   );
 
-  let bin = (stat.values.as_slice()[0])
+  let value0 = OptNode::from_ptr(stat.values.as_slice()[0]);
+  let bin = value0
     .as_node::<AstExprBinary>()
     .expect("local 值应为二元表达式");
   assert_eq!(AstExprBinaryOp::Add, bin.op);
@@ -889,23 +898,9 @@ local z = x + y
   let rhs = (bin.right)
     .as_node::<AstExprLocal>()
     .expect("右操作数应为 local 引用");
-  // Safety: local 字段指向存活 Binding（夹具 arena 只读）。
-  assert_eq!(
-    "x",
-    PtrRef::as_ref_opt(&lhs.local)
-      .expect("存活 Binding 指针")
-      .name
-      .as_str()
-      .unwrap()
-  );
-  assert_eq!(
-    "y",
-    PtrRef::as_ref_opt(&rhs.local)
-      .expect("存活 Binding 指针")
-      .name
-      .as_str()
-      .unwrap()
-  );
+  // local 字段为 Node 句柄（非空），直接只读取名。
+  assert_eq!("x", lhs.local.get().name.as_str().unwrap());
+  assert_eq!("y", rhs.local.get().name.as_str().unwrap());
 }
 
 // Source: `tests/FragmentAutocomplete.test.cpp`
@@ -940,8 +935,9 @@ local y = 5
   assert_eq!("local z = x + y", fragment.fragment_to_parse);
   assert_eq!(4, fragment.ancestry.len());
   assert!(!fragment.root.is_null());
-  // Safety: fragment.root 已判空，指向夹具 arena 存活根块，仅只读。
-  let root = fragment.root.as_ref_opt().unwrap();
+  // fragment.root 已判空，经句柄物化夹具 arena 存活根块的只读借用。
+  let root_slot = OptNode::from_ptr(fragment.root);
+  let root = root_slot.get().unwrap();
   assert_eq!(
     Location {
       begin: Position { line: 2, column: 0 },
@@ -961,15 +957,16 @@ local y = 5
   assert_eq!(1, stat.values.size);
   assert_eq!(
     "z",
-    // Binding 指针槽读法走夹具门面 PtrRef（null → None），零 unsafe。
-    PtrRef::as_ref_opt(&stat.vars.as_slice()[0])
+    // vars 元素指针数组经 deref_at 门面判空物化。
+    deref_at(&stat.vars, 0)
       .expect("vars 元素是 arena 写入的存活 Binding 指针")
       .name
       .as_str()
       .unwrap()
   );
 
-  let bin = (stat.values.as_slice()[0])
+  let value0 = OptNode::from_ptr(stat.values.as_slice()[0]);
+  let bin = value0
     .as_node::<AstExprBinary>()
     .expect("local 值应为二元表达式");
   assert_eq!(AstExprBinaryOp::Add, bin.op);
@@ -980,15 +977,8 @@ local y = 5
   let rhs = (bin.right)
     .as_node::<AstExprGlobal>()
     .expect("右操作数应为 global 引用");
-  // Safety: local 字段指向存活 Binding（夹具 arena 只读）。
-  assert_eq!(
-    "x",
-    PtrRef::as_ref_opt(&lhs.local)
-      .expect("存活 Binding 指针")
-      .name
-      .as_str()
-      .unwrap()
-  );
+  // local 字段为 Node 句柄（非空），直接只读取名。
+  assert_eq!("x", lhs.local.get().name.as_str().unwrap());
   assert_eq!("y", rhs.name.as_str().unwrap());
 }
 
@@ -1056,15 +1046,17 @@ abc("bar")
 
   let back = *fragment.ancestry.last().unwrap();
   assert!(crate::is_node::<AstExprConstantString>(back));
-  // Safety: 判型后的 arena 节点指针物化为只读引用，用例作用域内存活且不再写入。
-  let back = back.as_ref_opt().unwrap();
+  // 判型后的 arena 节点经句柄物化只读引用，用例作用域内存活且不再写入。
+  let back_handle = OptNode::from_ptr(back);
+  let back = back_handle.get().unwrap();
   assert_eq!(Position { line: 2, column: 0 }, back.location.begin);
   assert_eq!(Position { line: 2, column: 5 }, back.location.end);
 
   let parent = fragment.ancestry[fragment.ancestry.len() - 2];
   assert!(crate::is_node::<AstExprCall>(parent));
-  // Safety: 同上，判型后的存活 arena 节点只读引用。
-  let parent = parent.as_ref_opt().unwrap();
+  // 同上，判型后的存活 arena 节点只读引用。
+  let parent_handle = OptNode::from_ptr(parent);
+  let parent = parent_handle.get().unwrap();
   assert_eq!(Position { line: 1, column: 0 }, parent.location.begin);
   assert_eq!(Position { line: 3, column: 1 }, parent.location.end);
 }
@@ -1105,15 +1097,17 @@ abc("bar")
 
   let back = *call_fragment.ancestry.last().unwrap();
   assert!(crate::is_node::<AstExprConstantString>(back));
-  // Safety: 判型后的 arena 节点指针物化为只读引用，用例作用域内存活且不再写入。
-  let back = back.as_ref_opt().unwrap();
+  // 判型后的 arena 节点经句柄物化只读引用，用例作用域内存活且不再写入。
+  let back_handle = OptNode::from_ptr(back);
+  let back = back_handle.get().unwrap();
   assert_eq!(Position { line: 1, column: 4 }, back.location.begin);
   assert_eq!(Position { line: 1, column: 9 }, back.location.end);
 
   let parent = call_fragment.ancestry[call_fragment.ancestry.len() - 2];
   assert!(crate::is_node::<AstExprCall>(parent));
-  // Safety: 同上，判型后的存活 arena 节点只读引用。
-  let parent = parent.as_ref_opt().unwrap();
+  // 同上，判型后的存活 arena 节点只读引用。
+  let parent_handle = OptNode::from_ptr(parent);
+  let parent = parent_handle.get().unwrap();
   assert_eq!(Position { line: 1, column: 0 }, parent.location.begin);
   assert_eq!(
     Position {
@@ -1142,7 +1136,8 @@ abc("bar")
   let back = *string_fragment.ancestry.last().unwrap();
   // 门面一步下转+判型+物化（原 `ast_node_as + is_null + &*` 三步）。
   // Safety: ancestry 元素为夹具 arena 存活节点指针，只读至用例结束。
-  let as_string = (back)
+  let back_handle = OptNode::from_ptr(back);
+  let as_string = back_handle
     .as_node::<AstExprConstantString>()
     .expect("ancestry 尾元素应为字符串字面量");
   assert_eq!(
@@ -1582,8 +1577,11 @@ end
   assert_eq!(1, result.local_stack.len());
   assert_eq!(result.local_map.size(), result.local_stack.len());
   let last = *result.local_stack.last().unwrap();
-  // (下方 unsafe: local_stack 元素是 arena 写入的存活 Binding 指针，只读取名)
-  assert_eq!("self", last.as_ref_opt().unwrap().name.as_str().unwrap());
+  // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
+  assert_eq!(
+    "self",
+    OptNode::from_ptr(last).get().unwrap().name.as_str().unwrap()
+  );
 }
 
 // Source: `tests/FragmentAutocomplete.test.cpp`
@@ -1785,18 +1783,21 @@ end
   assert_eq!(result.local_map.size(), result.local_stack.len());
   assert!(!result.nearest_statement.is_null());
   let last = *result.local_stack.last().unwrap();
-  // (下方 unsafe: local_stack 元素是 arena 写入的存活 Binding 指针，只读取名)
-  assert_eq!("z", last.as_ref_opt().unwrap().name.as_str().unwrap());
+  // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
+  assert_eq!(
+    "z",
+    OptNode::from_ptr(last).get().unwrap().name.as_str().unwrap()
+  );
 
   // 门面一步下转+判型+物化（原 `ast_node_as + is_null + &*` 三步）。
-  // Safety: nearest_statement 为夹具 arena 存活语句指针，只读至用例结束。
-  let local = (result.nearest_statement)
+  // nearest_statement 为夹具 arena 存活语句指针，句柄物化后只读至用例结束。
+  let nearest = OptNode::from_ptr(result.nearest_statement);
+  let local = nearest
     .as_node::<AstStatLocal>()
     .expect("nearest_statement 应为 local 声明");
   assert_eq!(1, local.vars.size);
-  // Binding 指针槽读法走夹具门面 PtrRef（null → None），零 unsafe。
-  let var =
-    PtrRef::as_ref_opt(&local.vars.as_slice()[0]).expect("vars 元素是 arena 写入的存活节点指针");
+  // vars 元素指针数组经 deref_at 门面判空物化。
+  let var = deref_at(&local.vars, 0).expect("vars 元素是 arena 写入的存活节点指针");
   assert_eq!("q", var.name.as_str().unwrap());
 }
 
@@ -1823,18 +1824,21 @@ end
   assert_eq!(result.local_map.size(), result.local_stack.len());
   assert!(!result.nearest_statement.is_null());
   let last = *result.local_stack.last().unwrap();
-  // (下方 unsafe: local_stack 元素是 arena 写入的存活 Binding 指针，只读取名)
-  assert_eq!("y", last.as_ref_opt().unwrap().name.as_str().unwrap());
+  // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
+  assert_eq!(
+    "y",
+    OptNode::from_ptr(last).get().unwrap().name.as_str().unwrap()
+  );
 
   // 门面一步下转+判型+物化（原 `ast_node_as + is_null + &*` 三步）。
-  // Safety: nearest_statement 为夹具 arena 存活语句指针，只读至用例结束。
-  let local = (result.nearest_statement)
+  // nearest_statement 为夹具 arena 存活语句指针，句柄物化后只读至用例结束。
+  let nearest = OptNode::from_ptr(result.nearest_statement);
+  let local = nearest
     .as_node::<AstStatLocal>()
     .expect("nearest_statement 应为 local 声明");
   assert_eq!(1, local.vars.size);
-  // Binding 指针槽读法走夹具门面 PtrRef（null → None），零 unsafe。
-  let var =
-    PtrRef::as_ref_opt(&local.vars.as_slice()[0]).expect("vars 元素是 arena 写入的存活节点指针");
+  // vars 元素指针数组经 deref_at 门面判空物化。
+  let var = deref_at(&local.vars, 0).expect("vars 元素是 arena 写入的存活节点指针");
   assert_eq!("e", var.name.as_str().unwrap());
 }
 
@@ -2010,9 +2014,10 @@ type a = typeof({})@1
     |frag: &mut FragmentAutocompleteStatusResult| {
       LUAU_ASSERT!(frag.result.is_some());
       let sc: *mut Scope = frag.result.as_ref().unwrap().fresh_scope;
-      // Safety: fresh_scope 是结果自带的存活 Scope 句柄，仅只读查找绑定。
+      // fresh_scope 是结果自带的存活 Scope 槽位，经句柄安全只读查找绑定。
       assert!(
-        sc.as_ref_opt()
+        OptNode::from_ptr(sc)
+          .get()
           .unwrap()
           .private_type_bindings
           .contains_key("a")
@@ -2580,10 +2585,17 @@ return module"#;
 
       let frag_id = frag_id.unwrap();
       let src_id = src_id.unwrap();
-      // Safety: frag_id/src_id 为存活 arena 类型句柄（TypeId 即被测侧 `*const Type`
-      // 别名，(c) 类无安全解引用门面），本处只读 owning_arena 标量字段。
-      let frag_arena = frag_id.as_ref_opt().unwrap().owning_arena;
-      let src_arena = src_id.as_ref_opt().unwrap().owning_arena;
+      // frag_id/src_id 为存活 arena 类型句柄（TypeId 即被测侧 `*const Type`
+      // 别名，(c) 类无安全解引用门面），经 OptNode 折叠判空后只读 owning_arena
+      // 标量字段（类型对象在借用期内不移动不释放）。
+      let frag_arena = OptNode::from_ptr(frag_id.cast_mut())
+        .get()
+        .unwrap()
+        .owning_arena;
+      let src_arena = OptNode::from_ptr(src_id.cast_mut())
+        .get()
+        .unwrap()
+        .owning_arena;
       let module_arena = frag
         .result
         .as_ref()
@@ -4037,13 +4049,13 @@ local y = 5
     assert!(!result.nearest_statement.is_null());
 
     // 门面一步下转+判型（原 `ast_node_as + is_null` 两步）。
-    // Safety: nearest_statement 为夹具 arena 存活语句指针，只读。
-    let local = (result.nearest_statement)
+    // nearest_statement 为夹具 arena 存活语句指针，句柄物化后只读。
+    let nearest = OptNode::from_ptr(result.nearest_statement);
+    let local = nearest
       .as_node::<AstStatLocal>()
       .expect("nearest_statement 应为 local 声明");
     assert_eq!(1, local.vars.size);
-    let var =
-      PtrRef::as_ref_opt(&local.vars.as_slice()[0]).expect("vars 元素是 arena 写入的存活节点指针");
+    let var = deref_at(&local.vars, 0).expect("vars 元素是 arena 写入的存活节点指针");
     assert_eq!("y", var.name.as_str().unwrap());
   }
 }
@@ -4122,8 +4134,11 @@ local function bar() return x + foo() end
   assert_eq!(3, result.local_stack.len());
   assert_eq!(result.local_map.size(), result.local_stack.len());
   let last = *result.local_stack.last().unwrap();
-  // (下方 unsafe: local_stack 元素是 arena 写入的存活 Binding 指针，只读取名)
-  assert_eq!("bar", last.as_ref_opt().unwrap().name.as_str().unwrap());
+  // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
+  assert_eq!(
+    "bar",
+    OptNode::from_ptr(last).get().unwrap().name.as_str().unwrap()
+  );
   assert!(crate::is_nearest::<AstStatReturn>(result.nearest_statement));
 }
 
@@ -4170,7 +4185,12 @@ fn fragment_autocomplete_local_initializer() {
       begin: Position { line: 0, column: 0 },
       end: Position { line: 0, column: 9 },
     },
-    fragment.root.as_ref_opt().unwrap().base.base.location
+    OptNode::from_ptr(fragment.root)
+      .get()
+      .unwrap()
+      .base
+      .base
+      .location
   );
 }
 
@@ -4760,16 +4780,17 @@ type V = {h : number, i : U?} @1
     |frag: &mut FragmentAutocompleteStatusResult| {
       LUAU_ASSERT!(!frag.result.as_ref().unwrap().fresh_scope.is_null());
       let scope: *mut Scope = frag.result.as_ref().unwrap().fresh_scope;
+      let scope_slot = OptNode::from_ptr(scope);
       assert!(
-        1 == scope
-          .as_ref_opt()
+        1 == scope_slot
+          .get()
           .unwrap()
           .private_type_bindings
           .contains_key("U") as usize
       );
       assert!(
-        1 == scope
-          .as_ref_opt()
+        1 == scope_slot
+          .get()
           .unwrap()
           .private_type_bindings
           .contains_key("V") as usize
@@ -4797,8 +4818,11 @@ if x == 4 then
   assert_eq!(result.local_map.size(), result.local_stack.len());
   assert!(!result.nearest_statement.is_null());
   let last = *result.local_stack.last().unwrap();
-  // (下方 unsafe: local_stack 元素是 arena 写入的存活 Binding 指针，只读取名)
-  assert_eq!("y", last.as_ref_opt().unwrap().name.as_str().unwrap());
+  // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
+  assert_eq!(
+    "y",
+    OptNode::from_ptr(last).get().unwrap().name.as_str().unwrap()
+  );
 
   assert!(crate::is_nearest::<AstStatIf>(result.nearest_statement));
 }
@@ -5844,7 +5868,7 @@ fn fragment_autocomplete_statement_in_empty_fragment_is_non_null() {
   assert_eq!("", fragment.fragment_to_parse);
   assert_eq!(1, fragment.ancestry.len());
   assert!(!fragment.root.is_null());
-  assert_eq!(0, fragment.root.as_ref_opt().unwrap().body.len());
+  assert_eq!(0, OptNode::from_ptr(fragment.root).get().unwrap().body.len());
 }
 
 // Source: `tests/FragmentAutocomplete.test.cpp`

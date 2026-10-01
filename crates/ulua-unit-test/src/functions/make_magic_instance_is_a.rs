@@ -24,13 +24,10 @@ use ulua_analysis::{
 };
 use ulua_ast::records::{
   ast_expr_call::AstExprCall, ast_expr_constant_string::AstExprConstantString,
-  ast_expr_index_name::AstExprIndexName,
+  ast_expr_index_name::AstExprIndexName, node_handle::OptNode,
 };
 
-use crate::functions::{
-  ast_node_ref::{NodePtr, PtrRef},
-  raw_handle::raw_handle,
-};
+use crate::functions::{ast_node_ref::{NodePtr, PtrRef}, raw_handle::raw_handle};
 fn magic_instance_is_a_handle_old_solver(
   type_checker: &mut TypeChecker,
   scope: &Arc<Scope>,
@@ -41,12 +38,14 @@ fn magic_instance_is_a_handle_old_solver(
     return None;
   }
 
-  let args = expr.args.as_slice();
-  // 门面一步「上转+判型+判空」：安全 `NodePtr::as_node`（生命周期由 slot 借用给出），
-  // 未命中与 null 折叠为同一 None 早退，调用点零 unsafe。
-  let index = expr.func.as_node::<AstExprIndexName>();
-  let str_node = args
-    .first()
+  // 裸指针字段先物化为 `OptNode` 句柄（判空收口在 ulua-ast），再走安全门面
+  // 一步「上转+判型」：未命中与 null 折叠为同一 None 早退，调用点零 unsafe。
+  let func = OptNode::from_ptr(expr.func);
+  let index = func.as_node::<AstExprIndexName>();
+  let str_node = expr
+    .args
+    .iter_nodes()
+    .next()
     .and_then(|arg| arg.as_node::<AstExprConstantString>());
   let (Some(index), Some(str_node)) = (index, str_node) else {
     return None;
@@ -83,8 +82,9 @@ fn magic_instance_is_a_infer(_context: &MagicFunctionCallContext) -> bool {
 
 /// C++ `MagicInstanceIsA::refine` (new constraint-solver path).
 fn magic_instance_is_a_refine(ctx: &MagicRefinementContext) {
-  let call_site = ctx
-    .call_site
+  // call_site 为 parser arena 节点槽（非空契约同 cpp），经 OptNode 安全物化。
+  let call_site_handle = OptNode::from_ptr(ctx.call_site.cast_mut());
+  let call_site = call_site_handle
     .as_ref_opt()
     .expect("MagicRefinementContext 约定 call_site 非空");
 
@@ -92,11 +92,13 @@ fn magic_instance_is_a_refine(ctx: &MagicRefinementContext) {
     return;
   }
 
-  // 安全门面 as_node：slot 借用（&call_site）给出返回引用寿命，判型未命中折叠为 None 早退。
-  let args = call_site.args.as_slice();
-  let index = call_site.func.as_node::<AstExprIndexName>();
-  let str_node = args
-    .first()
+  // 安全门面 as_node：句柄绑定给出返回引用寿命，判型未命中折叠为 None 早退。
+  let func = OptNode::from_ptr(call_site.func);
+  let index = func.as_node::<AstExprIndexName>();
+  let str_node = call_site
+    .args
+    .iter_nodes()
+    .next()
     .and_then(|arg| arg.as_node::<AstExprConstantString>());
   let (Some(_index), Some(str_node)) = (index, str_node) else {
     return;
@@ -108,8 +110,10 @@ fn magic_instance_is_a_refine(ctx: &MagicRefinementContext) {
   };
 
   let name = String::from(str_node.value.as_str().unwrap_or(""));
-  let scope = ctx
-    .scope
+  // scope 为分析侧 solver 生命周期内稳定的可空槽（借用期内不移动不释放），
+  // 与 AST 槽同一「判空 + 存活物化」形态，经 OptNode 安全折叠。
+  let scope_handle = OptNode::from_ptr(ctx.scope);
+  let scope = scope_handle
     .as_ref_opt()
     .expect("MagicRefinementContext 约定 scope 非空");
   let tfun = match scope.lookup_type(&name) {

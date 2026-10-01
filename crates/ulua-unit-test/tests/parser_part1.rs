@@ -2,6 +2,7 @@
 // Automatically aggregated test suite.
 
 // cpp `cstNode->as<T>()`：CST 侧下转入口与 AST 侧同在 `ast_node_ref` 收口。
+use ulua_ast::records::node_handle::OptNode;
 use ulua_common::functions::c_str::cstr;
 use ulua_unit_test::functions::ast_node_ref::CstNodePtr;
 
@@ -67,7 +68,7 @@ fn parser_all_disallowed_metamethods() {
 #[test]
 fn parser_allocator_can_be_moved() {
   use ulua_ast::records::allocator::Allocator;
-  use ulua_unit_test::{functions::ast_node_ref::PtrRef, records::counter::Counter};
+  use ulua_unit_test::records::counter::Counter;
 
   // 计数器句柄的「未分配」态用 `Option` 表达，取代 `null_mut()` 局部哨兵（review.md §2）；
   // 句柄本体仍是 arena 返回的 `*mut Counter`（跨 move 观察存活对象，非借用槽）。
@@ -84,7 +85,7 @@ fn parser_allocator_can_be_moved() {
   let _a = Allocator::move_from(&mut inner());
 
   let counter_ptr = c.expect("counter 已分配");
-  assert_eq!(1, counter_ptr.as_ref_opt().expect("counter 必须存活").id);
+  assert_eq!(1, OptNode::from_ptr(counter_ptr).get().expect("counter 必须存活").id);
 }
 #[test]
 fn parser_allow_unicode_in_string() {
@@ -388,7 +389,8 @@ fn parser_class_declaration() {
   assert_eq!(root.body.len(), 2);
 
   let first = as_node_at::<AstStatClass, _>(&root.body, 0).expect("body[0] 应为 AstStatClass");
-  let first_name = first.name.as_ref_opt().expect("类名 AstLocal 必须存在");
+  let class_name = OptNode::from_ptr(first.name);
+  let first_name = class_name.as_ref_opt().expect("类名 AstLocal 必须存在");
   assert_eq!(first_name.name.as_str(), Some("Point2"));
 
   assert_eq!(first.members.size, 2);
@@ -489,8 +491,8 @@ end
   let cat = as_node_at::<AstStatClass, _>(&root.body, 1).expect("body[1] 应为 AstStatClass");
   assert!(!cat.super_.is_null(), "Cat 应有基类引用");
   assert!(!cat.open);
-  let super_global = cat
-    .super_
+  let super_slot = OptNode::from_ptr(cat.super_);
+  let super_global = super_slot
     .as_node::<AstExprGlobal>()
     .expect("super 应为 AstExprGlobal");
   assert_eq!(super_global.name.as_str(), Some("Animal"));
@@ -534,7 +536,7 @@ fn parser_class_indexer() {
     parse_options::ParseOptions,
   };
   use ulua_unit_test::{
-    functions::ast_node_ref::{NodePtr, PtrRef, as_node_at},
+    functions::ast_node_ref::{NodePtr, as_node_at},
     records::fixture::Fixture,
   };
 
@@ -551,19 +553,17 @@ fn parser_class_indexer() {
 
   let declared_extern_type = as_node_at::<AstStatDeclareExternType, _>(&root.body, 0)
     .expect("body[0] 应为 AstStatDeclareExternType");
-  let indexer = declared_extern_type
-    .indexer
-    .as_ref_opt()
-    .expect("indexer 必须存在");
+  let indexer_slot = OptNode::from_ptr(declared_extern_type.indexer);
+  let indexer = indexer_slot.get().expect("indexer 必须存在");
 
-  let index_type_ref = indexer
-    .index_type
+  let index_type = OptNode::from_ptr(indexer.index_type);
+  let index_type_ref = index_type
     .as_node::<AstTypeReference>()
     .expect("indexType 应为 AstTypeReference");
   assert_eq!(index_type_ref.name.as_str(), Some("string"));
 
-  let result_type_ref = indexer
-    .result_type
+  let result_type = OptNode::from_ptr(indexer.result_type);
+  let result_type_ref = result_type
     .as_node::<AstTypeReference>()
     .expect("resultType 应为 AstTypeReference");
   assert_eq!(result_type_ref.name.as_str(), Some("number"));
@@ -577,12 +577,13 @@ fn parser_class_indexer() {
     "Cannot have more than one indexer on an extern type",
     None,
   );
-  let error_root = error_parse_result.root.as_ref_opt().expect("根块必须存在");
+  let error_root_slot = OptNode::from_ptr(error_parse_result.root);
+  let error_root = error_root_slot.get().expect("根块必须存在");
   assert_eq!(error_root.body.len(), 1);
 
   let error_declared_extern_type = as_node_at::<AstStatDeclareExternType, _>(&error_root.body, 0)
     .expect("body[0] 应为 AstStatDeclareExternType");
-  assert!(error_declared_extern_type.indexer.as_ref_opt().is_some());
+  assert!(OptNode::from_ptr(error_declared_extern_type.indexer).is_some());
 }
 #[test]
 fn parser_class_is_still_contextual() {
@@ -632,7 +633,7 @@ fn parser_class_method_missing_end_error() {
 fn parser_class_method_properties() {
   use ulua_ast::records::ast_stat_declare_extern_type::AstStatDeclareExternType;
   use ulua_unit_test::{
-    functions::ast_node_ref::{PtrRef, as_node_at},
+    functions::ast_node_ref::as_node_at,
     records::fixture::Fixture,
   };
 
@@ -645,7 +646,8 @@ fn parser_class_method_properties() {
     None,
   );
 
-  let root1 = result1.root.as_ref_opt().expect("根块必须存在");
+  let root1_slot = OptNode::from_ptr(result1.root);
+  let root1 = root1_slot.get().expect("根块必须存在");
   assert_eq!(1, root1.body.len());
 
   let klass = as_node_at::<AstStatDeclareExternType, _>(&root1.body, 0)
@@ -661,7 +663,8 @@ fn parser_class_method_properties() {
     None,
   );
 
-  let root2 = result2.root.as_ref_opt().expect("根块必须存在");
+  let root2_slot = OptNode::from_ptr(result2.root);
+  let root2 = root2_slot.get().expect("根块必须存在");
   assert_eq!(1, root2.body.len());
 
   let klass2 = as_node_at::<AstStatDeclareExternType, _>(&root2.body, 0)
@@ -790,7 +793,7 @@ fn parser_class_recovery_public_no_name_and_invalid_body_token() {
   };
   use ulua_common::fflag;
   use ulua_unit_test::{
-    functions::ast_node_ref::{PtrRef, as_node_at, elem},
+    functions::ast_node_ref::{as_node_at, elem},
     records::fixture::Fixture,
     type_aliases::scoped_fast_flag::ScopedFastFlag,
   };
@@ -806,9 +809,8 @@ fn parser_class_recovery_public_no_name_and_invalid_body_token() {
   assert_eq!(root.body.len(), 1);
   let cls = as_node_at::<AstStatClass, _>(&root.body, 0).expect("body[0] 应为 AstStatClass");
   assert_eq!(
-    cls
-      .name
-      .as_ref_opt()
+    OptNode::from_ptr(cls.name)
+      .get()
       .expect("类名 AstLocal 必须存在")
       .name
       .as_str(),
@@ -881,7 +883,7 @@ fn parser_classes_can_interleave_methods_and_properties() {
   };
   use ulua_common::fflag;
   use ulua_unit_test::{
-    functions::ast_node_ref::{PtrRef, as_node_at, elem},
+    functions::ast_node_ref::{as_node_at, elem},
     records::fixture::Fixture,
     type_aliases::scoped_fast_flag::ScopedFastFlag,
   };
@@ -897,9 +899,8 @@ fn parser_classes_can_interleave_methods_and_properties() {
   assert_eq!(root.body.len(), 1);
   let cls = as_node_at::<AstStatClass, _>(&root.body, 0).expect("body[0] 应为 AstStatClass");
   assert_eq!(
-    cls
-      .name
-      .as_ref_opt()
+    OptNode::from_ptr(cls.name)
+      .get()
       .expect("类名 AstLocal 必须存在")
       .name
       .as_str(),
@@ -1040,7 +1041,7 @@ fn parser_classes_work_after_other_statements() {
   use ulua_ast::records::{ast_stat_class::AstStatClass, parse_options::ParseOptions};
   use ulua_common::fflag;
   use ulua_unit_test::{
-    functions::ast_node_ref::{PtrRef, as_node_at},
+    functions::ast_node_ref::as_node_at,
     records::fixture::Fixture,
     type_aliases::scoped_fast_flag::ScopedFastFlag,
   };
@@ -1069,9 +1070,8 @@ fn parser_classes_work_after_other_statements() {
   // cpp `CHECK_EQ(cls->name->name, "Player")` compares AstName content (strcmp),
   // not the interned pointer.
   assert_eq!(
-    cls
-      .name
-      .as_ref_opt()
+    OptNode::from_ptr(cls.name)
+      .get()
       .expect("类名 AstLocal 必须存在")
       .name
       .as_str(),
@@ -1111,8 +1111,8 @@ fn parser_complex_union_in_generic_ty() {
   let var_0 = deref_at(&assignment.vars, 0).expect("vars[0] 必须存在");
   assert_eq!(var_0.name.as_str(), Some("x"));
 
-  let generic_ty = var_0
-    .annotation
+  let annotation = OptNode::from_ptr(var_0.annotation);
+  let generic_ty = annotation
     .as_node::<AstTypeReference>()
     .expect("annotation 应为 AstTypeReference");
   assert_eq!(generic_ty.parameters.size, 1);
@@ -1270,7 +1270,8 @@ fn parser_do_end_block_with_cst() {
     .cst_node_map
     .find(&node_key(do_block))
     .expect("do 块应有 CST 节点");
-  let do_block_cst = do_block_cst_node
+  let do_block_cst_slot = OptNode::from_ptr(do_block_cst_node);
+  let do_block_cst = do_block_cst_slot
     .as_cst::<CstStatDo>()
     .expect("应为 CstStatDo");
 
