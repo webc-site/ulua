@@ -62,12 +62,12 @@ pub(crate) unsafe fn buffer_data(l: *mut LuaState, narg: i32) -> (*mut u8, usize
 /// `buf` 的数据界自洽（通常取自 [`buffer_data_ref`]）；抛错路径要求 `l` 处于可捕获
 /// 错误的受保护帧。
 #[inline]
-pub(crate) unsafe fn buffer_at_ref<'a>(
+pub(crate) unsafe fn buffer_at_ref(
   l: *mut LuaState,
-  buf: &'a mut [u8],
+  buf: &mut [u8],
   offset: i32,
   size: usize,
-) -> &'a mut [u8] {
+) -> &mut [u8] {
   // 纯界校验（安全 const 算术）留在 unsafe 外；仅抛错调用收进窄块。
   if isoutofbounds(offset, buf.len(), size) {
     // SAFETY: 契约保证 `l` 为存活调用帧，buffer_oob_error 抛错不返回
