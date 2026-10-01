@@ -54,6 +54,11 @@ pub enum VmState {
 /// 任意宿主闭包（各 `set_interrupt(move |_| …)` 单态化出不同 `F`）汇入同一
 /// [`InterruptStore`] 槽位——种类运行期开放，非有限集合可枚举。
 ///
+/// 路径热度评估：未安装 interrupt 时槽位为空、trampoline 查表即返回，虚分派
+/// 零成本；安装后每个 VM safepoint（循环回边/调用返回/GC 步进）经此一次 vtable
+/// 间接调用——这是「运行期可替换 + 类型集合开放」槽位的最小不可省开销，且仅对
+/// 主动安装 interrupt 的宿主生效（opt-in 超时/取消机制），有别于全量回调热路径。
+///
 /// Under `send` the boxed closure is `Send`: the closure is installed through
 /// [`Lua::set_interrupt`], which already requires [`MaybeSend`], and the per-VM
 /// table holding it is process-wide under that feature (see [`crate::vm_store`]).
