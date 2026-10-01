@@ -6,7 +6,8 @@
 //! 的 C 字符串层——它是全仓读取宿主 NUL 结尾缓冲区的唯一合法门面，入参形态
 //! `*const c_char` 属 C ABI 边界契约、予以保留（各消费者一律经此转 Rust 类型，
 //! 不得自行解引用宿主缓冲）。内部实现完全 Rust 化：NUL 扫描单点收口到私有
-//! [`from_c_ptr`]（原 C 串读取构造的零类型替代），读取方向两枚公开函数只剩
+//! [`from_c_ptr`]，产出 `&[u8]`/`Cow<str>`（review.md §10：CStr/CString 零残留，
+//! 不借道 `core::ffi::CStr`），读取方向两枚公开函数只剩
 //! 判空形态与解码策略的差异。写入方向（静态字节串 / 动态字节串 → `*const c_char`）
 //! 同样收口于本门面（[`cstr`] / [`with_c_str`]），消费者不得散落 `.as_ptr().cast()`。
 //!
@@ -29,7 +30,7 @@
 //! 本门面。
 
 use alloc::{borrow::Cow, string::String};
-use core::ffi::{CStr, c_char};
+use core::{ffi::c_char, slice::from_raw_parts};
 
 /// 判空 + 单点 NUL 扫描：null 哨兵按 cpp「空字符串」语义译成 `None`，
 /// 由调用门面各按自身的空值形态承接（`Cow::Borrowed("")` / 空切片）。
@@ -41,10 +42,20 @@ unsafe fn from_c_ptr<'a>(p: *const c_char) -> Option<&'a [u8]> {
   if p.is_null() {
     return None;
   }
-  // Safety: 前置条件保证 `p` 非空且指向 NUL 结尾缓冲区，[`CStr::from_ptr`] 在首个
-  // NUL 处截断读取（libc `strlen` 语义），[`CStr::to_bytes`] 返回不含终止符的字节
-  // 切片、存活期即调用方实例化的 `'a`——与原手工逐字节扫描 + `from_raw_parts` 逐位等价。
-  Some(unsafe { CStr::from_ptr(p) }.to_bytes())
+  // Safety: 前置条件担保缓冲区内必有终止 NUL：光标自 `start` 起逐字节推进，
+  // 在首个 NUL 处停止、不越过缓冲区（libc `strlen` 语义，与原借道
+  // `CStr::from_ptr().to_bytes()` 的实现逐位等价）。`[start, end)` 即首个 NUL
+  // 前的全部字节，均在调用方缓冲区内且存活期覆盖 `'a`，满足
+  // `from_raw_parts` 的非空与范围内要求；`offset_from` 非负（`end >= start`），
+  // `as usize` 无截断。
+  unsafe {
+    let start = p.cast::<u8>();
+    let mut end = start;
+    while *end != 0 {
+      end = end.add(1);
+    }
+    Some(from_raw_parts(start, end.offset_from(start) as usize))
+  }
 }
 
 /// 以 NUL 结尾的 C 字符串 → `Cow<str>`（UTF-8 宽容解码）：合法 UTF-8 时零拷贝
@@ -91,6 +102,10 @@ pub fn cstr(bytes: &'static [u8]) -> *const c_char {
   bytes.as_ptr().cast()
 }
 
+/// `with_c_str` 栈缓冲容量：绝大多数 Lua 标识符 / 模块名 ≤ 127 字节，
+/// 命中即走零堆分配的栈快路径。
+const STACK_BUF_CAP: usize = 128;
+
 /// Rust 字节串 → 瞬时 NUL 结尾收口：补一个尾部 NUL，把仅在闭包调用期内有效的
 /// `*const c_char` 交给闭包。用于 callee 当场复制/驻留字符串的 `*const c_char`
 /// 契约（如 `lua_setfield`/`lua_pushcclosure` 走 `lua_s_new` 入 intern 表），
@@ -105,9 +120,9 @@ pub fn with_c_str<R>(bytes: &[u8], f: impl FnOnce(*const c_char) -> R) -> R {
     return f(bytes.as_ptr().cast());
   }
 
-  // 栈缓冲快路径：绝大多数 Lua 标识符 / 模块名 ≤ 127 字节，零堆分配
-  if bytes.len() < 128 {
-    let mut buf = [0u8; 128];
+  // 栈缓冲快路径：容量内零堆分配
+  if bytes.len() < STACK_BUF_CAP {
+    let mut buf = [0u8; STACK_BUF_CAP];
     buf[..bytes.len()].copy_from_slice(bytes);
     buf[bytes.len()] = 0;
     f(buf.as_ptr().cast())
