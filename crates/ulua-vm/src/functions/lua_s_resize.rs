@@ -1,5 +1,5 @@
 use core::{
-  ptr::{addr_of_mut, null_mut},
+  ptr::{NonNull, addr_of_mut, null_mut},
   slice::from_raw_parts_mut,
 };
 
@@ -24,7 +24,7 @@ pub(crate) unsafe fn lua_s_resize(l: *mut LuaState, newsize: i32) {
     fresh.fill(null_mut());
 
     let tb: *mut Stringtable = addr_of_mut!((*(*l).global).strt);
-    // f_luaopen 首扩时 size==0 且 hash 未分配：buckets() 的 null 守卫给空视图。
+    // f_luaopen 首扩时 size==0 且 hash 为 None（未分配）：buckets() 的缺席守卫给空视图。
     // 旧桶按序 rehash，链内仍按 cpp 以 next 驱动、头插新桶（遍历/落位次序逐位保持）。
     let old_buckets = (*tb).buckets();
     for &head in old_buckets {
@@ -41,8 +41,14 @@ pub(crate) unsafe fn lua_s_resize(l: *mut LuaState, newsize: i32) {
       }
     }
 
-    luaM_freearray!(l, (*tb).hash, (*tb).size as usize, *mut tstring, 0);
+    // 释放旧阵：`None`（首扩，size==0）塌缩回 null 哨兵指针，与 0 槽数同现，
+    // 满足 lua_m_free「osize == 0 当且仅当 block 为空」断言
+    let oldhash = (*tb).hash.map(NonNull::as_ptr).unwrap_or(null_mut());
+    luaM_freearray!(l, oldhash, (*tb).size as usize, *mut tstring, 0);
     (*tb).size = newsize;
-    (*tb).hash = newhash;
+    // SAFETY: luaM_newarray→lua_m_new 契约——nsize>0（newsize>0 且 2 的幂）时分配失败
+    // 经 lua_d_throw 抛出（返回 `!`），正常抵达此处必为非空；unchecked 构造同时守住
+    // 表不变式（size>0 必配 Some，不会退化成 None 留下半换阵状态）
+    (*tb).hash = Some(NonNull::new_unchecked(newhash));
   }
 }

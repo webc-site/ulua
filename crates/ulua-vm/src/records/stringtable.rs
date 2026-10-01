@@ -13,8 +13,8 @@
 //!   `shrinkbuffers(full)` 与发布尾的负载判定，除零/极值魔法数提为 `const`。
 //!
 //! 表不变式（构造后恒成立，`lua_newstate` 建空表、`lua_s_resize` 唯一换阵）：
-//! `hash` 非 null 时指向 `frealloc` 分配的 `size` 个可读写 `*mut tstring` 槽，
-//! 且 `size > 0`；`size == 0` 与 `hash == null` 同现（未分配态）。链上每个节点
+//! `hash` 为 `Some` 时指向 `frealloc` 分配的 `size` 个可读写 `*mut tstring` 槽，
+//! 且 `size > 0`；`size == 0` 与 `hash == None` 同现（未分配态）。链上每个节点
 //! 都是存活 `TString`，其 `data` 区 `(*el).len` 字节可读。越界桶号句柄经 `get`
 //! 落空表分支：cpp 同位是越界 UB（空表期 intern 在 f_luaopen 建表前不可达），
 //! 本实现取「查不中/不入链、串成孤儿由 `unlink` 未命中路径回收」的正确方向。
@@ -23,8 +23,8 @@
 
 use core::{
   ffi::c_uint,
-  mem,
-  ptr::null_mut,
+  mem::{self, align_of, offset_of, size_of},
+  ptr::{NonNull, null_mut},
   slice::{from_raw_parts, from_raw_parts_mut},
 };
 
@@ -53,23 +53,34 @@ pub(crate) struct BucketIdx(pub(crate) usize);
 #[derive(Debug)]
 #[repr(C)]
 pub struct Stringtable {
-  /// 桶数组基址（cpp `lstring.h:22` `TString** hash`）。null = 「表未初始化/未分配」（与 `size == 0`
-  /// 同现），是真正的缺席语义而非可解引用的算式基址——本文件内所有读经 `buckets()/buckets_mut()` 的
-  /// null 守卫收拢为单点。§2 判定=规则 1「表未初始化」，理想形态 `Option<NonNull<*mut tstring>>`
-  /// （复用 null niche，零尺寸开销）。但本次改动被限定在本定义文件：`hash` 的裸指针读写在
-  /// `lua_s_resize.rs`（`(*tb).hash = newhash` 赋值、`luaM_freearray!(l, (*tb).hash, ..)` 释放旧阵）
-  /// 与 `lua_newstate.rs:78`（建空表 `g.strt.hash = null_mut()`），均属并行会话文件，就地改型破坏其
-  /// 编译。故本轮保留 `*mut *mut tstring`，null 只在 `Default`/建空表占位，并记录待协调改点。
-  pub(crate) hash: *mut *mut tstring,
+  /// 桶数组基址（cpp `lstring.h:22` `TString** hash`）。`None` = 「表未初始化/未分配」
+  /// （与 `size == 0` 同现），是真正的缺席语义而非可解引用的算式基址——§2 判定=规则 1
+  /// 的终态形态 `Option<NonNull<*mut tstring>>`：复用指针 null niche，与裸指针同尺寸同
+  /// 对齐（`repr(C)` 布局冻结见下方 `const` 断言）。读写收拢单点：本文件
+  /// `buckets()/buckets_mut()` 守卫 `None` 给空切片视图，链操作（`interned/link_front/
+  /// unlink`）只经切片索引；唯一换阵点 `lua_s_resize` 分配后写入 `Some` 并按
+  /// `map(NonNull::as_ptr)` 摘旧阵释放；建空表点 `Default`/`lua_newstate` 写 `None`；
+  /// `detach_buckets` 关闭转手时塌缩回裸指针哨兵（frealloc 释放契约归调用方）。
+  pub(crate) hash: Option<NonNull<*mut tstring>>,
   pub(crate) nuse: u32,
   pub(crate) size: i32,
 }
 
+// 布局冻结断言：Option<NonNull> 复用 null niche，字段尺寸/对齐/偏移与改型前
+// `*mut *mut tstring` 逐字节一致，`repr(C)` 与 `global_State` 内偏移不受影响。
+const _: () = assert!(
+  size_of::<Option<NonNull<*mut tstring>>>() == size_of::<*mut *mut tstring>()
+    && align_of::<Option<NonNull<*mut tstring>>>() == align_of::<*mut *mut tstring>()
+    && offset_of!(Stringtable, nuse) == size_of::<*mut *mut tstring>()
+    && offset_of!(Stringtable, size) == size_of::<*mut *mut tstring>() + size_of::<u32>()
+);
+
 impl Default for Stringtable {
-  // 既有约定（review.md §2）：字符串桶数组 POD 字段初值——hash=null 表「未初始化/未分配」（与 size==0 同现）；读写收拢单点、契约详见上方字段 doc，勿改 Option
+  // 既有约定（review.md §2 终态）：字符串桶数组 POD 字段初值——hash=None 表「未初始化/未分配」（与 size==0 同现，
+  // null niche 零尺寸开销）；读写收拢单点、契约详见上方字段 doc
   fn default() -> Self {
     Self {
-      hash: null_mut(),
+      hash: None,
       nuse: 0,
       size: 0,
     }
@@ -83,25 +94,23 @@ impl Stringtable {
     BucketIdx((h as usize) & (size as usize).wrapping_sub(1))
   }
 
-  /// 桶数组只读切片视图；未分配空表给空视图（null 守卫收拢于单点）。
+  /// 桶数组只读切片视图；未分配空表（`hash == None`）给空视图（缺席守卫收拢于单点）。
   #[inline]
   pub(crate) fn buckets(&self) -> &[*mut tstring] {
-    if self.hash.is_null() {
-      &[]
-    } else {
-      // SAFETY: 表不变式——hash 非 null 时指向 size 个可读 *mut tstring 槽
-      unsafe { from_raw_parts(self.hash, self.size as usize) }
+    match self.hash {
+      // SAFETY: 表不变式——hash 为 Some 时指向 size 个可读 *mut tstring 槽
+      Some(nn) => unsafe { from_raw_parts(nn.as_ptr(), self.size as usize) },
+      None => &[],
     }
   }
 
-  /// 桶数组可变切片视图；未分配空表给空视图。
+  /// 桶数组可变切片视图；未分配空表（`hash == None`）给空视图。
   #[inline]
   pub(crate) fn buckets_mut(&mut self) -> &mut [*mut tstring] {
-    if self.hash.is_null() {
-      &mut []
-    } else {
-      // SAFETY: 表不变式——hash 非 null 时指向 size 个可写 *mut tstring 槽
-      unsafe { from_raw_parts_mut(self.hash, self.size as usize) }
+    match self.hash {
+      // SAFETY: 表不变式——hash 为 Some 时指向 size 个可写 *mut tstring 槽
+      Some(nn) => unsafe { from_raw_parts_mut(nn.as_ptr(), self.size as usize) },
+      None => &mut [],
     }
   }
 
@@ -228,7 +237,9 @@ impl Stringtable {
   /// 收表转手（§2 所有权转手显式动作）：摘出桶数组指针与槽数并置空表
   /// 初态，数组的 `frealloc` 释放责任移交调用方（close_state）。
   pub(crate) fn detach_buckets(&mut self) -> (*mut *mut tstring, usize) {
-    let hash = mem::replace(&mut self.hash, null_mut());
+    // 终态转手：`None`（未分配）塌缩回 null 哨兵裸指针，与 size=0 同现，
+    // 维持 close_state 侧 `lua_m_free` 的「osize == 0 当且仅当 block 为空」契约
+    let hash = self.hash.take().map(NonNull::as_ptr).unwrap_or(null_mut());
     let count = mem::replace(&mut self.size, 0) as usize;
     self.nuse = 0;
     (hash, count)
