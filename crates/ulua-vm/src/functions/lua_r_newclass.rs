@@ -60,7 +60,11 @@ pub(crate) unsafe fn lua_r_constructobject(l: *mut LuaState) -> i32 {
       !init_index.is_null() && !matches!(ValueView::from_tvalue(&*init_index), ValueView::Nil)
     );
     let init_offset = (*init_index).as_number() as i32 - class.numberofinstancemembers;
-    let init_function = class.staticmembers.add(init_offset as usize);
+    // 静态成员窗偏移经 c_slice 收口（形制同簇内 :48/:291 先例）：下标越界由裸指针
+    // UB 降为 panic，界内性由类构造不变量兜底（`__init` 注册偏移必落在静态区）
+    let static_count = (class.numberofallmembers - class.numberofinstancemembers) as usize;
+    let init_function: *const TValue =
+      &c_slice(class.staticmembers, static_count)[init_offset as usize];
 
     let numargs = (*l).top.offset_from((*l).base) as i32;
 
@@ -142,8 +146,10 @@ pub(crate) unsafe fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
 
     let prop_slot = 1;
 
-    setnilvalue!((*l).top);
-    (*l).top = (*l).top.add(1);
+    // 栈顶保留槽写入收口为 B2-0 push 族的 pub 面 `push_nil`（即
+    // `reserved_top_slot`+`incr_top` 形）：本帧契约已保证栈顶 ≥1 空闲槽，
+    // 其前置 `ensure_stack_space(1)` 恒为 no-op，抛错/校验序逐位不变
+    (*l).push_nil();
 
     let inst_members = (*classinst).members;
     let offsettomember = (*classobject).offsettomember;
@@ -161,12 +167,20 @@ pub(crate) unsafe fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
       setsvalue!(l, &mut key, member_name);
       lua_v_gettable(
         l,
-        Slot::from_raw((*l).base.add(prop_slot)),
+        // 实参窗 base..base+numargs（numargs 已于上方校验为 2）经 c_slice 界内下标
+        // 收口 `base.add(prop_slot)`；luaV_gettable 对 `t` 句柄只走读面，from_ref 合法
+        Slot::from_ref(&c_slice((*l).base, numargs as usize)[prop_slot]),
         Slot::from_mut(&mut key),
         Slot::from_raw((*l).top.sub(1)),
       );
-      setobj!(l, inst_members.add(idx), (*l).top.sub(1));
-      lua_c_barrier!(l, classinst, inst_members.add(idx));
+      // 实例成员窗偏移经 c_slice 收口：每轮在 luaV_gettable 再入之后重取切片，
+      // 仍不持跨调用的可变借用（上方注释纪律不变），越界 UB 降 panic
+      let member_dst: *mut TValue = &mut c_slice_mut(
+        inst_members,
+        (*classobject).numberofinstancemembers as usize,
+      )[idx];
+      setobj!(l, member_dst, (*l).top.sub(1));
+      lua_c_barrier!(l, classinst, member_dst);
     }
 
     (*l).top = (*l).top.sub(1);
@@ -198,6 +212,8 @@ pub(crate) fn lua_r_setupconstructor(
 
     let inst_members = (*classobject).numberofinstancemembers;
     let staticmembers = (*classobject).staticmembers;
+    // 静态成员窗长 = 全部成员数 − 实例成员数（newclass 按静态数分配、all=inst+static）
+    let static_count = ((*classobject).numberofallmembers - inst_members) as usize;
 
     // B2-2a 任务B：同借用窗口即时读判定——Option<Slot> 原生收口；原 `!is_null()`
     // 守卫对恒非空 sentinel/cpp getstr 本就恒真，折叠后由 None 臂（miss）统一落空。
@@ -210,7 +226,8 @@ pub(crate) fn lua_r_setupconstructor(
         offset_double >= inst_members as f64
           && offset_double < (*classobject).numberofallmembers as f64
       );
-      let dest = staticmembers.add((offset_double as i32 - inst_members) as usize);
+      let dest: *mut TValue = &mut c_slice_mut(staticmembers, static_count)
+        [(offset_double as i32 - inst_members) as usize];
       setclvalue!(l, dest, constructor);
       lua_c_barrier!(l, classobject, dest);
     }
@@ -227,7 +244,8 @@ pub(crate) fn lua_r_setupconstructor(
     if let Some(init_index) = lua_h_getstr(&*(*classobject).memberstooffset, init_key)
       && let ValueView::Number(init_offset) = ValueView::from_tvalue(init_index.get())
     {
-      let dest = staticmembers.add((init_offset as i32 - inst_members) as usize);
+      let dest: *mut TValue =
+        &mut c_slice_mut(staticmembers, static_count)[(init_offset as i32 - inst_members) as usize];
       setclvalue!(l, dest, default_ctor);
       lua_c_barrier!(l, classobject, dest);
     }
