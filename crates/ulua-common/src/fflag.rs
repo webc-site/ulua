@@ -281,37 +281,70 @@ luau_flag_module! {
   // CodeGen/src/OptimizeConstProp.cpp 块间传播 fallback tag
   LUAU_FASTFLAGVARIABLE!(LUAU_CODEGEN_PROPAGATE_FALLBACK_TAGS, LuauCodegenPropagateFallbackTags), version = 2;
 
+  // VM/src/lapi.cpp
   LUAU_FASTFLAGVARIABLE!(DEBUG_LUAU_COROUTINE_FINALLY, DebugLuauCoroutineFinally);
+  // Analysis/src/EmbeddedBuiltinDefinitions.cpp
   LUAU_FASTFLAGVARIABLE!(DEBUG_LUAU_COROUTINE_FINALLY_ANALYSIS, DebugLuauCoroutineFinallyAnalysis);
+  // Analysis/src/ConstraintGenerator.cpp
   LUAU_FASTFLAGVARIABLE!(DEBUG_LUAU_EXACT_TABLE_TYPES, DebugLuauExactTableTypes);
+  // tests/Fixture.cpp
   LUAU_FASTFLAGVARIABLE!(DEBUG_LUAU_FORCE_EXACT_TABLES, DebugLuauForceExactTables);
+  // Ast/src/Parser.cpp
   LUAU_FASTFLAGVARIABLE!(DEBUG_LUAU_PARSE_EXACT_TABLES, DebugLuauParseExactTables);
+  // tests/Fixture.cpp
   LUAU_FASTFLAGVARIABLE!(DEBUG_LUAU_RUN_FAILING_EXACT_TABLE_TESTS, DebugLuauRunFailingExactTableTests);
+  // Analysis/src/ConstraintGenerator.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_BIDIRECTIONAL_INFERENCE_SET_METATABLE, LuauBidirectionalInferenceSetMetatable);
+  // VM/src/lstate.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_BUFFER_CAGE, LuauBufferCage);
+  // VM/src/lvmutils.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_CALL_LUAU_TM, LuauCallLuauTm);
+  // Analysis/src/TypeChecker2.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_CANNOT_ADD_INDEXER_TO_TABLE_PRIMITIVE, LuauCannotAddIndexerToTablePrimitive);
+  // Analysis/src/Module.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_CLONE_PUBLIC_INTERFACE_RETAIN_TYPE_FUNCTION_SOLVED_STATUS, LuauClonePublicInterfaceRetainTypeFunctionSolvedStatus);
+  // CodeGen/src/IrLoweringA64.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_CODEGEN_A64_FORG_LOOP_ARRAY, LuauCodegenA64ForgLoopArray);
+  // CodeGen/src/IrRegAllocX64.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_CODEGEN_X64_INT_SPILL_RESTORE, LuauCodegenX64IntSpillRestore);
+  // Compiler/src/Compiler.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_COMPILE_LOOP_UNROLL_ZERO, LuauCompileLoopUnrollZero);
+  // Bytecode/src/BytecodeBuilder.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_COMPILE_UNDO_EMIT_ADJUST, LuauCompileUndoEmitAdjust);
+  // Analysis/src/ConstraintGenerator.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_EXPERIMENTAL_IF_LOCAL_ANALYSIS, LuauExperimentalIfLocalAnalysis);
+  // Ast/src/Parser.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_EXPERIMENTAL_IF_LOCAL_SYNTAX, LuauExperimentalIfLocalSyntax);
+  // Analysis/src/Normalize.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_FIX_NORMALIZE_FUNCTION_INTERSECTIONS, LuauFixNormalizeFunctionIntersections);
+  // Analysis/src/FragmentAutocomplete.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_FRAGMENT_AC_LOCAL_AUTOCOMPLETE_FIX, LuauFragmentACLocalAutocompleteFix);
+  // VM/src/lapi.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_FROZEN_META_BUTTERFLY, LuauFrozenMetaButterfly);
+  // VM/src/lgc.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_GC_TRACE_UDATA, LuauGcTraceUdata);
+  // Analysis/src/Linter.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_IMPROVE_DEPRECATED_LINT, LuauImproveDeprecatedLint);
+  // Analysis/src/Unifier2.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_INFER_READ_ONLY_INDEXERS, LuauInferReadOnlyIndexers);
+  // VM/src/lvmload.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_LOAD_REMAP_OPTIONAL_USERDATA, LuauLoadRemapOptionalUserdata);
+  // Analysis/src/Constraint.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_REFERENCE_COUNT_INITIALIZER_IS_ITERATIVE, LuauReferenceCountInitializerIsIterative);
+  // VM/src/linit.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_SANDBOX_FREEZES_VECTOR_METATABLE, LuauSandboxFreezesVectorMetatable);
+  // Analysis/src/TypeChecker2.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_SKIP_UNUSED_TYPE_TRAVERSALS, LuauSkipUnusedTypeTraversals);
+  // Analysis/src/TypeChecker2.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_SOUND_GENERIC_MISMATCHES, LuauSoundGenericMismatches);
+  // Analysis/src/Subtyping.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_SUBTYPING_SKIP_UNREAD_REASONING, LuauSubtypingSkipUnreadReasoning);
+  // VM/src/ltable.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_TABLE_ARRAY_ADJUST_CHECK, LuauTableArrayAdjustCheck);
+  // VM/src/ltable.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_TABLE_ARRAY_SHRINK_ORDER, LuauTableArrayShrinkOrder);
+  // Analysis/src/ConstraintSolver.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_TRAVERSE_SCOPE_TO_FUNCTION, LuauTraverseScopeToFunction);
+  // Analysis/src/UserDefinedTypeFunction.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_TYPE_FUNCTIONS_RETURN_AFTER_ALL_SERIALIZED, LuauTypeFunctionsReturnAfterAllSerialized);
 }
