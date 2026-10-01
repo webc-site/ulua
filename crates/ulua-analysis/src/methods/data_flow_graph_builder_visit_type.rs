@@ -10,8 +10,7 @@ use ulua_ast::{
 use ulua_common::LUAU_ASSERT;
 
 use crate::{
-  functions::arena_ref::arena_ref,
-  records::{arena_handle::alias_opt, data_flow_graph_builder::DataFlowGraphBuilder},
+  functions::arena_ref::arena_ref, records::data_flow_graph_builder::DataFlowGraphBuilder,
 };
 
 impl DataFlowGraphBuilder {
@@ -60,11 +59,9 @@ impl DataFlowGraphBuilder {
     }
 
     // indexer 是显式可空字段，使用前判空（cpp `if (t->indexer)` 同款）。
-    if let Some(indexer) = alias_opt(t.indexer) {
-      let index_type = arena_ref(indexer.index_type, "AstTableIndexer.index_type");
-      let result_type = arena_ref(indexer.result_type, "AstTableIndexer.result_type");
-      self.visit_type(index_type);
-      self.visit_type(result_type);
+    if let Some(indexer) = t.indexer.get() {
+      self.visit_type(indexer.index_type.get());
+      self.visit_type(indexer.result_type.get());
     }
   }
 

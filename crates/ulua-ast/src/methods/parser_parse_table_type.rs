@@ -1,10 +1,8 @@
-use core::ptr::NonNull;
-
 use crate::{
   enums::{
     ast_table_access::AstTableAccess, quote_style_cst::QuoteStyle::QuotedDouble, type_lexer::Type,
   },
-  functions::optional_node::{node_opt, opt_node, slot_ref},
+  functions::optional_node::{opt_node, slot_ref},
   records::{
     ast_array::AstArray,
     ast_name::AstName,
@@ -18,6 +16,7 @@ use crate::{
     lexeme::{Lexeme, lexeme_name_is},
     location::Location,
     match_lexeme::MatchLexeme,
+    node_handle::{Node, OptNode},
     parser::Parser,
     position::Position,
     temp_vector::TempVector,
@@ -30,7 +29,8 @@ impl Parser {
 
     let mut props = TempVector::new(&mut self.scratch_table_type_props);
     let mut cst_items = TempVector::new(&mut self.scratch_cst_table_type_props);
-    let mut indexer: Option<NonNull<AstTableIndexer>> = None;
+    // cpp `AstTableIndexer* indexer = nullptr`：至多一个索引器，未出现即 `None`。
+    let mut indexer: Option<OptNode<AstTableIndexer>> = None;
 
     let start = self.lexer.current().location;
 
@@ -130,15 +130,15 @@ impl Parser {
           let table_indexer_result = self.parse_table_indexer(access, access_location, begin);
           if indexer.is_some() {
             // table_indexer_result.node 由 parse_table_indexer 内 `self.alloc(AstTableIndexer{..})`
-            // 产出（arena alloc 恒非空，失败 handle_alloc_error 中止）；slot_ref 只读拷贝
-            // 该记录的直接 `location` 字段。
-            let bad_indexer_location = slot_ref(table_indexer_result.node).location;
+            // 产出（arena alloc 恒非空，Node 句柄承载非空性）；只读拷贝该记录的
+            // 直接 `location` 字段。
+            let bad_indexer_location = table_indexer_result.node.get().location;
             self.report(
               bad_indexer_location,
               format_args!("Cannot have more than one table indexer"),
             );
           } else {
-            indexer = node_opt(table_indexer_result.node);
+            indexer = Some(table_indexer_result.node.into());
             if self.options.store_cst_data {
               let (separator, separator_position) = self.table_separator_position();
               cst_items.push_back(CstTypeTableItem {
@@ -173,15 +173,18 @@ impl Parser {
           false,
           AstArray::EMPTY,
         ));
-        indexer = node_opt(self.alloc(AstTableIndexer {
-          index_type: index,
-          result_type: r#type,
-          // r#type 为 parse_type 刚 arena 分配的存活类型节点（恒非空）；slot_ref
-          // 只读其 repr(C) 基类前缀 location。
-          location: slot_ref(r#type).base.location,
-          access,
-          access_location,
-        }));
+        indexer = Some(
+          Node::from_raw(self.alloc(AstTableIndexer {
+            index_type: Node::from_raw(index),
+            result_type: Node::from_raw(r#type),
+            // r#type 为 parse_type 刚 arena 分配的存活类型节点（恒非空）；slot_ref
+            // 只读其 repr(C) 基类前缀 location。
+            location: slot_ref(r#type).base.location,
+            access,
+            access_location,
+          }))
+          .into(),
+        );
 
         break;
       } else {
@@ -235,7 +238,7 @@ impl Parser {
     let node = self.alloc_type(AstTypeTable::new(
       Location::new(start.begin, end.end),
       props_array,
-      opt_node(indexer),
+      indexer.unwrap_or_default(),
     ));
 
     if self.options.store_cst_data {

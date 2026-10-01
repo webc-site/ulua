@@ -282,10 +282,7 @@ impl TypeChecker {
           }
         }
 
-        let indexer = if table.indexer.is_null() {
-          None
-        } else {
-          let indexer = alias_ref(table.indexer);
+        let indexer = table.indexer.get().and_then(|indexer| {
           match indexer.access {
             AstTableAccess::Read => {
               self.report_error_location_type_error_data(
@@ -301,21 +298,15 @@ impl TypeChecker {
               );
               None
             }
+            // index/result 为句柄化恒非空子节点（cpp 同处无条件解引用），
+            // 防御性 null 分支随槽位句柄化一并消除。
             AstTableAccess::ReadWrite => Some(TableIndexer {
-              index_type: if indexer.index_type.is_null() {
-                self.error_recovery_type_scope_ptr(&scope)
-              } else {
-                self.resolve_type(scope.clone(), alias_ref(indexer.index_type))
-              },
-              index_result_type: if indexer.result_type.is_null() {
-                self.error_recovery_type_scope_ptr(&scope)
-              } else {
-                self.resolve_type(scope.clone(), alias_ref(indexer.result_type))
-              },
+              index_type: self.resolve_type(scope.clone(), indexer.index_type.get()),
+              index_result_type: self.resolve_type(scope.clone(), indexer.result_type.get()),
               is_read_only: false,
             }),
           }
-        };
+        });
 
         let table_ty =
           TableType::table_type_props_optional_table_indexer_type_level_scope_table_state(

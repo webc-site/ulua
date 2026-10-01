@@ -1,5 +1,3 @@
-use core::ptr::NonNull;
-
 use ulua_common::fflag;
 
 use crate::{
@@ -12,7 +10,7 @@ use crate::{
     ast_stat_declare_function::AstStatDeclareFunction,
     ast_stat_declare_global::AstStatDeclareGlobal, ast_table_indexer::AstTableIndexer,
     ast_type_list::AstTypeList, ast_type_pack_explicit::AstTypePackExplicit, location::Location,
-    match_lexeme::MatchLexeme, parser::Parser, temp_vector::TempVector,
+    match_lexeme::MatchLexeme, node_handle::OptNode, parser::Parser, temp_vector::TempVector,
   },
   rtti::AstNodeClass,
 };
@@ -162,7 +160,7 @@ impl Parser {
       let mut props = TempVector::new(&mut self.scratch_declared_class_props);
       // cpp `AstTableIndexer* indexer = nullptr`（Parser.cpp:1916）：extern type 至多一个
       // indexer，未出现即 None；判重走 Option 而非裸指针非空。
-      let mut indexer: Option<NonNull<AstTableIndexer>> = None;
+      let mut indexer: Option<OptNode<AstTableIndexer>> = None;
 
       while self.lexer.current().r#type != Type::RESERVED_END {
         let mut attributes = AstArray::EMPTY;
@@ -227,16 +225,17 @@ impl Parser {
             }
           } else if indexer.is_some() {
             let bad_indexer_res = self.parse_table_indexer(AstTableAccess::ReadWrite, None, begin);
-            let bad_indexer_location = slot_ref(bad_indexer_res.node).location;
+            let bad_indexer_location = bad_indexer_res.node.get().location;
             self.report(
               bad_indexer_location,
               format_args!("Cannot have more than one indexer on an extern type"),
             );
           } else {
-            indexer = node_opt(
+            indexer = Some(
               self
                 .parse_table_indexer(AstTableAccess::ReadWrite, None, begin)
-                .node,
+                .node
+                .into(),
             );
           }
         } else {
@@ -292,7 +291,7 @@ impl Parser {
         class_name.name,
         super_name,
         props_array,
-        indexer,
+        indexer.unwrap_or_default(),
       ))
     } else if let Some(global_name) = self.parse_name_opt("global variable name") {
       self.expect_and_consume_char(':', "global variable declaration");

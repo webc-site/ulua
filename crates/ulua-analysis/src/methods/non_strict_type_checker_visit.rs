@@ -699,10 +699,11 @@ impl<'a> NonStrictTypeChecker<'a> {
   }
 
   pub(crate) fn visit_ast_type_table(&mut self, table: &AstTypeTable) {
-    // indexer 为可空槽位（cpp 判空后解引用），alias_opt 折叠为 Option。
-    if let Some(indexer) = alias_opt(table.indexer) {
-      self.visit_ast_type(alias_opt(indexer.index_type));
-      self.visit_ast_type(alias_opt(indexer.result_type));
+    // indexer 为可空槽位（cpp 判空后解引用），句柄 `get` 折叠为 Option；
+    // index/result 为恒非空句柄，`get` 直接给出共享引用。
+    if let Some(indexer) = table.indexer.get() {
+      self.visit_ast_type(Some(indexer.index_type.get()));
+      self.visit_ast_type(Some(indexer.result_type.get()));
     }
 
     for prop in table.props.as_slice() {
@@ -1015,10 +1016,11 @@ impl<'a> NonStrictTypeChecker<'a> {
     &mut self,
     decl_class: &AstStatDeclareExternType,
   ) -> NonStrictContext {
-    // indexer 为可空槽位（cpp 判空后解引用），alias_opt 折叠为 Option。
-    if let Some(indexer) = alias_opt(decl_class.indexer) {
-      self.visit_ast_type(alias_opt(indexer.index_type));
-      self.visit_ast_type(alias_opt(indexer.result_type));
+    // indexer 为可空槽位（cpp 判空后解引用），句柄 `get` 折叠为 Option；
+    // index/result 为恒非空句柄，`get` 直接给出共享引用。
+    if let Some(indexer) = decl_class.indexer.get() {
+      self.visit_ast_type(Some(indexer.index_type.get()));
+      self.visit_ast_type(Some(indexer.result_type.get()));
     }
 
     for prop in decl_class.props.as_slice() {

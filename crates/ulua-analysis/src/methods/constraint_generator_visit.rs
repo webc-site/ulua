@@ -1475,7 +1475,7 @@ impl ConstraintGenerator {
     bind_type(class_bind_ty, extern_ty);
 
     // §2：可空 indexer 槽位折成 Option（cpp 判空后直接解引用，null 即 UB）。
-    if let Some(indexer) = slot_opt(decl.indexer) {
+    if let Some(indexer) = decl.indexer.get() {
       if self.recursion_count >= dfint::LuauConstraintGeneratorRecursionLimit.get() {
         self.report_code_too_complex(indexer.location);
       } else {
@@ -1484,14 +1484,14 @@ impl ConstraintGenerator {
         // mixed.
         let index_type = self.resolve_type(
           scope,
-          alias_ref(indexer.index_type),
+          indexer.index_type.get(),
           false,
           false,
           Polarity::Mixed,
         );
         let index_result_type = self.resolve_type(
           scope,
-          alias_ref(indexer.result_type),
+          indexer.result_type.get(),
           false,
           false,
           Polarity::Mixed,

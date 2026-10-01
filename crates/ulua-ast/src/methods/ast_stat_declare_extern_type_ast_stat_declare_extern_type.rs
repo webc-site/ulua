@@ -1,11 +1,8 @@
-use core::ptr::NonNull;
-
 use crate::{
-  functions::optional_node::opt_node,
   records::{
     ast_array::AstArray, ast_declared_extern_type_property::AstDeclaredExternTypeProperty,
     ast_name::AstName, ast_stat::AstStat, ast_stat_declare_extern_type::AstStatDeclareExternType,
-    ast_table_indexer::AstTableIndexer, location::Location,
+    ast_table_indexer::AstTableIndexer, location::Location, node_handle::OptNode,
   },
   rtti::AstNodeClass,
 };
@@ -17,14 +14,14 @@ impl AstStatDeclareExternType {
     name: AstName,
     super_name: Option<AstName>,
     props: AstArray<AstDeclaredExternTypeProperty>,
-    indexer: Option<NonNull<AstTableIndexer>>,
+    indexer: OptNode<AstTableIndexer>,
   ) -> Self {
     Self {
       base: AstStat::new(<Self as AstNodeClass>::CLASS_INDEX, location),
       name,
       super_name,
       props,
-      indexer: opt_node(indexer),
+      indexer,
     }
   }
 }

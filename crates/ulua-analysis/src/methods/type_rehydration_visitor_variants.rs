@@ -33,6 +33,7 @@ use ulua_ast::{
     ast_type_table::AstTypeTable,
     ast_type_union::AstTypeUnion,
     location::Location,
+    node_handle::{Node, OptNode},
   },
   type_aliases::ast_argument_name::AstArgumentName,
 };
@@ -294,20 +295,21 @@ impl TypeRehydrationVisitor {
       let result_type = self.visit_type(indexer_ref.index_result_type);
 
       let indexer_node = AstTableIndexer {
-        index_type,
-        result_type,
+        // visit_type 的返回值即 arena 分配产物（恒非空），from_raw 收非空句柄。
+        index_type: Node::from_raw(index_type),
+        result_type: Node::from_raw(result_type),
         location: Location::default(),
         access: AstTableAccess::ReadWrite,
         access_location: None,
       };
 
       let allocator = self.allocator_mut();
-      allocator.alloc(indexer_node)
+      OptNode::from_ptr(allocator.alloc(indexer_node))
     } else {
       // cpp `TypeAttach.cpp:229` 同款 `AstTableIndexer* indexer = nullptr;`：
       // 仅当 `ttv.indexer` 存在才建节点；落点 `AstTypeTable.indexer` 是可空
-      // 子节点槽，空槽经 `opt_node(None)` 单点写出（读取方经 node_opt 判空）。
-      opt_node(None)
+      // 句柄槽，空槽即 `None`。
+      OptNode::default()
     };
 
     let props_array = props_builder.finish();
@@ -396,17 +398,18 @@ impl TypeRehydrationVisitor {
       let result_type = self.visit_type(indexer_data.index_result_type);
 
       let allocator = self.allocator_mut();
-      allocator.alloc(AstTableIndexer {
-        index_type,
-        result_type,
+      OptNode::from_ptr(allocator.alloc(AstTableIndexer {
+        // visit_type 的返回值即 arena 分配产物（恒非空），from_raw 收非空句柄。
+        index_type: Node::from_raw(index_type),
+        result_type: Node::from_raw(result_type),
         location: Location::default(),
         access: AstTableAccess::ReadWrite,
         access_location: None,
-      })
+      }))
     } else {
       // cpp `TypeAttach.cpp:294` 同款 `AstTableIndexer* indexer = nullptr;`
-      //（ExternType 分支）：空槽经 `opt_node(None)` 单点写出。
-      opt_node(None)
+      //（ExternType 分支）：句柄槽空态即 `None`。
+      OptNode::default()
     };
 
     let props = props_builder.finish();
