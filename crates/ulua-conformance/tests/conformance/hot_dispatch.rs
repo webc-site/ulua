@@ -10,6 +10,8 @@
 //   钩子激活时经 `backedge_idle` 让路给冷续延之后的语义——回边命中数、钩子里 `lua_yield`
 //   的续跑、钩子里 `luaL_error` 的展开。以 skipCodegen 运行（被测对象只有解释器派发环），
 //   并把每次命中的 `currentline` 钉在对应函数源码行区间内。
+// * `fuse_edges.luau`：钉每条被融进臂尾巴的热边在操作数不是数字时的回退——元方法只能按
+//   原圈数调用（次数即判据），链中段抛错照旧被外层 pcall 接住。同样两模式对比。
 
 use core::{
   ffi::c_int,
@@ -155,6 +157,12 @@ fn check_lines(lo: i32, hi: i32, what: &str) -> i32 {
 #[test]
 fn conformance_hot_dispatch() {
   run_fixture("hotdispatch.luau");
+}
+
+/// 臂尾融合（`fuse_succ_*`）的未命中回退与元方法计数：见 `fuse_edges.luau` 头注。
+#[test]
+fn conformance_fuse_edges() {
+  run_fixture("fuse_edges.luau");
 }
 
 #[test]
