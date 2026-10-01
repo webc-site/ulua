@@ -15,7 +15,7 @@ pub unsafe fn tfind(l: *mut LuaState) -> i32 {
   unsafe {
     (*l).check_type(1, LuaType::Table);
     (*l).check_any(2);
-    let init = lua_l_optinteger(l, 3, 1);
+    let init = lua_l_optinteger(&mut *l, 3, 1);
     if init < 1 {
       // The dependency card for lua_l_argerror_l shows it takes &str.
       lua_l_argerror_l(l, 3, "index out of range");

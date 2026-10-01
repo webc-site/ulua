@@ -76,13 +76,13 @@ unsafe fn move_stack_range(
     if reverse {
       // 区间重叠时按降序搬运，语义同 memmove 逆向分支
       for (srckey, dstkey) in src_keys.rev().zip(dst_keys.rev()) {
-        lua_rawgeti(l, srct, srckey as i32);
-        lua_rawseti(l, dstt, dstkey as i32);
+        lua_rawgeti(&mut *l, srct, srckey as i32);
+        lua_rawseti(&mut *l, dstt, dstkey as i32);
       }
     } else {
       for (srckey, dstkey) in src_keys.zip(dst_keys) {
-        lua_rawgeti(l, srct, srckey as i32);
-        lua_rawseti(l, dstt, dstkey as i32);
+        lua_rawgeti(&mut *l, srct, srckey as i32);
+        lua_rawseti(&mut *l, dstt, dstkey as i32);
       }
     }
   }
@@ -134,13 +134,13 @@ pub(crate) unsafe fn moveelements(
 
       let mut iter = 0;
       loop {
-        iter = lua_rawiter(l, srcta, iter);
+        iter = lua_rawiter(&mut *l, srcta, iter);
         if iter == -1 {
           break;
         }
         match tovalidintkey(l, -2, f, e) {
           // 命中：lua_rawseti 自行弹出值；未命中：手动弹出值
-          Some(ikey) => lua_rawseti(l, -3, ikey),
+          Some(ikey) => lua_rawseti(&mut *l, -3, ikey),
           None => (*l).pop(1),
         }
         (*l).pop(1); // 弹出键
@@ -148,25 +148,25 @@ pub(crate) unsafe fn moveelements(
 
       iter = 0;
       loop {
-        iter = lua_rawiter(l, dstta, iter);
+        iter = lua_rawiter(&mut *l, dstta, iter);
         if iter == -1 {
           break;
         }
         if let Some(ikey) = tovalidintkey(l, -2, t, te) {
           (*l).push_nil();
-          lua_rawseti(l, dstta, ikey);
+          lua_rawseti(&mut *l, dstta, ikey);
         }
         (*l).pop(2);
       }
 
       iter = 0;
       loop {
-        iter = lua_rawiter(l, -1, iter);
+        iter = lua_rawiter(&mut *l, -1, iter);
         if iter == -1 {
           break;
         }
         let ikey = (*l).to_integer(-2).unwrap_or(0);
-        lua_rawseti(l, dstta, ikey - f + t);
+        lua_rawseti(&mut *l, dstta, ikey - f + t);
         (*l).pop(1);
       }
 

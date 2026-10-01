@@ -19,7 +19,7 @@ pub(crate) fn lua_insert(l: &mut LuaState, idx: i32) {
   unsafe {
     let lp = l.as_mut_ptr();
     lua_c_threadbarrier_lapi(lp);
-    let p: StkId = index_2_addr(lp, idx);
+    let p: StkId = index_2_addr(&*lp, idx);
     api_check!(lp, !eq(p, LUA_O_NILOBJECT));
 
     let count = (*lp).top.offset_from(p);

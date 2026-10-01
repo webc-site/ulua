@@ -8,7 +8,7 @@ use crate::{functions::lua_rawgetfield::lua_rawgetfield_bytes, records::lua_stat
 pub(crate) unsafe fn getboolfield(l: *mut LuaState, key: &[u8]) -> i32 {
   // SAFETY: 契约保证 `L` 栈顶相对索引处为可读表，rawget 探测与布尔读取在当前帧栈界内完成
   unsafe {
-    lua_rawgetfield_bytes(l, -1, key);
+    lua_rawgetfield_bytes(&mut *l, -1, key);
 
     let is_nil = (*l).is_nil(-1);
 

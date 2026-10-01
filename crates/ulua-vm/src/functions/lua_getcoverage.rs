@@ -20,7 +20,7 @@ pub unsafe fn lua_getcoverage(
   // SAFETY: 契约保证 `l` 存活、funcindex 处为 Lua 闭包可读；行缓冲出参已折叠为帧内
   // `Vec<i32>`（§3 出参惯用化），不再经 luaM arena 转手，其裸指针仅在 callback 调用窗口内有效。
   unsafe {
-    let func: *const TValue = lua_a_toobject(l, funcindex);
+    let func: *const TValue = lua_a_toobject(&*l, funcindex);
     api_check!(
       l,
       (*func).is_function() && (*(*func).as_closure_ptr()).is_c == 0

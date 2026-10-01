@@ -32,7 +32,7 @@ pub unsafe extern "C-unwind" fn lua_collectgarbage(l: *mut LuaState) -> c_int {
     GC_OPT_COLLECT
   } else {
     // Safety: `l` 为活跃状态机；返回切片在本次调用期内有效（实参被栈槽持有）。
-    unsafe { lua_l_checklstring_ref(l, 1) }
+    lua_l_checklstring_ref(&mut *l, 1)
   };
 
   if option == GC_OPT_COLLECT {

@@ -228,7 +228,7 @@ fn tonumber_string_conversion_via_api() {
       (b"12xyz", None),
     ] {
       lua_pushlstring(s.l, bytes.as_ptr() as *const c_char, bytes.len());
-      let v = lua_tonumberx(s.l, -1);
+      let v = lua_tonumberx(&*s.l, -1);
       match expect {
         Some(e) => assert_eq!(v, Some(e), "{bytes:?} 应可转换"),
         None => assert_eq!(v, None, "{bytes:?} 应拒绝转换"),

@@ -22,7 +22,7 @@ pub(crate) unsafe fn lua_touserdatatagged_ref<'a>(
   tag: i32,
 ) -> Option<&'a mut c_void> {
   unsafe {
-    let o: StkId = index_2_addr(l, idx);
+    let o: StkId = index_2_addr(&*l, idx);
 
     match ValueView::from_tvalue(&*o) {
       ValueView::Userdata(u) if (*u).tag as i32 == tag => (*u).data.as_ptr() as *mut c_void,

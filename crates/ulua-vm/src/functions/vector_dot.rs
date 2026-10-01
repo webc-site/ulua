@@ -9,8 +9,8 @@ use crate::{
 pub(crate) unsafe fn vector_dot(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证索引 1/2 为 vector，分量窗口只读 [0..=3]，不写栈
   unsafe {
-    let a = vector_components(lua_l_checkvector(l, 1));
-    let b = vector_components(lua_l_checkvector(l, 2));
+    let a = vector_components(lua_l_checkvector(&mut *l, 1));
+    let b = vector_components(lua_l_checkvector(&mut *l, 2));
 
     // 逐项乘积可为 -0.0，故 3 分量配置不并入第 4 项（`x + 0.0` 会把 -0.0 归一为 +0.0）
     let mut d = a[0] * b[0] + a[1] * b[1] + a[2] * b[2];

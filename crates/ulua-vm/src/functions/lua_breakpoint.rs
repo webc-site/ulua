@@ -16,7 +16,7 @@ use crate::{
 pub unsafe fn lua_breakpoint(l: *mut LuaState, funcindex: i32, line: i32, enabled: i32) -> i32 {
   // SAFETY: 契约保证 `l` 存活、funcindex 处为 Lua 闭包（api_check 兜底），pc 表索引经 code 长度上界检查
   unsafe {
-    let func: *const TValue = lua_a_toobject(l, funcindex);
+    let func: *const TValue = lua_a_toobject(&*l, funcindex);
     api_check!(
       l,
       (*func).is_function() && (*(*func).as_closure_ptr()).is_c == 0

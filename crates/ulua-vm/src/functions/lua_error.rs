@@ -4,14 +4,10 @@ use crate::{
 };
 
 // lapi.cpp — l_noret lua_error(LuaState* l) { api_checknelems(l, 1); luaD_throw(l, LUA_ERRRUN); }
-/// # Safety
-/// `l` 须为存活 LuaState 并处于受保护帧，且栈上已压入 1 个待抛错误对象（`api_checknelems!(l, 1)` 校验，release 不校验）；
-/// `lua_d_throw` 以 `LUA_ERRRUN` 沿保护帧 unwind，本函数返回 `!`（永不正常返回）。cpp/VM/src/lapi.cpp:1546 lua_error。
-///
-/// 前移为引用形收口点（`&mut LuaState`）已具备条件（`lua_d_throw` 本身为安全
-/// panic 载荷边界），但 ulua-require 等兄弟 crate 的调用点仍持 `unsafe { lua_error(l) }`
-/// 裸指针形，本轮范围禁改这些 crate，故签名暂留裸形（下轮随消费方一并迁移）。
-pub unsafe fn lua_error(l: *mut LuaState) -> ! {
+/// `lua_error` 核心（cpp/VM/src/lapi.cpp:1546）。调用序契约（正确性，非内存安全）：
+/// `l` 处于受保护帧，且栈上已压入 1 个待抛错误对象（`api_checknelems!(l, 1)` 校验，release 不校验）；
+/// `lua_d_throw` 以 `LUA_ERRRUN` 沿保护帧 unwind，本函数返回 `!`（永不正常返回）。
+pub fn lua_error(l: &mut LuaState) -> ! {
   unsafe {
     api_checknelems!(l, 1);
     lua_d_throw(l, LuaStatus::ErrRun as i32)

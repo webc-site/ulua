@@ -15,14 +15,14 @@ pub unsafe fn utflen(l: *mut LuaState) -> i32 {
   unsafe {
     let mut n: i32 = 0;
     let mut len: usize = 0;
-    let s = lua_l_checklstring(l, 1, &mut len);
+    let s = lua_l_checklstring(&mut *l, 1, &mut len);
     // Lua 字符串恒有 NUL 终止（utf_8_decode 的入约模型）：切片覆盖到含终止符，
     // 循环游标改字节下标，取代 cpp 的裸指针推进与差值回算
     // SAFETY: s 指向 len 字节的 Lua 串数据，第 len 处恒为 NUL 终止符（tstring 布局保证）
     let bytes = from_raw_parts(s as *const u8, len + 1);
 
-    let posi = u_posrelat(lua_l_optinteger(l, 2, 1), len);
-    let mut posj = u_posrelat(lua_l_optinteger(l, 3, -1), len);
+    let posi = u_posrelat(lua_l_optinteger(&mut *l, 2, 1), len);
+    let mut posj = u_posrelat(lua_l_optinteger(&mut *l, 3, -1), len);
 
     (*l).arg_check(
       1 <= posi && posi <= len as i32 + 1,

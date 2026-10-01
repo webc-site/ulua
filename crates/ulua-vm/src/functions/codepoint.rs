@@ -14,14 +14,14 @@ use crate::{
 pub unsafe fn codepoint(l: *mut LuaState) -> i32 {
   unsafe {
     let mut len: usize = 0;
-    let s = lua_l_checklstring(l, 1, &mut len);
+    let s = lua_l_checklstring(&mut *l, 1, &mut len);
     // Lua 字符串恒有 NUL 终止（utf_8_decode 的入约模型）：切片覆盖到含终止符，
     // 游标改字节下标，取代 cpp 的裸指针推进比较
     // SAFETY: s 指向 len 字节的 Lua 串数据，第 len 处恒为 NUL 终止符（tstring 布局保证）
     let bytes = from_raw_parts(s as *const u8, len + 1);
 
-    let posi = u_posrelat(lua_l_optinteger(l, 2, 1), len);
-    let pose = u_posrelat(lua_l_optinteger(l, 3, posi), len);
+    let posi = u_posrelat(lua_l_optinteger(&mut *l, 2, 1), len);
+    let pose = u_posrelat(lua_l_optinteger(&mut *l, 3, posi), len);
 
     (*l).arg_check(posi >= 1, 2, "out of range");
     (*l).arg_check(pose <= len as i32, 3, "out of range");
@@ -35,7 +35,7 @@ pub unsafe fn codepoint(l: *mut LuaState) -> i32 {
     }
 
     let n = (pose - posi) + 1;
-    lua_l_checkstack(l, n, "string slice too long");
+    lua_l_checkstack(&mut *l, n, "string slice too long");
 
     let mut n = 0;
     // cpp `while (s < se)`：se = s + pose，指针比较等价于下标比较 i < pose；

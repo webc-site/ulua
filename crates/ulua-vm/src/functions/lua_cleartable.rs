@@ -13,7 +13,7 @@ use crate::{
 /// `lua_h_clear` 清空数组与哈希区。cpp/VM/src/lapi.cpp:2139 lua_cleartable。
 pub unsafe fn lua_cleartable(l: *mut LuaState, idx: i32) {
   unsafe {
-    let t: StkId = index_2_addr(l, idx);
+    let t: StkId = index_2_addr(&*l, idx);
     api_check!(l, (*t).is_table());
     let tt = (*t).as_table_ptr();
     check_writable(l, tt);

@@ -284,8 +284,8 @@ impl Function {
     // environment. [`Function::is_lua_closure`] 自行压/弹一层，返回后栈顶仍是本函数。
     let env = if self.is_lua_closure() {
       // Safety: `state` 存活、由当前线程驱动，-1 是刚压入的 Lua 闭包；
-      // `lua_getfenv(state, -1)` 压一层该闭包的环境表。
-      unsafe { lua_getfenv(state.as_mut_ptr(), -1) };
+      // `lua_getfenv(&mut *state.as_mut_ptr(), -1)` 压一层该闭包的环境表。
+      unsafe { lua_getfenv(&mut *state.as_mut_ptr(), -1) };
       // 栈顶是刚压入的环境值，`is_table_at`（safe 门面）只读其类型标记、不动栈。
       let is_table = is_table_at(state, -1);
       // 命中表时 `pop_ref`（safe fn）登记引用并弹掉这一层；否则留待下面 settop 收口。
@@ -324,7 +324,7 @@ impl Function {
       env.push_to_stack();
       // Safety: 栈布局 [func, env]，-2 正指刚压入的本 Lua 闭包；`lua_setfenv` 按
       // C API 约定消费栈顶环境表写入函数原型，返回是否成功。
-      unsafe { lua_setfenv(state.as_mut_ptr(), -2) != 0 }
+      unsafe { lua_setfenv(&mut *state.as_mut_ptr(), -2) != 0 }
     } else {
       false
     };

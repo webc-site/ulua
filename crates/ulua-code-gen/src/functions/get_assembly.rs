@@ -33,7 +33,7 @@ pub unsafe fn get_assembly(
   // 依 Lua C-ABI 合法读取该栈位，func 为其 LClosure TValue 指针。
   let func = unsafe {
     debug_assert!(lua_is_lfunction(l, idx) != 0);
-    lua_a_toobject(l, idx)
+    lua_a_toobject(&*l, idx)
   };
 
   // 各分支仅做构建器装配（安全代码），impl 调用为原样转发的 (b) 类边界：

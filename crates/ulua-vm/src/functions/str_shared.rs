@@ -21,7 +21,7 @@ pub(crate) unsafe fn str_transform1(
 ) -> i32 {
   // SAFETY: 契约保证 `l` 存活且 checklstring 取回有效源切片，buffinitsize 分配等长目标缓冲
   unsafe {
-    let src = lua_l_checklstring_ref(l, 1);
+    let src = lua_l_checklstring_ref(&mut *l, 1);
     let len = src.len();
 
     let mut b = LuaLStrbuf::new();

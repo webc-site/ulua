@@ -10,9 +10,11 @@ use crate::{
   type_aliases::stk_id::StkId,
 };
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn lua_setfield_bytes(l: *mut LuaState, idx: i32, k: &[u8]) {
+/// `lua_setfield` 核心（cpp `lapi.cpp:1010`）。调用序契约（正确性，非内存安全）：
+/// `l` 处于可 GC/可抛错的受保护帧，栈顶已压 value 一项（`api_checknelems!(l, 1)`）；
+/// `idx` 经 `index_2_addr` 解析为非 `LUA_O_NILOBJECT` 的栈槽（`api_check`）；`k` 为字段名字节切片
+/// （intern 可分配），写入后 `top` 回退一格。
+pub(crate) fn lua_setfield_bytes(l: &mut LuaState, idx: i32, k: &[u8]) {
   unsafe {
     api_checknelems!(l, 1);
 
@@ -25,8 +27,8 @@ pub(crate) unsafe fn lua_setfield_bytes(l: *mut LuaState, idx: i32, k: &[u8]) {
       l,
       Slot::from_raw(t),
       Slot::from_ref(&key),
-      Slot::from_raw((*l).top.sub(1)),
+      Slot::from_raw(l.top.sub(1)),
     );
-    (*l).top = (*l).top.sub(1);
+    l.top = l.top.sub(1);
   }
 }

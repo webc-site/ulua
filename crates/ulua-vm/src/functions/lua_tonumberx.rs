@@ -3,7 +3,6 @@ use crate::{
   functions::{cstr_bytes, index_2_addr::index_2_addr, lua_o_str_2_d::lua_o_str_2_d},
   macros::getstr::getstr,
   records::{lua_state::LuaState, t_string::tstring},
-  type_aliases::t_value::TValue,
 };
 
 /// cpp `lua_tonumberx`（`VM/src/lapi.cpp:414`）：`idx` 槽位可作数值时返回该数值。
@@ -18,17 +17,14 @@ use crate::{
 ///   `luaV_tonumber`（`lvmutils.cpp:25`）只认 Number/String 一致；
 /// - 其余 tag 为失败路径。
 ///
-/// # Safety
-///
-/// `l` 必须是正在执行的 C 函数帧的存活 `LuaState`，`idx` 为其合法栈索引（越界
-/// 读错槽甚至悬垂 TValue）；`ValueView::from_tvalue` 仅读栈槽值，不触发 GC 也不
-/// 分配。cpp lapi.cpp:414。
-pub unsafe fn lua_tonumberx(l: *mut LuaState, idx: i32) -> Option<f64> {
-  // SAFETY: 契约保证 `index_2_addr` 返回可读、对齐的 TValue 槽（越界为可读的
-  // LUA_O_NILOBJECT）；字符串臂的 `getstr`/`cstr_bytes` 前提（NUL 结尾完整 payload）
-  // 与既有 `lua_v_tonumber` 宏链相同。
+/// `l` 以引用传入（存活由类型保证）；`idx` 为任意（伪）索引，越界经硬化的
+/// `index_2_addr` 返回只读哨兵槽；仅读栈槽值，不触发 GC 也不分配。cpp lapi.cpp:414。
+pub fn lua_tonumberx(l: &LuaState, idx: i32) -> Option<f64> {
+  let o = index_2_addr(l, idx);
+  // SAFETY:o 为栈上有效 TValue 或只读哨兵槽；字符串臂的 `getstr`/`cstr_bytes`
+  // 前提（NUL 结尾完整 payload）与既有 `lua_v_tonumber` 宏链相同。
   unsafe {
-    match ValueView::from_tvalue(&*(index_2_addr(l, idx) as *const TValue)) {
+    match ValueView::from_tvalue(&*o) {
       ValueView::Number(n) => Some(n),
       ValueView::String(ts) => lua_o_str_2_d(cstr_bytes(getstr(ts as *const tstring))),
       ValueView::Integer(_)

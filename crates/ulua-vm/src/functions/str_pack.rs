@@ -83,7 +83,7 @@ pub(crate) unsafe fn str_pack(l: *mut LuaState) -> i32 {
         }
         KOption::Kchar => {
           // fixed-size string
-          let s = lua_l_checklstring_ref(l, arg);
+          let s = lua_l_checklstring_ref(&mut *l, arg);
           let len = s.len();
           (*l).arg_check(len <= size as usize, arg, "string longer than given size");
           lua_l_addlstring(&mut b, s); // add string
@@ -95,7 +95,7 @@ pub(crate) unsafe fn str_pack(l: *mut LuaState) -> i32 {
         }
         KOption::Kstring => {
           // strings with length count
-          let s = lua_l_checklstring_ref(l, arg);
+          let s = lua_l_checklstring_ref(&mut *l, arg);
           let len = s.len();
           (*l).arg_check(
             size >= size_of::<usize>() as i32 || len < (1usize << (size * 8)),
@@ -108,7 +108,7 @@ pub(crate) unsafe fn str_pack(l: *mut LuaState) -> i32 {
         }
         KOption::Kzstr => {
           // zero-terminated string
-          let s = lua_l_checklstring_ref(l, arg);
+          let s = lua_l_checklstring_ref(&mut *l, arg);
           let len = s.len();
           // 原 cstr_bytes strlen==len 的「无内嵌零」判定收为 memchr 单遍扫描
           (*l).arg_check(memchr(0, s).is_none(), arg, "string contains zeros");

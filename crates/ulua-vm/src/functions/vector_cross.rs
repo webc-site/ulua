@@ -12,8 +12,8 @@ use crate::{
 pub(crate) unsafe fn vector_cross(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证索引 1/2 为 vector，分量窗口只读 [0..=3]；压栈需 top 后 ≥1 空槽
   unsafe {
-    let a = vector_components(lua_l_checkvector(l, 1));
-    let b = vector_components(lua_l_checkvector(l, 2));
+    let a = vector_components(lua_l_checkvector(&mut *l, 1));
+    let b = vector_components(lua_l_checkvector(&mut *l, 2));
 
     // 叉积只落在 x/y/z 上，w 恒 0.0（cpp 四分量重载同形）
     vector_push(

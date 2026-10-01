@@ -49,29 +49,6 @@ macro_rules! capi_libfn_shell_l_cint {
   };
 }
 
-/// 同上模板之双栈索引变体 `(l, index1, index2) -> c_int`：lua_equal/lua_lessthan/
-/// lua_rawequal 三壳共用。
-macro_rules! capi_shell_l_i_i_cint {
-  ($m:ident, $n:ident) => {
-    #[doc = concat!(
-      "# Safety\n",
-      "C ABI 导出壳（符号 `ulua_", stringify!($n), "`），仅逐参数透传至 `ulua_vm::functions::", stringify!($m), "::", stringify!($n), "(l, index1, index2)`，零逻辑，本帧不解引用任何指针。调用方须保证：\n",
-      "- `l`：指向由本 VM 创建的合法 `LuaState`，非空、对齐，整个调用期间存活，且与对该状态的其它访问单线程驱动（不得跨 OS 线程并发）；\n",
-      "- 其余参数均为值类型（栈索引/标量），其合法性按 Lua/C API 约定由调用方给出，不引入额外内存前提；\n",
-      "- 其余安全前置条件与被调函数的 `# Safety` 契约一致。"
-    )]
-    #[unsafe(export_name = concat!("ulua_", stringify!($n)))]
-    pub unsafe extern "C-unwind" fn $n(
-      l: *mut ::ulua_vm::records::lua_state::LuaState,
-      index1: ::core::ffi::c_int,
-      index2: ::core::ffi::c_int,
-    ) -> ::core::ffi::c_int {
-      // Safety: C ABI 导出壳，由 C 宿主按 Lua/C API 约定调用：l 为调用方提供的有效 LuaState*；index1、index2 均为值型参数（栈索引/标量），合法性由调用方按 API 约定给出，无指针前提。本壳不解引用任何指针、不在本帧重建引用，仅原样转调 ulua-vm 同名实现，故不存在别名/悬挂窗口；参数合法性前提即该实现 /// # Safety 所列契约。
-      unsafe { ::ulua_vm::functions::$m::$n(l, index1, index2) }
-    }
-  };
-}
-
 /// `(l, obj, event: *const c_char) -> c_int` 元方法名壳模板：
 /// lua_l_callmeta/lua_l_getmetafield 两壳共用（两份 21 行同形同契约）。
 macro_rules! capi_shell_l_obj_event {
@@ -232,8 +209,8 @@ macro_rules! capi_shell_check_opt {
       l: *mut ::ulua_vm::records::lua_state::LuaState,
       narg: ::core::ffi::c_int $(, $v: $vt)*,
     ) -> $ret {
-      // Safety: C ABI 导出壳，由 C 宿主按 Lua/C API 约定调用：l 为有效 LuaState*；narg 及其余值型参数（如有）均为栈索引/标量，合法性由调用方按 API 约定给出，无指针前提。本壳不解引用任何指针、不在本帧重建引用，仅原样转调 ulua-vm 同名实现，故不存在别名/悬挂窗口；参数合法性前提即该实现 /// # Safety 所列契约。
-      unsafe { ::ulua_vm::functions::$m::$n(l, narg $(, $v)*) }
+      // Safety: C ABI 导出壳，由 C 宿主按 Lua/C API 约定调用：l 为有效 LuaState*；narg 及其余值型参数（如有）均为栈索引/标量，合法性由调用方按 API 约定给出，无指针前提。被调实现已前移为 `&mut LuaState` 引用形接收者，本帧把 `l` 重建为可变引用（`&mut *l`，借用窗口即时结束）后转调；其余调用序前提与被调方文档所列契约一致。
+      unsafe { ::ulua_vm::functions::$m::$n(&mut *l, narg $(, $v)*) }
     }
   };
 }

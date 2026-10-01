@@ -25,7 +25,7 @@ use crate::{
 /// 等既有收口同形，由调用方保证不跨 VM 操作持有）。cpp lapi.cpp:497。
 pub unsafe fn lua_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a [u8]> {
   unsafe {
-    let mut o: StkId = index_2_addr(l, idx);
+    let mut o: StkId = index_2_addr(&*l, idx);
 
     if !(*o).is_string() {
       lua_c_threadbarrier_lapi(l);
@@ -33,7 +33,7 @@ pub unsafe fn lua_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a [u
         return None;
       }
       lua_c_check_gc!(l);
-      o = index_2_addr(l, idx);
+      o = index_2_addr(&*l, idx);
     }
 
     let ts = (*o).as_string_ptr();

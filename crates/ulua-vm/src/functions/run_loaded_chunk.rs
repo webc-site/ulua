@@ -82,7 +82,7 @@ pub unsafe fn run_loaded_chunk(
   // 的闭包。
   // SAFETY: pushvalue/remove 把 -2 处闭包挪到线程之上，xmove 仅在同 VM 两线程
   // 间移动单值，三步是 cpp `runCode` 同款平衡序列。
-  // lua_pushvalue(l, -2); lua_remove(l, -3); lua_xmove(l, t, 1);
+  // lua_pushvalue(&mut *l, -2); lua_remove(l, -3); lua_xmove(l, t, 1);
   unsafe {
     (*l).push_value(-2);
     (*l).remove(-3);
@@ -108,7 +108,7 @@ pub unsafe fn run_loaded_chunk(
       // getglobal/insert/pcall 走「取 _PRETTYPRINT（缺则按参数回退 print）→
       // 插到参数前 → pcall(t, n, 0, 0)」的 cpp 同款打印路径。
       unsafe {
-        lua_l_checkstack(t, LUA_MINSTACK, "too many results to print");
+        lua_l_checkstack(&mut *t, LUA_MINSTACK, "too many results to print");
         // If _PRETTYPRINT is nil, then use the standard print function instead
         if pretty_print_fallback {
           (*t).get_global_bytes(PRETTYPRINT_NAME);

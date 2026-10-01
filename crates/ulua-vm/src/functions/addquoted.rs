@@ -23,7 +23,7 @@ pub(crate) unsafe fn addquoted(l: *mut LuaState, b: &mut LuaLStrbuf, arg: i32) {
   // 长度即 payload 长，不含 NUL），切片后逐字节转义拼接不越出该串长度
   unsafe {
     let mut len: usize = 0;
-    let s = lua_l_checklstring(l, arg, &mut len);
+    let s = lua_l_checklstring(&mut *l, arg, &mut len);
     let bytes = from_raw_parts(s as *const u8, len);
 
     lua_l_prepbuffsize(b, len + 2);

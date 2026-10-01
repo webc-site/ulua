@@ -253,7 +253,7 @@ fn handler_setnumber_result() {
 
   // Safety: l 存活，栈顶为返回值；lua_isnumber/lua_tonumber 为只读栈操作。
   unsafe {
-    assert_ne!(lua_isnumber(l, -1), 0);
+    assert_ne!(lua_isnumber(&*l, -1), 0);
     assert_eq!((*l).to_number(-1).unwrap_or(0.0), 3.5);
   }
 }
@@ -341,7 +341,7 @@ fn repeated_access_handler_called_every_iteration() {
   assert_eq!(status, LuaStatus::Ok as i32);
   // Safety: l 存活，栈顶为返回值；只读栈操作。
   unsafe {
-    assert_ne!(lua_isnumber(l, -1), 0);
+    assert_ne!(lua_isnumber(&*l, -1), 0);
     assert_eq!((*l).to_number(-1).unwrap_or(0.0), 35.0);
   }
 

@@ -9,7 +9,7 @@ use crate::{
 pub(crate) unsafe fn lua_l_checktype(l: *mut LuaState, narg: i32, t: i32) {
   // SAFETY: 契约保证 `l` 为存活调用帧且 narg 栈槽可读；标签不符时经 lua_type 名称对其抛错、不返回
   unsafe {
-    if lua_type(l, narg) != t {
+    if lua_type(&*l, narg) != t {
       tag_error(l, narg, t);
     }
   }

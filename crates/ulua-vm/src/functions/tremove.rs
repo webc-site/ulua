@@ -14,18 +14,18 @@ pub unsafe fn tremove(l: *mut LuaState) -> i32 {
   unsafe {
     (*l).check_type(1, LuaType::Table);
     let n = (*l).obj_len(1) as i32;
-    let pos = lua_l_optinteger(l, 2, n);
+    let pos = lua_l_optinteger(&mut *l, 2, n);
 
     if !(1 <= pos && pos <= n) {
       return 0;
     }
 
-    lua_rawgeti(l, 1, pos);
+    lua_rawgeti(&mut *l, 1, pos);
 
     moveelements(l, 1, 1, pos + 1, n, pos, false);
 
     (*l).push_nil();
-    lua_rawseti(l, 1, n);
+    lua_rawseti(&mut *l, 1, n);
 
     1
   }

@@ -12,12 +12,12 @@ use crate::{
 pub(crate) unsafe fn auxwrapfinish(l: *mut LuaState, r: i32) -> i32 {
   unsafe {
     if r < 0 {
-      if lua_isstring(l, -1) != 0 {
+      if lua_isstring(&*l, -1) != 0 {
         lua_l_where(l, 1);
         (*l).insert(-2);
         (*l).concat(2);
       }
-      lua_error(l);
+      lua_error(&mut *l);
     }
     r
   }

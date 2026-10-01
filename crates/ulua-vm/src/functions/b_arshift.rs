@@ -13,7 +13,7 @@ use crate::{
 pub(crate) unsafe fn b_arshift(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证 `l` 指向本次 binary32 C 函数调用的存活 LuaState，实参栈槽按索引可读、栈顶留有压入结果的 LUA_MINSTACK 余量
   unsafe {
-    let mut r: BUint = lua_l_checkunsigned(l, 1);
+    let mut r: BUint = lua_l_checkunsigned(&mut *l, 1);
     let i: i32 = (*l).check_integer(2);
 
     // C: `if (i < 0 || !(r & ((BUint)1 << (NBITS - 1))))` — logical NOT: sign bit clear.

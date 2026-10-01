@@ -116,7 +116,7 @@ unsafe fn push_props(
         (*vm_l).set_field_bytes(-2, FIELD_WRITE);
       }
 
-      lua_settable(vm_l, -3);
+      lua_settable(&mut *vm_l, -3);
     }
   }
 }

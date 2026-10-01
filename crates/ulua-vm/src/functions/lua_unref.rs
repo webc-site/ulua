@@ -8,20 +8,20 @@ use crate::{
   type_aliases::t_value::TValue,
 };
 
-/// # Safety
-/// `l` 须为存活 `LuaState` 且 `(*l).global.registry` 为已建好的 table TValue（`hvalue!` 取表）；`ref_`
+/// `lua_unref` 核心（cpp `lapi.cpp:1896`）。调用序契约（正确性，非内存安全）：
+/// `l.global.registry` 为已建好的 table TValue（`hvalue!` 取表）；`ref_`
 /// 须为 `> LUA_REFNIL` 的既有引用号，`luaH_getnum` 返回的槽须非 `LUA_O_NILOBJECT`（`api_check`）；写入的
-/// 释放链值为 number 故免屏障。cpp `lapi.cpp:1896`。
-pub unsafe fn lua_unref(l: *mut LuaState, ref_: i32) {
+/// 释放链值为 number 故免屏障。
+pub fn lua_unref(l: &mut LuaState, ref_: i32) {
   unsafe {
     if ref_ <= LUA_REFNIL {
       return;
     }
 
-    let g: *mut global_State = (*l).global;
+    let g: *mut global_State = l.global;
 
     // hvalue! 宏接收 TValue 指针
-    // registry!(l) returns &(*(*l).global).registry, which is a &TValue.
+    // registry!(l) returns &(*l.global).registry, which is a &TValue.
     let reg_tvalue_ptr: *const TValue = registry!(l);
     let reg: *mut LuaTable = (*reg_tvalue_ptr).as_table_ptr() as *const _ as *mut LuaTable;
 

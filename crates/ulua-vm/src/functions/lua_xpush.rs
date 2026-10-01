@@ -23,7 +23,7 @@ pub(crate) fn lua_xpush(from: &LuaState, to: &mut LuaState, idx: i32) {
     lua_c_threadbarrier_lapi(to.as_mut_ptr());
     // cpp `ensure_stack_impl(to, from, 1)`
     ensure_stack_impl(to.as_mut_ptr(), from.read_ptr(), 1);
-    let o = index_2_addr(from.read_ptr(), idx);
+    let o = index_2_addr(&*from.read_ptr(), idx);
     setobj_2_s!(to.as_mut_ptr(), to.top, o);
     api_incr_top!(to.as_mut_ptr());
   }

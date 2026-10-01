@@ -212,7 +212,7 @@ fn deep_arithmetic_chain_compiles_for_a64() {
   // Safety: 见契约；func/root/p_proto 皆为块内即时派生读数，state 未关闭故 GC 对象存活，
   // 二次解引用仅读不写、无释放。
   unsafe {
-    let func = lua_a_toobject(l, -1);
+    let func = lua_a_toobject(&*l, -1);
     let root = (*func).as_closure().inner.l.p;
     let p_proto = *(*root).p;
     assert!(!(*p_proto).execdata.is_null(), "p 未绑定 execdata");

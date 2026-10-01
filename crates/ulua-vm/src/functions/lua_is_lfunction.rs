@@ -9,7 +9,7 @@ use crate::{
 /// 不抛错/不分配/不触碰 GC。cpp/VM/src/lapi.cpp:362 lua_isLfunction。
 pub unsafe fn lua_is_lfunction(l: *mut LuaState, idx: i32) -> i32 {
   unsafe {
-    let o: StkId = index_2_addr(l, idx);
+    let o: StkId = index_2_addr(&*l, idx);
 
     if ttype!(o) == LuaType::Function as u32 && (*(*o).as_closure_ptr()).is_c == 0 {
       1

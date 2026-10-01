@@ -30,10 +30,10 @@ pub(crate) unsafe fn str_unpack(l: *mut LuaState) -> i32 {
     let mut fmt = FmtCursor::from_ptr((*l).check_bytes(1).as_ptr().cast());
 
     let mut ld: usize = 0;
-    let data = lua_l_checklstring(l, 2, &mut ld);
+    let data = lua_l_checklstring(&mut *l, 2, &mut ld);
     // 含终止 NUL 的单一可读切片：全程按下标切窗，免逐点 add/from_raw_parts 指针算术
     let win = from_raw_parts(data as *const u8, ld + 1);
-    let mut pos = posrelat(lua_l_optinteger(l, 3, 1), ld) - 1;
+    let mut pos = posrelat(lua_l_optinteger(&mut *l, 3, 1), ld) - 1;
     if pos < 0 {
       pos = 0;
     }
@@ -53,7 +53,7 @@ pub(crate) unsafe fn str_unpack(l: *mut LuaState) -> i32 {
       pos += ntoalign;
       // 钳位保证 p ∈ [0, ld]，各读取窗口 win[p..p+size] 恒落在含终止 NUL 的切片内
       let p = pos as usize;
-      lua_l_checkstack(l, 2, "too many results");
+      lua_l_checkstack(&mut *l, 2, "too many results");
       n += 1;
 
       match opt {

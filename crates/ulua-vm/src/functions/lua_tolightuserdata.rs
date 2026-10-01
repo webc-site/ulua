@@ -16,7 +16,7 @@ use crate::{
 /// 不解引用。
 pub unsafe fn lua_tolightuserdata_ref(l: *mut LuaState, idx: i32) -> Option<*mut c_void> {
   unsafe {
-    let o: StkId = index_2_addr(l, idx);
+    let o: StkId = index_2_addr(&*l, idx);
 
     match ValueView::from_tvalue(&*o) {
       ValueView::LightUserdata { pointer, .. } => Some(pointer),

@@ -67,18 +67,18 @@ fn build_shape(l: *mut LuaState) {
     // 直接迭代应存在的键段（三段互斥），无需全段扫过后逐个筛
     for k in (1..=DENSE).chain(RUN_LO..=RUN_HI).chain(FAR_KEYS) {
       (*l).push_number(f64::from(k) * 7.0 + 0.5);
-      lua_rawseti(l, 1, k);
+      lua_rawseti(&mut *l, 1, k);
     }
     // 连续插入非数组键：撑满哈希段并触发多次增长 rehash
     for j in 0..STR_KEYS {
       let name = format!("probe-key-{j}");
       lua_pushlstring(l, name.as_ptr() as *const c_char, name.len());
       (*l).push_number(f64::from(j) + 0.25);
-      lua_rawset(l, -3); // 弹出 k、v，保留 t
+      lua_rawset(&mut *l, -3); // 弹出 k、v，保留 t
     }
     // 边界键：nvalue == sizearray + 1 → newkey 快路 rehash → resize 收缩
     (*l).push_number(f64::from(EK) * 7.0 + 0.5);
-    lua_rawseti(l, 1, EK);
+    lua_rawseti(&mut *l, 1, EK);
   }
 }
 
@@ -86,7 +86,7 @@ fn build_shape(l: *mut LuaState) {
 fn read_number(l: *mut LuaState) -> f64 {
   // Safety: `l` 为调用方持有的存活 VM 状态，栈顶可读。
   unsafe {
-    lua_tonumberx(l, -1).unwrap_or_else(|| panic!("栈顶不是数字（污染 tag 读）"))
+    lua_tonumberx(&*l, -1).unwrap_or_else(|| panic!("栈顶不是数字（污染 tag 读）"))
   }
 }
 
@@ -97,7 +97,7 @@ fn assert_values_intact(l: *mut LuaState) {
   unsafe {
     for k in 1..=(ASIZE + 1) {
       let want = expected(k);
-      let tt = lua_rawgeti(l, 1, k);
+      let tt = lua_rawgeti(&mut *l, 1, k);
       match want {
         Some(w) => {
           assert_eq!(tt, LuaType::Number as i32, "键 {k} 类型错位（UAF 暴露）");
@@ -128,7 +128,7 @@ fn assert_traversal_clean(l: *mut LuaState) {
       total += 1;
       // 栈: [t, k, v]
       if (*l).type_of(-2) == LuaType::Number {
-        let k = lua_tonumberx(l, -2).unwrap_or(0.0);
+        let k = lua_tonumberx(&*l, -2).unwrap_or(0.0);
         if k.fract() == 0.0 {
           let ki = k as i32;
           if (1..=(ASIZE + 1)).contains(&ki) && expected(ki).is_none() {
@@ -302,7 +302,7 @@ fn churn_rehash_cycles_keep_table_consistent() {
       for k in (2..4096).step_by(2 + round) {
         let v = f64::from(k) + round as f64;
         (*ls).push_number(v);
-        lua_rawseti(ls, 1, k);
+        lua_rawseti(&mut *ls, 1, k);
         // 同键重复写入时先丢弃旧记账，expect 始终反映最终值
         expect.retain(|(ek, _)| *ek != k);
         expect.push((k, v));
@@ -311,17 +311,17 @@ fn churn_rehash_cycles_keep_table_consistent() {
         let name = format!("churn-{round}-{j}");
         lua_pushlstring(ls, name.as_ptr() as *const c_char, name.len());
         (*ls).push_number(f64::from(j) - 0.5);
-        lua_rawset(ls, -3);
+        lua_rawset(&mut *ls, -3);
       }
       // 挖掉一半偶数键 → 数组段出洞
       for k in (2..4096).step_by(2 + round).skip(1).step_by(2) {
         (*ls).push_nil();
-        lua_rawseti(ls, 1, k);
+        lua_rawseti(&mut *ls, 1, k);
         expect.retain(|(ek, _)| *ek != k);
       }
     }
     for (k, v) in &expect {
-      let tt = lua_rawgeti(ls, 1, *k);
+      let tt = lua_rawgeti(&mut *ls, 1, *k);
       if tt == LuaType::Nil as i32 {
         panic!("churn 后键 {k} 丢失");
       }

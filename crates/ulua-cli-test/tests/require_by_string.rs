@@ -59,7 +59,7 @@ fn assert_module_cache(l: *mut LuaState, key: &str, present: bool, context: &str
   // Safety: `l` 指向 fixture 初始化完成的主线程；findtable/getfield 的栈操作配平。
   // `lua_getfield` 走 `lua_s_new` 当场入 intern 表、不保存该指针。
   unsafe {
-    lua_l_findtable(l, LUA_REGISTRYINDEX, cstr(b"_MODULES\0"), 1);
+    lua_l_findtable(&mut *l, LUA_REGISTRYINDEX, cstr(b"_MODULES\0"), 1);
     (*l).get_field_str(-1, key);
     let cached = !(*l).is_nil(-1);
     assert!(cached == present, "{context}");
@@ -96,7 +96,7 @@ fn register_test_module(l: *mut LuaState) {
     (*l).new_table();
     (*l).push_str("hello");
     (*l).push_str("world");
-    lua_settable(l, -3);
+    lua_settable(&mut *l, -3);
     (*l).call(2, 0);
   }
 }

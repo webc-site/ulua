@@ -22,7 +22,7 @@ pub unsafe fn lua_getcounters(
 ) {
   // SAFETY: 契约保证 `L` 存活、funcindex 处为 Lua 闭包可读，`counters` 为调用方可写输出数组且长度与原型指令数匹配
   unsafe {
-    let func: *const TValue = lua_a_toobject(l, funcindex);
+    let func: *const TValue = lua_a_toobject(&*l, funcindex);
     api_check!(
       l,
       (*func).is_function() && (*(*func).as_closure_ptr()).is_c == 0

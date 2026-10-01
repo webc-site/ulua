@@ -13,7 +13,7 @@ pub fn lua_b_inext(l: &mut LuaState) -> i32 {
   l.push_integer(i);
   // SAFETY: `l` 存活（引用形保证）；`lua_rawgeti` 的 `# Safety` 其余前提（1 号槽为
   // 合法正索引且上方已校验为 table）由库函数约定与 `check_type` 成立。
-  unsafe { lua_rawgeti(l.as_mut_ptr(), 1, i) };
+  lua_rawgeti(l, 1, i);
 
   if l.is_nil(-1) { 0 } else { 2 }
 }

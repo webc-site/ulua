@@ -25,7 +25,7 @@ pub(crate) unsafe fn getfunc(l: *mut LuaState, opt: i32) {
     } else {
       let mut ar: LuaDebug = zeroed();
       let level: i32 = if opt != 0 {
-        lua_l_optinteger(l, 1, 1)
+        lua_l_optinteger(&mut *l, 1, 1)
       } else {
         (*l).check_integer(1)
       };

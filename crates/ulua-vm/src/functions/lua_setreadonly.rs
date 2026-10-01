@@ -12,7 +12,7 @@ use crate::{
 /// cpp VM/src/lapi.cpp:907
 pub(crate) unsafe fn lua_setreadonly(l: *mut LuaState, objindex: i32, enabled: i32) {
   unsafe {
-    let o: *const TValue = index_2_addr(l, objindex);
+    let o: *const TValue = index_2_addr(&*l, objindex);
     api_check!(l, (*o).is_table());
 
     let t: *mut LuaTable = (*o).as_table_ptr();

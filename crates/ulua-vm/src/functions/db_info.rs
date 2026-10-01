@@ -26,7 +26,7 @@ pub(crate) unsafe fn db_info(l: *mut LuaState) -> i32 {
     }
 
     let level: i32;
-    if lua_isnumber(l, arg + 1) != 0 {
+    if lua_isnumber(&*l, arg + 1) != 0 {
       level = (*l).to_integer(arg + 1).unwrap_or(0);
       (*l).arg_check(level >= 0, arg + 1, "level can't be negative");
     } else if arg == 0 && (*l).is_function(1) {

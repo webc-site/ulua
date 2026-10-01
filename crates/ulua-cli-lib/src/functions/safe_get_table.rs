@@ -43,9 +43,9 @@ pub unsafe fn safe_get_table(l: *mut LuaState, table_index: i32) {
   let mut loop_count: i32 = 0;
   loop {
     l.push_value(-2); // 复制键
-    // Safety: `lua_rawget` 为 ulua-vm unsafe 导出；按不变式 `-2` 是表、顶是键副本，
-    // 弹副本查表并把结果压回顶（此时结果 -1、表 -2、原键 -3）。
-    unsafe { lua_rawget(l, -2) }; // 尝试查找键
+    // 按不变式 `-2` 是表、顶是键副本，弹副本查表并把结果压回顶（此时结果 -1、
+    // 表 -2、原键 -3）。
+    lua_rawget(&mut *l, -2); // 尝试查找键
 
     if !l.is_nil(-1) || loop_count >= MAX_TRAVERSAL_LIMIT {
       break;

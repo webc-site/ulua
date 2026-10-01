@@ -18,10 +18,7 @@ use crate::{
 impl LuaState {
   #[inline(always)]
   pub fn type_of(&self, idx: i32) -> LuaType {
-    // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），被调方
-    // `# Safety` 其余前提（`idx` 为合法（伪）索引）由调用方按文档保证。
-    let t = unsafe { lua_type(self.read_ptr(), idx) };
-    LuaType::from_c_int(t).unwrap_or(LuaType::None)
+    LuaType::from_c_int(lua_type(self, idx)).unwrap_or(LuaType::None)
   }
 
   #[inline(always)]
@@ -41,14 +38,12 @@ impl LuaState {
 
   #[inline(always)]
   pub fn is_number(&self, idx: i32) -> bool {
-    // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_isnumber(self.read_ptr(), idx) != 0 }
+    lua_isnumber(self, idx) != 0
   }
 
   #[inline(always)]
   pub fn is_string(&self, idx: i32) -> bool {
-    // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_isstring(self.read_ptr(), idx) != 0 }
+    lua_isstring(self, idx) != 0
   }
 
   #[inline(always)]
@@ -93,14 +88,12 @@ impl LuaState {
 
   #[inline(always)]
   pub fn to_number(&self, idx: i32) -> Option<f64> {
-    // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_tonumberx(self.read_ptr(), idx) }
+    lua_tonumberx(self, idx)
   }
 
   #[inline(always)]
   pub fn to_integer(&self, idx: i32) -> Option<i32> {
-    // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_tointegerx(self.read_ptr(), idx) }
+    lua_tointegerx(self, idx)
   }
 
   #[inline(always)]
@@ -117,8 +110,7 @@ impl LuaState {
 
   #[inline(always)]
   pub fn raw_equal(&self, idx1: i32, idx2: i32) -> bool {
-    // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_rawequal(self.read_ptr(), idx1, idx2) != 0 }
+    lua_rawequal(self, idx1, idx2) != 0
   }
 
   #[inline(always)]
@@ -128,8 +120,7 @@ impl LuaState {
 
   #[inline(always)]
   pub fn check_bytes<'a>(&mut self, idx: i32) -> &'a [u8] {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_l_checklstring_ref(self.as_mut_ptr(), idx) }
+    lua_l_checklstring_ref(self, idx)
   }
 
   #[inline(always)]
@@ -173,14 +164,12 @@ impl LuaState {
 
   #[inline(always)]
   pub fn check_boolean(&mut self, narg: i32) -> bool {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_l_checkboolean(self.as_mut_ptr(), narg) != 0 }
+    lua_l_checkboolean(self, narg) != 0
   }
 
   #[inline(always)]
   pub fn check_integer_64(&mut self, narg: i32) -> i64 {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_l_checkinteger_64(self.as_mut_ptr(), narg) }
+    lua_l_checkinteger_64(self, narg)
   }
 
   /// 仅本模块的 `to_lightuserdata_ptr`（全仓唯一消费面）使用；外部一律走 `_ptr` 变体。
@@ -204,7 +193,6 @@ impl LuaState {
 
   #[inline(always)]
   pub fn opt_boolean(&mut self, narg: i32, def: bool) -> bool {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_l_optboolean(self.as_mut_ptr(), narg, def) }
+    lua_l_optboolean(self, narg, def)
   }
 }

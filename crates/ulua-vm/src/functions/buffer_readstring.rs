@@ -16,7 +16,7 @@ pub(crate) unsafe fn buffer_readstring(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证 `l` 指向本次 buffer 库调用的存活 LuaState，buffer 数据界由已校验的 userdata 长度字段给出，越界访问统一走报错路径
   unsafe {
     let mut len: usize = 0;
-    let buf = lua_l_checkbuffer(l, 1, &mut len).cast::<u8>();
+    let buf = lua_l_checkbuffer(&mut *l, 1, &mut len).cast::<u8>();
     let offset = (*l).check_integer(2);
     let size = (*l).check_integer(3);
 

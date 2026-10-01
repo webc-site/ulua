@@ -17,7 +17,7 @@ pub unsafe fn lua_l_typeerror_l(l: *mut LuaState, narg: i32, tname: &str) -> ! {
   // lua_a_toobject/lua_t_objtypename 按各自 C-API 契约读槽，luaL_error 抛错不返回
   unsafe {
     let fname = currfuncname(l);
-    let obj: *const TValue = lua_a_toobject(l, narg);
+    let obj: *const TValue = lua_a_toobject(&*l, narg);
 
     if !obj.is_null() {
       let objtypename = lua_t_objtypename(l, &*obj);

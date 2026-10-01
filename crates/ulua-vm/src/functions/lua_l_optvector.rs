@@ -8,7 +8,7 @@ pub(crate) unsafe fn lua_l_optvector(l: *mut LuaState, narg: i32, def: *const f3
     if (*l).is_none_or_nil(narg) {
       def
     } else {
-      lua_l_checkvector(l, narg)
+      lua_l_checkvector(&mut *l, narg)
     }
   }
 }

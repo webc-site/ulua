@@ -14,11 +14,11 @@ use crate::{
 /// cpp `lbaselib.cpp:39`。
 pub(crate) unsafe fn lua_b_tonumber(l: *mut LuaState) -> i32 {
   unsafe {
-    let base = lua_l_optinteger(l, 2, 10);
+    let base = lua_l_optinteger(&mut *l, 2, 10);
 
     if base == 10 {
       // standard conversion
-      if let Some(n) = lua_tonumberx(l, 1) {
+      if let Some(n) = lua_tonumberx(&*l, 1) {
         (*l).push_number(n);
         return 1;
       }

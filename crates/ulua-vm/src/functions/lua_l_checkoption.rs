@@ -10,11 +10,12 @@ use crate::{
 };
 
 /// # Safety
-/// `l` 必须指向存活 `LuaState`（失配路径经 argerror 抛错不返回）；第 `narg` 栈槽须为可读串值或可取默认；
-/// `lst` 须为以 NULL 元素收尾的可读 C 串指针数组（越界读会踩数组尾）；`def` 为空或指向可读 NUL 结尾 C 串。
-/// 对应 cpp laux.cpp:99。
+/// C-ABI 镜像垫片（`def`/`lst` 裸 C 串参数为 C 约定面，按 review.md §2 保留 unsafe 形；
+/// `l` 的存活前提已由 `&mut` 接收者类型承载）：`l` 须为存活 `LuaState`（失配路径经 argerror 抛错不返回）；
+/// 第 `narg` 栈槽须为可读串值或可取默认；`lst` 须为以 NULL 元素收尾的可读 C 串指针数组（越界读会踩数组尾）；
+/// `def` 为空或指向可读 NUL 结尾 C 串。对应 cpp laux.cpp:99。
 pub unsafe fn lua_l_checkoption(
-  l: *mut LuaState,
+  l: &mut LuaState,
   narg: i32,
   def: *const c_char,
   lst: *const *const c_char,
@@ -28,7 +29,7 @@ pub unsafe fn lua_l_checkoption(
       lua_l_checklstring(l, narg, null_mut())
     };
 
-    // 选项表为 NUL 结尾指针数组：字节序列比较等价 cpp `strcmp == 0`
+    // SAFETY: 选项表为 NUL 结尾指针数组：`lst.add(i)` 由上述契约覆盖，字节序列比较等价 cpp `strcmp == 0`
     let name_bytes = cstr_bytes(name);
     let mut i: i32 = 0;
     loop {

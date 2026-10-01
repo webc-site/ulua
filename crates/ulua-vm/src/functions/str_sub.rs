@@ -12,10 +12,10 @@ use crate::{
 pub unsafe fn str_sub(l: *mut LuaState) -> i32 {
   unsafe {
     // 借用切片形态取源串：出参 len 由切片长度承接，后续按下标取子串，免指针游走
-    let s = lua_l_checklstring_ref(l, 1);
+    let s = lua_l_checklstring_ref(&mut *l, 1);
     let len = s.len();
     let mut start = posrelat((*l).check_integer(2), len);
-    let mut end = posrelat(lua_l_optinteger(l, 3, -1), len);
+    let mut end = posrelat(lua_l_optinteger(&mut *l, 3, -1), len);
 
     if start < 1 {
       start = 1;

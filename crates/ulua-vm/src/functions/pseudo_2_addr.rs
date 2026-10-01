@@ -27,28 +27,32 @@ unsafe fn getcurrenv(l: *mut LuaState) -> *mut LuaTable {
   }
 }
 
-/// # Safety
-/// `l` 须为存活 `LuaState` 且 `(*l).global.pseudotemp`、`registry`、`gt` 均有效；`idx`
-/// 须满足 `lua_ispseudo(idx)`（`api_check` 保证），LUA_ENVIRONINDEX/GLOBALSINDEX 分支会经
-/// `sethvalue` 写 pseudotemp 并可能触发写屏障；越界伪索引返回 `luaO_nilobject`。cpp `lapi.cpp:89`。
-pub(crate) unsafe fn pseudo_2_addr(l: *mut LuaState, idx: i32) -> StkId {
+/// 伪索引 → 槽地址换算（cpp `pseudo2addr`）。`l` 以引用传入（存活由类型保证）；
+/// `idx` 须满足 `lua_ispseudo(idx)`（`api_check` 保证），LUA_ENVIRONINDEX/GLOBALSINDEX
+/// 分支会经 `sethvalue` 写 `global.pseudotemp` 并可能触发写屏障（写路径只触
+/// `global`/GC 对象头，不写穿 `l` 本体）；越界伪索引返回 `luaO_nilobject`。
+/// cpp `lapi.cpp:89`。
+pub(crate) fn pseudo_2_addr(l: &LuaState, idx: i32) -> StkId {
+  api_check!(l, lua_ispseudo(idx));
+  // SAFETY:`l` 存活（引用形保证）；写路径仅触 `(*l).global.pseudotemp`、GC 对象
+  // 头与 upvalue 槽位，均不写穿 `l` 本体，`read_ptr` 只读转发契约成立（见其文档）。
   unsafe {
-    api_check!(l, lua_ispseudo(idx));
+    let lp = l.read_ptr();
     match idx {
       // pseudo-indices
-      LUA_REGISTRYINDEX => registry!(l) as *const TValue as *mut TValue,
+      LUA_REGISTRYINDEX => registry!(lp) as *const TValue as *mut TValue,
       LUA_ENVIRONINDEX => {
-        let tmp = &mut (*(*l).global).pseudotemp as *mut TValue;
-        sethvalue!(l, tmp, getcurrenv(l));
+        let tmp = &mut (*(*lp).global).pseudotemp as *mut TValue;
+        sethvalue!(lp, tmp, getcurrenv(lp));
         tmp
       }
       LUA_GLOBALSINDEX => {
-        let tmp = &mut (*(*l).global).pseudotemp as *mut TValue;
-        sethvalue!(l, tmp, (*l).gt);
+        let tmp = &mut (*(*lp).global).pseudotemp as *mut TValue;
+        sethvalue!(lp, tmp, (*lp).gt);
         tmp
       }
       _ => {
-        let func = curr_func!(l);
+        let func = curr_func!(lp);
         // cpp `LUA_GLOBALSINDEX - idx`：合法 upvalue 伪索引（`lua_upvalueindex(i)`，
         // i≥1）折叠出 1..=255 的 i，行为不变；对垃圾超负 idx 该减法是符号溢出 UB
         // （溢出后 `i <= nupvalues` 判真、`upvals[i-1]` 出负下标）。

@@ -14,7 +14,7 @@ use crate::{
 /// 返回的 `*const c_void` 仅在对应对象存活期间有效，仅用于 identity 比较。cpp/VM/src/lapi.cpp:665 lua_topointer。
 pub unsafe fn lua_topointer(l: *mut LuaState, idx: i32) -> *const c_void {
   unsafe {
-    let o: StkId = index_2_addr(l, idx);
+    let o: StkId = index_2_addr(&*l, idx);
 
     match ValueView::from_tvalue(&*o) {
       ValueView::Userdata(u) => (*u).data.as_ptr() as *const c_void,
