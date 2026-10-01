@@ -59,7 +59,8 @@ use crate::{
     gkey::gval, gnext::gnext, gval_2_slot::gval2slot, incr_ci::incr_ci, is_lua::isLua,
     lightuserdatatag::lightuserdatatag, lu_tag_iterator::LU_TAG_ITERATOR,
     lua_c_barrier::lua_c_barrier, lua_c_barrierfast::lua_c_barrierfast,
-    lua_c_barriert::luaC_barriert, lua_c_check_gc::lua_c_check_gc,
+    lua_c_barriert::{luaC_barriert, luaC_barriert_pending},
+    lua_c_check_gc::lua_c_check_gc, lua_c_needs_gc::luaC_needsGC,
     lua_callinfo_native::LUA_CALLINFO_NATIVE, lua_callinfo_return::LUA_CALLINFO_RETURN,
     lua_d_checkstack::luaD_checkstack, lua_d_checkstackfornewci::lua_d_checkstackfornewci,
     lua_g_typeerror::luaG_typeerror, lua_multret::LUA_MULTRET, lua_o_nilobject::LUA_O_NILOBJECT,
@@ -405,7 +406,7 @@ macro_rules! call_arm {
 /// （标量取数值常量）共享本单源，`$scalar` 为纯读表达式（f64→f32 透传 cast），
 /// 求值序与旧 `let vc` 提前绑定不可观察差异；判定顺序不动。
 macro_rules! vec_scalar_op {
-  ($frame:ident, $ra:expr, $vslot:expr, $scalar:expr, $op_fn:expr, $label:lifetime) => {{
+  ($frame:ident, $ra:expr, $vslot:expr, $scalar:expr, $op_fn:expr, $next:block) => {{
     let vb = $frame.lanes($vslot);
     let op_fn = $op_fn;
     setvvalue!(
@@ -415,7 +416,7 @@ macro_rules! vec_scalar_op {
       op_fn(vb[2], $scalar),
       op_fn($frame.lane_at($vslot, 3), $scalar)
     );
-    continue $label;
+    $next;
   }};
 }
 
@@ -423,12 +424,12 @@ macro_rules! vec_scalar_op {
 /// K 常量变体）slow-path 臂尾单源：`vm_protect!` 保护下调用 `lua_v_doarithimpl`
 /// 回 dispatch，九处变体只差操作数槽位与 tm；判定顺序、快慢路划分一律不动。
 macro_rules! arith_slow {
-  ($l:ident, $pc:ident, $base:ident, $ra:expr, $rb:expr, $rc:expr, $tm:expr, $label:lifetime) => {{
+  ($l:ident, $pc:ident, $base:ident, $ra:expr, $rb:expr, $rc:expr, $tm:expr, $next:block) => {{
     // slow-path, may invoke C/Lua via metamethods
     vm_protect!($l, $pc, $base, {
       lua_v_doarithimpl($l, Slot::from_raw($ra), &*$rb, &*$rc, $tm);
     });
-    continue $label;
+    $next;
   }};
 }
 
@@ -686,12 +687,6 @@ pub(crate) fn luau_execute(l: *mut LuaState) {
 fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
   // SAFETY: 契约保证 `l` 满足与 luau_execute 相同前置（存活且 isactive、当前 ci 为 Lua 闭包、单线程执行），const 分支仅切换单步开关
   unsafe {
-    // the critical interpreter state, stored in locals for performance
-    let mut cl: *mut Closure;
-    let mut base: StkId;
-    let mut k: *mut TValue;
-    let mut pc: *const Instruction;
-
     LUAU_ASSERT!(isLua!((*l).ci));
     LUAU_ASSERT!((*l).isactive);
     // C++ also asserts !isblack(obj2gco(l)) — active threads never turn black.
@@ -709,55 +704,1828 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
       }
     }
 
-    // C++ `reentry:` label (goto target from NATIVECALL/RETURN native paths).
-    'reentry: loop {
-      LUAU_ASSERT!(isLua!((*l).ci));
+    // C++ `reentry:` 与 `dispatch:` 都在本函数内；尾调用分层（见 tier_cold 文档）要求
+    // 每个环节都是可 `become` 的独立函数，故这里只保留「原生层入口 + 首次入环」。
+    // 本帧以普通调用进入链头：`become` 要求调用方与被调方签名逐参数全等，而本函数
+    // 签名是 C++ `luau_execute(LuaState*)` 的对齐形态，只能作为链外的一层等待帧。
+    let pc: *const Instruction = (*(*l).ci).savedpc;
+    let cl: *mut Closure = (*(*(*l).ci).func).as_closure_ptr();
+    let base: StkId = (*l).base;
+    let k: *mut TValue = {
+      let l = &(*cl).inner.l;
+      (*l.p).k
+    };
 
-      pc = (*(*l).ci).savedpc;
-      cl = (*(*(*l).ci).func).as_closure_ptr();
-      base = (*l).base;
-      k = {
-        let l = &(*cl).inner.l;
-        (*l.p).k
-      };
+    tier_reentry::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
 
-      // C++ `VM_CONTINUE(op)` re-dispatches WITHOUT refetching `*pc`.
-      // 覆写值以裸 `u8` 承载、`LOP_NOP`(0) 作「无覆写」哨兵：`Option<u8>` 无可用
-      // niche，判别位与载荷被拆成两个独立 SSA 值，于是每条指令派发回到循环头时都要
-      // 双 `mov` 重置 None（A64 派发块实测 `mov w9,#0; mov w24,#0`）。五个覆写点
-      // （LOP_CALL 落穿 / LOP_BREAK 的 debuginsn 原码 / GETTABLEKS / SETTABLEKS /
-      // NAMECALL 三处 vm_patch 回写）写入的 opcode 恒非 0，与哨兵无冲突。
-      let mut continue_op: u8 = LuauOpcode::LOP_NOP as u8;
+/// 派发链的统一签名：解释器五个循环状态量（`l`/`pc`/`base`/`k`/`cl`）按值经寄存器
+/// 传递（aarch64 x0..x4，x86-64 rdi/rsi/rdx/rcx/r8）。
+///
+/// `become` 要求调用方与被调方**逐参数全等**，因此 reentry、冷层与所有热 handler
+/// 共用这一个形状；也正因为它是一张可按 opcode 索引的函数指针表，[`vm_next!`] 才能
+/// 在每个 handler 自己的尾部展开一条表索引尾调用。
+type VmFn = unsafe fn(*mut LuaState, *const Instruction, StkId, *mut TValue, *mut Closure);
 
-      // 栈槽视图门面：把 from_raw_parts / 分量索引类指针算术关进带 `# Safety`
-      // 契约的方法（见 records/vm_frame.rs），臂内不再手写。
-      let frame = VmFrame::new(l);
+/// C++ `VM_NEXT()` 的尾调用分层版，即 computed goto 的 `goto* kDispatchTable[op]`。
+///
+/// 展开在每个 handler 的尾部：取下一条指令的 opcode，查表尾调用对应函数。尾调用
+/// **替换**本帧（栈不增长），且那条 `b` 的指令地址随 handler 而不同 —— 这正是
+/// `match` 把 91 个臂折叠成一条共享 `br` 时丢掉的按 site 隔离的预测历史。
+macro_rules! vm_next {
+  ($single_step:expr, $l:expr, $pc:expr, $base:expr, $k:expr, $cl:expr) => {{
+    let __o = usize::from(luau_insn_op(*$pc) as u8);
+    let __t: &[VmFn; 256] = if $single_step { &DISPATCH_STEP } else { &DISPATCH_EXEC };
+    // SAFETY: 两张表的每个槽位都由本模块的 tier_cold / h_* 函数填满（无空槽），
+    // 类型即 VmFn；派发链契约保证 $l 与四个状态量同源且单线程独占
+    become __t[__o]($l, $pc, $base, $k, $cl);
+  }};
+}
 
-      // C++ `dispatch:` label; `VM_NEXT()` == `continue 'dispatch`.
-      'dispatch: loop {
-        // Note: in C++ this assert block is bypassed by computed goto
-        // except in single-step mode; asserts only.
-        if SINGLE_STEP
-          && continue_op == LuauOpcode::LOP_NOP as u8
-          && (*(*l).global).cb.debugstep.is_some()
-          && !luau_skipstep(luau_insn_op(*pc) as u8)
-        {
-          let debugstep = (*(*l).global).cb.debugstep;
-          vm_protect!(l, pc, base, {
-            luau_callhook(l, debugstep, None);
-          });
-          // allow debugstep hook to put thread into error/yield state
-          if (*l).status != 0 {
-            return; // goto exit
-          }
+/// 热层清单：`(opcode, handler)` 的单一来源，[`DISPATCH_EXEC`] 与 [`HOT_EXEC`] 两张表
+/// 都由它派生，避免「表已路由、冷层判定未更新」这类双写不一致。
+///
+/// 入选标准不是猜测，而是 `vm-opcount` 特性在 7 个回归用例上的**动态**指令直方图
+/// 累计占比 ≥95% 的集合（工具见 `op_count.rs`）。
+const HOT_ARMS: &[(LuauOpcode, VmFn)] = &[  (LuauOpcode::LOP_JUMP, h_jump::<false>), 
+  (LuauOpcode::LOP_JUMPIF, h_jumpif::<false>), 
+  (LuauOpcode::LOP_JUMPIFNOT, h_jumpifnot::<false>), 
+  (LuauOpcode::LOP_JUMPBACK, h_jumpback::<false>), 
+  (LuauOpcode::LOP_FORNPREP, h_fornprep::<false>), 
+  (LuauOpcode::LOP_FORNLOOP, h_fornloop::<false>), 
+  (LuauOpcode::LOP_NEWTABLE, h_newtable::<false>),   (LuauOpcode::LOP_ADD, h_add::<false>), 
+  (LuauOpcode::LOP_SUB, h_sub::<false>), 
+  (LuauOpcode::LOP_MUL, h_mul::<false>), 
+  (LuauOpcode::LOP_ADDK, h_addk::<false>), 
+  (LuauOpcode::LOP_SUBK, h_subk::<false>), 
+  (LuauOpcode::LOP_MULK, h_mulk::<false>), 
+  (LuauOpcode::LOP_MODK, h_modk::<false>),   (LuauOpcode::LOP_GETTABLEN, h_gettablen::<false>), 
+  (LuauOpcode::LOP_SETTABLEN, h_settablen::<false>), 
+  (LuauOpcode::LOP_SETTABLE, h_settable::<false>),   (LuauOpcode::LOP_LOADNIL, h_loadnil::<false>), 
+  (LuauOpcode::LOP_LOADB, h_loadb::<false>), 
+  (LuauOpcode::LOP_LOADN, h_loadn::<false>), 
+  (LuauOpcode::LOP_LOADK, h_loadk::<false>), 
+  (LuauOpcode::LOP_MOVE, h_move::<false>), 
+  (LuauOpcode::LOP_GETUPVAL, h_getupval::<false>), 
+  (LuauOpcode::LOP_SETUPVAL, h_setupval::<false>), (LuauOpcode::LOP_GETTABLE, h_gettable::<false>)];
+
+/// opcode → 热层 handler；未入选的槽位回冷层循环头 [`tier_cold`]。
+///
+/// 256 项稠密表让派发只剩「一次索引 + 一条间接跳转」：`u8` 索引恒在界内，
+/// 因此没有 `match` 那条 `cmp/b.hi` 边界判定。
+static DISPATCH_EXEC: [VmFn; 256] = build_dispatch();
+
+/// 单步层不分区（cpp 的 computed goto 同样只出现在 `!SingleStep` 单态）：全表指回
+/// `tier_cold::<true>`，每条指令都在冷层循环头跑 `debugstep` 钩子。
+static DISPATCH_STEP: [VmFn; 256] = [tier_cold::<true> as VmFn; 256];
+
+/// 冷层循环头的热层出口判定，与 [`DISPATCH_EXEC`] 同源。
+static HOT_EXEC: [bool; 256] = build_hot();
+
+const fn build_dispatch() -> [VmFn; 256] {
+  let mut t = [tier_cold::<false> as VmFn; 256];
+  let mut i = 0;
+  while i < HOT_ARMS.len() {
+    let (op, f) = HOT_ARMS[i];
+    t[op as usize] = f;
+    i += 1;
+  }
+  t
+}
+
+const fn build_hot() -> [bool; 256] {
+  let mut m = [false; 256];
+  let mut i = 0;
+  while i < HOT_ARMS.len() {
+    m[HOT_ARMS[i].0 as usize] = true;
+    i += 1;
+  }
+  m
+}
+
+/// C++ `reentry:` label（lvmexecute.cpp:212 的 `goto reentry` 目标）：从 `L->ci`
+/// 重建解释器循环局部量（`pc`/`cl`/`base`/`k`），随后尾调用进入派发层。
+///
+/// 之所以是一个独立函数而不是外层 `loop`：`become` 尾调用**替换**本帧，链上任何一环
+/// 都不可能「返回到中间帧」，于是 reentry 只能是派发链上的一个环节；原外层 loop 的
+/// 唯一回边（NATIVECALL / RETURN 原生路径的 `goto reentry`）改写为对本函数的尾调用，
+/// 语义与 `goto` 一致（帧不增长、状态从 `L->ci` 重取）。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方全部在 crate 内）
+///
+/// `l` 必须指向存活且 `isactive` 的 `LuaState`，其 `ci` 当前为 Lua 闭包帧
+/// （入口 `LUAU_ASSERT!(isLua!((*l).ci))` 兜底），且同一 VM 状态任一时刻仅单线程解释执行。
+unsafe fn tier_reentry<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  _pc: *const Instruction,
+  _base: StkId,
+  _k: *mut TValue,
+  _cl: *mut Closure,
+) {
+  // SAFETY: 契约保证 l 为就绪的 Lua 帧状态，const 分支仅切换单步开关
+  unsafe {
+    // 四个 `_` 形参只为凑齐派发链的统一签名（见 VM_SIG 注释）：reentry 的语义就是
+    // 「一切状态从 L->ci 重取」，与 C++ `goto reentry` 后循环头重读一致。
+    LUAU_ASSERT!(isLua!((*l).ci));
+    LUAU_ASSERT!((*l).isactive);
+    // C++ also asserts !isblack(obj2gco(l)) — active threads never turn black.
+
+    // the critical interpreter state, threaded through the tail-call tiers by value
+    // (aarch64 x0..x4 / x86-64 rdi..r8) so it stays register-resident exactly as
+    // C++ keeps them in the luau_execute frame.
+    let pc: *const Instruction = (*(*l).ci).savedpc;
+    let cl: *mut Closure = (*(*(*l).ci).func).as_closure_ptr();
+    let base: StkId = (*l).base;
+    let k: *mut TValue = {
+      let l = &(*cl).inner.l;
+      (*l.p).k
+    };
+
+    become tier_cold::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
+
+/// C++ `template<bool SingleStep> static void luau_execute(LuaState* l)` 的 `dispatch:`
+/// 主循环（lvmexecute.cpp:228），即派发分层中的**冷层**。
+///
+/// 分层动机（实测根因）：C++ 的 computed goto 把 `goto* kDispatchTable[op]` 复制进
+/// 每个 handler 尾部，于是**每条指令的间接跳转都落在自己的指令地址上**，分支预测历史
+/// 按 site 隔离；Rust 的 `match` 把 91 个臂尾折叠成循环头**一条**共享 `br`，热循环里几十个
+/// 目标交替 → 持续误预测。把热点 opcode 抽成独立 handler、在其尾部用 `vm_next!` 尾调用
+/// 查表跳转，即可在 stable 语义边界内复刻该结构；本函数保留未抽出的臂。
+///
+/// 状态交接：`pc`/`base`/`k`/`cl` 按值取入、按值传出（尾调用寄存器搬运，不落栈），
+/// 因此热层与冷层之间切换的代价是一次 `b`；冷层循环头额外付一次热表命中判定。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方为本模块的尾调用链）
+///
+/// `l` 指向存活且 `isactive` 的 `LuaState`；`pc`/`base`/`k`/`cl` 必须是同一 Lua 闭包帧
+/// 的一致解释器状态（由 [`tier_reentry`] 或原生返回路径建立），且任一时刻仅单线程使用。
+
+/// C++ computed-goto 的 handler 单元：LOP_GETTABLE（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_gettable<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+    // lvmexecute.cpp:741
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+
+    // fast-path: array access
+    if (*rb).is_table() && (*rc).is_number() {
+      let h = (*rb).as_table_ptr();
+      let indexd = (*rc).as_number();
+      let index = indexd as i32;
+
+      // index has to be an exact integer and in-bounds for the array portion
+      if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32
+        && (*h).metatable.is_null()
+        && index as f64 == indexd
+      {
+        setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
+        vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+      }
+    }
+
+    // 非数字键 / 表外对象 / 带元表：慢路交 [`s_gettable`]，本函数保持无栈帧叶函数
+    become s_gettable::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
+
+/// [`h_gettable`] 的慢路续延：`luaV_gettable` 要写 `savedpc`、可能触发元表调用，
+/// 因此带帧；从热臂 `become` 进来后按 `pc.sub(1)` 重读指令、槽位由 `base` 重算
+/// （纯读，判定顺序与原臂一致）。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_gettable`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
+#[inline(never)]
+unsafe fn s_gettable<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_gettable 尾调用保证，本体即原 opcode 臂慢路
+  unsafe {
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+
+    base = gettable_slow(l, pc, ra, rb, rc);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_SETUPVAL（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_setupval<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:450
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let ur = VM_UV!(luau_insn_b(insn), cl);
+    // cpp: `UpVal* uv = upvalue(ur);`（lvmexecute.cpp:477）——裸指针形态，与上游一致。
+    let uv = upvalue!(ur);
+
+    setobj!(l, (*uv).v, ra);
+    lua_c_barrier!(l, uv, ra);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_GETUPVAL（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_getupval<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:439
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let ur = VM_UV!(luau_insn_b(insn), cl);
+    let v = if (*ur).is_upval() {
+    (*upvalue!(ur)).v
+    } else {
+    ur
+    };
+
+    setobj_2_s!(l, ra, v);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_MOVE（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_move<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:366
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+
+    setobj_2_s!(l, ra, rb);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_LOADK（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_loadk<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:356
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let kv = VM_KV!(luau_insn_d(insn), cl, k);
+
+    setobj_2_s!(l, ra, kv);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_LOADN（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_loadn<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:347
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+
+    setnvalue!(ra, luau_insn_d(insn) as f64);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_LOADB（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_loadb<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:335
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+
+    setbvalue!(ra, luau_insn_b(insn) as i32);
+
+    pc = pc.add(luau_insn_c(insn) as usize);
+    let p = cl_proto!(cl);
+    LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_LOADNIL（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_loadnil<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:326
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+
+    setnilvalue!(ra);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_SETTABLEN（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_settablen<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:830
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let c = luau_insn_c(insn) as i32;
+
+    // fast-path: array access
+    if (*rb).is_table() {
+    let h = (*rb).as_table_ptr();
+
+    if (c as u32) < (*h).sizearray as u32
+    && (*h).metatable.is_null()
+    && (*h).readonly == 0
+    {
+    setobj2t!(l, (*h).array.add(c as usize), ra);
+    // 写屏障的谓词（值可回收 / 表已黑 / 值还白）本身无调用，就地判；只有真要
+    // mark 时才交 [`s_settablen_bar`] 跑那次 call —— 留在热臂会让 LLVM 给本函数
+    // 加入口帧，把一次性 prologue 变成每条指令的 stp/ldp（理由同 [`s_add`]）。
+    if luaC_barriert_pending!(h, ra) {
+    become s_settablen_bar::<SINGLE_STEP>(l, pc, base, k, cl);
+    }
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    }
+    }
+
+    // 越界 / 元表 / readonly：慢路交 [`s_settablen`]，本函数保持无栈帧叶函数
+    become s_settablen::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
+
+/// [`h_settablen`] 数组命中的写屏障续延：值已由热臂写回，这里只补 `luaC_barriert`
+/// 那次可能发生的 call（`lua_c_barriertable` 会走 GC，是热臂不能容纳的唯一调用）。
+/// 指令按 `pc.sub(1)` 重读、槽位由 `base` 重算（纯读，判定与热臂一致）。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_settablen`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令、该指令确为数组命中且值已写回。
+#[inline(never)]
+unsafe fn s_settablen_bar<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_settablen 尾调用保证，本体即原 opcode 臂数组命中段
+  unsafe {
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let h = (*rb).as_table_ptr();
+
+    luaC_barriert!(l, h, ra);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+/// [`h_settablen`] 的慢路续延：同签名所以能被 `become` 接管；指令按 `pc.sub(1)` 重读。
+///
+/// 拆两层的理由与 [`s_add`] 相同：本慢路要把临时键 `TValue` 放在栈上按值传给
+/// `lua_v_settable`，LLVM 因此把整个帧建立提到函数入口——留在热臂里就是**每条指令**多
+/// 付一次 `sub sp` + 3 对 `stp`/`ldp`。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_settablen`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
+#[inline(never)]
+unsafe fn s_settablen<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_settablen 尾调用保证，本体即原 opcode 臂慢路
+  unsafe {
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let c = luau_insn_c(insn) as i32;
+
+    // slow-path: handles out of bounds array accesses
+    let mut n = TValue::default();
+    setnvalue!(&mut n, (c + 1) as f64);
+    vm_protect!(l, pc, base, {
+      lua_v_settable(
+        l,
+        Slot::from_raw(rb),
+        Slot::from_ref(&n),
+        Slot::from_raw(ra),
+      );
+    });
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_GETTABLEN（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_gettablen<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:802
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let c = luau_insn_c(insn) as i32;
+
+    // fast-path: array access
+    if (*rb).is_table() {
+    let h = (*rb).as_table_ptr();
+
+    if (c as u32) < (*h).sizearray as u32 && (*h).metatable.is_null() {
+    setobj_2_s!(l, ra, (*h).array.add(c as usize));
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    }
+    }
+
+    // 越界 / 元表：慢路交 [`s_gettablen`]，本函数保持无栈帧叶函数
+    become s_gettablen::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
+
+/// [`h_gettablen`] 的慢路续延：同签名所以能被 `become` 接管；指令按 `pc.sub(1)` 重读。
+///
+/// 拆两层的理由与 [`s_settablen`] 相同。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_gettablen`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
+#[inline(never)]
+unsafe fn s_gettablen<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_gettablen 尾调用保证，本体即原 opcode 臂慢路
+  unsafe {
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let c = luau_insn_c(insn) as i32;
+
+    // slow-path: handles out of bounds array accesses
+    let mut n = TValue::default();
+    setnvalue!(&mut n, (c + 1) as f64);
+    vm_protect!(l, pc, base, {
+      lua_v_gettable(
+        l,
+        Slot::from_raw(rb),
+        Slot::from_mut(&mut n),
+        Slot::from_raw(ra),
+      );
+    });
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_SETTABLE（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_settable<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:771
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+
+    // fast-path: array access
+    if (*rb).is_table() && (*rc).is_number() {
+    let h = (*rb).as_table_ptr();
+    let indexd = (*rc).as_number();
+    let index = indexd as i32;
+
+    // index has to be an exact integer and in-bounds for the array portion
+    if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32
+    && (*h).metatable.is_null()
+    && (*h).readonly == 0
+    && index as f64 == indexd
+    {
+    setobj2t!(l, (*h).array.add((index - 1) as u32 as usize), ra);
+    // 同 [`h_settablen`]：屏障谓词无调用、就地判，只有真要 mark 才交续延
+    if luaC_barriert_pending!(h, ra) {
+    become s_settable_bar::<SINGLE_STEP>(l, pc, base, k, cl);
+    }
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    }
+    }
+
+    // 非数组命中：慢路交 [`s_settable`]，本函数保持无栈帧叶函数
+    become s_settable::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
+
+/// [`h_settable`] 数组命中的写屏障续延：值已由热臂写回，这里只补 `luaC_barriert`
+/// 那次可能发生的 call（表已黑、值还白时要 `lua_c_barriertable`）。留在热臂会让
+/// LLVM 在函数入口存 3 对 callee-saved，实测每条 SETTABLE 多付 6 次访存。
+/// 指令按 `pc.sub(1)` 重读、槽位由 `base` 重算（纯读，判定与热臂一致）。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_settable`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令、该指令确为数组命中且值已写回。
+#[inline(never)]
+unsafe fn s_settable_bar<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_settable 尾调用保证，本体即原 opcode 臂数组命中段
+  unsafe {
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let h = (*rb).as_table_ptr();
+
+    luaC_barriert!(l, h, ra);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+/// [`h_settable`] 的慢路续延：同签名所以能被 `become` 接管；指令按 `pc.sub(1)` 重读、
+/// 槽位由 `base` 重算。拆两层的理由与 [`s_add`] 相同：`settable_slow` 之前必须把
+/// `savedpc` 落好并在返回后刷新 `base`，这条路径天然带栈帧。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_settable`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
+#[inline(never)]
+unsafe fn s_settable<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_settable 尾调用保证，本体即原 opcode 臂慢路
+  unsafe {
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+
+    base = settable_slow(l, pc, ra, rb, rc);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_MODK（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_modk<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:2256
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let kv = VM_KV!(luau_insn_c(insn), cl, k);
+
+    if (*rb).is_number() {
+    let nb = (*rb).as_number();
+    let nk = (*kv).as_number();
+    setnvalue!(ra, luai_nummod(nb, nk));
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    }
+    // 非数字 rb：`__mod`/ coercion 慢路交 [`s_modk`]，本函数保持叶函数
+    become s_modk::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
+
+/// [`h_modk`] 的慢路续延：同签名所以能被 `become` 接管；指令按 `pc.sub(1)` 重读，
+/// `kv` 由 `cl`/`k` 重算（纯读，判定与原臂一致）。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_modk`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
+#[inline(never)]
+unsafe fn s_modk<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_modk 尾调用保证，本体即原 opcode 臂慢路
+  unsafe {
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let kv = VM_KV!(luau_insn_c(insn), cl, k);
+
+    arith_slow!(l, pc, base, ra, rb, kv, TMS::TmMod, {});
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_MULK（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_mulk<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+    let frame = VmFrame::new(l);
+
+
+    // lvmexecute.cpp:2112
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let kv = VM_KV!(luau_insn_c(insn), cl, k);
+
+    if (*rb).is_number() {
+    setnvalue!(ra, (*rb).as_number() * (*kv).as_number());
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    } else if (*rb).is_vector() {
+    vec_scalar_op!(frame, ra, rb, (*kv).as_number() as f32, |a: f32, b: f32| a * b, { vm_next!(SINGLE_STEP, l, pc, base, k, cl); });
+    }
+    // 其余类型：`__mul` 元方法 / coercion 慢路交 [`s_mulk`]，本函数保持叶函数
+    become s_mulk::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
+
+/// [`h_mulk`] 的慢路续延：同签名所以能被 `become` 接管；指令按 `pc.sub(1)` 重读，
+/// `kv` 由 `cl`/`k` 重算（纯读，判定顺序与原臂逐条一致）。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_mulk`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
+#[inline(never)]
+unsafe fn s_mulk<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_mulk 尾调用保证，本体即原 opcode 臂慢路
+  unsafe {
+    let frame = VmFrame::new(l);
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let kv = VM_KV!(luau_insn_c(insn), cl, k);
+
+    if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmMul) {
+      base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
+    } else {
+      arith_slow!(l, pc, base, ra, rb, kv, TMS::TmMul, {});
+    }
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_SUBK（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_subk<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:2091
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let kv = VM_KV!(luau_insn_c(insn), cl, k);
+
+    if (*rb).is_number() {
+    setnvalue!(ra, (*rb).as_number() - (*kv).as_number());
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    }
+    // 非数字 rb：`__sub`/ coercion 慢路交 [`s_subk`]，本函数保持叶函数
+    become s_subk::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
+
+/// [`h_subk`] 的慢路续延：同签名所以能被 `become` 接管；指令按 `pc.sub(1)` 重读，
+/// `kv` 由 `cl`/`k` 重算（纯读，判定与原臂一致）。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_subk`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
+#[inline(never)]
+unsafe fn s_subk<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_subk 尾调用保证，本体即原 opcode 臂慢路
+  unsafe {
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let kv = VM_KV!(luau_insn_c(insn), cl, k);
+
+    arith_slow!(l, pc, base, ra, rb, kv, TMS::TmSub, {});
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_ADDK（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_addk<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:2070
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let kv = VM_KV!(luau_insn_c(insn), cl, k);
+
+    if (*rb).is_number() {
+    setnvalue!(ra, (*rb).as_number() + (*kv).as_number());
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    }
+    // 非数字 rb：`__add`/ coercion 慢路交 [`s_addk`]，本函数保持叶函数
+    become s_addk::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
+
+/// [`h_addk`] 的慢路续延：同签名所以能被 `become` 接管；指令按 `pc.sub(1)` 重读，
+/// `kv` 由 `cl`/`k` 重算（纯读，判定与原臂一致）。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_addk`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
+#[inline(never)]
+unsafe fn s_addk<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_addk 尾调用保证，本体即原 opcode 臂慢路
+  unsafe {
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let kv = VM_KV!(luau_insn_c(insn), cl, k);
+
+    arith_slow!(l, pc, base, ra, rb, kv, TMS::TmAdd, {});
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_MUL（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_mul<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+    let frame = VmFrame::new(l);
+
+
+    // lvmexecute.cpp:1851
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+
+    // fast-path: number
+    if (*rb).is_number() && (*rc).is_number() {
+    setnvalue!(ra, (*rb).as_number() * (*rc).as_number());
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    } else if (*rb).is_vector() && (*rc).is_number() {
+    let vc = (*rc).as_number() as f32;
+    vec_scalar_op!(frame, ra, rb, vc, |a: f32, b: f32| a * b, { vm_next!(SINGLE_STEP, l, pc, base, k, cl); });
+    } else if (*rb).is_vector() && (*rc).is_vector() {
+    let vb = frame.lanes(rb);
+    let vc = frame.lanes(rc);
+    setvvalue!(
+    ra,
+    vb[0] * vc[0],
+    vb[1] * vc[1],
+    vb[2] * vc[2],
+    frame.lane_at(rb, 3) * frame.lane_at(rc, 3)
+    );
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    } else if (*rb).is_number() && (*rc).is_vector() {
+    let vb = (*rb).as_number() as f32;
+    let vc = frame.lanes(rc);
+    setvvalue!(
+    ra,
+    vb * vc[0],
+    vb * vc[1],
+    vb * vc[2],
+    vb * frame.lane_at(rc, 3)
+    );
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    }
+    // `__mul` 元方法 / 其余混合类型：交 [`s_mul`] 续延，本函数保持叶函数
+    become s_mul::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
+
+/// [`h_mul`] 的慢路续延：同签名所以能被 `become` 接管；指令按 `pc.sub(1)` 重读、
+/// 操作数槽位由 `base` 重算（纯读，判定顺序与原臂逐条一致）。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_mul`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
+#[inline(never)]
+unsafe fn s_mul<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_mul 尾调用保证，本体即原 opcode 臂慢路
+  unsafe {
+    let frame = VmFrame::new(l);
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+
+    let rbc = if (*rb).is_number() { rc } else { rb };
+    if let Some(fn_tm) = frame.c_tm_by_obj(rbc, TMS::TmMul) {
+      base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+    } else {
+      arith_slow!(l, pc, base, ra, rb, rc, TMS::TmMul, {});
+    }
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_SUB（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_sub<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+    let frame = VmFrame::new(l);
+
+
+    // lvmexecute.cpp:1805
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+
+    // fast-path: number
+    if (*rb).is_number() && (*rc).is_number() {
+    setnvalue!(ra, (*rb).as_number() - (*rc).as_number());
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    } else if (*rb).is_vector() && (*rc).is_vector() {
+    let vb = frame.lanes(rb);
+    let vc = frame.lanes(rc);
+    setvvalue!(
+    ra,
+    vb[0] - vc[0],
+    vb[1] - vc[1],
+    vb[2] - vc[2],
+    frame.lane_at(rb, 3) - frame.lane_at(rc, 3)
+    );
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    }
+    // `__sub` 元方法 / 混合类型：交 [`s_sub`] 续延，本函数保持叶函数（见其文档）
+    become s_sub::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
+
+/// [`h_sub`] 的慢路续延：同签名所以能被 `become` 接管；指令按 `pc.sub(1)` 重读、
+/// 操作数槽位由 `base` 重算（纯读，判定顺序与原臂逐条一致）。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_sub`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
+#[inline(never)]
+unsafe fn s_sub<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_sub 尾调用保证，本体即原 opcode 臂慢路
+  unsafe {
+    let frame = VmFrame::new(l);
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+
+    if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmSub) {
+      base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+    } else {
+      arith_slow!(l, pc, base, ra, rb, rc, TMS::TmSub, {});
+    }
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_ADD（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_add<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂快路
+  unsafe {
+    let frame = VmFrame::new(l);
+
+    // lvmexecute.cpp:1759
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+
+    // fast-path: number
+    if (*rb).is_number() && (*rc).is_number() {
+      setnvalue!(ra, (*rb).as_number() + (*rc).as_number());
+      vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    } else if (*rb).is_vector() && (*rc).is_vector() {
+      let vb = frame.lanes(rb);
+      let vc = frame.lanes(rc);
+      setvvalue!(
+        ra,
+        vb[0] + vc[0],
+        vb[1] + vc[1],
+        vb[2] + vc[2],
+        frame.lane_at(rb, 3) + frame.lane_at(rc, 3)
+      );
+      vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+    }
+    // 混合类型 / `__add` 元方法：交 [`s_add`] 续延，本函数保持叶函数（见其文档）
+    become s_add::<SINGLE_STEP>(l, pc, base, k, cl);
+  }
+}
+
+/// [`h_add`] 的慢路续延：同签名所以能被 `become` 接管；指令按 `pc.sub(1)` 重读、
+/// 操作数槽位由 `base` 重算（纯读，判定顺序与原臂逐条一致）。
+///
+/// 拆两层的理由：`become` 尾调用**替换**本帧，但只要函数体里还留着 `bl`（元方法调用、
+/// `lua_t_gettmbyobj`、`vm_protect!`），LLVM 就得在入口存 5 对 callee-saved、出口恢复——
+/// 原单一解释环里这笔开销是整帧一次性的，拆成函数后按指令付。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_add`]）
+///
+/// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
+#[inline(never)]
+unsafe fn s_add<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由 h_add 尾调用保证，本体即原 opcode 臂慢路
+  unsafe {
+    let frame = VmFrame::new(l);
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let rb = VM_REG!(luau_insn_b(insn), l, base);
+    let rc = VM_REG!(luau_insn_c(insn), l, base);
+
+    if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmAdd) {
+      base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+    } else {
+      arith_slow!(l, pc, base, ra, rb, rc, TMS::TmAdd, {});
+    }
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// 回边前置（`VM_INTERRUPT` + `LuauBackedgeHeapCheck` 门控的 `VM_CHECK_GC`）在当前
+/// 状态下是否必然为 no-op。
+///
+/// 判据只允许**无调用**构造（一次 load + 比较）：热 handler 里出现任何 `bl`，LLVM
+/// 就得在函数入口把 `pc`/`base`/`k`/`cl` 所在的 x1..x4 保存进栈帧，本应只在 VM 入口
+/// 发生一次的 prologue 于是变成每条回边一次 `stp`/`ldp`（旗标读取因此走
+/// [`FValue::get_unshadowed`] 而非 `get()`）。
+///
+/// 保守判定：`get_unshadowed()` 返回 `None`（本进程装过线程本地覆盖，只有测试会）
+/// 时按「旗标为真」处理，交冷续延用 `get()` 复核 —— 与拆分前逐位同语义。
+#[inline(always)]
+unsafe fn backedge_idle(l: *mut LuaState) -> bool {
+  // SAFETY: 契约同热 handler —— l 指向存活 LuaState，global 为其稳定字段指针
+  unsafe {
+    let hooked = (*(*l).global).cb.interrupt.is_some();
+    let gc_may_step =
+      fflag::LuauBackedgeHeapCheck.get_unshadowed().unwrap_or(true) && luaC_needsGC!(l);
+    !hooked && !gc_may_step
+  }
+}
+
+/// C++ computed-goto 的 handler 单元：LOP_JUMPBACK（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_jumpback<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+    // 回边前置只在有 interrupt 钩子 / 需要 GC 步进时才有动作，两者皆含调用；
+    // 命中即整臂交给冷续延，本函数保持叶函数（无入口帧）。
+    if !backedge_idle(l) {
+      become s_jumpback::<SINGLE_STEP>(l, pc, base, k, cl);
+    }
+
+    // lvmexecute.cpp:2988
+    let insn = *pc;
+    pc = pc.add(1);
+
+    pc = pc.offset(luau_insn_d(insn) as isize);
+    let p = cl_proto!(cl);
+    LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+/// [`h_jumpback`] 的回边前置续延：完整跑 `VM_INTERRUPT` + 可选 `VM_CHECK_GC`
+/// （`interrupt` 可把线程置入 error/yield 态并 `return` 退出 VM，`lua_c_step` 可能
+/// realloc 栈并刷新 `base`），再执行与热路径同构的 pc 回退。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_jumpback`]）
+///
+/// 与 [`h_jumpback`] 同前置。
+#[inline(never)]
+unsafe fn s_jumpback<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 由 h_jumpback 的 become 传递同一份一致状态
+  unsafe {
+    // lvmexecute.cpp:2988
+    VM_INTERRUPT!(l, pc, base);
+    // lvmexecute.cpp:3005-3006：LuauBackedgeHeapCheck 开启时回边额外 GC 检查
+    if fflag::LuauBackedgeHeapCheck.get() {
+      VM_CHECK_GC!(l, pc, base);
+    }
+
+    let insn = *pc;
+    pc = pc.add(1);
+
+    pc = pc.offset(luau_insn_d(insn) as isize);
+    let p = cl_proto!(cl);
+    LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_FORNLOOP（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_fornloop<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+    // 同 [`h_jumpback`]：回边前置含调用，命中即交冷续延，本函数保持叶函数
+    if !backedge_idle(l) {
+      become s_fornloop::<SINGLE_STEP>(l, pc, base, k, cl);
+    }
+
+    // lvmexecute.cpp:2573
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    pc = fornloop_step(pc, cl, insn, ra);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+/// [`h_fornloop`] 的回边前置续延：完整跑 `VM_INTERRUPT` + 可选 `VM_CHECK_GC`
+/// （`interrupt` 可让线程进入 error/yield 态并 `return` 退出 VM，`lua_c_step` 可能
+/// realloc 栈并刷新 `base`），再走与热路径同构的循环体。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_fornloop`]）
+///
+/// 与 [`h_fornloop`] 同前置。
+#[inline(never)]
+unsafe fn s_fornloop<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 由 h_fornloop 的 become 传递同一份一致状态
+  unsafe {
+    // lvmexecute.cpp:2573
+    VM_INTERRUPT!(l, pc, base);
+    // lvmexecute.cpp:2575-2576：LuauBackedgeHeapCheck 开启时回边额外 GC 检查
+    if fflag::LuauBackedgeHeapCheck.get() {
+      VM_CHECK_GC!(l, pc, base);
+    }
+
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    pc = fornloop_step(pc, cl, insn, ra);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+/// LOP_FORNLOOP 的循环体（两记回边前置之后、派发之前）：热臂与冷续延共用一份实现。
+/// 返回下一条指令的 pc，派发留给两条调用路径各自的 `vm_next!`。
+///
+/// 它不是 `become` 链的一环，签名因此不受「与调用方逐参数全等」的约束；反过来，链上
+/// 的每个函数（handler 与其续延）必须同形，所以本函数不能自带 `vm_next!`。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是同模块的两条 FORNLOOP 路径）
+///
+/// `ra` 是本指令 `A` 槽（`limit`/`step`/`idx` 三元组首槽）且三槽均为数值，`pc` 已越过
+/// 本指令。
+#[inline(always)]
+unsafe fn fornloop_step(
+  pc: *const Instruction,
+  cl: *mut Closure,
+  insn: Instruction,
+  ra: *mut TValue,
+) -> *const Instruction {
+  // SAFETY: 调用方（h_fornloop / s_fornloop）已按上述契约给出 ra/pc
+  unsafe {
+    LUAU_ASSERT!((*ra).is_number() && (*ra.add(1)).is_number() && (*ra.add(2)).is_number());
+
+    let limit = (*ra).as_number();
+    let step = (*ra.add(1)).as_number();
+    let idx = (*ra.add(2)).as_number() + step;
+
+    setnvalue!(ra.add(2), idx);
+
+    // Note: make sure the loop condition is exactly the same between
+    // this and LOP_FORNPREP so that we handle NaN/etc. consistently
+    let cont = if step > 0.0 {
+      idx <= limit
+    } else {
+      limit <= idx
+    };
+    let backedge = pc.offset(luau_insn_d(insn) as isize);
+    let p = cl_proto!(cl);
+    LUAU_ASSERT!((backedge.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+    pc_select!(cont, backedge, pc)
+  }
+}
+
+/// C++ computed-goto 的 handler 单元：LOP_FORNPREP（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_fornprep<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+    // lvmexecute.cpp:2546
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+
+    // 非数值三元组要走 luaV_prepareFORN（可转数、可报错）：含调用，交冷续延，
+    // 本函数保持叶函数
+    if !(*ra).is_number() || !(*ra.add(1)).is_number() || !(*ra.add(2)).is_number() {
+      become s_fornprep::<SINGLE_STEP>(l, pc, base, k, cl);
+    }
+
+    pc = fornprep_step(pc, cl, insn, ra);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+/// [`h_fornprep`] 的非数值续延：转数 / 触发 Lua 报错后走同一条循环预备尾。指令按
+/// `pc.sub(1)` 重读（`become` 要求与热臂逐参数全等，`insn` 不能多带一个参数）。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`h_fornprep`]）
+///
+/// 与 [`h_fornprep`] 同前置，且 `pc` 已越过当前指令。
+#[inline(never)]
+unsafe fn s_fornprep<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 由 h_fornprep 的 become 传递同一份一致状态
+  unsafe {
+    let insn = *pc.sub(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+
+    // slow-path: can convert arguments to numbers and trigger Lua errors
+    // Note: this doesn't reallocate stack so we don't need to recompute ra/base
+    (*(*l).ci).savedpc = pc; // vm_protect_pc()
+
+    // luaV_prepareFORN 按 StkId 形参收三槽可写指针
+    lua_v_prepare_forn(l, ra, ra.add(1), ra.add(2));
+
+    pc = fornprep_step(pc, cl, insn, ra);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+/// LOP_FORNPREP 的循环预备尾（数值三元组就绪后、派发前）：热臂与冷续延共用。/// 返回下一条指令的 pc；不参与 `become` 链，理由见 [`fornloop_step`]。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是同模块的两条 FORNPREP 路径）
+///
+/// `ra` 指向 `limit`/`step`/`idx` 三元组首槽且三者均为数值，`pc` 已越过本指令。
+#[inline(always)]
+unsafe fn fornprep_step(
+  mut pc: *const Instruction,
+  cl: *mut Closure,
+  insn: Instruction,
+  ra: *mut TValue,
+) -> *const Instruction {
+  // SAFETY: 调用方保证 ra 三槽均为数值（热臂就地判定，冷续延经 prepareFORN 转换）
+  unsafe {
+    let limit = (*ra).as_number();
+    let step = (*ra.add(1)).as_number();
+    let idx = (*ra.add(2)).as_number();
+
+    // Note: make sure the loop condition is exactly the same between
+    // this and LOP_FORNLOOP so that we handle NaN/etc. consistently
+    let will_run = if step > 0.0 {
+      idx <= limit
+    } else {
+      limit <= idx
+    };
+    pc = pc_select!(will_run, pc, pc.offset(luau_insn_d(insn) as isize));
+    let p = cl_proto!(cl);
+    LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+    pc
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_NEWTABLE（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_newtable<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  mut base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:2458
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+    let b = luau_insn_b(insn) as i32;
+    let aux: u32 = *pc;
+    pc = pc.add(1);
+
+    (*(*l).ci).savedpc = pc; // vm_protect_pc(): lua_h_new may fail due to OOM
+
+    sethvalue!(
+    l,
+    ra,
+    lua_h_new(l, aux as i32, if b == 0 { 0 } else { 1 << (b - 1) })
+    );
+    vm_protect!(l, pc, base, {
+    lua_c_check_gc!(l);
+    });
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_JUMPIFNOT（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_jumpifnot<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:1351
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+
+    let falsy = (*ra).is_falsy();
+    pc = pc_select!(falsy, pc.offset(luau_insn_d(insn) as isize), pc);
+    let p = cl_proto!(cl);
+    LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_JUMPIF（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_jumpif<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:1341
+    let insn = *pc;
+    pc = pc.add(1);
+    let ra = VM_REG!(luau_insn_a(insn), l, base);
+
+    let truthy = (*ra).is_truthy();
+    pc = pc_select!(truthy, pc.offset(luau_insn_d(insn) as isize), pc);
+    let p = cl_proto!(cl);
+    LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+
+/// C++ computed-goto 的 handler 单元：LOP_JUMP（原冷层 `match` 臂体，逐行同构）。
+///
+/// 抽成独立函数的唯一理由是**分支预测地址**：`match` 把 91 个臂尾折叠成循环头一条
+/// 共享 `br`，热循环里几十个目标交替导致持续误预测；本函数尾部 `vm_next!` 展开出属于
+/// 本 opcode 自己的表索引尾调用，等价于 cpp 在每个 handler 尾部复制的
+/// `goto* kDispatchTable[...]`。冷层同名臂只留一次 `become`，两层共用同一份实现。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是派发表）
+///
+/// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
+/// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
+unsafe fn h_jump<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  base: StkId,
+  k: *mut TValue,
+  cl: *mut Closure,
+) {
+  // SAFETY: 契约由派发链上游保证（tier_reentry / tier_cold），本体即原 opcode 臂
+  unsafe {
+
+    // lvmexecute.cpp:1332
+    let insn = *pc;
+    pc = pc.add(1);
+
+    pc = pc.offset(luau_insn_d(insn) as isize);
+    let p = cl_proto!(cl);
+    LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
+    vm_next!(SINGLE_STEP, l, pc, base, k, cl);
+  }
+}
+
+unsafe fn tier_cold<const SINGLE_STEP: bool>(
+  l: *mut LuaState,
+  mut pc: *const Instruction,
+  mut base: StkId,
+  mut k: *mut TValue,
+  mut cl: *mut Closure,
+) {
+  // SAFETY: 契约保证 l 与四个循环状态量同源且单线程独占（与 C++ luau_execute 同前置）
+  unsafe {
+    // 栈槽视图门面：把 from_raw_parts / 分量索引类指针算术关进带 `# Safety`
+    // 契约的方法（见 records/vm_frame.rs），臂内不再手写。
+    let frame = VmFrame::new(l);
+
+    // vm-opcount：本层激活内的上一条派发 opcode（256 表「无前驱」）。
+    #[cfg(feature = "vm-opcount")]
+    let mut prev_op: u16 = 256;
+
+    // C++ `dispatch:` label; `VM_NEXT()` == `continue 'dispatch`.
+    //
+    // C++ `VM_CONTINUE(op)` re-dispatches WITHOUT refetching `*pc`. 原先用
+    // `continue_op` 哨兵（裸 u8、LOP_NOP=0 表「无覆写」）在同一个循环头里合并两个
+    // 入口，代价是**每条指令**一次 `tst/b.ne` + 哨兵重置；改为两层循环后，外层只做
+    // 取指，5 个 VM_CONTINUE 站点（LOP_CALL 落穿 / LOP_BREAK 的 debuginsn 原码 /
+    // GETTABLEKS / SETTABLEKS / NAMECALL 三处 vm_patch 回写）改写 op 后
+    // `continue 'continue_op` 直接进内层，热路径上的哨兵判断彻底消失。
+    'dispatch: loop {
+      // Note: in C++ this assert block is bypassed by computed goto
+      // except in single-step mode; asserts only.
+      // 钩子只在取指入口判定，与原「continue_op==NOP 才查」的语义逐位一致。
+      if SINGLE_STEP
+        && (*(*l).global).cb.debugstep.is_some()
+        && !luau_skipstep(luau_insn_op(*pc) as u8)
+      {
+        let debugstep = (*(*l).global).cb.debugstep;
+        vm_protect!(l, pc, base, {
+          luau_callhook(l, debugstep, None);
+        });
+        // allow debugstep hook to put thread into error/yield state
+        if (*l).status != 0 {
+          return; // goto exit
         }
+      }
 
-        let op: u8 = if continue_op != LuauOpcode::LOP_NOP as u8 {
-          continue_op
-        } else {
-          luau_insn_op(*pc) as u8
-        };
-        continue_op = LuauOpcode::LOP_NOP as u8;
+      let mut op: u8 = luau_insn_op(*pc) as u8;
+
+      // 热层出口：opcode 已抽出为独立 handler 时立即尾调用交出，本冷层循环不再恢复
+      // （handler 尾部自己查表继续）。单步层不分区；vm-opcount 下整环留在冷层，
+      // 否则动态直方图会漏掉热层执行的指令。
+      #[cfg(not(feature = "vm-opcount"))]
+      if !SINGLE_STEP && HOT_EXEC[usize::from(op)] {
+        // SAFETY: HOT_EXEC 与 DISPATCH_EXEC 同源于 HOT_ARMS，命中槽必为非空 handler
+        become DISPATCH_EXEC[usize::from(op)](l, pc, base, k, cl);
+      }
+
+      'continue_op: loop {
+        #[cfg(feature = "vm-opcount")]
+        crate::functions::op_count::record(op, &mut prev_op);
 
         // C++ 跳转表盲目索引 opcode 字节，越界时靠 `LUAU_UNREACHABLE()` 兜底
         // （等价 UB）。此处用 `From<u8>`：合法 opcode（< LopCount）结果与
@@ -773,59 +2541,28 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
           }
 
           LuauOpcode::LOP_LOADNIL => {
-            // lvmexecute.cpp:326
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-
-            setnilvalue!(ra);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_loadnil::<SINGLE_STEP>(l, pc, base, k, cl);
           }
 
           LuauOpcode::LOP_LOADB => {
-            // lvmexecute.cpp:335
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-
-            setbvalue!(ra, luau_insn_b(insn) as i32);
-
-            pc = pc.add(luau_insn_c(insn) as usize);
-            let p = cl_proto!(cl);
-            LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_loadb::<SINGLE_STEP>(l, pc, base, k, cl);
           }
 
           LuauOpcode::LOP_LOADN => {
-            // lvmexecute.cpp:347
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-
-            setnvalue!(ra, luau_insn_d(insn) as f64);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_loadn::<SINGLE_STEP>(l, pc, base, k, cl);
           }
 
           LuauOpcode::LOP_LOADK => {
-            // lvmexecute.cpp:356
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let kv = VM_KV!(luau_insn_d(insn), cl, k);
-
-            setobj_2_s!(l, ra, kv);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_loadk::<SINGLE_STEP>(l, pc, base, k, cl);
           }
 
           LuauOpcode::LOP_MOVE => {
-            // lvmexecute.cpp:366
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-
-            setobj_2_s!(l, ra, rb);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_move::<SINGLE_STEP>(l, pc, base, k, cl);
           }
 
           LuauOpcode::LOP_GETGLOBAL => {
@@ -904,33 +2641,13 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
           }
 
           LuauOpcode::LOP_GETUPVAL => {
-            // lvmexecute.cpp:439
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let ur = VM_UV!(luau_insn_b(insn), cl);
-            let v = if (*ur).is_upval() {
-              (*upvalue!(ur)).v
-            } else {
-              ur
-            };
-
-            setobj_2_s!(l, ra, v);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_getupval::<SINGLE_STEP>(l, pc, base, k, cl);
           }
 
           LuauOpcode::LOP_SETUPVAL => {
-            // lvmexecute.cpp:450
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let ur = VM_UV!(luau_insn_b(insn), cl);
-            // cpp: `UpVal* uv = upvalue(ur);`（lvmexecute.cpp:477）——裸指针形态，与上游一致。
-            let uv = upvalue!(ur);
-
-            setobj!(l, (*uv).v, ra);
-            lua_c_barrier!(l, uv, ra);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_setupval::<SINGLE_STEP>(l, pc, base, k, cl);
           }
 
           LuauOpcode::LOP_CLOSEUPVALS => {
@@ -1194,128 +2911,20 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             }
           }
           LuauOpcode::LOP_GETTABLE => {
-            // lvmexecute.cpp:741
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let rc = VM_REG!(luau_insn_c(insn), l, base);
-
-            // fast-path: array access
-            if (*rb).is_table() && (*rc).is_number() {
-              let h = (*rb).as_table_ptr();
-              let indexd = (*rc).as_number();
-              let index = indexd as i32;
-
-              // index has to be an exact integer and in-bounds for the array portion
-              if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32
-                && (*h).metatable.is_null()
-                && index as f64 == indexd
-              {
-                setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
-                continue 'dispatch;
-              }
-            }
-
-            // slow-path
-            base = gettable_slow(l, pc, ra, rb, rc);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_gettable::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_SETTABLE => {
-            // lvmexecute.cpp:771
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let rc = VM_REG!(luau_insn_c(insn), l, base);
-
-            // fast-path: array access
-            if (*rb).is_table() && (*rc).is_number() {
-              let h = (*rb).as_table_ptr();
-              let indexd = (*rc).as_number();
-              let index = indexd as i32;
-
-              // index has to be an exact integer and in-bounds for the array portion
-              if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32
-                && (*h).metatable.is_null()
-                && (*h).readonly == 0
-                && index as f64 == indexd
-              {
-                setobj2t!(l, (*h).array.add((index - 1) as u32 as usize), ra);
-                luaC_barriert!(l, h, ra);
-                continue 'dispatch;
-              }
-            }
-
-            // slow-path
-            base = settable_slow(l, pc, ra, rb, rc);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_settable::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_GETTABLEN => {
-            // lvmexecute.cpp:802
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let c = luau_insn_c(insn) as i32;
-
-            // fast-path: array access
-            if (*rb).is_table() {
-              let h = (*rb).as_table_ptr();
-
-              if (c as u32) < (*h).sizearray as u32 && (*h).metatable.is_null() {
-                setobj_2_s!(l, ra, (*h).array.add(c as usize));
-                continue 'dispatch;
-              }
-            }
-
-            // slow-path: handles out of bounds array accesses
-            let mut n = TValue::default();
-            setnvalue!(&mut n, (c + 1) as f64);
-            vm_protect!(l, pc, base, {
-              lua_v_gettable(
-                l,
-                Slot::from_raw(rb),
-                Slot::from_mut(&mut n),
-                Slot::from_raw(ra),
-              );
-            });
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_gettablen::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_SETTABLEN => {
-            // lvmexecute.cpp:830
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let c = luau_insn_c(insn) as i32;
-
-            // fast-path: array access
-            if (*rb).is_table() {
-              let h = (*rb).as_table_ptr();
-
-              if (c as u32) < (*h).sizearray as u32
-                && (*h).metatable.is_null()
-                && (*h).readonly == 0
-              {
-                setobj2t!(l, (*h).array.add(c as usize), ra);
-                luaC_barriert!(l, h, ra);
-                continue 'dispatch;
-              }
-            }
-
-            // slow-path: handles out of bounds array accesses
-            let mut n = TValue::default();
-            setnvalue!(&mut n, (c + 1) as f64);
-            vm_protect!(l, pc, base, {
-              lua_v_settable(
-                l,
-                Slot::from_raw(rb),
-                Slot::from_ref(&n),
-                Slot::from_raw(ra),
-              );
-            });
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_settablen::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_NEWCLOSURE => {
             // lvmexecute.cpp:859
@@ -1575,7 +3184,6 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               // points at the CALL instruction, so forcing the dispatch op
               // is semantically identical)
               LUAU_ASSERT!(luau_insn_op(*pc) == LuauOpcode::LOP_CALL as u32);
-              continue_op = LuauOpcode::LOP_CALL as u8;
               continue 'dispatch;
             }
           }
@@ -1633,7 +3241,7 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               && let Some(enter) = (*(*l).global).ecb.enter
             {
               if enter(l, nextproto) == 1 {
-                continue 'reentry; // goto reentry
+                become tier_reentry::<SINGLE_STEP>(l, pc, base, k, cl); // goto reentry
               } else {
                 return; // goto exit
               }
@@ -1647,40 +3255,18 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             continue 'dispatch;
           }
           LuauOpcode::LOP_JUMP => {
-            // lvmexecute.cpp:1332
-            let insn = *pc;
-            pc = pc.add(1);
-
-            pc = pc.offset(luau_insn_d(insn) as isize);
-            let p = cl_proto!(cl);
-            LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_jump::<SINGLE_STEP>(l, pc, base, k, cl);
           }
 
           LuauOpcode::LOP_JUMPIF => {
-            // lvmexecute.cpp:1341
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-
-            let truthy = (*ra).is_truthy();
-            pc = pc_select!(truthy, pc.offset(luau_insn_d(insn) as isize), pc);
-            let p = cl_proto!(cl);
-            LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_jumpif::<SINGLE_STEP>(l, pc, base, k, cl);
           }
 
           LuauOpcode::LOP_JUMPIFNOT => {
-            // lvmexecute.cpp:1351
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-
-            let falsy = (*ra).is_falsy();
-            pc = pc_select!(falsy, pc.offset(luau_insn_d(insn) as isize), pc);
-            let p = cl_proto!(cl);
-            LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_jumpifnot::<SINGLE_STEP>(l, pc, base, k, cl);
           }
 
           // 分臂 JUMPIFEQ / JUMPIFNOTEQ：热叶比较就地展开，`is_not` 成编译期常量
@@ -1784,7 +3370,9 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               ValueView::Number(n) => {
                 jump_and_next!(pc, cl, insn, 'dispatch, !(n == (*rb).as_number()))
               }
-              ValueView::Integer(a) => jump_and_next!(pc, cl, insn, 'dispatch, !(a == lvalue!(rb))),
+              ValueView::Integer(a) => {
+                jump_and_next!(pc, cl, insn, 'dispatch, !(a == lvalue!(rb)))
+              }
               ValueView::Vector(v) => {
                 jump_and_next!(pc, cl, insn, 'dispatch, !(luai_veceq(v, (*rb).as_vector_ref())))
               }
@@ -1899,111 +3487,16 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             }
           }
           LuauOpcode::LOP_ADD => {
-            // lvmexecute.cpp:1759
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let rc = VM_REG!(luau_insn_c(insn), l, base);
-
-            // fast-path: number
-            if (*rb).is_number() && (*rc).is_number() {
-              setnvalue!(ra, (*rb).as_number() + (*rc).as_number());
-              continue 'dispatch;
-            } else if (*rb).is_vector() && (*rc).is_vector() {
-              let vb = frame.lanes(rb);
-              let vc = frame.lanes(rc);
-              setvvalue!(
-                ra,
-                vb[0] + vc[0],
-                vb[1] + vc[1],
-                vb[2] + vc[2],
-                frame.lane_at(rb, 3) + frame.lane_at(rc, 3)
-              );
-              continue 'dispatch;
-            } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmAdd) {
-              base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
-              continue 'dispatch;
-            } else {
-              arith_slow!(l, pc, base, ra, rb, rc, TMS::TmAdd, 'dispatch);
-            }
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_add::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_SUB => {
-            // lvmexecute.cpp:1805
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let rc = VM_REG!(luau_insn_c(insn), l, base);
-
-            // fast-path: number
-            if (*rb).is_number() && (*rc).is_number() {
-              setnvalue!(ra, (*rb).as_number() - (*rc).as_number());
-              continue 'dispatch;
-            } else if (*rb).is_vector() && (*rc).is_vector() {
-              let vb = frame.lanes(rb);
-              let vc = frame.lanes(rc);
-              setvvalue!(
-                ra,
-                vb[0] - vc[0],
-                vb[1] - vc[1],
-                vb[2] - vc[2],
-                frame.lane_at(rb, 3) - frame.lane_at(rc, 3)
-              );
-              continue 'dispatch;
-            } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmSub) {
-              base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
-              continue 'dispatch;
-            } else {
-              arith_slow!(l, pc, base, ra, rb, rc, TMS::TmSub, 'dispatch);
-            }
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_sub::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_MUL => {
-            // lvmexecute.cpp:1851
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let rc = VM_REG!(luau_insn_c(insn), l, base);
-
-            // fast-path: number
-            if (*rb).is_number() && (*rc).is_number() {
-              setnvalue!(ra, (*rb).as_number() * (*rc).as_number());
-              continue 'dispatch;
-            } else if (*rb).is_vector() && (*rc).is_number() {
-              let vc = (*rc).as_number() as f32;
-              vec_scalar_op!(frame, ra, rb, vc, |a: f32, b: f32| a * b, 'dispatch);
-            } else if (*rb).is_vector() && (*rc).is_vector() {
-              let vb = frame.lanes(rb);
-              let vc = frame.lanes(rc);
-              setvvalue!(
-                ra,
-                vb[0] * vc[0],
-                vb[1] * vc[1],
-                vb[2] * vc[2],
-                frame.lane_at(rb, 3) * frame.lane_at(rc, 3)
-              );
-              continue 'dispatch;
-            } else if (*rb).is_number() && (*rc).is_vector() {
-              let vb = (*rb).as_number() as f32;
-              let vc = frame.lanes(rc);
-              setvvalue!(
-                ra,
-                vb * vc[0],
-                vb * vc[1],
-                vb * vc[2],
-                vb * frame.lane_at(rc, 3)
-              );
-              continue 'dispatch;
-            } else {
-              let rbc = if (*rb).is_number() { rc } else { rb };
-              if let Some(fn_tm) = frame.c_tm_by_obj(rbc, TMS::TmMul) {
-                base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
-                continue 'dispatch;
-              } else {
-                arith_slow!(l, pc, base, ra, rb, rc, TMS::TmMul, 'dispatch);
-              }
-            }
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_mul::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_DIV => {
             // lvmexecute.cpp:1912
@@ -2019,7 +3512,7 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               continue 'dispatch;
             } else if (*rb).is_vector() && (*rc).is_number() {
               let vc = (*rc).as_number() as f32;
-              vec_scalar_op!(frame, ra, rb, vc, |a: f32, b: f32| a / b, 'dispatch);
+              vec_scalar_op!(frame, ra, rb, vc, |a: f32, b: f32| a / b, { continue 'dispatch; });
             } else if (*rb).is_vector() && (*rc).is_vector() {
               let vb = frame.lanes(rb);
               let vc = frame.lanes(rc);
@@ -2048,7 +3541,9 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
                 base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
                 continue 'dispatch;
               } else {
-                arith_slow!(l, pc, base, ra, rb, rc, TMS::TmDiv, 'dispatch);
+                arith_slow!(l, pc, base, ra, rb, rc, TMS::TmDiv, {
+                  continue 'dispatch;
+                });
               }
             }
           }
@@ -2066,14 +3561,16 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               continue 'dispatch;
             } else if (*rb).is_vector() && (*rc).is_number() {
               let vc = (*rc).as_number() as f32;
-              vec_scalar_op!(frame, ra, rb, vc, |a: f32, b: f32| luai_numidiv(a as f64, b as f64) as f32, 'dispatch);
+              vec_scalar_op!(frame, ra, rb, vc, |a: f32, b: f32| luai_numidiv(a as f64, b as f64) as f32, { continue 'dispatch; });
             } else {
               let rbc = if (*rb).is_number() { rc } else { rb };
               if let Some(fn_tm) = frame.c_tm_by_obj(rbc, TMS::TmIDiv) {
                 base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
                 continue 'dispatch;
               } else {
-                arith_slow!(l, pc, base, ra, rb, rc, TMS::TmIDiv, 'dispatch);
+                arith_slow!(l, pc, base, ra, rb, rc, TMS::TmIDiv, {
+                  continue 'dispatch;
+                });
               }
             }
           }
@@ -2089,7 +3586,9 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               setnvalue!(ra, luai_nummod((*rb).as_number(), (*rc).as_number()));
               continue 'dispatch;
             } else {
-              arith_slow!(l, pc, base, ra, rb, rc, TMS::TmMod, 'dispatch);
+              arith_slow!(l, pc, base, ra, rb, rc, TMS::TmMod, {
+                continue 'dispatch;
+              });
             }
           }
           LuauOpcode::LOP_POW => {
@@ -2104,58 +3603,22 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               setnvalue!(ra, (*rb).as_number().powf((*rc).as_number()));
               continue 'dispatch;
             } else {
-              arith_slow!(l, pc, base, ra, rb, rc, TMS::TmPow, 'dispatch);
+              arith_slow!(l, pc, base, ra, rb, rc, TMS::TmPow, {
+                continue 'dispatch;
+              });
             }
           }
           LuauOpcode::LOP_ADDK => {
-            // lvmexecute.cpp:2070
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let kv = VM_KV!(luau_insn_c(insn), cl, k);
-
-            if (*rb).is_number() {
-              setnvalue!(ra, (*rb).as_number() + (*kv).as_number());
-              continue 'dispatch;
-            } else {
-              arith_slow!(l, pc, base, ra, rb, kv, TMS::TmAdd, 'dispatch);
-            }
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_addk::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_SUBK => {
-            // lvmexecute.cpp:2091
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let kv = VM_KV!(luau_insn_c(insn), cl, k);
-
-            if (*rb).is_number() {
-              setnvalue!(ra, (*rb).as_number() - (*kv).as_number());
-              continue 'dispatch;
-            } else {
-              arith_slow!(l, pc, base, ra, rb, kv, TMS::TmSub, 'dispatch);
-            }
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_subk::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_MULK => {
-            // lvmexecute.cpp:2112
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let kv = VM_KV!(luau_insn_c(insn), cl, k);
-
-            if (*rb).is_number() {
-              setnvalue!(ra, (*rb).as_number() * (*kv).as_number());
-              continue 'dispatch;
-            } else if (*rb).is_vector() {
-              vec_scalar_op!(frame, ra, rb, (*kv).as_number() as f32, |a: f32, b: f32| a * b, 'dispatch);
-            } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmMul) {
-              base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
-              continue 'dispatch;
-            } else {
-              arith_slow!(l, pc, base, ra, rb, kv, TMS::TmMul, 'dispatch);
-            }
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_mulk::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_DIVK => {
             // lvmexecute.cpp:2158
@@ -2169,12 +3632,14 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               setnvalue!(ra, (*rb).as_number() / (*kv).as_number());
               continue 'dispatch;
             } else if (*rb).is_vector() {
-              vec_scalar_op!(frame, ra, rb, (*kv).as_number() as f32, |a: f32, b: f32| a / b, 'dispatch);
+              vec_scalar_op!(frame, ra, rb, (*kv).as_number() as f32, |a: f32, b: f32| a / b, { continue 'dispatch; });
             } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmDiv) {
               base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
               continue 'dispatch;
             } else {
-              arith_slow!(l, pc, base, ra, rb, kv, TMS::TmDiv, 'dispatch);
+              arith_slow!(l, pc, base, ra, rb, kv, TMS::TmDiv, {
+                continue 'dispatch;
+              });
             }
           }
           LuauOpcode::LOP_IDIVK => {
@@ -2189,30 +3654,19 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               setnvalue!(ra, luai_numidiv((*rb).as_number(), (*kv).as_number()));
               continue 'dispatch;
             } else if (*rb).is_vector() {
-              vec_scalar_op!(frame, ra, rb, (*kv).as_number() as f32, |a: f32, b: f32| luai_numidiv(a as f64, b as f64) as f32, 'dispatch);
+              vec_scalar_op!(frame, ra, rb, (*kv).as_number() as f32, |a: f32, b: f32| luai_numidiv(a as f64, b as f64) as f32, { continue 'dispatch; });
             } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmIDiv) {
               base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
               continue 'dispatch;
             } else {
-              arith_slow!(l, pc, base, ra, rb, kv, TMS::TmIDiv, 'dispatch);
+              arith_slow!(l, pc, base, ra, rb, kv, TMS::TmIDiv, {
+                continue 'dispatch;
+              });
             }
           }
           LuauOpcode::LOP_MODK => {
-            // lvmexecute.cpp:2256
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let rb = VM_REG!(luau_insn_b(insn), l, base);
-            let kv = VM_KV!(luau_insn_c(insn), cl, k);
-
-            if (*rb).is_number() {
-              let nb = (*rb).as_number();
-              let nk = (*kv).as_number();
-              setnvalue!(ra, luai_nummod(nb, nk));
-              continue 'dispatch;
-            } else {
-              arith_slow!(l, pc, base, ra, rb, kv, TMS::TmMod, 'dispatch);
-            }
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_modk::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_POWK => {
             // lvmexecute.cpp:2279
@@ -2238,7 +3692,9 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               setnvalue!(ra, r);
               continue 'dispatch;
             } else {
-              arith_slow!(l, pc, base, ra, rb, kv, TMS::TmPow, 'dispatch);
+              arith_slow!(l, pc, base, ra, rb, kv, TMS::TmPow, {
+                continue 'dispatch;
+              });
             }
           }
           LuauOpcode::LOP_AND => {
@@ -2338,7 +3794,9 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               base = call_c_tm(l, pc, fn_tm, &[rb], luau_insn_a(insn) as i32);
               continue 'dispatch;
             } else {
-              arith_slow!(l, pc, base, ra, rb, rb, TMS::TmUnm, 'dispatch);
+              arith_slow!(l, pc, base, ra, rb, rb, TMS::TmUnm, {
+                continue 'dispatch;
+              });
             }
           }
           LuauOpcode::LOP_LENGTH => {
@@ -2375,25 +3833,8 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             }
           }
           LuauOpcode::LOP_NEWTABLE => {
-            // lvmexecute.cpp:2458
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            let b = luau_insn_b(insn) as i32;
-            let aux: u32 = *pc;
-            pc = pc.add(1);
-
-            (*(*l).ci).savedpc = pc; // vm_protect_pc(): lua_h_new may fail due to OOM
-
-            sethvalue!(
-              l,
-              ra,
-              lua_h_new(l, aux as i32, if b == 0 { 0 } else { 1 << (b - 1) })
-            );
-            vm_protect!(l, pc, base, {
-              lua_c_check_gc!(l);
-            });
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_newtable::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_DUPTABLE => {
             // lvmexecute.cpp:2472
@@ -2456,66 +3897,12 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             continue 'dispatch;
           }
           LuauOpcode::LOP_FORNPREP => {
-            // lvmexecute.cpp:2546
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-
-            if !(*ra).is_number() || !(*ra.add(1)).is_number() || !(*ra.add(2)).is_number() {
-              // slow-path: can convert arguments to numbers and trigger Lua errors
-              // Note: this doesn't reallocate stack so we don't need to recompute ra/base
-              (*(*l).ci).savedpc = pc; // vm_protect_pc()
-
-              // luaV_prepareFORN 按 StkId 形参收三槽可写指针
-              lua_v_prepare_forn(l, ra, ra.add(1), ra.add(2));
-            }
-
-            let limit = (*ra).as_number();
-            let step = (*ra.add(1)).as_number();
-            let idx = (*ra.add(2)).as_number();
-
-            // Note: make sure the loop condition is exactly the same between
-            // this and LOP_FORNLOOP so that we handle NaN/etc. consistently
-            let will_run = if step > 0.0 {
-              idx <= limit
-            } else {
-              limit <= idx
-            };
-            pc = pc_select!(will_run, pc, pc.offset(luau_insn_d(insn) as isize));
-            let p = cl_proto!(cl);
-            LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_fornprep::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_FORNLOOP => {
-            // lvmexecute.cpp:2573
-            VM_INTERRUPT!(l, pc, base);
-            // lvmexecute.cpp:2575-2576：LuauBackedgeHeapCheck 开启时回边额外 GC 检查
-            if fflag::LuauBackedgeHeapCheck.get() {
-              VM_CHECK_GC!(l, pc, base);
-            }
-            let insn = *pc;
-            pc = pc.add(1);
-            let ra = VM_REG!(luau_insn_a(insn), l, base);
-            LUAU_ASSERT!((*ra).is_number() && (*ra.add(1)).is_number() && (*ra.add(2)).is_number());
-
-            let limit = (*ra).as_number();
-            let step = (*ra.add(1)).as_number();
-            let idx = (*ra.add(2)).as_number() + step;
-
-            setnvalue!(ra.add(2), idx);
-
-            // Note: make sure the loop condition is exactly the same between
-            // this and LOP_FORNPREP so that we handle NaN/etc. consistently
-            let cont = if step > 0.0 {
-              idx <= limit
-            } else {
-              limit <= idx
-            };
-            let backedge = pc.offset(luau_insn_d(insn) as isize);
-            let p = cl_proto!(cl);
-            LUAU_ASSERT!((backedge.offset_from((*p).code) as u32) < (*p).sizecode as u32);
-            pc = pc_select!(cont, backedge, pc);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_fornloop::<SINGLE_STEP>(l, pc, base, k, cl);
           }
           LuauOpcode::LOP_FORGPREP => {
             // lvmexecute.cpp:2695
@@ -2779,7 +4166,7 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             };
 
             if enter(l, p) == 1 {
-              continue 'reentry; // goto reentry
+              become tier_reentry::<SINGLE_STEP>(l, pc, base, k, cl); // goto reentry
             }
 
             return; // goto exit
@@ -2973,19 +4360,8 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             continue 'dispatch;
           }
           LuauOpcode::LOP_JUMPBACK => {
-            // lvmexecute.cpp:2988
-            VM_INTERRUPT!(l, pc, base);
-            // lvmexecute.cpp:3005-3006：LuauBackedgeHeapCheck 开启时回边额外 GC 检查
-            if fflag::LuauBackedgeHeapCheck.get() {
-              VM_CHECK_GC!(l, pc, base);
-            }
-            let insn = *pc;
-            pc = pc.add(1);
-
-            pc = pc.offset(luau_insn_d(insn) as isize);
-            let p = cl_proto!(cl);
-            LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
-            continue 'dispatch;
+            // 热层：尾调用交给独立 handler（其尾部自带本 opcode 的间接跳转 site）
+            become h_jumpback::<SINGLE_STEP>(l, pc, base, k, cl);
           }
 
           LuauOpcode::LOP_LOADKX => {
@@ -3104,7 +4480,9 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               setnvalue!(ra, (*kv).as_number() - nc);
               continue 'dispatch;
             } else {
-              arith_slow!(l, pc, base, ra, kv, rc, TMS::TmSub, 'dispatch);
+              arith_slow!(l, pc, base, ra, kv, rc, TMS::TmSub, {
+                continue 'dispatch;
+              });
             }
           }
           LuauOpcode::LOP_DIVRK => {
@@ -3133,7 +4511,9 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
               );
               continue 'dispatch;
             } else {
-              arith_slow!(l, pc, base, ra, kv, rc, TMS::TmDiv, 'dispatch);
+              arith_slow!(l, pc, base, ra, kv, rc, TMS::TmDiv, {
+                continue 'dispatch;
+              });
             }
           }
           LuauOpcode::LOP_FASTCALL1 => {
@@ -3189,10 +4569,10 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             };
             LUAU_ASSERT!(!(*proto).debuginsn.is_null());
 
-            let op = *(*proto)
+            let debug_op = *(*proto)
               .debuginsn
               .add(pc.offset_from((*proto).code) as usize);
-            LUAU_ASSERT!(op != LuauOpcode::LOP_BREAK as u8);
+            LUAU_ASSERT!(debug_op != LuauOpcode::LOP_BREAK as u8);
 
             if (*(*l).global).cb.debugbreak.is_some() {
               let debugbreak = (*(*l).global).cb.debugbreak;
@@ -3207,8 +4587,10 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             }
 
             // VM_CONTINUE(op): re-dispatch the original opcode without refetching
-            continue_op = op;
-            continue 'dispatch;
+            // —— BREAK 处 pc 仍指向 BREAK 本身，取指会死循环，故改写外层 op 后
+            // 从内层入口重新派发 debuginsn 记录的原码。
+            op = debug_op;
+            continue 'continue_op;
           }
           LuauOpcode::LOP_JUMPXEQKNIL
           | LuauOpcode::LOP_JUMPXEQKB
@@ -3266,8 +4648,8 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             vm_patch_aux_slot(pc.sub(1), kidx, 0);
 
             pc = pc.sub(2);
-            continue_op = LuauOpcode::LOP_GETTABLEKS as u8; // VM_CONTINUE
-            continue 'dispatch;
+            op = LuauOpcode::LOP_GETTABLEKS as u8; // VM_CONTINUE
+            continue 'continue_op;
           }
           LuauOpcode::LOP_SETUDATAKS => {
             // lvmexecute.cpp:3573（快路径单源见 udata_direct_fast! 宏文档）
@@ -3290,8 +4672,8 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             vm_patch_aux_slot(pc.sub(1), kidx, 0);
 
             pc = pc.sub(2);
-            continue_op = LuauOpcode::LOP_SETTABLEKS as u8; // VM_CONTINUE
-            continue 'dispatch;
+            op = LuauOpcode::LOP_SETTABLEKS as u8; // VM_CONTINUE
+            continue 'continue_op;
           }
           LuauOpcode::LOP_NAMECALLUDATA => {
             // lvmexecute.cpp:3670
@@ -3401,8 +4783,8 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
             vm_patch_aux_slot(pc.sub(1), kidx, 0);
 
             pc = pc.sub(2);
-            continue_op = LuauOpcode::LOP_NAMECALL as u8; // VM_CONTINUE
-            continue 'dispatch;
+            op = LuauOpcode::LOP_NAMECALL as u8; // VM_CONTINUE
+            continue 'continue_op;
           }
           LuauOpcode::LOP_NEWCLASSMEMBER => {
             // lvmexecute.cpp:3670 (NEWCLASSMEMBER)

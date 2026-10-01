@@ -214,13 +214,38 @@ impl<T: FValueOverridable> FValue<T> {
     // 快路径：从未有测试装过覆盖 -> 直读全局。
     // 装了 `ScopedFastFlag`/`ScopedFastInt` 的测试会翻起 `OVERRIDES_ACTIVE`，其
     // 线程本地覆盖随后只遮蔽本线程的全局值（并行测试互不干扰）。
-    if overrides_active()
-      && let Some(v) = T::override_top(addr(self))
-    {
+    if let Some(v) = self.get_unshadowed() {
       return v;
     }
-    // Relaxed 读取与 C++ 普通读同成本;启动期之外的竞争按良性数据竞争处理,不再触发 UB。
-    T::load(&self.value)
+    self.get_shadowed()
+  }
+
+  /// `get()` 的**无调用**形态：`Some(v)` 即当前生效值；`None` 表示本进程装过线程本地
+  /// 覆盖（只有测试会），值必须由 [`FValue::get_shadowed`] 判定。
+  ///
+  /// 存在的理由是**指令级**的：覆盖查表是一次调用，而 VM 派发层里任何 `bl` 都会逼
+  /// LLVM 在函数入口把 `pc`/`base`/`k`/`cl` 所在的 x1..x4 落进 callee-saved 栈帧 ——
+  /// 本应只在 VM 入口发生一次的 prologue 因此变成每条字节码一次 `stp`/`ldp`（见
+  /// `luau_execute.rs` 的 `backedge_idle`）。热 handler 因此只准用本方法判定，
+  /// `None` 一律交给冷续延。
+  #[inline(always)]
+  pub fn get_unshadowed(&self) -> Option<T> {
+    if overrides_active() {
+      None
+    } else {
+      // Relaxed 读取与 C++ 普通读同成本;启动期之外的竞争按良性数据竞争处理,不再触发 UB。
+      Some(T::load(&self.value))
+    }
+  }
+
+  /// 覆盖遮蔽下的完整读（`get()` 的慢路）。外提成独立函数，避免把 TLS 查表的调用体
+  /// （含 `Option<T>` 返回的临时量）摊进每个内联点。
+  #[inline(never)]
+  fn get_shadowed(&self) -> T {
+    match T::override_top(addr(self)) {
+      Some(v) => v,
+      None => T::load(&self.value),
+    }
   }
 
   /// Install a thread-local override for this flag (used by the test scope
