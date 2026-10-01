@@ -23,9 +23,7 @@ pub(crate) fn push_registry_table(l: &mut LuaState, table_key: &[u8]) {
   // Safety: `as_mut_ptr` 由 `&mut LuaState` 借出、调用期内独占存活；lua_l_findtable_bytes
   // 在本次调用内读完键内容（findtable 的失败返回指针不被消费，键串为本帧借用、
   // 调用期内可读），不外泄任何指针；净压一个表值。
-  unsafe {
-    lua_l_findtable_bytes(l.as_mut_ptr(), LUA_REGISTRYINDEX, table_key, SUB_TABLE_HINT);
-  }
+  lua_l_findtable_bytes(l, LUA_REGISTRYINDEX, table_key, SUB_TABLE_HINT);
 }
 
 /// 取 `table_idx` 处表的字节键字段并压栈，对应 cpp `lua_getfield(L, idx, key.c_str())`。

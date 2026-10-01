@@ -4,7 +4,7 @@ use crate::{
   records::{
     ast_type_pack::AstTypePack, ast_type_pack_generic::AstTypePackGeneric,
     ast_type_pack_variadic::AstTypePackVariadic, cst_type_pack_generic::CstTypePackGeneric,
-    location::Location, parser::Parser,
+    location::Location, node_handle::Node, parser::Parser,
   },
 };
 
@@ -28,7 +28,7 @@ impl Parser {
         // `parse_type` 依 parser 契约返回 arena 中存活的非空 `*mut AstType`；
         // slot_ref 只读其 repr(C) 首字段 base.location。
         slot_ref(variadic_annotation).base.location,
-        variadic_annotation,
+        Node::from_raw(variadic_annotation),
       ))
     }
   }

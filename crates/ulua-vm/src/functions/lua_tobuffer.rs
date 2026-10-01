@@ -22,7 +22,7 @@ pub unsafe fn lua_tobuffer<'a>(
   len: *mut usize,
 ) -> Option<&'a mut c_void> {
   unsafe {
-    let o: StkId = index_2_addr(l, idx);
+    let o: StkId = index_2_addr(&*l, idx);
 
     match ValueView::from_tvalue(&*o) {
       ValueView::Buffer(b) => {

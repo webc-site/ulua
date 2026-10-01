@@ -9,7 +9,7 @@ use crate::{
     ast_type_pack::AstTypePack, ast_type_pack_explicit::AstTypePackExplicit,
     cst_type_function::CstTypeFunction, cst_type_group::CstTypeGroup,
     cst_type_pack_explicit::CstTypePackExplicit, location::Location, match_lexeme::MatchLexeme,
-    parser::Parser, position::Position, temp_vector::TempVector,
+    node_handle::Node, parser::Parser, position::Position, temp_vector::TempVector,
   },
   rtti::ast_node_is,
 };
@@ -120,7 +120,7 @@ impl Parser {
       } else {
         let node = self.alloc_type(AstTypeGroup::new(
           Location::new(parameter_start.location.begin, close_args_location.end),
-          params[0],
+          Node::from_raw(params[0]),
         ));
         if self.options.store_cst_data {
           let close_pos = if close_args_found {

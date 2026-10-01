@@ -315,8 +315,7 @@ impl DataFlowGraphBuilder {
 
   /// cpp `visit(AstTypePackVariadic*)`：登记 `T...` 的元素类型。
   pub fn visit_type_pack_variadic(&mut self, v: &AstTypePackVariadic) {
-    // SAFETY: variadic_type 由 parser 契约保证非空（cpp 直接解引用）。
-    let variadic_type = arena_ref::<AstType>(v.variadic_type, "AstTypePackVariadic.variadic_type");
-    self.visit_type(variadic_type);
+    // variadic_type 槽已句柄化（parser 契约保证非空，cpp 直接解引用），get() 直取。
+    self.visit_type(v.variadic_type.get());
   }
 }

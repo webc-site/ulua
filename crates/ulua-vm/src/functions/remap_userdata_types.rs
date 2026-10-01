@@ -5,12 +5,15 @@ use crate::functions::{fits, read_var_int::read_var_int};
 /// 单字节类型重映射：带符号差转索引，命中重映射表才写回。索引为负（`t < BASE`）
 /// 经 `try_into` 失败自然跳过，越界经 `get` 返回 `None` 也跳过——全程无 `unsafe`。
 fn remap_byte(t: &mut u8, remap: &[u8]) {
-  let index = *t as i32 - LuauBytecodeType::LBC_TYPE_TAGGED_USERDATA_BASE.0 as i32;
+  const OPTIONAL_BIT: u8 = LuauBytecodeType::LBC_TYPE_OPTIONAL_BIT.0 as u8;
+  let tag = *t & !OPTIONAL_BIT;
+  let optional = *t & OPTIONAL_BIT;
+  let index = tag as i32 - LuauBytecodeType::LBC_TYPE_TAGGED_USERDATA_BASE.0 as i32;
 
   if let Ok(index) = usize::try_from(index)
     && let Some(&mapped) = remap.get(index)
   {
-    *t = mapped;
+    *t = mapped | optional;
   }
 }
 

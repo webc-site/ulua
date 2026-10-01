@@ -13,9 +13,9 @@ use crate::{
 /// cpp VM/src/lveclib.cpp:256
 pub(crate) unsafe fn vector_index(l: *mut LuaState) -> i32 {
   unsafe {
-    let v = lua_l_checkvector(l, 1);
+    let v = lua_l_checkvector(&mut *l, 1);
     let mut len = 0usize;
-    let name = lua_l_checklstring(l, 2, &mut len);
+    let name = lua_l_checklstring(&mut *l, 2, &mut len);
 
     if len == 1 {
       let ic = (*name as i32 | 0x20) - 'x' as i32;

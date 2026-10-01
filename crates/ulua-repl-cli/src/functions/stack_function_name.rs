@@ -4,10 +4,7 @@
 use alloc::string::String;
 
 use ulua_common::functions::c_str::{cstr, cstr_cow};
-use ulua_vm::{
-  functions::lua_getinfo::lua_getinfo,
-  records::lua_state::LuaState,
-};
+use ulua_vm::{functions::lua_getinfo::lua_getinfo, records::lua_state::LuaState};
 
 use crate::functions::ZERO_DEBUG;
 

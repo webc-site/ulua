@@ -10,7 +10,7 @@ use crate::{
 pub(crate) unsafe fn lua_l_checknumber(l: *mut LuaState, narg: i32) -> f64 {
   // SAFETY: 契约保证 `l` 为存活调用帧且 narg 栈槽可读；非数值路径经 typeerror 抛错、不返回
   unsafe {
-    match lua_tonumberx(l, narg) {
+    match lua_tonumberx(&*l, narg) {
       Some(d) => d,
       None => tag_error(l, narg, LuaType::Number as i32),
     }

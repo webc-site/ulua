@@ -1402,7 +1402,8 @@ impl TypeChecker {
       }
     }
 
-    let mut ty = self.resolve_type(alias_scope.clone(), alias_ref(typealias.type_ptr));
+    // type_ptr 槽已句柄化（别名右值 parser 必建），get() 直出共享引用。
+    let mut ty = self.resolve_type(alias_scope.clone(), typealias.type_ptr.get());
 
     // `get_mutable` requires a followed type (it asserts the arg is not a
     // BoundType). `ty` here is the raw result of `resolve_type`, which for
@@ -1625,11 +1626,10 @@ impl TypeChecker {
 
     let arg_pack =
       self.resolve_type_pack_scope_ptr_ast_type_list(fun_scope.clone(), &global.params);
-    let ret_pack = if global.ret_types.is_null() {
-      self.add_type_pack_type_pack(TypePack::empty())
-    } else {
-      self.resolve_type_pack_scope_ptr_ast_type_pack(fun_scope.clone(), alias_ref(global.ret_types))
-    };
+    // ret_types 槽已句柄化；cpp `resolveTypePack(funScope, *global.retTypes)`
+    // （TypeInfer.cpp:1845）不判 null 直接解引用，非空 get() 即同一行为。
+    let ret_pack =
+      self.resolve_type_pack_scope_ptr_ast_type_pack(fun_scope.clone(), global.ret_types.get());
 
     let module_raw = shared_mut(self.expect_current_module());
     let defn = FunctionDefinition {

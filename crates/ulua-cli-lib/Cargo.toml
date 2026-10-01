@@ -1,27 +1,48 @@
 [package]
 name = "ulua-cli-lib"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-authors.workspace = true
-repository.workspace = true
+version = "0.1.5"
 description = "Shared command-line helpers used by the ulua tool crates."
-keywords = ["luau", "lua", "cli"]
-categories = ["command-line-utilities", "development-tools"]
+keywords = [ "luau", "lua", "cli" ]
+categories = [ "command-line-utilities", "development-tools" ]
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
 
 [lib]
-crate-type = ["rlib"]
+crate-type = [ "rlib" ]
 
-[dependencies]
-memchr = { workspace = true, default-features = false }
-ulua-ast = { path = "../ulua-ast", version = "0.1.4" }
-ulua-common = { path = "../ulua-common", version = "0.1.4" }
-ulua-compiler = { path = "../ulua-compiler", version = "0.1.4" }
-ulua-require = { version = "0.1.4", path = "../ulua-require" }
-ulua-vm = { path = "../ulua-vm", version = "0.1.4" }
+[dependencies.memchr]
+workspace = true
+default-features = false
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.5"
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.5"
+
+[dependencies.ulua-compiler]
+path = "../ulua-compiler"
+version = "0.1.5"
+
+[dependencies.ulua-require]
+version = "0.1.5"
+path = "../ulua-require"
+
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.5"
 
 [features]
-# 仅测试侧启用：暴露 test_utils 共享工作区脚手架，默认不编译、不扩大公开 API。
-test-utils = []
-# 曾有的 default/std/wasm 为零消费点空特性（无 cfg 门控、无下游转发），已删。
-
+test-utils = [ ]

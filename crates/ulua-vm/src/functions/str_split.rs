@@ -1,7 +1,7 @@
 use crate::{
   functions::{
     lua_createtable::lua_createtable, lua_l_checklstring::lua_l_checklstring_ref,
-    lua_pushlstring::lua_pushlstring_bytes, lua_settable::lua_settable,
+    lua_pushlstring::lua_pushlstring_bytes, lua_rawseti::lua_rawseti,
   },
   macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
@@ -15,11 +15,11 @@ const SEP_COMMA: &[u8] = b",";
 pub unsafe fn str_split(l: *mut LuaState) -> i32 {
   unsafe {
     // 借用切片形态取源串/分隔符：出参 len 由切片长度承接，游走全程按下标，免指针算术
-    let hay = lua_l_checklstring_ref(l, 1);
+    let hay = lua_l_checklstring_ref(&mut *l, 1);
     let nee = if (*l).is_none_or_nil(2) {
       SEP_COMMA
     } else {
-      lua_l_checklstring_ref(l, 2)
+      lua_l_checklstring_ref(&mut *l, 2)
     };
     let haystack_len = hay.len();
     let needle_len = nee.len();
@@ -27,39 +27,69 @@ pub unsafe fn str_split(l: *mut LuaState) -> i32 {
     let mut span_start: usize = 0;
     let mut num_matches = 0;
 
-    lua_createtable(l, 0, 0);
+    // cpp lstrlib.cpp:1089 LuauOptimizeStringSplit 优化路径
+    if needle_len == 0 {
+      // 空分隔符按单字符切分源串，结果表容量确定，一次性预分配
+      lua_createtable(l, haystack_len as i32, 0);
 
-    // C++ `iter = begin; if (needleLen == 0) iter++`；游标改源串相对下标
-    let mut iter = usize::from(needle_len == 0);
-    // Don't iterate the last needleLen - 1 bytes of the string - they are
-    // impossible to be splits and would let us compare past the end of the
-    // buffer.（C++ `iter <= end - needleLen` 的同界判定）
-    while iter + needle_len <= haystack_len {
-      // u8 切片比较与 C memcmp 语义一致，且允许嵌入 null 字节
-      if &hay[iter..iter + needle_len] == nee {
+      for iter in 0..haystack_len {
+        lua_pushlstring_bytes(l, &hay[iter..iter + 1]);
         num_matches += 1;
-        (*l).push_integer(num_matches);
-        // span_start ≤ iter ≤ haystack_len，切片区间恒界内
-        lua_pushlstring_bytes(l, &hay[span_start..iter]);
-        lua_settable(l, -3);
+        lua_rawseti(&mut *l, -2, num_matches);
+      }
 
-        span_start = iter + needle_len;
-        if needle_len > 0 {
-          iter += needle_len - 1;
+      1
+    } else if needle_len == 1 {
+      // 单字符分隔符预统计匹配次数，精准预分配结果表容量
+      let sep = nee[0];
+      let count = 1 + memchr::memchr_iter(sep, hay).count();
+      lua_createtable(l, count as i32, 0);
+
+      for found in memchr::memchr_iter(sep, hay) {
+        lua_pushlstring_bytes(l, &hay[span_start..found]);
+        num_matches += 1;
+        lua_rawseti(&mut *l, -2, num_matches);
+        span_start = found + 1;
+      }
+
+      lua_pushlstring_bytes(l, &hay[span_start..]);
+      num_matches += 1;
+      lua_rawseti(&mut *l, -2, num_matches);
+
+      1
+    } else {
+      lua_createtable(l, 0, 0);
+
+      if needle_len <= haystack_len {
+        let last = haystack_len - needle_len;
+        let mut iter = 0;
+        let first = nee[0];
+        let last_ch = nee[needle_len - 1];
+
+        while iter <= last {
+          // 首尾字符内联速判，规避多数位置的完整切片比较
+          if hay[iter] == first
+            && hay[iter + needle_len - 1] == last_ch
+            && &hay[iter..iter + needle_len] == nee
+          {
+            lua_pushlstring_bytes(l, &hay[span_start..iter]);
+            num_matches += 1;
+            lua_rawseti(&mut *l, -2, num_matches);
+
+            span_start = iter + needle_len;
+            iter = span_start;
+          } else {
+            iter += 1;
+          }
         }
       }
-      iter += 1;
-    }
 
-    if needle_len > 0 {
-      num_matches += 1;
-      (*l).push_integer(num_matches);
-      // span_start ≤ haystack_len（仅 needle_len>0 时推进过界内命中位）
       lua_pushlstring_bytes(l, &hay[span_start..]);
-      lua_settable(l, -3);
-    }
+      num_matches += 1;
+      lua_rawseti(&mut *l, -2, num_matches);
 
-    1
+      1
+    }
   }
 }
 

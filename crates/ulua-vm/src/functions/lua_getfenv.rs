@@ -13,9 +13,11 @@ use crate::{
   type_aliases::stk_id::StkId,
 };
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn lua_getfenv(l: *mut LuaState, idx: i32) {
+/// `lua_getfenv` 核心（cpp `lapi.cpp:996`）。调用序契约（正确性，非内存安全）：
+/// `l` 处于可 GC/可分配（thread barrier）的受保护帧，`ensure_stack(l, 1)` 留 1 结果槽；
+/// `idx` 经 `index_2_addr` 解析为非 `LUA_O_NILOBJECT` 的栈槽（`api_check`），命中 Function/Thread
+/// 分支时该槽 `value.gc` 须为存活 Closure/LuaState（读其 `env`/`gt` 压栈，`sethvalue` 写屏障可触发 GC）。
+pub fn lua_getfenv(l: &mut LuaState, idx: i32) {
   unsafe {
     lua_c_threadbarrier_lapi(l);
     ensure_stack(l, 1);
@@ -25,13 +27,13 @@ pub unsafe fn lua_getfenv(l: *mut LuaState, idx: i32) {
 
     match ttype!(o) {
       x if x == LuaType::Function as u32 => {
-        sethvalue!(l, (*l).top, (*o).as_closure().env);
+        sethvalue!(l, l.top, (*o).as_closure().env);
       }
       x if x == LuaType::Thread as u32 => {
-        sethvalue!(l, (*l).top, (*o).as_thread().gt);
+        sethvalue!(l, l.top, (*o).as_thread().gt);
       }
       _ => {
-        setnilvalue!((*l).top);
+        setnilvalue!(l.top);
       }
     }
 

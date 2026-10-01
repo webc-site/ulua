@@ -15,9 +15,9 @@ pub unsafe fn tunpack(l: *mut LuaState) -> i32 {
     (*l).check_type(1, LuaType::Table);
     let t = (*(*l).base).as_table_ptr();
 
-    let i = lua_l_optinteger(l, 2, 1);
+    let i = lua_l_optinteger(&mut *l, 2, 1);
     let e = (*l).obj_len(1) as i32;
-    let e = lua_l_optinteger(l, 3, e);
+    let e = lua_l_optinteger(&mut *l, 3, e);
 
     if i > e {
       return 0; // empty range
@@ -48,9 +48,9 @@ pub unsafe fn tunpack(l: *mut LuaState) -> i32 {
       // push arg[i..e - 1] (to avoid overflows)：cpp `while current_i < e` 游走
       // 收为区间迭代，末元素单独压栈（i <= e 此前已由空区间早退保证）
       for current_i in i..e {
-        lua_rawgeti(l, 1, current_i);
+        lua_rawgeti(&mut *l, 1, current_i);
       }
-      lua_rawgeti(l, 1, e); // push last element
+      lua_rawgeti(&mut *l, 1, e); // push last element
     }
 
     n as i32

@@ -16,13 +16,13 @@ use crate::{
 pub unsafe fn byteoffset(l: *mut LuaState) -> i32 {
   unsafe {
     let mut len: usize = 0;
-    let s = lua_l_checklstring(l, 1, &mut len);
+    let s = lua_l_checklstring(&mut *l, 1, &mut len);
     // SAFETY: 契约保证 s[..=len] 覆盖串 payload 及终止 NUL；posi 钳位后恒属 [0, len]，
     // C++ 以 iscont 读终止 NUL（非续字节）的点位由有界切片同构保留
     let bytes = from_raw_parts(s as *const u8, len + 1);
     let mut n = (*l).check_integer(2);
     let mut posi = if n >= 0 { 1 } else { len as i32 + 1 };
-    posi = u_posrelat(lua_l_optinteger(l, 3, posi), len);
+    posi = u_posrelat(lua_l_optinteger(&mut *l, 3, posi), len);
     (*l).arg_check(
       1 <= posi && posi <= len as i32 + 1,
       3,

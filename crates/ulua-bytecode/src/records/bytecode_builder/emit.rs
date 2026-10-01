@@ -2,6 +2,7 @@
 
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
+  fflag::LuauCompileUndoEmitAdjust,
   functions::{is_fast_call::is_fast_call, is_jump_d::is_jump_d, is_skip_c::is_skip_c},
   macros::luau_assert::LUAU_ASSERT,
   records::instruction::Instruction,
@@ -139,6 +140,27 @@ impl<'a> BytecodeBuilder<'a> {
   pub fn undo_emit(&mut self, op: LuauOpcode) {
     LUAU_ASSERT!(!self.insns.is_empty());
     LUAU_ASSERT!((self.insns[self.insns.len() - 1] & insn::OP_MASK) == op as u32);
+
+    if LuauCompileUndoEmitAdjust.get() {
+      let insns_len = self.insns.len() as u32;
+      let adjust_local = |startpc: u32, endpc: &mut u32| {
+        if startpc == insns_len {
+          false
+        } else {
+          if *endpc == insns_len {
+            *endpc -= 1;
+          }
+          true
+        }
+      };
+
+      self
+        .debug_locals
+        .retain_mut(|l| adjust_local(l.startpc, &mut l.endpc));
+      self
+        .typed_locals
+        .retain_mut(|l| adjust_local(l.startpc, &mut l.endpc));
+    }
 
     self.insns.pop();
     self.lines.pop();

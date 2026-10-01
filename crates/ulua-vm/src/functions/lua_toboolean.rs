@@ -11,7 +11,7 @@ use crate::{
 pub(crate) fn lua_toboolean(l: &LuaState, idx: i32) -> i32 {
   // SAFETY: `l` 存活（引用形保证）；index_2_addr 已对任意 idx 硬化（越界返回
   // 哨兵，无栈外指针算术），`read_ptr` 只读转发契约成立（本函数不写 `l`）。
-  let o: *const TValue = unsafe { index_2_addr(l.read_ptr(), idx) };
+  let o: *const TValue = unsafe { index_2_addr(&*l.read_ptr(), idx) };
   // SAFETY:o 指向栈上有效 TValue 或只读哨兵。
   (!unsafe { l_isfalse!(o) }) as i32
 }

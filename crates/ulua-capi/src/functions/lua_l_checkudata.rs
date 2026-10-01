@@ -27,5 +27,5 @@ pub unsafe extern "C-unwind" fn lua_l_checkudata(
   let tname = unsafe { to_str_or_empty(tname) };
   // Safety: `l`、`ud` 的前提见上方契约；`tname` 已在本帧重建为合法 `&str`（本次调用期内存活），
   // 本行仅按声明顺序透传、不再解引用任何原始指针，与被调函数 `# Safety` 契约一致。
-  unsafe { lua_l_checkudata::lua_l_checkudata(l, ud, tname) }
+  unsafe { lua_l_checkudata::lua_l_checkudata(&mut *l, ud, tname) }
 }

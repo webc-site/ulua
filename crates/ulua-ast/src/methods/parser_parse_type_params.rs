@@ -11,7 +11,8 @@ use crate::{
     ast_array::AstArray, ast_node::AstNode, ast_type_group::AstTypeGroup,
     ast_type_or_pack::AstTypeOrPack, ast_type_pack_explicit::AstTypePackExplicit,
     cst_type_group::CstTypeGroup, cst_type_pack_explicit::CstTypePackExplicit,
-    match_lexeme::MatchLexeme, parser::Parser, position::Position, temp_vector::TempVector,
+    match_lexeme::MatchLexeme, node_handle::Node, parser::Parser, position::Position,
+    temp_vector::TempVector,
   },
   rtti::{ast_node_try_as, cst_node_try_as},
 };
@@ -68,7 +69,7 @@ impl Parser {
                 // parenthesized_type 是 types 切片首元素，parser 建列时写入的
                 // 非空 arena 存活 `*mut AstType`；slot_ref 只读其基类 location。
                 slot_ref(parenthesized_type).base.location,
-                parenthesized_type,
+                Node::from_raw(parenthesized_type),
               ));
 
               if self.options.store_cst_data

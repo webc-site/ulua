@@ -8,7 +8,7 @@ use crate::{
 
 /// # Safety
 /// `l` 须为存活 `LuaState` 且处于受保护帧：`luaL_checkany(l,1)`、`luaL_checktype(l,2,CLASS)` 要求索引 2 为 class
-/// 否则抛错回退；`lua_a_toobject(l,1/2)` 返回栈内 TValue 裸指针（索引须存在）；`obj` 侧 `classvalue!` 与 `inst` 侧
+/// 否则抛错回退；`lua_a_toobject(&*l,1/2)` 返回栈内 TValue 裸指针（索引须存在）；`obj` 侧 `classvalue!` 与 `inst` 侧
 /// 沿 `(*LuauObject).lclass.super_` 上溯的链均须为存活 class 对象；`lua_pushboolean` 需 `(*l).top` 后 ≥1 空槽；可触发 GC。
 /// cpp VM/src/lclasslib.cpp:10
 pub unsafe fn class_isinstance(l: *mut LuaState) -> i32 {
@@ -16,8 +16,8 @@ pub unsafe fn class_isinstance(l: *mut LuaState) -> i32 {
     (*l).check_any(1);
     (*l).check_type(2, LuaType::Class);
 
-    let inst: *const TValue = lua_a_toobject(l, 1);
-    let obj: *const TValue = lua_a_toobject(l, 2);
+    let inst: *const TValue = lua_a_toobject(&*l, 1);
+    let obj: *const TValue = lua_a_toobject(&*l, 2);
 
     // classvalue!/objectvalue! 已返回类型化裸指针（对应 cpp 的 LuauClass*/LuauObject*）
     let lclass = classvalue!(obj);

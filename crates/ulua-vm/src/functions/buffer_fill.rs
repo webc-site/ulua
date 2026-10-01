@@ -16,14 +16,14 @@ pub(crate) unsafe fn buffer_fill(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证填充区间经 argcheck 落在 buffer 数据界内，memset 仅触达该界
   unsafe {
     let mut len: usize = 0;
-    let buf = lua_l_checkbuffer(l, 1, &mut len).cast::<u8>();
+    let buf = lua_l_checkbuffer(&mut *l, 1, &mut len).cast::<u8>();
     let offset = (*l).check_integer(2);
-    let value = lua_l_checkunsigned(l, 3);
+    let value = lua_l_checkunsigned(&mut *l, 3);
     // C++ evaluates `int(len) - offset` as the default eagerly (signed overflow
     // is UB upstream for offset = INT_MIN); wrapping_sub reproduces the two's-
     // complement value C++ relies on, which the `size < 0` / isoutofbounds checks
     // below then reject. (Upstream UBSan: lbuflib.cpp:278.)
-    let size = lua_l_optinteger(l, 4, (len as i32).wrapping_sub(offset));
+    let size = lua_l_optinteger(&mut *l, 4, (len as i32).wrapping_sub(offset));
 
     if size < 0 {
       buffer_oob_error(l);

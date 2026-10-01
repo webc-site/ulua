@@ -84,5 +84,5 @@ pub(crate) use ulua_vm::{
   },
   macros::{lua_registryindex::LUA_REGISTRYINDEX, lua_upvalueindex::lua_upvalueindex},
   records::{lua_debug::LuaDebug, lua_state::LuaState},
-  type_aliases::lua_c_function::LuaCFunction,
+  type_aliases::{lua_c_function::LuaCFunction, lua_destructor::LuaDestructor},
 };

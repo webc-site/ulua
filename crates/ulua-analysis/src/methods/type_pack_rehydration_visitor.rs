@@ -6,7 +6,7 @@ use ulua_ast::records::{
   allocator::Allocator, ast_array::AstArrayBuilder, ast_name::AstName, ast_type_list::AstTypeList,
   ast_type_pack::AstTypePack, ast_type_pack_explicit::AstTypePackExplicit,
   ast_type_pack_generic::AstTypePackGeneric, ast_type_pack_variadic::AstTypePackVariadic,
-  location::Location,
+  location::Location, node_handle::Node,
 };
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
@@ -128,7 +128,7 @@ impl TypePackRehydrationVisitor {
     // Safety: arena 借出已全部归还，重借构造期存入的存活 arena 指针分配
     // 变参包节点，`&mut` 随尾表达式返回释放，无重叠别名。
     let allocator = self.allocator_mut();
-    let node = AstTypePackVariadic::new(Location::default(), variadic_type);
+    let node = AstTypePackVariadic::new(Location::default(), Node::from_raw(variadic_type));
     allocator.alloc(node).cast::<AstTypePack>()
   }
 

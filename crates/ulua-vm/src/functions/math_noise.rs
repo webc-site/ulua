@@ -15,9 +15,9 @@ const K_NOISE_PERIOD: f64 = 256.0;
 /// cpp/VM/src/lmathlib.cpp:369 math_noise。
 pub unsafe fn math_noise(l: *mut LuaState) -> i32 {
   unsafe {
-    let x = lua_tonumberx(l, 1);
-    let y = lua_tonumberx(l, 2);
-    let z = lua_tonumberx(l, 3);
+    let x = lua_tonumberx(&*l, 1);
+    let y = lua_tonumberx(&*l, 2);
+    let z = lua_tonumberx(&*l, 3);
 
     (*l).arg_expected(x.is_some(), 1, "number");
     (*l).arg_expected(y.is_some() || (*l).is_none_or_nil(2), 2, "number");

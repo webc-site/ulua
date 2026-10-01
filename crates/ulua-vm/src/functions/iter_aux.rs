@@ -16,7 +16,7 @@ use crate::{
 pub unsafe fn iter_aux(l: *mut LuaState) -> i32 {
   unsafe {
     let mut len: usize = 0;
-    let s = lua_l_checklstring(l, 1, &mut len);
+    let s = lua_l_checklstring(&mut *l, 1, &mut len);
     // Lua 字符串恒有 NUL 终止（utf_8_decode 的入约模型）：切片覆盖到含终止符，
     // 之后所有解码/续字节判定均在有界读内完成
     // SAFETY: s 指向 len 字节的 Lua 串数据，第 len 处恒为 NUL 终止符（tstring 布局保证）

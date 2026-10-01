@@ -21,7 +21,7 @@ use crate::{
 pub(crate) unsafe fn str_rep(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证 `l` 存活且重复次数/串长经溢出检查，块内经缓冲写入的总量受扩展协议保护
   unsafe {
-    let s = lua_l_checklstring_ref(l, 1);
+    let s = lua_l_checklstring_ref(&mut *l, 1);
     let len = s.len();
     let n = (*l).check_integer(2);
 

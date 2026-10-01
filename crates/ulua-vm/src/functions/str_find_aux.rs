@@ -17,10 +17,10 @@ use crate::{
 /// `lua_push*`/`push_captures` 压栈，匹配递归深度由 `MatchState.matchdepth` 兜底。
 pub unsafe fn str_find_aux(l: *mut LuaState, find: i32) -> i32 {
   unsafe {
-    let src = lua_l_checklstring_ref(l, 1);
-    let pat = lua_l_checklstring_ref(l, 2);
+    let src = lua_l_checklstring_ref(&mut *l, 1);
+    let pat = lua_l_checklstring_ref(&mut *l, 2);
 
-    let mut init = posrelat(lua_l_optinteger(l, 3, 1), src.len());
+    let mut init = posrelat(lua_l_optinteger(&mut *l, 3, 1), src.len());
     if init < 1 {
       init = 1;
     } else if init > src.len() as i32 + 1 {

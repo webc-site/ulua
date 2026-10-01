@@ -119,8 +119,8 @@ impl ArcCollector<'_> {
   }
 
   pub fn visit_ast_type_typeof(&mut self, node: &AstTypeTypeof) -> bool {
-    let expr = node.expr;
-    let name = unsafe { mk_name_ast_expr(&*expr) };
+    // expr 槽已句柄化（typeof(expr) 文法必带表达式）：get() 安全借用，无需 unsafe。
+    let name = mk_name_ast_expr(node.expr.get());
     if let Some(name) = name {
       self.add(&name);
     }

@@ -44,7 +44,7 @@ pub(crate) unsafe fn add_value(
       (*l).call(n, 1);
     } else if tr == LuaType::Table {
       push_onecapture(ms, 0, Some(s), Some(e));
-      lua_gettable(l, 3);
+      lua_gettable(&mut *l, 3);
     } else {
       // LUA_TNUMBER or LUA_TSTRING
       add_s(ms, b, s, e);
@@ -60,8 +60,8 @@ pub(crate) unsafe fn add_value(
       // keep.len() 内有效、`c_char` 对齐为 1；lua_pushlstring 仅做界内拷贝不留存
       let keep = ms.src_slice(s, e - s);
       lua_pushlstring(l, keep.as_ptr() as *const c_char, keep.len()); // keep original text
-    } else if lua_isstring(l, -1) == 0 {
-      let tn = cstr_cow(lua_l_typename(l, -1));
+    } else if lua_isstring(&*l, -1) == 0 {
+      let tn = cstr_cow(lua_l_typename(&*l, -1));
       luaL_error!(l, "invalid replacement value (a {})", tn);
     }
     lua_l_addvalue(b); // add result to accumulator

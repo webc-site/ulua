@@ -2,9 +2,7 @@
 name = "ulua-e2e"
 description = "End-to-end / integration test suite for ulua: exercises the CLI binaries and library API as a shipping product."
 publish = false
-
-[package.version]
-workspace = true
+version = "0.1.4"
 
 [package.edition]
 workspace = true
@@ -23,11 +21,11 @@ path = "src/lib.rs"
 
 [dev-dependencies.ulua]
 path = "../ulua"
-version = "0.1.4"
+version = "0.1.5"
 
 [dev-dependencies.ulua-common]
 path = "../ulua-common"
-version = "0.1.4"
+version = "0.1.5"
 
 [dev-dependencies.assert_cmd]
 workspace = true
@@ -40,27 +38,27 @@ workspace = true
 
 [dev-dependencies.ulua-repl-cli]
 path = "../ulua-repl-cli"
-version = "0.1.4"
+version = "0.1.5"
 
 [dev-dependencies.ulua-analyze-cli]
 path = "../ulua-analyze-cli"
-version = "0.1.4"
+version = "0.1.5"
 
 [dev-dependencies.ulua-ast-cli]
 path = "../ulua-ast-cli"
-version = "0.1.4"
+version = "0.1.5"
 
 [dev-dependencies.ulua-compile-cli]
 path = "../ulua-compile-cli"
-version = "0.1.4"
+version = "0.1.5"
 
 [dev-dependencies.ulua-bytecode-cli]
 path = "../ulua-bytecode-cli"
-version = "0.1.4"
+version = "0.1.5"
 
 [dev-dependencies.ulua-reduce-cli]
 path = "../ulua-reduce-cli"
-version = "0.1.4"
+version = "0.1.5"
 
 [dev-dependencies.sonic-rs]
 workspace = true

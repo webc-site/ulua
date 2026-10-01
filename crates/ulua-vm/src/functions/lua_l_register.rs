@@ -20,11 +20,11 @@ pub unsafe fn lua_l_register_bytes(l: *mut LuaState, libname: Option<&[u8]>, lr:
   unsafe {
     if let Some(libname) = libname {
       let size = libsize(lr);
-      lua_l_findtable_bytes(l, LUA_REGISTRYINDEX, b"_LOADED", 1);
+      lua_l_findtable_bytes(&mut *l, LUA_REGISTRYINDEX, b"_LOADED", 1);
       (*l).get_field_bytes(-1, libname);
       if !(*l).is_table(-1) {
         (*l).pop(1);
-        if !lua_l_findtable_bytes(l, LUA_GLOBALSINDEX, libname, size).is_null() {
+        if !lua_l_findtable_bytes(&mut *l, LUA_GLOBALSINDEX, libname, size).is_null() {
           let name = String::from_utf8_lossy(libname);
           luaL_error!(l, "name conflict for module '{}'", name);
         }

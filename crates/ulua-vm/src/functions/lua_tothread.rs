@@ -15,7 +15,7 @@ use crate::{
 /// 存活 thread GCObject（返回其内嵌 `th` 状态指针）。
 pub unsafe fn lua_tothread(l: *mut LuaState, idx: i32) -> Option<*mut LuaState> {
   unsafe {
-    let o: StkId = index_2_addr(l, idx);
+    let o: StkId = index_2_addr(&*l, idx);
 
     match ValueView::from_tvalue(&*o) {
       ValueView::Thread(th) => Some(th),

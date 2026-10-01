@@ -25,7 +25,7 @@ use crate::{
 ///
 /// # Safety
 /// `p` 必须指向 `push_closure::<C>` 构造的存活 `HostSlot<C>`。
-unsafe extern "C-unwind" fn drop_require_host<C: RequireHost>(ptr: *mut c_void) {
+unsafe extern "C-unwind" fn drop_require_host<C: RequireHost>(_l: *mut LuaState, ptr: *mut c_void) {
   // Safety: 契约保证 ptr 指向已构造的 Box 本体，drop_in_place 恰好一次。
   unsafe {
     drop_in_place(ptr.cast::<HostSlot<C>>());

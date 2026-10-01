@@ -1,5 +1,6 @@
 use crate::{
-  functions::lua_setsafeenv::lua_setsafeenv, macros::lua_globalsindex::LUA_GLOBALSINDEX,
+  functions::{lua_setsafeenv::lua_setsafeenv, vector_shared::vector_push},
+  macros::lua_globalsindex::LUA_GLOBALSINDEX,
   records::lua_state::LuaState,
 };
 
@@ -22,6 +23,14 @@ pub unsafe fn lua_l_sandbox(l: *mut LuaState) {
 
     // set all builtin metatables to read-only
     (*l).push_bytes(b"");
+    if (*l).get_metatable(-1) {
+      (*l).set_readonly(-1, true);
+      (*l).pop(2);
+    } else {
+      (*l).pop(1);
+    }
+
+    vector_push(l, [0.0, 0.0, 0.0, 0.0]);
     if (*l).get_metatable(-1) {
       (*l).set_readonly(-1, true);
       (*l).pop(2);

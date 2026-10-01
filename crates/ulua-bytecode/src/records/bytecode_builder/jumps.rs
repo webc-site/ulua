@@ -4,7 +4,7 @@ use core::{iter::repeat_n, mem};
 use std::{vec, vec::Vec};
 
 use ulua_common::{
-  enums::luau_opcode::LuauOpcode, fflag, macros::luau_assert::LUAU_ASSERT,
+  enums::luau_opcode::LuauOpcode, macros::luau_assert::LUAU_ASSERT,
   records::instruction::Instruction,
 };
 
@@ -93,7 +93,7 @@ impl<'a> BytecodeBuilder<'a> {
         let offset =
           (self.jumps[current_jump].target as i32) - (self.jumps[current_jump].source as i32) - 1;
 
-        if offset.abs() > K_MAX_JUMP_DISTANCE_CONSERVATIVE {
+        if offset.abs() >= K_MAX_JUMP_DISTANCE_CONSERVATIVE {
           // insert jump trampoline as described above; we keep JUMPX offset uninitialized in this pass
           newinsns.push(LuauOpcode::LOP_JUMP as u32 | (1 << insn::B_SHIFT));
           newinsns.push(LuauOpcode::LOP_JUMPX as u32);
@@ -131,11 +131,11 @@ impl<'a> BytecodeBuilder<'a> {
 
       // cpp BytecodeBuilder.cpp:1407-1410：trampoline 展开后仍放不进 JUMPX 的
       // 24 位偏移 — 静默截断会产生坏字节码，立即放弃并上报
-      if fflag::LuauCompileExpandLimit.get() && (newoffset.abs() + 1) >= K_MAX_JUMP_DISTANCE {
+      if (newoffset.abs() + 1) >= K_MAX_JUMP_DISTANCE {
         return true;
       }
 
-      if offset.abs() > K_MAX_JUMP_DISTANCE_CONSERVATIVE {
+      if offset.abs() >= K_MAX_JUMP_DISTANCE_CONSERVATIVE {
         // fix up jump trampoline
         let trampoline_pos = remap[jump.source as usize] as usize - 1;
         let op_pos = trampoline_pos + 1;

@@ -14,8 +14,8 @@ use crate::{
 pub(crate) unsafe fn b_replace(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证 `l` 为存活调用帧且实参 1..=4 可读，字段位区间经 argcheck 在 [0,64) 界内
   unsafe {
-    let r: BUint = lua_l_checkunsigned(l, 1);
-    let mut v: BUint = lua_l_checkunsigned(l, 2);
+    let r: BUint = lua_l_checkunsigned(&mut *l, 1);
+    let mut v: BUint = lua_l_checkunsigned(&mut *l, 2);
     let (f, w) = fieldargs(l, 3);
     let m: BUint = mask(w);
     v &= m;

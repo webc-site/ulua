@@ -15,7 +15,7 @@ use crate::{
 /// 内部字节，下一次操作 `l` 前有效。cpp lapi.cpp:517。
 pub unsafe fn lua_tostringatom(l: *mut LuaState, idx: i32, atom: *mut i32) -> *const c_char {
   unsafe {
-    let o: StkId = index_2_addr(l, idx);
+    let o: StkId = index_2_addr(&*l, idx);
 
     if !(*o).is_string() {
       return null();

@@ -10,10 +10,10 @@ use crate::{
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub unsafe fn vector_angle(l: *mut LuaState) -> i32 {
   unsafe {
-    let a = lua_l_checkvector(l, 1);
+    let a = lua_l_checkvector(&mut *l, 1);
     // cpp: luaL_checkvector(L, 2) —— b 是必需参数；optvector 会漏检缺参，
     // 返回空指针后在 from_raw_parts(b, 3) 解引用，产生段错误而非 Lua 错误
-    let b = lua_l_checkvector(l, 2);
+    let b = lua_l_checkvector(&mut *l, 2);
     let axis = lua_l_optvector(l, 3, null());
 
     let a_val = from_raw_parts(a, 3);

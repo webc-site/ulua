@@ -12,10 +12,10 @@ use crate::{
 pub unsafe fn str_byte(l: *mut LuaState) -> i32 {
   unsafe {
     // 借用切片形态取源串：len 即切片长度，逐字节读取走切片下标，免指针出参与 from_raw_parts
-    let s = lua_l_checklstring_ref(l, 1);
+    let s = lua_l_checklstring_ref(&mut *l, 1);
     let len = s.len();
-    let mut posi = posrelat(lua_l_optinteger(l, 2, 1), len);
-    let mut pose = posrelat(lua_l_optinteger(l, 3, posi), len);
+    let mut posi = posrelat(lua_l_optinteger(&mut *l, 2, 1), len);
+    let mut pose = posrelat(lua_l_optinteger(&mut *l, 3, posi), len);
 
     if posi <= 0 {
       posi = 1;
@@ -36,7 +36,7 @@ pub unsafe fn str_byte(l: *mut LuaState) -> i32 {
       luaL_error!(l, "string slice too long");
     }
 
-    lua_l_checkstack(l, n, "string slice too long");
+    lua_l_checkstack(&mut *l, n, "string slice too long");
 
     // 钳位保证 1 <= posi <= pose <= len，[posi-1, pose) 恒界内
     for &b in &s[(posi - 1) as usize..pose as usize] {

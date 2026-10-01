@@ -14,7 +14,7 @@ const K_TYPE_USERDATA_TAG: i32 = 42;
 
 pub fn push_type(l: *mut LuaState, r#type: TypeFunctionTypeId) {
   unsafe {
-    lua_l_checkstack(l as *mut lua_state::LuaState, 2, "allocating type");
+    lua_l_checkstack(&mut *(l as *mut lua_state::LuaState), 2, "allocating type");
 
     let ptr = lua_newuserdatatagged(
       l as *mut lua_state::LuaState,

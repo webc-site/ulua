@@ -28,10 +28,9 @@ impl DataFlowGraphBuilder {
       AstTypeRef::Error(e) => self.visit_type_error(e),
       AstTypeRef::SingletonBool(_) | AstTypeRef::SingletonString(_) => {} // ok
       AstTypeRef::Group(group) => {
-        // AstTypeGroup.type_ 是 parser 必绑定的内层类型指针（cpp 直接
-        // `visitType(g->type)`）。
-        let inner = arena_ref(group.type_, "AstTypeGroup.type_");
-        self.visit_type(inner);
+        // AstTypeGroup.type_ 是 parser 必绑定的内层类型节点（cpp 直接
+        // `visitType(g->type)`），槽已句柄化，get() 直取。
+        self.visit_type(group.type_.get());
       }
     }
   }
@@ -71,14 +70,14 @@ impl DataFlowGraphBuilder {
     self.visit_generic_packs(f.generic_packs);
     self.visit_type_list(f.arg_types);
 
-    let return_types = arena_ref(f.return_types, "AstTypeFunction.return_types");
-    self.visit_type_pack(return_types);
+    // return_types 槽已句柄化（parseReturnType/补建空 pack 恒非空），get() 直取。
+    self.visit_type_pack(f.return_types.get());
   }
 
   /// cpp `visitType(AstTypeTypeof*)`：`typeof e` 的表达式进入值命名空间遍历。
   pub fn visit_type_typeof(&mut self, t: &AstTypeTypeof) {
-    let inner = arena_ref(t.expr, "AstTypeTypeof.expr");
-    self.visit_expr(inner);
+    // expr 槽已句柄化（typeof(expr) 文法必带表达式），get() 直取。
+    self.visit_expr(t.expr.get());
   }
 
   /// cpp `visitType(AstTypeUnion*)`。

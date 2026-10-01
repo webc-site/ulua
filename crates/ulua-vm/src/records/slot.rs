@@ -28,10 +28,7 @@
 //!
 //! [`StkId`]: crate::type_aliases::stk_id::StkId
 
-use core::{
-  marker::PhantomData,
-  ptr::{NonNull, from_mut},
-};
+use core::{marker::PhantomData, ptr::NonNull};
 
 use crate::{
   functions::index_2_addr::index_2_addr, records::lua_state::LuaState,
@@ -149,7 +146,7 @@ impl LuaState {
   pub unsafe fn slot(&mut self, idx: i32) -> Slot<'_> {
     // SAFETY: `idx`/帧栈界按本方法契约原样供出（与既有 `index_2_addr` 调用点同前提）；
     // 换算所得槽地址在 `self` 的借用期内存活，派生句柄即锚定该借用。
-    unsafe { Slot::from_raw(index_2_addr(from_mut(self), idx)) }
+    unsafe { Slot::from_raw(index_2_addr(self, idx)) }
   }
 }
 

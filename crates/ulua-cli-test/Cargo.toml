@@ -1,24 +1,41 @@
 [package]
 name = "ulua-cli-test"
-version.workspace = true
-edition.workspace = true
+version = "0.1.4"
 publish = false
 
+[package.edition]
+workspace = true
+
 [lib]
-crate-type = ["rlib"]
+crate-type = [ "rlib" ]
 
-[dependencies]
-memchr = { workspace = true, default-features = false }
-ulua-cli-lib = { path = "../ulua-cli-lib", version = "0.1.4" }
-ulua-common = { path = "../ulua-common", version = "0.1.4" }
-ulua-config = { path = "../ulua-config", version = "0.1.4" }
-ulua-repl-cli = { path = "../ulua-repl-cli", version = "0.1.4" }
-ulua-require = { path = "../ulua-require", version = "0.1.4" }
-ulua-vm = { path = "../ulua-vm", version = "0.1.4" }
+[dependencies.memchr]
+workspace = true
+default-features = false
 
-# 旧 [features] 段的 default/std/wasm 为零消费点空特性（无 cfg 门控、无
-# 下游转发），删除虚假 no_std 特性面（对齐 ulua-bytecode 先例）。
+[dependencies.ulua-cli-lib]
+path = "../ulua-cli-lib"
+version = "0.1.5"
 
-[dev-dependencies]
-tempfile = { workspace = true }
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.5"
 
+[dependencies.ulua-config]
+path = "../ulua-config"
+version = "0.1.5"
+
+[dependencies.ulua-repl-cli]
+path = "../ulua-repl-cli"
+version = "0.1.5"
+
+[dependencies.ulua-require]
+path = "../ulua-require"
+version = "0.1.5"
+
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.5"
+
+[dev-dependencies.tempfile]
+workspace = true

@@ -12,7 +12,7 @@ use crate::{
 pub(crate) unsafe fn vector_normalize(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证索引 1 为 vector（分量窗口读 [0..=3]），压栈需 top 后 ≥1 空槽
   unsafe {
-    let v = vector_components(lua_l_checkvector(l, 1));
+    let v = vector_components(lua_l_checkvector(&mut *l, 1));
 
     let inv_sqrt = 1.0f32 / sum_squares(v).sqrt();
     vector_push(l, v.map(|x| x * inv_sqrt));

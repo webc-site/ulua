@@ -1,3 +1,5 @@
+use ulua_common::fflag::LuauSubtypingSkipUnreadReasoning;
+
 use crate::{
   enums::{
     subtyping_suppression_policy::SubtypingSuppressionPolicy, subtyping_variance::SubtypingVariance,
@@ -39,6 +41,10 @@ impl Subtyping {
       env, sub_ty, super_ty, scope,
     );
     result.and_also(contra, SubtypingSuppressionPolicy::Any);
+
+    if LuauSubtypingSkipUnreadReasoning.get() && result.is_subtype {
+      return result;
+    }
 
     if result.reasoning.empty() {
       result.reasoning.insert(SubtypingReasoning {

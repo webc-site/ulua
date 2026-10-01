@@ -12,7 +12,7 @@ pub fn lua_b_rawget(l: &mut LuaState) -> i32 {
   l.set_top(2);
   // SAFETY: `l` 存活（引用形保证）；`lua_rawget` 的 `# Safety` 其余前提（1 号槽为
   // 合法正索引且上方已校验为 table、栈顶 key 就位）由库函数约定与本函数前三句成立。
-  unsafe { lua_rawget(l.as_mut_ptr(), 1) };
+  lua_rawget(l, 1);
   1
 }
 

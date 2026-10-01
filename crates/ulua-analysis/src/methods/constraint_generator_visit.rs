@@ -1157,7 +1157,8 @@ impl ConstraintGenerator {
 
     let ty = self.resolve_type(
       &defn_scope,
-      alias_ref(alias.type_ptr),
+      // type_ptr 槽已句柄化（别名右值 parser 必建），get() 给出共享引用。
+      alias.type_ptr.get(),
       /* in_type_arguments */ false,
       /* replace_error_with_fresh */ false,
       Polarity::Positive,
@@ -1206,7 +1207,7 @@ impl ConstraintGenerator {
     self.add_constraint_scope_ptr_location_constraint_v(
       scope,
       // 类型别名文法必有右端类型节点 type_ptr（resolve_type 已在上方读同一节点）。
-      slot_ref(alias.type_ptr).base.location,
+      alias.type_ptr.get().base.location,
       ConstraintV::Name(NameConstraint {
         named_type: ty,
         name: name_key,
@@ -1673,7 +1674,7 @@ impl ConstraintGenerator {
     );
     let ret_pack = self.resolve_type_pack_scope_ptr_ast_type_pack_bool_bool_polarity(
       &fun_scope,
-      alias_ref(global.ret_types),
+      global.ret_types.get(),
       false,
       false,
       Polarity::Positive,

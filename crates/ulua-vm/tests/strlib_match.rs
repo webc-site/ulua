@@ -86,7 +86,7 @@ impl Str {
       } else if t == LuaType::String {
         Val::Str(self.message_at(idx))
       } else {
-        let n = lua_tointegerx(l, idx)
+        let n = lua_tointegerx(&*l, idx)
           .unwrap_or_else(|| panic!("槽 {idx} 既非 nil/串也不是整数: {}", self.message_at(idx)));
         Val::Int(i64::from(n))
       }

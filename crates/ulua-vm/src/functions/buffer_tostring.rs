@@ -11,7 +11,7 @@ pub(crate) unsafe fn buffer_tostring(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证 `l` 存活且 buffer 数据界自洽，压回的串取 buffer 全长拷贝
   unsafe {
     let mut len: usize = 0;
-    let data = lua_l_checkbuffer(l, 1, &mut len);
+    let data = lua_l_checkbuffer(&mut *l, 1, &mut len);
 
     lua_pushlstring(l, data.cast(), len);
 

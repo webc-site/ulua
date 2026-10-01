@@ -18,7 +18,7 @@ pub unsafe fn class_classof(l: *mut LuaState) -> i32 {
       return 1;
     }
 
-    let inst: *const TValue = lua_a_toobject(l, 1);
+    let inst: *const TValue = lua_a_toobject(&*l, 1);
     let ci = objectvalue!(inst);
     lua_a_pushclass(l, (*ci).lclass);
     1

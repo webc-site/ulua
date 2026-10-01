@@ -8,17 +8,16 @@ use crate::{
   type_aliases::{stk_id::StkId, t_value::TValue},
 };
 
-/// # Safety
-/// `l` 须为存活 `LuaState` 且 `(*l).global` 存活：`api_check!(idx != LUA_REGISTRYINDEX)`，`index_2_addr` 所得 `p` 为栈内
+/// `lua_ref` 核心（cpp VM/src/lapi.cpp:1867）。调用序契约（正确性，非内存安全）：
+/// `api_check!(idx != LUA_REGISTRYINDEX)`，`index_2_addr` 所得 `p` 为栈内
 /// 合法槽（非 nil 时登记）；registry 表 `(*registry!(l)).as_table_ptr()` 须存活可写，`lua_h_setnum` 可能 rehash（写 `slot`、`luaC_barriert`
 /// 置灰、GC 期间该引用不可被回收），`(*g).registryfree`/`totalbytes` 读写须处于正常 GC 态。返回引用号（LUA_REFNIL 表未登记）。
-/// cpp VM/src/lapi.cpp:1867
-pub unsafe fn lua_ref(l: *mut LuaState, idx: i32) -> i32 {
+pub fn lua_ref(l: &mut LuaState, idx: i32) -> i32 {
   unsafe {
     api_check!(l, idx != LUA_REGISTRYINDEX);
 
     let mut ref_ = LUA_REFNIL;
-    let g = (*l).global;
+    let g = l.global;
     let p: StkId = index_2_addr(l, idx);
 
     if !(*p).is_nil() {

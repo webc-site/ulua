@@ -32,7 +32,7 @@ pub(crate) unsafe extern "C-unwind" fn lua_loadstring(l: *mut LuaState) -> i32 {
   let l = state(l);
   // Safety: 索引 1 为本次调用的实参槽位；非字符串即报错发散（不返回），返回的切片由
   // 栈槽持有、在本次调用期内有效。
-  let source_bytes = unsafe { lua_l_checklstring_ref(l, 1) };
+  let source_bytes = lua_l_checklstring_ref(&mut *l, 1);
   // cpp `luaL_optlstring(L, 2, s, NULL)`：槽 2 缺席/nil 时默认值即第一参数的
   // 串本体，否则按 checklstring 取形；长度出参本就弃用。
   let name_bytes = if l.is_none_or_nil(2) {
@@ -40,7 +40,7 @@ pub(crate) unsafe extern "C-unwind" fn lua_loadstring(l: *mut LuaState) -> i32 {
   } else {
     // Safety: 索引 2 为本次调用的实参槽位；数字自动转换、非转换类型按 cpp 抛
     // "string expected" 发散。
-    unsafe { lua_l_checklstring_ref(l, 2) }
+    lua_l_checklstring_ref(&mut *l, 2)
   };
 
   // Safety: `lua_setsafeenv` 为 unsafe 导出；仅改环境表的 safe 标志位。

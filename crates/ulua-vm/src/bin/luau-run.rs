@@ -116,7 +116,7 @@ unsafe fn print_result(t: *mut LuaState, i: i32) {
       println!("  [{i}] = {:?}", tolstring_lossy(t, i).unwrap_or_default());
       return;
     }
-    if let Some(v) = lua_tonumberx(t, i) {
+    if let Some(v) = lua_tonumberx(&*t, i) {
       println!("  [{i}] = {v}");
     } else {
       println!("  [{i}] = {:?}", tolstring_lossy(t, i).unwrap_or_default());

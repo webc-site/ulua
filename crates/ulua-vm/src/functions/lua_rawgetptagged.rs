@@ -12,11 +12,13 @@ use crate::{
   type_aliases::stk_id::StkId,
 };
 
+/// `lua_rawgetptagged` 核心（cpp lapi.cpp:886）。
 /// # Safety
-/// `l` 指向存活 `LuaState`；`idx` 为当前帧可解析的合法索引且该槽必须是表
+/// C-ABI 镜像垫片（`p` 为调用方保证有效的裸键指针，按 review.md §2 保留 unsafe 形）；调用序契约（正确性，非内存安全）：
+/// `idx` 为当前帧可解析的合法索引且该槽必须是表
 /// （cpp lapi.cpp:891 `api_check!(ttype_is_table(gct(ptr)))`）；`p/tag` 仅作 lightuserdata 键的
-/// 位模式比较、不被解引用，返回的 ttype 与压栈槽 `top.sub(1)` 处的值配套对应。cpp lapi.cpp:886。
-pub unsafe fn lua_rawgetptagged(l: *mut LuaState, idx: i32, p: *mut c_void, tag: i32) -> i32 {
+/// 位模式比较、不被解引用，返回的 ttype 与压栈槽 `top.sub(1)` 处的值配套对应。
+pub unsafe fn lua_rawgetptagged(l: &mut LuaState, idx: i32, p: *mut c_void, tag: i32) -> i32 {
   // SAFETY: 契约保证 `l` 存活、索引处为可读表，块内 rawget 取回的 userdata 引用与 tag 匹配性检查仅在栈槽界内进行
   unsafe {
     lua_c_threadbarrier_lapi(l);
@@ -25,9 +27,9 @@ pub unsafe fn lua_rawgetptagged(l: *mut LuaState, idx: i32, p: *mut c_void, tag:
     let t: StkId = index_2_addr(l, idx);
     api_check!(l, (*t).is_table());
 
-    setobj_2_s!(l, (*l).top, lua_h_getp((*t).as_table_ptr(), p, tag));
+    setobj_2_s!(l, l.top, lua_h_getp((*t).as_table_ptr(), p, tag));
     api_incr_top!(l);
 
-    ttype!((*l).top.sub(1)) as i32
+    ttype!(l.top.sub(1)) as i32
   }
 }

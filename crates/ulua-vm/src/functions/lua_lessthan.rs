@@ -19,8 +19,8 @@ pub fn lua_lessthan(l: &mut LuaState, index1: i32, index2: i32) -> i32 {
   // 槽，沿用本帧栈界与元方法回跑契约。
   unsafe {
     let lp = l.as_mut_ptr();
-    let o1: StkId = index_2_addr(lp, index1);
-    let o2: StkId = index_2_addr(lp, index2);
+    let o1: StkId = index_2_addr(&*lp, index1);
+    let o2: StkId = index_2_addr(&*lp, index2);
 
     let nil_ptr = LUA_O_NILOBJECT;
 

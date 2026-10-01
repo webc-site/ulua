@@ -1510,9 +1510,8 @@ impl TypeChecker2 {
       AstTypeRef::Union(ty) => self.visit_type_union(ty),
       AstTypeRef::Intersection(ty) => self.visit_type_intersection(ty),
       AstTypeRef::Group(group) => {
-        // group.type_ 是括号类型标注的 arena 子指针（parser 必建，恒非空），
-        // 经 alias_ref 门面换存活引用。
-        self.visit_type(alias_ref(group.type_));
+        // group.type_ 是括号类型标注的内层类型（parser 必建，恒非空），槽已句柄化。
+        self.visit_type(group.type_.get());
       }
       _ => {}
     }
@@ -1709,15 +1708,14 @@ impl TypeChecker2 {
   pub(crate) fn visit_type_function(&mut self, ty: &AstTypeFunction) {
     self.visit_generics(ty.generics, ty.generic_packs);
     self.visit_type_list(&ty.arg_types);
-    // SAFETY: return_types 是节点自有的存活 AstTypePack 指针（可空，判空由
-    // Option 形态承接（alias_opt 即可空透传，解引用契约在 arena_handle）。
-    self.visit_type_pack(alias_opt(ty.return_types));
+    // return_types 槽已句柄化（parseReturnType/补建空 pack 恒非空），get() 直取。
+    self.visit_type_pack(Some(ty.return_types.get()));
   }
 
   pub(crate) fn visit_type_typeof(&mut self, ty: &AstTypeTypeof) {
-    // typeof 的 expr 字段由 parser 强制存在（无空值场景），alias_ref 换引用后
-    // 透传给 value-context 访问器只读递归。
-    let expr = alias_ref(ty.expr);
+    // typeof 的 expr 字段由 parser 强制存在（无空值场景），槽已句柄化，
+    // get() 直出引用后透传给 value-context 访问器只读递归。
+    let expr = ty.expr.get();
     self.visit_expr(expr, ValueContext::RValue);
   }
 
@@ -1771,8 +1769,8 @@ impl TypeChecker2 {
   }
 
   pub(crate) fn visit_type_pack_variadic(&mut self, tp: &AstTypePackVariadic) {
-    // variadic_type（`...T` 的 T）parser 必建，无空值分支；alias_ref 换存活引用。
-    self.visit_type(alias_ref(tp.variadic_type));
+    // variadic_type（`...T` 的 T）parser 必建，无空值分支，槽已句柄化。
+    self.visit_type(tp.variadic_type.get());
   }
 
   pub(crate) fn visit_type_pack_generic(&mut self, tp: &AstTypePackGeneric) {
@@ -2832,8 +2830,8 @@ impl TypeChecker2 {
     // generics/generic_packs 是别名声明泛型参数表（arena 数组），只读遍历登记符号。
     self.visit_generics(stat.generics, stat.generic_packs);
 
-    // type_ptr 为别名右值 AstType（parser 必建，恒非空）：alias_ref 换存活引用。
-    self.visit_type(alias_ref(stat.type_ptr));
+    // type_ptr 为别名右值 AstType（parser 必建，恒非空），槽已句柄化。
+    self.visit_type(stat.type_ptr.get());
   }
 
   pub fn visit_stat_type_function(&mut self, stat: &AstStatTypeFunction) {
@@ -2845,10 +2843,9 @@ impl TypeChecker2 {
   pub(crate) fn visit_stat_declare_function(&mut self, stat: &AstStatDeclareFunction) {
     self.visit_generics(stat.generics, stat.generic_packs);
     // params 是声明节点自有的 AstTypeList 字段（& 只读遍历其 arena 数组）；
-    // ret_types 为节点自有的存活 AstTypePack 指针，可空由 Option 承接。
+    // ret_types 槽已句柄化（declare 文法对缺省返回类型现场补建显式空 pack）。
     self.visit_type_list(&stat.params);
-    // ret_types 可空：alias_opt 折叠为 Option。
-    self.visit_type_pack(alias_opt(stat.ret_types));
+    self.visit_type_pack(Some(stat.ret_types.get()));
   }
 
   pub(crate) fn visit_stat_declare_global(&mut self, stat: &AstStatDeclareGlobal) {

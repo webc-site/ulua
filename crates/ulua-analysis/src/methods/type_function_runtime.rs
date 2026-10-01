@@ -270,7 +270,7 @@ impl TypeFunctionRuntime {
     // 仅取指针值作 lightuserdata 身份键。
     unsafe {
       alias(global_vm).push_lightuserdata((function as *mut ()).cast());
-      lua_gettable(global_vm, LUA_REGISTRYINDEX);
+      lua_gettable(&mut *global_vm, LUA_REGISTRYINDEX);
     }
 
     // if (!lua_isnil(global, -1)) { lua_pop(global, 1); return std::nullopt; }
@@ -404,7 +404,7 @@ impl TypeFunctionRuntime {
     unsafe {
       alias(global_vm).push_lightuserdata((function as *mut ()).cast());
       lua_xmove(l_vm, global_vm, 1);
-      lua_settable(global_vm, LUA_REGISTRYINDEX);
+      lua_settable(&mut *global_vm, LUA_REGISTRYINDEX);
     }
 
     popper.luau_temp_thread_popper();

@@ -18,9 +18,9 @@ use crate::{
 pub unsafe fn vector_clamp(l: *mut LuaState) -> i32 {
   // SAFETY: 契约保证索引 1/2/3 为 vector（分量窗口读 [0..=3]）；压栈需 top 后 ≥1 空槽
   unsafe {
-    let v = vector_components(lua_l_checkvector(l, 1));
-    let min = vector_components(lua_l_checkvector(l, 2));
-    let max = vector_components(lua_l_checkvector(l, 3));
+    let v = vector_components(lua_l_checkvector(&mut *l, 1));
+    let min = vector_components(lua_l_checkvector(&mut *l, 2));
+    let max = vector_components(lua_l_checkvector(&mut *l, 3));
 
     (*l).arg_check(
       matches!(min[0].partial_cmp(&max[0]), Some(Less | Equal)),

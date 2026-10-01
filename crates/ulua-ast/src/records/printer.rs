@@ -1067,7 +1067,7 @@ impl<'a, W: Writer> Printer<'a, W> {
             None => {
               self
                 .writer
-                .maybe_space(&slot_ref(a.type_ptr).base.location.begin, 2);
+                .maybe_space(&a.type_ptr.get().base.location.begin, 2);
               self.writer.symbol(SYM_ASSIGN);
             }
           }

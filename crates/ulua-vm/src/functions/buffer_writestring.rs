@@ -16,12 +16,12 @@ use crate::{
 pub(crate) unsafe fn buffer_writestring(l: *mut LuaState) -> i32 {
   unsafe {
     let mut len: usize = 0;
-    let buf = lua_l_checkbuffer(l, 1, &mut len).cast::<u8>();
+    let buf = lua_l_checkbuffer(&mut *l, 1, &mut len).cast::<u8>();
     let offset = (*l).check_integer(2);
 
     let mut size: usize = 0;
-    let val = lua_l_checklstring(l, 3, &mut size);
-    let count = lua_l_optinteger(l, 4, size as i32);
+    let val = lua_l_checklstring(&mut *l, 3, &mut size);
+    let count = lua_l_optinteger(&mut *l, 4, size as i32);
 
     (*l).arg_check(count >= 0, 4, "count");
 

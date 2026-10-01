@@ -1118,7 +1118,7 @@ fn test_exec_raw() -> Result<()> {
   // Test error handling
   let res: Result<()> = unsafe {
     lua.exec_raw("test error", |state| {
-      api::lua_error(state);
+      api::lua_error(&mut *state);
     })
   };
   assert!(matches!(res, Err(Error::RuntimeError(err)) if err.contains("test error")));

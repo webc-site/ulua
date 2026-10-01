@@ -5,7 +5,7 @@ use crate::{
     ast_array::AstArray, ast_attr::AstAttr, ast_generic_type::AstGenericType,
     ast_generic_type_pack::AstGenericTypePack, ast_type::AstType,
     ast_type_function::AstTypeFunction, ast_type_list::AstTypeList, ast_type_pack::AstTypePack,
-    location::Location,
+    location::Location, node_handle::Node,
   },
   rtti::AstNodeClass,
   type_aliases::ast_argument_name::AstArgumentName,
@@ -18,7 +18,7 @@ impl AstTypeFunction {
     generic_packs: AstArray<*mut AstGenericTypePack>,
     arg_types: AstTypeList,
     arg_names: AstArray<Option<AstArgumentName>>,
-    return_types: *mut AstTypePack,
+    return_types: Node<AstTypePack>,
   ) -> Self {
     ulua_common::LUAU_ASSERT!(arg_names.is_empty() || arg_names.len() == arg_types.types.len());
 
@@ -42,7 +42,7 @@ impl AstTypeFunction {
     generic_packs: AstArray<*mut AstGenericTypePack>,
     arg_types: AstTypeList,
     arg_names: AstArray<Option<AstArgumentName>>,
-    return_types: *mut AstTypePack,
+    return_types: Node<AstTypePack>,
   ) -> Self {
     LUAU_ASSERT!(arg_names.is_empty() || arg_names.len() == arg_types.types.len());
 

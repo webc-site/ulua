@@ -2,15 +2,24 @@ use ulua_common::fflag;
 
 use crate::{
   enums::{ast_table_access::AstTableAccess, type_lexer::Type},
-  functions::optional_node::{node_opt, opt_node, slot_ref},
+  functions::optional_node::{node_opt, slot_ref},
   records::{
-    ast_array::AstArray, ast_attr::AstAttr,
-    ast_declared_extern_type_property::AstDeclaredExternTypeProperty, ast_name::AstName,
-    ast_stat::AstStat, ast_stat_declare_extern_type::AstStatDeclareExternType,
+    ast_array::AstArray,
+    ast_attr::AstAttr,
+    ast_declared_extern_type_property::AstDeclaredExternTypeProperty,
+    ast_name::AstName,
+    ast_stat::AstStat,
+    ast_stat_declare_extern_type::AstStatDeclareExternType,
     ast_stat_declare_function::AstStatDeclareFunction,
-    ast_stat_declare_global::AstStatDeclareGlobal, ast_table_indexer::AstTableIndexer,
-    ast_type_list::AstTypeList, ast_type_pack_explicit::AstTypePackExplicit, location::Location,
-    match_lexeme::MatchLexeme, node_handle::OptNode, parser::Parser, temp_vector::TempVector,
+    ast_stat_declare_global::AstStatDeclareGlobal,
+    ast_table_indexer::AstTableIndexer,
+    ast_type_list::AstTypeList,
+    ast_type_pack_explicit::AstTypePackExplicit,
+    location::Location,
+    match_lexeme::MatchLexeme,
+    node_handle::{Node, OptNode},
+    parser::Parser,
+    temp_vector::TempVector,
   },
   rtti::AstNodeClass,
 };
@@ -61,14 +70,15 @@ impl Parser {
       self.expect_match_and_consume(')', &match_paren, false);
 
       // cpp `if (!retTypes) retTypes = alloc<AstTypePackExplicit>(..., AstTypeList{{}, nullptr})`
-      // （Parser.cpp:1845-1846）：缺省返回类型是一个「空类型列表、无尾注」的显式 pack。
-      let ret_types = self.parse_optional_return_type(None).or_else(|| {
-        let empty = self.alloc_type_pack(AstTypePackExplicit::new(
+      // （Parser.cpp:1845-1846）：缺省返回类型是一个「空类型列表、无尾注」的显式 pack；
+      // 两条路都产出非空槽位，直接以 Node 接线。
+      let ret_types = match self.parse_optional_return_type(None) {
+        Some(ret) => Node::from_non_null(ret),
+        None => Node::from_raw(self.alloc_type_pack(AstTypePackExplicit::new(
           self.lexer.current().location,
           AstTypeList::new(AstArray::EMPTY, None),
-        ));
-        node_opt(empty)
-      });
+        ))),
+      };
       let end = self.lexer.current().location;
 
       let mut vars = TempVector::new(&mut self.scratch_type);
@@ -105,7 +115,7 @@ impl Parser {
         param_names: var_names_array,
         vararg,
         vararg_location,
-        ret_types: opt_node(ret_types),
+        ret_types,
       })
     } else if (self.lexer.current().name() == "class"
       && (if fflag::LuauAllowGlobalDeclarationToBeCalledClass.get() {

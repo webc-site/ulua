@@ -53,13 +53,13 @@ pub unsafe fn lua_l_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a 
       }
       LuaType::Number => {
         // Number 类型槽必可转换；旧形忽略 isnum、失败时格式化 0.0，unwrap_or(0.0) 等价
-        let n = lua_tonumberx(l, idx).unwrap_or(0.0);
+        let n = lua_tonumberx(&*l, idx).unwrap_or(0.0);
         let mut s = [0u8; LUAI_MAXNUM2STR as usize];
         let len = luai_num2str_buf(&mut s, n);
         lua_pushlstring_bytes(l, &s[..len]);
       }
       LuaType::Vector => {
-        let v = lua_tovector(l, idx);
+        let v = lua_tovector(&*l, idx);
         let mut s = [0u8; (LUAI_MAXNUM2STR as usize) * (LUA_VECTOR_SIZE as usize)];
         let mut pos = 0;
         for (i, &comp) in c_slice(v, LUA_VECTOR_SIZE as usize).iter().enumerate() {
@@ -84,7 +84,7 @@ pub unsafe fn lua_l_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a 
       _ => {
         let ptr = lua_topointer(l, idx);
         let enc = lua_encodepointer(&*l, ptr as usize);
-        let name = cstr_cow(lua_l_typename(l, idx));
+        let name = cstr_cow(lua_l_typename(&*l, idx));
         lua_pushfstring_l(l, format_args!("{}: 0x{:016x}", name, enc));
       }
     }

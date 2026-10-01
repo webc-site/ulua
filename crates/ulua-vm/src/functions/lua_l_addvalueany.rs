@@ -42,7 +42,7 @@ pub(crate) unsafe fn lua_l_addvalueany(b: &mut LuaLStrbuf, idx: i32) {
       }
       LuaType::Number => {
         // Number 类型槽必可转换；旧形忽略 isnum、失败时格式化 0.0，unwrap_or(0.0) 等价
-        let n = lua_tonumberx(l, idx).unwrap_or(0.0);
+        let n = lua_tonumberx(&*l, idx).unwrap_or(0.0);
         let mut s = [0u8; LUAI_MAXNUM2STR as usize];
         let len = luai_num2str_buf(&mut s, n);
         lua_l_addlstring(b, &s[..len]);

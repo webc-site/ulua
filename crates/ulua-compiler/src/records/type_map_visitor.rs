@@ -136,8 +136,9 @@ impl TypeMapVisitor<'_, '_> {
   ) -> Option<Node<AstType>> {
     let ty_node = ty?;
 
-    // 外层 `None` = 未做解析（回落原 ty）；`Some(inner)` 中 inner 可为 `None`，
-    // 即别名命中但其 `type_ptr` 缺席（cpp `return alias->typePtr` 交出 null）。
+    // 外层 `None` = 未做解析（回落原 ty）；`Some(inner)` 恒非空——type_ptr
+    // 槽已句柄化为非空 `Node`（cpp `getType((*alias)->type, ...)` 直接递归，
+    // 无 null 形态）。
     let resolved = match ty_node.borrow().as_type_ref() {
       // 带 prefix 的限定引用（如 `pkg.Type`）不是裸别名，原样返回
       AstTypeRef::Reference(ref_node) if ref_node.prefix.is_some() => None,
@@ -148,7 +149,7 @@ impl TypeMapVisitor<'_, '_> {
         .flatten()
         // alias 由 push_type_aliases 建档，指向 arena 存活 AstStatTypeAlias；
         // 建档缺席视为无法解析，回落原 ty。
-        .map(|alias| Node::try_new(alias.borrow().type_ptr)),
+        .map(|alias| Some(Node::from_ast_handle(alias.borrow().type_ptr))),
       _ => None,
     };
 

@@ -1,7 +1,9 @@
 use alloc::{string::ToString, sync::Arc, vec::Vec};
 use core::{cmp::min, mem::swap, ptr::null};
 
-use ulua_common::{dfint, fflag, fint, macros::luau_assert::LUAU_ASSERT};
+use ulua_common::{
+  dfint, fflag, fflag::LuauSubtypingSkipUnreadReasoning, fint, macros::luau_assert::LUAU_ASSERT,
+};
 
 use crate::{
   enums::{
@@ -1034,10 +1036,14 @@ impl Subtyping {
       if next.is_subtype {
         return next;
       }
-      next.with_super_component(Component::Index(Index {
-        index,
-        variant: Variant::Union,
-      }));
+      if LuauSubtypingSkipUnreadReasoning.get() {
+        next.reasoning.clear();
+      } else {
+        next.with_super_component(Component::Index(Index {
+          index,
+          variant: Variant::Union,
+        }));
+      }
       result.and_also(next, SubtypingSuppressionPolicy::Any);
     }
     result

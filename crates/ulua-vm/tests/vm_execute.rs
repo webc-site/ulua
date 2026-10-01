@@ -78,7 +78,8 @@ impl State {
   unsafe fn number_at(&self, index: i32) -> f64 {
     // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`self.l` 在本用例
     // 作用域内存活，`lua_tonumberx` 只读栈槽。
-    unsafe { lua_tonumberx(self.l, index) }.unwrap_or_else(|| panic!("栈位 {index} 必须是数值结果"))
+    unsafe { lua_tonumberx(&*self.l, index) }
+      .unwrap_or_else(|| panic!("栈位 {index} 必须是数值结果"))
   }
 
   /// 栈顶按错误消息读取；仅在断言失败路径调用

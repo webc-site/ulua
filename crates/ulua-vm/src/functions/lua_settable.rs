@@ -9,11 +9,11 @@ use crate::{
   type_aliases::stk_id::StkId,
 };
 
-/// # Safety
-/// `l` 须为存活 LuaState 并处于可 GC/可抛错的受保护帧，栈顶已压入 key+value 两项（`api_checknelems!(l, 2)`，release 由调用方保证）；
+/// `lua_settable` 核心（cpp/VM/src/lapi.cpp:999）。调用序契约（正确性，非内存安全）：
+/// `l` 处于可 GC/可抛错的受保护帧，栈顶已压入 key+value 两项（`api_checknelems!(l, 2)`，release 由调用方保证）；
 /// `idx` 经 `index_2_addr` 解析为非 `LUA_O_NILOBJECT` 的栈槽（`api_check`）；`lua_v_settable` 以 top-2 为 key、top-1 为 value 写入，
-/// 末尾 `top` 回退两格。cpp/VM/src/lapi.cpp:999 lua_settable。
-pub unsafe fn lua_settable(l: *mut LuaState, idx: i32) {
+/// 末尾 `top` 回退两格。
+pub fn lua_settable(l: &mut LuaState, idx: i32) {
   unsafe {
     api_checknelems!(l, 2);
 
@@ -22,9 +22,9 @@ pub unsafe fn lua_settable(l: *mut LuaState, idx: i32) {
     lua_v_settable(
       l,
       Slot::from_raw(t),
-      Slot::from_raw((*l).top.sub(2)),
-      Slot::from_raw((*l).top.sub(1)),
+      Slot::from_raw(l.top.sub(2)),
+      Slot::from_raw(l.top.sub(1)),
     );
-    (*l).top = (*l).top.sub(2);
+    l.top = l.top.sub(2);
   }
 }

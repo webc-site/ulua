@@ -12,7 +12,7 @@ use crate::{
 pub unsafe fn lua_setuserdatatag(l: *mut LuaState, idx: i32, tag: i32) {
   unsafe {
     api_check!(l, (tag as u32) < LUA_UTAG_LIMIT as u32);
-    let o: StkId = index_2_addr(l, idx);
+    let o: StkId = index_2_addr(&*l, idx);
     api_check!(l, (*o).is_userdata());
     if let Some(u) = (*(*o).value.gc).as_udata_mut() {
       u.tag = tag as u8;

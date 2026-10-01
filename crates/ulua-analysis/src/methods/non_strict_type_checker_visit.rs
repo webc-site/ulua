@@ -508,7 +508,8 @@ impl<'a> NonStrictTypeChecker<'a> {
         self.visit_ast_type_intersection(intersection_type)
       }
       AstTypeRef::Group(group) => {
-        self.visit_ast_type(alias_opt(group.type_));
+        // group.type_ 槽已句柄化（分组必有内层类型），get() 直出非空引用。
+        self.visit_ast_type(Some(group.type_.get()));
       }
       AstTypeRef::Optional(_) | AstTypeRef::SingletonBool(_) | AstTypeRef::SingletonString(_) => {
         // 三类叶节点都不产生约束：`?` 部件在 AST 上没有内层类型成员（cpp 的
@@ -713,13 +714,13 @@ impl<'a> NonStrictTypeChecker<'a> {
 
   pub(crate) fn visit_ast_type_function(&mut self, function: &AstTypeFunction) {
     self.visit_ast_type_list(&function.arg_types);
-    self.visit_ast_type_pack(alias_opt(function.return_types));
+    // return_types 槽已句柄化（parseReturnType/补建空 pack 恒非空）。
+    self.visit_ast_type_pack(Some(function.return_types.get()));
   }
 
   pub(crate) fn visit_ast_type_typeof(&mut self, type_of: &AstTypeTypeof) {
-    // expr 为 ast record 未句柄化字段（恒非空，parser 填充同 arena 节点），
-    // 经 `alias_ref` 门面（解引用契约集中在 arena_handle）换得存活引用。
-    self.visit_ast_expr_value_context(alias_ref(type_of.expr), ValueContext::RValue);
+    // expr 槽已句柄化（typeof(expr) 文法必带表达式），get() 直出存活引用。
+    self.visit_ast_expr_value_context(type_of.expr.get(), ValueContext::RValue);
   }
 
   pub(crate) fn visit_ast_type_union(&mut self, union_type: &AstTypeUnion) {
@@ -818,8 +819,8 @@ impl<'a> NonStrictTypeChecker<'a> {
   }
 
   pub(crate) fn visit_ast_type_pack_variadic(&mut self, tp: &AstTypePackVariadic) {
-    // variadic_type 子指针由 parser 填充，alias_opt 折叠后传入只读的 visit_ast_type。
-    self.visit_ast_type(alias_opt(tp.variadic_type));
+    // variadic_type 槽已句柄化（`...T` 文法必建 T），get() 直出非空引用。
+    self.visit_ast_type(Some(tp.variadic_type.get()));
   }
 
   pub(crate) fn visit_ast_stat_if(&mut self, if_statement: &AstStatIf) -> NonStrictContext {
@@ -984,9 +985,10 @@ impl<'a> NonStrictTypeChecker<'a> {
     &mut self,
     type_alias: &AstStatTypeAlias,
   ) -> NonStrictContext {
-    // generics/generic_packs/type_ptr 字段由 parser 填充、随父节点存活。
+    // generics/generic_packs/type_ptr 字段由 parser 填充、随父节点存活；
+    // type_ptr 槽已句柄化，get() 直出非空引用。
     self.visit_generics(type_alias.generics, type_alias.generic_packs);
-    self.visit_ast_type(alias_opt(type_alias.type_ptr));
+    self.visit_ast_type(Some(type_alias.type_ptr.get()));
 
     NonStrictContext::new()
   }
@@ -998,7 +1000,8 @@ impl<'a> NonStrictTypeChecker<'a> {
     // 声明语句及其 generics/params/ret_types 均在 arena 中。
     self.visit_generics(decl_fn.generics, decl_fn.generic_packs);
     self.visit_ast_type_list(&decl_fn.params);
-    self.visit_ast_type_pack(alias_opt(decl_fn.ret_types));
+    // ret_types 槽已句柄化（declare 文法对缺省返回类型现场补建显式空 pack）。
+    self.visit_ast_type_pack(Some(decl_fn.ret_types.get()));
 
     NonStrictContext::new()
   }

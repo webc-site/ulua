@@ -199,8 +199,8 @@ pub fn callbacks_mut<'a>(l: L) -> &'a mut LuaCallbacks {
   unsafe { &mut *lua_callbacks(l) }
 }
 
-/// `lua_newuserdatadtor` 的内联析构类型（VM 侧同名 type alias 未导出，此处镜像）。
-pub type UserdataDtorRaw = Option<unsafe extern "C-unwind" fn(*mut c_void)>;
+/// `lua_newuserdatadtor` 的内联析构类型（与 `LuaDestructor` 一致）。
+pub type UserdataDtorRaw = LuaDestructor;
 
 /// `lua_newthread` 的返回值同样是存活线程栈，归父状态持有；用例经门面取得后
 /// 可安全作为后续 [`L`] 参数。
@@ -234,7 +234,7 @@ pub fn checkstack(l: L, size: c_int) -> c_int {
 /// `luaL_checkstack`：扩容失败即抛 Lua 错误（消息 `msg`）。
 pub fn l_checkstack(l: L, space: c_int, msg: &str) {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_l_checkstack(l, space, msg) }
+  unsafe { lua_l_checkstack(&mut *l, space, msg) }
 }
 
 /// `lua_pushvalue`：复制槽 `idx` 压栈。
@@ -450,7 +450,7 @@ pub fn resume(l: L, from: Option<L>, nargs: c_int) -> c_int {
 /// `lua_type`。
 pub fn type_(l: L, idx: c_int) -> c_int {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_type(l, idx) }
+  unsafe { lua_type(&*l, idx) }
 }
 
 /// `lua_typename(t)` 的原始字节视图。
@@ -462,7 +462,7 @@ pub fn typename_bytes<'a>(l: L, t: c_int) -> &'a [u8] {
 /// `luaL_typename(l, idx)` 的原始字节视图。
 pub fn l_typename_bytes<'a>(l: L, idx: c_int) -> &'a [u8] {
   // Safety: `l` 存活；返回 NUL 结尾类型名串（VM 内部缓冲）。
-  unsafe { cstr_bytes(lua_l_typename(l, idx)) }
+  unsafe { cstr_bytes(lua_l_typename(&*l, idx)) }
 }
 
 /// `lua_tostring!(l, idx)` + 原始字节收口（要求 `idx` 为字符串，与旧断言同前提）。
@@ -489,7 +489,7 @@ pub fn l_checkstring_bytes<'a>(l: L, idx: c_int) -> &'a [u8] {
 /// `lua_tonumber!(l, idx)`（`lua_tonumberx(..).unwrap_or(0.0)`）。
 pub fn tonumber(l: L, idx: c_int) -> f64 {
   // Safety: `l` 存活（模块级契约）；非数值回报 0，与宏一致。
-  unsafe { lua_tonumberx(l, idx).unwrap_or(0.0) }
+  unsafe { lua_tonumberx(&*l, idx).unwrap_or(0.0) }
 }
 
 /// `lua_l_checkinteger`：非整数即抛 Lua 错误。
@@ -505,13 +505,13 @@ pub fn toboolean(l: L, idx: c_int) -> c_int {
 /// `lua_isstring`（C 侧 0/非 0）。
 pub fn isstring(l: L, idx: c_int) -> c_int {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_isstring(l, idx) }
+  unsafe { lua_isstring(&*l, idx) }
 }
 
 /// `lua_isnumber`（C 侧 0/非 0）。
 pub fn isnumber(l: L, idx: c_int) -> c_int {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_isnumber(l, idx) }
+  unsafe { lua_isnumber(&*l, idx) }
 }
 
 /// `lua_status`。
@@ -523,7 +523,7 @@ pub fn status(l: L) -> c_int {
 /// `lua_equal`（C 侧 0/1）。
 pub fn equal(l: L, a: c_int, b: c_int) -> c_int {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_equal(l, a, b) }
+  unsafe { lua_equal(&mut *l, a, b) }
 }
 
 /// `lua_objlen`。
@@ -549,7 +549,7 @@ pub fn next(l: L, idx: c_int) -> c_int {
 /// `lua_rawiter` 索引遍历。
 pub fn rawiter(l: L, idx: c_int, iter: c_int) -> c_int {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_rawiter(l, idx, iter) }
+  unsafe { lua_rawiter(&mut *l, idx, iter) }
 }
 
 /// `lua_getfield`。
@@ -659,7 +659,7 @@ pub fn createtable(l: L, narray: c_int, nrec: c_int) {
 /// `lua_settable`（键值在栈顶，idx 指向目标表）。
 pub fn settable(l: L, idx: c_int) {
   // Safety: `l` 存活且栈顶两槽为键值对（用例配平契约）。
-  unsafe { lua_settable(l, idx) }
+  unsafe { lua_settable(&mut *l, idx) }
 }
 
 /// `lua_newuserdatatagged(l, sz, tag)`：返回 VM 持有的数据块裸指针。
@@ -731,7 +731,7 @@ pub fn l_getmetatable(l: L, name: &'static [u8]) -> c_int {
 /// `luaL_checkudata(l, idx, tname)`：按元表名校验 userdata，返回数据块裸指针。
 pub fn l_checkudata(l: L, idx: c_int, tname: &str) -> *mut c_void {
   // Safety: `l` 存活；`idx` 在使用点未被改栈失效。
-  unsafe { lua_l_checkudata(l, idx, tname) }
+  unsafe { lua_l_checkudata(&mut *l, idx, tname) }
 }
 
 /// 把 [`newuserdatatagged`] / [`newuserdata`] 等交回的 VM 数据块按 `T` 原位写入。
@@ -745,50 +745,50 @@ pub fn poke<T: Copy>(p: *mut c_void, v: T) {
 pub fn rawgetfield(l: L, idx: c_int, k: &'static [u8]) -> c_int {
   let key = k.strip_suffix(b"\0").unwrap_or(k);
   // Safety: `l` 存活（模块级契约）；`key` 切片在调用返回前有效，被调侧不得逃逸
-  unsafe { lua_rawgetfield_bytes(l, idx, key) }
+  unsafe { lua_rawgetfield_bytes(&mut *l, idx, key) }
 }
 
 /// `lua_rawsetfield`。
 pub fn rawsetfield(l: L, idx: c_int, k: &'static [u8]) {
   let key = k.strip_suffix(b"\0").unwrap_or(k);
   // Safety: `l` 存活（模块级契约）；`key` 切片在调用返回前有效，被调侧不得逃逸
-  unsafe { lua_rawsetfield_bytes(l, idx, key) }
+  unsafe { lua_rawsetfield_bytes(&mut *l, idx, key) }
 }
 
 /// `lua_rawget`（键在栈顶）。
 pub fn rawget(l: L, idx: c_int) -> c_int {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_rawget(l, idx) }
+  unsafe { lua_rawget(&mut *l, idx) }
 }
 
 /// `lua_gettable`（键在栈顶）。
 pub fn gettable(l: L, idx: c_int) -> c_int {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_gettable(l, idx) }
+  unsafe { lua_gettable(&mut *l, idx) }
 }
 
 /// `lua_rawgeti`。
 pub fn rawgeti(l: L, idx: c_int, n: c_int) -> c_int {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_rawgeti(l, idx, n) }
+  unsafe { lua_rawgeti(&mut *l, idx, n) }
 }
 
 /// `lua_rawseti`。
 pub fn rawseti(l: L, idx: c_int, n: c_int) {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_rawseti(l, idx, n) }
+  unsafe { lua_rawseti(&mut *l, idx, n) }
 }
 
 /// `lua_rawgetptagged`。
 pub fn rawgetptagged(l: L, idx: c_int, p: *mut c_void, tag: c_int) -> c_int {
   // Safety: `l` 存活；`p` 为用例持有的载荷指针（仅比较，不解引用）。
-  unsafe { lua_rawgetptagged(l, idx, p, tag) }
+  unsafe { lua_rawgetptagged(&mut *l, idx, p, tag) }
 }
 
 /// `lua_rawsetptagged`。
 pub fn rawsetptagged(l: L, idx: c_int, p: *mut c_void, tag: c_int) {
   // Safety: 同 [`rawgetptagged`]。
-  unsafe { lua_rawsetptagged(l, idx, p, tag) }
+  unsafe { lua_rawsetptagged(&mut *l, idx, p, tag) }
 }
 
 /// `lua_rawgetp`（tag 0，宏形态）。
@@ -829,7 +829,7 @@ pub fn setmetatable(l: L, idx: c_int) -> c_int {
 /// `lua_setfenv`。
 pub fn setfenv(l: L, idx: c_int) -> c_int {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_setfenv(l, idx) }
+  unsafe { lua_setfenv(&mut *l, idx) }
 }
 
 // ---------------------------------------------------------------------------
@@ -857,13 +857,13 @@ pub fn tobuffer_len(l: L, idx: c_int, len: &mut usize) -> Option<*mut c_void> {
 /// `luaL_checkbuffer` 只取址形态（C 侧 NULL 长度出参边界契约，既有约定 review.md §2）。
 pub fn l_checkbuffer_ptr(l: L, narg: c_int) -> *mut c_void {
   // Safety: `l` 存活；`narg` 为 buffer 槽（用例断言前置）；null 长度出参走仅取址分支。
-  unsafe { lua_l_checkbuffer(l, narg, null_mut()) }
+  unsafe { lua_l_checkbuffer(&mut *l, narg, null_mut()) }
 }
 
 /// `luaL_checkbuffer` 取址兼长度出参形态。
 pub fn l_checkbuffer_len(l: L, narg: c_int, len: &mut usize) -> *mut c_void {
   // Safety: `l` 存活；`len` 为本帧可写出参。
-  unsafe { lua_l_checkbuffer(l, narg, len) }
+  unsafe { lua_l_checkbuffer(&mut *l, narg, len) }
 }
 
 /// `lua_topointer`。
@@ -948,19 +948,19 @@ pub fn getref(l: L, r: c_int) {
 /// `lua_ref(l, idx)`：给 `idx` 处对象建引用并弹栈。
 pub fn luaref(l: L, idx: c_int) -> c_int {
   // Safety: `l` 存活（模块级契约）；`idx` 为可读槽。
-  unsafe { lua_ref(l, idx) }
+  unsafe { lua_ref(&mut *l, idx) }
 }
 
 /// `lua_unref(l, ref)`：释放引用。
 pub fn unref(l: L, r: c_int) {
   // Safety: `l` 存活；`r` 为先前 `lua_ref` 交回的引用句柄。
-  unsafe { lua_unref(l, r) }
+  unsafe { lua_unref(&mut *l, r) }
 }
 
 /// `lua_isuserdata`（C 侧 0/非 0）。
 pub fn isuserdata(l: L, idx: c_int) -> c_int {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_isuserdata(l, idx) }
+  unsafe { lua_isuserdata(&*l, idx) }
 }
 
 // ---------------------------------------------------------------------------
@@ -1143,31 +1143,31 @@ pub fn is_lfunction(l: L, idx: c_int) -> c_int {
 /// 返回命中下标（缺省走 `def`，失配抛 Lua 错误）。
 pub fn l_checkoption(l: L, narg: c_int, def: *const c_char, lst: *const *const c_char) -> c_int {
   // Safety: `l` 存活；`lst` 为调用方在本帧持有的 NULL 收尾静态选项表。
-  unsafe { lua_l_checkoption(l, narg, def, lst) }
+  unsafe { lua_l_checkoption(&mut *l, narg, def, lst) }
 }
 
 /// `luaL_checkunsigned`：非数值即抛 Lua 错误。
 pub fn l_checkunsigned(l: L, narg: c_int) -> c_uint {
   // Safety: `l` 存活；`narg` 槽可读。
-  unsafe { lua_l_checkunsigned(l, narg) }
+  unsafe { lua_l_checkunsigned(&mut *l, narg) }
 }
 
 /// `luaL_optboolean`：nil 时取 `def`，其余按布尔语义读取。
 pub fn l_optboolean(l: L, narg: c_int, def: bool) -> bool {
   // Safety: `l` 存活；`narg` 槽可读。
-  unsafe { lua_l_optboolean(l, narg, def) }
+  unsafe { lua_l_optboolean(&mut *l, narg, def) }
 }
 
 /// `luaL_optinteger`：nil 时取 `def`，否则按整数读取（失配抛 Lua 错误）。
 pub fn l_optinteger(l: L, narg: c_int, def: c_int) -> c_int {
   // Safety: `l` 存活；`narg` 槽可读。
-  unsafe { lua_l_optinteger(l, narg, def) }
+  unsafe { lua_l_optinteger(&mut *l, narg, def) }
 }
 
 /// `luaL_checklstring!` 的字节切片形态：非字符串即抛 Lua 错误。
 pub fn l_checklstring<'a>(l: L, narg: c_int) -> &'a [u8] {
   // Safety: `l` 存活；返回借用指向 VM 栈内串，调用点即时消费。
-  unsafe { lua_l_checklstring_ref(l, narg) }
+  unsafe { lua_l_checklstring_ref(&mut *l, narg) }
 }
 
 /// `luaL_typeerror`：按类型名抛 Lua 错误（不返回）。
@@ -1181,7 +1181,7 @@ pub fn l_typeerror(l: L, narg: c_int, tname: &str) -> ! {
 pub fn l_checkvector<'a>(l: L, narg: c_int) -> &'a [f32] {
   // Safety: `l` 存活且 `narg` 为 vector 槽（checkvector 失配即抛错）；返回指针
   // 指向该 vector 的分量缓冲，本帧内有效。
-  unsafe { from_raw_parts(lua_l_checkvector(l, narg), LUA_VECTOR_SIZE as usize) }
+  unsafe { from_raw_parts(lua_l_checkvector(&mut *l, narg), LUA_VECTOR_SIZE as usize) }
 }
 
 /// `lua_pushvector`（3 分量形态，第 4 分量按构建期布局补 0 由 VM 侧处理）。

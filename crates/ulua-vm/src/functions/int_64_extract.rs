@@ -10,7 +10,7 @@ pub unsafe fn int64_extract(l: *mut LuaState) -> i32 {
   unsafe {
     let n = (*l).check_integer_64(1);
     let f = (*l).check_integer_64(2);
-    let w = lua_l_optinteger_64(l, 3, 1);
+    let w = lua_l_optinteger_64(&mut *l, 3, 1);
 
     (*l).arg_check((0..=63).contains(&f), 2, "field cannot be negative");
     (*l).arg_check(0 < w, 3, "width must be positive");

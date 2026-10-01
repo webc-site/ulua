@@ -38,7 +38,7 @@ pub(crate) fn lua_replace(l: &mut LuaState, idx: i32) {
     let lp = l.as_mut_ptr();
     api_checknelems!(lp, 1);
     lua_c_threadbarrier_lapi(lp);
-    let o: StkId = index_2_addr(lp, idx);
+    let o: StkId = index_2_addr(&*lp, idx);
     api_check!(lp, !eq(o, LUA_O_NILOBJECT));
     // 栈顶单槽窗口：`(*lp).top.offset(-1)` 的六连裸重读收为一次预绑定
     // （index_2_addr/屏障/GC 均不改写 `(*lp).top`，读取时机与逐指令等价）

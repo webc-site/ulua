@@ -55,7 +55,7 @@ fn test_x64_codegen_no_unbound_labels_across_all_benchmarks() {
       let rc = luau_load(l, &chunkname, &bytecode, 0);
       assert_eq!(rc, 0, "luau_load failed for {}", lua_path.display());
 
-      let cl = (*lua_a_toobject(l, -1)).as_closure();
+      let cl = (*lua_a_toobject(&*l, -1)).as_closure();
       let root_proto = cl.inner.l.p;
 
       let mut all_protos = vec![root_proto];

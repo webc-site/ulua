@@ -61,11 +61,11 @@ impl NormalizeFixture {
       let module = self.base.get_main_module(false);
       assert!(!module.is_null(), "expected main module");
 
-      // Safety: 上方断言 module 非空（resolver 保有的存活 Module）；alias.type_ptr 为别名语句在 arena 内存活类型节点指针（cpp 同款身份 map 键，签名涟漪归 B1），ast_resolved_types.find 只读查询。
+      // Safety: 上方断言 module 非空（resolver 保有的存活 Module）；alias.type_ptr 槽已句柄化，as_ptr 还原 arena 身份键（cpp 同款身份 map 键），ast_resolved_types.find 只读查询。
       unsafe {
         (*module)
           .ast_resolved_types
-          .find(&(alias.type_ptr as *const _))
+          .find(&alias.type_ptr.as_ptr().cast_const())
           .copied()
       }
     } else {

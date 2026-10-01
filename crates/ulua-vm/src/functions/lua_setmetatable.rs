@@ -27,7 +27,7 @@ pub(crate) fn lua_setmetatable(l: &mut LuaState, objindex: i32) -> i32 {
     let lp = l.as_mut_ptr();
     api_checknelems!(lp, 1);
 
-    let obj: StkId = index_2_addr(lp, objindex);
+    let obj: StkId = index_2_addr(&*lp, objindex);
     api_check!(lp, !eq(obj, LUA_O_NILOBJECT));
 
     // 既有约定（review.md §2）：VM c-API 边界局部哨兵——栈顶为 nil 时 `mt` 保持空表示清除元表，null 为合法实参，边界体内保留裸指针

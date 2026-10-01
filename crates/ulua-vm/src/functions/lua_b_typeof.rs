@@ -9,11 +9,9 @@ use crate::{
 /// cpp/VM/src/lbaselib.cpp:208 luaB_typeof。
 pub fn lua_b_typeof(l: &mut LuaState) -> i32 {
   l.check_any(1);
-  // SAFETY: `l` 存活（引用形保证）；`lua_l_typename` 的 `# Safety` 其余前提（1 号槽
-  // 为合法正索引）由库函数约定与上方 `check_any` 成立；返回的 `name` 指向存活
-  // TString 的 NUL 串数据（本调用内被压栈持有），cstr_bytes 只读切片视图。
-  let name = unsafe { lua_l_typename(l.as_mut_ptr(), 1) };
-  // SAFETY: 同上，name 在本表达式求值期间存活。
+  // SAFETY: name 指向存活 TString 的 NUL 串数据（本调用内被压栈持有），
+  // cstr_bytes 只读切片视图。
+  let name = lua_l_typename(l, 1);
   l.push_bytes(unsafe { cstr_bytes(name) });
   1
 }

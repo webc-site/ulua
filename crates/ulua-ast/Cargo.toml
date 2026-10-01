@@ -1,22 +1,39 @@
 [package]
 name = "ulua-ast"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-authors.workspace = true
-repository.workspace = true
+version = "0.1.5"
 description = "Luau lexer, parser, and AST (faithful Rust port)."
-keywords = ["luau", "lua", "parser", "lexer", "ast"]
-categories = ["parser-implementations", "parsing"]
+keywords = [ "luau", "lua", "parser", "lexer", "ast" ]
+categories = [ "parser-implementations", "parsing" ]
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
 
 [lib]
-crate-type = ["rlib"]
+crate-type = [ "rlib" ]
 
-[dependencies]
-itoa = { workspace = true, default-features = false }
-memchr = { workspace = true, default-features = false }
-strum = { workspace = true }
-thiserror.workspace = true
-ulua-common = { path = "../ulua-common", version = "0.1.4" }
+[dependencies.itoa]
+workspace = true
+default-features = false
 
+[dependencies.memchr]
+workspace = true
+default-features = false
 
+[dependencies.strum]
+workspace = true
+
+[dependencies.thiserror]
+workspace = true
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.5"

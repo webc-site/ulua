@@ -1,35 +1,51 @@
 [package]
 name = "ulua-vm"
-version.workspace = true
-edition.workspace = true
-license.workspace = true
-authors.workspace = true
-repository.workspace = true
+version = "0.1.5"
 description = "The Luau register virtual machine and standard library (Rust)."
-keywords = ["luau", "lua", "vm", "interpreter", "bytecode"]
-categories = ["compilers", "emulators"]
+keywords = [ "luau", "lua", "vm", "interpreter", "bytecode" ]
+categories = [ "compilers", "emulators" ]
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
 
 [lib]
-crate-type = ["rlib"]
+crate-type = [ "rlib" ]
 
-[dependencies]
-# 口径注记：coarsetime 原生支持 wasm32-unknown-unknown（经 wasm-bindgen 读宿主时钟），
-# os.time 需全目标真实时钟故不门控；ulua-analysis 的门控仅因其消费点是统计用耗时戳。
-coarsetime = { workspace = true }
-itoa = { workspace = true, default-features = false }
-# 时间分解/时区纯 Rust 实现（os.date 的 gmtime/localtime 层，替代 libc FFI）。
-# 默认特性（std + tz-system + tzdb-*）：native 读系统时区库；
-# wasm32-unknown-unknown 无 tz 面时 system() 回退 UTC，与本仓旧 wasm shim 同语义。
-jiff = { workspace = true }
-memchr = { workspace = true, default-features = false, features = ["alloc"] }
-strum = { workspace = true }
-ulua-common = { path = "../ulua-common", version = "0.1.4" }
+[dependencies.coarsetime]
+workspace = true
+
+[dependencies.itoa]
+workspace = true
+default-features = false
+
+[dependencies.jiff]
+workspace = true
+
+[dependencies.memchr]
+workspace = true
+default-features = false
+features = [ "alloc" ]
+
+[dependencies.strum]
+workspace = true
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.5"
 
 [features]
-luai_gcmetrics = []
-hard_mem_tests = []
+luai_gcmetrics = [ ]
+hard_mem_tests = [ ]
 
 # 测量用：在 VM 派发环里记录动态 opcode 直方图与转移计数（见 functions/op_count.rs）。
 # 打开后热点出口失效（整环留在冷层），故只用于选热点集合，不进默认构建。
-vm-opcount = []
-
+vm-opcount = [ ]

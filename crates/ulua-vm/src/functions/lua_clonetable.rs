@@ -23,7 +23,7 @@ pub unsafe fn lua_clonetable(l: *mut LuaState, idx: i32) {
     // cpp `ensure_stack(L, 1)`：随后 sethvalue 直接写 L->top
     ensure_stack(l, 1);
 
-    let t: StkId = index_2_addr(l, idx);
+    let t: StkId = index_2_addr(&*l, idx);
 
     api_check!(l, (*t).is_table());
 

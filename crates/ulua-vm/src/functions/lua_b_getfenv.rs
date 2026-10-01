@@ -15,7 +15,7 @@ pub(crate) unsafe fn lua_b_getfenv(l: *mut LuaState) -> i32 {
     if lua_iscfunction(&*l, -1) != 0 {
       (*l).push_value(LUA_GLOBALSINDEX);
     } else {
-      lua_getfenv(l, -1);
+      lua_getfenv(&mut *l, -1);
     }
     lua_setsafeenv(l, -1, 0);
     1

@@ -31,7 +31,7 @@ pub unsafe fn tinsert(l: *mut LuaState) -> i32 {
       _ => luaL_error!(l, "wrong number of arguments to 'insert'"),
     }
 
-    lua_rawseti(l, 1, pos); // t[pos] = v
+    lua_rawseti(&mut *l, 1, pos); // t[pos] = v
     0
   }
 }

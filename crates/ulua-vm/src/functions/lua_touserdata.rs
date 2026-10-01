@@ -18,7 +18,7 @@ use crate::{
 /// 载荷存活期间有效，调用方须保证期间无 GC 移动/释放该对象。
 pub unsafe fn lua_touserdata<'a>(l: *mut LuaState, idx: i32) -> Option<&'a mut c_void> {
   unsafe {
-    let o: StkId = index_2_addr(l, idx);
+    let o: StkId = index_2_addr(&*l, idx);
 
     match ValueView::from_tvalue(&*o) {
       // Udata 的 data 是结构体尾部的 char[1]柔性数组，取其首字节可变引用。

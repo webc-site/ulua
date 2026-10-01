@@ -20,6 +20,6 @@ pub unsafe fn lua_l_error_l(l: *mut LuaState, _fmt: *const c_char, args: Argumen
     lua_l_where(l, 1);
     lua_pushvfstring(l, args);
     (*l).concat(2);
-    lua_error(l)
+    lua_error(&mut *l)
   }
 }
