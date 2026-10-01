@@ -16,5 +16,5 @@ use ulua_vm::{functions::lua_b_assert, records::lua_state::LuaState};
 pub unsafe extern "C-unwind" fn lua_b_assert(l: *mut LuaState) -> c_int {
   // Safety: 契约声明 `l` 为整个调用期间存活的合法 `LuaState`；本帧引用重建
   // 即时结束借用窗口。
-  unsafe { lua_b_assert::lua_b_assert(&mut *l) }
+  lua_b_assert::lua_b_assert(unsafe { &mut *l })
 }

@@ -1,4 +1,4 @@
-//! 本文件由 `crates/ulua-capi/tools/gen_capi.py` 自动生成（源：ulua-vm/src/functions/lua_v_doarithimpl.rs）。
+//! 本文件对应 `ulua_luaV_doarithimpl_*` 8 枚导出符号（源：ulua-vm/src/functions/lua_v_doarithimpl.rs）。
 //! 每个导出壳与 ulua-vm 对应函数签名一致，仅做逐参数透传，零逻辑。
 //! 8 个算术 TM 变体导出（签名与逐参数契约完全同形，仅变体名不同）由宏
 //! `arith_tm_exports!` 单模板生成，与 vm 侧 `tm_exports!` 先例同构；导出符号与

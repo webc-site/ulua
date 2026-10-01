@@ -17,5 +17,5 @@ use ulua_vm::{functions::lua_status, records::lua_state::LuaState};
 pub unsafe extern "C-unwind" fn lua_status(l: *mut LuaState) -> c_int {
   // Safety: 契约声明 `l` 为整个调用期间存活的合法 `LuaState`；`lua_status` 只读 `status`
   // 单字段、不解引用所指集合、不压弹栈、不触发 GC，本帧 `&*l` 重建即时结束借用窗口。
-  unsafe { lua_status::lua_status(&*l) }
+  lua_status::lua_status(unsafe { &*l })
 }

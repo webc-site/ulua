@@ -2,12 +2,15 @@
 //! 由 `functions/` 下各壳文件以一次宏调用实例化；`functions/mod.rs` 仅保留模块声明注册表。
 //! 每族宏的 `# Safety` 契约与 `// Safety:` 理由只在本文件书写一次，成员文件不得复述契约文本。
 
-/// 单参 `(l) -> c_int` 通用 C ABI 导出壳模板：71 个同形透传壳（`LuaState`/`LuaState`
-/// 为同一类型别名，仅源拼写差异；`lua_isthreadreset` 已随 vm 侧 B 档前移退役为
-/// 显式壳，见 `functions/lua_isthreadreset.rs`）单源生成，与 `lua_v_doarithimpl.rs` 的
-/// `arith_tm_exports!` 先例同构。与手写逐壳的差异仅在文本层：透传目标在 doc 契约中
-/// 以 `ulua_vm::functions::` 全路径书写；体内 `// Safety:` 理由注释转通用表述。
-/// 导出符号名、签名与 rustdoc 逐参数契约语义与逐字节手写版一致。
+/// 单参 `(l) -> c_int` 通用 C ABI 导出壳模板：55 个同形透传壳单源生成，与
+/// `lua_v_doarithimpl.rs` 的 `arith_tm_exports!` 先例同构（lua_b_* 族 16 壳与
+/// lua_gettop/lua_status/lua_isthreadreset/lua_singlestep/lua_c_allocationrate/
+/// lua_encodepointer/lua_g_hasnative/lua_g_onbreak/lua_l_buffinit/
+/// lua_pushinteger_64/lua_setthreaddata/lua_stackdepth/lua_a_pushvalue 已随 vm 侧
+/// 接收者前移退役为显式壳，见 `functions/lua_status.rs` 先例）。与手写逐壳的差异仅在
+/// 文本层：透传目标在 doc 契约中以 `ulua_vm::functions::` 全路径书写；体内
+/// `// Safety:` 理由注释转通用表述。导出符号名、签名与 rustdoc 逐参数契约语义与
+/// 逐字节手写版一致。
 macro_rules! capi_shell_l_cint {
   ($m:ident, $n:ident) => {
     #[doc = concat!(
@@ -26,8 +29,8 @@ macro_rules! capi_shell_l_cint {
   };
 }
 
-/// 同上 `(l) -> c_int` 导出壳模板之库函数变体：唯一差异是体内 `// Safety:` 理由
-/// 注释按 b26 校准保留「l 由 Lua VM 按库函数/闭包约定传入」的调用来源表述。
+/// 同上 `(l) -> c_int` 导出壳模板之库函数变体（现 55 枚）：唯一差异是体内 `// Safety:`
+/// 理由注释按 b26 校准保留「l 由 Lua VM 按库函数/闭包约定传入」的调用来源表述。
 macro_rules! capi_libfn_shell_l_cint {
   ($m:ident, $n:ident) => {
     #[doc = concat!(
@@ -120,9 +123,9 @@ macro_rules! capi_shell_tkeyval {
 }
 
 /// `(result: *mut c_void [, 值型参数...]) -> ()` userdata 直接字段写入壳模板：
-/// lua_userdatadirectfield_set* 系 5 文件 7 枚透传导出壳（nil / boolean / number /
-/// integer64 与 integer_64 / vector4 与 vector3）共用，导出符号名固定为 `ulua_` +
-/// 函数名。与手写逐壳的差异仅在文本层：体内 `// Safety:` 理由注释逐壳列举的值型参数
+/// lua_userdatadirectfield_set* 系 5 文件 6 枚透传导出壳（nil / boolean / number /
+/// integer_64 / vector4 与 vector3）共用，导出符号名固定为 `ulua_` + 函数名。
+/// 与手写逐壳的差异仅在文本层：体内 `// Safety:` 理由注释逐壳列举的值型参数
 /// 名（如「其余参数（b）为值型」）统一为不点名表述；`/// # Safety` 契约逐字不变。
 macro_rules! capi_shell_udfield_set {
   ($m:ident, $n:ident) => {
@@ -161,10 +164,12 @@ macro_rules! capi_shell_udfield_set {
   };
 }
 
-/// `(l [, 值型参数...]) -> ()` 压栈导出壳模板：lua_push{nil,boolean,number,integer_64,
-/// vector_lapi} 系 5 文件 6 枚透传导出壳（含 vector 的 4/3 分量两枚）共用，导出符号名
-/// 固定为 `ulua_` + 函数名。与手写逐壳的差异仅在文本层：体内 `// Safety:` 理由注释逐壳
-/// 列举的值型参数名（如「b 均为值型参数」）统一为不点名表述；`/// # Safety` 契约逐字不变。
+/// `(l [, 值型参数...]) -> ()` 压栈导出壳模板：lua_pushvector_lapi 的 4/3 分量两枚
+/// 透传导出壳共用，导出符号名固定为 `ulua_` + 函数名（lua_pushnil/lua_pushboolean/
+/// lua_pushnumber/lua_pushinteger_64 已随 vm 侧接收者前移退役为显式壳，见
+/// `functions/lua_pushinteger_64.rs`）。与手写逐壳的差异仅在文本层：体内
+/// `// Safety:` 理由注释逐壳列举的值型参数名（如「b 均为值型参数」）统一为不点名
+/// 表述；`/// # Safety` 契约逐字不变。
 macro_rules! capi_shell_push {
   ($m:ident, $n:ident) => {
     capi_shell_push!(@impl $m, $n, "");
@@ -234,15 +239,15 @@ macro_rules! capi_shell_check_opt {
 }
 
 /// `(l, <c_int 值型参数>) -> c_int`（以及无返回值 `unit` 尾缀形态）导出壳模板：
-/// coresumefinish / lua_g_hasnative / lua_g_isnative / lua_isstring / lua_type /
-/// str_find_aux（返回 c_int）与 lua_settop / lua_setuserdatametatable 共 8 枚
+/// coresumefinish / lua_g_isnative / lua_isstring / lua_type / str_find_aux
+/// （返回 c_int）与 lua_settop / lua_setuserdatametatable 共 7 枚
 /// 同形透传壳共用（第二参数名 r/level/idx/find/
 /// tag 与导出符号名以入参给出——`lua_g_isnative` 的符号是
 /// `ulua_luaG_isnative`，与函数名不同形，故符号一律走字面量，同
-/// capi_shell_tkeyval! 先例；`lua_singlestep` 已随 vm 侧 B 档前移退役为显式壳，
-/// 见 `functions/lua_singlestep.rs`）。与手写逐壳的差异仅在文本层：体内 `// Safety:` 理由
-/// 注释逐壳点名的参数（如「find 均为值型参数」）统一为不点名表述；`/// # Safety`
-/// 契约逐字不变。
+/// capi_shell_tkeyval! 先例；`lua_g_hasnative` 与 `lua_singlestep` 已随 vm 侧
+/// B 档前移退役为显式壳，见 `functions/lua_g_hasnative.rs`）。与手写逐壳的差异仅在
+/// 文本层：体内 `// Safety:` 理由注释逐壳点名的参数（如「find 均为值型参数」）统一为
+/// 不点名表述；`/// # Safety` 契约逐字不变。
 macro_rules! capi_shell_l_int {
   // (l, v: c_int) -> c_int
   ($m:ident, $n:ident, $sym:literal, $v:ident) => {

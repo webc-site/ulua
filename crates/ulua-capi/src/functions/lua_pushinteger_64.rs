@@ -14,5 +14,5 @@ use ulua_vm::{functions::lua_pushinteger_64, records::lua_state::LuaState};
 pub unsafe extern "C-unwind" fn lua_pushinteger_64(l: *mut LuaState, n: i64) {
   // Safety: 契约声明 `l` 为整个调用期间存活的合法 `LuaState`；本帧引用重建
   // 即时结束借用窗口。
-  unsafe { lua_pushinteger_64::lua_pushinteger_64(&mut *l, n) }
+  lua_pushinteger_64::lua_pushinteger_64(unsafe { &mut *l }, n)
 }

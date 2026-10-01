@@ -18,5 +18,5 @@ use ulua_vm::{functions::lua_stackdepth, records::lua_state::LuaState};
 pub unsafe extern "C-unwind" fn lua_stackdepth(l: *mut LuaState) -> c_int {
   // Safety: 契约声明 `l` 为整个调用期间存活的合法 `LuaState`；被调方仅读 `ci`/`base_ci`
   // 两个指针字段取差值、不解引用任何帧内容，本帧 `&*l` 重建即时结束借用窗口。
-  unsafe { lua_stackdepth::lua_stackdepth(&*l) }
+  lua_stackdepth::lua_stackdepth(unsafe { &*l })
 }
