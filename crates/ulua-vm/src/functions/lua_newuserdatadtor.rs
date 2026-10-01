@@ -1,9 +1,4 @@
-use core::{
-  ffi::c_void,
-  mem::size_of,
-  ptr::write_unaligned,
-  slice::from_raw_parts_mut,
-};
+use core::{ffi::c_void, mem::size_of, ptr::write_unaligned, slice::from_raw_parts_mut};
 
 use crate::{
   enums::lua_type::LuaType,

@@ -39,6 +39,12 @@ pub(crate) unsafe fn lua_u_freeudata(l: *mut LuaState, u: *mut Udata, page: *mut
       }
     }
 
-    lua_m_freegco(l, obj2gco!(u), sizeudata((*u).len as usize), (*u).memcat, page);
+    lua_m_freegco(
+      l,
+      obj2gco!(u),
+      sizeudata((*u).len as usize),
+      (*u).memcat,
+      page,
+    );
   }
 }

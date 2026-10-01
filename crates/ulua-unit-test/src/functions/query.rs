@@ -20,6 +20,7 @@ use crate::records::{find_nth_occurence_of::FindNthOccurenceOf, nth::Nth};
 /// - `src/methods/data_flow_graph_fixture_get_def.rs` / `..get_local_def.rs`：输出经
 ///   `cast_const` 直接喂 `ulua_analysis::DataFlowGraph::get_def(*const AstExpr)` 等
 ///   句柄形态下游（该签名为 crate 外消费面，不可在本 crate 内单方改掉）。
+///
 /// 三类用法逐点证实，改 `Option` 形态只会把裸指针转换下推到各消费点，违背 §2 收口方向。
 pub fn query<T: AstNodeClass>(node: impl AstNodePtr, nths: Vec<Nth>) -> *mut T {
   let mut node = node.as_ast_node();
