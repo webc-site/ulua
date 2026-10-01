@@ -620,14 +620,20 @@ impl VmFrame {
     unsafe { Self::view((*h).node, 1usize << (*h).lsizenode) }
   }
 
-  /// 表 `h` 哈希部分第 `slot` 节点的 (key 视图, 值槽)。key 域是 `TKey`（tt 与 next 打包
-  /// 于一字），与 `TValue` 共享偏移 0 的标签/值域（vm 侧 LuaNode 布局约定），故统一以
-  /// `TValue` 视图返回；调用点以 `is_string` 等谓词先行判定后再取载荷。
+  /// 表 `h` 哈希部分第 `slot` 节点的 (key 视图, 值槽) 引用对。key 域是 `TKey`（tt 与
+  /// next 打包于一字），与 `TValue` 共享偏移 0 的标签/值域（vm 侧 LuaNode 布局约定），
+  /// 故统一以 `TValue` 视图返回；调用点以 `is_string` 等谓词先行判定后再取载荷。
+  /// 两引用携带 `table_nodes` 切片的寿命（近似挂到 `&self`），不得跨可能重排节点
+  /// 数组的重入点持有（同 [`VmFrame::table_nodes`] 契约）；消费侧向 `*const TValue`
+  /// 形参的传递由 `&TValue` 的隐式强转完成，不再以裸地址出借。
   #[inline]
-  pub(crate) fn table_node(&self, h: *mut LuaTable, slot: usize) -> (*const TValue, *const TValue) {
+  pub(crate) fn table_node(&self, h: *mut LuaTable, slot: usize) -> (&TValue, &TValue) {
     // 槽号由调用点以 `nodemask8`（= 节点数 − 1）掩码，界内性由切片下标复核。
     let n = &self.table_nodes(h)[slot];
-    (from_ref(&n.key).cast(), from_ref(&n.val).cast())
+    // Safety: TKey 与 TValue 共享偏移 0 的标签/值域（vm 侧 LuaNode 布局约定），
+    // key 域按 TValue 引用视图读出与原 `from_ref().cast()` 逐位等价（仅改挂寿命）。
+    let key: &TValue = unsafe { &*from_ref(&n.key).cast() };
+    (key, &n.val)
   }
 
   define_vm_frame_accessor! {
