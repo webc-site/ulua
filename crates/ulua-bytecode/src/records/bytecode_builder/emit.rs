@@ -8,7 +8,7 @@ use ulua_common::{
   records::instruction::Instruction,
 };
 
-use super::{BytecodeBuilder, K_MAX_JUMP_DISTANCE, insn};
+use super::{BytecodeBuilder, K_MAX_JUMP_DISTANCE, insn, jumps::PcRangeRemap};
 use crate::records::jump::Jump;
 
 // ── abs-r139：并自 `methods/bytecode_builder_emit_abc.rs` ──
@@ -136,27 +136,32 @@ impl<'a> BytecodeBuilder<'a> {
 }
 
 // ── abs-r139：并自 `methods/bytecode_builder_undo_emit.rs` ──
+/// 弹出末条指令后对齐局部活跃区间（cpp BytecodeBuilder.cpp:551-585）：
+/// 起点落在被删 pc 的局部从未存在，整条移除；右开终点恰为被删 pc 则收缩一格。
+/// 返回 false 表示该条应被 retain_mut 剔除。
+fn trim_undone_local<L: PcRangeRemap>(local: &mut L, end_of_code: u32) -> bool {
+  let (startpc, endpc) = local.pc_range();
+  if *startpc == end_of_code {
+    return false;
+  }
+  *endpc -= (*endpc == end_of_code) as u32;
+  true
+}
+
 impl<'a> BytecodeBuilder<'a> {
   pub fn undo_emit(&mut self, op: LuauOpcode) {
     LUAU_ASSERT!(!self.insns.is_empty());
     LUAU_ASSERT!((self.insns[self.insns.len() - 1] & insn::OP_MASK) == op as u32);
 
     if LuauCompileUndoEmitAdjust.get() {
-      let insns_len = self.insns.len() as u32;
-      let adjust_local = |startpc: u32, endpc: &mut u32| {
-        let retain = startpc != insns_len;
-        if retain {
-          *endpc -= (*endpc == insns_len) as u32;
-        }
-        retain
-      };
-
+      // pop 前 len 即被删指令的 pc（DebugLocal/TypedLocal 的右开区间端点）
+      let end_of_code = self.insns.len() as u32;
       self
         .debug_locals
-        .retain_mut(|l| adjust_local(l.startpc, &mut l.endpc));
+        .retain_mut(|l| trim_undone_local(l, end_of_code));
       self
         .typed_locals
-        .retain_mut(|l| adjust_local(l.startpc, &mut l.endpc));
+        .retain_mut(|l| trim_undone_local(l, end_of_code));
     }
 
     self.insns.pop();
