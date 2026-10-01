@@ -1,19 +1,19 @@
--- 热层派发定向 conformance：本仓新增，cpp/tests/conformance 无对应源。
+-- 派发环 × 臂尾融合定向 conformance：本仓新增，cpp/tests/conformance 无对应源。
 --
--- 覆盖对象是 ulua-vm 的 become 尾调用热臂集合（见 crates/ulua-vm/src/functions/
--- luau_execute.rs 的 HOT_ARMS）：LOP_JUMP / JUMPIF / JUMPIFNOT / JUMPBACK / FORNPREP /
+-- 覆盖对象是 ulua-vm 派发环里被 fuse_succ_* 融合的热边所在的臂（见 crates/ulua-vm/
+-- src/functions/luau_execute.rs）：LOP_JUMP / JUMPIF / JUMPIFNOT / JUMPBACK / FORNPREP /
 -- FORNLOOP / GETTABLE / SETTABLE / GETTABLEN / SETTABLEN / NEWTABLE / ADD / SUB / MUL /
 -- ADDK / SUBK / MULK / MODK / LOAD* / MOVE / GETUPVAL / SETUPVAL。
 --
 -- 四件事逐条钉住：
---   1. 热臂内部抛错的展开：本仓用 panic 模拟 longjmp（install_lua_exception_panic_hook），
---      它必须能穿过 musttail/become 链被外层 pcall 接住；
+--   1. 融合臂内部抛错的展开：本仓用 panic 模拟 longjmp（install_lua_exception_panic_hook），
+--      它必须能穿过内联的 handler 与融合链被外层 pcall 接住；
 --   2. 抛错后状态完好：同一 state 继续跑热循环，结果不受污染（savedpc/base 回写纪律）；
---   3. 协程在热臂内 yield/resume，跨热臂的栈帧交接与错误传播正确；
+--   3. 协程在融合臂内 yield/resume，跨臂的栈帧交接与错误传播正确；
 --   4. 条件跳转的「真分支双尾」不改变语义：回边/退出、零次循环、负步长、NaN 边界都要对。
 --
 -- 断言在解释器与原生（LUAU_CODEGEN=1）两种模式下必须一致成立；钩子相关的段落拆到
--- hotdispatch_hook.luau（该 fixture 以 skipCodegen 运行，只走解释器热臂）。
+-- hotdispatch_hook.luau（该 fixture 以 skipCodegen 运行，只走解释器派发环）。
 
 --- 热循环基准：FORNPREP/FORNLOOP/ADDK/LOADN/JUMPBACK 一条链，返回值用于「抛错后状态自检」。
 local function hot_sum(n)
