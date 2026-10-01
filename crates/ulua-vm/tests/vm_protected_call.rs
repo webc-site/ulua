@@ -41,6 +41,7 @@ fn install_quiet_hook() {
   static ONCE: Once = Once::new();
   ONCE.call_once(|| {
     let prev = panic::take_hook();
+    // std 的 set_hook 签名强制 `Box<dyn Fn>`：测试冷路径一次性安装，§4 保留。
     panic::set_hook(Box::new(move |info| {
       let hit = |s: &str| s.starts_with(SYNTHETIC);
       let synthetic = info

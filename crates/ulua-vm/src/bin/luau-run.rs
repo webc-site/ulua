@@ -32,6 +32,8 @@ unsafe fn tolstring_lossy(l: *mut LuaState, idx: i32) -> Option<String> {
 }
 
 fn main() {
+  // 差分 oracle 驱动要求 stderr 只含结果：静音默认钩子。std 的 set_hook 签名
+  // 强制 `Box<dyn Fn>`（review.md §4 保留：进程级一次性冷路径，泛型无从替代）。
   set_hook(Box::new(|_| {}));
 
   let Some(path) = args().nth(1) else {
