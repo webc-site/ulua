@@ -4,12 +4,11 @@
 //! 的类形状被标 readonly，NEWCLASS 每次执行必须克隆后再改写（isopen/继承/
 //! 增员都只落在克隆上），不得写穿共享常量形状。
 
-use core::ptr::copy_nonoverlapping;
-
 use ulua_common::LUAU_ASSERT;
 
 use crate::{
   functions::{
+    c_slice, c_slice_mut,
     getcurrenv::getcurrenv,
     lua_h_clone::lua_h_clone,
     lua_r_newclass::{lua_r_newblankclass, lua_r_setupconstructor},
@@ -51,20 +50,22 @@ pub(crate) unsafe fn lua_r_cloneclass(
     (*newclass).memberstooffset = (*classobject).memberstooffset;
 
     (*newclass).offsettomember = luaM_newarray!(l, numallmembers, *mut tstring, (*newclass).memcat);
-    copy_nonoverlapping(
+    // 成员名数组克隆改切片对称形（镜像 r11-vmud/fef1e75）：源共享窗+目标独占窗
+    // 等长 copy_from_slice，界长由各自分配真值给出，越界由 UB 降 panic
+    c_slice_mut((*newclass).offsettomember, numallmembers as usize).copy_from_slice(c_slice(
       (*classobject).offsettomember,
-      (*newclass).offsettomember,
       numallmembers as usize,
-    );
+    ));
 
     (*newclass).numberofallmembers = numallmembers;
 
     (*newclass).staticmembers = luaM_newarray!(l, numstaticmembers, TValue, (*newclass).memcat);
-    copy_nonoverlapping(
+    // 静态成员值数组克隆同款切片对称形；TValue 为 #[derive(Clone, Copy)] POD，
+    // copy_from_slice 逐位即原 memcpy 语义
+    c_slice_mut((*newclass).staticmembers, numstaticmembers as usize).copy_from_slice(c_slice(
       (*classobject).staticmembers,
-      (*newclass).staticmembers,
       numstaticmembers as usize,
-    );
+    ));
 
     (*newclass).numberofinstancemembers = (*classobject).numberofinstancemembers;
 
