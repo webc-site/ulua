@@ -76,8 +76,8 @@ pub unsafe fn lua_newstate(f: LuaAlloc, ud: *mut c_void) -> *mut LuaState {
   g.ptrenckey = PTRENCKEY_INIT;
   g.strt.size = 0;
   g.strt.nuse = 0;
-  // 既有约定（review.md §2）：LG 堆对象 POD 字段初值 + GC 页/块链表与灰/弱链表头结构哨兵（strt.hash/gray/grayagain/weak/freepages/allpages/mt 等）；alloc 回调返回 null 的契约见上方 SAFETY 注（46-47 行），此处裸指针均作空/未挂链哨兵，勿改 Option
-  g.strt.hash = null_mut();
+  // 既有约定（review.md §2）：LG 堆对象 POD 字段初值 + GC 页/块链表与灰/弱链表头结构哨兵（gray/grayagain/weak/freepages/allpages/mt 等）；alloc 回调返回 null 的契约见上方 SAFETY 注（46-47 行），此处裸指针均作空/未挂链哨兵，勿改 Option；strt.hash 已按 §2 规则 1 终态改型为 Option<NonNull>（None=未分配，与 size==0 同现，读写契约收拢于 records/stringtable.rs 字段 doc）
+  g.strt.hash = None;
   g.pseudotemp.set_nil();
   g.registry.set_nil();
   g.gcstate = GCSPAUSE as u8;
