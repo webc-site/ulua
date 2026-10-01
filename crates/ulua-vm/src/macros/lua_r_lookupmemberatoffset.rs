@@ -9,12 +9,21 @@ macro_rules! luaR_lookupmemberatoffset {
     ulua_common::LUAU_ASSERT!(
       $crate::macros::lua_r_checkoffsetinbounds::luaR_checkoffsetinbounds!(inst, offset)
     );
-    if offset < (*(*inst).lclass).numberofinstancemembers {
-      (*inst).members.add(offset as usize)
+    // 镜像 r11-vmud/fef1e75 切片化形：两段裸 `.add` 改窗内定位，界长各取分配真值
+    // （实例段 = object.numberofmembers、静态段 = all-inst），越界由 UB 降 panic；
+    // 展开式与改前同样要求调用点处于 unsafe 上下文（裸指针解引用），unsafe 面零涨
+    let numberofinstancemembers = (*(*inst).lclass).numberofinstancemembers;
+    if offset < numberofinstancemembers {
+      ulua_common::functions::c_slice::c_slice_mut((*inst).members, (*inst).numberofmembers as usize)
+        [offset as usize..]
+        .as_mut_ptr()
     } else {
-      (*(*inst).lclass)
-        .staticmembers
-        .add((offset - (*(*inst).lclass).numberofinstancemembers) as usize)
+      let lclass = &*(*inst).lclass;
+      ulua_common::functions::c_slice::c_slice_mut(
+        lclass.staticmembers,
+        (lclass.numberofallmembers - numberofinstancemembers) as usize,
+      )[(offset - numberofinstancemembers) as usize..]
+        .as_mut_ptr()
     }
   }};
 }
