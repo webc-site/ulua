@@ -4,13 +4,15 @@ use crate::{
   type_aliases::lua_destructor::LuaDestructor,
 };
 
-/// # Safety
-///
-/// `l` 必须指向存活 `LuaState`，索引/长度/标签等参数满足各 API 注释约定，需压栈时栈顶预留由调用方保证。
-pub unsafe fn lua_getuserdatadtor(l: *mut LuaState, tag: i32) -> LuaDestructor {
+/// `lua_getuserdatadtor`（cpp/VM/src/lapi.cpp 同名）：读回 `tag` 登记的全局 userdata
+/// 析构函数。调用序契约（正确性，非内存安全；r16-v4 引用形前移，`l` 存活由
+/// `&LuaState` 类型承载）：`tag` 须 `< LUA_UTAG_LIMIT`（`api_check` debug 断言；
+/// release 越界由数组安全索引 panic 兜住，即调用方违约当场响亮失败，无静默错读）。
+/// 本体为纯读数：`gs_ref` 只读视图一句一借取回注册槽值，unsafe 消亡。
+pub fn lua_getuserdatadtor(l: &LuaState, tag: i32) -> LuaDestructor {
   api_check!(l, (tag as u32) < LUA_UTAG_LIMIT as u32);
 
-  // SAFETY: 契约保证 `l` 的 global 存活且 tag 落在 udatagc 注册数组界内，取回的析构指针为登记原值
-  // （r16-b1 收编：读数经 gs_ref 只读视图，同指针同值，见其契约）
-  unsafe { (*l).gs_ref().udatagc[tag as usize] }
+  // r16-b1 收编形制保持：读数经 gs_ref 只读视图，同指针同值（见其契约）；
+  // r16-v4：`(*l)` 裸解引用由 `&LuaState` 类型承载消亡，一句一借、视图不出本句
+  l.gs_ref().udatagc[tag as usize]
 }

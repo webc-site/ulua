@@ -4,14 +4,14 @@ use crate::{
   type_aliases::lua_destructor::LuaDestructor,
 };
 
-/// # Safety
-///
-/// `l` 必须指向存活 `LuaState`，索引/长度/标签等参数满足各 API 注释约定，需压栈时栈顶预留由调用方保证。
-pub unsafe fn lua_setuserdatadtor(l: *mut LuaState, tag: i32, dtor: LuaDestructor) {
+/// `lua_setuserdatadtor`（cpp/VM/src/lapi.cpp 同名）：把 `dtor` 登记为 `tag` 的全局
+/// userdata 析构。调用序契约（正确性，非内存安全；r16-v4 引用形前移，`l` 存活与
+/// 独占由 `&mut LuaState` 类型承载）：`tag` 须 `< LUA_UTAG_LIMIT`（`api_check` debug
+/// 断言；release 越界由数组安全索引 panic 兜住，即调用方违约当场响亮失败）；`dtor`
+/// 为可空合法函数指针（登记 API 语义，写入即覆注册槽）。
+pub fn lua_setuserdatadtor(l: &mut LuaState, tag: i32, dtor: LuaDestructor) {
   api_check!(l, (tag as u32) < LUA_UTAG_LIMIT as u32);
-  // SAFETY: 契约保证 `l` 的 global 存活、tag 在 udatagc 注册界内且 dtor 为可空合法函数指针，仅覆写注册槽
-  unsafe {
-    // r16-b3 收编：裸解引用写点改经 gs_mut 一句一借（登记 API，无重入穿插）
-    (*l).gs_mut().udatagc[tag as usize] = dtor;
-  }
+  // r16-b3 收编形制保持：写点经 gs_mut 一句一借（登记 API，无重入穿插）；
+  // r16-v4：外层 `(*l)` 裸解引用与包裹 unsafe 由 `&mut LuaState` 类型承载消亡
+  l.gs_mut().udatagc[tag as usize] = dtor;
 }

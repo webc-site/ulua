@@ -613,8 +613,9 @@ pub fn pushlightuserdatatagged(l: L, p: *mut c_void, tag: c_int) {
 
 /// `lua_lightuserdatatag(l, idx)`。
 pub fn lightuserdatatag(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活；`idx` 为 lightuserdata 槽（用例契约）。
-  unsafe { lua_lightuserdatatag(l, idx) }
+  // r16-v4：callee 已引用形 safe 化（纯读数），`state_ref` 判空重建 `&LuaState` 收口；
+  // `idx` 为 lightuserdata 槽由用例契约保证
+  lua_lightuserdatatag(state_ref(l), idx)
 }
 
 /// `lua_tolightuserdatatagged(l, idx, tag)`：tag 不符或非 lightuserdata 得 `None`。
@@ -637,8 +638,9 @@ pub fn setlightuserdataname(l: L, tag: c_int, name: &'static [u8]) {
 
 /// `lua_getlightuserdataname(l, tag)`：未注册得 `None`，否则为登记名原始字节。
 pub fn getlightuserdataname<'a>(l: L, tag: c_int) -> Option<&'a [u8]> {
-  // Safety: `l` 存活；`tag` 界内；返回 NULL 或登记时的 NUL 结尾静态串。
-  let p = unsafe { lua_getlightuserdataname(l, tag) };
+  // r16-v4：callee 已引用形 safe 化，`state_ref` 判空重建 `&LuaState` 收口；返回值
+  // 消费保持原样——null 判 + 登记名 NUL 结尾静态串字节窗（`tag` 界内由用例契约保证）
+  let p = lua_getlightuserdataname(state_ref(l), tag);
   if p.is_null() {
     None
   } else {
@@ -683,14 +685,16 @@ pub fn newuserdatataggedwithmetatable(l: L, sz: usize, tag: c_int) -> *mut c_voi
 
 /// `lua_userdatatag(l, idx)`。
 pub fn userdatatag(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活；`idx` 为 userdata 槽（用例契约）。
-  unsafe { lua_userdatatag(l, idx) }
+  // r16-v4：callee 已引用形 safe 化（纯读数），`state_ref` 判空重建 `&LuaState` 收口；
+  // `idx` 为 userdata 槽由用例契约保证
+  lua_userdatatag(state_ref(l), idx)
 }
 
 /// `lua_setuserdatatag(l, idx, tag)`。
 pub fn setuserdatatag(l: L, idx: c_int, tag: c_int) {
-  // Safety: `l` 存活；`idx` 为 userdata 槽、`tag` 界内（用例契约）。
-  unsafe { lua_setuserdatatag(l, idx, tag) }
+  // r16-v4：callee 已引用形 safe 化（写点为栈槽可达堆对象，取独占形），`state_mut`
+  // 判空重建收口；`idx` 为 userdata 槽、`tag` 界内由用例契约保证
+  lua_setuserdatatag(state_mut(l), idx, tag)
 }
 
 /// `lua_touserdatatagged(l, idx, tag)`：tag 不符得 NULL。
@@ -707,14 +711,15 @@ pub fn touserdata<'a>(l: L, idx: c_int) -> Option<&'a mut c_void> {
 
 /// `lua_getuserdatadtor(l, tag)`：读回 tag 注册的全局析构。
 pub fn getuserdatadtor(l: L, tag: i32) -> LuaDestructor {
-  // Safety: `l` 存活；`tag` 界内。
-  unsafe { lua_getuserdatadtor(l, tag) }
+  // r16-v4：callee 已引用形 safe 化，`state_ref` 判空重建 `&LuaState` 即收口
+  lua_getuserdatadtor(state_ref(l), tag)
 }
 
 /// `lua_setuserdatadtor(l, tag, dtor)`：注册 tag 全局析构。
 pub fn setuserdatadtor(l: L, tag: i32, dtor: LuaDestructor) {
-  // Safety: `l` 存活；`tag` 界内；`dtor` 遵循 Lua 析构 C 约定。
-  unsafe { lua_setuserdatadtor(l, tag, dtor) }
+  // r16-v4：callee 已引用形 safe 化，`state_mut` 判空重建独占 `&mut LuaState` 收口；
+  // `dtor` 遵循 Lua 析构 C 约定（用例桩函数自带）
+  lua_setuserdatadtor(state_mut(l), tag, dtor)
 }
 
 /// `lua_getuserdatametatable(l, tag)`：把 tag 全局元表压栈。
