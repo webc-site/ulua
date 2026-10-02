@@ -31,15 +31,30 @@ use crate::{
 #[inline(never)]
 pub unsafe fn luau_callhook(l: *mut LuaState, hook: LuaHook, userdata: Option<*mut c_void>) {
   // SAFETY: 契约保证 `l` 存活且 savestack! 保存的 base/top/ci_top 在 hook 重入调用后仍可恢复，块内不保留跨调用的裸栈指针
+  //
+  // r14-p3 逐点定性（w6d 口径保留面）：base 帧窗读数（入口偏移暂存参数）与三处
+  // 落笔（ci 帧基址拷贝、两处恢复落值）、ci 链与帧面现读读写（func/savedpc/top
+  // 各点）、stack_last 界缘断言、top 写面（restorestack 落值）与帧落笔行 RHS 顶读
+  //（resume_finish:92 同形单点保留判例，不翻案）均无既有门面，保留。收编两处形：
+  // 入口顶槽偏移暂存读数经 top_slot(0) 边界原语——读数位在 luaD_checkstack 扩容
+  // 之前，只换形不移位，暂存偏移仍对应旧栈；status 快照与其后比较转 status()
+  // 枚举谓词面——全部消费点均为 Yield/Break 判别值 ==/!= 谓词，non-repr 0x7f→Ok
+  // 兜底不改谓词真值（w1b resume_finish Break 谓词论证同款），未发现 `!=0`/
+  // `==Ok`/原值回传消费形，判据成立；三处 status 写面（清零与两处判别值写）无
+  // 门面，原样保留。
   unsafe {
     let base = savestack!(l, (*l).base);
-    let top = savestack!(l, (*l).top);
+    // 收编：顶槽偏移暂存读数经 top_slot(0) 边界原语（off=0 即顶槽，同址同值的
+    // 现读镜像；位点保持在扩容之前不动）
+    let top = savestack!(l, (*l).top_slot(0));
     let ci_top = savestack!(l, (*(*l).ci).top);
-    let status = (*l).status;
+    // 收编：状态快照落既有 status() 门面（本体单读 status 字段 + from_repr 兜底，
+    // 快照位点现读不变；谓词面转换见上方定性注记）
+    let status = (*l).status();
 
     // if the hook is called externally on a paused thread, we need to make
     // sure the paused thread can emit Luau calls
-    if status == LuaStatus::Yield as u8 || status == LuaStatus::Break as u8 {
+    if status == LuaStatus::Yield || status == LuaStatus::Break {
       (*l).status = 0;
       (*l).base = (*(*l).ci).base;
     }
@@ -97,11 +112,13 @@ pub unsafe fn luau_callhook(l: *mut LuaState, hook: LuaHook, userdata: Option<*m
     (*l).top = restorestack!(l, top);
 
     // note that we only restore the paused state if the hook hasn't yielded by itself
-    if status == LuaStatus::Yield as u8 && (*l).status != LuaStatus::Yield as u8 {
+    // 收编：快照与两处现读均转 status() 枚举谓词面——==/!= 判别值谓词在 non-repr
+    // →Ok 兜底两侧同真值（0x7f 既非 Yield 亦非 Break），钩子后再现读位点保持现读场域
+    if status == LuaStatus::Yield && (*l).status() != LuaStatus::Yield {
       (*l).status = LuaStatus::Yield as u8;
       (*l).base = restorestack!(l, base);
-    } else if status == LuaStatus::Break as u8 {
-      LUAU_ASSERT!((*l).status != LuaStatus::Break as u8); // hook shouldn't break again
+    } else if status == LuaStatus::Break {
+      LUAU_ASSERT!((*l).status() != LuaStatus::Break); // hook shouldn't break again
 
       (*l).status = LuaStatus::Break as u8;
       (*l).base = restorestack!(l, base);
