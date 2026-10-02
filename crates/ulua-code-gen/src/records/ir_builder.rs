@@ -554,6 +554,11 @@ impl IrBuilder {
     IrOp::ir_op_ir_op_kind_u32(IrOpKind::Inst, index)
   }
 
+  /// J1 Phase 2b：设置 TSFB 观测类型提示（暖重编译入口在 build_function_ir 前调用）。
+  pub fn set_type_hints(&mut self, hints: Vec<(u32, u8, u8)>) {
+    self.function.type_hints = hints;
+  }
+
   pub fn ir_builder_ir_builder(host_hooks: &HostIrHooks) -> Self {
     Self {
       host_hooks: host_hooks as *const HostIrHooks,

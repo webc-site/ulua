@@ -1,6 +1,7 @@
 use core::ptr::null_mut;
 
 use ulua_common::fint::CodegenHeuristicsInstructionLimit;
+use ulua_vm::functions::type_feedback::tsfb_hints_for;
 use ulua_vm::records::proto::Proto;
 
 use crate::{
@@ -69,6 +70,12 @@ pub unsafe fn create_native_function_x_64(
   // 本函数的 unsafe 只在三个被调边界（IR 构建/降级/execdata 生成），均以上层 CodeGen
   // 保证的「proto 存活 + build/helpers/total 活借用」为共同前提，逐处就地标注。
   let mut ir = IrBuilder::ir_builder_ir_builder(&options.hooks);
+
+  // J1 Phase 2b：暖重编译时从上一版 execdata 的 TSFB 侧表读取观测类型提示
+  // （GETTABLEKS 站点：pc → (B 寄存器, 观测 tag)），注入分析器做 ANY 细化。
+  if options.force_recompile && !unsafe { (*proto).execdata.is_null() } {
+    ir.set_type_hints(unsafe { tsfb_hints_for(proto) });
+  }
   // Safety: proto 为待编译的活 X64 L 函数 Proto（调用方 CodeGen 保证），IR 构建期只读。
   unsafe { ir.build_function_ir(proto) };
 
@@ -111,6 +118,12 @@ pub unsafe fn create_native_function_a_64(
 ) -> Result<NativeProtoExecDataPtr, CodeGenCompilationResult> {
   // 与 x_64 分支同构：unsafe 只在三个被调边界，共用「proto 存活 + 活借用」前提。
   let mut ir = IrBuilder::ir_builder_ir_builder(&options.hooks);
+
+  // J1 Phase 2b：暖重编译时从上一版 execdata 的 TSFB 侧表读取观测类型提示
+  // （GETTABLEKS 站点：pc → (B 寄存器, 观测 tag)），注入分析器做 ANY 细化。
+  if options.force_recompile && !unsafe { (*proto).execdata.is_null() } {
+    ir.set_type_hints(unsafe { tsfb_hints_for(proto) });
+  }
   // Safety: proto 为待编译的活 A64 L 函数 Proto（调用方 CodeGen 保证），IR 构建期只读。
   unsafe { ir.build_function_ir(proto) };
 

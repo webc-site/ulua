@@ -15,6 +15,8 @@ use std::sync::{Mutex, OnceLock};
 
 use crate::records::proto::Proto;
 use crate::type_aliases::instruction::Instruction;
+use ulua_common::enums::luau_opcode::LuauOpcode;
+
 use crate::type_aliases::t_value::TValue;
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
@@ -310,4 +312,46 @@ pub fn tsfb_over_threshold(min_hits: u32, min_share: f64) -> Vec<(usize, u32, u8
     }
   }
   out
+}
+
+
+/// J1 Phase 2b：从 proto 当前 execdata 的 TSFB 侧表产出类型提示
+/// （GETTABLEKS 站点：pc → (B 寄存器 = 接收者, 观测 tag)）。
+/// 暖重编译路径消费：hint 注入分析器细化 ANY → 观测 tag。
+///
+/// # Safety
+/// `proto` 须为存活 Proto 且其 `execdata`（若非空）为本模块布局的堆分配数据区；
+/// `code` 界内可读。
+pub unsafe fn tsfb_hints_for(proto: *const Proto) -> Vec<(u32, u8, u8)> {
+  // SAFETY: 契约保证 proto 存活、execdata/code 为同址字段读；locate_tsfb 界内扫描。
+  unsafe {
+  let mut out = Vec::new();
+  let d = (*proto).execdata;
+  if d.is_null() {
+    return out;
+  }
+  let sc = (*proto).sizecode as usize;
+  let data = d as *const u32;
+  let (_, nslots) = match locate_tsfb(data, sc, u32::MAX) {
+    Some(x) => x,
+    None => return out,
+  };
+  let code = (*proto).code;
+  for s in 0..nslots {
+    let pc = *data.add(sc + 2 + 2 * s);
+    let st = *data.add(sc + 3 + 2 * s);
+    let tag = (st & 0xff) as u8;
+    if pc as usize >= sc {
+      continue;
+    }
+    let insn = *code.add(pc as usize);
+    let op = (insn & 0xff) as u8;
+    // GETTABLEKS：B 即接收者寄存器
+    if op == LuauOpcode::LopGettableks as u8 {
+      let reg_b = ((insn >> 8) & 0xff) as u8;
+      out.push((pc, reg_b, tag));
+    }
+  }
+  out
+  }
 }
