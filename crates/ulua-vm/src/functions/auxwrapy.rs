@@ -16,8 +16,8 @@ use crate::{
 /// cpp VM/src/lcorolib.cpp:292
 pub unsafe fn auxwrapy(l: *mut LuaState) -> i32 {
   unsafe {
-    let co =
-      lua_tothread(l, lua_upvalueindex(1)).expect("cowrap 建立 upvalue1 为 thread，契约保证非空");
+    let co = lua_tothread(&mut *l, lua_upvalueindex(1))
+      .expect("cowrap 建立 upvalue1 为 thread，契约保证非空");
     // r16-b2 收编：顶-基槽距读数落既有 get_top 门面——其本体 slot_distance(base, top)
     // 即被替代式 `top.offset_from(base) as i32` 的同址同宽镜像（现读位点不变）；
     // isize→i32 折形在现域无截差（协程栈槽距受 LUAI_MAXSTACK 约束、远小于 i32::MAX）

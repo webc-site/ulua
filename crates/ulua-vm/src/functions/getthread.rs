@@ -13,7 +13,7 @@ pub(crate) unsafe fn getthread(l: *mut LuaState) -> (*mut LuaState, i32) {
     // `lua_isthread!` 已证其为 thread 值，故必为 `Some`。
     unsafe {
       (
-        lua_tothread(l, 1).expect("lua_isthread! 已证槽 1 为 thread"),
+        lua_tothread(&mut *l, 1).expect("lua_isthread! 已证槽 1 为 thread"),
         1,
       )
     }

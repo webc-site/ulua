@@ -15,7 +15,7 @@ use crate::{
 /// cpp/VM/src/lcorolib.cpp:312 auxwrapcont。
 pub(crate) unsafe fn auxwrapcont(l: *mut LuaState, _status: i32) -> i32 {
   unsafe {
-    let co = lua_tothread(l, lua_upvalueindex(1))
+    let co = lua_tothread(&mut *l, lua_upvalueindex(1))
       .expect("auxwrapy 建立续体时 upvalue1 为 thread，契约保证非空");
 
     if (*co).status == LuaStatus::Break as u8 {

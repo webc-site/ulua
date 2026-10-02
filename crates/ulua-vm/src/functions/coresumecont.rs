@@ -14,7 +14,7 @@ use crate::{
 /// `coresumefinish` 可 GC/可抛错。cpp/VM/src/lcorolib.cpp:239 coresumecont。
 pub(crate) unsafe fn coresumecont(l: *mut LuaState, _status: i32) -> i32 {
   unsafe {
-    let co = lua_tothread(l, 1);
+    let co = lua_tothread(&mut *l, 1);
     (*l).arg_expected(co.is_some(), 1, "thread");
     let co = co.expect("arg_expected 已证 co 非空");
 

@@ -188,8 +188,9 @@ impl LuaState {
   /// 取 `idx` 槽协程指针；非 thread 返回 `None`（可空以 `Option` 表达，不设 null 哨兵，§2）。
   #[inline(always)]
   pub(crate) fn to_thread(&self, idx: i32) -> Option<*mut LuaState> {
-    // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_tothread(self.read_ptr(), idx) }
+    // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），引用重建
+    // 窗止于本调用语句；被调方 `# Safety` 其余前提由调用方按文档保证。
+    unsafe { lua_tothread(&mut *self.read_ptr(), idx) }
   }
 
   #[inline(always)]
