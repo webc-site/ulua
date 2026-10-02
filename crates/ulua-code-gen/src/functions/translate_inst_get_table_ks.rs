@@ -7,11 +7,13 @@ use ulua_vm::enums::lua_type::LuaType;
 use crate::{
   enums::ir_cmd::IrCmd,
   functions::{
-    bytecode_types::is_userdata_bytecode_type, check_table_tag_guard::check_table_tag_guard,
-    emit::x_64::check_tag_exit, proto_views::{string_constant, string_constant_hash},
+    bytecode_types::is_userdata_bytecode_type,
+    check_table_tag_guard::check_table_tag_guard,
+    emit::x_64::check_tag_exit,
+    proto_views::{string_constant, string_constant_hash},
   },
-  records::{fallback_stream_scope::FallbackStreamScope, ir_builder::IrBuilder},
   macros::codegen_assert::CODEGEN_ASSERT,
+  records::{fallback_stream_scope::FallbackStreamScope, ir_builder::IrBuilder},
   type_aliases::ir::Instruction,
 };
 

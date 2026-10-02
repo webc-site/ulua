@@ -38,7 +38,6 @@ use crate::{
   enums::{lua_type::LuaType, tms::TMS, value_view::ValueView},
   functions::{
     copy_results_pop_frame::pop_frame_copy_results, lua_d_call::lua_d_call,
-    type_feedback,
     lua_d_check_cstack::lua_d_check_cstack, lua_d_performcally::lua_d_performcally,
     lua_f_close::lua_f_close, lua_f_findupval::lua_f_findupval,
     lua_f_new_lclosure::lua_f_new_lclosure, lua_f_recordhit::lua_f_recordhit,
@@ -55,7 +54,7 @@ use crate::{
     lua_v_settable::lua_v_settable, lua_v_strcmp::lua_v_strcmp, lua_v_tryfunc_tm::lua_v_tryfunc_tm,
     luai_numidiv::luai_numidiv, luai_nummod::luai_nummod, luai_veceq::luai_veceq,
     luau_callhook::luau_callhook, luau_setupcci::luau_setupcci, luau_skipstep::luau_skipstep,
-    set_iterator_done::set_iterator_done, set_iterator_index::set_iterator_index,
+    set_iterator_done::set_iterator_done, set_iterator_index::set_iterator_index, type_feedback,
   },
   macros::{
     classvalue::classvalue,

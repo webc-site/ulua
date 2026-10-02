@@ -13,12 +13,12 @@ use std::{env::args, fs::File, io::Read, panic::set_hook, process::exit};
 use ulua_common::records::f_value::set_luau_bool_flags;
 #[cfg(feature = "vm-opcount")]
 use ulua_vm::functions::op_count;
-use ulua_vm::functions::type_feedback;
 use ulua_vm::{
   enums::lua_type::LuaType,
   functions::{
     lua_l_newstate::lua_l_newstate, lua_l_openlibs::lua_l_openlibs, lua_newthread::lua_newthread,
     lua_tolstring::lua_tolstring_ref, lua_tonumberx::lua_tonumberx, luau_load::luau_load,
+    type_feedback,
   },
   records::lua_state::LuaState,
 };

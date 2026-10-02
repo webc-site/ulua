@@ -26,8 +26,7 @@ pub unsafe fn create_native_proto_exec_data(
   let tsfb = unsafe { build_tsfb_table(proto, sizecode) };
 
   // extra 总数含 TSFB 侧表与自描述尾字（表长）
-  let extra_data_count =
-    ir.function.extra_native_data.len() as u32 + tsfb.len() as u32 + 1;
+  let extra_data_count = ir.function.extra_native_data.len() as u32 + tsfb.len() as u32 + 1;
   let mut native_exec_data = create_native_proto_exec_data_u32_u32(sizecode, extra_data_count);
 
   let inst_target = ir.function.entry_location;
@@ -92,7 +91,6 @@ pub unsafe fn create_native_proto_exec_data(
 
   native_exec_data
 }
-
 
 /// J1 Phase 2a：扫描 proto 字节码，收集热点类别站点（升序 pc），产出 TSFB 侧表。
 /// 布局（u32 单位）：`[TSFB_MAGIC, nslots, (pc, state)×nslots]`，state = hits<<8 | last_tag。

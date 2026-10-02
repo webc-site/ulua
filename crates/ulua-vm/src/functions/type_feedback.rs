@@ -7,17 +7,22 @@
 //! 成本模型：未启用时 `enabled()` 为一次可预测分支（基准零影响）；启用态走
 //! `record_slow`（哈希 + Mutex），只用于诊断运行，不进基准口径。
 
-use std::cmp::Reverse;
-use std::collections::HashMap;
-use std::env;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Mutex, OnceLock};
+use std::{
+  cmp::Reverse,
+  collections::HashMap,
+  env,
+  sync::{
+    Mutex, OnceLock,
+    atomic::{AtomicBool, Ordering},
+  },
+};
 
-use crate::records::proto::Proto;
-use crate::type_aliases::instruction::Instruction;
 use ulua_common::enums::luau_opcode::LuauOpcode;
 
-use crate::type_aliases::t_value::TValue;
+use crate::{
+  records::proto::Proto,
+  type_aliases::{instruction::Instruction, t_value::TValue},
+};
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
 
@@ -31,7 +36,11 @@ struct Site {
 }
 
 impl Site {
-  const ZERO: Site = Site { count: 0, ta: [0; 256], tb: [0; 256] };
+  const ZERO: Site = Site {
+    count: 0,
+    ta: [0; 256],
+    tb: [0; 256],
+  };
 }
 
 fn table() -> &'static Mutex<HashMap<u64, Site>> {
@@ -63,13 +72,7 @@ fn mix(mut h: u64) -> u64 {
 /// 环头单点上报：`proto`/`pc` 定位站点，`ta`/`tb` 为 A/B 槽 tag（LuaType as u8）。
 /// 无返回值、无 panic 面：表锁毒化只影响读数不影响执行。
 #[inline(always)]
-pub fn record(
-  proto: *const Proto,
-  pc: *const Instruction,
-  op: u8,
-  ta: u8,
-  tb: u8,
-) {
+pub fn record(proto: *const Proto, pc: *const Instruction, op: u8, ta: u8, tb: u8) {
   if !ENABLED.load(Ordering::Relaxed) {
     return;
   }
@@ -102,7 +105,8 @@ pub fn dump() -> String {
         }
       }
       idx.sort_unstable_by_key(|x| Reverse(x.0));
-      idx.iter()
+      idx
+        .iter()
         .take(3)
         .map(|(c, i)| format!("{i}:{c}"))
         .collect::<Vec<_>>()
@@ -129,7 +133,6 @@ pub fn record_tvs(
 ) {
   record(proto, pc, op, ta_tv.tt as u8, tb_tv.tt as u8);
 }
-
 
 // ---------------------------------------------------------------------------
 // J1 Phase 2a：native execdata TSFB 侧表（布局由 codegen 侧
@@ -214,49 +217,52 @@ pub unsafe fn tsfb_bump(proto: *const Proto, pc_off: u32, tag: u8) {
   // SAFETY: 契约保证 proto 存活；execdata/sizecode 为同址字段读，state 写落在
   // 分配的 extra 区界内（locate_tsfb 已校验表自洽）。
   unsafe {
-  let d = (*proto).execdata;
-  if d.is_null() {
-    return;
-  }
-  let sc = (*proto).sizecode as usize;
-  let data = d as *const u32;
-  // TSFB 表位置自描述扫描（不依赖 header 偏移）：extra 区自 data[sizecode] 起，
-  // 命中 MAGIC 且 (nslots, pc 升序≤sizecode) 自洽即认定。诊断路径，有界扫描可接受。
-  let (tsfb0, nslots) = match locate_tsfb(data, sc, pc_off) {
-    Some((t, n)) => (t, n),
-    None => return,
-  };
-  let base = data.add(tsfb0 + 2);
-  // pc 升序二分
-  let (mut lo, mut hi) = (0usize, nslots);
-  while lo < hi {
-    let mid = (lo + hi) / 2;
-    if *base.add(2 * mid) < pc_off {
-      lo = mid + 1;
-    } else {
-      hi = mid;
+    let d = (*proto).execdata;
+    if d.is_null() {
+      return;
     }
-  }
-  if lo == nslots || *base.add(2 * lo) != pc_off {
-    return;
-  }
-  let state_ptr = base.add(2 * lo + 1) as *mut u32;
-  let st = *state_ptr;
-  let hits = (st >> 8).min(0xff_ffff);
-  *state_ptr = ((hits + 1) << 8) | tag as u32;
+    let sc = (*proto).sizecode as usize;
+    let data = d as *const u32;
+    // TSFB 表位置自描述扫描（不依赖 header 偏移）：extra 区自 data[sizecode] 起，
+    // 命中 MAGIC 且 (nslots, pc 升序≤sizecode) 自洽即认定。诊断路径，有界扫描可接受。
+    let (tsfb0, nslots) = match locate_tsfb(data, sc, pc_off) {
+      Some((t, n)) => (t, n),
+      None => return,
+    };
+    let base = data.add(tsfb0 + 2);
+    // pc 升序二分
+    let (mut lo, mut hi) = (0usize, nslots);
+    while lo < hi {
+      let mid = (lo + hi) / 2;
+      if *base.add(2 * mid) < pc_off {
+        lo = mid + 1;
+      } else {
+        hi = mid;
+      }
+    }
+    if lo == nslots || *base.add(2 * lo) != pc_off {
+      return;
+    }
+    let state_ptr = base.add(2 * lo + 1) as *mut u32;
+    let st = *state_ptr;
+    let hits = (st >> 8).min(0xff_ffff);
+    *state_ptr = ((hits + 1) << 8) | tag as u32;
 
-  {
-    let mut ps = tsfb_protos().lock().unwrap_or_else(|e| e.into_inner());
-    if !ps.contains(&(proto as usize)) {
-      ps.push(proto as usize);
+    {
+      let mut ps = tsfb_protos().lock().unwrap_or_else(|e| e.into_inner());
+      if !ps.contains(&(proto as usize)) {
+        ps.push(proto as usize);
+      }
     }
-  }
   }
 }
 
 /// TSFB 读数：各 proto 各站点的 pc/hits/last-tag 概览。
 pub fn tsfb_dump() -> String {
-  let protos = tsfb_protos().lock().unwrap_or_else(|e| e.into_inner()).clone();
+  let protos = tsfb_protos()
+    .lock()
+    .unwrap_or_else(|e| e.into_inner())
+    .clone();
   eprintln!("[tsfb-dump] registered protos: {}", protos.len());
   let mut out = String::new();
   for (i, p) in protos.iter().enumerate() {
@@ -287,11 +293,13 @@ pub fn tsfb_dump() -> String {
   out
 }
 
-
 /// J1 Phase 2b 选点入口：遍历已注册 TSFB 表，返回 hits ≥ `min_hits` 且
 /// 末 tag 占比 ≥ `min_share` 的站点 `(proto, pc, tag)`——暖重编译/特化的候选集。
 pub fn tsfb_over_threshold(min_hits: u32, min_share: f64) -> Vec<(usize, u32, u8)> {
-  let protos = tsfb_protos().lock().unwrap_or_else(|e| e.into_inner()).clone();
+  let protos = tsfb_protos()
+    .lock()
+    .unwrap_or_else(|e| e.into_inner())
+    .clone();
   let mut out = Vec::new();
   for p in protos.iter() {
     let proto = *p as *const Proto;
@@ -321,7 +329,6 @@ pub fn tsfb_over_threshold(min_hits: u32, min_share: f64) -> Vec<(usize, u32, u8
   out
 }
 
-
 /// J1 Phase 2b：从 proto 当前 execdata 的 TSFB 侧表产出类型提示
 /// （GETTABLEKS 站点：pc → (B 寄存器 = 接收者, 观测 tag)）。
 /// 暖重编译路径消费：hint 注入分析器细化 ANY → 观测 tag。
@@ -332,33 +339,33 @@ pub fn tsfb_over_threshold(min_hits: u32, min_share: f64) -> Vec<(usize, u32, u8
 pub unsafe fn tsfb_hints_for(proto: *const Proto) -> Vec<(u32, u8, u8)> {
   // SAFETY: 契约保证 proto 存活、execdata/code 为同址字段读；locate_tsfb 界内扫描。
   unsafe {
-  let mut out = Vec::new();
-  let d = (*proto).execdata;
-  if d.is_null() {
-    return out;
-  }
-  let sc = (*proto).sizecode as usize;
-  let data = d as *const u32;
-  let (_, nslots) = match locate_tsfb(data, sc, u32::MAX) {
-    Some(x) => x,
-    None => return out,
-  };
-  let code = (*proto).code;
-  for s in 0..nslots {
-    let pc = *data.add(sc + 2 + 2 * s);
-    let st = *data.add(sc + 3 + 2 * s);
-    let tag = (st & 0xff) as u8;
-    if pc as usize >= sc {
-      continue;
+    let mut out = Vec::new();
+    let d = (*proto).execdata;
+    if d.is_null() {
+      return out;
     }
-    let insn = *code.add(pc as usize);
-    let op = (insn & 0xff) as u8;
-    // GETTABLEKS：B 即接收者寄存器
-    if op == LuauOpcode::LopGettableks as u8 {
-      let reg_b = ((insn >> 8) & 0xff) as u8;
-      out.push((pc, reg_b, tag));
+    let sc = (*proto).sizecode as usize;
+    let data = d as *const u32;
+    let (_, nslots) = match locate_tsfb(data, sc, u32::MAX) {
+      Some(x) => x,
+      None => return out,
+    };
+    let code = (*proto).code;
+    for s in 0..nslots {
+      let pc = *data.add(sc + 2 + 2 * s);
+      let st = *data.add(sc + 3 + 2 * s);
+      let tag = (st & 0xff) as u8;
+      if pc as usize >= sc {
+        continue;
+      }
+      let insn = *code.add(pc as usize);
+      let op = (insn & 0xff) as u8;
+      // GETTABLEKS：B 即接收者寄存器
+      if op == LuauOpcode::LopGettableks as u8 {
+        let reg_b = ((insn >> 8) & 0xff) as u8;
+        out.push((pc, reg_b, tag));
+      }
     }
-  }
-  out
+    out
   }
 }

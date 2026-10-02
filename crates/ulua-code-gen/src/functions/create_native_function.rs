@@ -1,8 +1,7 @@
 use core::ptr::null_mut;
 
 use ulua_common::fint::CodegenHeuristicsInstructionLimit;
-use ulua_vm::functions::type_feedback::tsfb_hints_for;
-use ulua_vm::records::proto::Proto;
+use ulua_vm::{functions::type_feedback::tsfb_hints_for, records::proto::Proto};
 
 use crate::{
   enums::{

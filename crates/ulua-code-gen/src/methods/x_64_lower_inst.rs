@@ -4023,10 +4023,9 @@ impl IrLoweringX64 {
             (offset_of!(LuaTable, metatable) as i32),
           ),
         );
-        self.build_mut().test(
-          OperandX64::reg(tmp.reg),
-          OperandX64::reg(tmp.reg),
-        );
+        self
+          .build_mut()
+          .test(OperandX64::reg(tmp.reg), OperandX64::reg(tmp.reg));
         self.build_mut().jcc(ConditionX64::Zero, &mut fast);
 
         CODEGEN_ASSERT!((TMS::TmNewIndex as u32) < 8);
@@ -4041,9 +4040,7 @@ impl IrLoweringX64 {
           OperandX64::imm(1_i32 << (TMS::TmNewIndex as i32)),
         );
         let label = self.get_target_label(inst.op(1), index, &mut fresh);
-        self.with_target_label(label, |s, l| {
-          s.build_mut().jcc(ConditionX64::Zero, l)
-        });
+        self.with_target_label(label, |s, l| s.build_mut().jcc(ConditionX64::Zero, l));
         self.build_mut().set_label(&mut fast);
         self.finalize_target_label(inst.op(1), index, &mut fresh);
       }

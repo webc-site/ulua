@@ -2930,10 +2930,7 @@ impl IrLoweringA64 {
           self.build_mut().cbz(temp, &mut fast);
 
           // temp 持 metatable 指针：读其 tmcache 缺席位
-          self.emit_ldrb(
-            tempw,
-            mem(temp, (offset_of!(LuaTable, tmcache) as i32)),
-          );
+          self.emit_ldrb(tempw, mem(temp, (offset_of!(LuaTable, tmcache) as i32)));
           CODEGEN_ASSERT!((TMS::TmNewIndex as u32) < 8);
           let target = self.get_target_label(inst.op(1), index, &mut fresh);
           self.with_target_label(target, |s, l| {
@@ -3100,19 +3097,11 @@ impl IrLoweringA64 {
 
           // 哨兵表（t->node == dummynode）→ 不可插：插入需 rehash 换发实向量
           let hoist_tbl = self.reg_op(inst.op(1));
-          self.emit_ldr(
-            temp1,
-            mem(hoist_tbl, (offset_of!(LuaTable, node) as i32)),
-          );
-          self.emit_ldr(
-            temp2,
-            native_ctx(offset_of!(NativeContext, dummynode)),
-          );
+          self.emit_ldr(temp1, mem(hoist_tbl, (offset_of!(LuaTable, node) as i32)));
+          self.emit_ldr(temp2, native_ctx(offset_of!(NativeContext, dummynode)));
           self.build_mut().cmp_rr(temp1, temp2);
           let target = self.get_target_label(inst.op(2), index, &mut fresh);
-          self.with_target_label(target, |s, l| {
-            s.build_mut().b_cond(ConditionA64::Equal, l)
-          });
+          self.with_target_label(target, |s, l| s.build_mut().b_cond(ConditionA64::Equal, l));
 
           // 主位被占（val.tt != NIL）→ 不可插：cpp 走 freepos/碰撞链
           // temp1 的 node 比较已完成，复用为装载寄存器
@@ -3136,10 +3125,9 @@ impl IrLoweringA64 {
           // t->tmcache = 0）——新键插入作废本表作为 metatable 的元方法缺席缓存。
           // 单字节写（tmcache 与 readonly/safeenv/lsizenode/nodemask8 同处一个字）。
           let hoist_tbl = self.reg_op(inst.op(2));
-          self.build_mut().strb(
-            WZR,
-            mem(hoist_tbl, (offset_of!(LuaTable, tmcache) as i32)),
-          );
+          self
+            .build_mut()
+            .strb(WZR, mem(hoist_tbl, (offset_of!(LuaTable, tmcache) as i32)));
 
           // cpp `setnodekey` 三件套——key.value 拷自 k[aux].value（8B）、
           // extra 清零、tt=LUA_TSTRING 且 next 位随整字归零。
@@ -3183,7 +3171,9 @@ impl IrLoweringA64 {
             ),
           );
           self.build_mut().and_rr_u32(tempw, tempw, 0xFFFFFFF0);
-          self.build_mut().orr_rr_u32(tempw, tempw, LUA_TSTRING as u32);
+          self
+            .build_mut()
+            .orr_rr_u32(tempw, tempw, LUA_TSTRING as u32);
           let hoist_tt = self.reg_op(inst.op(0));
           self.emit_str(
             tempw,

@@ -6,8 +6,8 @@ use ulua_common::{
   },
 };
 use ulua_vm::{
-  functions::type_feedback::tsfb_bump,
   enums::tms::TMS,
+  functions::type_feedback::tsfb_bump,
   type_aliases::{stk_id::StkId, t_value::TValue},
 };
 
