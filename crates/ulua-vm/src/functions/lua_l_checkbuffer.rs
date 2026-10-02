@@ -31,7 +31,12 @@ pub fn lua_l_checkbuffer_ref<'a>(l: &mut LuaState, narg: i32) -> &'a mut [u8] {
 
 /// C-ABI 镜像垫片：把 [`lua_l_checkbuffer_ref`] 的切片折回 laux 约定的
 /// `(void*, size_t* len)` 出参形——成功路径写出数据块长度，`len` 可为 null。
-/// 仅供跨 crate / 测试门面等既有 C 形消费点使用；T9 收口时随簇 B 消费方迁移删除。
+///
+/// r12 T9 裁决保留：ulua-vm 内消费面实测为零（簇 B 已全迁 [`lua_l_checkbuffer_ref`]），
+/// ulua-capi 亦无引用；唯一真实消费方是 ulua-conformance 测试门面（safe_api.rs 的
+/// `l_checkbuffer_ptr`/`l_checkbuffer_len`，api.rs 据此断言与 `lua_tobuffer` 的指针
+/// 同一性）——即 cpp `luaL_checkbuffer`（laux.cpp:150）镜像契约的验证面。函数体保持
+/// 对 ref 核心的一行委托 + 出参折回（折回即本垫片存在的全部理由）。
 ///
 /// # Safety
 /// C-ABI 镜像垫片（裸指针出参/入参为 C 约定面，按 review.md §2 保留 unsafe 形）：
