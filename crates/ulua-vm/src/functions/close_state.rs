@@ -40,7 +40,7 @@ pub(crate) unsafe fn close_state(l: *mut LuaState) {
       LUAU_ASSERT!(bytes == 0);
     }
 
-    if let Some(close) = (*(*l).global).ecb.close {
+    if let Some(close) = (*l).gs_ref().ecb.close {
       close(l);
     }
 

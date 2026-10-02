@@ -66,7 +66,7 @@ pub(crate) unsafe fn lua_f_freeproto(l: *mut LuaState, f: *mut Proto, page: *mut
     }
 
     if !p.execdata.is_null()
-      && let Some(destroy) = (*(*l).global).ecb.destroy
+      && let Some(destroy) = (*l).gs_ref().ecb.destroy
     {
       destroy(l, f);
     }

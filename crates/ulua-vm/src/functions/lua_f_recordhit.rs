@@ -24,7 +24,7 @@ pub unsafe fn lua_f_recordhit(
   // SAFETY: 契约保证 caller/target 为存活闭包且 target 反馈向量非空，slotid 经 sizecode 上界检查后按槽读写
   unsafe {
     // cpp lfunc.cpp:225：回调缺失时不参与内联计数
-    let Some(inline_fn) = (*(*l).global).ecb.inlinefunction else {
+    let Some(inline_fn) = (*l).gs_ref().ecb.inlinefunction else {
       return false;
     };
 
