@@ -4,9 +4,17 @@ use crate::{
   enums::lua_type::LuaType,
   gc_object_accessors,
   records::{
-    closure::Closure, g_cheader::GCheader, lua_state::LuaState, lua_table::LuaTable,
-    luau_buffer::LuauBuffer, luau_class::LuauClass, luau_object::LuauObject, proto::Proto,
-    t_string::{TString, tstring}, udata::Udata, up_val::UpVal,
+    closure::Closure,
+    g_cheader::GCheader,
+    lua_state::LuaState,
+    lua_table::LuaTable,
+    luau_buffer::LuauBuffer,
+    luau_class::LuauClass,
+    luau_object::LuauObject,
+    proto::Proto,
+    t_string::{TString, tstring},
+    udata::Udata,
+    up_val::UpVal,
   },
 };
 

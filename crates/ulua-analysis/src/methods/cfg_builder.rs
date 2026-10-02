@@ -22,13 +22,8 @@ use crate::{
   enums::block_kind::BlockKind,
   methods::block::block_set_reaching_definition,
   records::{
-    arena_handle::alias,
-    block_registry::resolve_block_mut,
-    cfg_allocator::CfgAllocator,
-    cfg_builder::CfgBuilder,
-    control_flow_graph::ControlFlowGraph,
-    join::Join,
-    symbol::Symbol,
+    arena_handle::alias, block_registry::resolve_block_mut, cfg_allocator::CfgAllocator,
+    cfg_builder::CfgBuilder, control_flow_graph::ControlFlowGraph, join::Join, symbol::Symbol,
   },
   type_aliases::{block_id::BlockId, def_id_control_flow_graph::DefId, instr_id::InstrId},
 };
