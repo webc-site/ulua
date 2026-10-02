@@ -39,6 +39,14 @@ vs LuaJIT asm ~10），前者已到融合收益边界：micro_call 的 `LOADN �
 （LOADN 尾过热，单一用例的边不配探针）。call-boundary 边（Subk→Callfb 等）
 不可融合（帧转换）。fib/micro_call 的剩余差距记为**调用帧建立成本的结构性差距**；
 可做残余：checkstackfornewci 与 ci 字段写的微成本（需 samply 精确归因后另立项）。
+
+**2026-10-02 E2 残余归因的教训**：samply 剖证必须先看样本量——fib 归因仅 429 样本，
+「SETTABLE 探测 miss 占 7.2%」实为 31 个样本的统计噪声；据此做的双探针换序
+（JUMPIFNOTLT 先探）在 CPU 时间（getrusage RUSAGE_CHILDREN，抗调度噪声）配对下
+fib -1.2%、mtg -7.5%、micro_call +3.4%——方向与逻辑预期相反，纯属布局彩票，
+已还原。结论：①单热点归因需 ≥5000 样本（拉长采样窗或提高采样率）；②微改动
+（探针顺序/代码位移）的 A/B 必须用 CPU 时间 + 多用例交叉验证，wall-clock 在
+共享机器上不可用。
 fib/micro_call/binarytrees 的转移表被 CALLFB/RETURN 边主导（各 15%），
 融合无法跨调用帧。LuaJIT asm fast path：判 Lua 闭包 + nargs==nparams + 推帧
 全在解释器循环内完成，不重入。落点：`luau_execute.rs` CALL 臂内联 precall 的
