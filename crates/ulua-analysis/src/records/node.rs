@@ -3,7 +3,7 @@
 
 use alloc::collections::BTreeSet;
 
-use ulua_ast::records::ast_stat::AstStat;
+use ulua_ast::records::{ast_stat::AstStat, node_handle::Node as StatHandle};
 
 use crate::records::identifier::Identifier;
 
@@ -24,14 +24,16 @@ pub struct Node {
   pub(crate) depends: BTreeSet<NodeId>,
 
   pub(crate) name: Option<Identifier>,
-  // The statement itself lives in the AST arena; we only ever pass it around as
-  // an opaque identity, so the raw pointer stays (it is graph *payload*, not a
-  // graph edge).
-  pub(crate) element: *mut AstStat,
+  // 语句本体在 AST arena 中,图逻辑只把它当作不透明身份在节点间搬运——载荷由
+  // 早先的 `*mut AstStat` 收敛为 arena 句柄 `node_handle::Node<AstStat>`:
+  // 句柄 `#[repr(transparent)]` 编码恒非空,`Eq`/`Hash` 按指针地址判等,与原
+  // 裸指针的 cpp `Node* == Node*` 身份语义逐位同构,排序与去重行为不变;读经
+  // `get`/`get_mut` 安全借用,解引用 unsafe 收口在句柄模块一处,不外渗到本图。
+  pub(crate) element: StatHandle<AstStat>,
 }
 
 impl Node {
-  pub fn new(name: Option<Identifier>, el: *mut AstStat) -> Self {
+  pub fn new(name: Option<Identifier>, el: StatHandle<AstStat>) -> Self {
     Self {
       provides: BTreeSet::new(),
       depends: BTreeSet::new(),

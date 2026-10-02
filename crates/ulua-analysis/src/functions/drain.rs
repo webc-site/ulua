@@ -3,35 +3,38 @@
 //! (`Analysis/src/TopoSortStatements.cpp:404-497`).
 //!
 //! The graph is the shared `arena: Vec<Node>`; nodes are named by index. The
-//! only raw pointers are the `AstStat*` payload (`node.element`), which live in
-//! the AST arena and are copied into `result` by value.
+//! only arena payload is the `Node<AstStat>` handle (`node.element`), which
+//! lives in the AST arena and is copied into `result` by value.
 use alloc::{
   collections::{BTreeMap, BTreeSet},
   vec::Vec,
 };
 
-use ulua_ast::records::ast_stat::AstStat;
+use ulua_ast::records::{ast_stat::AstStat, node_handle::Node as StatHandle};
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   functions::{is_block_terminator::is_block_terminator, prune::prune},
   records::{
     arcs::Arcs,
-    arena_handle::alias_ref,
     node::{Node, NodeId},
   },
   type_aliases::node_list::NodeList,
 };
 
 fn stat_of(node: &Node) -> &AstStat {
-  alias_ref(node.element)
+  node.element.get()
 }
 
 /// 返回本轮摘除并加入结果的语句序列（cpp 的 `result` 出参折为返回值），
-/// 顺序与 cpp 逐次 `result.push_back` 一致。
-pub fn drain(arena: &mut [Node], q: &mut NodeList, target: Option<NodeId>) -> Vec<*mut AstStat> {
+/// 顺序与 cpp 逐次 `result.push_back` 一致。载荷为 arena 句柄，身份判等按地址。
+pub fn drain(
+  arena: &mut [Node],
+  q: &mut NodeList,
+  target: Option<NodeId>,
+) -> Vec<StatHandle<AstStat>> {
   // cpp 中调用方传入的 `result`：本函数只追加，故收拢为局部返回值。
-  let mut result: Vec<*mut AstStat> = Vec::new();
+  let mut result: Vec<StatHandle<AstStat>> = Vec::new();
 
   // Connectivity of the subgraph induced by the nodes currently in `Q`. In C++
   // `elements` was redundantly rebuilt each outer iteration; it is loop-invariant.

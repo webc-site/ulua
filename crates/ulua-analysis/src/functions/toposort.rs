@@ -6,10 +6,10 @@
 //! statements), then walk it Kahn-style, deferring function/type definitions
 //! into a queue `Q` that is toposorted on demand.
 // Wire `ArcCollector` (a C++ `AstVisitor` subclass) into the Rust `AstVisitor`
-// trait so `ast_stat_visit` dispatches to its overrides. Each trait method just
-// forwards to the inherent `visit_ast_*` method that carries the ported body;
-// the un-overridden methods keep the base `AstVisitor` defaults — exactly the
-// set the C++ class overrides (the `AstExpr*`/`AstStat*`/`AstType*` ones).
+// trait so `ast_stat_visit_ref` dispatches to its overrides. Each trait method
+// just forwards to the inherent `visit_ast_*` method that carries the ported
+// body; the un-overridden methods keep the base `AstVisitor` defaults — exactly
+// the set the C++ class overrides (the `AstExpr*`/`AstStat*`/`AstType*` ones).
 use alloc::vec::Vec;
 
 use ulua_ast::{
@@ -18,9 +18,9 @@ use ulua_ast::{
     ast_expr_local::AstExprLocal, ast_stat::AstStat, ast_stat_function::AstStatFunction,
     ast_stat_local_function::AstStatLocalFunction, ast_stat_type_alias::AstStatTypeAlias,
     ast_type::AstType, ast_type_pack::AstTypePack, ast_type_reference::AstTypeReference,
-    ast_type_typeof::AstTypeTypeof, ast_visitor::AstVisitor,
+    ast_type_typeof::AstTypeTypeof, ast_visitor::AstVisitor, node_handle::Node as StatHandle,
   },
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_common::records::dense_hash_map::DenseHashMap;
 
@@ -32,7 +32,6 @@ use crate::{
   },
   records::{
     arc_collector::ArcCollector,
-    arena_handle::{alias_opt, alias_ref},
     identifier::Identifier,
     identifier_hash::IdentifierHash,
     node::{Node, NodeId},
@@ -74,23 +73,22 @@ impl AstVisitor for ArcCollector<'_> {
 
 /// 返回排序后的语句序列；cpp 的早退（不可排序时保持 `stats` 原样）在此
 /// 折为「返回原序拷贝」，末尾 `std::swap(stats, result)` 折为返回 `result`。
-pub fn toposort(stats: &[*mut AstStat]) -> Vec<*mut AstStat> {
+/// 载荷为 arena 句柄 `Node<AstStat>`（原 `*mut AstStat`），身份判等仍按指针地址，
+/// 与 cpp 逐格同构。
+pub fn toposort(stats: &[StatHandle<AstStat>]) -> Vec<StatHandle<AstStat>> {
   // if (stats.empty()) return;
   if stats.is_empty() {
     return Vec::new();
   }
 
   // if (!containsToposortableNode(stats)) return;
-  // (Inlined: the helper's signature does not match `&[*mut AstStat]`.)
-  if !stats
-    .iter()
-    .any(|&stat| is_toposortable_node(alias_ref(stat)))
-  {
+  // (Inlined: the helper's signature does not match the handle slice.)
+  if !stats.iter().any(|stat| is_toposortable_node(stat.get())) {
     return stats.to_vec();
   }
 
   // std::vector<AstStat*> result; result.reserve(stats.size());
-  let mut result: Vec<*mut AstStat> = Vec::with_capacity(stats.len());
+  let mut result: Vec<StatHandle<AstStat>> = Vec::with_capacity(stats.len());
 
   // The dependency graph now lives in a dense `Vec<Node>` arena addressed by
   // index (`NodeId`), replacing the C++ `unique_ptr<Node>`s that `nodes`/`Q`
@@ -102,13 +100,12 @@ pub fn toposort(stats: &[*mut AstStat]) -> Vec<*mut AstStat> {
   let mut q: NodeList = NodeList::new();
 
   // for (AstStat* stat : stats) nodes.push_back(new Node(mkName(stat), stat));
-  // `elements` is a copy of the raw `AstStat*` payload so the visitor loop never
+  // `elements` is a copy of the arena handle payload so the visitor loop never
   // borrows `arena` while `collector` mutably holds it.
-  let mut elements: Vec<*mut AstStat> = Vec::with_capacity(stats.len());
+  let mut elements: Vec<StatHandle<AstStat>> = Vec::with_capacity(stats.len());
   for &stat in stats.iter() {
     let id: NodeId = arena.len();
-    let stat_ref = alias_opt(stat);
-    arena.push(Node::new(mk_name_ast_stat(stat_ref), stat));
+    arena.push(Node::new(mk_name_ast_stat(Some(stat.get())), stat));
     elements.push(stat);
     nodes.push_back(id);
   }
@@ -124,16 +121,15 @@ pub fn toposort(stats: &[*mut AstStat]) -> Vec<*mut AstStat> {
       current_arc: None,
     };
     collector.populate_map(nodes.iter().copied());
-    for (id, &element) in elements.iter().enumerate() {
+    // `elements` 持有 arena 句柄的独立拷贝（与 collector 的 `arena` 借用不相交），
+    // 逐槽 `get_mut` 交出 `&mut AstStat` 喂给安全引用形态的 `ast_stat_visit_ref`
+    // ——对应 cpp `node->element->visit(&collector)` 的非 const 写穿语义；独占性
+    // 由 TopoSort 阶段 AST 定稿不变量保证（visitor 只读 AST、不改写节点，collector
+    // 只写与 arena 句柄目标不相交的 Node 图 arena 与局部 map）。原裸指针 `unsafe`
+    // 门面就此收敛为句柄安全借用,本函数不再需要 `unsafe`。
+    for (id, element) in elements.iter_mut().enumerate() {
       collector.current_arc = Some(id);
-      // Safety: `element` 即入参 `stats`（本函数只读借用的切片）中
-      // arena 存活 AstStat 指针，满足 ast_stat_visit 的“null 或存活节点”
-      // 契约；RTTI class index 分发到对应 visit 覆写。独占性由
-      // TopoSort 阶段 AST 定稿不变量保证（visitor 只读 AST、不改写节点）；
-      // collector 只写与其不相交的 Node 图 arena 与局部 map。
-      unsafe {
-        ast_stat_visit(element, &mut collector);
-      }
+      ast_stat_visit_ref(element.get_mut(), &mut collector);
     }
   }
 
@@ -143,7 +139,7 @@ pub fn toposort(stats: &[*mut AstStat]) -> Vec<*mut AstStat> {
   {
     let mut prev: usize = 0;
     for (it, &it_id) in nodes.iter().enumerate() {
-      if it != prev && !is_toposortable_node(alias_ref(arena[it_id].element)) {
+      if it != prev && !is_toposortable_node(arena[it_id].element.get()) {
         let prev_id: NodeId = *nodes.at(prev);
         arena[it_id].depends.insert(prev_id);
         arena[prev_id].provides.insert(it_id);
@@ -156,10 +152,10 @@ pub fn toposort(stats: &[*mut AstStat]) -> Vec<*mut AstStat> {
   while !nodes.empty() {
     let next: NodeId = *nodes.front();
 
-    if arena[next].depends.is_empty() && !is_block_terminator(alias_ref(arena[next].element)) {
+    if arena[next].depends.is_empty() && !is_block_terminator(arena[next].element.get()) {
       prune(&mut arena, next);
       result.push(arena[next].element);
-    } else if !contains_function_call(alias_ref(arena[next].element)) {
+    } else if !contains_function_call(arena[next].element.get()) {
       q.push_back(next);
     } else {
       result.extend(drain(&mut arena, &mut q, Some(next)));

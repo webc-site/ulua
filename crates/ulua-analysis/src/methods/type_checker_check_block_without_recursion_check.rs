@@ -5,6 +5,7 @@ use ulua_ast::{
     ast_expr_index_name::AstExprIndexName, ast_stat::AstStat, ast_stat_block::AstStatBlock,
     ast_stat_declare_extern_type::AstStatDeclareExternType, ast_stat_function::AstStatFunction,
     ast_stat_local_function::AstStatLocalFunction, ast_stat_type_alias::AstStatTypeAlias,
+    node_handle::Node as StatHandle,
   },
   rtti::ast_node_try_as,
 };
@@ -15,7 +16,7 @@ use crate::{
     contains_function_call_or_return::contains_function_call_or_return, follow_type,
     shared_mut::shared_mut, toposort::toposort,
   },
-  records::{arena_handle::alias_ref, binding::Binding, symbol::Symbol, type_checker::TypeChecker},
+  records::{binding::Binding, symbol::Symbol, type_checker::TypeChecker},
   type_aliases::{collections::HashMap, scope_ptr_type::ScopePtr, type_id::TypeId},
 };
 
@@ -28,11 +29,11 @@ impl TypeChecker {
   ) -> ControlFlow {
     let mut sub_level: i32 = 0;
 
-    let stats: Vec<*mut AstStat> = block.body.iter_nodes().map(|n| n.as_ptr()).collect();
+    let stats: Vec<StatHandle<AstStat>> = block.body.iter_nodes().copied().collect();
     let mut sorted = toposort(&stats);
 
     for &stat in &sorted {
-      let stat_ref = alias_ref(stat);
+      let stat_ref = stat.get();
       if let Some(typealias) = ast_node_try_as::<AstStatTypeAlias>(&stat_ref.base) {
         self.prototype_scope_ptr_ast_stat_type_alias_i32(scope.clone(), typealias, sub_level);
         sub_level += 1;
@@ -44,11 +45,13 @@ impl TypeChecker {
     }
 
     let mut check_iter: usize = 0;
-    let mut function_decls: HashMap<*mut AstStat, (TypeId, ScopePtr)> = HashMap::new();
+    // 以 arena 句柄为键:句柄 `Eq`/`Hash` 按指针地址判等,与 cpp `unordered_map<AstStat*, ...>`
+    // 的裸指针身份判等逐格同构,函数声明的登记/查回行为不变。
+    let mut function_decls: HashMap<StatHandle<AstStat>, (TypeId, ScopePtr)> = HashMap::new();
     let mut first_flow: Option<ControlFlow> = None;
 
     for (proto_iter, &proto_stat) in sorted.iter().enumerate() {
-      let proto_ref = alias_ref(proto_stat);
+      let proto_ref = proto_stat.get();
 
       if contains_function_call_or_return(proto_ref) {
         // 补齐 [check_iter, proto_iter) 的滞后区段，切片迭代与原逐个推进同序。
@@ -163,10 +166,10 @@ impl TypeChecker {
   fn check_body(
     &mut self,
     scope: &ScopePtr,
-    stat: *mut AstStat,
-    function_decls: &HashMap<*mut AstStat, (TypeId, ScopePtr)>,
+    stat: StatHandle<AstStat>,
+    function_decls: &HashMap<StatHandle<AstStat>, (TypeId, ScopePtr)>,
   ) {
-    let stat_ref = alias_ref(stat);
+    let stat_ref = stat.get();
     if let Some(fun) = ast_node_try_as::<AstStatFunction>(&stat_ref.base) {
       let (fun_ty, fun_scope) = function_decls
         .get(&stat)

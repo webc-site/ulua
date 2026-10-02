@@ -1,15 +1,11 @@
 use alloc::vec::Vec;
-use core::ptr::NonNull;
 
 use ulua_analysis::functions::toposort::toposort as analysis_toposort;
 use ulua_ast::records::{ast_stat::AstStat, ast_stat_block::AstStatBlock, node_handle::Node};
 
-/// 测试门面:以句柄形态返回置换结果,内部仍走 analysis 的裸指针排序入口。
+/// 测试门面:以 arena 句柄形态返回置换结果,与 analysis 的句柄排序入口同型直传,
+/// 不再经裸指针往返。
 pub fn toposort(block: &mut AstStatBlock) -> Vec<Node<AstStat>> {
-  let stats: Vec<*mut AstStat> = block.body.iter_nodes().map(|n| n.as_ptr()).collect();
+  let stats: Vec<Node<AstStat>> = block.body.iter_nodes().copied().collect();
   analysis_toposort(&stats)
-    .into_iter()
-    // toposort 只置换既有非空槽位,判空拦截即可安全建槽。
-    .map(|p| Node::from_non_null(NonNull::new(p).expect("toposort 输出槽位恒非空")))
-    .collect()
 }
