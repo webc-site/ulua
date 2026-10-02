@@ -11,11 +11,12 @@ use crate::{
 
 /// 对已出错协程直接注入错误驱动的恢复入口（cpp `lua_resumeerror`）。
 ///
-/// # Safety
+/// 调用序契约（正确性，非内存安全；r16-v3 引用形前移，`l` 存活由 `&mut` 类型承载）：
 /// `l` 须为已置错误态、待恢复的协程 `LuaState`（`resume_start` 会校验并可能抛错），`from` 按 `resume_start`
-/// 契约可为空（主状态恢复），非空时须为存活恢复发起方；`resume_findhandler` 取回的 `ci` 帧透传给
+/// 契约可为空（主状态恢复），非空时须为存活恢复发起方——`from` 可空，按判例保留裸指针
+/// 形参（引用形无法编码 null，同 [`lua_resume`] 的 from 面）；`resume_findhandler` 取回的 `ci` 帧透传给
 /// `resume_handle`（经 `lua_d_rawrunprotected` 保护帧承接再抛），`resume_finish` 可读写 `(*l).status/n_ccalls`。
-pub unsafe fn lua_resumeerror(l: *mut LuaState, from: *mut LuaState) -> i32 {
+pub fn lua_resumeerror(l: &mut LuaState, from: *mut LuaState) -> i32 {
   unsafe {
     let starterror = resume_start(l, from, 1);
     if starterror != 0 {

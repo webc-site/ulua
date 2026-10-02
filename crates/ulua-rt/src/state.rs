@@ -722,10 +722,8 @@ pub(crate) fn resume_co(mut co: StateView<'_>, from: StateView<'_>, nargs: i32) 
 ///
 /// 调用序契约：同 [`resume_co`]，另错误对象已 `xmove` 到 `co` 栈顶。
 #[inline]
-pub(crate) fn resume_co_error(co: StateView<'_>, from: StateView<'_>) -> i32 {
-  // Safety: 调用序前提由 `resume_error` 维持(status 预检 + 栈顶即错误对象 +
-  // 头寸预留)。
-  unsafe { lua_resumeerror(co.as_mut_ptr(), from.as_mut_ptr()) }
+pub(crate) fn resume_co_error(mut co: StateView<'_>, from: StateView<'_>) -> i32 {
+  lua_resumeerror(&mut co, from.as_mut_ptr())
 }
 
 /// `lua_resetthread(co)`：清空 `co` 栈并回到可复用状态。
