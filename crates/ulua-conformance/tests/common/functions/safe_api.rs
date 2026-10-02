@@ -794,8 +794,9 @@ pub fn rawgetptagged(l: L, idx: c_int, p: *mut c_void, tag: c_int) -> c_int {
 
 /// `lua_rawsetptagged`。
 pub fn rawsetptagged(l: L, idx: c_int, p: *mut c_void, tag: c_int) {
-  // Safety: 同 [`rawgetptagged`]。
-  unsafe { lua_rawsetptagged(&mut *l, idx, p, tag) }
+  // r16-v4b：callee 已引用形 safe 化，`state_mut` 判空重建 `&mut LuaState` 即收口；
+  // 同 [`rawgetptagged`]，`p` 仅作位模式键不解引用。
+  lua_rawsetptagged(state_mut(l), idx, p, tag)
 }
 
 /// `lua_rawgetp`（tag 0，宏形态）。
