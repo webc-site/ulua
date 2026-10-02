@@ -25,13 +25,18 @@ pub unsafe fn lua_v_tryfunc_tm(l: *mut LuaState, func: Slot<'_>) {
       luaG_typeerror!(l, func, "call");
     }
 
-    let mut p = (*l).top;
+    // r12-w7a2 收编（同形单点·挪位协议窗）：`(*l).top` 预绑定单次读，供后移循环
+    // 与抬顶尾写共用——本函数契约保证全程不重分配栈（见 # Safety），循环仅写
+    // 已界内槽、不触场域，故尾写与原「场域再读后 wrapping_add」逐位同值；
+    // wrapping 形态保留（与原式同宽同回绕语义）
+    let top = (*l).top;
+    let mut p = top;
     while p > func {
       setobj_2_s!(l, p, p.wrapping_sub(1));
       p = p.wrapping_sub(1);
     }
 
-    (*l).top = (*l).top.wrapping_add(1);
+    (*l).top = top.wrapping_add(1);
     setobj_2_s!(l, func, tm);
   }
 }

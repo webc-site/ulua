@@ -43,12 +43,20 @@ pub(crate) unsafe fn lua_d_callint(
 
     let yielded = isyielded(&*l);
 
+    // r12-w7a2 收编（票面特别裁决位）：performcall 恢复点之后的两处
+    // `restorestack!(l, funcoffset)` 裸重派生收为一次等价窗绑定——
+    // restorestack_slot 为纯偏移算术、无副作用；绑定点与下面两个消费点之间仅有
+    // 标量场读写（base_ccalls），无任何栈操作，逐位同值。跨恢复点时序不重排：
+    // 两分支体的写入次序、`nresults == LUA_MULTRET ? 0 : nresults` 的求值形态
+    // 与恢复动作本体（callerci->top / l->top 场写）全部原位保留。
+    let funcslot = restorestack!(l, funcoffset);
+
     if fromyieldableccall {
       (*l).base_ccalls = (*l).base_ccalls.wrapping_sub(1);
 
       if yielded {
         let callerci = restoreci!(l, cioffset);
-        (*callerci).top = restorestack!(l, funcoffset).add(if nresults != LUA_MULTRET {
+        (*callerci).top = funcslot.add(if nresults != LUA_MULTRET {
           nresults as usize
         } else {
           0
@@ -57,7 +65,7 @@ pub(crate) unsafe fn lua_d_callint(
     }
 
     if nresults != LUA_MULTRET && !yielded {
-      (*l).top = restorestack!(l, funcoffset).add(nresults as usize);
+      (*l).top = funcslot.add(nresults as usize);
     }
 
     (*l).n_ccalls = (*l).n_ccalls.wrapping_sub(1);

@@ -37,6 +37,8 @@ pub unsafe fn lua_v_call_tm(l: *mut LuaState, nparams: i32, res: i32) {
     let ci = incr_ci!(l);
     (*ci).func = fun;
     (*ci).base = fun.add(1);
+    // 保留：CallInfo 帧建立面场域写（`top` 已是本函数体上方单次预绑定的窗读，
+    // 无可收编重读）；与豁免面 luau_setupcci/luau_callhook 同款建立点，属帧 ABI 本体
     (*ci).top = top.add(LUA_MINSTACK as usize);
     (*ci).savedpc = null_mut();
     (*ci).flags = 0;
@@ -88,6 +90,9 @@ pub unsafe fn lua_v_call_tm(l: *mut LuaState, nparams: i32, res: i32) {
 
     (*l).ci = cip;
     (*l).base = (*cip).base;
+    // 保留：帧回退三件套的恢复动作本体（ci/base/top 一并回读父帧 cip 场域，
+    // 时序即正确性）；无算术操作数可收编，形制同 copy_results_pop_frame 的
+    // B2-2b 保留裁决
     (*l).top = (*cip).top;
 
     (*l).n_ccalls -= 1;

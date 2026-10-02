@@ -28,6 +28,8 @@ pub unsafe fn lua_call(l: *mut LuaState, nargs: i32, nresults: i32) {
     lua_d_call(l, func, nresults);
 
     if nresults == LUA_MULTRET && (*l).top >= (*(*l).ci).top {
+      // 保留（MULTRET 帧界传播·同形单点）：场到场拷贝无算术操作数，guard 的现读
+      // 序与写序即 cpp `L->ci->top = L->top;` 恢复点本体，收编不增减任何读
       (*(*l).ci).top = (*l).top;
     }
   }

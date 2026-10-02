@@ -18,10 +18,15 @@ pub(crate) unsafe extern "C-unwind" fn callerrfunc(l: *mut LuaState, ud: *mut c_
   unsafe {
     let errfunc = ud as StkId;
 
-    setobj_2_s!(l, (*l).top, (*l).top.offset(-1));
-    setobj_2_s!(l, (*l).top.offset(-1), errfunc);
+    // r12-w7a2 收编：两连写位的三处 `(*l).top` 场域重读收为同一函数体内的
+    // 等价窗预绑定（写槽序不变；setobj2s 的屏障不动栈，绑定全程有效）
+    let top: StkId = (*l).top;
+    setobj_2_s!(l, top, top.sub(1));
+    setobj_2_s!(l, top.sub(1), errfunc);
     incr_top!(l);
 
+    // 保留（恢复点后现读）：incr_top! 内含 checkstack，可搬栈后必须现读场域——
+    // cpp 同形最小读面 `luaD_callnoyield(L, L->top - 2, 1)`
     lua_d_callny(l, (*l).top.offset(-2), 1);
   }
 }
