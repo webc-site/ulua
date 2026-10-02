@@ -1,4 +1,4 @@
-use core::ptr::addr_of_mut;
+use core::{ptr::addr_of_mut, slice::from_raw_parts_mut};
 
 use crate::{
   functions::runerror::runerror,
@@ -31,12 +31,11 @@ pub(crate) unsafe fn setnodevector(l: *mut LuaState, t: *mut LuaTable, mut size:
       size = 1 << lsize;
       (*t).node = luaM_newarray!(l, size as usize, LuaNode, (*t).memcat);
 
-      let mut n = (*t).node;
-      let end = n.add(size as usize);
-      while n < end {
-        (*n).key.tt_next = 0;
-        setnilvalue!(addr_of_mut!((*n).val));
-        n = n.add(1);
+      // 先分配换指针（上一行 node 回写已完成），后派生窗：哈希段逐槽初始化
+      // 改窗内遍历，消除 n/end 双指针游走（cpp ltable.cpp:534-538 逐槽同形）
+      for n in from_raw_parts_mut((*t).node, size as usize) {
+        n.key.tt_next = 0;
+        setnilvalue!(addr_of_mut!(n.val));
       }
     }
 
