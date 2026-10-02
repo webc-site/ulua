@@ -496,7 +496,7 @@ pub(crate) unsafe fn loadsafe(
             resolve_import_safe(l, (*p).k, iid);
             // r12-w9b 收编（loadsafe:498 类让位点）：消费面裸偏移读数改经
             // `top_slot(-1)` 边界原语，位点即派即用——resolve_import_safe 内
-            // pcall/raise_top 可搬栈，读数必须现读场域（correctstack 悬窗教训）
+            // pcall/advance_top 可搬栈，读数必须现读场域（correctstack 悬窗教训）
             setobj!(l, k, (*l).top_slot(-1));
             // 消费 import 解析压入的栈顶槽：`rewind_top(1)` 提交原语镜像原
             // `top = top.sub(1)` 落值（loader 直路点位，无恢复点耦合）
