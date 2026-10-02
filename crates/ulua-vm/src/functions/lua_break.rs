@@ -11,7 +11,7 @@ const ERR_BREAK_ACROSS_C_CALL: &[u8] = b"attempt to break across metamethod/C-ca
 pub unsafe fn lua_break(l: *mut LuaState) -> i32 {
   unsafe {
     if (*l).n_ccalls > (*l).base_ccalls {
-      lua_g_pusherror_bytes(l, ERR_BREAK_ACROSS_C_CALL);
+      lua_g_pusherror_bytes(&mut *l, ERR_BREAK_ACROSS_C_CALL);
       lua_d_throw(l, LuaStatus::ErrRun as i32);
     }
 
