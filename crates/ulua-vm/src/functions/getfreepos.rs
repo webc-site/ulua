@@ -22,6 +22,10 @@ use crate::{
 /// `setnilvalue!(gval!(mp))`）互相别名，且需为 `*mut LuaTable` 派生的借用伪造寿命。
 /// `Option<NonNull<_>>` 把可空性收进类型（null 哨兵归零、 niche 优化零开销），不改
 /// 动 provenance 形状，是本借用布局下的最小安全形态。
+///
+/// r12-w6d 逐点复核定性（保留面）：体内落点除键槽 nil 判读外，还须以可写裸指针身份
+/// 经返回值逃逸给消费方 `newkey` 的链改写（`*n = *mp`、`set_next(.. offset_from ..)`）；
+/// 宏结果并非「仅作取值/键槽」，不满足纯下标读收编门槛，维持保留。
 pub(crate) unsafe fn getfreepos(t: *mut LuaTable) -> Option<NonNull<LuaNode>> {
   unsafe {
     // In the C++ source, lastfree is accessed as t->lastfree.

@@ -21,5 +21,7 @@ pub(crate) unsafe fn hashpointer(t: *const LuaTable, p: *const c_void) -> *mut L
   h ^= h >> 16;
 
   // SAFETY: 契约保证 `t` 为存活 LuaTable，gnode!/sizenode! 宏读其 node 区并按 sizenode 取模索引不越界
+  // r12-w6d 逐点复核定性（保留面）：本点位与 hashint/hashnum 同为 `mp` 哨兵指针判据
+  // （`eq(mp, dummynode)`）的裸指针源头，provenance 契约同 mainposition，不收编。
   unsafe { gnode!(t, lmod!(h as i32, sizenode!(t)) as usize) }
 }

@@ -34,6 +34,8 @@ pub(crate) unsafe fn lua_h_next(l: *mut LuaState, t: &LuaTable, key: StkId) -> i
     // sizearray，故哈希起点为 max(i - sizearray, 0)。切 node_window 共享窗：
     // 哨兵表窗长恒 1（单格 dummy，val 恒 nil ⇒ 空桶），读出与 cpp
     // `gnode!(t, 0)` 走查逐位一致；实向量窗长 twoto(lsizenode) ⇔ sizenode!(t)。
+    // r12-w6d 逐点复核定性：本文件唯一 gnode 字样为 cpp 口径引用，代码点位已收编
+    // node_window 共享窗形（窗长 1 哨兵折叠语义引 E1 契约），无余量。
     let nodes = t.node_window();
     for n in nodes.iter().skip((i - sizearray).max(0) as usize) {
       if !matches!(ValueView::from_tvalue(&n.val), ValueView::Nil) {

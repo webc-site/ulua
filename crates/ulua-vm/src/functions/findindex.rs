@@ -36,6 +36,8 @@ pub(crate) unsafe fn findindex(l: *mut LuaState, t: &LuaTable, key: &TValue) -> 
       // 哈希链遍历（gnode! 裁决口径，保留裸形）：`walk_nodes` 沿 `key.next` 单链游走，
       // 与 cpp `findindex` 的链序逐位一致；改窗全扫会破坏命中序与 O(链长) 行为，
       // 且返回值依赖 `gnode!(t, 0)` 基址的 `offset_from` 算术（E1 裁决明载豁免）。
+      // r12-w6d 逐点复核定性：本文件唯一代码点位即该基址算术类，宏结果不作取值/键槽
+      // 消费，非纯下标读写，维持保留。
       // 窗等价契约：命中节点 `n.offset_from(gnode!(t, 0))` ⇔ 该桶在 `node_window()`
       // 内的下标；哨兵表下本链起点即 dummy 单格（窗长恒 1、键值皆 nil，rawequal/
       // DeadKey 判据必不命中），落到 runerror 分支，与 E1「判空不得用
