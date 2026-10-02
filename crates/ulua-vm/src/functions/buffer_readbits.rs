@@ -27,7 +27,7 @@ pub(crate) unsafe fn buffer_readbits(l: *mut LuaState) -> i32 {
     let mask = (1u64 << bitcount as u64) - 1;
 
     let result = ((data >> subbyteoffset) & mask) as u32;
-    lua_pushunsigned(l, result);
+    lua_pushunsigned(&mut *l, result);
 
     1
   }

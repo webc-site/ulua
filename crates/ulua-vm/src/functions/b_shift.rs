@@ -30,9 +30,10 @@ pub(crate) unsafe fn b_shift(l: *mut LuaState, mut r: BUint, i: i32) -> i32 {
     r = trim(r);
   }
 
-  // SAFETY: 契约保证 `l` 为存活调用帧且实参 1/2 可读，移位量经 argcheck 限制后纯数值运算无指针访问
+  // SAFETY: 契约保证 `l` 为存活调用帧；本帧把裸指针重建为独占引用后即结束借用窗口
+  // （`lua_pushunsigned` 自身签名安全，仅要求 `&mut LuaState`）
   unsafe {
-    lua_pushunsigned(l, r);
+    lua_pushunsigned(&mut *l, r);
   }
   1
 }

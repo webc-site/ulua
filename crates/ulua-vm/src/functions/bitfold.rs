@@ -44,7 +44,7 @@ pub(crate) unsafe fn bit_fold_push(
   // SAFETY: 契约同 bitfold——`l` 为存活调用帧，折叠为纯数值运算，栈顶已留压栈余量
   unsafe {
     let r = bitfold(l, init, op);
-    lua_pushunsigned(l, r);
+    lua_pushunsigned(&mut *l, r);
     1
   }
 }

@@ -29,7 +29,7 @@ pub(crate) unsafe fn b_arshift(l: *mut LuaState) -> i32 {
       r = trim((r >> i as u32) | !(!(0 as BUint) >> i as u32)); // add signal bit
     }
 
-    lua_pushunsigned(l, r);
+    lua_pushunsigned(&mut *l, r);
     1
   }
 }

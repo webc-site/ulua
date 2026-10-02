@@ -20,7 +20,7 @@ pub(crate) unsafe fn b_replace(l: *mut LuaState) -> i32 {
     let m: BUint = mask(w);
     v &= m;
     let r = (r & !(m << f)) | (v << f);
-    lua_pushunsigned(l, r);
+    lua_pushunsigned(&mut *l, r);
     1
   }
 }
