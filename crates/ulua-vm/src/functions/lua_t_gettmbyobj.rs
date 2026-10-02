@@ -31,13 +31,13 @@ pub(crate) unsafe fn lua_t_gettmbyobj(
       Some(LuaType::Table) => (*(*o).as_table_ptr()).metatable,
       Some(LuaType::UserData) => (*(*o).as_userdata_ptr()).metatable,
       Some(LuaType::Object) => (*(*objectvalue!(o)).lclass).instancemetatable,
-      _ => (*(*l).global).mt[tag as usize],
+      _ => (*l).gs_ref().mt[tag as usize],
     };
 
     if !mt.is_null() {
       // B2-2a 任务B：getstr 折叠 Option<Slot> 后在边界还原哨兵裸形——本函数契约
       // 「返回元表字段或 luaO_nilobject（永不为 null）」经 *const 返回跨调用传播
-      lua_h_getstr(&*mt, (*(*l).global).tmname[event as usize])
+      lua_h_getstr(&*mt, (*l).gs_ref().tmname[event as usize])
         .map_or(LUA_O_NILOBJECT, |s| s.as_const_ptr())
     } else {
       LUA_O_NILOBJECT

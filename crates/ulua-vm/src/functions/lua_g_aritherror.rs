@@ -26,7 +26,7 @@ pub(crate) unsafe fn lua_g_aritherror(
     let t1: *const c_char = lua_t_objtypename(l, &*p1);
     let t2: *const c_char = lua_t_objtypename(l, &*p2);
     // skip __ from metamethod name
-    let opname = getstr((*(*l).global).tmname[op as usize]).add(2);
+    let opname = getstr((*l).gs_ref().tmname[op as usize]).add(2);
 
     if t1 == t2 {
       // C++ compares interned typename pointers
