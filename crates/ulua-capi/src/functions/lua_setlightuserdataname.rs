@@ -27,7 +27,8 @@ pub unsafe extern "C-unwind" fn lua_setlightuserdataname(
   name: *const c_char,
 ) {
   // Safety: 契约声明 `l` 为整个调用期间存活的合法 `LuaState`，本帧 `&mut *l` 重建即时
-  // 结束借用窗口、不跨调用持有；被调方只 intern `name` 并写注册槽（gs_mut 一句一借），
-  // 其签名留 `unsafe fn` 形（cstr_bytes 裸参流入，lint 裁决见 callee 文档）。
-  unsafe { lua_setlightuserdataname::lua_setlightuserdataname(&mut *l, tag, name) }
+  // 结束借用窗口、不跨调用持有；被调方只 intern `name` 并写注册槽（gs_mut 一句一借）。
+  // r16-v4c：callee 已 safe 化（v4c 步骤 4 门面收 cstr_bytes），外层 unsafe 包裹随
+  // callee 消亡，仅存引用重建内联窗（`lua_status`/`lua_xmove` 显式壳同款终形）。
+  lua_setlightuserdataname::lua_setlightuserdataname(unsafe { &mut *l }, tag, name)
 }

@@ -632,10 +632,10 @@ pub fn tolightuserdata(l: L, idx: c_int) -> *mut c_void {
 
 /// `lua_setlightuserdataname(l, tag, name)`。
 pub fn setlightuserdataname(l: L, tag: c_int, name: &'static [u8]) {
-  // r16-v4b：callee 接收者已 `&mut` 引用形，`state_mut` 判空重建短借；`cstr(name)`
-  // NUL 结尾静态名串裸形透传（不切片化）；unsafe 仅剩 callee 留形转达（lint 裁决见
-  // callee 文档）。
-  unsafe { lua_setlightuserdataname(state_mut(l), tag, cstr(name)) }
+  // r16-v4c：callee 已 safe 化（v4c 步骤 4 门面收 cstr_bytes，lint 触发消亡），
+  // `state_mut` 判空重建短借后直调；`cstr(name)` NUL 结尾静态名串裸形透传（不切片化），
+  // unsafe 转达消亡（收口形制同 `getlightuserdataname` 终形）。
+  lua_setlightuserdataname(state_mut(l), tag, cstr(name))
 }
 
 /// `lua_getlightuserdataname(l, tag)`：未注册得 `None`，否则为登记名原始字节。
@@ -789,27 +789,28 @@ pub fn rawseti(l: L, idx: c_int, n: c_int) {
 
 /// `lua_rawgetptagged`。
 pub fn rawgetptagged(l: L, idx: c_int, p: *mut c_void, tag: c_int) -> c_int {
-  // r16-v4b：callee 接收者已 `&mut` 引用形，`state_mut` 判空重建短借；`p` 仅作位模式
-  // 键不解引用，unsafe 仅剩 callee 留形转达（lint 裁决见 callee 文档）。
-  unsafe { lua_rawgetptagged(state_mut(l), idx, p, tag) }
+  // r16-v4c：callee 已 safe 化（key 全链纯位模式，lint 触发消亡），`state_mut` 判空
+  // 重建短借后直调，unsafe 转达消亡（收口形制同 `lightuserdatatag` 终形）。
+  lua_rawgetptagged(state_mut(l), idx, p, tag)
 }
 
 /// `lua_rawsetptagged`。
 pub fn rawsetptagged(l: L, idx: c_int, p: *mut c_void, tag: c_int) {
-  // Safety: 同 [`rawgetptagged`]。
-  unsafe { lua_rawsetptagged(state_mut(l), idx, p, tag) }
+  // r16-v4c：同 [`rawgetptagged`]，callee safe 化后转达消亡。
+  lua_rawsetptagged(state_mut(l), idx, p, tag)
 }
 
 /// `lua_rawgetp`（tag 0，宏形态）。
 pub fn rawgetp(l: L, idx: c_int, p: *mut c_void) -> c_int {
-  // Safety: `l` 存活；`p` 仅比较不解引用。
-  unsafe { (*l).raw_get_ptr(idx, p) }
+  // r16-v4c：方法 `raw_get_ptr` 已随 callee 转 safe，`state_mut` 收口取代 `(*l)`
+  // 裸解引用；`p` 仅比较不解引用（用例契约）。
+  state_mut(l).raw_get_ptr(idx, p)
 }
 
 /// `lua_rawsetp`（tag 0，宏形态）。
 pub fn rawsetp(l: L, idx: c_int, p: *mut c_void) {
-  // Safety: `l` 存活；`p` 仅存储不解引用。
-  unsafe { (*l).raw_set_ptr(idx, p) }
+  // r16-v4c：同 [`rawgetp`]；`p` 仅存储不解引用（用例契约）。
+  state_mut(l).raw_set_ptr(idx, p)
 }
 
 /// `lua_clonefunction`。
