@@ -30,7 +30,8 @@ pub(crate) unsafe fn lua_pushfstring_l(l: &mut LuaState, args: Arguments<'_>) ->
     // 形状转换（存活帧 + 刚净压一层的槽合法性见上契约）
     lua_c_threadbarrier_lapi(l);
     lua_o_pushvfstring_ref(l, args);
-    // 对应 cpp lapi.cpp:770 `return svalue(L->top - 1)`
+    // 对应 cpp lapi.cpp:770 回返的 `luaO_pushvfstring` 结果（lobject.cpp:136
+    // `return svalue(L->top - 1)`）
     svalue!(l.top.offset(-1))
   }
 }

@@ -15,7 +15,7 @@ use crate::{
 /// push-字符串族的切片 ref 核心（r12 T9 形）：全部真实逻辑落在 `&mut LuaState` +
 /// `&[u8]` 签名——GC 检查、线程屏障、`ensure_stack(1)` 扩容、`lua_s_newlstr` 按
 /// 切片全长 intern（无 NUL 依赖，长度即切片长度）后写 top 槽并 `api_incr_top`
-/// 净压一层。cpp `lua_pushlstring`（`VM/src/lapi.cpp:738`）`luaS_newlstr(L, str, len)`
+/// 净压一层。cpp `lua_pushlstring`（`VM/src/lapi.cpp:744`）`luaS_newlstr(L, str, len)`
 /// 的同形骨架；Rust 侧一切字节压栈都经本核心，不再折道 ptr+len 形。
 ///
 /// # Safety
@@ -35,7 +35,7 @@ pub unsafe fn lua_pushlstring_bytes(l: &mut LuaState, s: &[u8]) {
   }
 }
 
-/// C-ABI 镜像垫片（cpp `lua_pushlstring`，`VM/src/lapi.cpp:738` 的
+/// C-ABI 镜像垫片（cpp `lua_pushlstring`，`VM/src/lapi.cpp:744` 的
 /// `(const char*, size_t)` 形）：只做一次性折形——`api_check!` 守 null 契约后把
 /// `(s, len)` 折成 `&[u8]` 交切片 ref 核心 [lua_pushlstring_bytes]，本形不再含任何
 /// 真实逻辑。
