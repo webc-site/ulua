@@ -33,7 +33,7 @@ static TAB_FUNCS: [LuaLReg; 17] = [
 ];
 
 /// # Safety
-/// `l` 须为存活 LuaState 且栈顶之上留足空槽（`lua_l_register` push 库表；`LUA_PUSHCFUNCTION` push cfunction 后
+/// `l` 须为存活 LuaState 且栈顶之上留足空槽（`lua_l_register_bytes` push 库表；`LUA_PUSHCFUNCTION` push cfunction 后
 /// `lua_setglobal` 消费之），须在可分配/GC 的受保护帧内调用。
 /// cpp/VM/src/ltablib.cpp:694 luaopen_table。
 pub unsafe fn luaopen_table(l: *mut LuaState) -> i32 {

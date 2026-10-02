@@ -20,7 +20,7 @@ use crate::{
 };
 
 /// # Safety
-/// `l` 须为存活 LuaState 且栈顶之上留足空槽（`lua_l_register` push 库表、随后 push+`lua_setfield` 各占一次临时），
+/// `l` 须为存活 LuaState 且栈顶之上留足空槽（`lua_l_register_bytes` push 库表、随后 push+`lua_setfield` 各占一次临时），
 /// 须在可分配/GC 的受保护帧内调用；`INT64LIB` 是静态 null 终止数组，`.as_ptr()` 指向其首项。
 /// cpp/VM/src/lintlib.cpp:603 luaopen_integer。
 pub(crate) unsafe fn luaopen_integer(l: *mut LuaState) -> i32 {
