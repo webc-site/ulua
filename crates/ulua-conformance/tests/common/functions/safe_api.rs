@@ -707,8 +707,8 @@ pub fn touserdata<'a>(l: L, idx: c_int) -> Option<&'a mut c_void> {
 
 /// `lua_getuserdatadtor(l, tag)`：读回 tag 注册的全局析构。
 pub fn getuserdatadtor(l: L, tag: i32) -> LuaDestructor {
-  // Safety: `l` 存活；`tag` 界内。
-  unsafe { lua_getuserdatadtor(l, tag) }
+  // r16-v4：callee 已引用形 safe 化，`state_ref` 判空重建 `&LuaState` 即收口
+  lua_getuserdatadtor(state_ref(l), tag)
 }
 
 /// `lua_setuserdatadtor(l, tag, dtor)`：注册 tag 全局析构。
