@@ -3,7 +3,7 @@ use core::ffi::c_char;
 
 use crate::{
   functions::{
-    cstr_bytes, cstr_cow, currentline::currentline, getluaproto::get_lua_proto,
+    cstr_bytes_ref::cstr_bytes_ref, cstr_cow, currentline::currentline, getluaproto::get_lua_proto,
     lua_o_chunkid::lua_o_chunkid, lua_o_pushfstring::lua_o_pushfstring,
   },
   macros::{getstr::getstr, is_lua::isLua, lua_idsize::LUA_IDSIZE},
@@ -54,10 +54,15 @@ pub(crate) fn pusherror_bytes(l: &mut LuaState, msg: &[u8]) {
   }
 }
 
+/// r16-v7 步骤 3（仿 v4c 判例）：导出垫片转 safe——`pub unsafe fn(*mut)` →
+/// `pub fn(&mut LuaState, *const c_char)`，体一行转调本票 safe 化的
+/// [`pusherror_bytes`]，C 串裸参只经既有 pub(crate) safe 门面 [`cstr_bytes_ref`]
+/// 消费（裸参入 safe 实参位，`not_unsafe_ptr_arg_deref` 触发消亡；不新造门面、
+/// 不动 `cstr_bytes` 本体）。
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn pusherror(l: *mut LuaState, msg: *const c_char) {
-  unsafe {
-    pusherror_bytes(&mut *l, cstr_bytes(msg));
-  }
+/// 调用序契约（正确性，非内存安全；safe fn 文档断言，由调用方承载）：`l` 存活与
+/// 独占由 `&mut` 接收者类型承载；`msg` 须为 NUL 结尾、调用期间存活的 C 串
+/// （门面内 NUL 扫描必终止），消息拼装语义与 cpp 参考实现逐位不变。
+pub fn pusherror(l: &mut LuaState, msg: *const c_char) {
+  pusherror_bytes(l, cstr_bytes_ref(msg));
 }

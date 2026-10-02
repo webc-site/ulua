@@ -14,7 +14,7 @@ use crate::{
 /// `l` 必须指向存活的 `LuaState`; `msg` 必须是 NUL 结尾的有效 C 字符串。
 pub(crate) unsafe fn runerror(l: *mut LuaState, msg: *const c_char) -> ! {
   unsafe {
-    lua_g_pusherror(l, msg);
+    lua_g_pusherror(&mut *l, msg);
     lua_d_throw(l, LuaStatus::ErrRun as i32);
   }
 }

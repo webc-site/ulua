@@ -46,7 +46,7 @@ pub(crate) unsafe extern "C-unwind" fn resume(l: *mut LuaState, ud: *mut c_void)
     if (*l).status == LuaStatus::Ok as u8 {
       LUAU_ASSERT!((*l).ci == (*l).base_ci && first_arg >= (*l).base);
       if first_arg == (*l).base {
-        lua_g_pusherror(l, ERR_DEAD_COROUTINE.as_ptr().cast());
+        lua_g_pusherror(&mut *l, ERR_DEAD_COROUTINE.as_ptr().cast());
         lua_d_throw(l, LuaStatus::ErrRun as i32);
       }
 

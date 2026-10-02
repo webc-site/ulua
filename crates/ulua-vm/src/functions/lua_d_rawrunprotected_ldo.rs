@@ -63,10 +63,10 @@ pub unsafe fn lua_d_rawrunprotected(l: *mut LuaState, f: Pfunc, ud: *mut c_void)
         // 载荷含内嵌 NUL 时退到固定文案；否则经 with_c_str 补 NUL 传递指针。
         const FALLBACK_MSG: &[u8] = b"invalid error message\0";
         if memchr::memchr(0, msg.as_bytes()).is_some() {
-          lua_g_pusherror(l, FALLBACK_MSG.as_ptr().cast());
+          lua_g_pusherror(&mut *l, FALLBACK_MSG.as_ptr().cast());
         } else {
           with_c_str(msg.as_bytes(), |cmsg| {
-            lua_g_pusherror(l, cmsg);
+            lua_g_pusherror(&mut *l, cmsg);
           });
         }
         // C++ nests a second try/catch for OOM while pushing; a Rust
