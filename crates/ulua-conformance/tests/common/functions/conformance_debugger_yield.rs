@@ -1,4 +1,4 @@
-use core::{ffi::c_int, ptr::null_mut, sync::atomic::Ordering};
+use core::{ffi::c_int, sync::atomic::Ordering};
 
 use ulua_vm::{macros::lua_minstack::LUA_MINSTACK, records::lua_state::LuaState};
 
@@ -75,10 +75,9 @@ fn resume_interrupted_thread() {
   let Some(interruptedthread) = CONFORMANCE_DEBUGGER_STATE.take_interruptedthread() else {
     return;
   };
-  // Safety: 登记指针为活跃状态（登记方契约）；take 后本侧独占。`resume` 为
-  // LuaState 的 unsafe 方法（from 实参位收 C 侧 NULL 哨兵）。
-  // FFI: c-API 要求 NULL
-  unsafe { state_mut(interruptedthread).resume(null_mut(), 0) };
+  // 登记指针为活跃状态（登记方契约）；take 后本侧独占。cpp 的
+  // resume(NULL, 0) 即主线程恢复契约形态，由 `resume_main` 单点收口。
+  state_mut(interruptedthread).resume_main(0);
 }
 
 /// # Safety

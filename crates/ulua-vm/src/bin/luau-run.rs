@@ -8,7 +8,7 @@
 //! run with `lua_resume` (not `lua_pcall` on the main thread), so top-level
 //! `coroutine.running()`/`isyieldable()` behave as in the reference CLI.
 
-use std::{env::args, fs::File, io::Read, panic::set_hook, process::exit, ptr::null_mut};
+use std::{env::args, fs::File, io::Read, panic::set_hook, process::exit};
 
 use ulua_common::records::f_value::set_luau_bool_flags;
 #[cfg(feature = "vm-opcount")]
@@ -82,7 +82,7 @@ fn main() {
       exit(2);
     }
 
-    let status = (*t).resume(null_mut(), 0);
+    let status = (*t).resume_main(0);
     if status != 0 {
       // The error object is on top of T's stack — surface its text so the
       // differential oracle reports WHY a run failed, not just the status.

@@ -382,9 +382,9 @@ impl TypeFunctionRuntime {
 
     // Execute the global function which should return our user-defined type function
     // if (auto error = checkResultForError(l, name.value, lua_resume(l, nullptr, 0))) return error;
-    // SAFETY: VM 边界——`from` 传 null 即「主线程 resume」（cpp lua_resume(l,
-    // nullptr, 0) 同款），`l_vm` 仍为本帧独占存活线程。
-    let resume_result = unsafe { alias(l_vm).resume(null_mut(), 0) };
+    // cpp `lua_resume(l, nullptr, 0)` 的 from=null 即「主线程恢复」契约形态，
+    // 由 `resume_main` 单点收口，此处无需再传 null 哨兵。
+    let resume_result = alias(l_vm).resume_main(0);
     if let Some(error) = E::check_result(l, &name_str, resume_result) {
       popper.luau_temp_thread_popper();
       return Some(error);

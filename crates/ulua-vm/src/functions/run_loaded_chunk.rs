@@ -4,7 +4,6 @@
 //! 移植，现收口于此；宿主间差异经参数与返回值表达，不再各写一份。
 
 use alloc::string::String;
-use core::ptr::null_mut;
 
 use crate::{
   enums::lua_status::LuaStatus,
@@ -90,10 +89,9 @@ pub unsafe fn run_loaded_chunk(
   }
 
   // int status = lua_resume(t, NULL, 0);
-  // 保留空指针：C 接口 lua_resume(L, from, nargs) 契约规定主线程首次
-  // resume 时 from 传 NULL（无父调用方）
-  // SAFETY: `t` 为上方新建且栈上已备好待执行函数；from=null 合法（见上注释）。
-  let status = unsafe { (*t).resume(null_mut(), 0) };
+  // cpp 的 from=NULL 即主线程恢复契约形态，由 `resume_main` 单点收口。
+  // SAFETY: 裸指针解引用——`t` 为上方新建且栈上已备好待执行函数。
+  let status = unsafe { (*t).resume_main(0) };
 
   if status == LuaStatus::Ok as i32 {
     // SAFETY: resume 正常返回后 t 仍由 l 栈槽持有；-n 为模块返回值。
