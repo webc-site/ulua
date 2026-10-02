@@ -18,6 +18,8 @@
 //!    `// SAFETY:` 注释的同一隐含前提，逐条上收到本文件）；
 //! 3. null 哨兵不进入本模块：可空处调用点先行判空或以 `Option` 表达。
 
+use core::ptr::NonNull;
+
 /// 裸指针 → `&'static mut T` 的解引用收口（原散点 `unsafe { &mut *p }` 的
 /// 唯一替身；句柄字段经 safe 的 `as_ptr()` 出裸址后进入本门面）。
 ///
@@ -27,4 +29,25 @@ pub(crate) fn alias<T>(p: *mut T) -> &'static mut T {
   // SAFETY: 契约由调用点逐条承担（与原散点 `unsafe { &mut *p }` 完全同形，
   // 全 crate 本簇仅此一处执行可变裸指针解引用）。
   unsafe { &mut *p }
+}
+
+/// [`alias`] 的共享只读形态（原散点 `unsafe { &*p }` 的替身）。
+///
+/// # Safety（由调用点满足，见模块级契约）
+/// `p` 非空、对齐且指向存活 `T`；共享读不产生可变别名。
+pub(crate) fn alias_ref<T>(p: *const T) -> &'static T {
+  // SAFETY: 同 [`alias`]，共享读不产生可变别名。
+  unsafe { &*p }
+}
+
+/// [`NonNull`] 句柄 → `&'static mut T` 的收口门面，复用 [`alias`] 的模块级契约。
+/// 本函数自身 safe，`unsafe` 仍只落在 [`alias`] 这一唯一可变解引用点。
+pub(crate) fn alias_nn<T>(p: NonNull<T>) -> &'static mut T {
+  alias(p.as_ptr())
+}
+
+/// [`NonNull`] 句柄 → `&'static T` 的收口门面（[`alias_nn`] 的只读形态），
+/// 复用 [`alias_ref`] 的模块级契约。
+pub(crate) fn alias_nn_ref<T>(p: NonNull<T>) -> &'static T {
+  alias_ref(p.as_ptr())
 }
