@@ -24,7 +24,7 @@ pub(crate) unsafe fn auxresume(l: *mut LuaState, co: *mut LuaState, narg: i32) -
       let status = lua_costatus(&*l, &*co);
       if status != LuaCoStatus::CoSus as i32 {
         let sname = LuaCoStatus::from_c_int(status).map_or("dead", LuaCoStatus::as_str);
-        lua_pushfstring_l(l, format_args!("cannot resume {} coroutine", sname));
+        lua_pushfstring_l(&mut *l, format_args!("cannot resume {} coroutine", sname));
         return CO_STATUS_ERROR;
       }
     }

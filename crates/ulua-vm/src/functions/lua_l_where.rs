@@ -43,7 +43,7 @@ pub(crate) unsafe fn lua_l_where(l: *mut LuaState, level: i32) {
       let line = currentline(&*ci);
       if line > 0 {
         let chunk = cstr_cow(chunkid);
-        lua_o_pushfstring(l, format_args!("{}:{}: ", chunk, line));
+        lua_o_pushfstring(&mut *l, format_args!("{}:{}: ", chunk, line));
         return;
       }
     }

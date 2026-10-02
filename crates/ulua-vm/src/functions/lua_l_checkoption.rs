@@ -43,7 +43,7 @@ pub unsafe fn lua_l_checkoption(
       i += 1;
     }
 
-    let msg = lua_pushfstring_l(l, format_args!("invalid option '{}'", cstr_cow(name)));
+    let msg = lua_pushfstring_l(&mut *l, format_args!("invalid option '{}'", cstr_cow(name)));
     let msg_str = cstr_cow(msg);
     lua_l_argerror_l(l, narg, msg_str.as_ref())
   }
