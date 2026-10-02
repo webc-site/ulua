@@ -2,7 +2,7 @@ use core::mem::zeroed;
 
 use crate::{
   functions::{
-    cstr_bytes, getthread::getthread, lua_getinfo::lua_getinfo, lua_isnumber::lua_isnumber,
+    cstr_bytes, getthread::getthread, lua_getinfo::lua_getinfo,
     lua_rawcheckstack::lua_rawcheckstack, lua_xmove::lua_xmove,
   },
   macros::lua_lib_fn::lua_lib_fn,
@@ -14,6 +14,15 @@ use crate::{
 /// 预留槽；栈 `arg+1` 为 level 数或函数、`arg+2` 为 NUL 结尾选项串（`luaL_checkstring`），
 /// `lua_getinfo` 可写 `ar` 并可抛错，须在受保护帧内调用。cpp `ldblib.cpp:25`。
 pub(crate) unsafe fn db_info(l: *mut LuaState) -> i32 {
+  // r13-w1a 逐点定性（w6d 口径保留面）：本票 14 处 `(*l).` 命中（to_integer/
+  // arg_check/is_function/get_top/arg_error×3/check_bytes/push_bytes×2/
+  // push_integer×2/push_value/push_boolean）均为 records/lua_state 既有门面收编
+  // 形态（前波 safe-ify 已收），零翻案、零新造门面；`getthread/rawcheckstack/
+  // lua_getinfo/lua_xmove` 为指针取参自由函数调用点，非 `(*l).` 裸调用面，原样
+  // 保留；`(*l1).get_top/(*l1).set_top` 同为既有门面。收编一处：level 数值判定
+  // `lua_isnumber(&*l, arg + 1) != 0` 换用 access.rs 既有 `is_number` 门面——
+  // 该方法即 `lua_isnumber(self, idx) != 0` 的 inline(always) 字面转发，谓词逐位
+  // 恒等、读数位点不变（use 头部同步去 `lua_isnumber` 导入）。
   unsafe {
     let (l1, arg) = getthread(l);
     let mut l1top: i32 = 0;
@@ -26,7 +35,7 @@ pub(crate) unsafe fn db_info(l: *mut LuaState) -> i32 {
     }
 
     let level: i32;
-    if lua_isnumber(&*l, arg + 1) != 0 {
+    if (*l).is_number(arg + 1) {
       level = (*l).to_integer(arg + 1).unwrap_or(0);
       (*l).arg_check(level >= 0, arg + 1, "level can't be negative");
     } else if arg == 0 && (*l).is_function(1) {
