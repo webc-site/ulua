@@ -6,9 +6,10 @@
 //! 该整数↔指针折算与 tag 常量收口到一处，读侧（FORGLOOP 快路径与 codegen 回调）
 //! 经 `pvalue! … as usize as i32` 逆运算取回游标。
 //!
-//! B1c 票面 1：写入面另折为 [`Slot::from_raw`] 一处指针边界 + [`TValue::set_pvalue`]
-//! 安全方法调用，`unsafe` 由「整块函数体」收敛为边界一次句柄构造；签名与槽地址语义
-//! 不变（消费点 `luau_execute.rs` FORGLOOP 臂与 code-gen 回调零改动）。
+//! B1c 票面 1 / r16-v6 收准：写入面全退 unsafe——`slot` 转 `&mut TValue`（借用承载
+//! 非空/对齐/独占可写），句柄经 safe 构造子 [`Slot::from_mut`] 构造、再走
+//! [`TValue::set_pvalue`] 安全写面，函数体零 `unsafe`、签名 `pub fn`。载荷/tag/写面
+//! 逐位语义不变（消费点 `luau_execute.rs` FORGLOOP 臂与 code-gen 回调仅调用形变）。
 
 use core::ffi::c_void;
 
@@ -19,14 +20,13 @@ use crate::{
 /// 把「访问完 `index` 之后的下一个游标」写入迭代器槽：载荷为
 /// `(index + 1) as usize as *mut c_void`，extra tag 为 `LU_TAG_ITERATOR`。
 ///
-/// # Safety
-/// `slot` 须指向本帧内建迭代协议预留的可写栈槽（FORGLOOP 的 `ra+2`）；`index` 为
-/// 当前数组+哈希段合并游标（有界 i32）。载荷为地址形态的纯游标数值，永不被解引用。
-pub unsafe fn set_iterator_index(slot: *mut TValue, index: i32) {
-  // SAFETY: 调用方契约保证 `slot` 为本次写入期内独占可写、按 `TValue` 对齐的栈槽，
-  // 这是全函数唯一的指针边界；整转指针是把游标按迭代器协议装箱为指针载荷
-  //（读侧 `as usize as i32` 原样取回），不构造可解引用的指针，`set_pvalue` 亦不解引用。
-  unsafe { Slot::from_raw(slot) }
+/// 调用序契约（正确性，非内存安全；r16-v6 起形参为 `&mut TValue`——借用承载
+/// 非空/对齐/独占可写，[`Slot::from_mut`] 为 safe 构造子，体零 `unsafe`）：`slot`
+/// 须为本帧内建迭代协议预留的可写栈槽（FORGLOOP 的 `ra+2`）；`index` 为当前
+/// 数组+哈希段合并游标（有界 i32）。载荷为地址形态的纯游标数值，读侧只做整数
+/// 折算（`as usize as i32` 原样取回），永不被解引用。
+pub fn set_iterator_index(slot: &mut TValue, index: i32) {
+  Slot::from_mut(slot)
     .as_mut()
     .set_pvalue((index + 1) as usize as *mut c_void, LU_TAG_ITERATOR);
 }

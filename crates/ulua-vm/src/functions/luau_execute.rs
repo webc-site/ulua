@@ -4549,7 +4549,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
                 // set up registers for builtin iteration
                 let w = frame.slots_mut(ra, 3);
                 setobj_2_s!(l, &raw mut w[1], &raw const w[0]);
-                set_iterator_done(&raw mut w[2]);
+                set_iterator_done(&mut w[2]);
                 setnilvalue!(&mut w[0]);
               } else {
                 (*(*l).ci).savedpc = pc; // vm_protect_pc(): next call always errors
@@ -4607,7 +4607,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
                 let e = (*h).array.add(index as usize);
 
                 if !(*e).is_nil() {
-                  set_iterator_index(ra.add(2), index);
+                  set_iterator_index(&mut *ra.add(2), index);
                   setnvalue!(ra.add(3), (index + 1) as f64);
                   setobj_2_s!(l, ra.add(4), e);
 
@@ -4628,7 +4628,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
                 let n = (*h).node.add((index - sizearray) as usize);
 
                 if !(*gval!(n)).is_nil() {
-                  set_iterator_index(ra.add(2), index);
+                  set_iterator_index(&mut *ra.add(2), index);
                   getnodekey!(l, ra.add(3), n);
                   setobj_2_s!(l, ra.add(4), gval!(n));
 
@@ -4707,7 +4707,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
             if (*(*cl).env).safeenv != 0 && (*ra.add(1)).is_table() && control_ok {
               setnilvalue!(ra);
               // ra+1 is already the table
-              set_iterator_done(ra.add(2));
+              set_iterator_done(&mut *ra.add(2));
             } else if !(*ra).is_function() {
               (*(*l).ci).savedpc = pc; // vm_protect_pc(): next call always errors
               lua_g_typeerror_l(l, ra, ERR_ITERATE_OVER);
