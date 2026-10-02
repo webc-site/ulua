@@ -101,6 +101,15 @@ pub(crate) unsafe fn moveelements(
   t: i32,
   sparsemove: bool,
 ) {
+  // r13-w1a 逐点定性（w6d 口径保留面）：`(*l).base` 两处 srct-1/dstt-1 帧槽读数
+  // （as_table_ptr hvalue 式取表指针）系 LuaState 帧裸字段落笔；边界原语只覆盖
+  // top 槽算术（top_slot/advance_top/rewind_top/reanchor_top），无 base 侧既有
+  // 门面，按 w6d 与 r13-w1b（lua_v_call_tm `(*l).base` 保留）判例原样保留，CallInfo
+  // 裸字段红线不动。`lua_rawgeti/lua_rawseti/lua_rawiter(&mut *l)`、
+  // `abs_index(&*l)`、`check_writable(l)` 为安全引用/指针取参自由函数调用点，
+  // 非 `(*l).` 裸调用面，保留。本文件其余 `(*l).` 命中——moveelements 的
+  // new_table/pop×5/push_nil/to_integer 与 tovalidintkey 的 type_of/to_number——
+  // 皆 records/lua_state 既有门面收编形态，零翻案、零新造门面、零动作。
   // SAFETY: 契约保证 base+srct-1/base+dstt-1 落在当前帧栈内且槽值为表，hvalue 解引用合法
   unsafe {
     let src = (*(*l).base.offset((srct - 1) as isize)).as_table_ptr();
