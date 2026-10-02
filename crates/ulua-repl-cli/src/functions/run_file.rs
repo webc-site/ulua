@@ -35,7 +35,7 @@ unsafe fn sandboxed_thread(gl: &mut LuaState) -> *mut LuaState {
   unsafe {
     let l = lua_newthread(gl);
     // new thread needs to have the globals sandboxed
-    lua_l_sandboxthread(l);
+    lua_l_sandboxthread(&mut *l);
     l
   }
 }

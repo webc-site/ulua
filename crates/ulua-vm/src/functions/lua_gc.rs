@@ -15,15 +15,17 @@ const KB_MASK: usize = (1 << KB_SHIFT) - 1;
 /// gc_threshold 的「GC 暂停」哨兵值
 const GC_PAUSED_THRESHOLD: usize = usize::MAX;
 
-/// # Safety
-///
-/// `l` must be a valid pointer to a live `LuaState`.
-pub unsafe fn lua_gc(l: *mut LuaState, what: i32, data: i32) -> i32 {
+/// `lua_gc`（cpp `lapi.cpp` 同名）：GC 控制/查询统一入口。调用序契约（正确性，
+/// 非内存安全；r16-v3 引用形前移，`l` 存活由 `&mut LuaState` 类型承载）：
+/// `l` 须为存活 `LuaState`，`what`/`data` 参数配对满足各分支约定（如 setpause 传
+/// 指针或 null）；内部触发的 `lua_c_validate`/`lua_c_fullgc`/`lua_c_step` 再入与
+/// `(*g)` 场域裸读写收进体内 unsafe，不再外包给调用方。
+pub fn lua_gc(l: &mut LuaState, what: i32, data: i32) -> i32 {
   let mut res: i32 = 0;
   // SAFETY: 契约保证 `l` 为存活调用帧且 what/data 参数配对满足各分支约定（如 setpause 传指针或 null）
   unsafe {
     condhardmemtests!(lua_c_validate(l), 1);
-    let g: *mut global_State = (*l).global;
+    let g: *mut global_State = l.global;
     let Some(op) = LuaGcOp::from_repr(what) else {
       return -1;
     };

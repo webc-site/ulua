@@ -58,7 +58,7 @@ fn new_sandbox() -> Option<StateGuard> {
   // Safety: null 已被 NonNull::new 上界拒绝，state 为 lua_l_newstate
   // 刚创建的有效 VM 状态，可安全开库与沙箱化
   unsafe {
-    lua_l_openlibs(state.as_ptr());
+    lua_l_openlibs(&mut *state.as_ptr());
     lua_l_sandbox(state.as_ptr());
   }
 

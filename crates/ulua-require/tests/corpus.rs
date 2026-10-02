@@ -399,9 +399,9 @@ impl RequireHost for MemHost {
     unsafe {
       let gl = lua_mainthread(&*l);
       let ml = lua_newthread(gl);
-      lua_xmove(gl, l, 1);
+      lua_xmove(&mut *gl, &mut *l, 1);
       // new thread needs to have the globals sandboxed
-      lua_l_sandboxthread(ml);
+      lua_l_sandboxthread(&mut *ml);
 
       let load_status = luau_load(ml, &chunkname, &bytecode, 0);
       if load_status == LuaStatus::Ok as i32 {
@@ -421,7 +421,7 @@ impl RequireHost for MemHost {
       }
 
       // add ML result to l stack, then remove the ML thread slot
-      lua_xmove(ml, l, 1);
+      lua_xmove(&mut *ml, &mut *l, 1);
       (*l).remove(-2);
       1
     }
@@ -440,7 +440,7 @@ impl Fixture {
     let l = unsafe {
       let l = lua_l_newstate();
       assert!(!l.is_null(), "luaL_newstate failed");
-      lua_l_openlibs(l);
+      lua_l_openlibs(&mut *l);
       luaopen_require(l, MemHost::new());
       l
     };

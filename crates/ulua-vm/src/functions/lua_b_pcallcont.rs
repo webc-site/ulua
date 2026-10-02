@@ -10,7 +10,7 @@ use crate::{
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub(crate) unsafe fn lua_b_pcallcont(l: *mut LuaState, status: i32) -> i32 {
   unsafe {
-    lua_rawcheckstack(l, 1);
+    lua_rawcheckstack(&mut *l, 1);
     if status == 0 {
       // r12-w7a2 收编（票面特别裁决位）：rawcheckstack 为唯一重分配点，其后窗读
       // `base`/`top` 已预绑定；栈顶抬升改经 advance_top 原语——窗口内仅做已界内槽的

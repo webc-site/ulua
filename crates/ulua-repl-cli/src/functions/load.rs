@@ -51,8 +51,8 @@ unsafe fn spawn_module_thread(l: &mut LuaState) -> *mut LuaState {
   unsafe {
     let gl = lua_mainthread(l);
     let ml = lua_newthread(gl);
-    lua_xmove(gl, l, 1);
-    lua_l_sandboxthread(ml);
+    lua_xmove(&mut *gl, &mut *l, 1);
+    lua_l_sandboxthread(&mut *ml);
     ml
   }
 }
@@ -194,8 +194,9 @@ pub(crate) fn load(
   // xmove 之后 l 栈顶是 [thread, result]，`remove(l, -2)` 弹走的正是该线程槽，
   // 只留 result。
   // Safety: ml 与 l 同属一个 VM 且都存活（xmove 前提成立）；-1 值移出后线程槽
-  // 已无引用需求（值已移出），remove 只搬运栈槽、不读已失效内存。
-  unsafe { lua_xmove(ml, l, 1) };
+  // 已无引用需求（值已移出），remove 只搬运栈槽、不读已失效内存。r16-v3：callee
+  // 已前移引用形，本 fn（unsafe fn 体）内即时建借用、无需再包块。
+  lua_xmove(&mut *ml, &mut *l, 1);
   // remove ML thread from l stack
   l.remove(-2);
 

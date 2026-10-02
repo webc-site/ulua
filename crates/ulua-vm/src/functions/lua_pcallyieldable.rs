@@ -28,7 +28,7 @@ unsafe extern "C-unwind" fn pcallyieldable_run(l: *mut LuaState, ud: *mut c_void
   // SAFETY: 契约保证 ud 指向 CallContext（调用方栈上存活至 pcall 结束）
   unsafe {
     let ctx = &*(ud as *const CallContext);
-    let preparereentry = lua_isyieldable(l) != 0;
+    let preparereentry = lua_isyieldable(&*l) != 0;
     lua_d_callint(l, ctx.func, ctx.nresults, preparereentry);
   }
 }

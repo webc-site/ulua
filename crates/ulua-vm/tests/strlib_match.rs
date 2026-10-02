@@ -50,7 +50,7 @@ impl Str {
   fn new() -> Self {
     let vm = State::new();
     // Safety: 测试并行运行下本 VM 由本用例独占；`lua_l_openlibs` 只初始化标准库表
-    unsafe { lua_l_openlibs(vm.l) };
+    unsafe { lua_l_openlibs(&mut *vm.l) };
     Self { vm }
   }
 

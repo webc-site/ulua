@@ -67,7 +67,7 @@ fn main() {
       eprintln!("lua_l_newstate returned null");
       exit(1);
     }
-    lua_l_openlibs(l);
+    lua_l_openlibs(&mut *l);
 
     // Run the chunk on a fresh thread, like CLI/src/Repl.cpp's runCode: the
     // thread T is rooted on l's stack, and we load the function directly into

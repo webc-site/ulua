@@ -30,7 +30,7 @@ pub(crate) unsafe fn db_info(l: *mut LuaState) -> i32 {
     // if l1 != l, l1 can be in any state, and therefore there are no guarantees about its stack space
     if l != l1 {
       // for 'f' option, we reserve one slot and we also record the stack top
-      lua_rawcheckstack(l1, 1);
+      lua_rawcheckstack(&mut *l1, 1);
       l1top = (*l1).get_top();
     }
 
@@ -92,7 +92,7 @@ pub(crate) unsafe fn db_info(l: *mut LuaState) -> i32 {
           if l1 == l {
             (*l).push_value(-1 - results); // function is right before results
           } else {
-            lua_xmove(l1, l, 1); // function is at top of l1
+            lua_xmove(&mut *l1, &mut *l, 1); // function is at top of l1
           }
           results += 1;
         }

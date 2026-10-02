@@ -114,7 +114,11 @@ fn gc_sweep_then_reintern_keeps_table_consistent() {
   let transient = b"gc-transient-string-42";
   unsafe {
     let ts1 = lua_s_newlstr(&mut *s.l, transient);
-    assert_eq!(lua_gc(s.l, LuaGcOp::Collect as i32, 0), 0, "fullgc 失败");
+    assert_eq!(
+      lua_gc(&mut *s.l, LuaGcOp::Collect as i32, 0),
+      0,
+      "fullgc 失败"
+    );
     // 清扫后重 intern：无残留半摘链（若有，桶内指向已释放对象会当场失守）
     let ts2 = lua_s_newlstr(&mut *s.l, transient);
     assert!(

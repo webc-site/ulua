@@ -68,7 +68,7 @@ impl Lib {
     // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 由 `State` 守卫
     // 持有，至本文件用例结束前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
     unsafe {
-      lua_l_openlibs(l);
+      lua_l_openlibs(&mut *l);
       // 库名按 cpp：LUA_INTLIBNAME="integer"（cpp/VM/include/lualib.h:154 +
       // lintlib.cpp:605），luaopen_integer 以同名注册。
       (*l).get_field_str(LUA_GLOBALSINDEX, "integer");

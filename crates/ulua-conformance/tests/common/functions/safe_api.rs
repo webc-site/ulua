@@ -228,8 +228,8 @@ pub fn pop(l: L, n: c_int) {
 
 /// `lua_checkstack`：尝试扩容 `size` 槽，返回 C 侧布尔（0/非 0）。
 pub fn checkstack(l: L, size: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_checkstack(l, size) }
+  // r16-v3：callee 已前移 `&mut LuaState` 引用形，经 `state_mut` 收口点直传独占引用。
+  lua_checkstack(state_mut(l), size)
 }
 
 /// `luaL_checkstack`：扩容失败即抛 Lua 错误（消息 `msg`）。
@@ -302,8 +302,8 @@ pub fn set_useratom(l: L, f: AtomAssignFn) {
 
 /// `luaL_openlibs`。
 pub fn openlibs(l: L) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_l_openlibs(l) }
+  // r16-v3：callee 已前移 `&mut LuaState` 引用形，经 `state_mut` 收口点直传独占引用。
+  lua_l_openlibs(state_mut(l))
 }
 
 /// `luaopen_base`：装载 base 库并返回其栈占用（供 [`pop`] 回收）。
@@ -326,8 +326,8 @@ pub fn sandbox(l: L) {
 
 /// `luaL_sandboxthread`。
 pub fn sandboxthread(l: L) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_l_sandboxthread(l) }
+  // r16-v3：callee 已前移引用形，经 `state_mut` 收口点直传独占引用。
+  lua_l_sandboxthread(state_mut(l))
 }
 
 /// `lua_validate`：VM 内部一致性校验。
@@ -534,8 +534,8 @@ pub fn objlen(l: L, idx: c_int) -> c_int {
 
 /// `lua_gc`：`what` 传 [`LuaGcOp`] 的 C 编码值。
 pub fn gc(l: L, what: c_int, data: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_gc(l, what, data) }
+  // r16-v3：callee 已前移 `&mut LuaState` 引用形，经 `state_mut` 收口点直传独占引用。
+  lua_gc(state_mut(l), what, data)
 }
 
 // ---------------------------------------------------------------------------
@@ -935,8 +935,8 @@ pub fn to_str<'a>(l: L, idx: c_int) -> Option<&'a str> {
 
 /// `lua_getreadonly(l, idx)`（C 侧 0/非 0）。
 pub fn getreadonly(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_getreadonly(l, idx) }
+  // r16-v3：callee 已前移 `&LuaState` 引用形，经 `state_ref` 收口点直传只读引用。
+  lua_getreadonly(state_ref(l), idx)
 }
 
 // ---------------------------------------------------------------------------
@@ -1002,9 +1002,9 @@ pub fn push_c_closure(l: L, f: LuaCFunction, name: &'static [u8], nup: c_int) {
 pub fn openlibs_and_sandbox_all(l: L) {
   // Safety: `l` 存活（模块级契约）。
   unsafe {
-    lua_l_openlibs(l);
+    lua_l_openlibs(&mut *l);
     lua_l_sandbox(l);
-    lua_l_sandboxthread(l);
+    lua_l_sandboxthread(&mut *l);
   }
 }
 
@@ -1048,8 +1048,8 @@ pub fn dump(
 
 /// `lua_isyieldable`（C 侧 0/非 0）。
 pub fn isyieldable(l: L) -> c_int {
-  // Safety: `l` 存活（模块级契约）；只读当前上下文的可让出位。
-  unsafe { lua_isyieldable(l) }
+  // r16-v3：callee 已前移 `&LuaState` 引用形，经 `state_ref` 收口点直传只读引用。
+  lua_isyieldable(state_ref(l))
 }
 
 /// `lua_yield`：以栈顶 `nresults` 个值让出回宿主（只应在可 yield 的 C 回调内调用）。
@@ -1235,9 +1235,8 @@ pub fn tothread(l: L, idx: c_int) -> Option<L> {
 
 /// `lua_xmove`：同 VM 内两线程间搬 `n` 个栈值。
 pub fn xmove(from: L, to: L, n: c_int) {
-  // Safety: 两侧同属一个存活 VM 且为不同 state、`from` 顶恰有 `n` 个待搬值
-  //（用例配平契约）。
-  unsafe { lua_xmove(from, to, n) }
+  // r16-v3：callee 已前移引用形，经 `state_mut` 收口点直传两侧独占引用（不同 state 前提见上）。
+  lua_xmove(state_mut(from), state_mut(to), n)
 }
 
 /// `lua_setsafeenv`：切换 `objindex` 处环境表的 safeenv 标志。

@@ -141,7 +141,7 @@ fn fastcall1_modf_fast_path_returns_ip_then_fp() {
 #[test]
 fn fastcall1_missing_slot_falls_back_to_env_lookup() {
   let s = State::new();
-  unsafe { lua_l_openlibs(s.l) };
+  unsafe { lua_l_openlibs(&mut *s.l) };
   s.enable_safeenv();
 
   // 常量段含 varint 负载，直接用 common 的 `Blob` 写入器拼装

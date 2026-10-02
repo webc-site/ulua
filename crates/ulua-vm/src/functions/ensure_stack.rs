@@ -24,7 +24,7 @@ pub(crate) unsafe fn ensure_stack_impl(l: *mut LuaState, error_l: *mut LuaState,
     if size > 0
       // cpp: `L->top + size > L->ci->top`
       && size as isize > (*(*l).ci).top.offset_from((*l).top)
-      && lua_checkstack(l, size) == 0
+      && lua_checkstack(&mut *l, size) == 0
     {
       // 对应 cpp lapi.cpp:64 `luaO_pushfstring(L, "stack overflow")`
       lua_o_pushfstring(&mut *error_l, format_args!("stack overflow"));

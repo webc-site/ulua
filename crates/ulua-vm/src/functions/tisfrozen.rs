@@ -9,7 +9,11 @@ pub unsafe fn tisfrozen(l: *mut LuaState) -> i32 {
   unsafe {
     (*l).check_type(1, LuaType::Table);
 
-    (*l).push_boolean(lua_getreadonly(l, 1) != 0);
+    // r16-v3 #60 拆两语句：`lua_getreadonly` 前移 `&LuaState` 只读形后与
+    // `push_boolean` 独占接收者借用冲突；原位现读、句间无场写，拆句逐位等价。
+    let frozen = lua_getreadonly(&*l, 1) != 0;
+
+    (*l).push_boolean(frozen);
 
     1
   }

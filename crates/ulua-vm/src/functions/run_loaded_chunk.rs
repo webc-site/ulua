@@ -85,7 +85,7 @@ pub unsafe fn run_loaded_chunk(
   unsafe {
     (*l).push_value(-2);
     (*l).remove(-3);
-    lua_xmove(l, t, 1);
+    lua_xmove(&mut *l, &mut *t, 1);
   }
 
   // int status = lua_resume(t, NULL, 0);

@@ -15,8 +15,9 @@ use ulua_vm::{
 // 串以 `&[u8]` 定长交 VM 拷贝（review.md §10：裸指针配点收进 VM bytes 门面，
 // 调用点不再散落 `.as_ptr().cast()`）。
 pub unsafe fn setup_arguments(l: *mut LuaState, args: &[impl AsRef<str>]) {
-  // Safety: `# Safety` 契约保证 `l` 为活跃状态机；按 `args.len()` 预留后再逐个压栈。
-  unsafe { lua_checkstack(l, args.len() as i32) };
+  // Safety: `# Safety` 契约保证 `l` 为活跃状态机，块内即时建引用；按 `args.len()`
+  // 预留后再逐个压栈（r16-v3：callee 已 safe 化，unsafe 仅剩边界裸指针重建）。
+  unsafe { lua_checkstack(&mut *l, args.len() as i32) };
   for arg in args {
     let s = arg.as_ref();
     // Safety: `l` 同上；`bytes` 门面以切片长度取字节，VM 当调用即拷入新串对象，

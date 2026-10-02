@@ -29,9 +29,9 @@ use crate::functions::compile_source::compile_source;
 // 强制（且 `pub fn` 解引用裸指针形参将命中 `clippy::not_unsafe_ptr_arg_deref`），故属
 // 「确属 c-API 句柄边界」而非纯逻辑层，签名不动。
 pub unsafe fn run_code(l: *mut LuaState, source: &str) -> Option<String> {
-  // Safety: l 是 REPL 循环全程有效的主线程状态（fn /// # Safety），checkstack
-  // 预留后续 VM 调用所需槽位。
-  unsafe { lua_checkstack(l, LUA_MINSTACK) };
+  // Safety: l 是 REPL 循环全程有效的主线程状态（fn /// # Safety），块内即时建引用
+  // 预留后续 VM 调用所需槽位（r16-v3：callee 已 safe 化，unsafe 仅剩边界裸指针重建）。
+  unsafe { lua_checkstack(&mut *l, LUA_MINSTACK) };
 
   let bytecode = compile_source(source);
 

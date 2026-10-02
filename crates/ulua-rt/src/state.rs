@@ -175,10 +175,8 @@ impl DerefMut for StateView<'_> {
 /// 为一次栈操作预留 `slots` 个空位；不足时返回可捕获的 `RuntimeError`
 /// （而不是让后续 push 触发 VM 断言 abort）。
 /// `Table` 系列原始访问、`Function::call`、`Thread::resume`、`exec_raw` 共用。
-pub(crate) fn ensure_stack(state: StateView<'_>, slots: i32) -> Result<()> {
-  // Safety: 族级契约成立;`lua_checkstack` 对存活 state + 任意 `slots` 都有
-  // 定义:返回 0 表示扩不动,非 0 表示头寸就位,不越界读写。
-  if unsafe { lua_checkstack(state.as_mut_ptr(), slots) } == 0 {
+pub(crate) fn ensure_stack(mut state: StateView<'_>, slots: i32) -> Result<()> {
+  if lua_checkstack(&mut state, slots) == 0 {
     return Err(Error::runtime("stack overflow: not enough Lua stack space"));
   }
   Ok(())
@@ -205,9 +203,8 @@ pub(crate) fn ensure_stack_or_panic(state: StateView<'_>, slots: i32) {
 /// interrupt trampoline 在 `raise_lua_error` 前用它——该 facade 自身的 `push_bytes`
 /// 需要一个已就位的空位才能维持 `api_incr_top` 不变式。
 #[inline]
-pub(crate) fn raw_reserve_stack(state: StateView<'_>, slots: i32) {
-  // Safety: 族级契约;`lua_rawcheckstack` 只调整该 state 的栈窗口、不越界读写。
-  unsafe { lua_rawcheckstack(state.as_mut_ptr(), slots) }
+pub(crate) fn raw_reserve_stack(mut state: StateView<'_>, slots: i32) {
+  lua_rawcheckstack(&mut state, slots)
 }
 
 /// `idx` 处当前是否处于可让出点（`lua_isyieldable` 收口点，返回布尔）。
@@ -216,8 +213,7 @@ pub(crate) fn raw_reserve_stack(state: StateView<'_>, slots: i32) {
 /// 保证 state 正由当前线程驱动。
 #[inline]
 pub(crate) fn is_yieldable(state: StateView<'_>) -> bool {
-  // Safety: 族级契约;`lua_isyieldable` 只读执行上下文。
-  unsafe { lua_isyieldable(state.as_ptr().cast_mut()) != 0 }
+  lua_isyieldable(&state) != 0
 }
 
 /// 读栈深（`lua_gettop`）的 safe 门面：`LuaState::get_top` 是 ulua-vm 已收口的
@@ -472,20 +468,16 @@ pub(crate) fn run_pcall(mut state: StateView<'_>, nargs: i32, nresults: i32, msg
 /// `as i32` 编码、`data` 满足该 op 的取值约定（动作类恒 0）。GC 只回收不可达
 /// 对象——所有存活句柄都持注册表引用（GC 可达），信息/动作 op 均不产生悬垂读。
 #[inline]
-pub(crate) fn run_gc(state: StateView<'_>, what: i32, data: i32) -> i32 {
-  // Safety: 族级契约;`lua_gc` 在调用线程上同步执行 VM 内部 GC 簿记,
-  // 不跨 Rust 借用指针。
-  unsafe { lua_gc(state.as_mut_ptr(), what, data) }
+pub(crate) fn run_gc(mut state: StateView<'_>, what: i32, data: i32) -> i32 {
+  lua_gc(&mut state, what, data)
 }
 
 /// 打开标准库（`lua_l_openlibs` 收口点）：只在 [`build_lua`] 的构造路径调用。
 ///
 /// 调用序契约：`state` 是刚通过非空收口、尚未交给任何其它 `lua_*` 入口的新 state。
 #[inline]
-fn open_std_libs(state: StateView<'_>) {
-  // Safety: 唯一调用点 [`build_lua`] 传入刚经 `NonNull::new` 非空收口的完整
-  // 新 state;`lua_l_openlibs` 只在该 state 上建库表,不跨 Rust 借用指针。
-  unsafe { lua_l_openlibs(state.as_mut_ptr()) }
+fn open_std_libs(mut state: StateView<'_>) {
+  lua_l_openlibs(&mut state)
 }
 
 /// 为 `state` 的调用栈构建回溯字符串并净压一层（`lua_l_traceback` 收口点，
@@ -559,8 +551,7 @@ pub(crate) fn slots_equal(mut state: StateView<'_>, a: i32, b: i32) -> bool {
 /// 读 `idx` 处 table 的只读标志（`lua_getreadonly` 收口点）。
 #[inline]
 pub(crate) fn readonly_at(state: StateView<'_>, idx: i32) -> bool {
-  // Safety: 族级契约;只读该槽头部。
-  unsafe { lua_getreadonly(state.as_ptr().cast_mut(), idx) != 0 }
+  lua_getreadonly(&state, idx) != 0
 }
 
 /// 压出 tagged light userdata（poll/回调分派用的不透明标记指针）。
@@ -711,10 +702,14 @@ pub(crate) fn co_status(from: StateView<'_>, co: StateView<'_>) -> i32 {
 /// 前提;`lua_xmove` 自身亦如此约定）；`n` 在 `to` 侧已预留头寸内；`from` 顶恰有
 /// `n` 个待搬值且不剥走活寄存器（协程须挂起）。
 #[inline]
-pub(crate) fn move_slots(from: StateView<'_>, to: StateView<'_>, n: i32) {
-  // Safety: 调用序前提由 thread.rs 的 xmove 装配(其 status 预检 +
-  // `ensure_stack` 预留)维持;搬运只界内读写。
-  unsafe { lua_xmove(from.as_mut_ptr(), to.as_mut_ptr(), n) }
+pub(crate) fn move_slots(mut from: StateView<'_>, mut to: StateView<'_>, n: i32) {
+  // 同态退化守卫（cpp `lua_xmove` 体内 `from == to` 短路的同形前移）：两枚 `&mut`
+  // 实参在求值期即构造，若两侧同 state 则先于任何落笔即违 noalias——指针相等判在
+  // 引用构造**之前**，语义与体内短路逐字一致（净行为=不动作）。
+  if from.as_ptr() == to.as_ptr() {
+    return;
+  }
+  lua_xmove(&mut from, &mut to, n)
 }
 
 /// 对协程 `co` 跑 `lua_resume(co, from, nargs)`，返回 raw 状态码。
@@ -742,9 +737,8 @@ pub(crate) fn resume_co_error(co: StateView<'_>, from: StateView<'_>) -> i32 {
 ///
 /// 调用序契约：`co` 非运行态（挂起/完成/错误），由调用方 status 分派保证。
 #[inline]
-pub(crate) fn reset_co(co: StateView<'_>) {
-  // Safety: `co` 由句柄锚定存活;调用方已挡 Running/Normal。
-  unsafe { lua_resetthread(co.as_mut_ptr()) }
+pub(crate) fn reset_co(mut co: StateView<'_>) {
+  lua_resetthread(&mut co)
 }
 
 /// 读 `idx` 处 thread 值的协程 `LuaState`（`lua_tothread` 收口点；非 thread / 空归一 `None`）。
@@ -785,10 +779,8 @@ pub(crate) fn sandbox_main(state: StateView<'_>) {
 /// 对 `state` 的 `LUA_GLOBALSINDEX` 安装代理全局表，使全局写入留在本线程
 /// （`lua_l_sandboxthread` 收口点，main state 与协程通用）。
 #[inline]
-pub(crate) fn sandbox_thread(state: StateView<'_>) {
-  // Safety: 族级契约;只对该 state 自身的 `LUA_GLOBALSINDEX` 安装代理表,
-  // push/replace 自平衡,不触碰其它状态。
-  unsafe { lua_l_sandboxthread(state.as_mut_ptr()) }
+pub(crate) fn sandbox_thread(mut state: StateView<'_>) {
+  lua_l_sandboxthread(&mut state)
 }
 
 /// 设置 `idx` 处表的 `safeenv` 标志（`lua_setsafeenv` 收口点）。

@@ -36,14 +36,15 @@ pub unsafe extern "C-unwind" fn lua_collectgarbage(l: *mut LuaState) -> c_int {
   };
 
   if option == GC_OPT_COLLECT {
-    // Safety: `lua_gc` 为 ulua-vm unsafe 导出；`l` 为活跃状态。
-    unsafe { lua_gc(l, LuaGcOp::Collect as c_int, 0) };
+    // r16-v3：`lua_gc` 已前移引用形；本 fn 为 unsafe fn 体（edition 2021 隐式 unsafe
+    // 语境），`&mut *l` 即时建引用无需块包裹。`l` 为活跃状态。
+    lua_gc(&mut *l, LuaGcOp::Collect as c_int, 0);
     return 0;
   }
 
   if option == b"count" {
-    // Safety: 同上，`l` 为活跃状态。
-    let c = unsafe { lua_gc(l, LuaGcOp::Count as c_int, 0) };
+    // r16-v3：同上，`Count` 读数即时建借用转调。
+    let c = lua_gc(&mut *l, LuaGcOp::Count as c_int, 0);
     l.push_number(c as f64);
     return 1;
   }

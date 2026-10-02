@@ -174,12 +174,12 @@ pub fn eval_bytecode(bytecode: &[u8]) -> StdResult<(), Error> {
   // Safety: 上方 null 判定保证 `l` 是本帧独占的活跃状态机；openlibs → sandbox
   // 即 cpp `setupState`（Repl.cpp:205-230）的调用序。
   unsafe {
-    lua_l_openlibs(l);
+    lua_l_openlibs(&mut *l);
     lua_l_sandbox(l);
   }
   // Safety: 同上，冻结线程全局表（cpp runRepl 于宿主 state 的
   // luaL_sandboxthread，Repl.cpp:566）。
-  unsafe { lua_l_sandboxthread(l) };
+  unsafe { lua_l_sandboxthread(&mut *l) };
   // Safety: `run_loaded_chunk` 的前置（活跃状态机、调用前栈平衡、已依次完成
   // `lua_l_openlibs`/`lua_l_sandbox`/`lua_l_sandboxthread`）恰由上三句成立，
   // 且状态关闭发生在本句之后、`_state` Drop 之时。punch #21：原独立

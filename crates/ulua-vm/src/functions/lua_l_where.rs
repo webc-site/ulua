@@ -23,7 +23,7 @@ pub(crate) unsafe fn lua_l_where(l: *mut LuaState, level: i32) {
     // 取上一层指针，循环变量不参与取数，跳动本身没有可切片化的数组
     for _ in 0..level {
       if ci == (*l).base_ci {
-        lua_rawcheckstack(l, 1);
+        lua_rawcheckstack(&mut *l, 1);
         lua_pushlstring_bytes(&mut *l, b"");
         return;
       }
@@ -48,7 +48,7 @@ pub(crate) unsafe fn lua_l_where(l: *mut LuaState, level: i32) {
       }
     }
 
-    lua_rawcheckstack(l, 1);
+    lua_rawcheckstack(&mut *l, 1);
     lua_pushlstring_bytes(&mut *l, b"");
   }
 }
