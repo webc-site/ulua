@@ -25,11 +25,21 @@ pub(crate) unsafe fn findindex(l: *mut LuaState, t: &LuaTable, key: &TValue) -> 
       _ => -1,
     };
 
+    // 数组段命中分支：`i > 0 && i <= t.sizearray` 界判 ⇔ E1 `array_window()` 契约
+    // （窗长 = sizearray.max(0)，`i-1` 即窗内下标，越界口径由 UB 降 panic 在本形下
+    // 已由界判先行达成）；本分支只回下标不取指针，无裸 `.add()` 可消，保持原形。
     if i > 0 && i <= t.sizearray {
       i - 1 // yes; that's the index (corrected to C)
     } else {
       // check whether `key' is somewhere in the chain
       // key may be dead already, but it is ok to use it in `next'
+      // 哈希链遍历（gnode! 裁决口径，保留裸形）：`walk_nodes` 沿 `key.next` 单链游走，
+      // 与 cpp `findindex` 的链序逐位一致；改窗全扫会破坏命中序与 O(链长) 行为，
+      // 且返回值依赖 `gnode!(t, 0)` 基址的 `offset_from` 算术（E1 裁决明载豁免）。
+      // 窗等价契约：命中节点 `n.offset_from(gnode!(t, 0))` ⇔ 该桶在 `node_window()`
+      // 内的下标；哨兵表下本链起点即 dummy 单格（窗长恒 1、键值皆 nil，rawequal/
+      // DeadKey 判据必不命中），落到 runerror 分支，与 E1「判空不得用
+      // node_window().len()==0、须以桶内容为准」契约口径一致——本函数无判空点位。
       walk_nodes(mainposition(t, key), |n| -> Option<i32> {
         if lua_o_rawequal_key(&(*n).key, key) != 0
           || matches!(TKeyView::from_tkey(&(*n).key),
