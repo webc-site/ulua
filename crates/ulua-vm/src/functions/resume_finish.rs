@@ -31,6 +31,14 @@ use crate::{
 /// resume_start/resume 驱动/resume_finish 的成对协议，缺环即 ccount 失衡。
 pub(crate) unsafe fn resume_finish(l: *mut LuaState, mut status: i32, old_n_ccalls: i32) -> i32 {
   // SAFETY: 契约保证 `L`/协程 resume 链存活，循环内 resume_findhandler 取回的 handler 帧与 status 设置均限于该协程帧界
+  //
+  // r13-w1b 逐点定性（w6d 口径保留面）：本体的 `n_ccalls`/`base_ccalls` 读写、
+  // `isactive` 落笔、`status` 两处写入、收尾 else-if 的 Ok 谓词与末行原值回传均
+  // 无既有门面（LuaState 无 ccount/status 写面；status() 门面自带 non-repr→Ok 兜底，
+  // 仅对 Break 谓词逐位等价，Ok 谓词与裸 u8 回传不可换用），恢复点动作位原样保留；
+  // `(*(*l).global).cb` 为 global_State 链读数，不属栈顶门面/边界原语覆盖面，保留。
+  // 收编共三处读数：循环内 Break 谓词经既有 status() 门面；错误收尾与栈顶归位两处
+  // top 现读经 top_slot(0) 读数原语（见行内注）。
   unsafe {
     while status != LuaStatus::Ok as i32 {
       let ch = resume_findhandler(l);
@@ -43,7 +51,9 @@ pub(crate) unsafe fn resume_finish(l: *mut LuaState, mut status: i32, old_n_ccal
       {
         debugprotectederror(l);
 
-        if (*l).status == LuaStatus::Break as u8 {
+        // 收编：Break 谓词经既有 status() 门面（from_repr(Break) 当且仅当字段为 6，
+        // non-repr 兜底 Ok 亦 ≠Break——谓词逐位等价；读数位点不变，仍现读场域）
+        if (*l).status() == LuaStatus::Break {
           status = LuaStatus::Ok as i32;
           break;
         }
@@ -74,12 +84,16 @@ pub(crate) unsafe fn resume_finish(l: *mut LuaState, mut status: i32, old_n_ccal
 
     if status != LuaStatus::Ok as i32 {
       (*l).status = status as u8;
-      lua_d_seterrorobj(l, status, (*l).top);
+      // 收编：顶槽地址读数经 top_slot(0) 边界原语（镜像 cpp `L->top` 读数形，
+      // off=0 即保留顶槽，位点现读不变）
+      lua_d_seterrorobj(l, status, (*l).top_slot(0));
       // 保留（错误收尾恢复动作·同形单点）：seterrorobj 刚重定 top，本行必须现读
       // 其结果场并落 ci 帧界——场到场拷贝无算术操作数，cpp 同形 `ci->top = L->top;`
       (*(*l).ci).top = (*l).top;
     } else if (*l).status == LuaStatus::Ok as u8 {
-      expandstacklimit!(l, (*l).top);
+      // 收编：宏参顶槽地址读数经 top_slot(0) 边界原语——宏体三处展开均在语句内
+      // 现读同一 `(*l).top`（其间仅写 ci->top，无 top 落笔），读数与原裸字段一致
+      expandstacklimit!(l, (*l).top_slot(0));
     }
 
     (*l).status as i32
