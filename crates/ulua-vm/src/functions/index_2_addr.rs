@@ -24,7 +24,11 @@ pub fn index_2_addr(l: &LuaState, idx: i32) -> StkId {
     // 较返回 nilobject（lua_type(L, 1000) 是合法调用）；Rust 里对越界 off 做
     // `add` 本身就是 UB，所以用偏移量比较替代指针比较。
     let off = (idx - 1) as usize;
-    let used = unsafe { l.top.offset_from(l.base) };
+    // r16-b2 收编：顶-基槽距读数落既有 get_top 门面——其本体 slot_distance(base, top)
+    // 即被替代式 `l.top.offset_from(l.base)` 的镜像（现读位点不变）。isize→i32 折形
+    // 在现域无截差（栈槽距受 LUAI_MAXSTACK 约束）；`used as usize` 收窄在 top≥base
+    // 不变量域下与原 isize as usize 逐位同值，比较方向不变
+    let used = l.get_top();
     if off >= used as usize {
       LUA_O_NILOBJECT as *mut TValue
     } else {
@@ -40,7 +44,10 @@ pub fn index_2_addr(l: &LuaState, idx: i32) -> StkId {
     // 得到确定的 LUA_TNONE），不再产生栈外指针。断言条件改写为非移项形式
     // （cpp 的 `-idx` 对 i32::MIN 是符号溢出），定义域内与 cpp 逐位一致；
     // 快路径仅多一次 isize 加法比较，正常路径零额外间接。
-    let rel = (idx as isize) + unsafe { l.top.offset_from(l.base) };
+    // r16-b2 收编：同款顶-基槽距读数落 get_top 门面（镜像论证见上方 :27 点位注）；
+    // rel 参与 isize 加法与 `rel >= 0` 断言，按票面显式 `as isize` 同形保留，值域
+    // 与原式逐位一致
+    let rel = (idx as isize) + l.get_top() as isize;
     api_check!(l, idx != 0 && rel >= 0);
     if idx != 0 && rel >= 0 {
       // SAFETY:`rel >= 0` 且 `|idx| <= used`，`top_slot` 相对栈顶读数原语所得
