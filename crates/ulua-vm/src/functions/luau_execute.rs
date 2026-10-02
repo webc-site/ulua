@@ -1048,7 +1048,10 @@ unsafe fn fuse_succ_fornloop(
 /// 热后继 `LOP_SETTABLE` 的尾融合：只吃数组快路，命中后顺势接 [`fuse_succ_fornloop`]。
 ///
 /// 实测边权（`vm-opcount` 转移表）：`LOADB → SETTABLE` 在 `nsieve` 1.19M/5.65M ≈ 21%
-/// （`isprime[i] = false`），`ADD → SETTABLE` 在 `matmul` 2.74M/17.2M ≈ 16%（`c[i][j] = s`）。
+/// （`isprime[i] = false`），`ADD → SETTABLE` 在 `matmul` 2.74M/17.2M ≈ 16%（`c[i][j] = s`），
+/// `LOADN → SETTABLE` 在 `microbig_tablegrow` 14.4M/45.6M ≈ 32%（`t[i] = k` 常量装载后
+/// 立即入表；配上 SETTABLE 臂自身的 `SETTABLE → FORNLOOP` 融合，该内层三指令回边
+/// 只付一次派发）。
 ///
 /// 判定与 [`h_settable`] 同构，只有一处顺序差别：写屏障的判据 [`luaC_barriert_pending!`]
 /// 提到写入**之前**。该判据只看表的着色与栈上那个值，先判后写与先写后判观察不到差别；
@@ -1571,8 +1574,16 @@ unsafe fn h_loadn(
     let ra = VM_REG!(luau_insn_a(insn), l, base);
 
     setnvalue!(ra, luau_insn_d(insn) as f64);
-    // `LOADN → JUMPIFNOTLT` 是 `fib` 里 `while n < 2` 的那条边（4.36M/28.3M ≈ 15.4%）
-    pc = fuse_succ_jumpifnotlt(l, pc, base, cl);
+    // `LOADN → SETTABLE` 是 `microbig_tablegrow` 内层 `t[i] = k` 的那条边
+    // （14.4M/45.6M ≈ 32%），配上 SETTABLE 臂已融合的 `SETTABLE → FORNLOOP`，
+    // 三指令回边只付一次派发。探测置于 JUMPIFNOTLT 之前：命中即吞，未命中
+    // （pc 原样）再走 `LOADN → JUMPIFNOTLT`（fib 的 while n < 2，4.36M/28.3M ≈ 15.4%）
+    let npc = fuse_succ_settable(l, pc, base, cl);
+    if eq(npc, pc) {
+      pc = fuse_succ_jumpifnotlt(l, npc, base, cl);
+    } else {
+      pc = npc;
+    }
     vm_next!(pc, base, k, cl);
   }
 }
