@@ -39,28 +39,54 @@ unsafe extern "C-unwind" fn pcallyieldable_run(l: *mut LuaState, ud: *mut c_void
 /// 否则块内 `top.sub(nargs+1)`/`base.add(errfunc-1)` 越界。
 pub unsafe fn lua_pcallyieldable(l: *mut LuaState, nargs: i32, nresults: i32, errfunc: i32) -> i32 {
   // SAFETY: 契约保证 ci 帧为带 cont 的 C 闭包且栈内实参覆盖 nargs/errfunc，pcall 恢复链由 lua_d_pcall 维护
+  //
+  // r14-p1 逐点定性（w6d 口径保留面）：CallInfo 帧面红线不碰、不翻案——入口
+  // `iscfunction` 谓词与 `cl` 取址两处 ci 帧 func 现读（ci 链无既有门面，r13-w1b
+  // lua_v_call_tm / r13-w1c lua_r_newclass 同款保留判例）、errfunc 帧面落笔一处、
+  // flags 置/清两处（LUA_CALLINFO_HANDLE 帧处置位，动作落笔非读数）均属帧面原样
+  // 保留；`cl` 之下 `c` 取址与 cont 谓词/取回两处为 C 闭包内记录读数，不属栈面
+  // 门面覆盖面，保留；`isyielded(&*l)` 为整态取址函数调用点，无字段裸读，保留。
+  // 本票收编共五处栈面读数：两处帧槽距经 get_top 门面，顶下槽地址与宏参顶槽地址
+  // 经 top_slot 边界原语，errfunc 帧槽暂存经 slot 索引域构造子（见各点位行内注）。
   unsafe {
     api_check!(l, iscfunction!((*(*l).ci).func));
     let cl = (*(*(*l).ci).func).as_closure_ptr();
     let c = addr_of!((*cl).inner.c).cast::<CClosure>();
     api_check!(l, (*c).cont.is_some());
-    api_check!(l, (nargs + 1) as isize <= (*l).top.offset_from((*l).base));
-    api_check!(
-      l,
-      errfunc >= 0 && errfunc as isize <= (*l).top.offset_from((*l).base)
-    );
+    // r14-p1 收编：两处栈帧槽距读数落既有 get_top 门面（stack.rs 既有本体
+    // `slot_distance(base, top)`）——即被替代式 `L->top - L->base` 裸槽距读数的
+    // 同址同宽镜像（cpp lapi.cpp:1252 侧 api_check 读数形，位点现读不变、不上提
+    // 不复用：两行各自现读，与原两行各自现读字段一致）。isize→i32 收敛无损：
+    // 槽距受栈深上限约束、nargs/errfunc 受 LUAI_MAXCCALLS 与 api 契约约束，均在
+    // i32 域内，谓词真值逐位恒等。
+    api_check!(l, (nargs + 1) <= (*l).get_top());
+    api_check!(l, errfunc >= 0 && errfunc <= (*l).get_top());
 
     (*(*l).ci).errfunc = errfunc;
     (*(*l).ci).flags |= LUA_CALLINFO_HANDLE as u32;
 
     let mut ctx = CallContext {
-      func: (*l).top.sub((nargs + 1) as usize),
+      // r14-p1 收编：顶下 nargs+1 槽地址经 top_slot 边界原语（stack.rs:94 既有本体
+      // `top.offset(off)`）——`offset(-((nargs+1) as isize))` 与被替代式
+      // `top.sub((nargs + 1) as usize)` 同址（负平移与减等址），位点现读不变、
+      // 仅指针平移不解引用；界内由上行 errfunc/nargs 契约断言先行把守。
+      func: (*l).top_slot(-((nargs + 1) as isize)),
       nresults,
     };
 
     let savedfunc = savestack!(l, ctx.func);
     let savederrfunc = if errfunc != 0 {
-      savestack!(l, (*l).base.add((errfunc - 1) as usize))
+      // r14-p1 收编：errfunc 帧槽暂存经 slot 索引域构造子（records/slot.rs:146
+      // 既有门面，as_ptr 为其宏/C ABI 边界取址面，非新增 API）——index_2_addr
+      // 正索引分支在合法域内恰为被替代式 `base.add(errfunc - 1)`，地址逐位恒等、
+      // 读数位点不变（本分支先行即原裸算式处，两语句间无场写入）。合法域论证：
+      // errfunc ∈ [1, top-base] 由上方 errfunc 契约 api_check 与本分支 errfunc != 0
+      // 前提合守——正索引分支 `off < used` 判据恒真，NILOBJECT 塌缩分支不可达，
+      // 其内建帧窗 api_check（idx ≤ ci.top − base）由 base..ci.top 帧不变量随行。
+      // 违约输入域下 index_2_addr 塌缩 NILOBJECT 而裸算式产越界指针（UB），
+      // 该分叉在契约外，非本收编覆盖面。
+      let errfunc_slot = (*l).slot(errfunc).as_ptr();
+      savestack!(l, errfunc_slot)
     } else {
       0
     };
@@ -73,7 +99,11 @@ pub unsafe fn lua_pcallyieldable(l: *mut LuaState, nargs: i32, nresults: i32, er
       savederrfunc,
     );
 
-    expandstacklimit!(l, (*l).top);
+    // r14-p1 收编：宏参顶槽地址读数经 top_slot(0) 边界原语（r13-w1b resume_finish:96
+    // 同款先例，w9b lua_d_seterrorobj 调用点同形）——off=0 即保留顶槽，镜像 cpp
+    // `L->top` 读数形；宏体三处展开均在语句内现读宏参文本，与被替代的裸字段三处
+    // 现读逐位同址同序，恢复点（受保护调用返回处）后现读位点保持，禁预绑定不上提。
+    expandstacklimit!(l, (*l).top_slot(0));
 
     if status == 0 && isyielded(&*l) {
       return C_CALL_YIELD;
