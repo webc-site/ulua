@@ -17,15 +17,17 @@ codegen pass 吞吐（实测 1.25ms/模块）；表增长 vs cpp（微基准反�
 
 ## 解释器组（目标 1.05 → <1.0）
 
-### E1 稀疏整数键 array 直达（nsieve 3.2x 的已证根因）
-nsieve 剖证：newkey 21.3% + resize 7.7% + rehash 6.5% + s_settable 1.3% +
-lua_v_settable 1.9%（插入慢路径合计 ~40%），COUNT 循环读走 lua_h_get 哈希查找
-18.7%——`sieve[j]=true`（j=i²..n 步进 i，稀疏升序）在我们这里走 hash 部分 +
-rehash 迁移舞步；LuaJIT `lj_tab_setinth` 对 1≤k≤MAXASIZE 直接扩 array part 落数组。
-落点：`lua_h_newkey.rs`/`arrayornewkey.rs`/`lua_h_resizearray.rs`
-（int 键 k 超出现 array 界 → 按 next-pow2(k) 扩 array 直插；rehash 的
-numusearray/computesizes 逻辑保留兜底）。`#t` border 语义按 cpp oracle 钉。
-预期：nsieve 3.2→1.5；表类基准连带 -2~4%。
+### E1 稀疏整数键 array 直达——**已实测否决（语义红线）**
+nsieve 剖证：插入慢路径合计 ~40%（newkey 21.3% + resize 7.7% + rehash 6.5% +
+s_settable/lua_v_settable 3.2%），COUNT 循环读走 lua_h_get 哈希查找 18.7%——
+`sieve[j]=true`（j=i²..n 步进 i，稀疏升序）在哈希部分 + rehash 迁移；LuaJIT
+`lj_tab_setinth` 对 1≤k≤MAXASIZE 直接扩 array part。已实现受控扩容
+（4×sizearray+16 上界 + next-pow2 resize）：nsieve **-32.7%**（44.1→29.7ms），
+但 `#t` border 随布局改变（b 案 16 vs cpp 4、h 案 3 vs cpp 1；base 与 cpp 逐位
+一致），**conformance_tables 当场红**（另触发 close_state 断言）→ 判定：表布局
+语义被 cpp oracle 钉死，LuaJIT 式增长属语义分叉，不可发货。nsieve 3.2x 记为
+**语义受限差距**；残余可做：cpp 同构下哈希路径微成本（getfreepos 扫描、
+setnodekey 拷贝宽度），收益有限。
 
 ### E2 CALL/RETURN 快路内联 + arity 特化（fib 2.1 / micro_call 1.5 / binarytrees 1.4）
 fib/micro_call/binarytrees 的转移表被 CALLFB/RETURN 边主导（各 15%），
