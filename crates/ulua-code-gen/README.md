@@ -33,8 +33,18 @@ proto_failures）、fastflag 默认值（与 cpp 一致 1'048'576）、编译耗
 - 复现：`exec_probe`（已在调查后删除，按 benchmarks/runner/src/bin 重写即可，
   Lua::new + enable_jit + load(src).into_function + call）+ `samply record`。
 
-下一步建议：dump p1 与 p4 的 entry offsets 全表与 `ir.function.entry_location`，
-核对 `create_native_proto_exec_data` 的 `entry_offset_or_address`（offset vs address
-语义）与 gate `br X2` 目标基址；修复预期直接解锁 nbody（74ms→≈15ms 量级）、oop、
-nbody 家族与官方 CodeGen 同款盲区（见表访问 IC 调研：动态键内联 / 两层 __index +
-mini-PIC / megamorphic stub cache）。
+第二轮取证（512 字节 disasm + NativeContext 布局核对）已收窄：
+- `exectarget` 是**绝对地址**（offset-vs-address 假说排除）；`off0=0` 正确；IR 与
+  生成码逐条对上（常量/tag 检查/fadd 环全对）。
+- `r=1` 不是异常码：A64 fallback 约定「helper 返回后经 outlined stub 置 X0=1 =
+  continue-in-VM」，gate 返 1 本身是 fallback 的**合法**交接。
+- 真正的损坏点是 **savedpc = code+20508**（p1 sizecode=8；20508 ≈ 本 proto 在共享
+  build buffer 里的 entry_location——helpers ≈ 20KB 之后的第一个 proto）。
+- 两条待验线索：(a) RETURN 尾部 `b`（应跳 poscall/continue helper）位移实测落在
+  本 proto +0x10，疑似 label 绑定基址错位；(b) fallback 写 savedpc=code+6 之后、
+  返回 on_enter 之前，savedpc 被 helper 链（doarith → call_bin_tm → VM 重入路径）
+  二次改写。需要 lldb watchpoint 钉 `ci->savedpc` 的写入者（一次会话即可定位）。
+- 已核对签名：`NativeArithFn` 四参 void 返回、`NativeContext[0x28]`=doarithadd、
+  `Proto.k/code` 相邻（gate `ldp` 假设成立），均排除。
+修复预期直接解锁 nbody（74ms→≈15ms 量级）、oop 家族与官方 CodeGen 同款盲区
+（见表访问 IC 调研：动态键内联 / 两层 __index + mini-PIC / megamorphic stub cache）。
