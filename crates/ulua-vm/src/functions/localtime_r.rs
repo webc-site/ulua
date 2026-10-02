@@ -12,6 +12,7 @@
 //! 持有的 NUL 结尾存储（[`localtime_r`] 随返回值移交的堆字节串（尾 NUL），
 //! §3 出参→返回值；指针移动安全），存活期由调用方保证覆盖字段读取。
 
+#[cfg(not(target_os = "windows"))]
 use alloc::vec::Vec;
 #[cfg(not(target_os = "windows"))]
 use core::{
@@ -45,6 +46,7 @@ pub struct Tm {
 
 /// UTC 区缩写的静态 NUL 结尾存储（`os.date("!...")` 与无时区库目标的
 /// `tm_zone` 直指它，无需堆分配）。
+#[cfg(not(target_os = "windows"))]
 pub(crate) static ZONE_UTC: &str = "UTC\0";
 
 /// 进程级缓存的本系统时区。

@@ -13,9 +13,11 @@
 //! removed). The current clock reads through [`now_epoch_seconds`]
 //! (`coarsetime`).
 
+#[cfg(not(target_os = "windows"))]
+use crate::functions::localtime_r::ZONE_UTC;
 use crate::{
   functions::{
-    localtime_r::{TimeT, Tm, ZONE_UTC, fill_civil, localtime_r},
+    localtime_r::{TimeT, Tm, fill_civil, localtime_r},
     lua_createtable::lua_createtable,
     lua_l_addlstring::lua_l_addlstring,
     lua_l_buffinit::lua_l_buffinit,
