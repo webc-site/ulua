@@ -29,6 +29,14 @@ unsafe extern "C-unwind" fn run(l: *mut LuaState, _ud: *mut c_void) {
 pub(crate) unsafe fn shrinkstackprotected(l: *mut LuaState) {
   unsafe {
     // the resize call can fail on exception, in which case we will continue with original size
+    // # Safety/保留理由：`ud` 不是出参而是 cpp `luaD_rawrunprotected(L, f, ud)` 的 ABI
+    // 载荷，`null_mut()` 在此表达「本回调无额外载荷」——`run` 所需状态全部由首参 `l`
+    // 携带（体内只 `shrinkstack(l)`），与 oracle `lgc.cpp:525 CallContext::run` 逐位同形。
+    // 闭包化不可行：`Pfunc` 是无捕获的 `unsafe extern "C-unwind" fn(l, ud)`（panic 须
+    // unwind 穿过它到 catch 边界），故消掉 `ud` 只能改 `Pfunc`/`lua_d_rawrunprotected(_mut)`
+    // 签名，牵连 `lua_d_pcall`、`lua_newstate`、`resume_finish`、`lua_checkstack`、
+    // `luau_load`、`stringresizeprotected`、`tableresizeprotected`、ulua-capi 导出壳与
+    // vm_protected_call 集成测试等本票 3 文件之外的消费方，按 review.md §1.3 退回最小方案。
     let status = lua_d_rawrunprotected_mut(l, Some(run), null_mut());
     LUAU_ASSERT!(status == LuaStatus::Ok as i32 || status == LuaStatus::ErrMem as i32);
   }
