@@ -32,7 +32,7 @@ pub(crate) unsafe fn lua_s_buffinish(l: *mut LuaState, ts: *mut tstring) -> *mut
     *s.data.as_mut_ptr().add(s.len as usize) = 0; // TString 布局保证 data[len] 可写（终止 NUL）
     s.atom = ATOM_UNDEF as i16;
     let tb = &mut (*g).strt;
-    tb.link_front(h, ts);
+    tb.link_front(h, s);
     if tb.wants_growth() {
       let target = tb.doubled_size();
       lua_s_resize(l, target); // too crowded

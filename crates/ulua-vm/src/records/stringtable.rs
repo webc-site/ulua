@@ -8,7 +8,9 @@
 //!   `tb.hash.add(i)` 裸指针算术与手写 null 哨兵守卫；
 //! - `interned/link_front/unlink`：cpp `luaS_newlstr`/`luaS_buffinish` 扫描段、
 //!   发布尾与 `unlinkstr` 的链算术，节点仍是页分配器拥有的侵入式
-//!   `TString.next` 链，`&mut tstring` 借用只在方法内从裸指针受控导出；
+//!   `TString.next` 链；操作目标一律以 `&mut tstring` 引用形传入（存活与
+//!   独占由借用保证），链上他节点的裸指针解引用收拢在方法内各一处最小
+//!   `unsafe` 块；
 //! - `wants_growth/doubled_size/wants_shrink/half_size/shrink_target`：cpp
 //!   `shrinkbuffers(full)` 与发布尾的负载判定，除零/极值魔法数提为 `const`。
 //!
@@ -24,7 +26,7 @@
 use core::{
   ffi::c_uint,
   mem::{self, align_of, offset_of, size_of},
-  ptr::{NonNull, null_mut},
+  ptr::{self, NonNull, null_mut},
   slice::{from_raw_parts, from_raw_parts_mut},
 };
 
@@ -108,6 +110,11 @@ impl Stringtable {
   /// 沿 `h` 桶链查找与 `needle` 等长等字节的驻留串；命中且已死则翻转
   /// WHITEBITS 复活（逐位同 cpp `luaS_newlstr`/`luaS_buffinish` 扫描段）。
   /// 返回借自表链的 `&mut tstring`，借用止于下次表变更。
+  ///
+  /// `g` 保持裸指针形：本方法对 `(*g).currentwhite` 只做只读探测（`isdead`），
+  /// 而 `self` 即 `(*g).strt` 的可变借用，若把 `g` 收成 `&global_State`，同一
+  /// `*g` 区域上并存的共享引用会压掉接收者的独占标签（Stacked Borrows 违规），
+  /// 故留为受控裸指针单参。
   pub(crate) fn interned(
     &mut self,
     g: *mut global_State,
@@ -115,68 +122,70 @@ impl Stringtable {
     needle: &[u8],
   ) -> Option<&mut tstring> {
     let b = Self::bucket_of(h, self.size);
-    let head = *self.buckets_mut().get(b.0)?;
-    let mut el = head;
+    let mut el = *self.buckets().get(b.0)?;
     loop {
       if el.is_null() {
         return None;
       }
       // SAFETY: 表不变式——链上节点皆存活 TString，data 区 (*el).len 字节
-      // 可读（空串零长度切片合法）。切片长度取 `s.len` 而非 `needle.len()`：
-      // 链不变式只承诺 (*el).len 字节可读，按 needle.len() 建切片在
-      // needle 更长时即从裸指针构造越界视图（真 UB，即便比较被短路）。
+      // 可读（空串零长度切片合法）；isdead 仅读头 marked 位。切片长度取 `s.len`
+      // 而非 `needle.len()`：链不变式只承诺 (*el).len 字节可读，按 needle.len()
+      // 建切片在 needle 更长时即从裸指针构造越界视图（真 UB，即便比较被短路）。
       // 等长前提下才 memcmp，与 cpp `luaS_newlstr` 的 len 判等 + memcmp 逐位等价
       //（切片 `==` 先比长度、不等即短路，不比字节）。
-      let s = unsafe { &mut *el };
-      let stored = unsafe { from_raw_parts(s.data.as_ptr() as *const u8, s.len as usize) };
-      if stored == needle {
-        // SAFETY: 表不变式——`el` 为链上存活 GCObject，isdead 仅读头 marked 位
-        if unsafe { isdead!(g, el as *mut GCObject) } {
-          s.hdr.marked ^= WHITEBITS as u8;
+      unsafe {
+        let s = &mut *el;
+        let stored = from_raw_parts(s.data.as_ptr() as *const u8, s.len as usize);
+        if stored == needle {
+          if isdead!(g, el as *mut GCObject) {
+            s.hdr.marked ^= WHITEBITS as u8;
+          }
+          return Some(s);
         }
-        return Some(s);
+        el = s.next;
       }
-      el = s.next;
     }
   }
 
   /// 发布尾前段：`ts` 头插 `h` 桶并 `nuse++`（cpp 链插顺序：先取旧链头、
   /// 再写新链头、再计数）。空表态为无操作（见模块头 DELIBERATE DEVIATION）。
-  pub(crate) fn link_front(&mut self, h: c_uint, ts: *mut tstring) {
+  ///
+  /// safe 方法：`&mut tstring` 只写字段 `next`（纯值写），桶槽写入经
+  /// `buckets_mut()` 切片的 `&mut *mut tstring` 落指针值，全程无解引用；
+  /// `ts` 存活可独占写由借用本身保证。
+  pub(crate) fn link_front(&mut self, h: c_uint, ts: &mut tstring) {
     let b = Self::bucket_of(h, self.size);
     let Some(slot) = self.buckets_mut().get_mut(b.0) else {
       return;
     };
-    // SAFETY: 表不变式 + 调用方契约——`ts` 为存活 TString，`slot` 界内
-    unsafe {
-      let s = &mut *ts;
-      s.next = *slot;
-      *slot = ts;
-    }
+    ts.next = *slot;
+    *slot = ptr::from_mut(ts);
     self.nuse = self.nuse.wrapping_add(1);
   }
 
   /// 把 `ts` 从其哈希桶链摘下（cpp `unlinkstr`）；true = 已除链，
   /// false = 不在表（孤儿缓冲，`(*ts).next` 应为 null 由调用方断言）。
   /// 不触碰 `nuse`（cpp 同构：递减归 `luaS_free` 的 removed 分支）。
-  pub(crate) fn unlink(&mut self, ts: *mut tstring) -> bool {
-    // SAFETY: 调用方契约——`ts` 为存活 TString（lua_s_free 保证 hash 可读）
-    let h = unsafe { (*ts).hash };
-    let b = Self::bucket_of(h, self.size);
+  ///
+  /// `ts` 为 `&mut` 独占借用，其 `hash`/`next` 读写皆 safe；链上他节点的
+  /// 解引用收拢到下方唯一 `unsafe` 块。
+  pub(crate) fn unlink(&mut self, ts: &mut tstring) -> bool {
+    let p = ptr::from_mut(ts);
+    let b = Self::bucket_of(ts.hash, self.size);
     let Some(slot) = self.buckets_mut().get_mut(b.0) else {
       return false;
     };
-    // SAFETY: 表不变式——桶槽与链节点皆存活；`ts` 存活由调用方保证
+    // SAFETY: 表不变式——桶槽与链节点皆存活 TString（`ts` 存活由其 `&mut` 借用保证）
     unsafe {
-      if *slot == ts {
-        *slot = (*ts).next;
+      if *slot == p {
+        *slot = ts.next;
         return true;
       }
       let mut curr = *slot;
       while !curr.is_null() {
         let next = (*curr).next;
-        if next == ts {
-          (*curr).next = (*ts).next;
+        if next == p {
+          (*curr).next = ts.next;
           return true;
         }
         curr = next;

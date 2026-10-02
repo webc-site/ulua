@@ -14,7 +14,7 @@ use crate::{
 pub(crate) unsafe fn lua_s_free(l: *mut LuaState, ts: *mut tstring, page: *mut lua_Page) {
   unsafe {
     let g = (*l).global;
-    let removed = (*g).strt.unlink(ts);
+    let removed = (*g).strt.unlink(&mut *ts);
     let s = &*ts; // unlink 可能改写桶链，读取放在其后
     if removed {
       (*g).strt.nuse = (*g).strt.nuse.wrapping_sub(1);
