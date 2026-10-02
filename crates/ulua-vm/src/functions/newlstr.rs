@@ -38,10 +38,13 @@ pub(crate) unsafe fn newlstr(l: *mut LuaState, str_: &[u8], h: c_uint) -> *mut t
     }
     *s.data.as_mut_ptr().add(len) = 0;
 
-    let tb = &mut (*(*l).global).strt;
-    tb.link_front(h, ts);
-    if tb.wants_growth() {
-      let target = tb.doubled_size();
+    // 红线试点逐句现形申报：原 `let tb = &mut (*(*l).global).strt;` 绑定跨
+    // `lua_s_resize`（realloc 本体）存活——拆为一句一借：挂链走 gs_mut（借用止于
+    // 当句），growth 判定/目标尺寸走 gs_ref 现读（与 tb 同帧读数恒等），
+    // `lua_s_resize` 调用时不再有任何 gs 借用存活
+    (*l).gs_mut().strt.link_front(h, ts);
+    if (*l).gs_ref().strt.wants_growth() {
+      let target = (*l).gs_ref().strt.doubled_size();
       lua_s_resize(l, target); // too crowded（cpp：经 l 受保护抛错的翻倍扩容）
     }
 
