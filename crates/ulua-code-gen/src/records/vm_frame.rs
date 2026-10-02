@@ -11,7 +11,9 @@
 //!
 //! - 字节码/栈槽/表 node/array 的读取一律收敛为切片视图（[`VmFrame::insns`]/
 //!   [`VmFrame::slots`]·[`VmFrame::slots_mut`]/[`VmFrame::table_nodes`]·
-//!   [`VmFrame::table_array`]），下标界内检查替代裸指针算术；`from_raw_parts*` 全文件
+//!   [`VmFrame::table_array`]），下标界内检查替代裸指针算术；热槽位
+//!   `table_node`/`array_slot` 的界内性以调用点掩码/扩容不变量论证后收
+//!   `get_unchecked`（review.md §5，各附 `// Safety`）。`from_raw_parts*` 全文件
 //!   唯二落点为带 `# Safety` 契约的泛型单源壳 `view`/`view_mut`。`reg`/`slot_at` 等
 //!   「仅算不解引用」的地址平移统一经泛型壳 `shift`/`shift_back`/`shift_ro`/
 //!   `shift_off`（wrapping 算术，机器语义与原 `ptr::add`/带符号 `offset` 一致），
@@ -637,8 +639,12 @@ impl VmFrame {
   /// 形参的传递由 `&TValue` 的隐式强转完成，不再以裸地址出借。
   #[inline]
   pub(crate) fn table_node(&self, h: *mut LuaTable, slot: usize) -> (&TValue, &TValue) {
-    // 槽号由调用点以 `nodemask8`（= 节点数 − 1）掩码，界内性由切片下标复核。
-    let n = &self.table_nodes(h)[slot];
+    // Safety: 热路径去界检（review.md §5）——槽号由调用点以 `nodemask8` 掩码，
+    // 该字段在 vm 侧恒按 `(1 << lsizenode) - 1` 窄化 u8 赋值（空表/克隆为 0），
+    // 两分支均满足 `slot ≤ nodemask8 < 1 << lsizenode`（`lsizenode ≥ 8` 时窄化后
+    // mask ≤ 255 < 窗长；`lsizenode == 0` 时 mask 为 0，哨兵窗长 1）；与原 cpp
+    // `node + slot` 非界检寻址逐位等价。
+    let n = unsafe { self.table_nodes(h).get_unchecked(slot) };
     // Safety: TKey 与 TValue 共享偏移 0 的标签/值域（vm 侧 LuaNode 布局约定），
     // key 域按 TValue 引用视图读出与原 `from_ref().cast()` 逐位等价（仅改挂寿命）。
     let key: &TValue = unsafe { &*from_ref(&n.key).cast() };
@@ -665,8 +671,11 @@ impl VmFrame {
   /// `array[index]`：序列部分槽地址（调用点已证 `index < sizearray`）。
   #[inline]
   pub(crate) fn array_slot(&self, h: *mut LuaTable, index: usize) -> *mut TValue {
-    // 经切片视图界内下标取槽；越界由切片检查兜底（原实现为 UB）。
-    from_mut(&mut self.table_array(h)[index])
+    // Safety: 热路径去界检（review.md §5）——唯一消费方 `execute_setlist` 在
+    // `resize_array` 补足界后经本壳重取基址，`index < sizearray` 由该扩容不变量
+    // 保证；与原 cpp `h->array + index` 非界检寻址逐位等价。
+    let array = self.table_array(h);
+    from_mut(unsafe { array.get_unchecked_mut(index) })
   }
 
   /// 把节点 key 的 `value/extra/tt` 逐字段拷入栈槽 `dst` 并复核 liveness
