@@ -1,10 +1,9 @@
 //! Source: `VM/src/laux.cpp:304-327` (hand-ported)
 
 use alloc::string::String;
-use core::ffi::c_char;
 
 use crate::{
-  functions::{cstr_bytes, libsize::libsize, lua_l_findtable::lua_l_findtable_bytes},
+  functions::{libsize::libsize, lua_l_findtable::lua_l_findtable_bytes},
   macros::{
     getstr::getstr, lua_globalsindex::LUA_GLOBALSINDEX, lua_l_error::luaL_error,
     lua_registryindex::LUA_REGISTRYINDEX, lua_s_new::lua_s_new,
@@ -39,20 +38,5 @@ pub unsafe fn lua_l_register_bytes(l: *mut LuaState, libname: Option<&[u8]>, lr:
       (*l).push_c_function(reg.func, getstr(ts));
       (*l).set_field_bytes(-2, reg.name);
     }
-  }
-}
-
-/// # Safety
-/// `l` 须为存活 `LuaState`；`libname` 允许为 NULL（此时跳过建模块表），非空时须为 NUL 结尾 C 串；
-/// `lr` 为 `LuaLReg` 纯切片，每项 `name` 为静态字节切片（不含尾部 `\0`）、`func` 为合法
-/// C 函数指针；建表/注册可分配、`luaL_error` 可抛错，须受保护帧。cpp `laux.cpp:304`。
-pub unsafe fn lua_l_register(l: *mut LuaState, libname: *const c_char, lr: &[LuaLReg]) {
-  unsafe {
-    let libname_bytes = if libname.is_null() {
-      None
-    } else {
-      Some(cstr_bytes(libname))
-    };
-    lua_l_register_bytes(l, libname_bytes, lr);
   }
 }
