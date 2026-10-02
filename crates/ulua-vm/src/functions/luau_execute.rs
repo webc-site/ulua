@@ -2951,13 +2951,6 @@ unsafe fn h_jump(
 /// （`fuse_succ_*`，减少回环头的次数）与慢路 `#[inline(never)]` 外提（`s_*`，冷代码不落进
 /// 热区的 I-cache）。
 ///
-/// 状态交接：`pc`/`base`/`k`/`cl` 按值取入，臂体以 [`VmNext`] 传出续延状态。
-///
-/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`tier_reentry`]）
-///
-/// `l` 指向存活且 `isactive` 的 `LuaState`；`pc`/`base`/`k`/`cl` 必须是同一 Lua 闭包帧
-/// 的一致解释器状态（由 [`tier_reentry`] 或原生返回路径建立），且任一时刻仅单线程使用。
-///
 /// ## TODO：`explicit_tail_calls`（`become`）进 stable 之后可以补的那一层
 ///
 /// 上面的否决只对 stable 成立。`become` 稳定后，可给**热点臂子集**补一层真正独立、尾部
@@ -3001,6 +2994,13 @@ unsafe fn h_jump(
 /// 4. **门禁门**：启用该 feature 必付一条 `allow(incomplete_features)`，与 `review.md` 的
 ///    零 `allow` 硬门禁冲突。要改的是门禁本身（把检查收紧成 `#!?\[allow`、并把这一条记成
 ///    显式认可的唯一豁免），而不是靠内属性写法躲过正则。
+/// 状态交接：`pc`/`base`/`k`/`cl` 按值取入，臂体以 [`VmNext`] 传出续延状态。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`tier_reentry`]）
+///
+/// `l` 指向存活且 `isactive` 的 `LuaState`；`pc`/`base`/`k`/`cl` 必须是同一 Lua 闭包帧
+/// 的一致解释器状态（由 [`tier_reentry`] 或原生返回路径建立），且任一时刻仅单线程使用。
+///
 unsafe fn tier_cold<const SINGLE_STEP: bool>(
   l: *mut LuaState,
   mut pc: *const Instruction,
