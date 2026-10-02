@@ -28,7 +28,7 @@ pub unsafe fn str_char(l: *mut LuaState) -> i32 {
 
       *slot = uchar(c);
     }
-    lua_l_pushresultsize(&mut b as *mut LuaLStrbuf, n as usize);
+    lua_l_pushresultsize(&mut b, n as usize);
     1
   }
 }
