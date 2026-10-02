@@ -94,4 +94,26 @@ impl LuaState {
     // 零行为改动。
     unsafe { &*self.global }
   }
+
+  // ---- r16-b3：可变形门面（按票授权新造，模板=r15-v1 gs_ref 先例）----
+
+  /// 入口句柄（可变形）：`self.global` 裸字段写点的解引用收口，返回挂靠 `&mut self`
+  /// 生命期的 `&mut global_State` 视图。消费形制判语援引 r15-v1 `gs_ref` 授权声明：
+  /// functions/ 写点一律以 `(*l).gs_mut().field = …` 单句赋值形态消费（一句一借、
+  /// 原位现取），所得 `&mut` 视图禁跨任何可能触发 realloc/GC/再入 Lua 的调用持有。
+  ///
+  /// # Safety（契约由本方法调用方按文档保证）
+  /// 1. `self.global` 在状态存活期恒定非空、对齐并指向存活 `global_State`
+  ///    （本文件 `global` 字段结构不变量，cpp `lstate.h` 同款）；
+  /// 2. 所得可变视图存活期内，global_State 不经其它别名（含裸指针场域）被读写——
+  ///    借用止于当句：视图窗内不得穿插重入调用（lua_* / GC step / 分配器回调）
+  ///    或其它场域访问点；
+  /// 3. null 哨兵不进入本门面：可空处调用点先行判空或以 `Option` 表达。
+  #[inline(always)]
+  pub(crate) fn gs_mut(&mut self) -> &mut global_State {
+    // SAFETY: 契约由调用点逐条承担（见上）；本方法为全仓本族 `global` 裸字段
+    // 写点解引用的唯一收口体，与原散点 `(*(*l).global).field = …` 同窗写入逐位
+    // 同形，零行为改动。
+    unsafe { &mut *self.global }
+  }
 }
