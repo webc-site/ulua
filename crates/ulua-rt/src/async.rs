@@ -679,8 +679,7 @@ fn report_ready<R: IntoLuaMulti>(lua: &Lua, result: Result<R>) -> i32 {
 /// 索引都有定义（非数字、越界索引一律 `None`，不越栈读写），故 C 边界读取收在
 /// 本函数体这一处，调用点是安全读值。
 fn integer_at(state: StateView<'_>, idx: i32) -> Option<i32> {
-  // Safety: `lua_tointegerx` 只读该槽值、不动栈深。
-  unsafe { lua_tointegerx(&*state.as_ptr(), idx) }
+  lua_tointegerx(&state, idx)
 }
 
 /// `unpack(t, n)`: push `t[1]..t[n]` onto the stack and return `n`.
