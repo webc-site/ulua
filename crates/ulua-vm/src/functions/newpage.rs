@@ -12,10 +12,10 @@ use crate::{
 /// # Safety
 /// 调用方须保证：`l` 存活且处于受保护帧（frealloc 返 null 时经 `l` 抛 ErrMem）；
 /// `page_size >= offset_of!(lua_Page, data) + block_size * block_count`（release 下断言失效，
-/// 不足即越界写页头/块区）；`pageset` 为 null 或指向可写的存活页链头指针。cpp lmem.cpp:276 `newpage`
+/// 不足即越界写页头/块区）；`pageset` 以 `&mut` 借用非空，指向可写的存活页链头指针。cpp lmem.cpp:276 `newpage`
 pub(crate) unsafe fn newpage(
   l: *mut LuaState,
-  pageset: *mut *mut lua_Page,
+  pageset: &mut *mut lua_Page,
   page_size: i32,
   block_size: i32,
   block_count: i32,
@@ -58,13 +58,12 @@ pub(crate) unsafe fn newpage(
     (*page).free_next = (block_count - 1) * block_size;
     (*page).busy_blocks = 0;
 
-    if !pageset.is_null() {
-      (*page).listnext = *pageset;
-      if !(*page).listnext.is_null() {
-        (*(*page).listnext).listprev = page;
-      }
-      *pageset = page;
+    // 挂入页链头：pageset 经 `&mut` 借用非空，全部调用方均传可写链头，判空死分支删除（review.md §2）
+    (*page).listnext = *pageset;
+    if !(*page).listnext.is_null() {
+      (*(*page).listnext).listprev = page;
     }
+    *pageset = page;
 
     page
   }

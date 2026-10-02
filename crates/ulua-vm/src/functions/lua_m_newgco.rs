@@ -1,7 +1,6 @@
 use core::{
   ffi::c_void,
   mem::{offset_of, size_of},
-  ptr::addr_of_mut,
 };
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
@@ -34,7 +33,7 @@ pub(crate) unsafe fn lua_m_newgco(l: *mut LuaState, nsize: usize, memcat: u8) ->
     } else {
       let page = &mut *newpage(
         l,
-        addr_of_mut!((*g).allgcopages),
+        &mut (*g).allgcopages,
         (offset_of!(lua_Page, data) + nsize) as i32,
         nsize as i32,
         1,

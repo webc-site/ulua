@@ -40,7 +40,8 @@ LUAU_NOINLINE! {
         let block_size = size_of_class + if store_metadata { K_BLOCK_HEADER } else { 0 };
         let block_count = (page_size - offset_of!(lua_Page, data) as i32) / block_size;
 
-        let page = newpage(l, pageset, page_size, block_size, block_count);
+        // pageset 为透传的 `&mut` 非空借用；newpage 契约要求可写链头
+        let page = newpage(l, &mut *pageset, page_size, block_size, block_count);
 
         LUAU_ASSERT!((*freepageset.add(size_class as usize)).is_null());
         *freepageset.add(size_class as usize) = page;
