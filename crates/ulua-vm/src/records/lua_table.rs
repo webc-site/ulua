@@ -70,13 +70,6 @@ impl LuaTable {
     unsafe { c_slice(self.array, self.sizearray.max(0) as usize) }
   }
 
-  /// [`array_window`] 的可写版本；独占借用 `&mut self` 即窗内槽的独占写权。
-  pub fn array_window_mut(&mut self) -> &mut [TValue] {
-    // SAFETY: 同 `array_window`，且 `&mut self` 保证视图存续期内无其它别名；
-    // 写序/写点合法性和理性由调用方（E3/E4 消费票）按各自 # Safety 契约维持。
-    unsafe { c_slice_mut(self.array, self.sizearray.max(0) as usize) }
-  }
-
   /// 哈希部分是否为编译期哨兵（cpp `t->node == dummynode`，即「空哈希表」判据）。
   ///
   /// 不变式（`luaH_new`/`setnodevector(0)` 建立，`rehash` 全程维持）：
