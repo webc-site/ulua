@@ -29,6 +29,17 @@ const ERR_DEAD_COROUTINE: &[u8] = b"cannot resume dead coroutine\0";
 /// 或从挂起点继续），`ud` 是首实参栈槽；`resume_handle` 仅推进出错 handler 帧的
 /// 续体，`ud` 是 handler `CallInfo` 帧。恢复粒度不同，两者 `ud` 不可互换。
 pub(crate) unsafe extern "C-unwind" fn resume(l: *mut LuaState, ud: *mut c_void) {
+  // r14-p2 逐点定性（w6d 口径保留面，本文件 A=0 纯注记、零收编）：status 读数三处
+  // 判别谓词均保留 C 形——`==Ok` 正谓词（其值域经 resume_start 契约限定为 {0(Ok),
+  // 1(Yield), 6(Break)}：start 仅放行 Yield/Break 或 Ok 且 ci/base_ci 同形校验后建档，
+  // 该域内谓词与 status() 门面真值表同值——此为值域论证备用；但门面 non-repr→Ok
+  // 兜底对域外值（如 0x7f）把判真折成判假，逐位等价论证不成立，沿 r13 台账 Ok
+  // 谓词保守口径保留）、`==SCHEDULED_REENTRY` 哨兵谓词（0x7f 为 non-repr 值，门面
+  // 折叠即丢哨兵，必保留）、`!=Ok` 否定谓词（0x7f→Ok 兜底把判真折成判假，形同
+  // resume_handle:113 判例，保留）；status 写面（挂起态归零恢复动作）无门面，保留。
+  // base/ci/base_ci/flags 帧面读写作（入口契约断言、首实参窗基准、重入归基址、
+  // RETURN 旗落笔与 pcall 帧回读）无既有门面且属 CallInfo 帧面 B 红线，照旧不翻案；
+  // 形参 l 经 curr_func!/isyielded! 宏仅透传状态指针，宏体读数不计本文件普查。
   unsafe {
     let mut first_arg = ud as StkId;
 
