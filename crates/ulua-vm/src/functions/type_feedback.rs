@@ -11,6 +11,7 @@ use std::{
   cmp::Reverse,
   collections::HashMap,
   env,
+  slice::from_raw_parts,
   sync::{
     Mutex, OnceLock,
     atomic::{AtomicBool, Ordering},
@@ -83,7 +84,7 @@ pub fn record(proto: *const Proto, pc: *const Instruction, op: u8, ta: u8, tb: u
 fn record_slow(proto: usize, pc: usize, op: u8, ta: u8, tb: u8) {
   let key = mix(u64::from(proto as u32)) ^ mix(u64::from(pc as u32));
   let mut t = table().lock().unwrap_or_else(|e| e.into_inner());
-  let site = t.entry(key).or_insert_with(|| Site::ZERO);
+  let site = t.entry(key).or_insert(Site::ZERO);
   site.count += 1;
   site.ta[ta as usize] += 1;
   site.tb[tb as usize] += 1;
@@ -279,24 +280,19 @@ pub fn tsfb_dump() -> String {
         None => continue,
       };
       out.push_str(&format!("== proto#{i} sizecode={sc} tsfb_sites={nslots}\n"));
-      let code_ptr = (*proto).code;
-      // 闭包体内的裸指针读自有其 unsafe 块：闭包体是独立 unsafe 语境（本行
-      // `#[allow]` 只压新 nightly 对「外层块嵌套闭包 unsafe」的冗余告警，
-      // 旧 nightly 下该内层块仍是必需语义，双版本兼容）。
-      #[allow(unused_unsafe)]
-      let op_at = |pc: u32| -> u8 {
-        if (pc as usize) < sc {
-          *code_ptr.add(pc as usize) as u8
-        } else {
-          0xff
-        }
-      };
-      for s in 0..nslots {
-        let pc = *data.add(sc + 2 + 2 * s);
-        let st = *data.add(sc + 3 + 2 * s);
+      // 最小 unsafe 边界内一次性取指令区与 TSFB 站点区切片，后续全部为安全
+      // 切片访问（调试读数路径，越界检查开销无碍）；op 语义与原裸指针读逐点
+      // 一致：pc 界内取指令字低字节，越界回 0xff。
+      let code = from_raw_parts((*proto).code, sc);
+      let sites = from_raw_parts(data.add(sc + 2), 2 * nslots);
+      for pair in sites.chunks_exact(2) {
+        let (pc, st) = (pair[0], pair[1]);
+        let op = code
+          .get(pc as usize)
+          .copied()
+          .map_or(0xff, |insn| insn as u8);
         out.push_str(&format!(
-          "  site pc={pc:5} op={:3} hits={:6} last_tag={}\n",
-          op_at(pc),
+          "  site pc={pc:5} op={op:3} hits={:6} last_tag={}\n",
           st >> 8,
           st & 0xff
         ));
@@ -327,9 +323,10 @@ pub fn tsfb_over_threshold(min_hits: u32, min_share: f64) -> Vec<(usize, u32, u8
         Some(x) => x,
         None => continue,
       };
-      for s in 0..nslots {
-        let pc = *data.add(sc + 2 + 2 * s);
-        let st = *data.add(sc + 3 + 2 * s);
+      // 同上：站点区一次取切片，安全迭代（读数语义与原逐点裸读一致）。
+      let sites = from_raw_parts(data.add(sc + 2), 2 * nslots);
+      for pair in sites.chunks_exact(2) {
+        let (pc, st) = (pair[0], pair[1]);
         let hits = (st >> 8) as u64;
         let tag = (st & 0xff) as u8;
         if hits >= u64::from(min_hits) {
