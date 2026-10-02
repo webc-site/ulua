@@ -51,11 +51,13 @@ pub fn enabled() -> bool {
   ENABLED.load(Ordering::Relaxed)
 }
 
-fn mix(mut h: usize) -> usize {
+/// 64 位 splitmix 终混（显式 u64：32 位目标上 usize 为 4 字节，
+/// `>>33` 与 64 位字面量都会溢出——CI wasm/linux-32 构建实测）。
+fn mix(mut h: u64) -> u64 {
   h ^= h >> 33;
-  h = h.wrapping_mul(0xff51afd7ed558ccd);
+  h = h.wrapping_mul(0xff51_afd7_ed55_8ccd);
   h ^= h >> 33;
-  h.wrapping_mul(0xc4ceb9fe1a85ec53) ^ (h >> 33)
+  h.wrapping_mul(0xc4ce_b9fe_1a85_ec53) ^ (h >> 33)
 }
 
 /// 环头单点上报：`proto`/`pc` 定位站点，`ta`/`tb` 为 A/B 槽 tag（LuaType as u8）。
@@ -76,7 +78,7 @@ pub fn record(
 
 #[cold]
 fn record_slow(proto: usize, pc: usize, op: u8, ta: u8, tb: u8) {
-  let key = mix(proto ^ mix(pc)) as u64;
+  let key = mix(u64::from(proto as u32)) ^ mix(u64::from(pc as u32));
   let mut t = table().lock().unwrap_or_else(|e| e.into_inner());
   let site = t.entry(key).or_insert_with(|| Site::ZERO);
   site.count += 1;
