@@ -90,7 +90,8 @@ impl LuaState {
   #[inline(always)]
   pub(crate) fn gs_ref(&self) -> &global_State {
     // SAFETY: 契约由调用点逐条承担（见上）；本方法为全仓本族 `global` 裸字段
-    // 只读解引用的唯一收口体，与原散点 `&*(*l).global` 同形，零行为改动。
+    // 只读解引用的唯一收口体，与原散点对开场字段取址后的同窗解引用逐位同形，
+    // 零行为改动。
     unsafe { &*self.global }
   }
 }
