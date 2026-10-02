@@ -50,7 +50,10 @@ pub(crate) struct BucketIdx(pub(crate) usize);
 
 /// 串表（cpp `stringtable`）：桶数组 + 已用计数。字段仍 `pub(crate)` 供
 /// `lua_newstate` 建空表与 `lua_s_resize` 换阵直写，其余模块一律走方法句柄。
-#[derive(Debug)]
+///
+/// `Default` 即 review.md §2 约定的初值：`hash=None`（未初始化/未分配，与
+/// `size==0` 同现）+ 计数清零，三字段各自的零值就是终态语义，无需手写 impl。
+#[derive(Debug, Default)]
 #[repr(C)]
 pub struct Stringtable {
   /// 桶数组基址（cpp `lstring.h:22` `TString** hash`）。`None` = 「表未初始化/未分配」
@@ -74,18 +77,6 @@ const _: () = assert!(
     && offset_of!(Stringtable, nuse) == size_of::<*mut *mut tstring>()
     && offset_of!(Stringtable, size) == size_of::<*mut *mut tstring>() + size_of::<u32>()
 );
-
-impl Default for Stringtable {
-  // 既有约定（review.md §2 终态）：字符串桶数组 POD 字段初值——hash=None 表「未初始化/未分配」（与 size==0 同现，
-  // null niche 零尺寸开销）；读写收拢单点、契约详见上方字段 doc
-  fn default() -> Self {
-    Self {
-      hash: None,
-      nuse: 0,
-      size: 0,
-    }
-  }
-}
 
 impl Stringtable {
   /// cpp `lmod(h, size)`：哈希 → 桶号句柄。

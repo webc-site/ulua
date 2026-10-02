@@ -47,5 +47,5 @@ luai_gcmetrics = [ ]
 hard_mem_tests = [ ]
 
 # 测量用：在 VM 派发环里记录动态 opcode 直方图与转移计数（见 functions/op_count.rs）。
-# 打开后热点出口失效（整环留在冷层），故只用于选热点集合，不进默认构建。
+# 打开后臂尾融合整体禁用（计数点只在环头），故只用于选融合站点，不进默认构建。
 vm-opcount = [ ]

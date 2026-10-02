@@ -1,15 +1,17 @@
-// 热层派发（become 尾调用链）定向用例：本仓新增，cpp/tests/conformance 无对应源。
+// 派发环 × 臂尾融合定向用例：本仓新增，cpp/tests/conformance 无对应源。
 //
-// 被测对象是 `crates/ulua-vm/src/functions/luau_execute.rs` 的热臂集合（HOT_ARMS）与
-// 条件跳转的 `jump_split!` 双尾写法，断言分两层：
+// 被测对象是 `crates/ulua-vm/src/functions/luau_execute.rs` 的派发环、被 `fuse_succ_*`
+// 吃掉的热边，以及条件跳转的 `jump_split!` 双尾写法，断言分两层：
 //
-// * `hotdispatch.luau`：纯 Lua 断言——热臂内抛错的展开、抛错后状态自检、协程跨热臂
+// * `hotdispatch.luau`：纯 Lua 断言——融合臂内抛错的展开、抛错后状态自检、协程跨融合臂
 //   yield/resume、回边边界形状（零次/负步长/NaN/±inf）、元表 `__index`/`__newindex` 抛错。
 //   以 `run_fixture` 运行，解释器与原生（LUAU_CODEGEN=1）两种模式都必须成立。
-// * `hotdispatch_hook.luau`：Rust 侧写入 `callbacks.interrupt` 后驱动热循环，钉热臂在钩子
-//   激活时经 `backedge_idle` 判定整臂 `become` 到冷续延之后的语义——回边命中数、钩子里
-//   `lua_yield` 的续跑、钩子里 `luaL_error` 的展开。以 skipCodegen 运行（被测对象只有
-//   解释器派发环），并把每次命中的 `currentline` 钉在对应函数源码行区间内。
+// * `hotdispatch_hook.luau`：Rust 侧写入 `callbacks.interrupt` 后驱动热循环，钉回边臂在
+//   钩子激活时经 `backedge_idle` 让路给冷续延之后的语义——回边命中数、钩子里 `lua_yield`
+//   的续跑、钩子里 `luaL_error` 的展开。以 skipCodegen 运行（被测对象只有解释器派发环），
+//   并把每次命中的 `currentline` 钉在对应函数源码行区间内。
+// * `fuse_edges.luau`：钉每条被融进臂尾巴的热边在操作数不是数字时的回退——元方法只能按
+//   原圈数调用（次数即判据），链中段抛错照旧被外层 pcall 接住。同样两模式对比。
 
 use core::{
   ffi::c_int,
@@ -157,6 +159,12 @@ fn conformance_hot_dispatch() {
   run_fixture("hotdispatch.luau");
 }
 
+/// 臂尾融合（`fuse_succ_*`）的未命中回退与元方法计数：见 `fuse_edges.luau` 头注。
+#[test]
+fn conformance_fuse_edges() {
+  run_fixture("fuse_edges.luau");
+}
+
 #[test]
 fn conformance_hot_dispatch_hook() {
   // 与 `conformance_interrupt` 同因：固定 optimization_level = 1，回边指令序列（以及
@@ -166,7 +174,7 @@ fn conformance_hot_dispatch_hook() {
     ..default_compile_options()
   };
 
-  // skip_codegen = true：本用例测的是解释器 become 尾调用派发层。
+  // skip_codegen = true：本用例测的是解释器派发环，不编原生码。
   let global_state = run_conformance(
     "hotdispatch_hook.luau",
     None,
