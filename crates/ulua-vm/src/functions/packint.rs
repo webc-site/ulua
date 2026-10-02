@@ -8,9 +8,12 @@ use crate::{
 
 /// # Safety
 ///
-/// `buf` 必须指向本次 pack/unpack 调用的可读且可写字节区，`bytes` 在 [1,8] 且落在缓冲界内。
-pub(crate) unsafe fn packint(b: *mut LuaLStrbuf, mut n: u64, islittle: i32, size: i32, neg: i32) {
-  // SAFETY: 契约保证 `buf` 可读/可写界覆盖 `bytes` 长度，位组装与回写仅触及该界内字节
+/// `b` 须为本次 pack 调用经 `lua_l_buffinit` 初始化、尚未 `pushresult` 的缓冲（写满
+/// 扩容义务转单源 [`lua_l_addlstring`]），`size` ≤ MAXINTSIZE；位组装仅触及本地
+/// `buff[..size]` 界内字节。
+pub(crate) unsafe fn packint(b: &mut LuaLStrbuf, mut n: u64, islittle: i32, size: i32, neg: i32) {
+  // SAFETY: 契约保证 `b` 为已接线可写缓冲；字节序位组装落本地 `buff`，追加窗界由
+  // 切片 `&buff[..size]` 自带，不触及缓冲外字节
   unsafe {
     LUAU_ASSERT!(size <= MAXINTSIZE);
     // 字节序打包本质是 u8 序列：本地缓冲用 u8，直接交字节切片口追加
@@ -28,6 +31,6 @@ pub(crate) unsafe fn packint(b: *mut LuaLStrbuf, mut n: u64, islittle: i32, size
       }
     }
 
-    lua_l_addlstring(&mut *b, &buff[..size as usize]);
+    lua_l_addlstring(b, &buff[..size as usize]);
   }
 }
