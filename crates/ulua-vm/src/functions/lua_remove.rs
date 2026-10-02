@@ -24,6 +24,7 @@ pub(crate) fn lua_remove(l: &mut LuaState, idx: i32) {
     if count > 0 {
       copy(p.add(1), p, count as usize);
     }
-    (*lp).top = (*lp).top.sub(1);
+    // 弹栈一格：`rewind_top(1)` 提交原语镜像原 `top = top.sub(1)` 落值
+    (*lp).rewind_top(1);
   }
 }

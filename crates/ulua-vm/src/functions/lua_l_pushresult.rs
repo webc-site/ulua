@@ -51,15 +51,19 @@ pub(crate) unsafe fn lua_l_pushresult(b: &mut LuaLStrbuf) {
       unsafe {
         lua_c_check_gc!(l);
 
+        // 结果槽经 `top_slot(-1)` 读数原语预绑定：绑定位置即原 setsvalue 实参序
+        // 中目的槽的求值位（buffinish/newlstr 只分配 TString、不挪栈不写栈顶，
+        // strbuf 窄腰的 realloc 重读时序在 extendstrbuf 侧自持，无跨 realloc 悬窗）
+        let res = (*l).top_slot(-1);
         if b.p == b.end {
           // 恰写满：GC 缓冲就地收尾，免整块复制
-          setsvalue!(l, (*l).top.offset(-1), lua_s_buffinish(l, storage.as_ptr()));
+          setsvalue!(l, res, lua_s_buffinish(l, storage.as_ptr()));
         } else {
           // TString 载荷声明为 c_char（GC 头布局线格式），字节宽度一致，cast 仅换元素类型
           let data = (*storage.as_ptr()).data.as_ptr().cast::<u8>();
           // 已写窗（切片形）：`[data, p)`
           let written = c_slice(data, b.p.offset_from(data) as usize);
-          setsvalue!(l, (*l).top.offset(-1), lua_s_newlstr(&mut *l, written));
+          setsvalue!(l, res, lua_s_newlstr(&mut *l, written));
         }
       }
     }

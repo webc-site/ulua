@@ -63,8 +63,9 @@ pub(crate) fn lua_pushcclosurek_ref(
     (*cc).cont = cont;
     (*cc).debugname = debugname;
 
-    // 出栈 nup：待捕获值窗自新 top 起
-    l.top = l.top.sub(nup as usize);
+    // 出栈 nup：待捕获值窗自新 top 起（`rewind_top` 提交原语镜像原
+    // `top = top.sub(nup)` 落值）
+    l.rewind_top(nup as usize);
 
     // k 值登记（切片形）：dst=闭包 upvals 堆块、src=出栈后的栈值窗，二者不相交
     let captured: &mut [TValue] =

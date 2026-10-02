@@ -14,7 +14,8 @@ pub unsafe fn tpack(l: *mut LuaState) -> i32 {
     let n = (*l).get_top(); // number of elements to pack
     lua_createtable(l, n, 1); // create result table
 
-    let t: *mut LuaTable = (*(*l).top.offset(-1)).as_table_ptr();
+    // 栈顶槽地址经 `top_slot(-1)` 读数原语取得（createtable 后帧内既有槽，界内契约见原语）
+    let t: *mut LuaTable = (*(*l).top_slot(-1)).as_table_ptr();
 
     // SAFETY:t->array 与栈 base 均有 n 个有效 TValue（createtable 预留）。
     for (e, v) in c_slice_mut((*t).array, n as usize)

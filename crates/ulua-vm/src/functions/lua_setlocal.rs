@@ -20,13 +20,14 @@ pub unsafe fn lua_setlocal(l: *mut LuaState, level: i32, n: i32) -> *const c_cha
       return null();
     };
 
-    // 栈顶待写入值的单槽窗口收一次预绑定（resolve_local 纯读帧信息，不改 `(*l).top`）
-    let value = (*l).top.offset(-1);
+    // 栈顶待写入值的单槽窗口经 `top_slot` 读数原语一次预绑定
+    // （resolve_local 纯读帧信息，不改栈顶字段）
+    let value = (*l).top_slot(-1);
     if !var.is_null() {
       setobj_2_s!(l, (*ci).base.offset((*var).reg as isize), value);
     }
 
-    (*l).top = value; // pop value
+    (*l).reanchor_top(value); // pop value
 
     if !var.is_null() {
       getstr((*var).varname)

@@ -36,7 +36,10 @@ pub unsafe fn lua_checkstack(l: *mut LuaState, size: i32) -> i32 {
         condhardstacktests!(lua_d_reallocstack(l, (*l).stacksize - EXTRA_STACK, 0));
       }
 
-      expandstacklimit!(l, (*l).top.add(size as usize));
+      // 扩容后按新栈顶经 `top_slot` 读数原语求目标界缘槽地址（reallocstack 已在
+      // 上方分支完成，此处重读与原 `top.add(size)` 求值位点一致），再交宏抬 ci 可写界
+      let wanttop = (*l).top_slot(size as isize);
+      expandstacklimit!(l, wanttop);
     }
     res
   }

@@ -24,7 +24,8 @@ pub(crate) unsafe fn lua_concat(l: *mut LuaState, n: i32) {
       lua_c_check_gc!(l);
       lua_c_threadbarrier_lapi(l);
       lua_v_concat(l, n, ((*l).top.offset_from((*l).base) as i32) - 1);
-      (*l).top = (*l).top.sub((n - 1) as usize);
+      // n 项并为 1 项：`rewind_top(n-1)` 提交原语镜像原 `top = top.sub(n-1)` 落值
+      (*l).rewind_top((n - 1) as usize);
     } else if n == 0 {
       lua_c_threadbarrier_lapi(l);
       // cpp `ensure_stack(L, 1)` 只在 n == 0 分支；n >= 2 由 luaV_concat 自行管栈

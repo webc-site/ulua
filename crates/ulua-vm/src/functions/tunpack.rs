@@ -1,7 +1,7 @@
 use crate::{
   enums::lua_type::LuaType,
   functions::{
-    c_slice, c_slice_mut, lua_checkstack::lua_checkstack, lua_l_optinteger::lua_l_optinteger,
+    c_slice, lua_checkstack::lua_checkstack, lua_l_optinteger::lua_l_optinteger,
     lua_rawgeti::lua_rawgeti,
   },
   macros::{lua_l_error::luaL_error, lua_lib_fn::lua_lib_fn, setobj_2_s::setobj_2_s},
@@ -36,14 +36,17 @@ pub unsafe fn tunpack(l: *mut LuaState) -> i32 {
 
     // fast-path: direct array-to-stack copy
     if i == 1 && (n as i32) <= (*t).sizearray {
-      // SAFETY:快路径已断言 n <= sizearray；栈上 n 个槽位随后由 top 前移提交。
-      for (dst, src) in c_slice_mut((*l).top, n as usize)
+      // SAFETY:快路径已断言 n <= sizearray；lua_checkstack 扩容先行覆盖 n 预留槽
+      // （`reserved_slots_mut` 窗契约），栈上 n 个槽位随后由 `advance_top` 提交，
+      // 写序与顶抬升时序同原逐格形态。
+      for (dst, src) in (*l)
+        .reserved_slots_mut(n as usize)
         .iter_mut()
         .zip(c_slice((*t).array, n as usize))
       {
         setobj_2_s!(l, dst as *mut TValue, src as *const TValue as *mut TValue);
       }
-      (*l).top = (*l).top.offset(n as isize);
+      (*l).advance_top(n as usize);
     } else {
       // push arg[i..e - 1] (to avoid overflows)：cpp `while current_i < e` 游走
       // 收为区间迭代，末元素单独压栈（i <= e 此前已由空区间早退保证）

@@ -32,6 +32,9 @@ pub unsafe fn lua_resetthread(l: *mut LuaState) {
     let ci = (*l).base_ci;
     (*ci).func = (*l).stack;
     (*ci).base = (*ci).func.add(1);
+    // r12-w7a1 定性保留：`(*ci).top` 为 CallInfo 裸字段（帧可写界初始化），
+    // 非 LuaState 栈顶槽算术——records/slot.rs 边界红线明载「CallInfo 裸字段与
+    // 帧内算术不落句柄」，字段落库仍用裸 StkId，此处不收编。
     (*ci).top = (*ci).base.add(LUA_MINSTACK as usize);
     setnilvalue!((*ci).func);
     (*l).ci = ci;
@@ -41,7 +44,7 @@ pub unsafe fn lua_resetthread(l: *mut LuaState) {
     // clear thread state
     (*l).status = LuaStatus::Ok as u8;
     (*l).base = (*(*l).ci).base;
-    (*l).top = (*(*l).ci).base;
+    (*l).reanchor_top((*(*l).ci).base);
     (*l).n_ccalls = 0;
     (*l).base_ccalls = 0;
     // clear thread stack

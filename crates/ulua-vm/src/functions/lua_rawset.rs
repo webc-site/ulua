@@ -20,14 +20,16 @@ pub fn lua_rawset(l: &mut LuaState, idx: i32) {
     let t: StkId = index_2_addr(l, idx);
     api_check!(l, (*t).is_table());
     check_writable(l, (*t).as_table_ptr());
-    let key = l.top.offset(-2);
-    let value = l.top.offset(-1);
+    // 顶下 (key, value) 两槽经 `top_slot` 读数原语一次取得（原顶相对裸偏移重读
+    // 收编；setobj2t/屏障/rehash 均不改写栈顶字段，读取时机逐位不变）
+    let key = l.top_slot(-2);
+    let value = l.top_slot(-1);
     // ⇔ cpp lapi.cpp:1038-1040 逐位同序：:1038 `setobj2t(L, luaH_set(...), top-1)`
     // （取槽→写值，key/value 是栈槽指针，不受表 rehash 影响）、:1039 `luaC_barriert`
     // （屏障在值落槽之后）、:1040 `top -= 2`。屏障与写分步保留，不收敛单函数。
     let slot = lua_h_set(l, (*t).as_table_ptr(), &*key);
     setobj2t!(l, slot, value);
     luaC_barriert!(l, (*t).as_table_ptr(), value);
-    l.top = key;
+    l.reanchor_top(key);
   }
 }

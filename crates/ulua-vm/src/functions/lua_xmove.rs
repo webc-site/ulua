@@ -1,7 +1,5 @@
 use crate::{
-  functions::{
-    c_slice, c_slice_mut, ensure_stack::ensure_stack_impl, lapi_barrier::lua_c_threadbarrier_lapi,
-  },
+  functions::{ensure_stack::ensure_stack_impl, lapi_barrier::lua_c_threadbarrier_lapi},
   macros::{api_check::api_check, api_checknelems::api_checknelems, setobj_2_s::setobj_2_s},
   records::{lua_state::LuaState, lua_t_value::TValue},
 };
@@ -27,18 +25,20 @@ pub unsafe fn lua_xmove(from: *mut LuaState, to: *mut LuaState, n: i32) {
     // cpp `ensure_stack_impl(to, from, n)`：目标帧不够时扩容，失败在 from 上抛错
     ensure_stack_impl(to, from, n);
 
-    let ttop = (*to).top;
-    let ftop = (*from).top.offset(-(n as isize));
+    // 槽窗门面：源侧取 `from` 顶下 n 格只读窗、目标侧取 `to` 顶后 n 格预留可写窗
+    //（扩容先行已由 ensure_stack_impl 覆盖，窗基址/界内契约见原语文档）
+    let src_win = (&*from).slots_below_top(n as usize);
+    let dst_win = (&mut *to).reserved_slots_mut(n as usize);
 
-    // SAFETY:from 栈自 ftop 起 n 个值有效；to 栈保证容纳 n 个新值（checkstack 已过）。
-    for (dst, src) in c_slice_mut(ttop, n as usize)
-      .iter_mut()
-      .zip(c_slice(ftop, n as usize))
-    {
+    // SAFETY:from 栈顶下 n 格值有效（api_checknelems 已过）；to 栈保证容纳 n 个新值
+    //（checkstack 已过）。
+    for (dst, src) in dst_win.iter_mut().zip(src_win) {
       setobj_2_s!(to, dst as *mut TValue, src as *const TValue as *mut TValue);
     }
 
-    (*from).top = ftop;
-    (*to).top = ttop.offset(n as isize);
+    // 顶提交：写窗未触 `top` 字段，`advance_top(n)`/`rewind_top(n)` 与原
+    // `to->top = ttop + n` / `from->top = ftop` 落值逐位一致，提交次序不动
+    (&mut *from).rewind_top(n as usize);
+    (&mut *to).advance_top(n as usize);
   }
 }

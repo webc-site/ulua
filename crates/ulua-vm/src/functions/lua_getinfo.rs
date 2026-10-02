@@ -37,7 +37,8 @@ pub unsafe fn lua_getinfo(
         return 0;
       }
 
-      let func = (*l).top.offset(level as isize);
+      // 顶下 level 格槽地址经 `top_slot` 读数原语取得（上方 `-level <= top-base` 界检已过）
+      let func = (*l).top_slot(level as isize);
 
       // and it has to be a function
       if !(*func).is_function() {

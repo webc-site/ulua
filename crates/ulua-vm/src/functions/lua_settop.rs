@@ -1,5 +1,5 @@
 use crate::{
-  functions::{c_slice_mut, ensure_stack::ensure_stack},
+  functions::ensure_stack::ensure_stack,
   macros::{api_check::api_check, setnilvalue::setnilvalue},
   records::lua_state::LuaState,
 };
@@ -16,18 +16,22 @@ pub fn lua_settop(l: &mut LuaState, idx: i32) {
       // 前必须保证 idx 落在 ci->top 之内，否则下面的 setnilvalue 会写出栈数组。
       ensure_stack(l, idx - l.top.offset_from(l.base) as i32);
       // 栈窗口 top..target 补空：原 `while top < target { setnilvalue; top += 1 }`
-      // 逐格走查收为一次 c_slice_mut 填充；top 已越过 target 时切片取 0 长、
-      // 直落 `top = target` 截断，与原循环空转分支逐指令等价
+      // 逐格走查收为一次预留槽窗填充；top 已越过 target 时切片取 0 长、
+      // 直落 `reanchor_top(target)` 截断，与原循环空转分支逐指令等价
       let target = l.base.add(idx as usize);
       let fill = target.offset_from(l.top).max(0) as usize;
-      // SAFETY: ensure_stack 已把可写界抬到覆盖 target（api_check 保证在 stack_last 内）
-      for slot in c_slice_mut(l.top, fill) {
+      // SAFETY: ensure_stack 已把可写界抬到覆盖 target（api_check 保证在 stack_last
+      // 内），预留窗 [top, top+fill) 可独占写入——契约见 `reserved_slots_mut`
+      for slot in l.reserved_slots_mut(fill) {
         setnilvalue!(slot);
       }
-      l.top = target;
+      l.reanchor_top(target);
     } else {
       api_check!(l, -(idx + 1) as isize <= l.top.offset_from(l.base));
-      l.top = l.top.offset((idx + 1) as isize); // `subtract' index (index is negative)
+      // 负 idx 截断：`top_slot(idx+1)` 读数 + 重锚提交两步，镜像原一步
+      // 顶回退落值形（`subtract' index (index is negative)`）
+      let target = l.top_slot((idx + 1) as isize);
+      l.reanchor_top(target); // `subtract' index (index is negative)
     }
   }
 }

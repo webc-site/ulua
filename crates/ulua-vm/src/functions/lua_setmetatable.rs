@@ -58,7 +58,8 @@ pub(crate) fn lua_setmetatable(l: &mut LuaState, objindex: i32) -> i32 {
       }
     }
 
-    (*lp).top = (*lp).top.sub(1);
+    // 消费元表槽一格：`rewind_top(1)` 提交原语镜像原 `top = top.sub(1)` 落值
+    (*lp).rewind_top(1);
     1
   }
 }

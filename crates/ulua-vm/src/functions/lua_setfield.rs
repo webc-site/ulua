@@ -29,6 +29,7 @@ pub(crate) fn lua_setfield_bytes(l: &mut LuaState, idx: i32, k: &[u8]) {
       Slot::from_ref(&key),
       Slot::from_raw(l.top.sub(1)),
     );
-    l.top = l.top.sub(1);
+    // 消费 value 一格：`rewind_top(1)` 提交原语镜像原 `top = top.sub(1)` 落值
+    l.rewind_top(1);
   }
 }

@@ -32,7 +32,8 @@ pub(crate) fn lua_next(l: &mut LuaState, idx: i32) -> i32 {
     if more != 0 {
       api_incr_top!(lp);
     } else {
-      (*lp).top = (*lp).top.sub(1);
+      // 无后继则弹回 key 槽：`rewind_top(1)` 提交原语镜像原 `top = top.sub(1)` 落值
+      (*lp).rewind_top(1);
     }
     more
   }

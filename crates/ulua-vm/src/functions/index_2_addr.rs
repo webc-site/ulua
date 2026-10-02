@@ -43,8 +43,9 @@ pub fn index_2_addr(l: &LuaState, idx: i32) -> StkId {
     let rel = (idx as isize) + unsafe { l.top.offset_from(l.base) };
     api_check!(l, idx != 0 && rel >= 0);
     if idx != 0 && rel >= 0 {
-      // SAFETY:`rel >= 0` 且 `|idx| <= used`，`top.offset(idx)` 落在栈数组内。
-      unsafe { l.top.offset(idx as isize) }
+      // SAFETY:`rel >= 0` 且 `|idx| <= used`，`top_slot` 相对栈顶读数原语所得
+      // 槽地址落在栈数组内（界内契约见原语文档）。
+      l.top_slot(idx as isize)
     } else {
       LUA_O_NILOBJECT as *mut TValue
     }

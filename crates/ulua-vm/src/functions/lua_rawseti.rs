@@ -20,10 +20,11 @@ pub fn lua_rawseti(l: &mut LuaState, idx: i32, n: i32) {
     let o: StkId = index_2_addr(l, idx);
     api_check!(l, (*o).is_table());
     check_writable(l, (*o).as_table_ptr());
-    // 栈顶 value 槽的三连裸重读收为一次预绑定（setnum/rehash/GC 均不改写 `l.top`）
-    let value = l.top.offset(-1);
+    // 栈顶 value 槽的三连裸重读收为一次 `top_slot(-1)` 预绑定
+    //（setnum/rehash/GC 均不改写栈顶字段）
+    let value = l.top_slot(-1);
     setobj2t!(l, lua_h_setnum(l, (*o).as_table_ptr(), n), value);
     luaC_barriert!(l, (*o).as_table_ptr(), value);
-    l.top = value;
+    l.reanchor_top(value);
   }
 }

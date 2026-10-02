@@ -24,9 +24,10 @@ pub unsafe fn lua_rawsetptagged(l: &mut LuaState, idx: i32, p: *mut c_void, tag:
     let o: StkId = index_2_addr(l, idx);
     api_check!(l, (*o).is_table());
     check_writable(l, (*o).as_table_ptr());
-    let val = l.top.offset(-1);
+    let val = l.top_slot(-1);
     setobj2t!(l, lua_h_setp(l, (*o).as_table_ptr(), p, tag), val);
     luaC_barriert!(l, (*o).as_table_ptr(), val);
-    l.top = l.top.offset(-1);
+    // 弹栈一格：`rewind_top(1)` 提交原语镜像原顶回退一格的落值形
+    l.rewind_top(1);
   }
 }

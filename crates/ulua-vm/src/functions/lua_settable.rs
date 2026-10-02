@@ -25,6 +25,7 @@ pub fn lua_settable(l: &mut LuaState, idx: i32) {
       Slot::from_raw(l.top.sub(2)),
       Slot::from_raw(l.top.sub(1)),
     );
-    l.top = l.top.sub(2);
+    // key+value 消费一格不剩：`rewind_top(2)` 提交原语镜像原 `top = top.sub(2)` 落值
+    l.rewind_top(2);
   }
 }
