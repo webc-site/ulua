@@ -13,19 +13,21 @@ use crate::{
   records::{gc_object::GCObject, lua_state::LuaState},
 };
 
-/// `luaC_barrierf` 前向写屏障（cpp `lgc.cpp:1284`）。r16-v9：首参收 `&mut LuaState`
-/// （仿 v5 rawequal/v7 pusherror 形制），`l` 存活/独占由接收者引用承载，`l.global` 读数
-/// 为 safe 位；GC 阶段与对象协议前提转为 safe fn 调用序契约（正确性，非内存安全；
-/// 文档断言，由调用方承载）：本函数须在 GC 处于非 GCSpause 的增量阶段调用，`o` 为黑色
-/// 存活对象、`v` 为刚被 `o` 引用的白色存活对象（二者均未 dead）。违反（如 v 已是黑对象
-/// 或对 dead 对象调用）会重复标记/改写已清扫对象，cpp lgc.cpp:1441。
-pub fn lua_c_barrierf(l: &mut LuaState, o: *mut GCObject, v: *mut GCObject) {
+/// `luaC_barrierf` 前向写屏障（cpp `lgc.cpp:1284`）。r16-v9b：首参仍收 `&mut LuaState`
+/// （仿 v5 rawequal/v7 pusherror 形制），`l` 非空/对齐与存活/独占由接收者引用承载，
+/// `l.global` 读数为 safe 位；GC 阶段与对象协议前提归 Safety 节承载（unsafe fn 语义）。
+///
+/// # Safety
+/// 本函数须在 GC 处于非 GCSpause 的增量阶段调用，`o` 为黑色存活对象、`v` 为刚被 `o`
+/// 引用的白色存活对象（二者均未 dead）。违反（如 v 已是黑对象或对 dead 对象调用）会
+/// 重复标记/改写已清扫对象，cpp lgc.cpp:1441。
+pub unsafe fn lua_c_barrierf(l: &mut LuaState, o: *mut GCObject, v: *mut GCObject) {
   // 接收者引用保证 `l` 有效，字段现读系 safe 位。
   let g = l.global;
   // SAFETY: 接收者保证 `l`（及由其派生的 `g`）非空与对齐；`o`/`v` 为 GC 协议裸形对象
   // （跨 crate 函数指针消费，不引用化），isblack/iswhite/isdead/keepinvariant/makewhite
   // 与 `reallymarkobject` 的裸读裸写触点均在对象协议界内，其成立前提（GC 阶段与
-  // 黑白/存活不变式）系上方调用序契约。
+  // 黑白/存活不变式）系上方 Safety 节。
   unsafe {
     LUAU_ASSERT!(isblack!(o) && iswhite!(v) && !isdead!(g, v) && !isdead!(g, o));
     LUAU_ASSERT!((*g).gcstate as i32 != GCSPAUSE);

@@ -13,19 +13,21 @@ use crate::{
   records::{gc_object::GCObject, lua_state::LuaState, lua_table::LuaTable},
 };
 
-/// `luaC_barriert` 表写屏障（cpp `lgc.cpp:1296`）。r16-v9：首参收 `&mut LuaState`
-/// （仿 v5 rawequal/v7 pusherror 形制），`l` 存活/独占由接收者引用承载，`l.global` 读数
-/// 为 safe 位；其余前提转为 safe fn 调用序契约（正确性，非内存安全；文档断言，由调用方
-/// 承载）：GC 须非 GCSpause；`t` 是黑色存活表，`v` 是刚写入 `t` 的白色存活 GCObject
-/// （未 dead）。二次传播阶段（GCSPROPAGATEAGAIN）退化为前向屏障。违反会把 gray 链挂错
-/// 对象或标记已清扫内存。cpp lgc.cpp:1453。
-pub fn lua_c_barriertable(l: &mut LuaState, t: *mut LuaTable, v: *mut GCObject) {
+/// `luaC_barriert` 表写屏障（cpp `lgc.cpp:1296`）。r16-v9b：首参仍收 `&mut LuaState`
+/// （仿 v5 rawequal/v7 pusherror 形制），`l` 非空/对齐与存活/独占由接收者引用承载，
+/// `l.global` 读数为 safe 位；GC 阶段与对象协议前提归 Safety 节承载（unsafe fn 语义）。
+///
+/// # Safety
+/// GC 须非 GCSpause；`t` 是黑色存活表，`v` 是刚写入 `t` 的白色存活 GCObject（未 dead）。
+/// 二次传播阶段（GCSPROPAGATEAGAIN）退化为前向屏障。违反会把 gray 链挂错对象或标记
+/// 已清扫内存。cpp lgc.cpp:1453。
+pub unsafe fn lua_c_barriertable(l: &mut LuaState, t: *mut LuaTable, v: *mut GCObject) {
   // 接收者引用保证 `l` 有效，字段现读系 safe 位。
   let g = l.global;
   // SAFETY: 接收者保证 `l`（及由其派生的 `g`）非空与对齐；`t`/`v`/`o` 为 GC 协议裸形
   // （跨 crate 函数指针消费，不引用化），obj2gco/isblack/iswhite/isdead/black2gray 裸读、
   // `(*g).gcstate` 判读与 `(*t).gclist`、grayagain 链写在 GC 阶段与对象协议界内，
-  // 其成立前提系上方调用序契约。
+  // 其成立前提系上方 Safety 节。
   unsafe {
     let o = obj2gco!(t);
 
