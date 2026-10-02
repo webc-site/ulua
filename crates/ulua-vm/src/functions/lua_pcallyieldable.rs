@@ -90,7 +90,11 @@ pub unsafe fn lua_pcallyieldable(l: *mut LuaState, nargs: i32, nresults: i32, er
       savederrfunc,
     );
 
-    expandstacklimit!(l, (*l).top);
+    // r14-p1 收编：宏参顶槽地址读数经 top_slot(0) 边界原语（r13-w1b resume_finish:96
+    // 同款先例，w9b lua_d_seterrorobj 调用点同形）——off=0 即保留顶槽，镜像 cpp
+    // `L->top` 读数形；宏体三处展开均在语句内现读宏参文本，与被替代的裸字段三处
+    // 现读逐位同址同序，恢复点（受保护调用返回处）后现读位点保持，禁预绑定不上提。
+    expandstacklimit!(l, (*l).top_slot(0));
 
     if status == 0 && isyielded(&*l) {
       return C_CALL_YIELD;
