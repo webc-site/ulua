@@ -246,13 +246,13 @@ impl ConstraintGenerator {
         }
 
         if fflag::LuauTypeFunctionStructuredErrors.get() {
-          // 注：`register_function` 已在 §2 收口为安全签名，`function` 指针仅
-          // 按身份登记（runtime 不解引用存活性之外的事），对照 C++:1011
+          // 注：`register_function` 已在 §2 收口为引用签名，arena 节点句柄经
+          // `alias` 门面物化借用，runtime 仅按该节点身份登记，对照 C++:1011
           // `registerFunction(function)`。
           if let Some(error) = self
             .type_function_runtime
             .get_mut()
-            .register_function(stat_node.as_ptr().cast::<AstStatTypeFunction>())
+            .register_function(alias(stat_node.as_ptr().cast::<AstStatTypeFunction>()))
           {
             self.report_error(
               function_location,
@@ -260,12 +260,12 @@ impl ConstraintGenerator {
             );
           }
         } else {
-          // 同上，收口后 `register_function_deprecated` 为安全签名。
+          // 同上，收口后 `register_function_deprecated` 亦为引用签名，经 `alias` 物化。
           // 对照 C++:1016 `registerFunction_DEPRECATED(function)`。
           if let Some(error) = self
             .type_function_runtime
             .get_mut()
-            .register_function_deprecated(stat_node.as_ptr().cast::<AstStatTypeFunction>())
+            .register_function_deprecated(alias(stat_node.as_ptr().cast::<AstStatTypeFunction>()))
           {
             self.report_error(
               function_location,
