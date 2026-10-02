@@ -608,7 +608,7 @@ fn call_c_tm(
 /// 避免第 1 轮整段 match 复制两份导致 `luau_execute_impl` 代码膨胀（matmul +6.8% 回退）。
 /// `is_not` 在此仅作冷路径的 `^`，不落在热循环 pc 关键路径上。逐输入语义与原合臂等价。
 ///
-/// # Safety
+/// # Safety（内部 unsafe 块契约，签名安全：调用方是派发环内的 `JUMPIFEQ`/`JUMPIFNOTEQ` 两臂）
 /// 调用臂保证 `ttype!(ra) == ttype!(rb)` 且 `ra` 为 Table/Userdata/Object 之一；`pc` 指向
 /// `insn` 之后的 aux 字；`base`/`l`/`cl` 满足 `luau_execute` 帧契约；`frame` 由同一 `l` 构造。
 #[cold]
@@ -842,8 +842,12 @@ macro_rules! vm_hot {
 ///  * `vm-opcount` —— 计数点只在环头，融合把两条指令计成一条，热点直方图与转移表失真。
 ///
 /// 判据本身是一次 `L` 热字段读 + 一条可预测分支；`cfg` 分支编译期即定。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的融合 helper）
+///
+/// `l` 为执行中的存活 `LuaState`。
 #[inline(always)]
-unsafe fn fuse_ok(l: *mut LuaState) -> bool {
+fn fuse_ok(l: *mut LuaState) -> bool {
   // SAFETY: 契约由调用方（派发环）保证，l 为执行中的存活 LuaState
   unsafe { !cfg!(feature = "vm-opcount") && !(*l).singlestep }
 }
@@ -863,7 +867,7 @@ unsafe fn fuse_ok(l: *mut LuaState) -> bool {
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向**下一条待执行指令**且落在 `cl` 的 proto
 /// code 段内，`base` 为该指令可寻址的栈槽基。
 #[inline(always)]
-unsafe fn fuse_jumpifnot(
+fn fuse_jumpifnot(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -909,7 +913,7 @@ unsafe fn fuse_jumpifnot(
 ///
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
 #[inline(always)]
-unsafe fn fuse_succ_gettable(
+fn fuse_succ_gettable(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -968,7 +972,7 @@ unsafe fn fuse_succ_gettable(
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基，
 /// `k` 为当前 proto 常量数组基址。
 #[inline(always)]
-unsafe fn fuse_succ_addk(
+fn fuse_succ_addk(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -1015,7 +1019,7 @@ unsafe fn fuse_succ_addk(
 ///
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
 #[inline(always)]
-unsafe fn fuse_succ_fornloop(
+fn fuse_succ_fornloop(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -1062,7 +1066,7 @@ unsafe fn fuse_succ_fornloop(
 ///
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
 #[inline(always)]
-unsafe fn fuse_succ_settable(
+fn fuse_succ_settable(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -1115,7 +1119,7 @@ unsafe fn fuse_succ_settable(
 ///
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
 #[inline(always)]
-unsafe fn fuse_succ_add(
+fn fuse_succ_add(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -1159,7 +1163,7 @@ unsafe fn fuse_succ_add(
 ///
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
 #[inline(always)]
-unsafe fn fuse_succ_mul(
+fn fuse_succ_mul(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -1201,7 +1205,7 @@ unsafe fn fuse_succ_mul(
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基，
 /// `k`/`cl` 为该帧的常量数组与闭包（[`VM_KV!`] 的既有前置）。
 #[inline(always)]
-unsafe fn fuse_succ_subk(
+fn fuse_succ_subk(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -1245,7 +1249,7 @@ unsafe fn fuse_succ_subk(
 ///
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
 #[inline(always)]
-unsafe fn fuse_succ_jumpifnotlt(
+fn fuse_succ_jumpifnotlt(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -1283,11 +1287,11 @@ unsafe fn fuse_succ_jumpifnotlt(
 /// C++ `reentry:` 标签的状态来源：解释器循环局部量全部从 `L->ci` 重取（原生返回、
 /// 协程恢复、native-call 之后都是这个口径），不与调用点的旧值掺混。
 ///
-/// # Safety（内部 unsafe 块契约）
+/// # Safety（内部 unsafe 块契约，签名安全：调用方是本文件的派发环与 [`tier_reentry`]）
 ///
 /// `l` 指向存活且 `isactive` 的 `LuaState`，其 `ci` 当前为 Lua 闭包帧。
 #[inline(always)]
-unsafe fn vm_state_from_ci(l: *mut LuaState) -> VmSt {
+fn vm_state_from_ci(l: *mut LuaState) -> VmSt {
   // SAFETY: 契约保证 l 为就绪的 Lua 帧状态
   unsafe {
     LUAU_ASSERT!(isLua!((*l).ci));
@@ -1330,7 +1334,7 @@ macro_rules! vm_reentry {
 ///
 /// `l` 必须指向存活且 `isactive` 的 `LuaState`，其 `ci` 当前为 Lua 闭包帧
 /// （入口 `LUAU_ASSERT!(isLua!((*l).ci))` 兜底），且同一 VM 状态任一时刻仅单线程解释执行。
-unsafe fn tier_reentry<const SINGLE_STEP: bool>(l: *mut LuaState) {
+fn tier_reentry<const SINGLE_STEP: bool>(l: *mut LuaState) {
   // SAFETY: 契约保证 l 为就绪的 Lua 帧状态，const 分支仅切换单步开关
   unsafe {
     // 循环状态量一律从 `L->ci` 重取（与 C++ `goto reentry` 后循环头重读一致），
@@ -2496,8 +2500,12 @@ unsafe fn s_add(
 ///
 /// 保守判定：`get_unshadowed()` 返回 `None`（本进程装过线程本地覆盖，只有测试会）
 /// 时按「旗标为真」处理，交冷续延用 `get()` 复核 —— 与拆分前逐位同语义。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的派发 handler 与融合链）
+///
+/// `l` 为执行中的存活 `LuaState`，其 `global` 为其稳定字段指针。
 #[inline(always)]
-unsafe fn backedge_idle(l: *mut LuaState) -> bool {
+fn backedge_idle(l: *mut LuaState) -> bool {
   // SAFETY: 契约同热 handler —— l 指向存活 LuaState，global 为其稳定字段指针
   unsafe {
     let hooked = (*(*l).global).cb.interrupt.is_some();
@@ -2667,7 +2675,7 @@ unsafe fn s_fornloop(
 /// `ra` 是本指令 `A` 槽（`limit`/`step`/`idx` 三元组首槽）且三槽均为数值，`pc` 已越过
 /// 本指令。
 #[inline(always)]
-unsafe fn fornloop_step(
+fn fornloop_step(
   pc: *const Instruction,
   cl: *mut Closure,
   insn: Instruction,
@@ -2773,7 +2781,7 @@ unsafe fn s_fornprep(
 ///
 /// `ra` 指向 `limit`/`step`/`idx` 三元组首槽且三者均为数值，`pc` 已越过本指令。
 #[inline(always)]
-unsafe fn fornprep_step(
+fn fornprep_step(
   mut pc: *const Instruction,
   cl: *mut Closure,
   insn: Instruction,
