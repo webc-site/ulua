@@ -49,7 +49,7 @@ pub(crate) unsafe fn lua_g_runerror_l(
 
     lua_rawcheckstack(&mut *l, 1);
 
-    pusherror(l, result.as_ptr() as *const c_char);
+    pusherror(&mut *l, result.as_ptr() as *const c_char);
     lua_d_throw(l, LuaStatus::ErrRun as i32);
   }
 }
