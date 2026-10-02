@@ -57,7 +57,11 @@ pub unsafe fn lua_pcallyieldable(l: *mut LuaState, nargs: i32, nresults: i32, er
     (*(*l).ci).flags |= LUA_CALLINFO_HANDLE as u32;
 
     let mut ctx = CallContext {
-      func: (*l).top.sub((nargs + 1) as usize),
+      // r14-p1 收编：顶下 nargs+1 槽地址经 top_slot 边界原语（stack.rs:94 既有本体
+      // `top.offset(off)`）——`offset(-((nargs+1) as isize))` 与被替代式
+      // `top.sub((nargs + 1) as usize)` 同址（负平移与减等址），位点现读不变、
+      // 仅指针平移不解引用；界内由上行 errfunc/nargs 契约断言先行把守。
+      func: (*l).top_slot(-((nargs + 1) as isize)),
       nresults,
     };
 
