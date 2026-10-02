@@ -1,6 +1,7 @@
 use core::{
   ffi::c_void,
   fmt::{Debug, Formatter, Result},
+  mem::{align_of, size_of},
   ptr, slice,
 };
 
@@ -31,6 +32,14 @@ pub type TValue = lua_TValue;
 /// 4-lane 构建视图多覆盖的本槽尾字节随后被 `tt` 置写覆盖，与旧宏裸指针写逐位一致。
 const VVALUE_LANES: usize = if LUA_VECTOR_SIZE == 4 { 4 } else { 3 };
 
+// 布局冻结前提（r17-c）：`as_vector_ref`/`set_vvalue` 的槽起始 f32 lane 视图
+// 唯一依赖「TValue 尺寸覆盖 lane 字节段、对齐不低于 f32」，由编译期断言背书，
+// 是两处最小 `unsafe` 视图的全部界内性论证。
+const _: () = assert!(
+  size_of::<lua_TValue>() >= VVALUE_LANES * size_of::<f32>()
+    && align_of::<lua_TValue>() >= align_of::<f32>()
+);
+
 impl Debug for lua_TValue {
   fn fmt(&self, f: &mut Formatter<'_>) -> Result {
     f.debug_struct("lua_TValue")
@@ -42,21 +51,21 @@ impl Debug for lua_TValue {
 
 /// 八个 cpp GC setter 公开壳（`setsvalue`/`sethvalue`/`setclvalue`/`setupvalue`/
 /// `setthvalue`/`setbufvalue`/`setclassvalue`/`setobjectvalue`，lobject.h:168-249）
-/// 中除锚点方法 `set_svalue` 外七件套的单源工厂：签名、`# Safety` 文档与转发
-/// `set_gc_tagged` 共享核心的函数体逐行同形，唯余方法名、`LuaType` tag 常量与
-/// 首行 doc——后者作为属性经 `#[doc = $doc]` 原样保留（含 cpp 出处锚点）。
-/// `set_svalue` 首行另携带 `as *mut GCObject` 抹除与 `g` 实参纯度的补充论证，保留手写并
-/// 继续充当各壳 `# Safety` 的引用锚点。
+/// 中除锚点方法 `set_svalue` 外七件套的单源工厂：签名与转发 `set_gc_tagged`
+/// 共享核心的函数体逐行同形，唯余方法名、`LuaType` tag 常量与首行 doc——后者
+/// 作为属性经 `#[doc = $doc]` 原样保留（含 cpp 出处锚点）。
+/// r17-c 起各壳为 safe fn（纯字段写、零解引用）；debug-only 存活断言
+/// `checkliveness!` 下沉至各 `set*value!` 宏壳（调用点 unsafe 语境承接），
+/// 写入/断言次序与旧宏体逐位一致；`set_svalue` 保留手写充当各壳文档锚点。
 macro_rules! gc_value_setter {
   ($name:ident, $doc:expr, $tag:path) => {
     #[doc = $doc]
     ///
-    /// # Safety
-    /// 同 [`Self::set_svalue`]（含「屏障留调用点」红线与 `g` 有效性前提）。
+    /// safe 方法：转发共享核心 [`Self::set_gc_tagged`]，只写字段、无解引用；
+    /// debug 存活断言见各 `set*value!` 宏壳，写屏障红线留调用点（不动）。
     #[inline]
-    pub unsafe fn $name(&mut self, gc: *mut GCObject, g: *mut global_State) {
-      // SAFETY: 同 [`Self::set_svalue`]，转发共享核心 `set_gc_tagged`
-      unsafe { self.set_gc_tagged(gc, g, $tag) }
+    pub fn $name(&mut self, gc: *mut GCObject) {
+      self.set_gc_tagged(gc, $tag)
     }
   };
 }
@@ -237,6 +246,9 @@ impl lua_TValue {
   #[inline(always)]
   pub fn as_vector_ref(&self) -> &[f32; 3] {
     debug_assert!(self.is_vector());
+    // SAFETY: 布局断言（VVALUE_LANES ≥ 3 ⇒ 12 字节 ≤ size_of::<TValue>()，对齐 ≥ f32）
+    // 保证视图界内且对齐；f32 无无效位模式，任意字节读数皆有定义；tag 不变量
+    // （lane 由 `set_vvalue` 同址视图写入）与 `ValueView::from_tvalue` 读数族同前提。
     unsafe { &*(ptr::from_ref(self).cast::<[f32; 3]>()) }
   }
 
@@ -320,12 +332,13 @@ impl lua_TValue {
   /// 自写入、`w()` 仅在门内求值）与旧宏一致；调用点实参均为纯读（读他槽 lane，与
   /// 本槽写入 lane 严格不交叉），把 x/y/z 求值统一提前不改变可观察行为。
   ///
-  /// # Safety
-  /// `&mut self` 由调用点经裸指针解引用取得：非空、按 `TValue` 对齐、指向已初始化
-  /// 槽、noalias 独占、槽寿命不跨栈扩容；写入跨 `value`+`extra` 字节段，与 `w()` 的
-  /// 4-lane 越界防御共同受 `LUA_VECTOR_SIZE` 编译期常量约束。
+  /// 本方法是 safe：体内唯一 `unsafe` 是从 `&mut self` 派生的槽起始 f32 lane 视图，
+  /// 界内性与对齐由 `VVALUE_LANES` 布局断言背书；`&mut self` 的取得前提（裸指针
+  /// 非空/对齐/已初始化/noalias 独占，寿命不跨栈扩容）同 [`Self::set_nil`] 随宏
+  /// 收口下沉至调用点解引用处保证，语义不变；4-lane 越界防御仍由
+  /// `LUA_VECTOR_SIZE` 编译期常量与 `w()` 的门内求值承接。
   #[inline]
-  pub unsafe fn set_vvalue<W: FnOnce() -> f32>(&mut self, x: f32, y: f32, z: f32, w: W) {
+  pub fn set_vvalue<W: FnOnce() -> f32>(&mut self, x: f32, y: f32, z: f32, w: W) {
     // SAFETY: `lanes` 由 &mut self 独占派生（cast 至本槽起始地址的 f32 视图），
     // lane0..lane2 落在 value+extra 字节段内；4-lane 门内 lane3 亦在 TValue 尾
     // 字节内；随后经 self 写 tt 后 raw 视图不再使用（Stacked Borrows 顺序合规）
@@ -343,40 +356,28 @@ impl lua_TValue {
 
   /// 八个 cpp GC setter（`setsvalue`/`sethvalue`/`setclvalue`/`setupvalue`/
   /// `setthvalue`/`setbufvalue`/`setclassvalue`/`setobjectvalue`，lobject.h
-  /// :168-249）的共享核心：方法体逐字同形——先写 `value.gc`、再置 `tt`、末尾
-  /// `checkliveness!(g, i_o)`（debug-only 存活断言）——唯一差异是 `LuaType`
-  /// tag，各公开方法只携带自己的 tag 转发到这里，安全论证单点收敛。
-  ///
-  /// # Safety
-  /// 同 [`Self::set_svalue`]（裸指针非空/对齐/已初始化/noalias 独占，寿命不跨栈
-  /// 扩容）；`g` 须为 `(*L).global` 所指的有效 `global_State`（仅 debug 断言路径
-  /// 解引用）。**gc 指针写入方仍须自行负责写屏障**：cpp 中 SETOBJ/SET*SVALUE 与
+  /// :168-249）的共享核心：方法体逐字同形——先写 `value.gc`、再置 `tt`——
+  /// 全程纯字段写、零解引用（r17-c：原末位 debug-only `checkliveness!((*L).global,
+  /// i_o)` 存活断言含裸指针解引用，随本方法 safe 化下沉至各 `set*value!` 宏壳，
+  /// 断言仍紧跟写入、次序与旧宏体逐位一致）。
+  /// **gc 指针写入方仍须自行负责写屏障**：cpp 中 SETOBJ/SET*SVALUE 与
   /// `luaC_barriert`/`barrierfast` 是分步的（lvmexecute.cpp:442/711/723/815/870、
   /// ltable.cpp:975/1026/1050），本方法绝不触发屏障，调用点屏障时序一律不动。
   #[inline]
-  unsafe fn set_gc_tagged(&mut self, gc: *mut GCObject, g: *mut global_State, tt: LuaType) {
+  fn set_gc_tagged(&mut self, gc: *mut GCObject, tt: LuaType) {
     self.value.gc = gc;
     self.tt = tt as i32;
-    // SAFETY: `i_o` 经 `ptr::from_mut` 从 `&mut self` 独占权源出、与本槽同址
-    // （与旧宏体传入 checkliveness 的 `i_o` 同值），仅做只读存活断言
-    unsafe {
-      let i_o = ptr::from_mut(self);
-      checkliveness!(g, i_o);
-    }
   }
 
   /// 写 GC 载荷并置 string tag（cpp `setsvalue`，lobject.h:168）：写入次序与旧
   /// 宏体逐位一致。`x as *mut GCObject` 的类型抹除保留在宏壳（继续兼容
-  /// 各 GC 指针实参类型），方法只收已擦除的 `gc`；`g` 即旧宏体 checkliveness 的
-  /// `(*L).global` 实参（纯指针字段加载，提前于载荷写入求值不改变可观察行为——
-  /// 与 [`Self::set_vvalue`] 的实参纯度论证同形）。
+  /// 各 GC 指针实参类型），方法只收已擦除的 `gc`。
   ///
-  /// # Safety
-  /// 同共享核心 `set_gc_tagged`（含「屏障留调用点」红线与 `g` 有效性前提）。
+  /// safe 方法：同 [`Self::set_gc_tagged`]（纯字段写；debug 存活断言由
+  /// `setsvalue!` 宏壳承接，屏障红线留调用点）。
   #[inline]
-  pub(crate) unsafe fn set_svalue(&mut self, gc: *mut GCObject, g: *mut global_State) {
-    // SAFETY: 契约见共享核心 `set_gc_tagged`
-    unsafe { self.set_gc_tagged(gc, g, LuaType::String) }
+  pub(crate) fn set_svalue(&mut self, gc: *mut GCObject) {
+    self.set_gc_tagged(gc, LuaType::String)
   }
 
   gc_value_setter!(
