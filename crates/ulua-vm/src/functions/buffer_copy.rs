@@ -1,3 +1,5 @@
+use core::slice::from_raw_parts_mut;
+
 use crate::{
   functions::{
     buffer_errors::buffer_oob_error, buffer_window::buffer_data_ref,
@@ -67,14 +69,14 @@ pub(crate) unsafe fn buffer_copy(l: *mut LuaState) -> i32 {
       // SAFETY: 上方双 isoutofbounds 保证 [soff, soff+size) 与 [toff, toff+size)
       // 均落在同一块 [0, tlen) 内；此处重新物化唯一一条覆盖整块的 &mut 借用
       // （此前 tbuf/sbuf 两借用在折裸量后均已结束），copy_within 即 memmove 等价
-      let buf = core::slice::from_raw_parts_mut(tptr, tlen);
+      let buf = from_raw_parts_mut(tptr, tlen);
       buf.copy_within(soff..soff + size, toff);
     } else {
       // SAFETY: 两窗各自经 isoutofbounds 校验落界内；异对象的数据块为各自内联自有
       // 块、互不相交（判据实证见同对象分支注记），dst/src 不重叠前提下
       // copy_from_slice（memcpy 形）与 cpp memmove 逐字节同义
-      let dst = core::slice::from_raw_parts_mut(tptr.add(toff), size);
-      let src = core::slice::from_raw_parts_mut(sptr.add(soff), size);
+      let dst = from_raw_parts_mut(tptr.add(toff), size);
+      let src = from_raw_parts_mut(sptr.add(soff), size);
       dst.copy_from_slice(src);
     }
 
