@@ -21,14 +21,16 @@ impl CfgFixture {
     // 结束），免 `as *const _ as *mut _` 双重 `as` 反模式。
     self.root = from_ref(self.parse(code)).cast_mut();
 
-    // Safety: cfg 指向 self.cfg_allocator 中存活的 ControlFlowGraph。
-    let cfg = unsafe { CfgBuilder::make_cfg(&mut self.cfg_allocator as *mut _, self.root) };
+    // Safety: make_cfg 入口 block 已引用化，此处首层解引用 `self.root`——它由
+    // 上一行从 `parse` 返回引用写入，指向 fixture allocator arena 内活
+    // AstStatBlock，借用半径止于本次调用表达式，allocator 比调用长寿。
+    let cfg = unsafe { CfgBuilder::make_cfg(&mut self.cfg_allocator as *mut _, &*self.root) };
 
     if fflag::DebugLuauLogCFG.get() {
       print!(
         "{}",
         dump_cfg(unsafe {
-          // Safety: cfg 指向行 23 make_cfg 刚在 self.cfg_allocator arena 中构造的 ControlFlowGraph（块地址随 allocator 稳定、make_cfg 按契约非空），&* 物化临时只读借用交 dump_cfg 打印，借用随 print 结束。
+          // Safety: cfg 指向上方 make_cfg 刚在 self.cfg_allocator arena 中构造的 ControlFlowGraph（块地址随 allocator 稳定、make_cfg 按契约非空），&* 物化临时只读借用交 dump_cfg 打印，借用随 print 结束。
           &*cfg
         })
       );

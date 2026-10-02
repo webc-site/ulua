@@ -26,9 +26,10 @@ pub struct CfgFixture {
   /// `&*self.root`）、`methods::data_flow_graph_fixture_{dfg,get_def,get_local_def}`
   /// （4）、以及跨 crate 的签名面 `functions::query`（2，`AstNodePtr` 只为 `*mut T`
   /// 实现）、`ulua_ast::rtti`（2）、`ulua_analysis::methods::cfg_builder`
-  /// （`CfgBuilder::make_cfg(*mut CfgAllocator, *mut AstStatBlock) ->
-  /// *mut ControlFlowGraph`）、`ulua_analysis::methods::data_flow_graph_builder`
-  /// （`DataFlowGraphBuilder::build` 第一参）。这些文件本轮禁改，只动声明端会留下
+  /// （`CfgBuilder::make_cfg(*mut CfgAllocator, &AstStatBlock) ->
+  /// *mut ControlFlowGraph`，本字段作为 `build` 内的首层 `&*self.root` 解引用点）、
+  /// `ulua_analysis::methods::data_flow_graph_builder`
+  /// （`DataFlowGraphBuilder::build` 首参已引用化为 `&AstStatBlock`）。这些文件本轮禁改，只动声明端会留下
   /// 不可编译的半截迁移；句柄化需与 `make_cfg`/`build`/`AstNodePtr` 同批改签名。
   pub root: *mut AstStatBlock,
   /// `build` 布线的 CFG 指针（指向 `cfg_allocator` arena），经 `CfgFixture::cfg`

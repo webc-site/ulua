@@ -22,7 +22,7 @@ use crate::{
     constraint_solver_ctor::SolverParams,
   },
   records::{
-    arena_handle::Handle, builtin_types::BuiltinTypes, constraint_generator::ConstraintGenerator,
+    arena_handle::{Handle, alias_ref}, builtin_types::BuiltinTypes, constraint_generator::ConstraintGenerator,
     constraint_graph::ConstraintGraph, constraint_solver::ConstraintSolver,
     data_flow_graph_builder::DataFlowGraphBuilder, frontend_options::FrontendOptions,
     internal_error_reporter::InternalErrorReporter, module::Module,
@@ -113,19 +113,17 @@ pub fn check(args: CheckArgs<'_>) -> ModulePtr {
     ice_handler.module_name = source_module.name.to_string();
   }
 
-  // Safety: def_arena/key_arena 是对 module_ptr（上方写穿句柄，Arc 堆对象
-  // 地址固定）字段的 &mut 借用；source_module.root 指向解析 arena 内活
-  // AST，二者仅在调用表达式内解引用，借用期覆盖 build 全程，符合
-  // DataFlowGraphBuilder::build 的裸指针前置条件（ice 侧已为
-  // Option<Handle>，非空/存活由类型承载）。
-  let mut dfg = unsafe {
-    DataFlowGraphBuilder::build(
-      source_module.root,
-      Handle::from_mut(&mut module_ptr.def_arena),
-      Handle::from_mut(&mut module_ptr.key_arena),
-      Some(Handle::from_mut(&mut *ice_handler)),
-    )
-  };
+  // `build` 入口已引用化（安全签名）：首层解引用收口在此处 `alias_ref`——
+  // source_module.root 指向解析 arena 内活 AST（`&'static` 借用由 arena 保活
+  // 契约供给）；def/key arena 借自存活的 module_ptr（写穿句柄，Arc 堆对象地址
+  // 固定），Handle 借用期覆盖 build 全程，符合 arena_handle 模块级契约（ice 侧
+  // 已为 Option<Handle>，非空/存活由类型承载）。
+  let mut dfg = DataFlowGraphBuilder::build(
+    alias_ref(source_module.root),
+    Handle::from_mut(&mut module_ptr.def_arena),
+    Handle::from_mut(&mut module_ptr.key_arena),
+    Some(Handle::from_mut(&mut *ice_handler)),
+  );
 
   let mut unifier_state = UnifierSharedState::new(Handle::from_mut(&mut *ice_handler));
   unifier_state.counters.recursion_limit = fint::LuauTypeInferRecursionLimit.get();

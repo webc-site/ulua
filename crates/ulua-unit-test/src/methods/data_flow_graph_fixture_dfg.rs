@@ -21,9 +21,13 @@ impl DataFlowGraphFixture {
 
     self.module = result.root;
     self.graph = Some(unsafe {
-      // Safety: module 为解析成功（行 19 错误路径已 panic）时 Parser::parse 返回的存活 AstStatBlock，fixture allocator arena 块地址不动、比 graph 长寿；三处接线（def_arena/key_arena/handle）同属本结构不同字段、互不重叠，Handle 仅在 build 帧内使用，返回图不借用它们。
+      // Safety: `build` 入口 block 已引用化，此处首层解引用 `self.module`——它
+      // 为解析成功（错误路径已 panic）时 Parser::parse 返回的存活
+      // AstStatBlock，fixture allocator arena 块地址不动、比 graph 长寿。三处
+      // 接线（def_arena/key_arena/handle）同属本结构不同字段、互不重叠，Handle
+      // 仅在 build 帧内使用，返回图不借用它们。
       DataFlowGraphBuilder::build(
-        self.module,
+        &*self.module,
         Handle::from_mut(&mut self.def_arena),
         Handle::from_mut(&mut self.key_arena),
         Some(Handle::from_mut(&mut self.handle)),

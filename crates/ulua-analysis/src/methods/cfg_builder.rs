@@ -22,7 +22,7 @@ use crate::{
   enums::block_kind::BlockKind,
   methods::block::block_set_reaching_definition,
   records::{
-    arena_handle::{alias, alias_ref},
+    arena_handle::alias,
     block_registry::resolve_block_mut,
     cfg_allocator::CfgAllocator,
     cfg_builder::CfgBuilder,
@@ -106,11 +106,12 @@ impl CfgBuilder {
   /// # Safety
   /// 对应 C++ `CFGBuilder::makeCFG(NotNull<CFGAllocator> allocator, AstStatBlock* block)`：
   /// `allocator` 须非空且在返回的 `ControlFlowGraph` 整个使用期内存活（CFG 只存裸句柄，
-  /// 不接管其所有权）；`block` 须指向存活非空的 `AstStatBlock`（Module 的 AST arena 节点）。
+  /// 不接管其所有权）。`block` 已引用化：非空/对齐/存活由借用类型承载（cpp 第二参
+  /// `AstStatBlock*` 的首层解引用收口到调用方）。
   /// 返回 `Box::into_raw` 产出的裸所有权指针，由调用方负责唯一释放。
   pub unsafe fn make_cfg(
     allocator: *mut CfgAllocator,
-    block: *mut AstStatBlock,
+    block: &AstStatBlock,
   ) -> *mut ControlFlowGraph {
     // C++:
     //   CFGBuilder builder(allocator);
@@ -118,7 +119,7 @@ impl CfgBuilder {
     let mut builder = CfgBuilder::new(allocator);
     // `block` is `AstStatBlock*`; C++ `lower(block)` dispatches to the
     // `AstStatBlock*` overload.
-    builder.lower_ast_stat_block(alias_ref(block));
+    builder.lower_ast_stat_block(block);
 
     // auto cfg = std::move(builder.cfg);
     // 不变式：`CfgBuilder::new` 构造期即置入 cfg（对应 C++ 构造里
