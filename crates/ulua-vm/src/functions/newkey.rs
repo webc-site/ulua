@@ -82,6 +82,15 @@ pub(crate) unsafe fn newkey(l: *mut LuaState, t: *mut LuaTable, key: &TValue) ->
       return arrayornewkey(l, t, key);
     }
 
+    // 哈希部分占用（gnode! 裁决口径，全程保留裸形）：`mp` 由 `mainposition`→`gnode!`
+    // 取回裸 *mut LuaNode，其 provenance 依 mainposition 契约挂在表裸指针下；
+    // 哨兵判据 `eq(mp, dummynode)` 是指针相等而非桶内容——这正对应 E1
+    // `node_window_mut()` 对哨兵表返回空窗的裁决口径（写哨兵表必须先经
+    // `is_hash_dummy()` 级判据换发实向量，本函数的换发路径即该判据命中的
+    // rehash→arrayornewkey 支），若窗化后以 len()==0 判空会破坏此契约。
+    // 窗等价契约：下文所有 `offset(next)`/`offset_from` 节点算术 ⇔ 实向量窗内
+    // 下标的加减（`n.offset_from(othern)` ⇔ 窗下标差），界外由 UB 降 panic 一
+    // 事在 E1 访问器本基线缺位（见票单），暂以 LUA_ASSERT! 与上游不变式兜底。
     let mut mp = mainposition(t, key);
     if !matches!(ValueView::from_tvalue(&*gval!(mp)), ValueView::Nil) || eq(mp, dummynode) {
       // cpp `LuaNode* n = getfreepos(t); if (n == NULL)`：`None` 即「哈希部分无空槽」，
@@ -106,6 +115,12 @@ pub(crate) unsafe fn newkey(l: *mut LuaState, t: *mut LuaTable, key: &TValue) ->
       getnodekey_direct(addr_of_mut!(mk), mp, (*l).global);
       let mut othern = mainposition(t, &mk);
 
+      // next 链改写（gnode! 裁决口径，保留裸形）：`othern.offset(next)` 单步链进与
+      // `set_next(.. offset_from ..)` 基址差写依赖裸 *mut 同一性——窗形仅能化为
+      // `window[idx]` 同址往返，unsafe 总量不减（E1 主控对 gnode! 的收编否决即此口径）。
+      // 窗等价契约：`n.offset_from(othern)` ⇔ 实向量 node 窗内下标差；搬运次序
+      // （找链尾 → 改 prev-next → `*n = *mp` 搬节点 → 断链清 nil）与 oracle
+      // cpp/VM/src/ltable.cpp:922 `luaH_newkey` 逐位一致，不作窗化重排。
       if othern != mp {
         while othern.offset((*othern).key.next() as isize) != mp {
           othern = othern.offset((*othern).key.next() as isize);
