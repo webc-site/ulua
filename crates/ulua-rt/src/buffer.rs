@@ -126,6 +126,8 @@ impl Buffer {
       // Safety: 两操作数都是各自 `&[u8]`/`&mut [u8]` 的完整区间（assert 已保证
       // 界内），u8 对齐平凡；重叠分支用 `copy`（memmove 语义）合法，len==0 时
       // 对空区间亦合法。非重叠分支交给 `copy_from_slice`。
+      // r12-w8buf 保留面：`core::ptr::copy` 即 Rust 惯用法要求的单点裸形
+      // （标准库无 safe 的重叠搬移门面），非 FFI/句柄面，不收编。
       unsafe { ptr::copy(bytes.as_ptr(), dst.as_mut_ptr(), len) };
     } else {
       dst.copy_from_slice(bytes);
@@ -145,6 +147,12 @@ impl Buffer {
 
   /// A raw pointer identifying this buffer (for identity comparison).
   /// Mirrors `Value::Buffer(_).to_pointer()`.
+  ///
+  /// r12-w8buf 保留面（w6d 口径钉死定性）：只作对象地址身份、全程不解引用，
+  /// 裸形系 mlua 对齐的公开判据所需；委托 `LuaRef::to_pointer`（safe 门面族，
+  /// 内部仅 `pointer_at` 一次读数）。消费面实测：本文件 `PartialEq::eq`、
+  /// `value.rs:296`（`Value::to_pointer` 的 Buffer 臂）、`value.rs:365`
+  /// （`Value` 判等的 Buffer 臂）。
   pub(crate) fn to_pointer(&self) -> *const c_void {
     self.reference.to_pointer()
   }
@@ -189,10 +197,16 @@ impl Buffer {
   /// （非 buffer 才返回 `None`，`expect` 收口为 panic 而非 UB）；`pop_stack`
   /// 后切片仍有效——对象由注册表引用钉住、Luau GC 不移动对象且 buffer 定长
   /// 不 resize（契约三要素见 `lua_tobuffer_bytes_ref`），栈槽只是视图。
+  ///
+  /// r12-w8buf 收编：门面形参已是 `&mut LuaState`（ulua-vm 安全签名族），实参
+  /// `&mut state` 经 StateView DerefMut 协变直达（`memory.rs` `lua_setmemcat`
+  /// 同款惯用形），本调用点不再自建裸解引用；`unsafe` 仅剩对 `pub unsafe fn`
+  /// 门面的调用本身，契约如上。
   fn bytes(reference: &XRc<LuaRef>) -> &'static mut [u8] {
-    let state = reference.state();
+    let mut state = reference.state();
     reference.push();
-    let bytes = unsafe { lua_tobuffer_bytes_ref(&mut *state.as_mut_ptr(), -1) };
+    // Safety: 见上方 # Safety 契约（栈槽 -1 即刚 push 回的 buffer 对象）。
+    let bytes = unsafe { lua_tobuffer_bytes_ref(&mut state, -1) };
     pop_stack(state, 1);
     bytes.expect("invalid Luau buffer")
   }
@@ -304,19 +318,20 @@ const NEWBUFFER_NAME: &[u8] = b"ulua-rt-newbuffer\0";
 unsafe extern "C-unwind" fn c_newbuffer(raw: *mut LuaState) -> i32 {
   // Safety: C-ABI 边界点(pcall 被调闭包帧实参):`raw` 由 `lua_pcall` 在被调
   // 闭包内提供（存活，且帧带 `LUA_MINSTACK` 头寸）;一次转视图,只在本次调用内。
-  let state = unsafe { StateView::from_raw(raw) };
-  // Safety: 栈槽 1 由创建方 `create_buffer_with_capacity` 压入的 number 实参
-  // 占据（契约"栈为 [size]"），经 `number_at` 只读消费；理论上的非数值形态
-  // 回落到 0，与旧形 `lua_tonumberx(.., NULL)` 对非数值返 0.0 的取值逐位一致，
+  let mut state = unsafe { StateView::from_raw(raw) };
+  // 调用序契约（r12-w8buf 收编：本函数体零 `unsafe`——`number_at`/`set_stack_top`
+  // 为 safe 门面，`lua_newbuffer_push_ref` 已是 `&mut LuaState` 安全签名，实参
+  // `&mut state` 经 DerefMut 协变直达，w6b trampoline 形不动）：栈槽 1 由创建方
+  // `create_buffer_with_capacity` 压入的 number 实参占据（契约"栈为 [size]"），
+  // 经 `number_at` 只读消费；理论上的非数值形态回落到 0，与旧形
+  // `lua_tonumberx(.., NULL)` 对非数值返 0.0 的取值逐位一致，
   // `f64 as usize` 饱和转换是 Rust 定义行为。`lua_settop(state, 0)` 丢弃实参后
   // `lua_newbuffer_push_ref` 在空帧上分配并压回恰好一个值（其 toobig 错误经外层受保护
   // 调用转成非零 status，不跨帧 unwind），返回 1 与之相符。
-  unsafe {
-    let size = number_at(state, 1).unwrap_or(0.0) as usize;
-    set_stack_top(state, 0);
-    lua_newbuffer_push_ref(&mut *state.as_mut_ptr(), size);
-    1
-  }
+  let size = number_at(state, 1).unwrap_or(0.0) as usize;
+  set_stack_top(state, 0);
+  lua_newbuffer_push_ref(&mut state, size);
+  1
 }
 
 /// Create a buffer of `size` zero-initialized bytes, catching an over-limit

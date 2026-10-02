@@ -48,6 +48,9 @@ pub(crate) use ulua_vm::functions::lua_l_tolstring::lua_l_tolstring_ref;
 // ---- traceback -----------------------------------------------------------
 pub(crate) use ulua_vm::functions::lua_l_traceback::lua_l_traceback;
 // ---- buffers / vectors (Luau) --------------------------------------------
+// r12-w8buf：buffer 族只转出 ref-core 门面（无裸 (ptr,len) C-ABI 形转入）。
+// 消费面实测：`lua_newbuffer_push_ref` → `buffer.rs:333`（trampoline 本体）；
+// `lua_tobuffer_bytes_ref` → `buffer.rs:209`（`Buffer::bytes` 唯一窗口派生点）。
 pub(crate) use ulua_vm::functions::lua_newbuffer::lua_newbuffer_push_ref;
 // ---- closures / userdata -------------------------------------------------
 pub(crate) use ulua_vm::functions::lua_newuserdatadtor::lua_newuserdatadtor;
