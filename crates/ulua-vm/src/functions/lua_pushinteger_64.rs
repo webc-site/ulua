@@ -14,6 +14,11 @@ use crate::{
 /// 与 [`LuaState::push_number`] 一侧的 push 族基元不同，本函数的 `LUA_TINTEGER` 精确槽
 /// 尚无签名安全的串接面（`push_slot_with` 收在 `records/lua_state/stack.rs` 私有原语内，
 /// 上收出本票文件集），故保留 2 语句窄 unsafe 窗，登记为后续「栈槽句柄」小票建议。
+///
+/// r12-w4b 消费面实测：C-ABI 面唯一消费方是 `ulua-capi` 的显式导出壳
+/// `ulua_lua_pushinteger_64`（vm 侧前移为引用形后，该壳从 `capi_shell!` 宏模板退役为手写
+/// 一行折形），按 T9 形裁决**保留**；Rust 侧消费点（`LuaState::push_integer_64` 方法与
+/// lintlib/buffer 族 10 余处）全走本引用形，无需在 vm 内另加 `*mut` 形垫片。
 pub fn lua_pushinteger_64(l: &mut LuaState, n: i64) {
   // 扩容先行（可移动栈），其后不留裸指针算式
   l.ensure_stack_space(1);

@@ -80,8 +80,18 @@ pub(crate) fn lua_pushcclosurek_ref(
   }
 }
 
-/// C-ABI 镜像垫片：把 [`lua_pushcclosurek_ref`] 的独占引用形折回 cpp
+/// C-ABI 镜像垫片：把 `lua_pushcclosurek_ref` 的独占引用形折回 cpp
 /// `lua_pushcclosurek`（`VM/src/lapi.cpp:742`）的 `lua_State*` 形，语义零差。
+///
+/// r12-w4b 按 T9 形实测裁决**保留**：全仓消费面 C 形入口真实存在且为零业务折形——
+/// 跨 crate 消费方 `ulua-rt`（`sys.rs` re-export，`state.rs` 的 `push_named_closure` /
+/// `push_anonymous_closure` 门面）、`ulua-require`（`push_closure.rs`）、`ulua-web`
+/// （`wasm.rs` 的 sandbox print 钩子），测试门面 `ulua-conformance`（`safe_api.rs` 的
+/// cfunction/closurek 两形）、`ulua-cli-test`（`require_by_string.rs` 三处），`ulua-vm` 内
+/// 另有 7 处 C 形调用点（`records/lua_state/stack.rs` 两方法、`luaopen_base` 两处、
+/// `luaopen_coroutine`、`f_ccall`、`cowrap`）；`ulua-capi` 侧实测零导出壳（本符号不在
+/// C ABI 导出表内）。函数体保持对 `lua_pushcclosurek_ref` 的一行折形委托。
+/// 后续票建议：把上述消费点逐个迁至 ref 核心（Rust 侧即免 unsafe 上下文），迁毕删本垫片。
 ///
 /// # Safety
 /// `l` 指向存活 `LuaState`；`fn` 非空且遵循 Lua C 函数约定（cpp lapi.cpp:783 `api_check(fn)`）；

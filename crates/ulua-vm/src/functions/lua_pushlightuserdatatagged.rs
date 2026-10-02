@@ -35,14 +35,21 @@ fn push_lightuserdata_slot(l: &mut LuaState, p: Option<NonNull<c_void>>, tag: i3
   }
 }
 
-/// C-ABI 镜像垫片：把 [`push_lightuserdata_slot`] 的引用/句柄形折回 cpp
+/// C-ABI 镜像垫片：把 `push_lightuserdata_slot` 的引用/句柄形折回 cpp
 /// `lua_pushlightuserdatatagged`（`VM/src/lapi.cpp:809`）的 `(lua_State*, void*, int)` 形，
 /// 仅做 `&mut *l` 重建与 `NonNull::new(p)` 折形，语义零差。
+///
+/// r12-w4b 按 T9 形实测裁决**保留**：C 形入口有跨 crate 真实消费方——`ulua-rt`
+/// （`sys.rs` re-export，`state.rs` 的 `push_lightuserdata_tagged` 与
+/// `push_null_lightuserdata`——后者正是 `None` 载荷形的对应用户）、`ulua-conformance`
+/// 测试门面 `safe_api.rs`；`ulua-vm` 内 `records/lua_state/stack.rs` 的
+/// `push_lightuserdata` 方法为唯一 Rust 侧收口点，`ulua-analysis` 的 6 处压桩全经该方法
+/// （间接消费）；`ulua-capi` 侧实测零导出壳。后续票建议：消费点迁至 ref 核心后删本垫片。
 ///
 /// # Safety
 /// `l` 须为存活 `LuaState`（非空、对齐、整个调用期单线程独占驱动——引用重建前提）；
 /// `p` 只作不透明载荷入栈（VM 不解引用，可为 null 或整数编码值）；`tag` 须
-/// `< LUA_LUTAG_LIMIT`。其余前提与 [`push_lightuserdata_slot`] 的 `# Safety` 契约逐条同一。
+/// `< LUA_LUTAG_LIMIT`。其余前提与 `push_lightuserdata_slot` 的 `# Safety` 契约逐条同一。
 pub unsafe fn lua_pushlightuserdatatagged(l: *mut LuaState, p: *mut c_void, tag: i32) {
   // SAFETY: 契约保证 `l` 非空且指向存活 LuaState，本帧重建独占引用后即结束借用窗口；
   // `p` 为不透明载荷值（可空），由核心按 `Option<NonNull>` 收口后只入栈不解引用

@@ -12,6 +12,12 @@ use crate::records::lua_state::LuaState;
 ///
 /// 本文件不再有 `unsafe`：`l` 的存活由引用类型保证，槽写入面收在 `push_slot_with`
 /// 的有契约最小边界内（`records/lua_state/stack.rs`）。
+///
+/// r12-w4b 消费面实测：调用点全在 `ulua-vm` 内——binary32 族 `b_replace`/`b_extract`/
+/// `b_rot`/`b_shift`/`b_arshift`/`bit_map1`/`bitfold` 与 `buffer_readbits` 共 8 处，
+/// 跨 crate、`ulua-capi` 导出面与 conformance/rt 测试门面实测零消费，故按 §7 零死代码
+/// 不保留 `*mut LuaState` 形垫片。若将来按 cpp 开 `ulua_lua_pushunsigned` 导出，循
+/// `lua_pushinteger_64` 的显式壳先例在 capi 侧一行折形即可。
 pub(crate) fn lua_pushunsigned(l: &mut LuaState, u: c_uint) {
   l.push_number(f64::from(u));
 }

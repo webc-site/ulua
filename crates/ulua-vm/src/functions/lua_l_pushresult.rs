@@ -26,6 +26,14 @@ use crate::{
 /// `storage` 数据区）同一分配内，故 `offset_from` 求长度合法。
 /// `lua_c_check_gc`/`lua_s_newlstr`/`lua_pushlstring_bytes` 可分配、可 GC。
 /// cpp/VM/src/laux.cpp:580 luaL_pushresult。
+///
+/// r12-w4b 消费面实测（T9 形裁决）：本函数与 `lua_l_pushresultsize` 同为 `pub(crate)`，
+/// 消费点 10 处全在 ulua-vm 的 strlib/os 族——pushresult：`os_date`/`str_format`/
+/// `utfchar`/`str_gsub`/`tconcat`/`lua_l_traceback`/`str_pack`，pushresultsize：
+/// `str_rep`/`str_char`/`str_shared`；`ulua-capi` 导出表与 ulua-rt/ulua-conformance/tests
+/// 面实测零消费（符号未导出，跨 crate 不可见），故本轮**不添加 C 导出垫**（§7 零死代码）。
+/// 若将来按 cpp `luaL_pushresult` 开 `ulua_lua_l_pushresult` 导出，循 `lua_l_buffinit`
+/// 的显式壳先例在 capi 侧一行折形（`&mut *b`）即可。
 pub(crate) unsafe fn lua_l_pushresult(b: &mut LuaLStrbuf) {
   // 句柄直读：`Option::expect`/`NonNull::as_ptr` 均安全，无 null 折回
   let l = b
