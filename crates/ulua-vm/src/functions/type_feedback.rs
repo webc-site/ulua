@@ -285,7 +285,7 @@ pub fn tsfb_dump() -> String {
       // 一致：pc 界内取指令字低字节，越界回 0xff。
       let code = from_raw_parts((*proto).code, sc);
       let sites = from_raw_parts(data.add(sc + 2), 2 * nslots);
-      for pair in sites.chunks_exact(2) {
+      for pair in sites.as_chunks::<2>().0 {
         let (pc, st) = (pair[0], pair[1]);
         let op = code
           .get(pc as usize)
@@ -325,7 +325,7 @@ pub fn tsfb_over_threshold(min_hits: u32, min_share: f64) -> Vec<(usize, u32, u8
       };
       // 同上：站点区一次取切片，安全迭代（读数语义与原逐点裸读一致）。
       let sites = from_raw_parts(data.add(sc + 2), 2 * nslots);
-      for pair in sites.chunks_exact(2) {
+      for pair in sites.as_chunks::<2>().0 {
         let (pc, st) = (pair[0], pair[1]);
         let hits = (st >> 8) as u64;
         let tag = (st & 0xff) as u8;
