@@ -228,8 +228,8 @@ pub fn pop(l: L, n: c_int) {
 
 /// `lua_checkstack`：尝试扩容 `size` 槽，返回 C 侧布尔（0/非 0）。
 pub fn checkstack(l: L, size: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_checkstack(l, size) }
+  // r16-v3：callee 已前移 `&mut LuaState` 引用形，经 `state_mut` 收口点直传独占引用。
+  lua_checkstack(state_mut(l), size)
 }
 
 /// `luaL_checkstack`：扩容失败即抛 Lua 错误（消息 `msg`）。

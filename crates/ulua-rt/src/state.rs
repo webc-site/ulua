@@ -175,10 +175,8 @@ impl DerefMut for StateView<'_> {
 /// 为一次栈操作预留 `slots` 个空位；不足时返回可捕获的 `RuntimeError`
 /// （而不是让后续 push 触发 VM 断言 abort）。
 /// `Table` 系列原始访问、`Function::call`、`Thread::resume`、`exec_raw` 共用。
-pub(crate) fn ensure_stack(state: StateView<'_>, slots: i32) -> Result<()> {
-  // Safety: 族级契约成立;`lua_checkstack` 对存活 state + 任意 `slots` 都有
-  // 定义:返回 0 表示扩不动,非 0 表示头寸就位,不越界读写。
-  if unsafe { lua_checkstack(state.as_mut_ptr(), slots) } == 0 {
+pub(crate) fn ensure_stack(mut state: StateView<'_>, slots: i32) -> Result<()> {
+  if lua_checkstack(&mut state, slots) == 0 {
     return Err(Error::runtime("stack overflow: not enough Lua stack space"));
   }
   Ok(())

@@ -11,9 +11,14 @@ use crate::{
   records::{call_context_lapi::CallContext, lua_state::LuaState},
 };
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn lua_checkstack(l: *mut LuaState, size: i32) -> i32 {
+/// `lua_checkstack`（cpp `lapi.cpp` 同名）：为调用方预留 `size` 层栈头寸，成功返 1、
+/// 越界/扩不动返 0。调用序契约（正确性，非内存安全）：`l` 须为存活可栈操作 `LuaState`、
+/// `size >= 0`（`api_check!` 兜底）；扩容路径经 `lua_d_rawrunprotected` 再入受保护帧或
+/// `lua_d_reallocstack` 重建栈指针，`expandstacklimit!` 落笔 `ci->top`——裸指针面收进
+/// 本实现体内（r16-v3 引用形前移，unsafe 不再外包给调用方）。
+pub fn lua_checkstack(l: &mut LuaState, size: i32) -> i32 {
+  // SAFETY: 契约保证 `l` 存活且 size 非负；top/base/stack_last 裸指针读写与受保护帧
+  // 再入均属实现本体，跨调用不留旧栈指针。
   unsafe {
     api_check!(l, size >= 0);
 

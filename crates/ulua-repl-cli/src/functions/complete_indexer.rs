@@ -27,9 +27,10 @@ pub(crate) fn complete_indexer(
   // Safety: l 为 REPL 补全链传入的存活状态（前置条件见上），经 `state` 门面物化后
   // 全走安全方法；unsafe 导出在各块内论证。
   let l = state(l);
-  // Safety: `lua_checkstack` 为 unsafe 导出；先预留 LUA_MINSTACK 槽位再压入
-  // LUA_GLOBALSINDEX 全局表起始搜索。
-  unsafe { lua_checkstack(l, LUA_MINSTACK) };
+  // r16-v3：`lua_checkstack` 已前移 `&mut LuaState` 引用形，`l` 经 `state` 门面物化后
+  // 直传借用，本点无 unsafe 残留；先预留 LUA_MINSTACK 槽位再压入 LUA_GLOBALSINDEX
+  // 全局表起始搜索。
+  lua_checkstack(l, LUA_MINSTACK);
   l.push_value(LUA_GLOBALSINDEX);
 
   let mut lookup: &str = edit_buffer;

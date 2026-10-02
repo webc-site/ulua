@@ -14,7 +14,7 @@ pub(crate) unsafe extern "C-unwind" fn f_ccall(l: *mut LuaState, ud: *mut c_void
   unsafe {
     let c = ud as *mut CCallS;
 
-    if lua_checkstack(l, 2) == 0 {
+    if lua_checkstack(&mut *l, 2) == 0 {
       lua_g_runerror!(l, "stack limit");
     }
 

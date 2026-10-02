@@ -244,9 +244,8 @@ impl LuaState {
 
   #[inline(always)]
   pub fn check_stack(&mut self, sz: i32) -> bool {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 的有效指针；其余前提（合法索引/栈界）
-    // 与被转发的 `pub unsafe fn` 的 `# Safety` 文档一致，由本方法调用方按文档保证。
-    unsafe { lua_checkstack(self.as_mut_ptr(), sz) != 0 }
+    // r16-v3：callee 已前移 `&mut LuaState` 引用形，本门面直传独占借用，无 unsafe 残留。
+    lua_checkstack(self, sz) != 0
   }
 
   #[inline(always)]
