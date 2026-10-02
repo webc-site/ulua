@@ -778,7 +778,7 @@ fn luau_execute_impl<const SINGLE_STEP: bool>(l: *mut LuaState) {
 /// （`l` 全程不变，故不入组）。
 ///
 /// 为什么是「返回状态」而不是函数指针表派发：stable Rust 没有 `goto`，也没有能在
-/// 派发链上**替换**当前帧的尾调用（`become` 属 nightly，本仓库不用），于是「每个
+/// 派发链上**替换**当前帧的尾调用（`become` 属 nightly，用法见 [`tier_cold`] 末尾 TODO），于是「每个
 /// handler 一次真实 `blr`+`ret`」的 subroutine threading 成为唯一保留 handler 函数
 /// 边界的表派发形态——它每次派发多付一对 call/ret 与 prologue，而那条 `blr` 仍然
 /// 是全环共享的单一间接跳转 site，cpp computed goto 的按 site 预测历史一点也拿不到
@@ -814,6 +814,10 @@ macro_rules! vm_next {
 
 /// 热臂进环：调用 handler 取回续延状态，写回环的四个循环变量后回环头；handler
 /// 报 `None` 时按 C++ `goto exit` 离开 VM。
+///
+/// 这里的「调用 + 返回」是 stable 下唯一不求救的写法：handler 全部 `#[inline(always)]`，
+/// 展开后与单一环一致。若 `explicit_tail_calls` 进 stable，本宏的热臂子集可换成
+/// `become` 尾调用形态，骨架与四条落地前提见 [`tier_cold`] 末尾 TODO。
 macro_rules! vm_hot {
   ($label:lifetime, $l:expr, $pc:ident, $base:ident, $k:ident, $cl:ident, $h:path) => {{
     match $h($l, $pc, $base, $k, $cl) {
@@ -2937,10 +2941,10 @@ unsafe fn h_jump(
 /// 主循环（lvmexecute.cpp:228）：外层 `'dispatch` 取指，内层 `'continue_op` 按 opcode
 /// 派发，全部 `VM_CASE` 臂都在这一个环里。
 ///
-/// 不再尝试复刻 C++ 的 computed goto（实测否决，别再走第二遍）：C++ 把
+/// 不再尝试复刻 C++ 的 computed goto（**在 stable 的约束下**实测否决，别再走第二遍）：C++ 把
 /// `goto* kDispatchTable[op]` 复制进每个 handler 尾部，于是每条指令的间接跳转都落在自己的
 /// 指令地址上，分支预测历史按 site 隔离；stable Rust 既没有 `goto`，也没有能替换当前帧的
-/// 尾调用（`become` 属 nightly，本仓库不用）。三条替代形态都上机量过：函数指针表的
+/// 尾调用（`become` 属 nightly，见本文档末尾的 TODO）。三条替代形态都上机量过：函数指针表的
 /// subroutine threading 每次派发多付一对 `blr`+`ret`，而那条 `blr` 仍是全环共享的单一 site
 /// （见 [`VmSt`] 文档）；把热点臂外联成真正独立的 handler 函数、以及在环外再套一层「热区环」，
 /// 都没跑赢本环。在这个约束下真正赚到时间的是环内两件手法：臂尾单 opcode 尾融合
@@ -2953,6 +2957,50 @@ unsafe fn h_jump(
 ///
 /// `l` 指向存活且 `isactive` 的 `LuaState`；`pc`/`base`/`k`/`cl` 必须是同一 Lua 闭包帧
 /// 的一致解释器状态（由 [`tier_reentry`] 或原生返回路径建立），且任一时刻仅单线程使用。
+///
+/// ## TODO：`explicit_tail_calls`（`become`）进 stable 之后可以补的那一层
+///
+/// 上面的否决只对 stable 成立。`become` 稳定后，可给**热点臂子集**补一层真正独立、尾部
+/// `become` 回本环的派发，让每个热 opcode 拿到自己的分支指令地址（即独立 BTB site）。
+/// 骨架如下，落地前四条前提都要重新验证，不要当已知结论：
+///
+/// ```rust,ignore
+/// // ulua-vm/src/lib.rs —— feature 门 + 架构门，wasm32 目标一律留在本环上
+/// #![cfg_attr(feature = "vm-become-dispatch", feature(explicit_tail_calls))]
+/// #![cfg_attr(feature = "vm-become-dispatch", allow(incomplete_features))]
+///
+/// // vm_next! 的第二形态：「回环头」从 return 续延换成替换本帧的尾调用。
+/// // 代价是宏要多收一个 `l`，且 handler 与其续延的返回类型要从 `VmNext` 改回 `()`。
+/// macro_rules! vm_next {
+///   ($l:expr, $pc:expr, $base:expr, $k:expr, $cl:expr) => {{
+///     become tier_cold::<SINGLE_STEP>($l, $pc, $base, $k, $cl);
+///   }};
+/// }
+///
+/// // 配套：只有热臂子集摘掉 #[inline(always)]（其余臂与环体不动，避免代码体积失控）
+/// #[cfg(all(
+///   feature = "vm-become-dispatch",
+///   any(target_arch = "x86_64", target_arch = "aarch64")
+/// ))]
+/// unsafe fn h_gettable(l: *mut LuaState, pc: *const Instruction, base: StkId, k: *mut TValue, cl: *mut Closure) {
+///   /* …快路判定与现在逐句相同… */
+///   vm_next!(l, pc, base, k, cl);
+/// }
+/// ```
+///
+/// 1. **收益门**：`become` 版分层在本轮 23 个 exec 用例上没有跑赢本环。重做时先用
+///    `vm-opcount` 的转移计数挑热臂子集（`fuse_succ_*` 文档里的边权即来源），配对实测
+///    ≥5% 才留，判据与每一批融合相同；只要 `VmSt` 的 load/store 吃掉预测收益就停线。
+/// 2. **展开门**：本仓的 Lua 运行时错误是 `panic_any(lua_exception)` 模拟 longjmp，由
+///    `lua_d_rawrunprotected` 的 `catch_unwind` 接住（见
+///    [`install_lua_exception_panic_hook`](crate::functions::install_lua_exception_panic_hook)）。
+///    `become` 链必须与真实展开共存，并且每个可抛错/可 GC 的调用点之前先写回
+///    `(*(*l).ci).savedpc = pc` —— 纪律同 `macros/vm_protect.rs`，这是整层的正确性命门。
+/// 3. **拓扑门**：handler 之间、handler 与融合 helper 之间互调必须成 DAG，否则链深无上界，
+///    会一路吞到 `sizecode` 之外（现例与理由见 [`fuse_succ_mul`] 文档）。
+/// 4. **门禁门**：启用该 feature 必付一条 `allow(incomplete_features)`，与 `review.md` 的
+///    零 `allow` 硬门禁冲突。要改的是门禁本身（把检查收紧成 `#!?\[allow`、并把这一条记成
+///    显式认可的唯一豁免），而不是靠内属性写法躲过正则。
 unsafe fn tier_cold<const SINGLE_STEP: bool>(
   l: *mut LuaState,
   mut pc: *const Instruction,
