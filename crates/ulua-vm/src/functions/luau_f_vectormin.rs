@@ -34,7 +34,9 @@ luau_f_arm! {
         result[2] = if b[2] < a[2] { b[2] } else { a[2] };
 
         result[3] = if LUA_VECTOR_SIZE == 4 {
-          if b[3] < a[3] { b[3] } else { a[3] }
+          let a3 = a.get(3).copied().unwrap_or(0.0);
+          let b3 = b.get(3).copied().unwrap_or(0.0);
+          if b3 < a3 { b3 } else { a3 }
         } else {
           0.0f32
         };
@@ -51,7 +53,8 @@ luau_f_arm! {
           result[1] = if c[1] < result[1] { c[1] } else { result[1] };
           result[2] = if c[2] < result[2] { c[2] } else { result[2] };
           if LUA_VECTOR_SIZE == 4 {
-            result[3] = if c[3] < result[3] { c[3] } else { result[3] };
+            let c3 = c.get(3).copied().unwrap_or(0.0);
+            result[3] = if c3 < result[3] { c3 } else { result[3] };
           }
         }
 
