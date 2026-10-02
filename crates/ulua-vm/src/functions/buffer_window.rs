@@ -164,11 +164,12 @@ const _: () = assert!(
 /// 返回承载 `[bitoffset, bitoffset+bitcount)` 的字节区间；oob→bitcount→oob 的抛错顺序
 /// 保持原样（`unsigned(bitcount) > 32` 令负数位宽也命中），故实参读取留在调用点。
 ///
-/// 消费方（簇 C）迁移到切片形前仍以 `buffer_data` 折出的 `len` 调本函数——签名不动，
-/// T2-T8 迁移后可与旧裸形垫片一并收敛。
+/// 消费方（簇 C：`buffer_readbits`/`buffer_writebits`）已迁移到切片形——`len` 取自
+/// [`buffer_data_ref`] 切片的 `buf.len()`；签名保持裸 `usize`（纯界校验参数，无借用）。
 ///
 /// # Safety
-/// `l` 为存活帧，`len` 取自同一 buffer 的 [`buffer_data`]。
+/// `l` 为存活帧，`len` 为同一 buffer 经 [`buffer_data_ref`] 取得的数据界长度（即
+/// `buf.len()`），与后续用返回区间索引该切片时自洽。
 #[inline]
 pub(crate) unsafe fn buffer_bit_bounds(
   l: *mut LuaState,
