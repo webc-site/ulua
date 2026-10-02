@@ -1,7 +1,6 @@
 use crate::{
   enums::{lua_type::LuaType, t_key_view::TKeyView, value_view::ValueView},
-  functions::c_slice,
-  macros::{lua_lib_fn::lua_lib_fn, sizenode::sizenode},
+  macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
 };
 
@@ -15,8 +14,9 @@ pub(crate) unsafe fn maxn(l: *mut LuaState) -> i32 {
 
     let t = (*(*l).base).as_table_ptr();
 
-    // 数组尾部：最后一个非 nil 元素决定 max，rposition 从后往前提前终止
-    let arr = c_slice((*t).array, (*t).sizearray as usize);
+    // 数组尾部：最后一个非 nil 元素决定 max，rposition 从后往前提前终止；
+    // 走 array_window 共享窗（窗长 max(sizearray,0)，null 数组归空窗，免手工 c_slice）
+    let arr = (*t).array_window();
     if let Some(i) = arr
       .iter()
       .rposition(|v| !matches!(ValueView::from_tvalue(v), ValueView::Nil))
@@ -24,9 +24,9 @@ pub(crate) unsafe fn maxn(l: *mut LuaState) -> i32 {
       max = (i + 1) as f64;
     }
 
-    let node_size = sizenode!(t);
-    // 节点数组按切片迭代：消除逐次 add 的索引写法，宏只读取不写回
-    for n in c_slice((*t).node, node_size as usize) {
+    // 哈希段走 node_window 共享窗，只读迭代不写回；哨兵表窗长恒 1（dummy 单格
+    // val 恒 nil ⇒ 空桶被跳过），与 cpp 按 sizenode 走查逐位一致
+    for n in (*t).node_window() {
       if matches!(ValueView::from_tvalue(&n.val), ValueView::Nil) {
         continue;
       }

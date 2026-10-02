@@ -1,17 +1,15 @@
 use crate::{
   enums::value_view::ValueView,
   functions::findindex::findindex,
-  macros::{
-    getnodekey::getnodekey, gkey::gval, gnode::gnode, setnvalue::setnvalue, setobj_2_s::setobj_2_s,
-    sizenode::sizenode,
-  },
+  macros::{getnodekey::getnodekey, setnvalue::setnvalue, setobj_2_s::setobj_2_s},
   records::{lua_state::LuaState, lua_table::LuaTable},
   type_aliases::stk_id::StkId,
 };
 
 /// # Safety
-/// `l` 须为存活 `LuaState`；`t` 须为存活 `LuaTable` 的共享只读借用（其 `array[0..sizearray]` 与 hash 部分
-/// `node[0..sizenode]` 均可读，本函数不写表）；`key` 须指向栈上可作为前一键读入、并写回键/值两格（`key` 与 `key.add(1)`）
+/// `l` 须为存活 `LuaState`；`t` 须为存活 `LuaTable` 的共享只读借用（经 `array_window`/
+/// `node_window` 共享窗读其数组与哈希两段，窗内借用期内表不得重排 `array`/`node` 指针，
+/// 本函数不写表）；`key` 须指向栈上可作为前一键读入、并写回键/值两格（`key` 与 `key.add(1)`）
 /// 的 StkId（出参写点保留裸指针形态，不借降级隐藏）。`findindex` 会读 `key` 当前值。cpp `ltable.cpp:379`。
 pub(crate) unsafe fn lua_h_next(l: *mut LuaState, t: &LuaTable, key: StkId) -> i32 {
   unsafe {
@@ -22,25 +20,25 @@ pub(crate) unsafe fn lua_h_next(l: *mut LuaState, t: &LuaTable, key: StkId) -> i
     let i = findindex(l, t, &*key) + 1;
     let sizearray = t.sizearray;
 
-    // try first array part
-    for i in i..sizearray {
-      let e = t.array.add(i as usize);
-      if !matches!(ValueView::from_tvalue(&*e), ValueView::Nil) {
-        setnvalue!(key, (i + 1) as f64);
+    // try first array part：切 array_window 共享窗，窗[i] ⇔ cpp `array[i]`（E1 契约逐位
+    // 一致）；i = findindex + 1 ≥ 0，起点即 i，越上界自然止。
+    for (idx, e) in t.array_window().iter().enumerate().skip(i.max(0) as usize) {
+      if !matches!(ValueView::from_tvalue(e), ValueView::Nil) {
+        setnvalue!(key, (idx + 1) as f64);
         setobj_2_s!(l, key.add(1), e);
         return 1;
       }
     }
 
     // then hash part；cpp 复用自增后的计数器，数组循环自然结束时其值恰为
-    // sizearray，故哈希起点为 max(i - sizearray, 0)
-    let size = sizenode!(t);
-    for k in (i - sizearray).max(0)..size {
-      let n = gnode!(t, k);
-      let val = gval!(n);
-      if !matches!(ValueView::from_tvalue(&*val), ValueView::Nil) {
+    // sizearray，故哈希起点为 max(i - sizearray, 0)。切 node_window 共享窗：
+    // 哨兵表窗长恒 1（单格 dummy，val 恒 nil ⇒ 空桶），读出与 cpp
+    // `gnode!(t, 0)` 走查逐位一致；实向量窗长 twoto(lsizenode) ⇔ sizenode!(t)。
+    let nodes = t.node_window();
+    for n in nodes.iter().skip((i - sizearray).max(0) as usize) {
+      if !matches!(ValueView::from_tvalue(&n.val), ValueView::Nil) {
         getnodekey!(l, key, n);
-        setobj_2_s!(l, key.add(1), val);
+        setobj_2_s!(l, key.add(1), &n.val);
         return 1;
       }
     }
