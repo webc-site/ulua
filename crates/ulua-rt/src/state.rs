@@ -703,6 +703,12 @@ pub(crate) fn co_status(from: StateView<'_>, co: StateView<'_>) -> i32 {
 /// `n` 个待搬值且不剥走活寄存器（协程须挂起）。
 #[inline]
 pub(crate) fn move_slots(mut from: StateView<'_>, mut to: StateView<'_>, n: i32) {
+  // 同态退化守卫（cpp `lua_xmove` 体内 `from == to` 短路的同形前移）：两枚 `&mut`
+  // 实参在求值期即构造，若两侧同 state 则先于任何落笔即违 noalias——指针相等判在
+  // 引用构造**之前**，语义与体内短路逐字一致（净行为=不动作）。
+  if from.as_ptr() == to.as_ptr() {
+    return;
+  }
   lua_xmove(&mut from, &mut to, n)
 }
 
