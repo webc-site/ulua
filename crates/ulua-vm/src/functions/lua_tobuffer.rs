@@ -44,7 +44,11 @@ pub unsafe fn lua_tobuffer_bytes_ref<'a>(l: &mut LuaState, idx: i32) -> Option<&
 /// 数据块首字节可变引用并把数据长度写进 `len`（`len` 可为 null，此时仅取址不写长度，
 /// 与 cpp 传 `nullptr` 一致）；非 buffer 返回 `None` 且不触碰 `*len`。
 ///
-/// 仅供跨 crate（ulua-rt）与测试门面的既有 C 形消费点使用；T9 收口时随消费方迁移删除。
+/// r12 T9 裁决保留：跨 crate 真实消费方实测存在——ulua-rt `buffer.rs::as_raw_parts`
+/// 以本形取（指针, 长度）对，ulua-conformance 门面 `tobuffer_ptr`/`tobuffer_len`
+/// （api.rs 据此断言指针同一性并整块写入）——即 cpp `lua_tobuffer`（lapi.cpp:650）
+/// 镜像契约的验证面。函数体保持对 [`lua_tobuffer_bytes_ref`] 的一行委托 + 出参折回
+/// （折回即本垫片存在的全部理由；Rust 侧消费方一律直用 ref 核心）。
 ///
 /// # Safety
 /// `l` 须为存活 LuaState；`idx` 经 `index_2_addr` 解析为栈内合法 StkId；`len` 须为可写
