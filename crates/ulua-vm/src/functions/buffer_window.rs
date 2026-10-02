@@ -96,8 +96,8 @@ pub(crate) fn load_scalar_ref<T: SwapBe>(src: &[u8]) -> T {
     "load_scalar_ref: 窗口短于标量宽度"
   );
 
-  // SAFETY: 上方断言保证 `src` 起 size_of::<T>() 字节可读；SwapBe 密封闭集全为整型
-  // （任意位模式合法），read_unaligned 无对齐承诺
+  // SAFETY: 上方断言保证 `src` 起 size_of::<T>() 字节可读；SwapBe 密封闭集全为定宽
+  // POD（整型与浮点 f32/f64 经 to_bits 位模式，任意位模式均合法），read_unaligned 无对齐承诺
   let mut val = unsafe { read_unaligned(src.as_ptr().cast::<T>()) };
 
   if LUAU_BIG_ENDIAN {
@@ -122,17 +122,6 @@ pub(crate) fn store_scalar_ref<T: SwapBe>(dst: &mut [u8], mut val: T) {
 
   // SAFETY: 上方断言保证 `dst` 起 size_of::<T>() 字节可写；T 为 POD（SwapBe: Copy）
   unsafe { write_unaligned(dst.as_mut_ptr().cast::<T>(), val) };
-}
-
-/// cpp `static_assert(sizeof(T) == sizeof(StorageType))`：const 块在单态化期求值，
-/// 尺寸失配在编译期报错，不留运行期 panic 点（浮点按存储宽度重排的前置）。
-pub(crate) fn assert_same_width<T, StorageType>() {
-  const {
-    assert!(
-      size_of::<T>() == size_of::<StorageType>(),
-      "T 与 StorageType 尺寸必须一致方可按字节重排"
-    );
-  }
 }
 
 /// 每字节位数：buffer 位窗口 bit↔byte 换算的单点真相
