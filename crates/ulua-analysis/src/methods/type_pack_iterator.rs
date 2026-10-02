@@ -1,12 +1,12 @@
 //! `type_pack_iterator` 方法汇总：原先按 cpp 符号逐方法拆分的同前缀小文件合并至此，行为逐字保留。
 
-use core::ptr::{null, null_mut};
+use core::ptr::null;
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   records::{
-    arena_handle::alias_ref, txn_log::TxnLog, type_pack::TypePack,
+    arena_handle::{alias_nn_ref, alias_ref}, txn_log::TxnLog, type_pack::TypePack,
     type_pack_iterator::TypePackIterator,
   },
   type_aliases::type_pack_id::TypePackId,
@@ -14,7 +14,7 @@ use crate::{
 
 impl TypePackIterator {
   pub fn tail(&self) -> Option<TypePackId> {
-    LUAU_ASSERT!(self.tp.is_null());
+    LUAU_ASSERT!(self.tp.is_none());
     if !self.current_type_pack.is_null() {
       Some(self.current_type_pack)
     } else {
@@ -47,7 +47,7 @@ impl TypePackIterator {
     Self {
       current_type_pack: null_tp,
       tail_cycle_check: null_tp,
-      tp: null(),
+      tp: None,
       current_index: 0,
       log: null(),
     }
@@ -79,10 +79,10 @@ impl TypePackIterator {
     self.current_index = 0;
     self.log = log;
 
-    // 短路求值保证进入右侧时 self.tp 非空；tp 由 txn_log_get_mutable 得到，
+    // 短路求值保证进入右侧时 self.tp 为 Some；tp 由 txn_log_get_mutable 得到，
     // 指向 arena 中存活的 TypePack（块地址不移动、遍历期内有效），只读 head 字段。
-    while !self.tp.is_null() && alias_ref(self.tp).head.is_empty() {
-      self.current_type_pack = if let Some(tail) = alias_ref(self.tp).tail {
+    while self.tp.is_some() && alias_nn_ref(self.tp.unwrap()).head.is_empty() {
+      self.current_type_pack = if let Some(tail) = alias_nn_ref(self.tp.unwrap()).tail {
         alias_ref(log).follow_type_pack_id(tail)
       } else {
         null()
@@ -91,7 +91,7 @@ impl TypePackIterator {
       self.tp = if !self.current_type_pack.is_null() {
         alias_ref(log).txn_log_get_mutable::<TypePack, TypePackId>(self.current_type_pack)
       } else {
-        null_mut()
+        None
       };
     }
   }

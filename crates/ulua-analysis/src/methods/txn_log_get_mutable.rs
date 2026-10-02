@@ -1,4 +1,4 @@
-use core::ptr::{from_mut, null_mut};
+use core::ptr::NonNull;
 
 use crate::{
   functions::{
@@ -11,30 +11,36 @@ use crate::{
     type_variant::TypeVariantMember,
   },
 };
-/// `*mut Self` 返回是 get_mutable 族的既有互操作面（结构层约定，sec2-txnlog-cell
-/// 先例）：null ≡ C++ `getMutable` 未命中，非 null ≡ arena/log 存活节点；本 crate
-/// 消费方全部按 `is_null`/`alias_opt` 在该指针面判读，`map_or(null_mut(), from_mut)`
-/// 折返即此约定的单点物化处，收口为 `Option` 波及面远超本批次。
+/// txn log 可变查询面的 Rust 形态（review.md §2：可空指针 → `Option`）：
+/// `Some(NonNull)` ≡ C++ `getMutable` 命中 arena/log 存活节点，`None` ≡ 原
+/// null 哨兵（未命中）。底层 `get_mutable_*` 族本就返回 `Option<&'static mut T>`，
+/// 这里以 `NonNull::from` 折叠回句柄形态、不再经 `null_mut` 折返裸指针。
+///
+/// 保留 `NonNull` 而非 `&'static mut`：TxnLog 走 cpp 的「内部可变 + arena 地址
+/// 稳定」语义，消费点要么把句柄存进 `Clone`/`Copy` 记录字段（weird_iter、
+/// type_pack_iterator）、要么按地址比对判等（unifier 表项换址检测），这些用法
+/// 引用模型无法机械表达，故以 `Option<NonNull<T>>` 收口——判空即 `is_none`，
+/// 解引用统一经 `arena_handle::alias_nn*` 门面，unsafe 不外渗。
 pub trait TxnLogGetMutable<TID>: Sized {
   /// # Safety
   /// 调用方须保证满足 C++ 原实现定义的内部不变量。
-  unsafe fn get_mutable_from_log(log: &TxnLog, ty: TID) -> *mut Self;
+  unsafe fn get_mutable_from_log(log: &TxnLog, ty: TID) -> Option<NonNull<Self>>;
 }
 
 impl<T: TypeVariantMember + 'static> TxnLogGetMutable<TypeId> for T {
-  unsafe fn get_mutable_from_log(log: &TxnLog, ty: TypeId) -> *mut Self {
+  unsafe fn get_mutable_from_log(log: &TxnLog, ty: TypeId) -> Option<NonNull<Self>> {
     // Safety: `log` 为调用方持有的存活 `&TxnLog`，`ty` 是类型 arena 的存活 TypeId
     // 句柄（C++ `getMutableFromLog` 同前提）。`log.pending_type_id(ty)` 仅在存在
     // 待定节点时返回非空 arena 指针，`!is_null()` 守卫后才交给 `get_mutable_pending_type`
     // 解引用；该函数命中返回 `Some(&'static mut T)`（未命中 `None`，原 null 哨兵），
-    // `from_mut` 物化回裸指针以维持本 trait 既有指针面（null/非空判据不变）。
+    // 经 `NonNull::from` 折叠为 `Option<NonNull<T>>`（null/非空判据不变）。
     unsafe {
       let pending_ty = log.pending_type_id(ty);
       if !pending_ty.is_null() {
-        return get_mutable_pending_type::<T>(pending_ty).map_or(null_mut(), from_mut);
+        return get_mutable_pending_type::<T>(pending_ty).map(NonNull::from);
       }
 
-      get_mutable_type::get_mutable::<T>(ty).map_or(null_mut(), from_mut)
+      get_mutable_type::get_mutable::<T>(ty).map(NonNull::from)
     }
   }
 }
@@ -43,25 +49,25 @@ impl<T: TypePackVariantMember + 'static> TxnLogGetMutable<TypePackId> for T {
   /// # Safety
   /// `tp` 须为指向存活类型 pack arena 节点的有效 `TypePackId`（内部
   /// `log.pending_type_pack_id(tp)` 与 `get_mutable_type_pack::get_mutable::<T>(tp)` 会解引用
-  /// 它）。返回值要么为 null，要么是对该 arena/`log` 内部节点的独占 `*mut Self`
-  /// 借用；调用方不得在借用存活期内对同一节点再取可变引用。
-  unsafe fn get_mutable_from_log(log: &TxnLog, tp: TypePackId) -> *mut Self {
+  /// 它）。返回值 `Some(NonNull)` 即对该 arena/`log` 内部节点的独占可变句柄；
+  /// 调用方不得在借用存活期内对同一节点再取可变引用。
+  unsafe fn get_mutable_from_log(log: &TxnLog, tp: TypePackId) -> Option<NonNull<Self>> {
     // Safety: 逐条满足上方 fn 级契约——`log` 存活、`tp` 是类型 pack arena 的活句柄；
-    // `pending_type_pack_id` 非空守卫后才解引用，`get_mutable_type_pack_id` 给出单一
-    // 存活节点的独占可变借用，两条路径至多产生一个 *mut，无并存别名。
+    // `pending_type_pack_id` 非空守卫后才解引用，`get_mutable_type_pack` 给出单一
+    // 存活节点的独占可变借用，两条路径至多产生一个句柄，无并存别名。
     unsafe {
       let pending_tp = log.pending_type_pack_id(tp);
       if !pending_tp.is_null() {
-        return get_mutable_pending_type_pack::<T>(pending_tp).map_or(null_mut(), from_mut);
+        return get_mutable_pending_type_pack::<T>(pending_tp).map(NonNull::from);
       }
 
-      get_mutable_type_pack::get_mutable::<T>(tp).map_or(null_mut(), from_mut)
+      get_mutable_type_pack::get_mutable::<T>(tp).map(NonNull::from)
     }
   }
 }
 
 impl TxnLog {
-  pub fn txn_log_get_mutable<T, TID>(&self, ty: TID) -> *mut T
+  pub fn txn_log_get_mutable<T, TID>(&self, ty: TID) -> Option<NonNull<T>>
   where
     T: TxnLogGetMutable<TID>,
   {

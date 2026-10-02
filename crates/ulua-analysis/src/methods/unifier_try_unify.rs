@@ -1,5 +1,5 @@
 use alloc::string::String;
-use core::{mem::swap, ptr::null_mut};
+use core::mem::swap;
 
 use ulua_common::fint;
 
@@ -17,7 +17,7 @@ use crate::{
   },
   records::{
     any_type::AnyType,
-    arena_handle::{alias_opt, alias_ref},
+    arena_handle::{alias_nn_opt, alias_nn_ref, alias_ref},
     arena_id::ArenaId,
     count_mismatch::{CountMismatch, CountMismatchContext},
     extern_type::ExternType,
@@ -168,8 +168,8 @@ impl Unifier {
     // super_free/sub_free 是 txn_log_get_mutable::<FreeType,_> 的快照：alias_opt
     // 门面收口「null→None、非 null→arena 稳定块/pending 副本的存活节点」（§2），
     // 以下仅读 level 比较，与原 `unsafe { p.as_ref() }` 逐格等价。
-    let super_ft_opt = alias_opt(super_free);
-    let sub_ft_opt = alias_opt(sub_free);
+    let super_ft_opt = alias_nn_opt(super_free);
+    let sub_ft_opt = alias_nn_opt(sub_free);
     if let (Some(super_ft), Some(sub_ft)) = (super_ft_opt, sub_ft_opt)
       && super_ft.level.subsumes(&sub_ft.level)
     {
@@ -180,7 +180,7 @@ impl Unifier {
       }
       return;
     } else if let (Some(super_ft), Some(sub_ft)) = (super_ft_opt, sub_ft_opt) {
-      // 原 `!super_free.is_null() && !sub_free.is_null()` 哨兵即 alias_opt 的
+      // 原 `!super_free.is_some() && !sub_free.is_some()` 哨兵即 alias_opt 的
       // Some 判据；进入时首分支的 subsumes 已判否，行为不变。
       if !self.occurs_check_type_id_type_id_bool(super_ty, sub_ty, true) {
         if super_ft.level.subsumes(&sub_ft.level) {
@@ -353,18 +353,18 @@ impl Unifier {
       .log
       .txn_log_get_mutable::<IntersectionType, TypeId>(sub_ty);
 
-    if let Some(sub_union_ref) = alias_opt(sub_union) {
+    if let Some(sub_union_ref) = alias_nn_opt(sub_union) {
       // sub_union 源自上方 txn_log_get_mutable::<UnionType,_>(sub_ty)：alias_opt
       // 门面把「null→None、非 null→arena/pending 稳定节点共享借用」收口到一处
       // （§2），Some 判定与原 `!is_null()` 分支逐格等价；被调方签名已 Rust 化为
       // `&'static UnionType`（C++ `const UnionType*` 同契约，只读 options 列表）。
       self.unifier_try_unify_union_with_type(sub_ty, sub_union_ref, super_ty);
-    } else if let Some(super_intersection_ref) = alias_opt(super_intersection) {
+    } else if let Some(super_intersection_ref) = alias_nn_opt(super_intersection) {
       // super_intersection 快照经 alias_opt 收口（null→None 与原 `!is_null()`
       // 分支等价）；被调方签名已 Rust 化为 `&'static IntersectionType`
       // （C++ `tryUnifyTypeWithIntersection` 的只读 `const IntersectionType*`）。
       self.unifier_try_unify_type_with_intersection(sub_ty, super_ty, super_intersection_ref);
-    } else if let Some(super_union_ref) = alias_opt(super_union) {
+    } else if let Some(super_union_ref) = alias_nn_opt(super_union) {
       // super_union 由上文 txn_log_get_mutable::<UnionType,_>(super_ty) 产生，
       // alias_opt 折叠 null→None（Some 判定与原 `!is_null()` 逐格等价），非 null
       // 指向 super_ty 的稳定 UnionType 节点；被调方签名已 Rust 化为
@@ -376,7 +376,7 @@ impl Unifier {
         cache_enabled,
         is_function_call,
       );
-    } else if let Some(sub_intersection_ref) = alias_opt(sub_intersection) {
+    } else if let Some(sub_intersection_ref) = alias_nn_opt(sub_intersection) {
       // sub_intersection 快照同源（getMutable 族，稳定地址），alias_opt 折叠
       // null→None 与原 `!is_null()` 逐格等价；被调方签名已 Rust 化为
       // `&'static IntersectionType`（C++ `tryUnifyIntersectionWithType` 只读 parts）。
@@ -621,7 +621,7 @@ impl Unifier {
       return;
     }
 
-    while let Some(tp) = alias_opt(self.log.txn_log_get_mutable::<TypePack, TypePackId>(sub_tp)) {
+    while let Some(tp) = alias_nn_opt(self.log.txn_log_get_mutable::<TypePack, TypePackId>(sub_tp)) {
       // alias_opt 门面收口 txn_log_get_mutable 快照（null→None ≡ 原 is_null break，
       // 非 null→arena/pending 稳定 TypePack 节点），以下仅读 head/tail（§2）。
       if !tp.head.is_empty() {
@@ -634,7 +634,7 @@ impl Unifier {
     }
 
     // 与 sub 侧同构：alias_opt 折叠快照，仅读 head/tail（§2）。
-    while let Some(tp) = alias_opt(
+    while let Some(tp) = alias_nn_opt(
       self
         .log
         .txn_log_get_mutable::<TypePack, TypePackId>(super_tp),
@@ -670,10 +670,10 @@ impl Unifier {
       self.blocked_type_packs.push(super_tp);
     }
 
-    if !self
+    if self
       .log
       .txn_log_get_mutable::<FreeTypePack, TypePackId>(super_tp)
-      .is_null()
+      .is_some()
     {
       if !self.occurs_check_type_pack_id_type_pack_id_bool(super_tp, sub_tp, true) {
         let mut widen = Widen::widen_widen(self.types, self.builtin_types);
@@ -685,10 +685,10 @@ impl Unifier {
         };
         self.log.replace_type_pack_id_type_pack_var(super_tp, bound);
       }
-    } else if !self
+    } else if self
       .log
       .txn_log_get_mutable::<FreeTypePack, TypePackId>(sub_tp)
-      .is_null()
+      .is_some()
     {
       if !self.occurs_check_type_pack_id_type_pack_id_bool(sub_tp, super_tp, false) {
         let bound = TypePackVar {
@@ -698,49 +698,49 @@ impl Unifier {
         };
         self.log.replace_type_pack_id_type_pack_var(sub_tp, bound);
       }
-    } else if !self
+    } else if self
       .log
       .txn_log_get_mutable::<ErrorTypePack, TypePackId>(super_tp)
-      .is_null()
+      .is_some()
     {
       self.try_unify_with_any_type_pack_id_type_pack_id(sub_tp, super_tp);
-    } else if !self
+    } else if self
       .log
       .txn_log_get_mutable::<ErrorTypePack, TypePackId>(sub_tp)
-      .is_null()
+      .is_some()
     {
       self.try_unify_with_any_type_pack_id_type_pack_id(super_tp, sub_tp);
-    } else if !self
+    } else if self
       .log
       .txn_log_get_mutable::<VariadicTypePack, TypePackId>(super_tp)
-      .is_null()
+      .is_some()
     {
       self.unifier_try_unify_variadics(sub_tp, super_tp, false, 0);
-    } else if !self
+    } else if self
       .log
       .txn_log_get_mutable::<VariadicTypePack, TypePackId>(sub_tp)
-      .is_null()
+      .is_some()
     {
       self.unifier_try_unify_variadics(super_tp, sub_tp, true, 0);
-    } else if !self
+    } else if self
       .log
       .txn_log_get_mutable::<TypePack, TypePackId>(super_tp)
-      .is_null()
-      && !self
+      .is_some()
+      && self
         .log
         .txn_log_get_mutable::<TypePack, TypePackId>(sub_tp)
-        .is_null()
+        .is_some()
     {
       // 快照经 alias_opt 门面折叠（null→None ≡ 原 getMutable 指针判空，同路径同
       // 地址；§2 收口），并在 flatten/iter 改写 log 之前即刻拷出 tail 句柄——
       // 与原 C++ 「getMutable 后马上读 tail」的时序逐格一致。
-      let snap_super_tail = alias_opt(
+      let snap_super_tail = alias_nn_opt(
         self
           .log
           .txn_log_get_mutable::<TypePack, TypePackId>(super_tp),
       )
       .and_then(|p| p.tail);
-      let snap_sub_tail = alias_opt(self.log.txn_log_get_mutable::<TypePack, TypePackId>(sub_tp))
+      let snap_sub_tail = alias_nn_opt(self.log.txn_log_get_mutable::<TypePack, TypePackId>(sub_tp))
         .and_then(|p| p.tail);
 
       // If the size of two heads does not match, but both packs have free tail
@@ -750,24 +750,25 @@ impl Unifier {
 
       let no_infinite_growth = (super_types.len() != sub_types.len())
         && super_tail.is_some_and(|t| {
-          !self
+          self
             .log
             .txn_log_get_mutable::<FreeTypePack, TypePackId>(t)
-            .is_null()
+            .is_some()
         })
         && sub_tail.is_some_and(|t| {
-          !self
+          self
             .log
             .txn_log_get_mutable::<FreeTypePack, TypePackId>(t)
-            .is_null()
+            .is_some()
         });
 
       let mut super_iter = WeirdIter {
         pack_id: super_tp,
         log: &mut self.log as *mut _,
-        // 占位：紧随的 init 调用第一句即覆盖为 txn_log 查得的槽位指针，其间无读取
-        // （C 型冗余哨兵；字段本体为 `*mut TypePack`，收口在 records/weird_iter.rs）。
-        pack: null_mut(),
+        // 占位：紧随的 init 调用第一句即覆盖为 txn_log 查得的槽位句柄，其间无读取
+        // （C 型冗余哨兵；字段本体为 `Option<NonNull<TypePack>>`，收口在
+        // records/weird_iter.rs，None 与原 null 走同一缺席分支）。
+        pack: None,
         index: 0,
         growing: false,
         level: TypeLevel::default(),
@@ -782,7 +783,7 @@ impl Unifier {
         log: &mut self.log as *mut _,
         // 同 super_iter 占位（既有约定收口在 records/weird_iter.rs 的 `pack` 字段），
         // init 第一句即覆盖，其间无读取。
-        pack: null_mut(),
+        pack: None,
         index: 0,
         growing: false,
         level: TypeLevel::default(),
@@ -832,16 +833,16 @@ impl Unifier {
           // snap_super_tail/snap_sub_tail 是分支入口 alias_opt 快照即刻拷出的句柄，
           // 此处仅对 follow 后的 id 查询 free pack（§2，无解引用）。
           let l_free_tail = snap_super_tail.is_some_and(|t| {
-            !self
+            self
               .log
               .txn_log_get_mutable::<FreeTypePack, TypePackId>(self.log.follow_type_pack_id(t))
-              .is_null()
+              .is_some()
           });
           let r_free_tail = snap_sub_tail.is_some_and(|t| {
-            !self
+            self
               .log
               .txn_log_get_mutable::<FreeTypePack, TypePackId>(self.log.follow_type_pack_id(t))
-              .is_null()
+              .is_some()
           });
           if l_free_tail && r_free_tail {
             // l/r_free_tail 各自蕴含对应 tail 为 Some。
@@ -866,10 +867,10 @@ impl Unifier {
               false,
             );
           } else if snap_sub_tail.is_some() && snap_super_tail.is_some() {
-            if !self
+            if self
               .log
               .txn_log_get_mutable::<VariadicTypePack, TypePackId>(super_iter.pack_id)
-              .is_null()
+              .is_some()
             {
               self.unifier_try_unify_variadics(
                 sub_iter.pack_id,
@@ -877,10 +878,10 @@ impl Unifier {
                 false,
                 sub_iter.index as i32,
               );
-            } else if !self
+            } else if self
               .log
               .txn_log_get_mutable::<VariadicTypePack, TypePackId>(sub_iter.pack_id)
-              .is_null()
+              .is_some()
             {
               self.unifier_try_unify_variadics(
                 super_iter.pack_id,
@@ -904,14 +905,23 @@ impl Unifier {
 
         // If both tails are free, bind one to the other and call it a day
         if super_iter.weird_iter_can_grow() && sub_iter.weird_iter_can_grow() {
-          // WeirdIter::pack 由 init 恒指向存活 head 型 TypePack 节点（arena 块
-          // 地址稳定）；alias_ref 门面收口解引用（§2），can_grow 蕴含 tail 为 Some。
-          let s = alias_ref(sub_iter.pack)
-            .tail
-            .expect("weird_iter_can_grow 蕴含 pack.tail 为该 free pack（Some）");
-          let sup = alias_ref(super_iter.pack)
-            .tail
-            .expect("weird_iter_can_grow 蕴含 pack.tail 为该 free pack（Some）");
+          // WeirdIter::pack 由 init 恒为 Some(NonNull) 指向存活 head 型 TypePack
+          // 节点（arena 块地址稳定）；alias_nn_ref 门面收口解引用（§2），
+          // can_grow 蕴含 pack 与 pack.tail 均为 Some。
+          let s = alias_nn_ref(
+            sub_iter
+              .pack
+              .expect("weird_iter_can_grow 蕴含 pack 为该 free pack（Some）"),
+          )
+          .tail
+          .expect("weird_iter_can_grow 蕴含 pack.tail 为该 free pack（Some）");
+          let sup = alias_nn_ref(
+            super_iter
+              .pack
+              .expect("weird_iter_can_grow 蕴含 pack 为该 free pack（Some）"),
+          )
+          .tail
+          .expect("weird_iter_can_grow 蕴含 pack.tail 为该 free pack（Some）");
           return self.try_unify_type_pack_id_type_pack_id_bool(s, sup, false);
         }
 
@@ -940,10 +950,10 @@ impl Unifier {
             continue;
           }
 
-          if !self
+          if self
             .log
             .txn_log_get_mutable::<VariadicTypePack, TypePackId>(super_iter.pack_id)
-            .is_null()
+            .is_some()
           {
             self.unifier_try_unify_variadics(
               sub_iter.pack_id,
@@ -954,10 +964,10 @@ impl Unifier {
             return;
           }
 
-          if !self
+          if self
             .log
             .txn_log_get_mutable::<VariadicTypePack, TypePackId>(sub_iter.pack_id)
-            .is_null()
+            .is_some()
           {
             self.unifier_try_unify_variadics(
               super_iter.pack_id,

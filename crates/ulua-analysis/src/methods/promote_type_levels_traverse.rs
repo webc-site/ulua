@@ -16,7 +16,7 @@ use ulua_common::records::dense_hash_set::DenseHashSet;
 
 use crate::{
   records::{
-    arena_handle::alias_ref,
+    arena_handle::{alias_nn_ref, alias_ref},
     free_type::FreeType,
     free_type_pack::FreeTypePack,
     function_type::FunctionType,
@@ -62,7 +62,10 @@ impl GenericTypeVisitorTrait for PromoteTypeLevels {
       return true;
     }
     let ft = alias_ref(self.log).txn_log_get_mutable::<FreeType, TypeId>(ty);
-    self.promote(ty, alias_ref(ft).level);
+    self.promote(
+      ty,
+      alias_nn_ref(ft.expect("LUAU_ASSERT 已判 txn_log_is::<FreeType> 命中")).level,
+    );
     true
   }
 
@@ -81,7 +84,10 @@ impl GenericTypeVisitorTrait for PromoteTypeLevels {
       return true;
     }
     let ft = alias_ref(self.log).txn_log_get_mutable::<FunctionType, TypeId>(ty);
-    self.promote(ty, alias_ref(ft).level);
+    self.promote(
+      ty,
+      alias_nn_ref(ft.expect("LUAU_ASSERT 已判 txn_log_is::<FunctionType> 命中")).level,
+    );
     true
   }
 
@@ -106,7 +112,10 @@ impl GenericTypeVisitorTrait for PromoteTypeLevels {
       return true;
     }
     let ttv_mut = alias_ref(self.log).txn_log_get_mutable::<TableType, TypeId>(ty);
-    self.promote(ty, alias_ref(ttv_mut).level);
+    self.promote(
+      ty,
+      alias_nn_ref(ttv_mut.expect("LUAU_ASSERT 已判 txn_log_is::<TableType> 命中")).level,
+    );
     true
   }
 
@@ -124,7 +133,10 @@ impl GenericTypeVisitorTrait for PromoteTypeLevels {
       return true;
     }
     let ftp = alias_ref(self.log).txn_log_get_mutable::<FreeTypePack, TypePackId>(tp);
-    self.promote_pack(tp, alias_ref(ftp).level);
+    self.promote_pack(
+      tp,
+      alias_nn_ref(ftp.expect("LUAU_ASSERT 已判 txn_log_is::<FreeTypePack> 命中")).level,
+    );
     true
   }
 }

@@ -1,11 +1,11 @@
-use core::ptr::{from_mut, null_mut};
+use core::ptr::NonNull;
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   functions::{get_mutable_txn_log::get_mutable_pending_type_pack, get_mutable_type_pack},
   records::{
-    arena_handle::{alias, alias_ref},
+    arena_handle::{alias, alias_nn, alias_nn_ref, alias_ref},
     arena_id::ArenaId,
     free_type_pack::FreeTypePack,
     scope::Scope,
@@ -21,7 +21,7 @@ use crate::{
 pub struct WeirdIter {
   pub(crate) pack_id: TypePackId,
   pub(crate) log: *mut TxnLog,
-  pub(crate) pack: *mut TypePack,
+  pub(crate) pack: Option<NonNull<TypePack>>,
   pub(crate) index: usize,
   pub(crate) growing: bool,
   pub(crate) level: TypeLevel,
@@ -30,7 +30,7 @@ pub struct WeirdIter {
 
 impl WeirdIter {
   pub fn weird_iter_good(&self) -> bool {
-    !self.pack.is_null() && self.index < alias_ref(self.pack).head.len()
+    self.pack.is_some() && self.index < alias_nn_ref(self.pack.unwrap()).head.len()
   }
 
   pub fn weird_iter_can_grow(&self) -> bool {
@@ -42,7 +42,7 @@ impl WeirdIter {
   #[inline]
   pub fn current(&mut self) -> &mut TypeId {
     LUAU_ASSERT!(self.weird_iter_good());
-    &mut alias(self.pack).head[self.index]
+    &mut alias_nn(self.pack.expect("weird_iter_good 判 pack 命中")).head[self.index]
   }
 
   pub fn weird_iter_type_pack_id_txn_log(&mut self, mut pack_id: TypePackId, log: &mut TxnLog) {
@@ -53,11 +53,11 @@ impl WeirdIter {
     self.growing = false;
     // 与 C++ WeirdIter 构造一致：沿 tail 链下沉到第一个 head 非空（或无 tail）的 pack。
     loop {
-      if self.pack.is_null() {
+      let Some(pack_nn) = self.pack else {
         break;
-      }
+      };
       // 判空后解引用；此处只读 `head`/`tail` 两个字段，不写回。
-      let pack = alias_ref(self.pack);
+      let pack = alias_nn_ref(pack_nn);
       let Some(next) = pack.tail else {
         break;
       };
@@ -70,7 +70,7 @@ impl WeirdIter {
   }
 
   pub fn weird_iter_push_type(&mut self, ty: TypeId) {
-    LUAU_ASSERT!(!self.pack.is_null());
+    LUAU_ASSERT!(self.pack.is_some());
     // Safety: self.log 由 Unifier::try_unify 以 `&mut self.log as *mut _` 取得（Unifier
     // 拥有的 TxnLog 字段），非空且对齐，WeirdIter 生命周期嵌套于该可变借用之内；
     // queue_type_pack_id 只经 &mut 重建一次借用，单线程串行遍历此刻无其它存活别名。
@@ -80,11 +80,11 @@ impl WeirdIter {
     // pending 非空/存活契约；内部按 RTTI 判别 pendingType 变体，未命中返回 None
     // （原 null 哨兵）。Some 分支内 pending 为该 Box 内活着 TypePack 变体的独占
     // 可变借用（Box 不移动，地址稳定）；写 head 仅此一处，单线程串行、无第二别名，
-    // 物化 `from_mut` 后的裸句柄存回 self.pack 与原「直接存返回指针」逐位同构。
+    // 折叠 `NonNull::from` 后存回 self.pack 与原「直接存返回指针」逐位同构。
     let pending = unsafe { get_mutable_pending_type_pack::<TypePack>(pending_pack) };
     if let Some(pending) = pending {
       pending.head.push(ty);
-      self.pack = from_mut(pending);
+      self.pack = Some(NonNull::from(pending));
     } else {
       LUAU_ASSERT!(false);
     }
@@ -111,23 +111,22 @@ impl WeirdIter {
       },
     );
     self.pack_id = new_tail;
-    self.pack =
-      get_mutable_type_pack::get_mutable::<TypePack>(new_tail).map_or(null_mut(), from_mut);
+    self.pack = get_mutable_type_pack::get_mutable::<TypePack>(new_tail).map(NonNull::from);
     self.index = 0;
     self.growing = true;
   }
 
   pub fn weird_iter_advance(&mut self) -> bool {
-    if self.pack.is_null() {
+    let Some(pack_nn) = self.pack else {
       return self.weird_iter_good();
-    }
-    if self.index < alias_ref(self.pack).head.len() {
+    };
+    if self.index < alias_nn_ref(pack_nn).head.len() {
       self.index += 1;
     }
-    if self.growing || self.index < alias_ref(self.pack).head.len() {
+    if self.growing || self.index < alias_nn_ref(self.pack.unwrap()).head.len() {
       return self.weird_iter_good();
     }
-    if let Some(tail) = alias_ref(self.pack).tail {
+    if let Some(tail) = alias_nn_ref(self.pack.unwrap()).tail {
       self.pack_id = alias_ref(self.log).follow_type_pack_id(tail);
       self.pack = alias_ref(self.log).txn_log_get_mutable::<TypePack, _>(self.pack_id);
       self.index = 0;

@@ -10,7 +10,7 @@ use crate::{
   functions::{get_mutable_type, get_type},
   macros::{substitution_entry::substitution_entry, substitution_vtable},
   records::{
-    arena_handle::{Handle, alias_ref},
+    arena_handle::{Handle, alias_nn_opt, alias_ref},
     builtin_types::BuiltinTypes,
     extern_type::ExternType,
     free_type::FreeType,
@@ -44,8 +44,7 @@ impl ReplaceGenerics {
 
     if fflag::LuauReplacerIsSolverAgnostic.get() {
       let ttv = alias_ref(log).txn_log_get_mutable::<TableType, TypeId>(ty);
-      if !ttv.is_null() {
-        let ttv = alias_ref(ttv);
+      if let Some(ttv) = alias_nn_opt(ttv) {
         let mut clone =
           TableType::table_type_props_optional_table_indexer_type_level_scope_table_state(
             &ttv.props,
@@ -70,8 +69,7 @@ impl ReplaceGenerics {
       }
     } else {
       let ttv = alias_ref(log).txn_log_get_mutable::<TableType, TypeId>(ty);
-      if !ttv.is_null() {
-        let ttv = alias_ref(ttv);
+      if let Some(ttv) = alias_nn_opt(ttv) {
         let mut clone =
           TableType::table_type_props_optional_table_indexer_type_level_scope_table_state(
             &ttv.props,
@@ -124,8 +122,7 @@ impl ReplaceGenerics {
     // ExternType 一侧 cpp 本就是 plain get，保持不变。
     let log = self.base.base.log;
     let ftv = alias_ref(log).txn_log_get_mutable::<FunctionType, TypeId>(ty);
-    if !ftv.is_null() {
-      let ftv_ref = alias_ref(ftv);
+    if let Some(ftv_ref) = alias_nn_opt(ftv) {
       if ftv_ref.has_no_free_or_generic_types {
         return true;
       }
@@ -144,12 +141,12 @@ impl ReplaceGenerics {
     let log = self.base.base.log;
 
     let ttv = alias_ref(log).txn_log_get_mutable::<TableType, TypeId>(ty);
-    if !ttv.is_null() {
-      return alias_ref(ttv).state == TableState::Generic;
+    if let Some(ttv) = alias_nn_opt(ttv) {
+      return ttv.state == TableState::Generic;
     }
 
     let gtv = alias_ref(log).txn_log_get_mutable::<GenericType, TypeId>(ty);
-    !gtv.is_null() && self.generics.contains(&ty)
+    gtv.is_some() && self.generics.contains(&ty)
   }
 
   pub fn is_dirty_type_pack_id(&self, tp: TypePackId) -> bool {
@@ -157,7 +154,7 @@ impl ReplaceGenerics {
     // 对齐 cpp Instantiation.cpp:141-147：仅当 log 的 pending 态命中 GenericTypePack 时
     // 才做 genericPacks 成员判断，否则直接视为 not-dirty。
     let gtp = alias_ref(log).txn_log_get_mutable::<GenericTypePack, TypePackId>(tp);
-    !gtp.is_null() && self.generic_packs.contains(&tp)
+    gtp.is_some() && self.generic_packs.contains(&tp)
   }
 }
 
