@@ -468,10 +468,8 @@ pub(crate) fn run_pcall(mut state: StateView<'_>, nargs: i32, nresults: i32, msg
 /// `as i32` 编码、`data` 满足该 op 的取值约定（动作类恒 0）。GC 只回收不可达
 /// 对象——所有存活句柄都持注册表引用（GC 可达），信息/动作 op 均不产生悬垂读。
 #[inline]
-pub(crate) fn run_gc(state: StateView<'_>, what: i32, data: i32) -> i32 {
-  // Safety: 族级契约;`lua_gc` 在调用线程上同步执行 VM 内部 GC 簿记,
-  // 不跨 Rust 借用指针。
-  unsafe { lua_gc(state.as_mut_ptr(), what, data) }
+pub(crate) fn run_gc(mut state: StateView<'_>, what: i32, data: i32) -> i32 {
+  lua_gc(&mut state, what, data)
 }
 
 /// 打开标准库（`lua_l_openlibs` 收口点）：只在 [`build_lua`] 的构造路径调用。

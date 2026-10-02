@@ -65,20 +65,20 @@ fn gc_stop_restart_isrunning_contract() {
   // Safety: `s.l` 为 State 独占持有的存活 VM 状态，lua_gc 的 C ABI 仅需非空 L。
   unsafe {
     assert_eq!(
-      lua_gc(s.l, LuaGcOp::Isrunning as i32, 0),
+      lua_gc(&mut *s.l, LuaGcOp::Isrunning as i32, 0),
       1,
       "新状态默认在跑"
     );
-    assert_eq!(lua_gc(s.l, LuaGcOp::Stop as i32, 0), 0);
-    assert_eq!(lua_gc(s.l, LuaGcOp::Isrunning as i32, 0), 0);
-    assert_eq!(lua_gc(s.l, LuaGcOp::Restart as i32, 0), 0);
-    assert_eq!(lua_gc(s.l, LuaGcOp::Isrunning as i32, 0), 1);
+    assert_eq!(lua_gc(&mut *s.l, LuaGcOp::Stop as i32, 0), 0);
+    assert_eq!(lua_gc(&mut *s.l, LuaGcOp::Isrunning as i32, 0), 0);
+    assert_eq!(lua_gc(&mut *s.l, LuaGcOp::Restart as i32, 0), 0);
+    assert_eq!(lua_gc(&mut *s.l, LuaGcOp::Isrunning as i32, 0), 1);
 
     // Count 以 KB 计（totalbytes >> 10），基础状态已 > 1KB
-    assert!(lua_gc(s.l, LuaGcOp::Count as i32, 0) >= 1);
+    assert!(lua_gc(&mut *s.l, LuaGcOp::Count as i32, 0) >= 1);
     // 越界操作码 → -1（IsPaused=10 补齐后不再是未知操作码）
-    assert_eq!(lua_gc(s.l, 42, 0), -1);
-    assert_ne!(lua_gc(s.l, LuaGcOp::IsPaused as i32, 0), -1);
+    assert_eq!(lua_gc(&mut *s.l, 42, 0), -1);
+    assert_ne!(lua_gc(&mut *s.l, LuaGcOp::IsPaused as i32, 0), -1);
   }
 }
 
@@ -91,7 +91,7 @@ fn gc_ispaused_follows_gcstate_contract() {
   // Safety: `s.l` 为存活 VM 状态；lua_gc/lua_pushlstring 仅要求非空 L 与可读字节区。
   unsafe {
     assert_eq!(
-      lua_gc(s.l, LuaGcOp::IsPaused as i32, 0),
+      lua_gc(&mut *s.l, LuaGcOp::IsPaused as i32, 0),
       1,
       "新状态必在 GCSpause"
     );
@@ -101,16 +101,16 @@ fn gc_ispaused_follows_gcstate_contract() {
       let buf = format!("ispaused-garbage-{i}-{}", "y".repeat(256));
       lua_pushlstring(s.l, buf.as_ptr() as *const c_char, buf.len());
     }
-    assert_eq!(lua_gc(s.l, LuaGcOp::Step as i32, 1), 0, "小步不应完成周期");
+    assert_eq!(lua_gc(&mut *s.l, LuaGcOp::Step as i32, 1), 0, "小步不应完成周期");
     assert_eq!(
-      lua_gc(s.l, LuaGcOp::IsPaused as i32, 0),
+      lua_gc(&mut *s.l, LuaGcOp::IsPaused as i32, 0),
       0,
       "步进后应离开 GCSpause"
     );
 
-    lua_gc(s.l, LuaGcOp::Step as i32, 1024 * 1024);
+    lua_gc(&mut *s.l, LuaGcOp::Step as i32, 1024 * 1024);
     assert_eq!(
-      lua_gc(s.l, LuaGcOp::IsPaused as i32, 0),
+      lua_gc(&mut *s.l, LuaGcOp::IsPaused as i32, 0),
       1,
       "周期跑完必须回到 GCSpause"
     );
@@ -133,7 +133,7 @@ fn intern_survives_full_gc_when_referenced() {
       let buf = format!("garbage-{i}-{}", "x".repeat(64));
       s.intern(buf.as_bytes());
     }
-    assert_eq!(lua_gc(s.l, LuaGcOp::Collect as i32, 0), 0);
+    assert_eq!(lua_gc(&mut *s.l, LuaGcOp::Collect as i32, 0), 0);
     let ts2 = s.intern(k);
     assert!(eq(ts1, ts2), "被引用字符串 fullgc 后 intern 必须一致");
     (*s.l).set_top(0);
@@ -146,16 +146,16 @@ fn unreferenced_string_collectable_by_full_gc() {
   let s = State::new();
   // Safety: `s.l` 为存活 VM 状态，lua_gc/intern 契约同 intern() 内注释。
   unsafe {
-    let count_before = lua_gc(s.l, LuaGcOp::Count as i32, 0);
+    let count_before = lua_gc(&mut *s.l, LuaGcOp::Count as i32, 0);
     // 不持有任何引用
     for i in 0..64 {
       let buf = format!("ephemeral-{i}-{}", "x".repeat(64));
       s.intern(buf.as_bytes());
     }
-    let count_peak = lua_gc(s.l, LuaGcOp::Count as i32, 0);
+    let count_peak = lua_gc(&mut *s.l, LuaGcOp::Count as i32, 0);
     assert!(count_peak > count_before, "intern 应增加内存计数");
-    assert_eq!(lua_gc(s.l, LuaGcOp::Collect as i32, 0), 0);
-    let count_after = lua_gc(s.l, LuaGcOp::Count as i32, 0);
+    assert_eq!(lua_gc(&mut *s.l, LuaGcOp::Collect as i32, 0), 0);
+    let count_after = lua_gc(&mut *s.l, LuaGcOp::Count as i32, 0);
     assert!(
       count_after < count_peak,
       "不可达字符串必须被 fullgc 回收（{count_peak} → {count_after}）"

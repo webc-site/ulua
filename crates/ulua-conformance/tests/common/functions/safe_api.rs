@@ -535,7 +535,7 @@ pub fn objlen(l: L, idx: c_int) -> c_int {
 /// `lua_gc`：`what` 传 [`LuaGcOp`] 的 C 编码值。
 pub fn gc(l: L, what: c_int, data: c_int) -> c_int {
   // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_gc(l, what, data) }
+  lua_gc(state_mut(l), what, data)
 }
 
 // ---------------------------------------------------------------------------
