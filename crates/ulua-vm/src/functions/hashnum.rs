@@ -8,7 +8,10 @@ use crate::{
 /// `t` 须为存活 `LuaTable` 的共享只读借用，其 `node` 指针非空且哈希数组长度恰为 `(*t).sizenode`（由 rehash/新建保证）；
 /// 返回的 `gnode!(t, lmod!(h2, sizenode))` 落在 `[node, node+sizenode)` 区间内，仅在 sizenode>0 时有效
 /// （sizenode==0 时由调用方走数组分支，不入本函数）。`n` 为已判别的数字键值，无副作用、不分配、不抛错。
-/// cpp VM/src/ltable.cpp:90
+/// cpp VM/src/ltable.cpp:90。
+///
+/// r12-w6d 逐点复核定性（保留面）：本点位与 hashint 同为 `mp` 哨兵指针判据
+/// （`eq(mp, dummynode)`）的裸指针源头，provenance 契约同 mainposition，不收编。
 pub(crate) unsafe fn hashnum(t: &LuaTableAlias, n: f64) -> *mut LuaNodeAlias {
   unsafe {
     // static_assert(sizeof(double) == sizeof(unsigned int) * 2, "expected a 8-byte double");

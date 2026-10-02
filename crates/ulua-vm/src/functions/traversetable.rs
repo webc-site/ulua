@@ -63,6 +63,9 @@ pub(crate) unsafe fn traversetable(g: *mut global_State, h: *mut LuaTable) -> i3
     // r12-E4 窗化裁决（哈希段保留原形）：哨兵表 node 指向不可变 static 单格，出借
     // &mut 窗即别名违例，而 removeentry 收 *mut 桶指针且对可回收键就地写 DeadKey；
     // 白灰判据/倒序/removeentry 次序逐字保持，gnode! 依 E1 裁决不收编。
+    // r12-w6d 逐点复核定性（保留面）：写侧收编门槛不满足——本路径未经 is_hash_dummy
+    // 判据先行/换发实向量，哨兵表可达本桶循环，node_window_mut 对哨兵返回空窗，
+    // 强行收编即把正常走查变成写拒 panic，属行为变更，维持保留。
     let mut i: i32 = sizenode!(h);
     while i > 0 {
       i -= 1;

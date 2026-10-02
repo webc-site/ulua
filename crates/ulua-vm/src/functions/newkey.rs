@@ -91,6 +91,9 @@ pub(crate) unsafe fn newkey(l: *mut LuaState, t: *mut LuaTable, key: &TValue) ->
     // 窗等价契约：下文所有 `offset(next)`/`offset_from` 节点算术 ⇔ 实向量窗内
     // 下标的加减（`n.offset_from(othern)` ⇔ 窗下标差），界外由 UB 降 panic 一
     // 事在 E1 访问器本基线缺位（见票单），暂以 LUA_ASSERT! 与上游不变式兜底。
+    // r12-w6d 逐点复核定性：本文件 4 处 gnode 字样均为裁决文档口径，体内无宏调用
+    // 代码点位（`mp` 经 `mainposition` 取回，源头判据见 hashint/hashnum/hashpointer
+    // 各票注），next 链 offset/offset_from 改写属指针判据保留面，无收编面。
     let mut mp = mainposition(t, key);
     if !matches!(ValueView::from_tvalue(&*gval!(mp)), ValueView::Nil) || eq(mp, dummynode) {
       // cpp `LuaNode* n = getfreepos(t); if (n == NULL)`：`None` 即「哈希部分无空槽」，
