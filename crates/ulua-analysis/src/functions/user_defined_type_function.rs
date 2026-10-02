@@ -162,7 +162,9 @@ pub fn user_defined_type_function(
 
   // if (typeFunction->userFuncData.owner.expired())
   if type_function.user_func_data.owner.upgrade().is_none() {
-    ctx.ice().ice_string("user-defined type function module has expired");
+    ctx
+      .ice()
+      .ice_string("user-defined type function module has expired");
     return erroneous_result();
   }
 
@@ -170,9 +172,9 @@ pub fn user_defined_type_function(
 
   // if (!typeFunction->userFuncName || !typeFunction->userFuncData.definition)
   if type_function.user_func_name.is_none() || definition_ptr.is_null() {
-    ctx.ice().ice_string(
-      "all user-defined type functions must have an associated function definition",
-    );
+    ctx
+      .ice()
+      .ice_string("all user-defined type functions must have an associated function definition");
     return erroneous_result();
   }
 
@@ -240,12 +242,15 @@ pub fn user_defined_type_function(
     let registration_failed = if fflag::LuauTypeFunctionStructuredErrors.get() {
       runtime.register_function(alias(def_ptr)).is_some()
     } else {
-      runtime.register_function_deprecated(alias(def_ptr)).is_some()
+      runtime
+        .register_function_deprecated(alias(def_ptr))
+        .is_some()
     };
     if registration_failed {
       // Failure to register at this point means that original definition had to error out and should not
       // have been present in the environment
-      ctx.ice()
+      ctx
+        .ice()
         .ice_string("user-defined type function reference cannot be registered");
       return erroneous_result();
     }
