@@ -1,22 +1,34 @@
-use core::ptr::copy_nonoverlapping;
-
 use crate::{
-  functions::{lua_l_checklstring::lua_l_checklstring, lua_newbuffer::lua_newbuffer},
+  functions::{
+    buffer_window::buffer_data_ref, lua_l_checklstring::lua_l_checklstring_ref,
+    lua_newbuffer::lua_newbuffer,
+  },
   macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
 };
 
-/// # Safety
+/// cpp `buffer_fromstring`（lbuflib.cpp:47）：按字符串实参长度新建 buffer 并整段复制。
 ///
-/// `l` 必须指向本次 buffer 库调用的存活 `LuaState`，索引/长度实参按约定可读，栈顶有压入结果的余量。
+/// # Safety
+/// `l` 须为本次 buffer 库调用的存活 `LuaState` 且处于受保护帧（`checklstring` 非串
+/// 实参经 `tag_error` 抛 "string expected" 发散），栈顶有压入新 buffer 的余量。
+/// 重入面论证：仅 #1 一次取参，走 `lua_tolstring`→`luaV_tostring` 内置数值转换
+/// （cpp lvmutils.cpp:39，不调 `__tostring`、不跑 Lua 代码）；`lua_newbuffer` 只
+/// 做分配/GC 步进/挪栈（Lua 串与 buffer 对象均不移动，#1 串切片按
+/// `lua_l_checklstring_ref` 契约在本次调用内可读），其后到写入点之间不再有任何
+/// 取参或可抛错重入路径——新对象在栈顶 `-1` 槽钉住、定长不 resize，数据窗经
+/// `buffer_data_ref` 后置派生直达 `copy_from_slice`，源与目的分属两个对象不重叠。
 pub(crate) unsafe fn buffer_fromstring(l: *mut LuaState) -> i32 {
-  // SAFETY: 契约保证 `l` 存活且源串数据可读，新 buffer 按串长分配并整段复制
+  // SAFETY: 契约保证 `l` 为存活调用帧；窗口派生与复制的边界论证见函数级 `# Safety`
   unsafe {
-    let mut len: usize = 0;
-    let val = lua_l_checklstring(&mut *l, 1, &mut len);
+    let val = lua_l_checklstring_ref(&mut *l, 1);
 
-    let data = lua_newbuffer(l, len);
-    copy_nonoverlapping(val as *const u8, data as *mut u8, len);
+    // 新 buffer 压入栈顶；返回裸数据指针不再手工成窗，改经窄腰切片形取回
+    lua_newbuffer(l, val.len());
+    // 刚压入的槽必是 buffer（typeerror 分支不可达），数据界即新建长度 `val.len()`
+    let dst = buffer_data_ref(l, -1);
+    debug_assert_eq!(dst.len(), val.len());
+    dst.copy_from_slice(val);
 
     1
   }
