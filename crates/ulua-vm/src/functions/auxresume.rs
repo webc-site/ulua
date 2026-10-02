@@ -36,7 +36,11 @@ pub(crate) unsafe fn auxresume(l: *mut LuaState, co: *mut LuaState, narg: i32) -
       lua_xmove(&mut *l, &mut *co, narg);
     } else {
       // coroutine might be completely full already
-      if ((*co).top.offset_from((*co).base) as i32) > LUAI_MAXCSTACK {
+      // r16-b2 收编：顶-基槽距读数落既有 get_top 门面——其本体 slot_distance(base, top)
+      // 即被替代式 `top.offset_from(base) as i32` 的同址同宽镜像（现读位点不变）；
+      // isize→i32 折形在现域无截差（协程栈槽距受 LUAI_MAXSTACK 约束、远小于 i32::MAX），
+      // 比较两侧同为 i32 后与原 isize 式同真值（LUAI_MAXCSTACK 为 i32 常量）
+      if (*co).get_top() > LUAI_MAXCSTACK {
         luaL_error!(l, "too many arguments to resume");
       }
     }
@@ -45,7 +49,8 @@ pub(crate) unsafe fn auxresume(l: *mut LuaState, co: *mut LuaState, narg: i32) -
 
     let status = (*co).resume(l, narg);
     if status == 0 || status == LuaStatus::Yield as i32 {
-      let nres = (*co).top.offset_from((*co).base) as i32;
+      // r16-b2 收编：同款顶-基槽距读数落 get_top 门面（镜像论证见上方 :39 点位注）
+      let nres = (*co).get_top();
       if nres != 0 {
         // +1 accounts for true/false status in resumefinish
         if nres + 1 > LUA_MINSTACK && lua_checkstack(&mut *l, nres + 1) == 0 {
