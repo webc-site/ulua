@@ -1,6 +1,6 @@
 use crate::{
   enums::lua_status::LuaStatus,
-  functions::{cstr, lua_d_throw_ldo::lua_d_throw, lua_g_pusherror::lua_g_pusherror},
+  functions::{lua_d_throw_ldo::lua_d_throw, lua_g_pusherror::lua_g_pusherror_bytes},
   macros::api_check::api_check,
   records::lua_state::LuaState,
 };
@@ -13,9 +13,9 @@ pub unsafe fn lua_yield(l: *mut LuaState, nresults: i32) -> i32 {
     api_check!(l, nresults as isize <= (*l).top.offset_from((*l).base));
 
     if (*l).n_ccalls > (*l).base_ccalls {
-      lua_g_pusherror(
+      lua_g_pusherror_bytes(
         l,
-        cstr(b"attempt to yield across metamethod/C-call boundary\0"),
+        b"attempt to yield across metamethod/C-call boundary",
       );
       lua_d_throw(l, LuaStatus::ErrRun as i32);
     }

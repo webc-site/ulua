@@ -2,10 +2,30 @@ use core::ffi::c_char;
 
 use crate::{
   enums::tms::TMS,
-  functions::{cstr, lua_h_getstr::lua_h_getstr},
+  functions::{cstr, cstr_bytes, lua_h_getstr::lua_h_getstr},
   macros::{api_check::api_check, lua_utag_limit::LUA_UTAG_LIMIT, svalue::svalue},
   records::lua_state::LuaState,
 };
+
+/// 字节切片形态获取 userdata 类型名称。
+/// # Safety
+/// `l` 必须指向存活 `LuaState`，tag 必须落在合法 tag 范围内。
+pub(crate) unsafe fn lua_getuserdataname_bytes<'a>(l: *mut LuaState, tag: i32) -> &'a [u8] {
+  unsafe {
+    api_check!(l, (tag as u32) < LUA_UTAG_LIMIT as u32);
+
+    let mt = (*(*l).global).udatamt[tag as usize];
+    if !mt.is_null() {
+      if let Some(type_) = lua_h_getstr(&*mt, (*(*l).global).tmname[TMS::TmType as usize])
+        && type_.get().is_string()
+      {
+        return cstr_bytes(svalue!(type_.get()));
+      }
+    }
+
+    b"userdata"
+  }
+}
 
 /// # Safety
 /// `l` 必须指向存活 `LuaState`，索引/长度/标签等参数满足各 API 注释约定，需压栈时栈顶预留由调用方保证。

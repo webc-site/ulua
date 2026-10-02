@@ -14,7 +14,7 @@ use crate::{
     lua_b_tonumber::lua_b_tonumber_arm, lua_b_tostring::lua_b_tostring_arm,
     lua_b_type::lua_b_type_arm, lua_b_typeof::lua_b_typeof_arm,
     lua_b_xpcallcont::lua_b_xpcallcont_arm, lua_b_xpcally::lua_b_xpcally_arm,
-    lua_l_register::lua_l_register, lua_pushcclosurek::lua_pushcclosurek,
+    lua_l_register::lua_l_register_bytes, lua_pushcclosurek::lua_pushcclosurek,
     lua_pushlstring::lua_pushlstring_bytes,
   },
   macros::{lua_globalsindex::LUA_GLOBALSINDEX, lua_lib_fn::lua_lib_fn},
@@ -50,7 +50,7 @@ pub unsafe fn luaopen_base(l: *mut LuaState) -> i32 {
     (*l).push_value(LUA_GLOBALSINDEX);
     (*l).set_global_bytes(b"_G");
 
-    lua_l_register(l, cstr(b"_G\0"), &BASE_FUNCS);
+    lua_l_register_bytes(l, Some(b"_G"), &BASE_FUNCS);
     lua_pushlstring_bytes(l, b"Luau");
     (*l).set_global_bytes(b"_VERSION");
 

@@ -384,7 +384,6 @@ pub mod lua_isuserdata;
 pub mod lua_isyieldable;
 pub mod lua_l_addchar;
 pub mod lua_l_addlstring;
-pub mod lua_l_addstring;
 pub mod lua_l_addvalue;
 pub mod lua_l_addvalueany;
 pub mod lua_l_argerror_l;

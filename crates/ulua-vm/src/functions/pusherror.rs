@@ -1,3 +1,4 @@
+use alloc::string::String;
 use core::ffi::c_char;
 
 use crate::{
@@ -9,13 +10,13 @@ use crate::{
   records::lua_state::LuaState,
 };
 
+/// 安全字节切片版错误信息压栈。
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn pusherror(l: *mut LuaState, msg: *const c_char) {
+pub(crate) unsafe fn pusherror_bytes(l: *mut LuaState, msg: &[u8]) {
   unsafe {
     let ci = (*l).ci;
 
-    // isLua! 宏接收 CallInfo 指针而非解引用结构体
     if isLua!(ci) {
       let proto = get_lua_proto(ci);
       let source = (*proto).source;
@@ -29,18 +30,19 @@ pub unsafe fn pusherror(l: *mut LuaState, msg: *const c_char) {
       );
 
       let line = currentline(&*ci);
-
-      // The `to_string_lossy()` `Cow`s must be bound to locals so they outlive
-      // the `format_args!` that borrows them: a `fmt::Arguments` can never
-      // outlive its captured temporaries, so storing it in a `let` and using
-      // it in a *later* statement dangles (E0716 — the temporaries are dropped
-      // at the end of the `let`). Inline `format_args!` into the call instead.
       let chunk = cstr_cow(chunkid);
-      let msg_str = cstr_cow(msg);
-      // 对应 cpp ldebug.cpp 的 `luaO_pushfstring(L, "%s:%d: %s", chunkid, line, msg)`
+      let msg_str = String::from_utf8_lossy(msg);
       lua_o_pushfstring(l, format_args!("{}:{}: {}", chunk, line, msg_str));
     } else {
-      (*l).push_bytes(cstr_bytes(msg));
+      (*l).push_bytes(msg);
     }
+  }
+}
+
+/// # Safety
+/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
+pub unsafe fn pusherror(l: *mut LuaState, msg: *const c_char) {
+  unsafe {
+    pusherror_bytes(l, cstr_bytes(msg));
   }
 }

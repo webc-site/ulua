@@ -2,9 +2,9 @@
 
 use crate::{
   functions::{
-    cstr, cstr_cow, currentline::currentline, getluaproto::get_lua_proto,
-    lua_o_chunkid::lua_o_chunkid, lua_o_pushfstring::lua_o_pushfstring,
-    lua_pushlstring::lua_pushlstring, lua_rawcheckstack::lua_rawcheckstack,
+    cstr_cow, currentline::currentline, getluaproto::get_lua_proto, lua_o_chunkid::lua_o_chunkid,
+    lua_o_pushfstring::lua_o_pushfstring, lua_pushlstring::lua_pushlstring_bytes,
+    lua_rawcheckstack::lua_rawcheckstack,
   },
   macros::{getstr::getstr, is_lua::isLua, lua_idsize::LUA_IDSIZE},
   records::lua_state::LuaState,
@@ -24,7 +24,7 @@ pub(crate) unsafe fn lua_l_where(l: *mut LuaState, level: i32) {
     for _ in 0..level {
       if ci == (*l).base_ci {
         lua_rawcheckstack(l, 1);
-        lua_pushlstring(l, cstr(b"\0"), 0);
+        lua_pushlstring_bytes(l, b"");
         return;
       }
       ci = ci.sub(1);
@@ -49,6 +49,6 @@ pub(crate) unsafe fn lua_l_where(l: *mut LuaState, level: i32) {
     }
 
     lua_rawcheckstack(l, 1);
-    lua_pushlstring(l, cstr(b"\0"), 0);
+    lua_pushlstring_bytes(l, b"");
   }
 }

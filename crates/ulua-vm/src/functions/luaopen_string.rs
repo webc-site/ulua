@@ -1,7 +1,7 @@
 use crate::{
   functions::{
-    createmetatable_lstrlib::createmetatable_mut, cstr, gmatch::gmatch_arm,
-    lua_l_register::lua_l_register, str_byte::str_byte_arm, str_char::str_char_arm,
+    createmetatable_lstrlib::createmetatable_mut, gmatch::gmatch_arm,
+    lua_l_register::lua_l_register_bytes, str_byte::str_byte_arm, str_char::str_char_arm,
     str_find::str_find, str_format::str_format_arm, str_gsub::str_gsub_arm, str_len::str_len_arm,
     str_lower::str_lower_arm, str_match::str_match, str_pack::str_pack_arm,
     str_packsize::str_packsize_arm, str_rep::str_rep_arm, str_reverse::str_reverse_arm,
@@ -38,7 +38,7 @@ static STRLIB: [LuaLReg; 17] = [
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub unsafe fn luaopen_string(l: *mut LuaState) -> i32 {
   unsafe {
-    lua_l_register(l, cstr(b"string\0"), &STRLIB);
+    lua_l_register_bytes(l, Some(b"string"), &STRLIB);
     createmetatable_mut(l);
 
     1
