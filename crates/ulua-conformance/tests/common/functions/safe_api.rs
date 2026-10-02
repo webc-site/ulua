@@ -632,8 +632,9 @@ pub fn tolightuserdata(l: L, idx: c_int) -> *mut c_void {
 
 /// `lua_setlightuserdataname(l, tag, name)`。
 pub fn setlightuserdataname(l: L, tag: c_int, name: &'static [u8]) {
-  // Safety: `l` 存活；`tag` 界内；`cstr` NUL 结尾静态名串。
-  unsafe { lua_setlightuserdataname(l, tag, cstr(name)) }
+  // r16-v4b：callee 已引用形 safe 化，`state_mut` 判空重建 `&mut LuaState` 即收口；
+  // `cstr(name)` NUL 结尾静态名串裸形透传（不切片化，同被调契约）。
+  lua_setlightuserdataname(state_mut(l), tag, cstr(name))
 }
 
 /// `lua_getlightuserdataname(l, tag)`：未注册得 `None`，否则为登记名原始字节。
