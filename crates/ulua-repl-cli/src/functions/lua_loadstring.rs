@@ -1,5 +1,4 @@
 use alloc::string::String;
-use core::ffi::c_int;
 
 use ulua_vm::{
   functions::{
@@ -17,8 +16,8 @@ use crate::functions::{compile_source::compile_source, state_ref::state};
 ///
 /// DELIBERATE DEVIATION（review.md §9.3）：本函数以 `lua_CFunction` 形态（`extern
 /// "C-unwind"`）装入 VM 并在 Lua 调用点被 C ABI 回调，故签名保留裸 `*mut LuaState`
-/// 与 `c_int`；其内部对 `checklstring_ref`/`luau_load` 的 `unsafe` 调用均为
-/// ulua-vm c-API 边界。字符串取形走 ref 门面（`&[u8]` 出栈），cpp
+/// （返回值用原生 `i32`）；其内部对 `luau_load`/`lua_setsafeenv` 的 `unsafe` 调用
+/// 均为 ulua-vm c-API 边界。字符串取形走 ref 门面（`&[u8]` 出栈），cpp
 /// `luaL_checklstring(L, 1, &len)` 的长度出参裸指针、`luaL_optlstring` 的 NULL
 /// 长度哨兵与 `c_slice`/`cstr_cow` 指针解码随之消失（review.md §2/§10）。
 ///
@@ -32,7 +31,7 @@ pub(crate) unsafe extern "C-unwind" fn lua_loadstring(l: *mut LuaState) -> i32 {
   let l = state(l);
   // Safety: 索引 1 为本次调用的实参槽位；非字符串即报错发散（不返回），返回的切片由
   // 栈槽持有、在本次调用期内有效。
-  let source_bytes = lua_l_checklstring_ref(&mut *l, 1);
+  let source_bytes = lua_l_checklstring_ref(l, 1);
   // cpp `luaL_optlstring(L, 2, s, NULL)`：槽 2 缺席/nil 时默认值即第一参数的
   // 串本体，否则按 checklstring 取形；长度出参本就弃用。
   let name_bytes = if l.is_none_or_nil(2) {
@@ -40,11 +39,12 @@ pub(crate) unsafe extern "C-unwind" fn lua_loadstring(l: *mut LuaState) -> i32 {
   } else {
     // Safety: 索引 2 为本次调用的实参槽位；数字自动转换、非转换类型按 cpp 抛
     // "string expected" 发散。
-    lua_l_checklstring_ref(&mut *l, 2)
+    lua_l_checklstring_ref(l, 2)
   };
 
-  // Safety: `lua_setsafeenv` 为 unsafe 导出；仅改环境表的 safe 标志位。
-  unsafe { lua_setsafeenv(l, LUA_ENVIRONINDEX, false as c_int) };
+  // Safety: `lua_setsafeenv` 为 unsafe 导出；仅改环境表的 safe 标志位。形参
+  // `enabled` 系 ulua-vm 侧原生 `i32`，不再绕 `c_int`（review.md §7）。
+  unsafe { lua_setsafeenv(l, LUA_ENVIRONINDEX, false as i32) };
 
   // loadstring 参数可为任意字节串；Rust 编译管线要求 &str（UTF-8），
   // 非法序列 lossy 替换，替代 from_utf8_unchecked 的 UB

@@ -153,8 +153,9 @@ impl RequireHost for ReplRequirer {
   }
 
   fn load(&self, l: *mut LuaState, path: &[u8], chunkname: &[u8], loadname: &[u8]) -> i32 {
-    // Safety: `l` 是 ulua-require 在 require 同步执行窗口内交出的活跃状态
-    // （trait `load` 方法契约）；chunkname/loadname/path 为该窗口内存活字节串。
-    unsafe { load(self, l, path, chunkname, loadname) }
+    // `l` 是 ulua-require 在 require 同步执行窗口内交出的活跃状态（trait `load`
+    // 方法契约），`functions::load::load` 内部经 `state` 门面物化，VM c-API 边界
+    // 的 `unsafe` 全部由其带 `# Safety` 契约的私有封装承担，本调用点为安全调用。
+    load(self, l, path, chunkname, loadname)
   }
 }
