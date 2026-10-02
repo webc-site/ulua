@@ -1,9 +1,6 @@
-use core::slice::from_raw_parts_mut;
-
 use crate::{
   enums::{t_key_view::TKeyView, value_view::ValueView},
   functions::countint::countint,
-  macros::sizenode::sizenode,
   records::lua_table::LuaTable,
 };
 
@@ -15,21 +12,19 @@ use crate::{
 ///
 /// # Safety
 ///
-/// `t` 必须指向存活 `LuaTable`，其 `node` 指向 `sizenode(t)` 个可读 LuaNode；`nums` 为
-/// 调用方保活的整数键区间计数数组。
+/// `t` 必须指向存活 `LuaTable`，其哈希段按 `node_window()` 共享窗可读（哨兵表窗长
+/// 恒 1、实向量窗长 `sizenode(t)`，均须与元数据一致）；`nums` 为调用方保活的整数键
+/// 区间计数数组。
 pub(crate) unsafe fn numusehash(t: *const LuaTable, nums: &mut [i32]) -> (i32, i32) {
   let mut totaluse: i32 = 0; // total number of elements
   let mut ause: i32 = 0; // summation of `nums'
-  // SAFETY: 契约保证 t 存活，sizenode 仅读其 node/sizearray 字段
-  let sizenode = unsafe { sizenode!(t) as usize };
 
-  // cpp `for (i = sizenode(t); i--;)` 逆序遍历哈希数组；Rust 版以可变切片 +
-  // iter().rev() 等价展开，边界由契约一次锁定，循环体内不再逐格裸指针偏移
+  // cpp `for (i = sizenode(t); i--;)` 逆序遍历哈希数组；Rust 版切 node_window 共享窗 +
+  // iter().rev() 等价展开，窗形收口切片构造（免手工 from_raw_parts_mut 的哨兵 &mut
+  // 别名违例），循环体内不再逐格裸指针偏移
   // （本函数为纯统计：键/值槽位一律经 B2a TKeyView / B1 ValueView 只读视图读取，
-  // 不写回任何节点字段）
-  // SAFETY: 契约保证 node 指向 sizenode 个可读 LuaNode，切片构造不越界
-  let nodes = unsafe { from_raw_parts_mut((*t).node, sizenode) };
-  for n in nodes.iter().rev() {
+  // 不写回任何节点字段；哨兵表读出单格 dummy，val 恒 nil ⇒ 空桶不计数，与 cpp 一致）
+  for n in unsafe { (*t).node_window() }.iter().rev() {
     // 视图经共享引用读取，本循环体已无裸指针解引用
     if !matches!(ValueView::from_tvalue(&n.val), ValueView::Nil) {
       // 键轴（B2a TKeyView）：数值键候选链收敛为变体 match
