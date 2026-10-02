@@ -19,7 +19,10 @@ use crate::{
   },
   records::{
     compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
-    compiler::Compiler,
+    compiler::{
+      Compiler,
+      nn_alias::{alias, alias_nn},
+    },
     constant::Constant,
     node::Node,
   },
@@ -55,9 +58,10 @@ impl Compiler {
       local_changes,
       ..
     } = self;
-    // Safety: names 句柄在 Compiler 构造时由 `&mut AstNameTable` 接线（非空、
-    // 唯一归属 self、比编译存活），该 &mut 仅用于向字符串表 intern 新名字。
-    let string_table = unsafe { names.as_mut() };
+    // 契约：names 句柄在 Compiler 构造时由 `&mut AstNameTable` 接线（非空、
+    // 唯一归属 self、比编译存活），该可变借用仅用于向字符串表 intern 新名字；
+    // 解引用收口于 nn_alias 门面。
+    let string_table = alias_nn(*names);
     fold_constants(
       root,
       FoldConstantsArgs {
@@ -193,11 +197,11 @@ impl Compiler {
       }
       match self.constants.find(&item.key.into()) {
         Some(Constant::Str(s)) if s.len != 0 => {
-          // Safety: self.names 句柄在构造点由 `&mut AstNameTable` 接线（非空、
+          // 契约：self.names 句柄在构造点由 `&mut AstNameTable` 接线（非空、
           // 比 self 长寿）；get_or_add_slice 只在名表内 intern，与 self 其余字段
           // 不相交。s.ptr/s.len 来自已录入的 Str 常量键，为合法字符串区间且
-          // 外层已判 len != 0。
-          let key_name = unsafe { (*self.names.as_ptr()).get_or_add_slice(s.bytes()) };
+          // 外层已判 len != 0。解引用收口于 nn_alias 门面。
+          let key_name = alias(self.names.as_ptr()).get_or_add_slice(s.bytes());
           if key_name == expr.index {
             Some(item.value.into())
           } else {

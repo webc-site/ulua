@@ -42,7 +42,7 @@ use crate::{
     compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
     compiler::{
       Compiler, K_GETIMPORT_FLAG, K_MAX_AD_INDEX, K_MAX_IMPORT_ID, K_MAX_K_CONST_INDEX,
-      K_MAX_TARGET_COUNT,
+      K_MAX_TARGET_COUNT, nn_alias::alias,
     },
     constant::Constant,
     node::Node,
@@ -77,11 +77,7 @@ impl Compiler {
         // Box 字段靠自动解引用强转即可，无需显式 `*`（clippy explicit_auto_deref）
         // expr 已句柄化恒非空；本入口持共享借用（cpp 非 const 透传形态），&mut 重建
         // 经 as_ptr 裸出口，写穿仅落在该节点编译期临时字段，单线程独占。
-        self.compile_expr(
-          unsafe { &mut *expr_group.expr.as_ptr() },
-          target,
-          target_temp,
-        );
+        self.compile_expr(alias(expr_group.expr.as_ptr()), target, target_temp);
       }
       AstExprRef::ConstantNil(_) => {
         self
@@ -190,11 +186,7 @@ impl Compiler {
       AstExprRef::TypeAssertion(expr_assertion) => {
         // expr 已句柄化恒非空；本入口持共享借用（cpp 非 const 透传形态），&mut 重建
         // 经 as_ptr 裸出口，写穿仅落在该节点编译期临时字段，单线程独占。
-        self.compile_expr(
-          unsafe { &mut *expr_assertion.expr.as_ptr() },
-          target,
-          target_temp,
-        );
+        self.compile_expr(alias(expr_assertion.expr.as_ptr()), target, target_temp);
       }
       AstExprRef::IfElse(expr_if_else) => {
         self.compile_expr_if_else(expr_if_else, target, target_temp);
@@ -205,7 +197,7 @@ impl Compiler {
       AstExprRef::Instantiate(expr_instantiate) => {
         // expr 为 parser 接线的存活子指针恒非空；本入口持共享借用（cpp 非 const
         // 透传形态），&mut 重建经裸出口，写穿仅落在该节点编译期临时字段，单线程独占。
-        self.compile_expr(unsafe { &mut *expr_instantiate.expr }, target, target_temp);
+        self.compile_expr(alias(expr_instantiate.expr), target, target_temp);
       }
       AstExprRef::Error(_) => LUAU_ASSERT!(false),
     }
@@ -238,7 +230,7 @@ impl Compiler {
         } else {
           expr_ref.left
         };
-        self.compile_expr(unsafe { &mut *branch.as_ptr() }, target, target_temp);
+        self.compile_expr(alias(branch.as_ptr()), target, target_temp);
         return;
       }
 
@@ -288,7 +280,7 @@ impl Compiler {
       let skip_jump = self.compile_condition_value(expr_ref.left.get(), Some(reg), !and_);
       // Safety: right 出自 parser 接线的存活 arena 子句柄；本入口持 &AstExprBinary
       // （cpp 非 const 透传形态），&mut 重建限于该节点编译期临时字段，单线程独占。
-      self.compile_expr(unsafe { &mut *expr_ref.right.as_ptr() }, reg, true);
+      self.compile_expr(alias(expr_ref.right.as_ptr()), reg, true);
       let move_label = self.bc().emit_label();
       self.patch_jumps(&expr_ref.base.base, &skip_jump, move_label);
 
@@ -546,18 +538,10 @@ impl Compiler {
       if is_constant_true(&self.constants, expr_ref.condition.as_ptr().into()) {
         // Safety: true_expr 已句柄化（parser 接线的存活子节点）；本函数持共享引用，
         // 写穿借用的还原沿既有形态经 as_ptr 桥接，target 由上层分配到本帧寄存器。
-        self.compile_expr(
-          unsafe { &mut *expr_ref.true_expr.as_ptr() },
-          target,
-          target_temp,
-        );
+        self.compile_expr(alias(expr_ref.true_expr.as_ptr()), target, target_temp);
       } else {
         // Safety: false_expr 同上（句柄即存活证明）。
-        self.compile_expr(
-          unsafe { &mut *expr_ref.false_expr.as_ptr() },
-          target,
-          target_temp,
-        );
+        self.compile_expr(alias(expr_ref.false_expr.as_ptr()), target, target_temp);
       }
     } else {
       if let Some(creg) = self.get_expr_local_reg(expr_ref.condition.as_ptr()) {
@@ -581,11 +565,7 @@ impl Compiler {
       // 返回值即本条件新发射的 skip 跳转标签；condition 已句柄化，`.get()` 直供只读入参。
       let else_jump = self.compile_condition_value(expr_ref.condition.get(), None, false);
       // Safety: true_expr 存活（同上）。
-      self.compile_expr(
-        unsafe { &mut *expr_ref.true_expr.as_ptr() },
-        target,
-        target_temp,
-      );
+      self.compile_expr(alias(expr_ref.true_expr.as_ptr()), target, target_temp);
 
       // 不驻留 &mut 长借用（原写法的局部别名会与后续 &mut self 调用重叠），
       // 逐点经 bc/bc_mut 取现，语义同 cpp 的引用成员直调。
@@ -594,11 +574,7 @@ impl Compiler {
 
       let else_label = self.bc().emit_label();
       // Safety: false_expr 存活（同上）。
-      self.compile_expr(
-        unsafe { &mut *expr_ref.false_expr.as_ptr() },
-        target,
-        target_temp,
-      );
+      self.compile_expr(alias(expr_ref.false_expr.as_ptr()), target, target_temp);
       let end_label = self.bc().emit_label();
 
       self.patch_jumps(&expr_ref.base.base, &else_jump, else_label);
@@ -765,7 +741,7 @@ impl Compiler {
     } else if target_temp {
       // Safety: expr.expr 已句柄化恒非空（上方同款契约），裸出口经 as_ptr 桥接写穿
       // 子槽位；target 本帧可覆写。
-      self.compile_expr(unsafe { &mut *expr.expr.as_ptr() }, target, true);
+      self.compile_expr(alias(expr.expr.as_ptr()), target, true);
       target
     } else {
       self.compile_expr_auto(expr.expr.get(), &mut rs)
@@ -801,12 +777,12 @@ impl Compiler {
     if list.size == target_count as usize {
       for (i, &expr) in list.iter().enumerate() {
         // Safety: 见上，expr 存活、寄存器有效。
-        self.compile_expr(unsafe { &mut *expr }, target.wrapping_add(i as u8), true);
+        self.compile_expr(alias(expr), target.wrapping_add(i as u8), true);
       }
     } else if list.size > target_count as usize {
       for (i, &expr) in list.iter().take(target_count as usize).enumerate() {
         // Safety: 见上，expr 存活、寄存器有效。
-        self.compile_expr(unsafe { &mut *expr }, target.wrapping_add(i as u8), true);
+        self.compile_expr(alias(expr), target.wrapping_add(i as u8), true);
       }
 
       for &expr in list.iter().skip(target_count as usize) {
@@ -816,7 +792,7 @@ impl Compiler {
     } else if !list.is_empty() {
       for (i, &expr) in list.iter().take(list.size - 1).enumerate() {
         // Safety: 见上，expr 存活、寄存器有效。
-        self.compile_expr(unsafe { &mut *expr }, target.wrapping_add(i as u8), true);
+        self.compile_expr(alias(expr), target.wrapping_add(i as u8), true);
       }
 
       // !is_empty 已保证末槽存在：as_slice().last() 取代裸 data.add(size-1)，
@@ -826,7 +802,7 @@ impl Compiler {
       };
       self.compile_expr_temp_n(
         // last_expr 同上存活（parser 接线），&mut 借用只覆盖该次调用。
-        unsafe { &mut *last_expr },
+        alias(last_expr),
         target.wrapping_add((list.size - 1) as u8),
         target_count.wrapping_sub((list.size - 1) as u8),
         target_top,

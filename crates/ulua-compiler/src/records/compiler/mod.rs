@@ -11,6 +11,7 @@ use ulua_common::{
   enums::luau_bytecode_type::LuauBytecodeType, records::dense_hash_map::DenseHashMap,
 };
 
+use self::nn_alias::{alias_nn, alias_nn_ref};
 use crate::{
   enums::{global::Global, table_constant_kind::TableConstantKind},
   records::{
@@ -132,6 +133,7 @@ mod expr_call;
 mod fold;
 mod function;
 mod module;
+pub(crate) mod nn_alias;
 mod scope;
 mod stat;
 
@@ -213,31 +215,31 @@ impl Compiler {
   /// 且活得比 `Compiler` 久，故经指针造引用与直接持有引用语义一致。
   #[inline]
   pub(crate) fn bc(&self) -> &BytecodeBuilder<'static> {
-    // Safety: 字段契约保证句柄非空且指向存活 BytecodeBuilder（`NonNull::as_ref`
-    // 的半径由调用点借用决定，同原裸指针解引用）。
-    unsafe { self.bytecode.as_ref() }
+    // 句柄经 nn_alias 门面物化只读借用：字段契约保证句柄非空且指向存活
+    // BytecodeBuilder（借用半径由调用点决定，同原裸指针解引用）。
+    alias_nn_ref(self.bytecode)
   }
 
   /// [`bc`](Self::bc) 的可变形态：独占借用半径即本次调用生命周期，与原先
   /// 散点 `(*self.bytecode).emit_x(..)` 解引用所在的语句范围一致。
   #[inline]
   pub(crate) fn bc_mut(&mut self) -> &mut BytecodeBuilder<'static> {
-    // Safety: 同 bc()；调用处 self 的 &mut 借用保证无并发别名。
-    unsafe { self.bytecode.as_mut() }
+    // 同 bc()；调用处 self 的 &mut 借用保证无并发别名，解引用落 nn_alias 门面本体。
+    alias_nn(self.bytecode)
   }
 
   /// `names` 句柄解引用的唯一安全收口点（只读视图），契约同 [`bc`](Self::bc)。
   #[inline]
   pub(crate) fn names(&self) -> &AstNameTable {
-    // Safety: 字段契约保证句柄非空且指向存活 AstNameTable。
-    unsafe { self.names.as_ref() }
+    // 字段契约保证句柄非空且指向存活 AstNameTable；解引用收口于 nn_alias 门面。
+    alias_nn_ref(self.names)
   }
 
   /// [`names`](Self::names) 的可变形态（字符串驻留点使用），契约同 [`bc_mut`](Self::bc_mut)。
   #[inline]
   pub(crate) fn names_mut(&mut self) -> &mut AstNameTable {
-    // Safety: 同 names()；调用处 self 的 &mut 借用保证无并发别名。
-    unsafe { self.names.as_mut() }
+    // 同 names()；调用处 self 的 &mut 借用保证无并发别名，解引用落 nn_alias 门面本体。
+    alias_nn(self.names)
   }
 
   /// `try_compile_*` 的守卫样板单源：记录放弃原因 remark 后返回 `false`
