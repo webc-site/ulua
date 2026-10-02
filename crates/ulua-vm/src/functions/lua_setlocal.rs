@@ -13,7 +13,10 @@ use crate::{
 pub unsafe fn lua_setlocal(l: *mut LuaState, level: i32, n: i32) -> *const c_char {
   // SAFETY: 契约保证 `l` 当前帧至少 1 个可写槽且 level 在调用栈深度内，变量名/valid 读取受 proto 局部信息界定
   unsafe {
-    api_check!(l, (*l).top.offset_from((*l).base) >= 1);
+    // r16-b2 收编：顶-基槽距读数落既有 get_top 门面（本体 slot_distance(base, top) 即
+    // 被替代式同址同宽镜像）。api_check! 系 debug 期断言、release 编译掉 ⇒ 换形等价
+    // 平凡真（r14 p1 判例②）；isize→i32 在现域无截差、比较方向不变
+    api_check!(l, (*l).get_top() >= 1);
 
     // var 为 null 时同样弹栈：cpp 原版无条件 pop，返回值仅为变量名
     let Some((ci, var)) = resolve_local(l, level, n) else {
