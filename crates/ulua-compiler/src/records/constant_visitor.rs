@@ -26,7 +26,7 @@ use crate::{
     fold_builtin_math::fold_builtin_math, fold_interp_string::fold_interp_string,
     fold_unary::fold_unary, undo_changes_constant_folding::ChangeEntry,
   },
-  records::{constant::Constant, node::Node, variable::Variable},
+  records::{compiler::nn_alias::alias, constant::Constant, node::Node, variable::Variable},
   type_aliases::{
     compile_constant::CompileConstant, expr_constant_change_log::ExprConstantChangeLog,
     library_member_constant_callback::LibraryMemberConstantCallback,
@@ -240,9 +240,10 @@ impl<'a> ConstantVisitor<'a> {
       }
       AstExprRef::Function(expr) => {
         // cpp `expr->body->visit(this)`：body 静态类型即 AstStatBlock，直调免 class-index 分发。
-        // Safety: expr.body 为 parser 保证非空存活的函数体 AstStatBlock；ConstantVisitor
-        // 只写自身 map，不改 AST 节点。
-        let body = unsafe { &mut *expr.body.as_ptr() };
+        // 句柄经 nn_alias 门面物化可变借用：expr.body 为 parser 保证非空存活的函数体
+        // AstStatBlock；ConstantVisitor 只写自身 map，不改 AST 节点，借用期内无其它
+        // 可变别名（nn_alias 模块级契约）。
+        let body = alias(expr.body.as_ptr());
         ast_stat_block_visit(body, self);
       }
       AstExprRef::Table(expr) => {
