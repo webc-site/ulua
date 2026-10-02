@@ -37,14 +37,14 @@ pub(crate) unsafe fn call_t_mres(
     setobj_2_s!(l, &raw mut args[2], p2);
 
     luaD_checkstack!(l, 3);
-    (*l).raise_top(3); // 收编：裸场域抬顶经 raise_top 原语（同址现读同宽偏移）
+    (*l).advance_top(3); // 收编：裸场域抬顶经 advance_top 原语（同址现读同宽偏移）
 
     // 保留（恢复点后现读）：checkstack 可搬栈，被调函数槽必须现读场域——
     // cpp 同形最小读面 `luaD_call(L, L->top - 3, 1)`，无可收编的重复重读
     lua_d_call(l, (*l).top.offset(-3), 1);
 
     res = restorestack!(l, result);
-    (*l).lower_top(1); // 收编：裸场域回落经 lower_top 原语
+    (*l).rewind_top(1); // 收编：裸场域回落经 rewind_top 原语
     setobj_2_s!(l, res, (*l).top);
 
     res

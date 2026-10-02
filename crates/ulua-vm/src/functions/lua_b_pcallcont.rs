@@ -13,7 +13,7 @@ pub(crate) unsafe fn lua_b_pcallcont(l: *mut LuaState, status: i32) -> i32 {
     lua_rawcheckstack(l, 1);
     if status == 0 {
       // r12-w7a2 收编（票面特别裁决位）：rawcheckstack 为唯一重分配点，其后窗读
-      // `base`/`top` 已预绑定；栈顶抬升改经 raise_top 原语——窗口内仅做已界内槽的
+      // `base`/`top` 已预绑定；栈顶抬升改经 advance_top 原语——窗口内仅做已界内槽的
       // copy/setbvalue，无场域写，现读场与绑定窗值恒等，时序逐位不变
       let base = (*l).base;
       let top = (*l).top;
@@ -22,14 +22,14 @@ pub(crate) unsafe fn lua_b_pcallcont(l: *mut LuaState, status: i32) -> i32 {
         copy(base, base.add(1), count);
       }
       setbvalue!(base, 1);
-      (*l).raise_top(1);
+      (*l).advance_top(1);
       (count + 1) as i32
     } else {
       // 错误分支：rawcheckstack 后窗读 `top` 单次预绑定，写槽后抬顶同形收编
       let top = (*l).top;
       setobj_2_s!(l, top, top.sub(1));
       setbvalue!(top.sub(1), 0);
-      (*l).raise_top(1); // 收编：同形抬顶经原语
+      (*l).advance_top(1); // 收编：同形抬顶经原语
       2
     }
   }

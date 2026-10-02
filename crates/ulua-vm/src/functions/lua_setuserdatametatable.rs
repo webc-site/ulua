@@ -26,8 +26,8 @@ pub unsafe fn lua_setuserdatametatable(l: *mut LuaState, tag: i32) {
     };
     (*(*l).global).udatamt[tag as usize] = h as *mut LuaTable;
 
-    // 弹栈经槽门面 lower_top：t 即上方预绑定的当前栈顶单槽（其间仅标量/裸名
+    // 弹栈经槽门面 rewind_top：t 即上方预绑定的当前栈顶单槽（其间仅标量/裸名
     // 注册表场写，无栈操作，现读场与窗值恒等），免二次场域重读
-    (*l).lower_top(1);
+    (*l).rewind_top(1);
   }
 }

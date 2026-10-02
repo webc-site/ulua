@@ -70,26 +70,26 @@ pub(crate) unsafe fn lua_r_constructobject(l: *mut LuaState) -> i32 {
 
     // Put self onto the stack to ensure that it unconditionally survives GC during execution of __init.
     // r12-w7a2 收编：本函数体「写已界内槽后裸抬顶」点位（self 槽写入 + checkstack
-    // 后 func/self/args 三段压栈）统一经 raise_top 原语——setobj/setobjectvalue/
+    // 后 func/self/args 三段压栈）统一经 advance_top 原语——setobj/setobjectvalue/
     // 切片拷贝均不移动栈、不写 top 场，原语现读场与被替代式同址同宽；
     // 扩容（checkstack）与 lua_d_call 的时序照旧先行
     setobjectvalue!(l, (*l).top, self_obj);
-    (*l).raise_top(1);
+    (*l).advance_top(1);
 
     luaD_checkstack!(l, 2 + numargs);
 
     let args_base = (*l).top;
     setobj_2_s!(l, (*l).top, init_function);
-    (*l).raise_top(1);
+    (*l).advance_top(1);
 
     setobjectvalue!(l, (*l).top, self_obj);
-    (*l).raise_top(1);
+    (*l).advance_top(1);
 
     // 批量拷贝参数（TValue 为 Copy 的 POD 值，切片 copy 与 cpp 逐元素 setobj2s 语义一致；
     // base..base+numargs 与 top 之后不重叠，边界由上方 luaD_checkstack 保证）
     let arg_count = numargs as usize;
     c_slice_mut((*l).top, arg_count).copy_from_slice(c_slice((*l).base, arg_count));
-    (*l).raise_top(arg_count);
+    (*l).advance_top(arg_count);
 
     lua_d_call(l, args_base, 0);
 
@@ -187,9 +187,9 @@ pub(crate) unsafe fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
       lua_c_barrier!(l, classinst, member_dst);
     }
 
-    // r12-w7a2 收编：弹回临时槽的裸场域回落经 lower_top 原语（循环内 luaV_gettable
+    // r12-w7a2 收编：弹回临时槽的裸场域回落经 rewind_top 原语（循环内 luaV_gettable
     // 再入之后现读场，与被替代式同址同宽；返回值计数 0 的收尾时序不变）
-    (*l).lower_top(1);
+    (*l).rewind_top(1);
 
     0
   }

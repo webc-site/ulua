@@ -76,6 +76,10 @@ impl LuaState {
   // `top_slot`/`slots_below_top`/`reserved_slots_mut` 派生，写面（栈顶提交）经
   // `reanchor_top`/`advance_top`/`rewind_top` 落笔。各原语为原逐点位表达式的
   // 指针平移镜像——扩容检查、写屏障与 api_check 断言位点全留在调用方，时序不动。
+  //
+  // r12-w9a 塌缩：w7a2 曾为调用/错误/元表族另建同义对 `raise_top`/`lower_top`
+  // （本体与本对逐字同形，仅 unsafe 签名之差），经亲验为纯同义，已灭形收编——
+  // 该族全部点位统一走本对 `advance_top`/`rewind_top`。
 
   /// 边界原语：取相对栈顶 `off` 格的槽地址读数（`off < 0` = 顶下既存槽、`off == 0`
   /// = 保留顶槽、`off > 0` = 顶外预留槽），镜像 cpp `L->top + off` 的读数形；只派生
@@ -132,7 +136,8 @@ impl LuaState {
 
   /// 边界原语：栈顶升 `count` 格，提交已写好的预留槽（镜像 cpp `L->top += n` 提交
   /// 形）；不自带 `api_incr_top` 断言（与原裸赋值点位逐形一致，需要断言的点位仍走
-  /// 调用方原宏）。
+  /// 调用方原宏）。r12-w9a 塌缩收编：原 w7a2 同义对 `raise_top` 的全部消费点
+  /// （调用/错误/元表族裸场域抬顶点位）迁移至本方法，语义与被替代点位逐位同形。
   ///
   /// # Safety（契约由本方法调用方按文档保证）
   /// 顶后 `count` 槽须已由扩容先行覆盖且已按序写完；`top + count` 落在分配界内。
@@ -143,7 +148,8 @@ impl LuaState {
   }
 
   /// 边界原语：栈顶降 `count` 格收掉栈顶 `count` 槽（镜像 cpp `L->top -= n` 弹栈
-  /// 提交形）。
+  /// 提交形）。r12-w9a 塌缩收编：原 w7a2 同义对 `lower_top` 的全部消费点迁移至本
+  /// 方法，语义与被替代点位逐位同形。
   ///
   /// # Safety（契约由本方法调用方按文档保证）
   /// `count` 须不超过 `top - base`（调用点消费断言先行）；所得新顶落在分配界内。
@@ -299,38 +305,5 @@ impl LuaState {
     // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 的有效指针；其余前提（合法索引/栈界）
     // 与被转发的 `pub unsafe fn` 的 `# Safety` 文档一致，由本方法调用方按文档保证。
     unsafe { lua_call(self.as_mut_ptr(), nargs, nresults) }
-  }
-
-  // ── r12-w7a2 调用/错误/元表族：栈顶裸算术收编原语 ──────────────────────────
-  // 与搬运/交换族（w7a1）的槽窗门面互不相涉：本对原语只收编「同一函数体内、
-  // 扩容/恢复点时序之后」的 `(*l).top = (*l).top.add(n)` / `.offset(-(n))` 纯场
-  // 域抬压点位，不引入任何 checkstack、屏障或断言面。
-
-  /// 调用/错误族收编原语：栈顶抬升 `n` 格。与被替代点位 `(*l).top = (*l).top.add(n)`
-  /// 逐位同形——同一时点现读 `top` 场、同宽偏移，本体不含扩容/屏障/断言，调用点
-  /// 原有的「先扩容（或经恢复点重派生）、后抬顶」时序保持于原函数体不动。
-  ///
-  /// # Safety（前提即被替代裸点位的原契约，由调用点在同一函数体内保证）
-  /// 调用前 `self.top + n` 须落在当前帧预留可写窗内（不越 `ci->top`/`stack_last`
-  /// 界）；为该 `n` 格准备的扩容或栈重分配恢复均须已在本调用点之前完成。
-  #[inline(always)]
-  pub(crate) unsafe fn raise_top(&mut self, n: usize) {
-    // SAFETY: 调用点契约保证 top+n 在帧预留窗内；场读与偏移与被替代裸点位同形同址。
-    unsafe {
-      self.top = self.top.add(n);
-    }
-  }
-
-  /// 调用/错误族收编原语：栈顶回落 `n` 格。与被替代点位
-  /// `(*l).top = (*l).top.sub(n)` / `.offset(-(n))` 逐位同形；本体不做任何栈操作。
-  ///
-  /// # Safety
-  /// 调用前 `self.top - n` 不得越过当前帧 `base`（栈顶须至少实有 `n` 个槽）。
-  #[inline(always)]
-  pub(crate) unsafe fn lower_top(&mut self, n: usize) {
-    // SAFETY: 调用点契约保证 top-n 不越帧基；场读与偏移与被替代裸点位同形同址。
-    unsafe {
-      self.top = self.top.sub(n);
-    }
   }
 }
