@@ -204,6 +204,14 @@ pub(crate) fn alias_nn_ref<T>(p: NonNull<T>) -> &'static T {
   alias_ref(p.as_ptr())
 }
 
+/// `Option<Handle<T>>` → 裸指针桥（[`Handle::from_opt_ptr`] 的反向）：仅供仍
+/// 以 `*mut T` 收货的下游字段/形参（如 `Module.root`、
+/// `ConstraintGenerator::run`）过渡接线，`None` 折叠为 `null_mut()`，与 cpp
+/// nullptr 透传逐位等价；这些下游句柄化完成后本桥随调用点一并消亡。
+pub(crate) fn opt_handle_as_ptr<T>(h: Option<Handle<T>>) -> *mut T {
+  h.map_or_else(core::ptr::null_mut, |handle| handle.as_ptr())
+}
+
 /// `Option<NonNull<T>>` → `Option<&'static T>` 的收口门面（[`alias_opt`] 的
 /// `NonNull` 形态）：`None` ≡ 原 null 哨兵未命中，`Some` 折叠为共享借用。
 pub(crate) fn alias_nn_opt<T>(p: Option<NonNull<T>>) -> Option<&'static T> {

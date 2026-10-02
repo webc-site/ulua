@@ -1,6 +1,6 @@
 use alloc::{string::String, sync::Arc};
 
-use ulua_analysis::records::source_module::SourceModule;
+use ulua_analysis::records::{arena_handle::Handle, source_module::SourceModule};
 use ulua_ast::records::{parse_options::ParseOptions, parse_result::ParseResult, parser::Parser};
 
 use crate::records::fragment_autocomplete_fixture_impl::FragmentAutocompleteFixtureImpl;
@@ -22,7 +22,8 @@ impl FragmentAutocompleteFixtureImpl {
       unsafe { Parser::parse(document.as_str(), names, &mut *allocator, parse_options) };
 
     source.parse_errors = parse_result.errors.clone();
-    source.root = parse_result.root;
+    // cpp `source->root = parseResult.root`：句柄入位，null 产物折叠 `None`。
+    source.root = Handle::from_opt_ptr(parse_result.root);
     source.hotcomments = parse_result.hotcomments.clone();
     source.comment_locations = parse_result.comment_locations.clone();
 

@@ -253,7 +253,12 @@ impl Frontend {
       shared_mut(root_scope),
     );
 
-    ast_stat_block_visit(alias(source_module.root), &mut visitor);
+    // `source_module.root` 句柄化：物化只读遍历起点前先断言在场
+    // （cpp `visit(sourceModule.root)` 的非空调用契约）。
+    let root = source_module
+      .root
+      .expect("populateExpectedTypes: 根块应在场（cpp 直取 sourceModule.root）");
+    ast_stat_block_visit(root.get_mut(), &mut visitor);
 
     if was_frozen {
       freeze(&mut alias(module).internal_types);

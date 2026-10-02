@@ -98,16 +98,18 @@ impl Frontend {
     let mut result = self.parse_module_name_string_view_parse_options(name, &source.source, &opts);
     result.r#type = source.r#type;
 
-    // SAFETY: result.root 指向本函数刚解析出的 AST，此处独占（C++ 契约）；
-    // RequireTracer 按 cpp `AstStatBlock*` 非 const 语义取 `&mut`。
-    let require = unsafe {
-      trace_requires(
-        self.file_resolver_mut(),
-        &mut *result.root,
-        name.clone(),
-        limits,
-      )
-    };
+    // 根块已句柄化：`Handle::get_mut` 物化本函数独占借用交 RequireTracer
+    // （cpp 契约：刚解析出的 AST、按非 const `AstStatBlock*` 遍历），
+    // 原裸 deref 的 unsafe 随之消亡。
+    let root = result
+      .root
+      .expect("getSourceNode: 解析后根块应在场（cpp 直取 result.root）");
+    let require = trace_requires(
+      self.file_resolver_mut(),
+      root.get_mut(),
+      name.clone(),
+      limits,
+    );
     self.require_trace.insert(name.clone(), require.clone());
 
     // std::shared_ptr<SourceNode>& sourceNode = sourceNodes[name];

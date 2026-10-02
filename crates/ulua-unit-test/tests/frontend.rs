@@ -216,9 +216,16 @@ fn frontend_ast_node_at_position() {
   );
 
   let source = fixture.base.base.main_source_module();
-  // Safety: `source.root` 是 parser 成功产物的非空 arena 块指针，只读取
-  // 其 Location（cpp fixture 同形）。
-  let mut pos = unsafe { (*source.root).base.base.location.end };
+  // 根块已句柄化：parser 成功产物的 arena 只读借用取 Location（cpp fixture
+  // 同形），缺席即契约违例、确定性 panic。
+  let mut pos = source
+    .root
+    .expect("根块应在场")
+    .get()
+    .base
+    .base
+    .location
+    .end;
   let node = find_node_at_position_source_module_position(source, pos);
 
   assert!(!node.is_null());
@@ -466,7 +473,13 @@ fn frontend_check_module_references_correct_ast_root() {
     .get_source_module(&ModuleName::from("game/workspace/MyScript"))
     .expect("expected source module")
     .get();
-  assert_eq!(module.root, source.root);
+  // cpp `CHECK(module->root == sourceModule->root)`：`Module.root` 仍持裸
+  // 指针（下游句柄化在后续波次），源侧经 `as_ptr` 折叠比对，`None` ≡ nullptr。
+  let source_root = source
+    .root
+    .map(|h| h.as_ptr())
+    .unwrap_or(core::ptr::null_mut());
+  assert_eq!(module.root, source_root);
 }
 
 // Ported from `tests/Frontend.test.cpp`.

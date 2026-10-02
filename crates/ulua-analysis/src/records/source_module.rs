@@ -11,7 +11,10 @@ use ulua_ast::{
   },
 };
 
-use crate::{enums::type_file_resolver::Type, type_aliases::module_name_type::ModuleName};
+use crate::{
+  enums::type_file_resolver::Type, records::arena_handle::Handle,
+  type_aliases::module_name_type::ModuleName,
+};
 #[derive(Debug, Clone)]
 pub struct SourceModule {
   pub name: ModuleName, // Module identifier or a filename
@@ -22,7 +25,10 @@ pub struct SourceModule {
   pub allocator: Arc<Allocator>,
   pub names: Arc<AstNameTable>,
   pub parse_errors: Vec<ParseError>,
-  pub root: *mut AstStatBlock,
+  /// cpp `AstStatBlock* root`：解析产物根块的别名句柄。`None` = cpp `nullptr`
+  /// 缺席态（未解析/解析失败无产物），`Some` 由 `allocator` arena 保活、地址
+  /// 稳定（`Handle` 模块契约：不拥有、不释放）。
+  pub root: Option<Handle<AstStatBlock>>,
   pub mode: Option<mode::Mode>,
   pub hotcomments: Vec<HotComment>,
   pub comment_locations: Vec<Comment>,
@@ -30,12 +36,14 @@ pub struct SourceModule {
 
 /// # Safety
 ///
-/// `root: *mut AstStatBlock` 借用自 `allocator: Arc<Allocator>` 拥有的 AST，令
-/// 自动 Send 失效。该指针不被本结构解引用或释放，且 AST 由 `Arc<Allocator>`
-/// /`Arc<AstNameTable>` 保有并跨线程存活；满足此所有权时转移即可靠。
-// Safety: 见上方文档——`root` 只是 arena 内 AST 结点的身份句柄（本结构不解引用/释放它），
-// AST 内存由同为字段成员的 `Arc<Allocator>` 保活，转移 SourceModule 即一并转移该 Arc 的
-// 引用计数所有权，故跨线程移交后指针依旧有效。
+/// `root: Option<Handle<AstStatBlock>>` 借用自 `allocator: Arc<Allocator>`
+/// 拥有的 AST，`Handle` 内部 `NonNull` 令自动 Send 失效。该句柄的目标不被本
+/// 结构释放，且 AST 由 `Arc<Allocator>` /`Arc<AstNameTable>` 保有并跨线程存活；
+/// 满足此所有权时转移即可靠。
+// Safety: 见上方文档——`root` 只是 arena 内 AST 结点的身份句柄（解引用仅在
+// 调用方契约的借用期内物化引用，从不释放），AST 内存由同为字段成员的
+// `Arc<Allocator>` 保活，转移 SourceModule 即一并转移该 Arc 的引用计数所有权，
+// 故跨线程移交后句柄依旧有效。
 unsafe impl Send for SourceModule {}
 /// # Safety
 ///

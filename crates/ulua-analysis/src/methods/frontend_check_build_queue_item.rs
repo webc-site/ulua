@@ -13,8 +13,12 @@ use crate::{
     unfreeze::unfreeze,
   },
   records::{
-    arena_handle::alias, build_queue_item::BuildQueueItem, frontend::Frontend, module::Module,
-    module_has_cyclic_dependency::ModuleHasCyclicDependency, syntax_error::SyntaxError,
+    arena_handle::{alias, opt_handle_as_ptr},
+    build_queue_item::BuildQueueItem,
+    frontend::Frontend,
+    module::Module,
+    module_has_cyclic_dependency::ModuleHasCyclicDependency,
+    syntax_error::SyntaxError,
     type_error::TypeError,
   },
   type_aliases::type_error_data::TypeErrorData,
@@ -186,7 +190,9 @@ impl Frontend {
       let lint_timestamp = get_timestamp();
 
       let warnings = lint(
-        item.source_module.root.cast::<AstStat>(),
+        // cpp `lint(sourceModule.root, ...)`：`lint` 形参仍持 `*mut AstStat`，
+        // 经 `opt_handle_as_ptr` 桥后下转，`None` ≡ nullptr 透传。
+        opt_handle_as_ptr(item.source_module.root).cast::<AstStat>(),
         item.source_module.names.as_ref(),
         &environment_scope,
         module_ptr as *const Module,

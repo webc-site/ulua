@@ -5,7 +5,7 @@ use core::ptr::NonNull;
 use crate::{
   functions::{copy_errors::copy_errors, freeze::freeze, unfreeze::unfreeze},
   records::{
-    arena_handle::{Handle, alias, alias_ref},
+    arena_handle::{Handle, alias},
     builtin_types::BuiltinTypes,
     data_flow_graph::DataFlowGraph,
     internal_error_reporter::InternalErrorReporter,
@@ -50,9 +50,14 @@ pub fn check_non_strict(
     module,
   );
 
-  // `source_module.root` 为 parser arena 产物、恒非空的块指针；`alias_ref`
-  // 门面（解引用契约集中在 arena_handle）换得存活引用后走纯引用遍历。
-  type_checker.visit_ast_stat_block(alias_ref(source_module.root));
+  // `source_module.root` 为 parser arena 产物、恒在场（cpp 直取根块传参）：
+  // 句柄物化只读借用（契约集中在 arena_handle）后走纯引用遍历。
+  type_checker.visit_ast_stat_block(
+    source_module
+      .root
+      .expect("checkNonStrict: 根块应在场（cpp 直取 sourceModule.root）")
+      .get(),
+  );
 
   let module = alias(module_nn.as_ptr());
   unfreeze(&mut module.interface_types);

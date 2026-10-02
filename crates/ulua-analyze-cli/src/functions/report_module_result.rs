@@ -77,8 +77,12 @@ pub(crate) fn report_module_result(
       attach_type_data(source_module, &mut *(Arc::as_ptr(&module) as *mut Module));
 
       // std::string annotated = prettyPrintWithTypes(*sm->root);
-      // Safety: `sm.root` 由 frontend 解析该模块时写入，源码模块存在即非空。
-      let annotated = pretty_print_with_types_ast_stat_block(&mut *source_module.root);
+      // 根块已句柄化：源码模块存在即在场，`Handle::get_mut` 物化 arena 独占
+      // 借用（cpp 直取 `sm->root`），原裸 deref 收敛为确定性断言。
+      let root = source_module
+        .root
+        .expect("reportModuleResult: 根块应在场（cpp 直取 sm->root）");
+      let annotated = pretty_print_with_types_ast_stat_block(root.get_mut());
       print!("{}", annotated);
     }
   }

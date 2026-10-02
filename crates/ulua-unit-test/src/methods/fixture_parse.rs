@@ -9,7 +9,7 @@
 use alloc::boxed::Box;
 use std::panic::panic_any;
 
-use ulua_analysis::records::source_module::SourceModule;
+use ulua_analysis::records::{arena_handle::Handle, source_module::SourceModule};
 use ulua_ast::records::{
   ast_stat_block::AstStatBlock, parse_errors::ParseErrors, parse_options::ParseOptions,
   parser::Parser,
@@ -42,11 +42,11 @@ impl Fixture {
 
     // C++ Fixture::parse populates sourceModule->root (and hotcomments) BEFORE
     // it throws, so error-recovery tests can still visit the partial AST after
-    // catching the throw. We skip the check()/lint() Analysis pass (irrelevant
-    // to parser-shape assertions). The AST lives in self.allocator, which
-    // outlives the test, so storing the raw root pointer here is sound.
+    // catching the throw. The AST lives in self.allocator, which outlives the
+    // test.
+    // 根块以 `Handle` arena 别名入位（null 产物折叠为 `None`，review.md §2）。
     let mut sm = SourceModule::new();
-    sm.root = root;
+    sm.root = Handle::from_opt_ptr(root);
     sm.hotcomments = result.hotcomments.clone();
     self.source_module = Some(Box::new(sm));
 

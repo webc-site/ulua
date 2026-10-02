@@ -10,9 +10,7 @@ use ulua_ast::{
 
 use crate::{
   functions::shared_mut::shared_mut,
-  records::{
-    arena_handle::alias, module::Module, source_module::SourceModule, type_attacher::TypeAttacher,
-  },
+  records::{module::Module, source_module::SourceModule, type_attacher::TypeAttacher},
 };
 /// C++ `TypeAttacher : public AstVisitor`. The five overridden `visit`
 /// overloads are landed as inherent methods on `TypeAttacher`; this impl
@@ -44,5 +42,9 @@ pub fn attach_type_data(source: &mut SourceModule, result: &mut Module) {
   // C++ `TypeAttacher ta(result, source.allocator.get()); source.root->visit(&ta);`
   let mut ta =
     TypeAttacher::type_attacher_type_attacher(result as *mut Module, shared_mut(&source.allocator));
-  alias(source.root).visit(&mut ta);
+  // 根块句柄化：cpp 直取非空 `source.root`，缺席即契约违例。
+  let root = source
+    .root
+    .expect("attachTypeData: 根块应在场（cpp 直取 source.root）");
+  root.get_mut().visit(&mut ta);
 }
