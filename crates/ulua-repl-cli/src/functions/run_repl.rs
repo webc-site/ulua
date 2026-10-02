@@ -5,16 +5,19 @@ use ulua_vm::{
 
 use crate::functions::{run_repl_impl::run_repl_impl, setup_state::setup_state, sigint_setup};
 
-/// # Safety
+/// 交互式 REPL 进程入口：新建状态、初始化、挂载 Ctrl-C、沙箱化线程并运行交互循环。
 ///
-/// Modifies global signal handling and manages a Lua VM state. Must only be run
-/// in single-threaded REPL mode.
+/// 调用契约（本 fn 为 `pub(crate)` 安全 fn，crate 内唯一调用方 repl_main 保证）：仅在
+/// 单线程 REPL 模式调用——本函数改写进程级信号处理并管理一个 Lua VM 状态，进程内不得
+/// 有其它 REPL/VM 驱动者。
 // DELIBERATE DEVIATION（review.md §9.3）：REPL 进程入口驱动一个 `*mut LuaState` 全
 // 生命周期（newstate→setup_state→install 信号→sandboxthread→run_repl_impl→withdraw），
-// 状态句柄由 LuaStateGuard 持有、本帧只别名传递；解引用与 VM/信号注册调用系边界固有。
+// 状态句柄由 LuaStateGuard 持有、本帧只别名传递；解引用与 VM/信号注册调用系边界固有，
+// 收在各消费点的 `unsafe` 块与 `state`/`sigint_setup` 门面内，故本编排入口自身收编为
+// 安全 fn、原 `unsafe fn` 契约降级为文档约定。
 // Faithful port of `runRepl` from Repl.cpp: create a fresh state, set it up,
 // arm Ctrl-C handling, sandbox the thread and run the interactive loop.
-pub(crate) unsafe fn run_repl() {
+pub(crate) fn run_repl() {
   // lua_l_newstate 是安全封装（OOM 返回 null 的边界与 cpp 相同，下方各消费点
   // 契约同样覆盖）；守卫在作用域退出时 lua_close（panic/unwind 同样生效）。
   // cpp Repl.cpp:553 `unique_ptr<lua_State, void (*)(lua_State*)>`
@@ -35,8 +38,9 @@ pub(crate) unsafe fn run_repl() {
 
   // Safety: l 为本帧存活的刚建状态。
   unsafe { lua_l_sandboxthread(l) };
-  // Safety: l 在整个交互式循环期间有效且单线程驱动（run_repl_impl 的 /// # Safety）。
-  unsafe { run_repl_impl(l) };
+  // run_repl_impl 现为 crate 内安全编排 fn；l 在整个交互式循环期间有效且单线程驱动
+  // （其文档契约）由本入口守卫保证。
+  run_repl_impl(l);
 
   // cpp 只在 unique_ptr 析构处关闭；这里先把全局信号处理引用的状态摘掉，
   // 再由守卫在作用域退出时 lua_close（panic/unwind 路径同样生效）。

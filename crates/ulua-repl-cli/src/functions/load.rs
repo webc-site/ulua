@@ -1,9 +1,10 @@
 //! cpp `ReplRequirer.cpp` 的 `static load`：在新线程上编译并运行被 require 的模块。
 //!
 //! 审计结论（工单 r13-w1e）：装载驱动 `load` 本身为安全 fn；确需的 `unsafe` 全部
-//! 落在 ulua-vm / ulua-require c-API 边界，收敛为本文件带 `# Safety` 契约的最小
-//! 私有封装（`spawn_module_thread` / `throw` / `prepare` / `check_run`）与三个单步
-//! 边界调用（`luau_load` / `resume` / `lua_xmove`）。文件读取走 `std::fs`
+//! 落在 ulua-vm / ulua-require c-API 边界，收敛为本文件带 `# Safety` 契约的最小封装
+//! （`spawn_module_thread` / `prepare` / `check_run` 为本文件私有，`throw` 上提为
+//! `pub(crate)` 单点供 `sigint_callback` 复用）与三个单步边界调用（`luau_load` /
+//! `resume` / `lua_xmove`）。文件读取走 `std::fs`
 //! （`read_file`），字符串入参 `&[u8]`、出边界即转 owned `Cow<str>`，无 C 串管道
 //! （review.md §2/§3/§10）。
 
@@ -57,14 +58,16 @@ unsafe fn spawn_module_thread(l: &mut LuaState) -> *mut LuaState {
 }
 
 /// FFI 边界（ulua-vm c-API）：在 `l` 上按格式化消息抛出 Lua 错误（发散，不返回）。
+/// crate 内单点封装，`load` 与 `sigint_callback` 共用（`luaL_error!` 宏展开点统一收口
+/// 于此，业务侧不再直接书写该宏）。
 ///
 /// # Safety
 ///
 /// `l` 为活跃且受保护的调用状态、栈上预留 ≥2 空槽（`lua_l_error_l` 的契约前置）；
 /// `msg` 为纯 Rust 格式化串，在被调窗口内消费、无逃逸借用。
-unsafe fn throw(l: *mut LuaState, msg: Arguments<'_>) -> ! {
+pub(crate) unsafe fn throw(l: *mut LuaState, msg: Arguments<'_>) -> ! {
   // FFI: c-API 要求 NULL —— `lua_l_error_l` 的 fmt 空指针是「已用 format_args!
-  // 组装」的协议形态，本文件仅此一处经手，luaL_error! 宏的展开点随之消失。
+  // 组装」的协议形态，本 crate 仅此一处经手，luaL_error! 宏的展开点随之消失。
   // Safety: 前置条件即本 fn 契约。
   unsafe { lua_l_error_l(l, null(), msg) }
 }
