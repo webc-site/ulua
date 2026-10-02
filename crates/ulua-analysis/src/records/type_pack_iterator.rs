@@ -1,11 +1,13 @@
-use core::{ptr::null, ptr::NonNull};
+use core::ptr::{NonNull, null};
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   records::{
-    arena_handle::{alias_nn_ref, alias_ref}, internal_compiler_error::InternalCompilerError,
-    txn_log::TxnLog, type_pack::TypePack,
+    arena_handle::{alias_nn_ref, alias_ref},
+    internal_compiler_error::InternalCompilerError,
+    txn_log::TxnLog,
+    type_pack::TypePack,
   },
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
@@ -52,9 +54,9 @@ impl TypePackIterator {
         None
       };
 
-      if self.tp.is_some() {
+      if let Some(tp_nn) = self.tp {
         // Step twice on each iteration to detect cycles
-        self.tail_cycle_check = if let Some(tail) = alias_nn_ref(self.tp.unwrap()).tail {
+        self.tail_cycle_check = if let Some(tail) = alias_nn_ref(tp_nn).tail {
           alias_ref(self.log).follow_type_pack_id(tail)
         } else {
           null()
@@ -94,9 +96,7 @@ impl Iterator for TypePackIterator {
 
   fn next(&mut self) -> Option<TypeId> {
     // C++ 以 `tp == end 迭代器的 tp（nullptr）` 作为终止条件
-    if self.tp.is_none() {
-      return None;
-    }
+    self.tp?;
     let ty = *self.current();
     self.advance();
     Some(ty)

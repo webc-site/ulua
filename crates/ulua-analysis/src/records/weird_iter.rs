@@ -52,10 +52,7 @@ impl WeirdIter {
     self.index = 0;
     self.growing = false;
     // 与 C++ WeirdIter 构造一致：沿 tail 链下沉到第一个 head 非空（或无 tail）的 pack。
-    loop {
-      let Some(pack_nn) = self.pack else {
-        break;
-      };
+    while let Some(pack_nn) = self.pack {
       // 判空后解引用；此处只读 `head`/`tail` 两个字段，不写回。
       let pack = alias_nn_ref(pack_nn);
       let Some(next) = pack.tail else {

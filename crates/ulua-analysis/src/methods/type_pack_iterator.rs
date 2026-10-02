@@ -6,7 +6,9 @@ use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   records::{
-    arena_handle::{alias_nn_ref, alias_ref}, txn_log::TxnLog, type_pack::TypePack,
+    arena_handle::{alias_nn_ref, alias_ref},
+    txn_log::TxnLog,
+    type_pack::TypePack,
     type_pack_iterator::TypePackIterator,
   },
   type_aliases::type_pack_id::TypePackId,

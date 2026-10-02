@@ -621,7 +621,8 @@ impl Unifier {
       return;
     }
 
-    while let Some(tp) = alias_nn_opt(self.log.txn_log_get_mutable::<TypePack, TypePackId>(sub_tp)) {
+    while let Some(tp) = alias_nn_opt(self.log.txn_log_get_mutable::<TypePack, TypePackId>(sub_tp))
+    {
       // alias_opt 门面收口 txn_log_get_mutable 快照（null→None ≡ 原 is_null break，
       // 非 null→arena/pending 稳定 TypePack 节点），以下仅读 head/tail（§2）。
       if !tp.head.is_empty() {
@@ -740,8 +741,9 @@ impl Unifier {
           .txn_log_get_mutable::<TypePack, TypePackId>(super_tp),
       )
       .and_then(|p| p.tail);
-      let snap_sub_tail = alias_nn_opt(self.log.txn_log_get_mutable::<TypePack, TypePackId>(sub_tp))
-        .and_then(|p| p.tail);
+      let snap_sub_tail =
+        alias_nn_opt(self.log.txn_log_get_mutable::<TypePack, TypePackId>(sub_tp))
+          .and_then(|p| p.tail);
 
       // If the size of two heads does not match, but both packs have free tail
       // we set the sentinel to avoid growing forever.
