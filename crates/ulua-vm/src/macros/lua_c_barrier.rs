@@ -13,7 +13,7 @@ macro_rules! lua_c_barrier {
       && $crate::macros::iswhite::iswhite!($crate::macros::gcvalue::gcvalue!($v))
     {
       $crate::functions::lua_c_barrierf::lua_c_barrierf(
-        $l,
+        &mut *$l,
         $crate::macros::obj_2_gco::obj2gco!($p),
         $crate::macros::gcvalue::gcvalue!($v),
       );

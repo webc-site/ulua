@@ -18,7 +18,7 @@ macro_rules! luaC_barriert {
   ($l:expr, $t:expr, $v:expr) => {
     if $crate::macros::lua_c_barriert::luaC_barriert_pending!($t, $v) {
       $crate::functions::lua_c_barriertable::lua_c_barriertable(
-        $l,
+        &mut *$l,
         $t,
         $crate::macros::gcvalue::gcvalue!($v),
       );

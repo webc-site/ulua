@@ -16,7 +16,7 @@ pub(crate) unsafe fn lua_c_threadbarrier_lapi(l: *mut LuaState) {
   unsafe {
     let obj = obj2gco!(l);
     if isblack!(obj) {
-      lua_c_barrierback(l, obj, &mut (*l).gclist);
+      lua_c_barrierback(&mut *l, obj, &mut (*l).gclist);
     }
   }
 }

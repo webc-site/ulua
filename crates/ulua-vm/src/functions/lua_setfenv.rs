@@ -29,7 +29,11 @@ pub fn lua_setfenv(l: &mut LuaState, idx: i32) -> i32 {
       res = 0;
     }
     if res != 0 {
-      lua_c_objbarrier!(l, gcvalue!(o), (*l.top.sub(1)).as_table_ptr());
+      // r16-v9b 授权拆语句（r16-v3 #60 判例）：第三实参原位现读 top-1 与宏体
+      // `&mut *$l` 重借用构成 E0503。等价论证：求值序本即先读 top-1 后入障，句间
+      // 无对 `l` 场/栈槽写点；`as_table_ptr` 只读，取指针值不延存借用，语义逐位不变。
+      let top_env_table = (*l.top.sub(1)).as_table_ptr();
+      lua_c_objbarrier!(l, gcvalue!(o), top_env_table);
     }
     // 消费 env 槽一格：`rewind_top(1)` 提交原语镜像原 `top = top.sub(1)` 落值
     l.rewind_top(1);

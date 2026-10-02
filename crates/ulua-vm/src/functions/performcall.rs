@@ -33,7 +33,7 @@ pub(crate) unsafe fn performcall(
 
       let o = l as *mut GCObject;
       if isblack!(o) {
-        lua_c_barrierback(l, o, addr_of_mut!((*l).gclist));
+        lua_c_barrierback(&mut *l, o, addr_of_mut!((*l).gclist));
       }
 
       if preparereentry {
