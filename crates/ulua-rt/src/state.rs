@@ -476,10 +476,8 @@ pub(crate) fn run_gc(mut state: StateView<'_>, what: i32, data: i32) -> i32 {
 ///
 /// 调用序契约：`state` 是刚通过非空收口、尚未交给任何其它 `lua_*` 入口的新 state。
 #[inline]
-fn open_std_libs(state: StateView<'_>) {
-  // Safety: 唯一调用点 [`build_lua`] 传入刚经 `NonNull::new` 非空收口的完整
-  // 新 state;`lua_l_openlibs` 只在该 state 上建库表,不跨 Rust 借用指针。
-  unsafe { lua_l_openlibs(state.as_mut_ptr()) }
+fn open_std_libs(mut state: StateView<'_>) {
+  lua_l_openlibs(&mut state)
 }
 
 /// 为 `state` 的调用栈构建回溯字符串并净压一层（`lua_l_traceback` 收口点，

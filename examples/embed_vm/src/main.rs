@@ -52,7 +52,7 @@ fn main() -> Result<(), Box<dyn Error>> {
   // `lua_State` 的前置条件。`lua_resume` 的 `from = null_mut()` 是「协程首次
   // 启动」的 C 契约，不是空指针解引用。
   unsafe {
-    lua_l_openlibs(l);
+    lua_l_openlibs(&mut *l);
 
     // 在新线程上运行，对齐参考 CLI 的 runCode。
     let t = lua_newthread(l);

@@ -174,7 +174,7 @@ pub fn eval_bytecode(bytecode: &[u8]) -> StdResult<(), Error> {
   // Safety: 上方 null 判定保证 `l` 是本帧独占的活跃状态机；openlibs → sandbox
   // 即 cpp `setupState`（Repl.cpp:205-230）的调用序。
   unsafe {
-    lua_l_openlibs(l);
+    lua_l_openlibs(&mut *l);
     lua_l_sandbox(l);
   }
   // Safety: 同上，冻结线程全局表（cpp runRepl 于宿主 state 的

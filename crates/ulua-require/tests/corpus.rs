@@ -440,7 +440,7 @@ impl Fixture {
     let l = unsafe {
       let l = lua_l_newstate();
       assert!(!l.is_null(), "luaL_newstate failed");
-      lua_l_openlibs(l);
+      lua_l_openlibs(&mut *l);
       luaopen_require(l, MemHost::new());
       l
     };

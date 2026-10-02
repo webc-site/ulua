@@ -56,7 +56,7 @@ pub(crate) fn run_in_sandbox(source: &str, before_sandbox: impl FnOnce(&mut LuaS
   // 调用序与 cpp `executeScript` 一致：openlibs →（安装钩子）→ sandbox →
   // sandboxthread，三者正是 [`run_code`] 的全部前置条件。
   let state = unsafe { &mut *l };
-  unsafe { lua_l_openlibs(from_mut(state)) };
+  lua_l_openlibs(state);
   before_sandbox(state);
   // Safety: `state` 同上契约；sandbox 只原地冻结全局表、sandboxthread 只替换
   // 当前线程为沙箱代理线程，均不悬垂传入指针。

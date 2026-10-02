@@ -37,12 +37,13 @@ const LUALIBS: [LuaLReg; 12] = [
 /// integer 门控关闭时的注册面（不含末位 integer 条目）。
 const LUALIBS_BASE_LEN: usize = 11;
 
-/// # Safety
-/// `l` 须为存活、已 `lua_newstate` 完成的全局状态机（含 registry/主线程）且处于受保护帧：对每个库
+/// 调用序契约（正确性，非内存安全；r16-v3 引用形前移，`l` 存活由 `&mut` 类型承载）：
+/// `l` 须为已 `lua_newstate` 完成的全局状态机（含 registry/主线程）且处于受保护帧：对每个库
 /// `LUA_PUSHCFUNCTION`+`lua_pushlstring(name)`+`lua_call(1,0)`，故 `(*l).top` 须逐轮留 ≥2 槽；各 luaopen_* 会再入 Lua、
 /// 分配、注册全局表并可抛错/GC。空名 `b""` 表示注册到全局自身。仅初始化期单次调用，不应在受限/只读 env 上重复执行。
+/// `(*l).push_c_function` 的裸 debugname 形参与库装载再入属体内 unsafe，不再外包给调用方。
 /// cpp VM/src/linit.cpp:42
-pub unsafe fn lua_l_openlibs(l: *mut LuaState) {
+pub fn lua_l_openlibs(l: &mut LuaState) {
   unsafe {
     // 编译期常量表 + 运行时切片定界取代原双运行时数组：条目均为实函数，
     // 无需 cpp linit.cpp:52 `lib->func` 的 None 哨兵收尾

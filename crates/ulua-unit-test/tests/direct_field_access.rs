@@ -361,7 +361,7 @@ fn unregistered_tag_falls_through_to_index_metamethod() {
 
   // Safety: l 为刚建存活状态，lua_l_openlibs 遵循 C 栈契约。
   unsafe {
-    lua_l_openlibs(l);
+    lua_l_openlibs(&mut *l);
   }
 
   reset_handler_hit_count();
@@ -464,7 +464,7 @@ mod same_field_name_different_tags_dispatch_independently {
 
     // Safety: l 为刚建存活状态，lua_l_openlibs 遵循 C 栈契约。
     unsafe {
-      lua_l_openlibs(l);
+      lua_l_openlibs(&mut *l);
     }
 
     reset_handler_hit_count();

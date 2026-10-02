@@ -302,8 +302,8 @@ pub fn set_useratom(l: L, f: AtomAssignFn) {
 
 /// `luaL_openlibs`。
 pub fn openlibs(l: L) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_l_openlibs(l) }
+  // r16-v3：callee 已前移 `&mut LuaState` 引用形，经 `state_mut` 收口点直传独占引用。
+  lua_l_openlibs(state_mut(l))
 }
 
 /// `luaopen_base`：装载 base 库并返回其栈占用（供 [`pop`] 回收）。
@@ -1002,7 +1002,7 @@ pub fn push_c_closure(l: L, f: LuaCFunction, name: &'static [u8], nup: c_int) {
 pub fn openlibs_and_sandbox_all(l: L) {
   // Safety: `l` 存活（模块级契约）。
   unsafe {
-    lua_l_openlibs(l);
+    lua_l_openlibs(&mut *l);
     lua_l_sandbox(l);
     lua_l_sandboxthread(l);
   }
