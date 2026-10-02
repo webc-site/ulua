@@ -632,10 +632,10 @@ pub fn tolightuserdata(l: L, idx: c_int) -> *mut c_void {
 
 /// `lua_setlightuserdataname(l, tag, name)`。
 pub fn setlightuserdataname(l: L, tag: c_int, name: &'static [u8]) {
-  // r16-v4b：callee 接收者已 `&mut` 引用形，`state_mut` 判空重建短借；`cstr(name)`
-  // NUL 结尾静态名串裸形透传（不切片化）；unsafe 仅剩 callee 留形转达（lint 裁决见
-  // callee 文档）。
-  unsafe { lua_setlightuserdataname(state_mut(l), tag, cstr(name)) }
+  // r16-v4c：callee 已 safe 化（v4c 步骤 4 门面收 cstr_bytes，lint 触发消亡），
+  // `state_mut` 判空重建短借后直调；`cstr(name)` NUL 结尾静态名串裸形透传（不切片化），
+  // unsafe 转达消亡（收口形制同 `getlightuserdataname` 终形）。
+  lua_setlightuserdataname(state_mut(l), tag, cstr(name))
 }
 
 /// `lua_getlightuserdataname(l, tag)`：未注册得 `None`，否则为登记名原始字节。
