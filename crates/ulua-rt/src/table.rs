@@ -780,12 +780,10 @@ pub(crate) fn create_table_with_capacity(lua: &Lua, narr: usize, nrec: usize) ->
 /// 调用序契约（正确性，非内存安全）：`state` 存活且由当前线程驱动，`idx` 为
 /// 有效栈索引；`lua_tonumberx` 只读该槽、不动栈深，`Option` 返回值即 cpp
 /// `isnum` 出参的收口。与 `stack_top`/`register_slot` 同族的 safe 门面，
-/// unsafe 只在此处一次 C-ABI 边界。
+/// callee 已是 `pub fn`，本处无 `unsafe` 边界。
 #[inline]
 pub(crate) fn number_at(state: StateView<'_>, idx: i32) -> Option<Number> {
-  // Safety: 族级契约;`lua_tonumberx` 只读该槽、不动栈深,`Option` 返回值即
-  // cpp `isnum` 出参的收口。本帧由裸指针重建引用,借用窗口即时结束。
-  unsafe { lua_tonumberx(&*state.as_ptr(), idx) }
+  lua_tonumberx(&state, idx)
 }
 
 /// 收口门面：读出栈顶的 [`Value`]（引用型值由 `value_from_stack` 登记注册表引用），
