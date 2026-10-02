@@ -13,11 +13,13 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// # Safety
-/// `l` 须为存活且非活动（`!(*l).isactive`）的 coroutine 线程，其 `stack`/`base_ci`/`ci`/`end_ci`/`size_ci`/`stacksize`
+/// `lua_resetthread`：把已完成/挂起/出错的 coroutine 线程重置回可复用态。
+/// 调用序契约（正确性，非内存安全；r16-v3 引用形前移，`l` 存活由 `&mut` 类型承载）：
+/// `l` 须为非活动（`!(*l).isactive`）的 coroutine 线程，其 `stack`/`base_ci`/`ci`/`end_ci`/`size_ci`/`stacksize`
 /// 自洽：`status != Ok` 时须已退到 `ci == base_ci`（`api_check`）；`lua_f_close` 关闭 open upvalue、
-/// `lua_d_realloc_ci`/`luaD_reallocstack` 收缩并重排栈帧，末尾对 `stack..stack+stacksize` 逐槽置 nil。cpp/VM/src/lstate.cpp:170 lua_resetthread。
-pub unsafe fn lua_resetthread(l: *mut LuaState) {
+/// `lua_d_realloc_ci`/`luaD_reallocstack` 收缩并重排栈帧，末尾对 `stack..stack+stacksize` 逐槽置 nil。
+/// cpp/VM/src/lstate.cpp:170 lua_resetthread。
+pub fn lua_resetthread(l: &mut LuaState) {
   // SAFETY: 契约保证 `l` 为非活动协程且栈/帧场自洽，重置面仅覆写本线程自有场域与 base_ci 首帧
   //
   // r13-w1c 逐点定性（w6d 口径保留面·本票收编 0 点）：本体 `(*l).` 命中全部为

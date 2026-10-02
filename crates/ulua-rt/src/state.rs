@@ -737,9 +737,8 @@ pub(crate) fn resume_co_error(co: StateView<'_>, from: StateView<'_>) -> i32 {
 ///
 /// 调用序契约：`co` 非运行态（挂起/完成/错误），由调用方 status 分派保证。
 #[inline]
-pub(crate) fn reset_co(co: StateView<'_>) {
-  // Safety: `co` 由句柄锚定存活;调用方已挡 Running/Normal。
-  unsafe { lua_resetthread(co.as_mut_ptr()) }
+pub(crate) fn reset_co(mut co: StateView<'_>) {
+  lua_resetthread(&mut co)
 }
 
 /// 读 `idx` 处 thread 值的协程 `LuaState`（`lua_tothread` 收口点；非 thread / 空归一 `None`）。
