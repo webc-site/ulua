@@ -39,6 +39,15 @@ unsafe extern "C-unwind" fn pcallyieldable_run(l: *mut LuaState, ud: *mut c_void
 /// 否则块内 `top.sub(nargs+1)`/`base.add(errfunc-1)` 越界。
 pub unsafe fn lua_pcallyieldable(l: *mut LuaState, nargs: i32, nresults: i32, errfunc: i32) -> i32 {
   // SAFETY: 契约保证 ci 帧为带 cont 的 C 闭包且栈内实参覆盖 nargs/errfunc，pcall 恢复链由 lua_d_pcall 维护
+  //
+  // r14-p1 逐点定性（w6d 口径保留面）：CallInfo 帧面红线不碰、不翻案——入口
+  // `iscfunction` 谓词与 `cl` 取址两处 ci 帧 func 现读（ci 链无既有门面，r13-w1b
+  // lua_v_call_tm / r13-w1c lua_r_newclass 同款保留判例）、errfunc 帧面落笔一处、
+  // flags 置/清两处（LUA_CALLINFO_HANDLE 帧处置位，动作落笔非读数）均属帧面原样
+  // 保留；`cl` 之下 `c` 取址与 cont 谓词/取回两处为 C 闭包内记录读数，不属栈面
+  // 门面覆盖面，保留；`isyielded(&*l)` 为整态取址函数调用点，无字段裸读，保留。
+  // 本票收编共五处栈面读数：两处帧槽距经 get_top 门面，顶下槽地址与宏参顶槽地址
+  // 经 top_slot 边界原语，errfunc 帧槽暂存经 slot 索引域构造子（见各点位行内注）。
   unsafe {
     api_check!(l, iscfunction!((*(*l).ci).func));
     let cl = (*(*(*l).ci).func).as_closure_ptr();
