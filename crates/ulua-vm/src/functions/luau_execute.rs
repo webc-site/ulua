@@ -620,7 +620,7 @@ fn luau_jump_eq_heavy(
   mut base: StkId,
   ra: StkId,
   rb: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
   frame: &VmFrame,
   is_not: bool,
 ) -> (*const Instruction, StkId) {
@@ -871,7 +871,7 @@ fn fuse_jumpifnot(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -917,7 +917,7 @@ fn fuse_succ_gettable(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -977,7 +977,7 @@ fn fuse_succ_addk(
   pc: *const Instruction,
   base: StkId,
   k: *mut TValue,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1023,7 +1023,7 @@ fn fuse_succ_fornloop(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1070,7 +1070,7 @@ fn fuse_succ_settable(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1123,7 +1123,7 @@ fn fuse_succ_add(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1167,7 +1167,7 @@ fn fuse_succ_mul(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1210,7 +1210,7 @@ fn fuse_succ_subk(
   pc: *const Instruction,
   base: StkId,
   k: *mut TValue,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1253,7 +1253,7 @@ fn fuse_succ_jumpifnotlt(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1377,9 +1377,9 @@ fn h_gettable(
         && index as f64 == indexd
       {
         setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
-        pc = fuse_jumpifnot(l, pc, base, cl);
+        pc = fuse_jumpifnot(l, pc, base, &*cl);
         // `GETTABLE → MUL` 是 `matmul` 内层 `a[i][k] * b[k][j]` 的那条边；链只在臂点起
-        pc = fuse_succ_mul(l, pc, base, cl);
+        pc = fuse_succ_mul(l, pc, base, &*cl);
         vm_next!(pc, base, k, cl);
       }
     }
@@ -1412,8 +1412,8 @@ fn s_gettable(
     let rc = VM_REG!(luau_insn_c(insn), l, base);
 
     base = gettable_slow(l, pc, ra, rb, rc);
-    pc = fuse_jumpifnot(l, pc, base, cl);
-    pc = fuse_succ_mul(l, pc, base, cl);
+    pc = fuse_jumpifnot(l, pc, base, &*cl);
+    pc = fuse_succ_mul(l, pc, base, &*cl);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -1483,7 +1483,7 @@ fn h_getupval(
 
     setobj_2_s!(l, ra, v);
     // `GETUPVAL → SUBK` 是 `fib` 里 `n - 1` 的那条边（4.36M/28.3M ≈ 15.4%）
-    pc = fuse_succ_subk(l, pc, base, k, cl);
+    pc = fuse_succ_subk(l, pc, base, k, &*cl);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -1577,9 +1577,9 @@ fn h_loadn(
     // （14.4M/45.6M ≈ 32%），配上 SETTABLE 臂已融合的 `SETTABLE → FORNLOOP`，
     // 三指令回边只付一次派发。探测置于 JUMPIFNOTLT 之前：命中即吞，未命中
     // （pc 原样）再走 `LOADN → JUMPIFNOTLT`（fib 的 while n < 2，4.36M/28.3M ≈ 15.4%）
-    let npc = fuse_succ_settable(l, pc, base, cl);
+    let npc = fuse_succ_settable(l, pc, base, &*cl);
     if eq(npc, pc) {
-      pc = fuse_succ_jumpifnotlt(l, npc, base, cl);
+      pc = fuse_succ_jumpifnotlt(l, npc, base, &*cl);
     } else {
       pc = npc;
     }
@@ -1618,7 +1618,7 @@ fn h_loadb(
     LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
     // LOADB 的跳转偏移已在上面并进来，尾融合从新 pc 起（`LOADB → SETTABLE` 是 `nsieve`
     // 内层 `isprime[i] = false` 的那条边）
-    pc = fuse_succ_settable(l, pc, base, cl);
+    pc = fuse_succ_settable(l, pc, base, &*cl);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -1886,7 +1886,7 @@ fn h_settable(
         if luaC_barriert_pending!(h, ra) {
           return s_settable_bar(l, pc, base, k, cl);
         }
-        pc = fuse_succ_fornloop(l, pc, base, cl);
+        pc = fuse_succ_fornloop(l, pc, base, &*cl);
         vm_next!(pc, base, k, cl);
       }
     }
@@ -1981,7 +1981,7 @@ fn h_modk(
       let nb = (*rb).as_number();
       let nk = (*kv).as_number();
       setnvalue!(ra, luai_nummod(nb, nk));
-      pc = fuse_succ_addk(l, pc, base, k, cl);
+      pc = fuse_succ_addk(l, pc, base, k, &*cl);
       vm_next!(pc, base, k, cl);
     }
     // 非数字 rb：`__mod`/ coercion 慢路交 [`s_modk`]，本函数保持叶函数
@@ -2046,7 +2046,7 @@ fn h_mulk(
     if (*rb).is_number() {
       setnvalue!(ra, (*rb).as_number() * (*kv).as_number());
       // `MULK → ADD` 是 `micro_arith` 内层的一条边（2.0M/18.0M ≈ 11%）
-      pc = fuse_succ_add(l, pc, base, cl);
+      pc = fuse_succ_add(l, pc, base, &*cl);
       vm_next!(pc, base, k, cl);
     } else if (*rb).is_vector() {
       vec_scalar_op!(
@@ -2185,8 +2185,8 @@ fn h_addk(
 
     if (*rb).is_number() {
       setnvalue!(ra, (*rb).as_number() + (*kv).as_number());
-      pc = fuse_succ_gettable(l, pc, base, cl);
-      pc = fuse_succ_fornloop(l, pc, base, cl);
+      pc = fuse_succ_gettable(l, pc, base, &*cl);
+      pc = fuse_succ_fornloop(l, pc, base, &*cl);
       vm_next!(pc, base, k, cl);
     }
     // 非数字 rb：`__add`/ coercion 慢路交 [`s_addk`]，本函数保持叶函数
@@ -2252,7 +2252,7 @@ fn h_mul(
     if (*rb).is_number() && (*rc).is_number() {
       setnvalue!(ra, (*rb).as_number() * (*rc).as_number());
       // `MUL → ADD` 是 `matmul` 内层 `s = s + a*b` 的那条边
-      pc = fuse_succ_add(l, pc, base, cl);
+      pc = fuse_succ_add(l, pc, base, &*cl);
       vm_next!(pc, base, k, cl);
     } else if (*rb).is_vector() && (*rc).is_number() {
       let vc = (*rc).as_number() as f32;
@@ -2431,7 +2431,7 @@ fn h_add(
     if (*rb).is_number() && (*rc).is_number() {
       setnvalue!(ra, (*rb).as_number() + (*rc).as_number());
       // `ADD → SETTABLE` 是 `matmul` 内层 `c[i][j] = s` 的那条边
-      pc = fuse_succ_settable(l, pc, base, cl);
+      pc = fuse_succ_settable(l, pc, base, &*cl);
       vm_next!(pc, base, k, cl);
     } else if (*rb).is_vector() && (*rc).is_vector() {
       let vb = frame.lanes(rb);
@@ -2610,7 +2610,7 @@ fn h_fornloop(
     let insn = *pc;
     pc = pc.add(1);
     let ra = VM_REG!(luau_insn_a(insn), l, base);
-    let (cont, backedge) = fornloop_step(pc, cl, insn, ra);
+    let (cont, backedge) = fornloop_step(pc, &*cl, insn, ra);
     // 见 [`jump_split!`]：回边与退出两条路各带一份独立取指尾块（把 FP 比较留在尾块
     // 之外，不挂进取指地址依赖链）。两条尾块各再试一次 GETTABLE 尾融合：实测
     // `FORNLOOP → GETTABLE` 是表格访问用例里权重最大的一条边。
@@ -2618,11 +2618,11 @@ fn h_fornloop(
       let npc = pc.offset(backedge);
       let p = cl_proto!(cl);
       LUAU_ASSERT!((npc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
-      vm_next!(fuse_succ_gettable(l, npc, base, cl), base, k, cl);
+      vm_next!(fuse_succ_gettable(l, npc, base, &*cl), base, k, cl);
     }
     let p = cl_proto!(cl);
     LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
-    vm_next!(fuse_succ_gettable(l, pc, base, cl), base, k, cl);
+    vm_next!(fuse_succ_gettable(l, pc, base, &*cl), base, k, cl);
   }
 }
 
@@ -2653,7 +2653,7 @@ fn s_fornloop(
     let insn = *pc;
     pc = pc.add(1);
     let ra = VM_REG!(luau_insn_a(insn), l, base);
-    let (cont, backedge) = fornloop_step(pc, cl, insn, ra);
+    let (cont, backedge) = fornloop_step(pc, &*cl, insn, ra);
     jump_split!(l, pc, cl, cont, backedge, base, k);
   }
 }
@@ -2672,7 +2672,7 @@ fn s_fornloop(
 #[inline(always)]
 fn fornloop_step(
   pc: *const Instruction,
-  cl: *mut Closure,
+  cl: &Closure,
   insn: Instruction,
   ra: *mut TValue,
 ) -> (bool, isize) {
@@ -2732,7 +2732,7 @@ fn h_fornprep(
       return s_fornprep(l, pc, base, k, cl);
     }
 
-    pc = fornprep_step(pc, cl, insn, ra);
+    pc = fornprep_step(pc, &*cl, insn, ra);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -2763,7 +2763,7 @@ fn s_fornprep(
     // luaV_prepareFORN 按 StkId 形参收三槽可写指针
     lua_v_prepare_forn(l, ra, ra.add(1), ra.add(2));
 
-    pc = fornprep_step(pc, cl, insn, ra);
+    pc = fornprep_step(pc, &*cl, insn, ra);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -2778,7 +2778,7 @@ fn s_fornprep(
 #[inline(always)]
 fn fornprep_step(
   mut pc: *const Instruction,
-  cl: *mut Closure,
+  cl: &Closure,
   insn: Instruction,
   ra: *mut TValue,
 ) -> *const Instruction {
@@ -2876,8 +2876,8 @@ fn h_jumpifnot(
       LUAU_ASSERT!((npc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
       vm_next!(npc, base, k, cl);
     }
-    pc = fuse_succ_addk(l, pc, base, k, cl);
-    pc = fuse_succ_fornloop(l, pc, base, cl);
+    pc = fuse_succ_addk(l, pc, base, k, &*cl);
+    pc = fuse_succ_fornloop(l, pc, base, &*cl);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -3876,7 +3876,7 @@ fn tier_cold<const SINGLE_STEP: bool>(
                 jump_and_next!(pc, cl, insn, 'dispatch, eq(classvalue!(ra), classvalue!(rb)))
               }
               ValueView::Table(_) | ValueView::Userdata(_) | ValueView::Object(_) => {
-                let (npc, nbase) = luau_jump_eq_heavy(l, pc, insn, base, ra, rb, cl, &frame, false);
+                let (npc, nbase) = luau_jump_eq_heavy(l, pc, insn, base, ra, rb, &*cl, &frame, false);
                 pc = npc;
                 base = nbase;
                 continue 'dispatch;
@@ -3939,7 +3939,7 @@ fn tier_cold<const SINGLE_STEP: bool>(
                 jump_and_next!(pc, cl, insn, 'dispatch, !(eq(classvalue!(ra), classvalue!(rb))))
               }
               ValueView::Table(_) | ValueView::Userdata(_) | ValueView::Object(_) => {
-                let (npc, nbase) = luau_jump_eq_heavy(l, pc, insn, base, ra, rb, cl, &frame, true);
+                let (npc, nbase) = luau_jump_eq_heavy(l, pc, insn, base, ra, rb, &*cl, &frame, true);
                 pc = npc;
                 base = nbase;
                 continue 'dispatch;
