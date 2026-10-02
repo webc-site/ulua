@@ -1158,8 +1158,8 @@ pub fn g_isnative(l: L, level: c_int) -> c_int {
 
 /// `lua_is_lfunction`（C 侧 0/非 0）：`idx` 是否为 Lua 闭包。
 pub fn is_lfunction(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活；只读槽位类型标签。
-  unsafe { lua_is_lfunction(l, idx) }
+  // r16-v4b：callee 已引用形 safe 化，`state_ref` 判空重建 `&LuaState` 即收口（纯读数）。
+  lua_is_lfunction(state_ref(l), idx)
 }
 
 // ---------------------------------------------------------------------------

@@ -32,7 +32,7 @@ pub unsafe fn get_assembly(
   // Safety: 契约保证 l 为存活 LuaState*、idx 为界内栈索引，lua_is_lfunction/lua_a_toobject
   // 依 Lua C-ABI 合法读取该栈位，func 为其 LClosure TValue 指针。
   let func = unsafe {
-    debug_assert!(lua_is_lfunction(l, idx) != 0);
+    debug_assert!(lua_is_lfunction(&*l, idx) != 0);
     lua_a_toobject(&*l, idx)
   };
 
