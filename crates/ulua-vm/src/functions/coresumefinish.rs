@@ -12,7 +12,12 @@ pub unsafe fn coresumefinish(l: *mut LuaState, r: i32) -> i32 {
       2
     } else {
       (*l).push_boolean(true);
-      (*l).insert(-(r + 1));
+      // r==0 时栈顶仅剩刚压入的 boolean 单元素段，insert(-1) 是恒等旋转
+      // （index2addr + 段距计算全付、零内存写）——跳过。cpp lcorolib.cpp:200
+      // 的 insert 在此同样无效果。
+      if r != 0 {
+        (*l).insert(-(r + 1));
+      }
       r + 1
     }
   }
