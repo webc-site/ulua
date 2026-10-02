@@ -741,8 +741,8 @@ impl VmFrame {
   #[inline]
   pub(crate) fn set_iterator_done(&self, slot: StkId) {
     // Safety: 类型不变量——slot 为界内可写栈槽（内建迭代协议约定的 ra+2 槽），
-    // 载荷是协议游标值 0 的指针形态，按迭代器协议永不解引用。
-    unsafe { set_iterator_done(slot) };
+    // 载荷是协议游标值 0 的指针形态，按迭代器协议永不解引用；引用重建窗仅收形。
+    set_iterator_done(unsafe { &mut *slot });
   }
 
   /// 内建迭代游标写：载荷按 `(index + 1)` 地址形态装箱（收口于
@@ -750,8 +750,8 @@ impl VmFrame {
   #[inline]
   pub(crate) fn set_iterator_index(&self, slot: StkId, index: c_int) {
     // Safety: 类型不变量——slot 为界内可写栈槽（内建迭代协议 ra+2）；index 为
-    // 有界数组+哈希段游标，整转指针不构造可解引用指针。
-    unsafe { set_iterator_index(slot, index) };
+    // 有界数组+哈希段游标，整转指针不构造可解引用指针；引用重建窗仅收形。
+    set_iterator_index(unsafe { &mut *slot }, index);
   }
 
   /// 同栈数组内两槽的地址差（`a - b`，供变参计数等算术；调用点保证同数组）。

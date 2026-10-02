@@ -6,9 +6,11 @@
 //! （JIT 经 `offset_of!` 消费布局，`translate_inst_for_g_prep_*` 仍按同一 tag 值生成
 //! IR 写入）。读侧识别见 [`crate::enums::value_view::ValueView::IteratorDone`]。
 //!
-//! B1c 票面 1：写入面另折为 [`Slot::from_raw`] 一处指针边界 + [`TValue::set_pvalue`]
-//! 安全方法调用，`unsafe` 由「整块函数体」收敛为边界一次句柄构造；签名与槽地址语义
-//! 不变（消费点 `luau_execute.rs` FORGPREP*/FORGLOOP 臂与 code-gen 回调零改动）。
+//! B1c 票面 1 / r16-v6 收准：写入面全退 unsafe——`slot` 转 `&mut TValue`（借用承载
+//! 非空/对齐/独占可写），句柄经 safe 构造子 [`Slot::from_mut`] 构造、再走
+//! [`TValue::set_pvalue`] 安全写面，函数体零 `unsafe`、签名 `pub fn`。载荷/tag/写面
+//! 逐位语义不变（消费点 `luau_execute.rs` FORGPREP*/FORGLOOP 臂与 code-gen 回调
+//! 仅调用形变）。
 
 use core::ptr::null_mut;
 
@@ -20,15 +22,14 @@ use crate::{
 /// LightUserData、extra tag 取 `LU_TAG_ITERATOR`、载荷为 null（即数组段起点
 /// 游标 0，FORGLOOP 快路径以 `pvalue!` 读回作整数游标，从不解引用）。
 ///
-/// # Safety
-/// `slot` 须指向本帧内建迭代协议预留的可写栈槽（FORGPREP*/FORGLOOP 的 `ra+2`），
-/// 且该槽按迭代器协议使用（读侧只做 null 判定与整数折算）。
-pub unsafe fn set_iterator_done(slot: *mut TValue) {
-  // SAFETY: 调用方契约保证 `slot` 为本次写入期内独占可写、按 `TValue` 对齐的栈槽；
-  // 这是全函数唯一的指针边界，其后仅经句柄写面调用 `TValue::set_pvalue`（与旧
-  // `setpvalue!` 宏体逐位一致）。null 载荷是协议游标值 0 的指针形态表示
-  //（对应 `set_iterator_index` 的 `index + 1` 编码在游标 -1 处），永不被解引用。
-  unsafe { Slot::from_raw(slot) }
+/// 调用序契约（正确性，非内存安全；r16-v6 起形参为 `&mut TValue`——借用承载
+/// 非空/对齐/独占可写，[`Slot::from_mut`] 为 safe 构造子，体零 `unsafe`）：`slot`
+/// 须为本帧内建迭代协议预留的可写栈槽（FORGPREP*/FORGLOOP 的 `ra+2`），且该槽
+/// 按迭代器协议使用（读侧只做 null 判定与整数折算）。null 载荷是协议游标值 0 的
+/// 指针形态表示（对应 `set_iterator_index` 的 `index + 1` 编码在游标 -1 处），
+/// 永不被解引用；`set_pvalue` 写面与旧 `setpvalue!` 宏体逐位一致。
+pub fn set_iterator_done(slot: &mut TValue) {
+  Slot::from_mut(slot)
     .as_mut()
     .set_pvalue(null_mut(), LU_TAG_ITERATOR);
 }
