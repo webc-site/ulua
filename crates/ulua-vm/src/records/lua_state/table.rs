@@ -86,24 +86,27 @@ impl LuaState {
     self.get_global_bytes(name.as_bytes())
   }
 
-  /// # Safety
-  /// `idx` 为合法表索引，`p` 为有效指针。
+  /// 以 C 指针为键的原生取值（cpp `lua_rawgetp` 宏形态，tag 0）。
+  ///
+  /// 调用序契约（正确性，非内存安全；safe fn 文档断言，由调用方承载）：`idx` 为当前
+  /// 帧合法表索引；`p` 为位模式键（可空/任意整数编码值，全链不解引用）——同
+  /// [`lua_rawgetptagged`] 契约。r16-v4c 步骤 3：callee `lua_rawgetptagged` 已 safe
+  /// 化，本方法 unsafe 转达消亡，随之转 safe（选型申报：p 仅入 safe 被调实参位无触发
+  /// 面，留 `unsafe fn` 形已无安全增量且阻断调用面收口）。
   #[inline(always)]
-  pub unsafe fn raw_get_ptr(&mut self, idx: i32, p: *mut c_void) -> i32 {
-    // SAFETY: `p` 的有效性由本方法 `# Safety` 契约承载（调用方保证，被调端仅作位
-    // 模式载荷不解引用）；r16-v4b 后 callee 已是 `&mut` 引用形，本帧 `self` 短借于
-    // 调用语句即时结束，unsafe 仅剩 callee 留形转达（lint 裁决见 callee 文档）。
-    unsafe { lua_rawgetptagged(self, idx, p, 0) }
+  pub fn raw_get_ptr(&mut self, idx: i32, p: *mut c_void) -> i32 {
+    lua_rawgetptagged(self, idx, p, 0)
   }
 
-  /// # Safety
-  /// `idx` 为合法表索引，`p` 为有效指针。
+  /// 以 C 指针为键的原生置值（cpp `lua_rawsetp` 宏形态，tag 0；值取栈顶并弹栈）。
+  ///
+  /// 调用序契约（正确性，非内存安全；safe fn 文档断言，由调用方承载）：`idx` 为当前
+  /// 帧合法表索引且该表非只读；顶下留 1 值元素；`p` 为位模式键（全链不解引用）——
+  /// 同 [`lua_rawsetptagged`] 契约。r16-v4c 步骤 3：callee 已 safe 化，unsafe 转达
+  /// 消亡，本方法随之转 safe（选型同 [`Self::raw_get_ptr`]）。
   #[inline(always)]
-  pub unsafe fn raw_set_ptr(&mut self, idx: i32, p: *mut c_void) {
-    // SAFETY: `p` 的有效性由本方法 `# Safety` 契约承载（调用方保证，被调端仅作位
-    // 模式载荷不解引用）；r16-v4b 后 callee 已是 `&mut` 引用形，本帧 `self` 短借于
-    // 调用语句即时结束，unsafe 仅剩 callee 留形转达（lint 裁决见 callee 文档）。
-    unsafe { lua_rawsetptagged(self, idx, p, 0) }
+  pub fn raw_set_ptr(&mut self, idx: i32, p: *mut c_void) {
+    lua_rawsetptagged(self, idx, p, 0)
   }
 
   #[inline(always)]
