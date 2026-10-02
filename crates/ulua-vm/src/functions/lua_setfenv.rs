@@ -31,7 +31,8 @@ pub fn lua_setfenv(l: &mut LuaState, idx: i32) -> i32 {
     if res != 0 {
       lua_c_objbarrier!(l, gcvalue!(o), (*l.top.sub(1)).as_table_ptr());
     }
-    l.top = l.top.sub(1);
+    // 消费 env 槽一格：`rewind_top(1)` 提交原语镜像原 `top = top.sub(1)` 落值
+    l.rewind_top(1);
     res
   }
 }

@@ -40,9 +40,9 @@ pub(crate) fn lua_replace(l: &mut LuaState, idx: i32) {
     lua_c_threadbarrier_lapi(lp);
     let o: StkId = index_2_addr(&*lp, idx);
     api_check!(lp, !eq(o, LUA_O_NILOBJECT));
-    // 栈顶单槽窗口：`(*lp).top.offset(-1)` 的六连裸重读收为一次预绑定
-    // （index_2_addr/屏障/GC 均不改写 `(*lp).top`，读取时机与逐指令等价）
-    let src: StkId = (*lp).top.offset(-1);
+    // 栈顶单槽窗口：经 `top_slot(-1)` 槽地址读数原语一次预绑定
+    // （index_2_addr/屏障/GC 均不改写栈顶字段，读取时机与逐指令等价）
+    let src: StkId = l.top_slot(-1);
     if idx == LUA_ENVIRONINDEX {
       api_check!(lp, (*lp).ci != (*lp).base_ci);
       let func: *mut Closure = current_closure(lp);
@@ -58,6 +58,6 @@ pub(crate) fn lua_replace(l: &mut LuaState, idx: i32) {
         lua_c_barrier!(lp, current_closure(lp), src);
       }
     }
-    (*lp).top = src;
+    l.reanchor_top(src);
   }
 }

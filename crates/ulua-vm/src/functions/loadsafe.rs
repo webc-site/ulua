@@ -495,7 +495,9 @@ pub(crate) unsafe fn loadsafe(
             let iid = read_value!(u32, "import constant");
             resolve_import_safe(l, (*p).k, iid);
             setobj!(l, k, (*l).top.sub(1));
-            (*l).top = (*l).top.sub(1);
+            // 消费 import 解析压入的栈顶槽：`rewind_top(1)` 提交原语镜像原
+            // `top = top.sub(1)` 落值（loader 直路点位，无恢复点耦合）
+            (*l).rewind_top(1);
           }
 
           LBC_CONSTANT_TABLE_U8 => {

@@ -24,14 +24,15 @@ pub fn lua_rawsetfield_bytes(l: &mut LuaState, idx: i32, k: &[u8]) {
     // （intern 串→取槽→写值三步嵌套在同一语句内，Rust 保持同样的表达式嵌套与求值序：
     // lua_s_new 可触发 GC，但发生在槽取得之前，无失效窗口）、:1027 `luaC_barriert`
     // （屏障在值落槽之后）、:1028 `top--`。屏障与写分步保留，不收敛单函数。
-    // 栈顶 value 槽的三连裸重读收为一次预绑定（lua_s_new/intern/GC 均不改写 `l.top`）
-    let value = l.top.offset(-1);
+    // 栈顶 value 槽的三连裸重读收为一次 `top_slot(-1)` 预绑定
+    //（lua_s_new/intern/GC 均不改写栈顶字段）
+    let value = l.top_slot(-1);
     setobj2t!(
       l,
       lua_h_setstr(l, (*t).as_table_ptr(), lua_s_new(l, k)),
       value
     );
     luaC_barriert!(l, (*t).as_table_ptr(), value);
-    l.top = value;
+    l.reanchor_top(value);
   }
 }

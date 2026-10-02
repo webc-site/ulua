@@ -31,7 +31,7 @@ pub(crate) unsafe fn lua_pushfstring_l(l: &mut LuaState, args: Arguments<'_>) ->
     lua_c_threadbarrier_lapi(l);
     lua_o_pushvfstring_ref(l, args);
     // 对应 cpp lapi.cpp:770 回返的 `luaO_pushvfstring` 结果（lobject.cpp:136
-    // `return svalue(L->top - 1)`）
-    svalue!(l.top.offset(-1))
+    // `return svalue(L->top - 1)`）；栈顶槽地址经 `top_slot(-1)` 读数原语取得
+    svalue!(l.top_slot(-1))
   }
 }

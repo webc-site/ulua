@@ -17,7 +17,8 @@ pub unsafe fn tcreate(l: *mut LuaState) -> i32 {
 
     if !(*l).is_none_or_nil(2) {
       lua_createtable(l, size, 0);
-      let t = (*(*l).top.offset(-1)).as_table_ptr();
+      // 栈顶槽地址经 `top_slot(-1)` 读数原语取得（createtable 后帧内既有槽）
+      let t = (*(*l).top_slot(-1)).as_table_ptr();
 
       let v: StkId = (*l).base.add(1);
 

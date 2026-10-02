@@ -17,7 +17,7 @@ pub(crate) unsafe fn correctstack(l: *mut LuaState, oldstack: *const TValue) {
     let remap =
       |p: *mut TValue| stack_bytes.wrapping_offset(p as isize - oldstack_addr) as *mut TValue;
 
-    (*l).top = remap((*l).top);
+    (*l).reanchor_top(remap((*l).top));
 
     // 开上值经 threadnext 串成链表（非连续数组），§3 仅对连续数组走迭代器，此处保留指针追逐。
     let mut up: *mut UpVal = (*l).openupval;
@@ -29,6 +29,10 @@ pub(crate) unsafe fn correctstack(l: *mut LuaState, oldstack: *const TValue) {
     // base_ci..=ci 是连续 CallInfo 数组：切片迭代取代 `while ci <= ci` 手工裸偏移自增。
     let frames = c_slice_mut((*l).base_ci, (*l).ci.offset_from((*l).base_ci) as usize + 1);
     for frame in frames {
+      // r12-w7a1 定性保留：`frame.top/base/func` 为 CallInfo 裸字段重排（栈搬迁
+      // remap 本体）——records/slot.rs 边界红线明载「CallInfo 裸字段与帧内算术
+      // 不落句柄」；本函数即 realloc 后的指针重读修正协作面，任何预绑定槽窗都会
+      // 跨 realloc 悬窗，按 w6d 口径钉死定性、不强收。
       frame.top = remap(frame.top);
       frame.base = remap(frame.base);
       frame.func = remap(frame.func);
