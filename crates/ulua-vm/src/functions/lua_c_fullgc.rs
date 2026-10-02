@@ -1,9 +1,12 @@
 use core::ptr::{addr_of_mut, null_mut};
 
-use ulua_common::macros::luau_assert::LUAU_ASSERT;
+use ulua_common::{clock_shim::monotonic_seconds, dfflag, macros::luau_assert::LUAU_ASSERT};
 
 use crate::{
-  functions::{gcstep::gcstep, markroot::markroot, shrinkbuffersfull::shrinkbuffersfull},
+  functions::{
+    finish_gc_cycle_metrics::finish_gc_cycle_metrics, gcstep::gcstep, markroot::markroot,
+    shrinkbuffersfull::shrinkbuffersfull,
+  },
   macros::{
     gc_percent_base::GC_PERCENT_BASE, gc_satomic::GCSSWEEP, gc_spause::GCSPAUSE,
     keepinvariant::keepinvariant, upisopen::upisopen,
@@ -77,5 +80,13 @@ pub unsafe fn lua_c_fullgc(l: *mut LuaState) {
     }
 
     (*g).gcstats.heapgoalsizebytes = heapgoalsizebytes;
+
+    if dfflag::LuauGcHeapShrinkFix.get() {
+      // 完整 GC 结束了一个周期，故堆增长自此点开始度量
+      (*g).gcstats.endtimestamp = monotonic_seconds();
+      (*g).gcstats.endtotalsizebytes = (*g).totalbytes;
+    }
+
+    finish_gc_cycle_metrics(g);
   }
 }

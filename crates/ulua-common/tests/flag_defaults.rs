@@ -292,6 +292,7 @@ fn rust_table() -> Vec<FlagEntry> {
     dfflag::LUAU_OPTIMIZE_STRING_SPLIT => LuauOptimizeStringSplit false,
     dfflag::LUAU_SPLIT_TABLE_LOOKUPS => LuauSplitTableLookups false,
     dfflag::LUAU_TABLE_ROBUST_OOM => LuauTableRobustOom false,
+    dfflag::LUAU_GC_HEAP_SHRINK_FIX => LuauGcHeapShrinkFix false,
   }
 }
 

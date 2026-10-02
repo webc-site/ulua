@@ -1,6 +1,6 @@
 use ulua_common::clock_shim::monotonic_seconds;
 
-use crate::records::lua_state::LuaState;
+use crate::{functions::getheapgrowth::getheapgrowth, records::lua_state::LuaState};
 
 /// 读分配速率（`lua_allocationrate`）。`l` 以引用传入（存活由类型保证）；其 `global`
 /// 指向同存活期的有效 `global_State`、GC 统计字段已随 GC 生命周期初始化均为
@@ -8,31 +8,30 @@ use crate::records::lua_state::LuaState;
 /// cpp/VM/src/lapi.cpp:2180 lua_allocationrate。
 pub fn lua_c_allocationrate(l: &LuaState) -> i64 {
   let g = l.global;
-  let duration_threshold: f64 = 1e-3; // avoid measuring intervals smaller than 1ms
+  const DURATION_THRESHOLD: f64 = 1e-3; // 避免测量小于 1ms 的时间间隔
 
   const GCS_ATOMIC: u8 = 3;
 
   // SAFETY: `g` 为存活 LuaState 挂接的 global_State（结构不变量），块内只读
   // gcstate/totalbytes/gcstats 统计字段。
   unsafe {
-    if (*g).gcstate <= GCS_ATOMIC {
-      let duration = monotonic_seconds() - (*g).gcstats.endtimestamp;
+    let (current, duration) = if (*g).gcstate <= GCS_ATOMIC {
+      (
+        (*g).totalbytes,
+        monotonic_seconds() - (*g).gcstats.endtimestamp,
+      )
+    } else {
+      // 清扫阶段 totalbytes 不稳定，改用标记阶段结束时测得的速率
+      (
+        (*g).gcstats.atomicstarttotalsizebytes,
+        (*g).gcstats.atomicstarttimestamp - (*g).gcstats.endtimestamp,
+      )
+    };
 
-      if duration < duration_threshold {
-        return -1;
-      }
-
-      return (((*g).totalbytes as f64 - (*g).gcstats.endtotalsizebytes as f64) / duration) as i64;
-    }
-
-    // totalbytes is unstable during the sweep, use the rate measured at the end of mark phase
-    let duration = (*g).gcstats.atomicstarttimestamp - (*g).gcstats.endtimestamp;
-
-    if duration < duration_threshold {
+    if duration < DURATION_THRESHOLD {
       return -1;
     }
 
-    (((*g).gcstats.atomicstarttotalsizebytes as f64 - (*g).gcstats.endtotalsizebytes as f64)
-      / duration) as i64
+    (getheapgrowth(current, (*g).gcstats.endtotalsizebytes) as f64 / duration) as i64
   }
 }

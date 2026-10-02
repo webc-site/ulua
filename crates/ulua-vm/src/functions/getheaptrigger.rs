@@ -1,10 +1,10 @@
 use crate::{
-  functions::getheaptriggererroroffset::getheaptriggererroroffset,
+  functions::{getheapgrowth::getheapgrowth, getheaptriggererroroffset::getheaptriggererroroffset},
   records::global_state::global_State,
 };
 
 pub(crate) fn getheaptrigger(g: &mut global_State, heapgoal: usize) -> usize {
-  const DURATION_THRESHOLD: f64 = 1e-3;
+  const DURATION_THRESHOLD: f64 = 1e-3; // 避免测量小于 1ms 的时间间隔
 
   let gcstats = &g.gcstats;
 
@@ -14,8 +14,8 @@ pub(crate) fn getheaptrigger(g: &mut global_State, heapgoal: usize) -> usize {
     return heapgoal;
   }
 
-  let allocationrate = (gcstats.atomicstarttotalsizebytes as f64
-    - gcstats.endtotalsizebytes as f64)
+  let allocationrate = getheapgrowth(gcstats.atomicstarttotalsizebytes, gcstats.endtotalsizebytes)
+    as f64
     / allocationduration;
   let markduration = gcstats.atomicstarttimestamp - gcstats.starttimestamp;
 

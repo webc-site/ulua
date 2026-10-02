@@ -15,4 +15,6 @@ luau_flag_module! {
   LUAU_DYNAMIC_FASTFLAGVARIABLE!(LUAU_SPLIT_TABLE_LOOKUPS, LuauSplitTableLookups, false);
   // VM/src/ltable.cpp
   LUAU_DYNAMIC_FASTFLAGVARIABLE!(LUAU_TABLE_ROBUST_OOM, LuauTableRobustOom, false);
+  // VM/src/lgc.cpp
+  LUAU_DYNAMIC_FASTFLAGVARIABLE!(LUAU_GC_HEAP_SHRINK_FIX, LuauGcHeapShrinkFix, false);
 }

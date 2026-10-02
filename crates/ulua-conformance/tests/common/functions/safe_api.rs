@@ -45,6 +45,7 @@ use ulua_vm::{
   functions::{
     lua_break::lua_break,
     lua_breakpoint::lua_breakpoint,
+    lua_c_allocationrate::lua_c_allocationrate,
     lua_c_dump::lua_c_dump,
     lua_c_enumheap::lua_c_enumheap,
     lua_c_fullgc::lua_c_fullgc,
@@ -1009,6 +1010,12 @@ pub fn enumheap(
 pub fn fullgc(l: L) {
   // Safety: `l` 存活（模块级契约）。
   unsafe { lua_c_fullgc(l) }
+}
+
+/// `lua_allocationrate(l)` 的语义收口。
+pub fn allocationrate(l: L) -> i64 {
+  // Safety: `l` 存活（模块级契约）。
+  lua_c_allocationrate(unsafe { &*l })
 }
 
 /// `lua_dump(l, f, category_name)`。`f` 为 `FILE*` 擦除后的 `*mut c_void`。

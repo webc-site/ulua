@@ -10,6 +10,7 @@
 // 契约见门面模块文档），用例侧只做 safe 调用；仅剩的裸 `unsafe` 是对 VM 自有
 // 缓冲的直接写（buffer 填充），其 `# Safety` 契约就地标注。
 
+use core::hint::spin_loop;
 use std::ptr::fn_addr_eq;
 
 use crate::common::functions::safe_api::*;
@@ -37,6 +38,55 @@ fn conformance_api_alloc() {
       Some(f) if fn_addr_eq(f, expected)
   ));
   assert_eq!(ud_check, (&mut ud as *mut i32).cast());
+}
+
+#[test]
+fn conformance_api_allocation_rate_after_full_gc() {
+  use ulua_common::{clock_shim::monotonic_seconds, dfflag};
+
+  use crate::common::{
+    functions::new_state::new_state, type_aliases::scoped_fast_flag::ScopedFastFlag,
+  };
+
+  let _luau_gc_heap_shrink_fix = ScopedFastFlag::new(&dfflag::LuauGcHeapShrinkFix, true);
+
+  let global_state = new_state();
+  let l = global_state.as_ptr();
+
+  // 存活数据，避免 full collection 后的分配立即触发新周期
+  createtable(l, 0, 0);
+  for i in 1..=10000 {
+    createtable(l, 1, 0);
+    rawseti(l, -2, i);
+  }
+
+  // 增大堆以保证增量 GC 周期完成
+  createtable(l, 0, 0);
+  for i in 1..=100000 {
+    createtable(l, 1, 0);
+    rawseti(l, -2, i);
+  }
+  pop(l, 1);
+
+  // 完整 GC 使堆收缩至上个增量周期结束时的大小之下
+  fullgc(l);
+
+  // 仅在测量间隔大于 1ms 时度量分配速率
+  let start = monotonic_seconds();
+  while monotonic_seconds() - start < 0.002 {
+    spin_loop();
+  }
+
+  assert!(allocationrate(l) >= 0);
+
+  // 完整 GC 之后的分配自其结束点开始度量
+  createtable(l, 0, 0);
+  for i in 1..=1000 {
+    createtable(l, 1, 0);
+    rawseti(l, -2, i);
+  }
+
+  assert!(allocationrate(l) > 0);
 }
 
 #[test]

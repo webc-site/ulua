@@ -160,6 +160,7 @@ pub mod getfield;
 pub mod getfreepos;
 pub mod getfunc;
 pub mod getfuncname;
+pub mod getheapgrowth;
 pub mod getheaptrigger;
 pub mod getheaptriggererroroffset;
 pub mod getluaproto;
