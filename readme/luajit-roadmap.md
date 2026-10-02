@@ -51,6 +51,11 @@ proto#1 pc=6：**480K 次 miss、last_tag=7（table 恒定）** = spike 剧本�
     （主位 hash+空判+3 store+屏障 ≈ 内联），oop 480K 次/轮 → **-30~40% oop JIT**；
   - 工作量：新 IrCmd ×2 + A64 lowering + NativeContext 槽 + census 读数，半天级。
 - 观测基建（P0 门控修复 + SETTABLEKS bump 对称接线 + census 探针）已就位。
+- **J4b 落地后 oop 实测（CPU 时间配对）= +0.6%（零收益）**：census 的 480K miss
+  计数正确但其成本占比被高估——execute_settableks 的 direct_set 路径本已精瘦
+  （VmFrame 门面 + set_str 主位查找 + patch_c），内联化省下的 call 开销 ≈ 测量噪声。
+  合成插入热负载 -19% 为真（helper 调用占绝对主导时成立）。J4b 作为机制保留；
+  oop 残余成本在别处（分配/GC/字符串 intern），非 fallback 路径。
 
 ### E2 CALL/RETURN 快路内联 + arity 特化（fib 2.1 / micro_call 1.5 / binarytrees 1.4）
 
