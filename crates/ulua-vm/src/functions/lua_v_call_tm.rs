@@ -22,6 +22,12 @@ use crate::{
 #[inline(never)] // 对应 cpp LUAU_NOINLINE：控制栈帧体积，勿内联
 pub unsafe fn lua_v_call_tm(l: *mut LuaState, nparams: i32, res: i32) {
   // SAFETY: 契约保证 `l` 为存活调用帧、tm/左值/右值按约定可读可写，块内重入调用不越本帧栈界
+  //
+  // r13-w1b 逐点定性（w6d 口径保留面）：n_ccalls 增减两处读数、stack_last 界缘
+  // 断言、`(*l).base` 帧建立/回退落笔与 `(*l).ci` 现读回退均无 LuaState 门面，
+  // 保留；帧回退三件套（ci/base/top 一并回读父帧 cip 场域）系既有 B2-2b 判例保留
+  // 注记（不得翻案，见其行前注）。收编三处 top 读数：入口顶基址、建立面契约断言
+  // 的顶侧操作数、结果拷贝消费窗（均 top_slot 原语，位点现读不变）。
   unsafe {
     (*l).n_ccalls += 1;
 
@@ -31,7 +37,9 @@ pub unsafe fn lua_v_call_tm(l: *mut LuaState, nparams: i32, res: i32) {
 
     luaD_checkstack!(l, LUA_MINSTACK);
 
-    let top = (*l).top;
+    // 收编：顶槽地址读数经 top_slot(0) 边界原语（镜像 cpp `StkId top = L->top;`
+    // 绑定形——luaD_checkstack! 扩容先行之后原位刻读，与旧点位同位同值）
+    let top = (*l).top_slot(0);
     let fun = top.sub(nparams as usize).sub(1);
 
     let ci = incr_ci!(l);
@@ -63,7 +71,9 @@ pub unsafe fn lua_v_call_tm(l: *mut LuaState, nparams: i32, res: i32) {
     };
 
     (*l).base = fun.add(1);
-    LUAU_ASSERT!((*l).top == (*l).base.add(nparams as usize));
+    // 收编：断言顶侧读数经 top_slot(0) 原语（同位现读、值恒等）；base 侧无门面，
+    // 按 w6d 口径保留裸读
+    LUAU_ASSERT!((*l).top_slot(0) == (*l).base.add(nparams as usize));
 
     let c = addr_of!((*cl).inner.c).cast::<CClosure>();
     let func = (*c).f;
@@ -81,7 +91,10 @@ pub unsafe fn lua_v_call_tm(l: *mut LuaState, nparams: i32, res: i32) {
         setobj_2_s!(
           l,
           (*cip).base.add(res as usize),
-          (*l).top.sub(n as usize) as *const TValue
+          // 收编：源侧裸偏移读数经 top_slot(-n) 边界原语——func(l) 可搬栈，本点位
+          // 即派即用现读场域顶（同 loadsafe/resolve_import_safe 的 r12-w9b 判例，
+          // 不预绑定窗）；契约 `n >= 0` 断言先行下与原 `top.sub(n)` 逐位同值
+          (*l).top_slot(-(n as isize)) as *const TValue
         );
       } else {
         setnilvalue!((*cip).base.add(res as usize));
