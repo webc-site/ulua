@@ -7,12 +7,13 @@ extern crate alloc;
 // 另有与顶层同路径的 fn 内纯重复导入一并删除（FragmentAutocompleteStatusResult/Fixture/LUAU_ASSERT/NodePtr/BuiltinsFixture）。
 
 /// cpp 夹具 `dynamic_cast<T*>(nearestStatement) != nullptr` 惯用断言的收口：
-/// `nearestStatement` 恒为 `*mut AstStat`（夹具 arena 存活基类指针），判型/下转
+/// `nearestStatement` 为 `Option<Handle<AstStat>>`（`None` ≡ cpp null 哨兵，
+/// `Some` 指夹具 arena 存活基类节点），判型/下转
 /// 经 `OptNode` 句柄走安全门面 `NodePtr::as_node`（null 与类型不符一并折叠为
 /// `None`），调用点零 `unsafe`。语义与 cpp `node->as<T>() != nullptr` 逐条对应。
 #[inline]
-fn is_nearest<T: AstNodeClass>(node: *mut AstStat) -> bool {
-  OptNode::from_ptr(node).as_node::<T>().is_some()
+fn is_nearest<T: AstNodeClass>(node: Option<Handle<AstStat>>) -> bool {
+  node.is_some_and(|h| OptNode::from_ptr(h.as_ptr()).as_node::<T>().is_some())
 }
 
 /// cpp 夹具 `dynamic_cast<T*>(node) != nullptr` 之于 `*mut AstNode`（ancestry 元素）：
@@ -38,7 +39,7 @@ macro_rules! fx_region {
 // 各用例原本逐函数重复的 `use` 语句已上提到本文件顶部（脚本按名去重、
 // 冲突核对为零；每条至少被一个用例使用，无未用导入）。
 use alloc::string::String;
-use core::{ptr::null_mut, str};
+use core::str;
 
 use ulua_analysis::{
   enums::{
@@ -54,7 +55,7 @@ use ulua_analysis::{
     try_fragment_autocomplete::try_fragment_autocomplete,
   },
   records::{
-    fragment_autocomplete_status_result::FragmentAutocompleteStatusResult,
+    arena_handle::Handle, fragment_autocomplete_status_result::FragmentAutocompleteStatusResult,
     fragment_context::FragmentContext, frontend_options::FrontendOptions, scope::Scope,
     source_module::SourceModule, table_type::TableType, to_string_options::ToStringOptions,
   },
@@ -121,7 +122,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatFunction>(
     region.nearest_statement
   ));
@@ -145,7 +146,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatFunction>(
     region.nearest_statement
   ));
@@ -170,7 +171,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatLocalFunction>(
     region.nearest_statement
   ));
@@ -194,7 +195,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatLocalFunction>(
     region.nearest_statement
   ));
@@ -447,7 +448,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatFunction>(
     region.nearest_statement
   ));
@@ -471,7 +472,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatLocalFunction>(
     region.nearest_statement
   ));
@@ -533,7 +534,11 @@ local z = 3"#,
   // Safety: old/new.root 为夹具刚解析出的 arena 根块，存活非空；
   // block_diff_start 仅只读遍历两棵树。
   let pos =
-    unsafe { block_diff_start(old.root, new.root, (*new.root).body.as_slice()[2].as_ptr()) };
+    unsafe { block_diff_start(
+      Handle::from_ptr(old.root),
+      Handle::from_ptr(new.root),
+      Some(Handle::from_ptr((*new.root).body.as_slice()[2].as_ptr())),
+    ) };
   assert_eq!(Some(Position { line: 0, column: 0 }), pos);
 }
 
@@ -610,7 +615,11 @@ local z = 3"#,
   // Safety: old/new.root 为夹具刚解析出的 arena 根块，存活非空；
   // block_diff_start 仅只读遍历两棵树。
   let pos =
-    unsafe { block_diff_start(old.root, new.root, (*new.root).body.as_slice()[1].as_ptr()) };
+    unsafe { block_diff_start(
+      Handle::from_ptr(old.root),
+      Handle::from_ptr(new.root),
+      Some(Handle::from_ptr((*new.root).body.as_slice()[1].as_ptr())),
+    ) };
   assert_eq!(Some(Position { line: 1, column: 0 }), pos);
 }
 
@@ -640,7 +649,11 @@ local foo = 8"#,
   // Safety: old/new.root 为夹具刚解析出的 arena 根块，存活非空；
   // block_diff_start 仅只读遍历两棵树。
   let pos =
-    unsafe { block_diff_start(old.root, new.root, (*new.root).body.as_slice()[3].as_ptr()) };
+    unsafe { block_diff_start(
+      Handle::from_ptr(old.root),
+      Handle::from_ptr(new.root),
+      Some(Handle::from_ptr((*new.root).body.as_slice()[3].as_ptr())),
+    ) };
   assert_eq!(Some(Position { line: 1, column: 0 }), pos);
 }
 
@@ -703,7 +716,11 @@ local foo = 8"#,
   // Safety: old/new.root 为夹具刚解析出的 arena 根块，存活非空；
   // block_diff_start 仅只读遍历两棵树。
   let pos =
-    unsafe { block_diff_start(old.root, new.root, (*new.root).body.as_slice()[2].as_ptr()) };
+    unsafe { block_diff_start(
+      Handle::from_ptr(old.root),
+      Handle::from_ptr(new.root),
+      Some(Handle::from_ptr((*new.root).body.as_slice()[2].as_ptr())),
+    ) };
   assert_eq!(Some(Position { line: 2, column: 0 }), pos);
 }
 
@@ -718,7 +735,7 @@ fn fragment_autocomplete_block_diff_test_both_empty() {
 
   // 故意传 null：两个块皆空时无 nearest statement，null 是 API 的哨兵输入
   // （cpp `blockDiffStart(old, new, nullptr)` 原样），nearest 仅按地址比较、不解引用。
-  let pos = block_diff_start(old.root, new.root, null_mut());
+  let pos = block_diff_start(Handle::from_ptr(old.root), Handle::from_ptr(new.root), None);
   assert!(pos.is_none());
 }
 
@@ -849,9 +866,9 @@ local z = x + y
 
   assert_eq!("local z = x + y", fragment.fragment_to_parse);
   assert_eq!(4, fragment.ancestry.len());
-  assert!(!fragment.root.is_null());
-  // fragment.root 已判空，经句柄物化夹具 arena 存活根块的只读借用。
-  let root_slot = OptNode::from_ptr(fragment.root);
+  // fragment.root 非空由 `Handle` 类型编码（cpp parseFragment null 早退契约），
+  // 经句柄物化夹具 arena 存活根块的只读借用。
+  let root_slot = OptNode::from_ptr(fragment.root.as_ptr());
   let root = root_slot.get().unwrap();
   assert_eq!(
     Location {
@@ -930,9 +947,9 @@ local y = 5
 
   assert_eq!("local z = x + y", fragment.fragment_to_parse);
   assert_eq!(4, fragment.ancestry.len());
-  assert!(!fragment.root.is_null());
-  // fragment.root 已判空，经句柄物化夹具 arena 存活根块的只读借用。
-  let root_slot = OptNode::from_ptr(fragment.root);
+  // fragment.root 非空由 `Handle` 类型编码（cpp parseFragment null 早退契约），
+  // 经句柄物化夹具 arena 存活根块的只读借用。
+  let root_slot = OptNode::from_ptr(fragment.root.as_ptr());
   let root = root_slot.get().unwrap();
   assert_eq!(
     Location {
@@ -1036,7 +1053,7 @@ abc("bar")
     .expect("expected fragment parse result");
 
   assert_eq!("abc(\n\"foo\"\n)", fragment.fragment_to_parse);
-  assert!(!fragment.nearest_statement.is_null());
+  assert!(fragment.nearest_statement.is_some());
   assert!(crate::is_nearest::<AstStatExpr>(fragment.nearest_statement));
   assert!(fragment.ancestry.len() >= 2);
 
@@ -1085,7 +1102,7 @@ abc("bar")
     .expect("expected call fragment parse result");
 
   assert_eq!("abc(\"foo\")", call_fragment.fragment_to_parse);
-  assert!(!call_fragment.nearest_statement.is_null());
+  assert!(call_fragment.nearest_statement.is_some());
   assert!(crate::is_nearest::<AstStatExpr>(
     call_fragment.nearest_statement
   ));
@@ -1123,7 +1140,7 @@ abc("bar")
     .expect("expected string fragment parse result");
 
   assert_eq!("abc(\"foo\"", string_fragment.fragment_to_parse);
-  assert!(!string_fragment.nearest_statement.is_null());
+  assert!(string_fragment.nearest_statement.is_some());
   assert!(crate::is_nearest::<AstStatExpr>(
     string_fragment.nearest_statement
   ));
@@ -1782,7 +1799,7 @@ end
   assert_eq!(6, result.ancestry.len());
   assert_eq!(3, result.local_stack.len());
   assert_eq!(result.local_map.size(), result.local_stack.len());
-  assert!(!result.nearest_statement.is_null());
+  assert!(result.nearest_statement.is_some());
   let last = *result.local_stack.last().unwrap();
   // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
   assert_eq!(
@@ -1797,7 +1814,12 @@ end
 
   // 门面一步下转+判型+物化（原 `ast_node_as + is_null + &*` 三步）。
   // nearest_statement 为夹具 arena 存活语句指针，句柄物化后只读至用例结束。
-  let nearest = OptNode::from_ptr(result.nearest_statement);
+  let nearest = OptNode::from_ptr(
+    result
+      .nearest_statement
+      .expect("上断言已证 nearest_statement 在场（cpp null 断言）")
+      .as_ptr(),
+  );
   let local = nearest
     .as_node::<AstStatLocal>()
     .expect("nearest_statement 应为 local 声明");
@@ -1828,7 +1850,7 @@ end
   assert_eq!(5, result.ancestry.len());
   assert_eq!(2, result.local_stack.len());
   assert_eq!(result.local_map.size(), result.local_stack.len());
-  assert!(!result.nearest_statement.is_null());
+  assert!(result.nearest_statement.is_some());
   let last = *result.local_stack.last().unwrap();
   // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
   assert_eq!(
@@ -1843,7 +1865,12 @@ end
 
   // 门面一步下转+判型+物化（原 `ast_node_as + is_null + &*` 三步）。
   // nearest_statement 为夹具 arena 存活语句指针，句柄物化后只读至用例结束。
-  let nearest = OptNode::from_ptr(result.nearest_statement);
+  let nearest = OptNode::from_ptr(
+    result
+      .nearest_statement
+      .expect("上断言已证 nearest_statement 在场（cpp null 断言）")
+      .as_ptr(),
+  );
   let local = nearest
     .as_node::<AstStatLocal>()
     .expect("nearest_statement 应为 local 声明");
@@ -2121,8 +2148,8 @@ abc(
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
-  assert!(!region.nearest_statement.is_null());
+  assert!(region.parent_block.is_some());
+  assert!(region.nearest_statement.is_some());
   assert!(crate::is_nearest::<AstStatExpr>(region.nearest_statement));
 }
 
@@ -2145,7 +2172,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatBlock>(region.nearest_statement));
 }
 
@@ -3358,7 +3385,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatLocal>(region.nearest_statement));
 }
 
@@ -3407,7 +3434,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatIf>(region.nearest_statement));
 }
 
@@ -3440,7 +3467,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatIf>(region.nearest_statement));
 }
 
@@ -3465,7 +3492,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatIf>(region.nearest_statement));
 }
 
@@ -3487,7 +3514,7 @@ elseif
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatIf>(region.nearest_statement));
 }
 
@@ -3582,7 +3609,7 @@ if"#,
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatIf>(region.nearest_statement));
 }
 
@@ -3612,7 +3639,7 @@ if true then
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatIf>(region.nearest_statement));
 }
 
@@ -3633,7 +3660,7 @@ if true
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatIf>(region.nearest_statement));
 }
 
@@ -3654,7 +3681,7 @@ if true
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatIf>(region.nearest_statement));
 }
 
@@ -3676,7 +3703,7 @@ if true then
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatIf>(region.nearest_statement));
 }
 
@@ -3899,7 +3926,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatBlock>(region.nearest_statement));
 }
 
@@ -3921,7 +3948,7 @@ do
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatBlock>(region.nearest_statement));
 }
 
@@ -4031,8 +4058,8 @@ local y = 5
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
-  assert!(!region.nearest_statement.is_null());
+  assert!(region.parent_block.is_some());
+  assert!(region.nearest_statement.is_some());
   assert!(crate::is_nearest::<AstStatLocal>(region.nearest_statement));
 }
 
@@ -4057,11 +4084,16 @@ local y = 5
     assert_eq!(3, result.ancestry.len());
     assert_eq!(1, result.local_stack.len());
     assert_eq!(result.local_map.size(), result.local_stack.len());
-    assert!(!result.nearest_statement.is_null());
+    assert!(result.nearest_statement.is_some());
 
     // 门面一步下转+判型（原 `ast_node_as + is_null` 两步）。
     // nearest_statement 为夹具 arena 存活语句指针，句柄物化后只读。
-    let nearest = OptNode::from_ptr(result.nearest_statement);
+    let nearest = OptNode::from_ptr(
+    result
+      .nearest_statement
+      .expect("上断言已证 nearest_statement 在场（cpp null 断言）")
+      .as_ptr(),
+  );
     let local = nearest
       .as_node::<AstStatLocal>()
       .expect("nearest_statement 应为 local 声明");
@@ -4201,7 +4233,7 @@ fn fragment_autocomplete_local_initializer() {
       begin: Position { line: 0, column: 0 },
       end: Position { line: 0, column: 9 },
     },
-    OptNode::from_ptr(fragment.root)
+    OptNode::from_ptr(fragment.root.as_ptr())
       .get()
       .unwrap()
       .base
@@ -4353,8 +4385,8 @@ abc(
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
-  assert!(!region.nearest_statement.is_null());
+  assert!(region.parent_block.is_some());
+  assert!(region.nearest_statement.is_some());
   assert!(crate::is_nearest::<AstStatExpr>(region.nearest_statement));
 }
 
@@ -4375,8 +4407,8 @@ abc("foo")
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
-  assert!(!region.nearest_statement.is_null());
+  assert!(region.parent_block.is_some());
+  assert!(region.nearest_statement.is_some());
   assert!(crate::is_nearest::<AstStatExpr>(region.nearest_statement));
 }
 
@@ -4832,7 +4864,7 @@ if x == 4 then
   assert_eq!(4, result.ancestry.len());
   assert_eq!(2, result.local_stack.len());
   assert_eq!(result.local_map.size(), result.local_stack.len());
-  assert!(!result.nearest_statement.is_null());
+  assert!(result.nearest_statement.is_some());
   let last = *result.local_stack.last().unwrap();
   // local_stack 元素是 arena 写入的存活 Binding 指针，经句柄安全只读取名。
   assert_eq!(
@@ -5306,7 +5338,7 @@ for i,v in {1,2,3} do
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatForIn>(region.nearest_statement));
 }
 
@@ -5333,7 +5365,7 @@ for i,v in {1,2,3}
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatForIn>(region.nearest_statement));
 }
 
@@ -5360,7 +5392,7 @@ for i,v in
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatForIn>(region.nearest_statement));
 }
 
@@ -5381,7 +5413,7 @@ for i,
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatForIn>(region.nearest_statement));
 }
 
@@ -5411,7 +5443,7 @@ for c = 1,3 do
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatFor>(region.nearest_statement));
 }
 
@@ -5441,7 +5473,7 @@ for c = 1,3
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatFor>(region.nearest_statement));
 }
 
@@ -5466,7 +5498,7 @@ local x =
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatLocal>(region.nearest_statement));
 }
 
@@ -5496,7 +5528,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatLocal>(region.nearest_statement));
 }
 
@@ -5517,7 +5549,7 @@ while t
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatWhile>(region.nearest_statement));
 }
 
@@ -5838,7 +5870,7 @@ local part : Part = {x = 3}; pa
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatError>(region.nearest_statement));
 }
 
@@ -5865,8 +5897,8 @@ abc("foo")
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
-  assert!(!region.nearest_statement.is_null());
+  assert!(region.parent_block.is_some());
+  assert!(region.nearest_statement.is_some());
   assert!(crate::is_nearest::<AstStatExpr>(region.nearest_statement));
 }
 
@@ -5888,10 +5920,9 @@ fn fragment_autocomplete_statement_in_empty_fragment_is_non_null() {
 
   assert_eq!("", fragment.fragment_to_parse);
   assert_eq!(1, fragment.ancestry.len());
-  assert!(!fragment.root.is_null());
   assert_eq!(
     0,
-    OptNode::from_ptr(fragment.root).get().unwrap().body.len()
+    OptNode::from_ptr(fragment.root.as_ptr()).get().unwrap().body.len()
   );
 }
 
@@ -6791,7 +6822,7 @@ end
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatWhile>(region.nearest_statement));
 }
 
@@ -6818,7 +6849,7 @@ function f(arg1,
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatFunction>(
     region.nearest_statement
   ));
@@ -6847,7 +6878,7 @@ local function f(arg1,
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatLocalFunction>(
     region.nearest_statement
   ));
@@ -6876,7 +6907,7 @@ function f(arg1 : T
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatFunction>(
     region.nearest_statement
   ));
@@ -6905,7 +6936,7 @@ function f(arg1 : T) :
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatFunction>(
     region.nearest_statement
   ));
@@ -6934,7 +6965,7 @@ function f(arg1 : T) : T...
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatFunction>(
     region.nearest_statement
   ));
@@ -6963,7 +6994,7 @@ local function f(arg1 : T
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatLocalFunction>(
     region.nearest_statement
   ));
@@ -6992,7 +7023,7 @@ local function f(arg1 : T) :
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatLocalFunction>(
     region.nearest_statement
   ));
@@ -7021,7 +7052,7 @@ local function f(arg1 : T) : T...
     },
     region.fragment_location
   );
-  assert!(!region.parent_block.is_null());
+  assert!(region.parent_block.is_some());
   assert!(crate::is_nearest::<AstStatLocalFunction>(
     region.nearest_statement
   ));

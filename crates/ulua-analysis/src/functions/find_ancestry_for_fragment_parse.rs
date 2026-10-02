@@ -1,5 +1,4 @@
 use alloc::vec::Vec;
-use core::ptr::null_mut;
 
 use ulua_ast::{
   records::{
@@ -20,7 +19,7 @@ use crate::{
     get_fragment_region_with_block_diff::get_fragment_region_with_block_diff,
   },
   records::{
-    arena_handle::{alias, alias_opt},
+    arena_handle::{Handle, alias_opt},
     fragment_autocomplete_ancestry_result::FragmentAutocompleteAncestryResult,
   },
 };
@@ -41,41 +40,41 @@ fn add_local(
 
 /// 对照 C++ `findAncestryForFragmentParse`（FragmentAutocomplete.cpp:387）。
 ///
-/// # Safety
-/// - `stale`：上一次解析持有树根部的非空 `*mut AstStatBlock`（C++ 形参 `stale`，
-///   即 Frontend 双树轮转中的旧 root）。调用期内该树必须存活且不被别名可变借用：
-///   函数内部以 `&mut *stale` 走祖先查询、以 `&mut *stale` 访问 block diff，且返回
-///   结果的 ancestry / nearest_statement / parent_block 裸指针全部指向这棵树。
-/// - `cursor_pos`：按值传入的光标坐标，无指针前提；允许落在两棵树的任意位置。
-/// - `last_good_parse`：最近一次完整解析的树根，可为 null（对应 C++ 对
-///   `lastGoodParse == nullptr` 提前返回空结果，本函数同样短路）；非空时须与
-///   `stale` 同属解析 arena 且调用期间存活，内部会完整遍历它做 block diff。
-pub unsafe fn find_ancestry_for_fragment_parse(
-  stale: *mut AstStatBlock,
+/// §2：入口已句柄化——`stale` 为双树轮转中的旧 root（C++ 形参 `stale`，
+/// 仅在 `last_good_parse` 非空的路径上被祖先查询/block diff 解引用，nullptr
+/// 于 cpp 属 UB，此处保留 `Option` 直至解引用点收口为确定性 panic）；
+/// `cursor_pos` 按值传入的光标坐标，允许落在两棵树的任意位置；
+/// `last_good_parse` 最近一次完整解析的树根，可为 `None`（对应 C++ 对
+/// `lastGoodParse == nullptr` 提前返回空结果，本函数同样短路）；两棵树在
+/// 调用期间存活由 `Handle` 模块级 arena 保活契约承载，返回值中的
+/// ancestry / nearest_statement / parent_block 皆指向这两棵树。
+pub fn find_ancestry_for_fragment_parse(
+  stale: Option<Handle<AstStatBlock>>,
   cursor_pos: Position,
-  last_good_parse: *mut AstStatBlock,
+  last_good_parse: Option<Handle<AstStatBlock>>,
 ) -> FragmentAutocompleteAncestryResult {
   // the freshest ast can sometimes be null if the parse was bad.
-  if last_good_parse.is_null() {
-    // nearest_statement / parent_block 维持 FragmentRegion 裸指针子系统的
-    // null 哨兵形态（与 records/nearest_statement_finder.rs、
-    // records/fragment_parse_result.rs 同一 arena AST 归入约定，见其字段注释）。
-    return FragmentAutocompleteAncestryResult {
-      local_map: DenseHashMap::default(),
-      local_stack: Vec::new(),
-      ancestry: Vec::new(),
-      nearest_statement: null_mut(),
-      parent_block: null_mut(),
-      fragment_selection_region: Location::new(Position::missing(), Position::missing()),
-    };
-  }
+  let fresh = match last_good_parse {
+    Some(fresh) => fresh,
+    None => {
+      return FragmentAutocompleteAncestryResult {
+        local_map: DenseHashMap::default(),
+        local_stack: Vec::new(),
+        ancestry: Vec::new(),
+        nearest_statement: None,
+        parent_block: None,
+        fragment_selection_region: Location::new(Position::missing(), Position::missing()),
+      };
+    }
+  };
 
-  // Safety: 满足 `get_fragment_region_with_block_diff` 对两个块指针的前提——
-  // `last_good_parse` 已在函数入口判空（null 时提前返回空结果），`stale` 非空且
-  // 两棵树在调用期间存活由本函数 `# Safety` 契约保证；期间无别名可变访问。
-  let region = unsafe { get_fragment_region_with_block_diff(stale, last_good_parse, &cursor_pos) };
-  let ancestry =
-    find_ancestry_at_position_for_autocomplete_ast_stat_block_position(alias(stale), cursor_pos);
+  let region = get_fragment_region_with_block_diff(stale, fresh, &cursor_pos);
+  let stale_root =
+    stale.expect("stale 根在 lastGoodParse 非空时应在场（cpp findAncestry 直解引用 UB 收口）");
+  let ancestry = find_ancestry_at_position_for_autocomplete_ast_stat_block_position(
+    stale_root.get_mut(),
+    cursor_pos,
+  );
 
   LUAU_ASSERT!(!ancestry.is_empty());
 

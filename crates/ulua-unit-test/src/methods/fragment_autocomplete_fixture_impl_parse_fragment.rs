@@ -1,5 +1,6 @@
 use ulua_analysis::{
-  functions::parse_fragment::parse_fragment, records::fragment_parse_result::FragmentParseResult,
+  functions::parse_fragment::parse_fragment,
+  records::{arena_handle::Handle, fragment_parse_result::FragmentParseResult},
 };
 use ulua_ast::records::position::Position;
 
@@ -33,11 +34,11 @@ impl FragmentAutocompleteFixtureImpl {
     let module_ref = unsafe { &*module };
     let names = raw_handle(module_ref.names.as_ref()?);
 
-    // Safety: 行 33 判空后把模块物化为只读共享借用（resolver ModulePtr 存活，见上方 31-32 行注记），不伪造 &mut；root 为 arena 存活 AST 起点，names 取 resolver 内 AstNameTable 非空块地址（cpp names.get() 同形，下游按 & 只读使用）；parse_result.root 为本次 parse 的存活产物；单线程帧内使用。
+    // Safety: 行 33 判空后把模块物化为只读共享借用（resolver ModulePtr 存活，见上方 31-32 行注记），不伪造 &mut；两树根经 `from_opt_ptr` 折叠可空性（root 为 arena 存活 AST 起点、parse_result.root 为本次 parse 的存活产物），names 取 resolver 内 AstNameTable 非空块地址（cpp names.get() 同形，下游按 & 只读使用）；单线程帧内使用。
     unsafe {
       parse_fragment(
-        module_ref.root,
-        parse_result.root,
+        Handle::from_opt_ptr(module_ref.root),
+        Handle::from_opt_ptr(parse_result.root),
         names,
         document,
         cursor_pos,

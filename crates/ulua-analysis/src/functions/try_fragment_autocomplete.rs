@@ -12,7 +12,7 @@ use crate::{
     is_within_hot_comment_module::is_within_hot_comment_parse_result_position,
   },
   records::{
-    fragment_autocomplete_status_result::FragmentAutocompleteStatusResult,
+    arena_handle::Handle, fragment_autocomplete_status_result::FragmentAutocompleteStatusResult,
     fragment_context::FragmentContext, frontend::Frontend,
   },
   type_aliases::{
@@ -49,7 +49,9 @@ pub fn try_fragment_autocomplete(
     deprecated_fragment_end_position: fragment_end,
     reporter,
   } = context;
-  let recent_parse = fresh_parse.root;
+  // cpp `fragmentAutocomplete(..., freshParse.root, ...)`：null 哨兵折叠为
+  // `Option<Handle>`（`from_opt_ptr` 不创建引用），存活随解析 arena 契约。
+  let recent_parse = Handle::from_opt_ptr(fresh_parse.root);
 
   let outcome = catch_unwind(AssertUnwindSafe(|| {
     fragment_autocomplete(FragmentAutocompleteArgs {

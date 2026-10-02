@@ -6,30 +6,26 @@ use ulua_ast::{
 use crate::{
   functions::get_fragment_location::get_fragment_location,
   records::{
-    arena_handle::{alias, alias_opt},
-    fragment_region::FragmentRegion,
+    arena_handle::Handle, fragment_region::FragmentRegion,
     nearest_statement_finder::NearestStatementFinder,
   },
 };
 
-/// # Safety
-/// - `root` 须为非空、对齐且指向 arena 存活 `AstStatBlock` 的句柄，存活期覆盖本次遍历；
-/// - visit 期间该块无其他并存借用（对应 C++ getFragmentRegion 调用契约）。
-pub unsafe fn get_fragment_region(
-  root: *mut AstStatBlock,
+/// §2：入口 `root` 已句柄化——cpp `getFragmentRegion` 对非空 `AstStatBlock*`
+/// 的直取遍历（未命中时以根块作 `parentBlock` 兜底），非空性由 [`Handle`]
+/// 类型编码、arena 保活契约覆盖本次遍历，`unsafe` 随裸形参一并消亡。
+pub fn get_fragment_region(
+  root: Handle<AstStatBlock>,
   cursor_position: &Position,
 ) -> FragmentRegion {
   let mut nsf = NearestStatementFinder::new(*cursor_position);
-  ast_stat_block_visit(alias(root), &mut nsf);
+  ast_stat_block_visit(root.get_mut(), &mut nsf);
 
-  let parent = if !nsf.parent.is_null() {
-    nsf.parent
-  } else {
-    root
-  };
+  // cpp `parentBlock = nsf.parent ? nsf.parent : root`：未命中回退根块。
+  let parent = nsf.parent.or(Some(root));
 
   FragmentRegion {
-    fragment_location: get_fragment_location(alias_opt(nsf.nearest), cursor_position),
+    fragment_location: get_fragment_location(nsf.nearest.map(|h| h.get()), cursor_position),
     nearest_statement: nsf.nearest,
     parent_block: parent,
   }

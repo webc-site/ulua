@@ -120,6 +120,16 @@ impl<T> Handle<T> {
     self.ptr.as_ptr()
   }
 
+  /// 同一地址在两个共享首字段基座的 AST 节点视图间重铸（对应原
+  /// `p.cast::<U>()` 裸指针形态，如 `AstStatBlock*` ↔ 其根语句
+  /// `AstStat*`）：`repr(C)` 首字段基址重合是移植层既有约定，句柄身份
+  /// （地址）不变，存活/别名契约随宿主句柄原样继承。
+  pub fn cast<U>(&self) -> Handle<U> {
+    Handle::<U> {
+      ptr: self.ptr.cast(),
+    }
+  }
+
   /// 直接以 `NonNull` 视图取回内部指针：`Handle` 类型编码「恒非空」，
   /// 故与 `NonNull::new(self.as_ptr()).unwrap()` 逐位等价且无判空分支，
   /// 供下游形参为 `NonNull<T>`（C++ `NotNull<T>` 镜像）的调用点直连。

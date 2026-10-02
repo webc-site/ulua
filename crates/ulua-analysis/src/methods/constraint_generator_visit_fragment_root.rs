@@ -6,7 +6,7 @@ use ulua_common::macros::luau_assert::LUAU_ASSERT;
 use crate::{
   functions::{as_mutable_type::as_mutable_type_id, follow_type, get_type},
   records::{
-    arena_handle::{alias, alias_ref},
+    arena_handle::{Handle, alias},
     blocked_type::BlockedType,
     constraint_generator::ConstraintGenerator,
     interior_free_types::InteriorFreeTypes,
@@ -48,12 +48,13 @@ impl ConstraintGenerator {
   }
 
   // ConstraintGenerator::visitFragmentRoot (ConstraintGenerator.cpp).
-  /// `block` 为本 fragment 的根 `AstStatBlock` 裸指针入口（记录字段直传边界），
-  /// 经 alias_ref 收口为共享引用后全程只读。
-  pub(crate) fn visit_fragment_root(&mut self, resume_scope: &ScopePtr, block: *mut AstStatBlock) {
+  /// §2：`block` 为本 fragment 的根 `AstStatBlock` 入口，已收非空 [`Handle`]
+  /// （cpp `visitFragmentRoot` 直解引用 `block->location`，nullptr 属契约外），
+  /// `get` 物化共享引用后全程只读。
+  pub(crate) fn visit_fragment_root(&mut self, resume_scope: &ScopePtr, block: Handle<AstStatBlock>) {
     // We prepopulate global data in the resumeScope to avoid writing data into the old modules scopes
     let global_scope = self.global_scope.clone().unwrap();
-    let block_ref = alias_ref(block);
+    let block_ref = block.get();
     self.prepopulate_global_scope_for_fragment_typecheck(&global_scope, resume_scope, block_ref);
     // Pre
     self.interior_free_types.push(InteriorFreeTypes::default());
