@@ -356,12 +356,13 @@ pub unsafe fn ast_node_visit<V: AstVisitor + ?Sized>(node: *mut AstNode, visitor
 macro_rules! define_dispatch_node {
   ($(($variant:ident, $ty:ty, $hook:ident, $parent:ident)),+ $(,)?) => {
     /// The central class-index dispatcher — the analog of the C++ vtable. One arm
-    /// per concrete node type; each downcast is sound for the same reason as
-    /// [`crate::rtti::mut_cast`] (standard-layout, base at offset 0).
+    /// per concrete node type; each downcast goes through the safe facade
+    /// [`crate::rtti::ast_node_try_as_mut`]（class_index 命中后 repr(C) 首字段
+    /// 基址重合，标准布局保证，同 [`crate::rtti::mut_cast`] 的契约）。
     ///
     /// 入参为 `&mut AstNode`：引用即「该 place 在借用期内存活且可独占」的类型系统
     /// 证明，故本函数是 safe fn——空指针早退交回调用方（各 `*_visit` 门面），
-    /// 唯一的裸指针下转收口在臂内的 `// Safety:` 块。
+    /// 臂内下转亦全程 safe，本分发器不再携带 `unsafe`。
     ///
     /// 静态类型已是 `AstStatBlock` 的入口（cpp `block->visit(visitor)` 直调 override，
     /// 无需 class-index 分发）不走这里，改调
@@ -370,9 +371,15 @@ macro_rules! define_dispatch_node {
       match node.class_index {
         $(
           <$ty>::CLASS_INDEX => {
-            // Safety: class_index 已命中 `<$ty>`，#[repr(C)] 单继承保证基址重合；`&mut` 入参
-            // 即该 arena place 在借用期内的独占证明，visitor 串行写穿，无重叠 `&mut` 别名。
-            let typed = unsafe { $crate::rtti::ast_node_as_unchecked_mut::<$ty>(node) };
+            // safe 下转门面复核判型：match 刚命中同一 CLASS_INDEX，失败臂不可达
+            // （未知 class index 的内存损坏已由 `_` 臂统一报出）。
+            let Some(typed) = $crate::rtti::ast_node_try_as_mut::<$ty>(node) else {
+              unreachable!(
+                "dispatch_node: class index {} 命中 {} 后复核失败",
+                node.class_index,
+                stringify!($ty)
+              );
+            };
             if visitor.visit_any(AstNodeRefMut::$variant(typed)) {
               typed.visit_children(visitor);
             }
