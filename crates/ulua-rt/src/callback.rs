@@ -264,9 +264,9 @@ where
   };
 
   // 3. Build a borrowed Lua handle for the calling thread (must NOT close it).
-  // `Lua::from_borrowed` 是带契约的 safe fn（只存指针不解引用）：`state` 由 VM
-  // 实时传入即满足「存活期覆盖句柄及其克隆」。
-  let lua = Lua::from_borrowed(raw);
+  // `Lua::from_borrowed` 是带契约的 safe fn（只复制视图指针位、不解引用）：
+  // `state` 由 VM 实时传入并经上一收口点转视图，即满足「存活期覆盖句柄及其克隆」。
+  let lua = Lua::from_borrowed(state);
 
   // 4. Pull the arguments off the stack into a MultiValue. They occupy
   //    stack indices 1..=nargs.

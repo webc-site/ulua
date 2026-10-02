@@ -213,11 +213,11 @@ unsafe extern "C-unwind" fn interrupt_trampoline(raw: *mut LuaState, gc: i32) {
   let cb = InterruptStore::with(|m| m.remove(&key));
   let Some(cb) = cb else { return };
 
-  // `from_borrowed` 现为带契约的安全封装（契约见 state.rs 文档）：`state` 在
-  // 本次调用全程存活（VM 正驱动到 safepoint），覆盖返回句柄及其克隆——
-  // 借用语义（`owned:false`）保证该句柄 drop 时不会关 VM；与 `callback.rs`
-  // trampoline 同纪律：闭包不得把克隆出的句柄寄存到超出本次回调。
-  let lua = Lua::from_borrowed(raw);
+  // `from_borrowed` 现为带契约的安全封装（契约见 state.rs 文档，形参收口为
+  // [`StateView`]）：`state` 在本次调用全程存活（VM 正驱动到 safepoint），覆盖
+  // 返回句柄及其克隆——借用语义（`owned:false`）保证该句柄 drop 时不会关 VM；
+  // 与 `callback.rs` trampoline 同纪律：闭包不得把克隆出的句柄寄存到超出本次回调。
+  let lua = Lua::from_borrowed(state);
   // The callback is user code: a panic must not unwind through the VM's
   // frames (it would corrupt the interpreter state mid-safepoint). Convert it
   // into a catchable Lua error instead, like the callback trampoline does.

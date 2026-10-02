@@ -1094,15 +1094,15 @@ impl Lua {
   /// trampoline) in a borrowed [`Lua`] that will **not** close it on drop.
   ///
   /// 内部边界封装（原 `pub(crate) unsafe fn`，去 unsafe 化后契约前移到调用点）：
-  /// `state` 必须是存活的非空 `LuaState`，且比返回句柄及其所有克隆活得久。本函数
-  /// 只把指针经 `NonNull` 收口存入 `LuaInner`（不解引用），`owned:false` 使句柄
-  /// drop 不关 VM。全部调用点都在 VM 驱动的 C trampoline 内（`callback.rs`/
-  /// `async.rs`/`interrupt.rs`）：那里的 `state` 由 VM 在受保护边界实时传入，天然
-  /// 满足契约；null 输入是调用方违约，当场 panic（原语义下是后续空指针解引用
-  /// UB——panic 是更响亮的等价失败）。
-  pub(crate) fn from_borrowed(state: *mut LuaState) -> Lua {
-    let state = NonNull::new(state).expect("borrowed LuaState must not be null");
-    Lua::from_inner(XRc::new(LuaInner::new(state, false)))
+  /// 形参已是 [`StateView`]——非空与存活的论证收口在视图唯一产生点
+  /// [`StateView::from_raw`]（C-ABI trampoline 入口），可空裸指针不再在业务
+  /// 逻辑层流转（§2）。本函数只把视图的指针位复制进 `LuaInner`（不解引用），
+  /// `owned:false` 使句柄 drop 不关 VM。全部调用点都在 VM 驱动的 C trampoline 内
+  /// （`callback.rs`/`async.rs`/`interrupt.rs`）：那里的视图由 VM 在受保护边界
+  /// 实时传入的 state 一次转出，天然满足「存活期覆盖返回句柄及其克隆」；
+  /// 同纪律要求句柄及其克隆不得寄存到该 trampoline 帧之外。
+  pub(crate) fn from_borrowed(state: StateView<'_>) -> Lua {
+    Lua::from_inner(XRc::new(LuaInner::new(state.ptr, false)))
   }
 
   /// Register a value sitting at stack index `idx` in the registry and return
