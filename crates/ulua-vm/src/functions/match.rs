@@ -32,7 +32,7 @@ pub(crate) unsafe fn match_item(ms: &mut MatchState, s: usize, mut p: usize) -> 
   // 回调期间以 `(*l).n_ccalls` 进出各一次计数包裹（cpp `match` 同点位），
   // 回调不可重入本状态（LUAI_MAXCCALLS 语义），计数复原必然执行
   unsafe {
-    if let Some(interrupt) = (*(*l).global).cb.interrupt {
+    if let Some(interrupt) = (*l).gs_ref().cb.interrupt {
       (*l).n_ccalls = (*l).n_ccalls.wrapping_add(1);
       interrupt(l, -1);
       (*l).n_ccalls = (*l).n_ccalls.wrapping_sub(1);

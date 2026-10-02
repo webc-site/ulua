@@ -289,7 +289,7 @@ pub(crate) unsafe fn loadsafe(
         let name = read_str!("userdata type name id");
 
         if ((index - 1) as usize) < USERDATA_TYPE_LIMIT
-          && let Some(cb) = (*(*l).global).ecb.gettypemapping
+          && let Some(cb) = (*l).gs_ref().ecb.gettypemapping
         {
           userdata_remapping[(index - 1) as usize] = cb(l, getstr(name), (*name).len as usize);
         }

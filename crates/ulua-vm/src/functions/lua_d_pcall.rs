@@ -31,8 +31,8 @@ pub(crate) unsafe fn lua_d_pcall(
   //
   // r13-w1b 逐点定性（w6d 口径保留面）：n_ccalls/base_ccalls 的保存-恢复对、
   // isactive 读与落笔、`saveci!/restoreci!` 的 ci 场域收发、收尾 `(*l).base` 回读
-  // `ci->base` 均为恢复点动作本体，LuaState 上无对应门面，原样保留；`(*(*l).global).cb`
-  // 为 global_State 链读数，非栈顶门面/原语覆盖面，保留；n_ccalls<=base_ccalls 处
+  // `ci->base` 均为恢复点动作本体，LuaState 上无对应门面，原样保留；`(*l).gs_ref().cb`
+  // 为 global_State 链读数，r16-b1 收编经 gs_ref 只读门面（见其契约）；n_ccalls<=base_ccalls 处
   // 系 cpp 明载的 lua_isyieldable 离线调用规避（inlined by design），不可换用
   // is_yieldable() 门面，保留原裸判据。收编仅两处读数：错误对象置顶的 top 现读
   // （top_slot(0)）与 debug 钩后的 Break 谓词（status() 门面）。
@@ -84,7 +84,7 @@ pub(crate) unsafe fn lua_d_pcall(
       (*l).base_ccalls = old_base_ccalls;
 
       // an error occurred, check if we have a protected error callback
-      if yieldable && let Some(debugprotectederror) = (*(*l).global).cb.debugprotectederror {
+      if yieldable && let Some(debugprotectederror) = (*l).gs_ref().cb.debugprotectederror {
         debugprotectederror(l);
 
         // debug hook is only allowed to break
