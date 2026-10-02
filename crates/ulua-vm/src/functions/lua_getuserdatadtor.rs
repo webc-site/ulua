@@ -11,5 +11,6 @@ pub unsafe fn lua_getuserdatadtor(l: *mut LuaState, tag: i32) -> LuaDestructor {
   api_check!(l, (tag as u32) < LUA_UTAG_LIMIT as u32);
 
   // SAFETY: 契约保证 `l` 的 global 存活且 tag 落在 udatagc 注册数组界内，取回的析构指针为登记原值
-  unsafe { (*(*l).global).udatagc[tag as usize] }
+  // （r16-b1 收编：读数经 gs_ref 只读视图，同指针同值，见其契约）
+  unsafe { (*l).gs_ref().udatagc[tag as usize] }
 }
