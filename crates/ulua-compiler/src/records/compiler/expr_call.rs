@@ -44,7 +44,7 @@ use crate::{
     builtin_info::BuiltinInfo,
     capture::Capture,
     compile_error::{CompileError, ERR_EXCEEDED_JUMP_DISTANCE_LIMIT, REMARK_INLINE_RECURSIVE},
-    compiler::{Compiler, K_MAX_AD_INDEX, K_MAX_TARGET_COUNT},
+    compiler::{Compiler, K_MAX_AD_INDEX, K_MAX_TARGET_COUNT, nn_alias::alias},
     constant::Constant,
     node::Node,
   },
@@ -309,12 +309,12 @@ impl Compiler {
         selfreg = regs;
         // Safety: fi.expr 已句柄化恒非空，裸出口经 as_ptr 桥接；&mut 写穿仅落在该节点
         // 的编译期临时字段，调用方独占本编译器、AST arena 无并发访问。
-        self.compile_expr_temp_top(unsafe { &mut *fi.expr.as_ptr() }, selfreg);
+        self.compile_expr_temp_top(alias(fi.expr.as_ptr()), selfreg);
       }
     } else if bfid < 0 && fast_pcall_id < 0 {
       // Safety: expr_ref.func 为调用节点的存活函数表达式子指针（parser 保证非空）；
       // &mut 写穿限于该节点编译期临时字段，独占由本编译器持有。
-      self.compile_expr_temp_top(unsafe { &mut *expr_ref.func }, regs);
+      self.compile_expr_temp_top(alias(expr_ref.func), regs);
     }
 
     let mut mult_call = false;
@@ -322,16 +322,11 @@ impl Compiler {
       if i + 1 == expr_ref.args.size {
         // Safety: arg 为 args 数组第 i 项，parser 登记的存活 AstExpr 子指针；
         // &mut 写穿限于该节点编译期临时字段。
-        mult_call = self.compile_expr_temp_mult_ret(
-          unsafe { &mut *arg },
-          regs + 1 + (expr_ref.self_ as u8) + i as u8,
-        );
+        mult_call =
+          self.compile_expr_temp_mult_ret(alias(arg), regs + 1 + (expr_ref.self_ as u8) + i as u8);
       } else {
         // Safety: 同上，args 各项均为存活 AstExpr 子指针。
-        self.compile_expr_temp_top(
-          unsafe { &mut *arg },
-          regs + 1 + (expr_ref.self_ as u8) + i as u8,
-        );
+        self.compile_expr_temp_top(alias(arg), regs + 1 + (expr_ref.self_ as u8) + i as u8);
       }
     }
 
@@ -373,7 +368,7 @@ impl Compiler {
           .emit_abc(LuauOpcode::LOP_FASTCALL, bfid as u8, 0, 0);
       }
       // Safety: expr_ref.func 为存活 AstExpr 子指针；&mut 写穿限于该节点编译期临时字段。
-      self.compile_expr(unsafe { &mut *expr_ref.func }, regs, true);
+      self.compile_expr(alias(expr_ref.func), regs, true);
       let call_label = self.bc().emit_label();
       // cpp 校验 patchSkipC 返回值，失败时报错（Compiler.cpp:1562-1565）
       if !self.bc_mut().patch_skip_c(fastcall_label, call_label) {
@@ -481,7 +476,7 @@ impl Compiler {
           args[i] = (regs as u32) + 1 + (i as u32);
           // Safety: arg_expr 为存活子表达式指针；args[i] 由 regs+1+i 推得，
           // regs 为本调用已分配的实参基寄存器，编号在帧内有效。
-          self.compile_expr_temp_top(unsafe { &mut *arg_expr }, args[i] as u8);
+          self.compile_expr_temp_top(alias(arg_expr), args[i] as u8);
         }
       }
     }
@@ -513,7 +508,7 @@ impl Compiler {
 
     // Safety: expr_ref.func 为 parser 保证非空的被调表达式指针（arena 内存活），
     // regs 是本帧为其分配的基寄存器。
-    self.compile_expr(unsafe { &mut *expr_ref.func }, regs, true);
+    self.compile_expr(alias(expr_ref.func), regs, true);
 
     let call_label = self.bc().emit_label();
 
@@ -633,10 +628,7 @@ impl Compiler {
       } else {
         // Safety: sub_expr 为 expressions 数组记录的存活 AstExpr 子指针；&mut 写穿
         // 限于该节点编译期临时字段，AST 与 &mut self 各字段无别名交集。
-        self.compile_expr_temp_top(
-          unsafe { &mut *sub_expr },
-          base_reg + 2 + i as u8 - skipped as u8,
-        );
+        self.compile_expr_temp_top(alias(sub_expr), base_reg + 2 + i as u8 - skipped as u8);
       }
     }
 
@@ -915,10 +907,10 @@ impl Compiler {
         let temp = (array_chunk_reg as u32 + array_chunk_current) as u8;
         if i + 1 == expr_ref.items.size {
           // Safety: value 为存活表项节点，&mut 借用只覆盖该次调用。
-          mult_ret = self.compile_expr_temp_mult_ret(unsafe { &mut *value }, temp);
+          mult_ret = self.compile_expr_temp_mult_ret(alias(value), temp);
         } else {
           // Safety: value 为存活表项节点，temp 是本块连续数组槽。
-          self.compile_expr_temp_top(unsafe { &mut *value }, temp);
+          self.compile_expr_temp_top(alias(value), temp);
         }
         array_chunk_current += 1;
       }
@@ -1104,7 +1096,7 @@ impl Compiler {
     } else {
       argreg = regs + 1;
       // Safety: arg 为存活索引参数表达式；regs+1 是为本调用预留的实参槽。
-      self.compile_expr_temp_top(unsafe { &mut *arg }, argreg);
+      self.compile_expr_temp_top(alias(arg), argreg);
     }
 
     let fastcall_label = self.bc().emit_label();
@@ -1118,7 +1110,7 @@ impl Compiler {
 
     // Safety: expr_ref.func 为 parser 保证非空存活的被调表达式（此处为 `select`），
     // regs 为其基寄存器。
-    self.compile_expr(unsafe { &mut *expr_ref.func }, regs, true);
+    self.compile_expr(alias(expr_ref.func), regs, true);
 
     if argreg != regs + 1 {
       self

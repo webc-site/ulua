@@ -132,6 +132,7 @@ mod expr_call;
 mod fold;
 mod function;
 mod module;
+pub(crate) mod nn_alias;
 mod scope;
 mod stat;
 
