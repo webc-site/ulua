@@ -650,6 +650,14 @@ assert(not ok)
 local ok2, err2 = pcall(function() return -(123i) end)
 assert(not ok2)
 
+-- Binary + is closed on integers too (add goes through integer.add, which works: see above)
+local success,errmsg = pcall(function() return intval + 1i end)
+assert(not success)
+assert(string.find(errmsg, "arithmetic %(add%) on integer"))
+
+-- tonumber() only accepts number/string channels; an integer yields nil
+assert(tonumber(42i) == nil)
+
 assert(is_native_if_supported())
 
 return('OK')
