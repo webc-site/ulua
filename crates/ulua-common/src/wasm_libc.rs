@@ -42,10 +42,11 @@
 //! 本模块所有返回空指针处均属保留项：它们是各 C 接口契约规定的 NULL 回报
 //! （malloc/realloc 分配失败、mmap 失败），
 //! 返回类型本身即 `extern "C"` 裸指针签名，无 Option 可替换的空间。
-//! r2 收口形态：块布局（头部读写、base↔user 换算、layout 复原）的**全部**
-//! `unsafe` 挤进 [`alloc_block`]/[`user_of`]/[`block_of`] 三枚最小 `# Safety`
-//! 封装，`extern "C"` 面只剩契约适配（`Option`/`Layout` 编排 + 单点转调），
-//! 不再有逐函数的指针算术。
+//! r2 收口形态：块布局（头部读写、base↔user 换算、layout 复原）与全局分配器
+//! 调用（`alloc`/`dealloc`/`alloc_realloc`）的**全部** `unsafe` 挤进
+//! [`alloc_block`]/[`dealloc_block`]/[`resize_block`]/[`user_of`]/[`block_of`]
+//! 五枚最小 `# Safety` 封装，`extern "C"` 面只剩契约适配（`Option`/`Layout`
+//! 编排 + 单点转调），不再有逐函数的指针算术或裸分配器调用。
 
 // target_os = "unknown"（wasm32-unknown-unknown）整模块参与；wasi 系目标下
 // malloc/free 等符号由 wasi-libc 提供，整模块门出以免重定义（cpp 无此面）
@@ -72,7 +73,8 @@ fn layout_of(size: usize) -> Option<Layout> {
   Layout::from_size_align(size.checked_add(HEADER)?, HEADER).ok()
 }
 
-/// 分配 + 写头 + 交用户指针的构造面（[`malloc`] 与 [`realloc`] 成功路径共用）：
+/// 分配 + 写头 + 交用户指针的构造面（[`malloc`] 成功路径唯一消费面；
+/// [`realloc`] 的 NULL 形态经其 C 约定转发到此）：
 /// 溢出/上限/分配失败统一回 `None`（C 约定 NULL）。除本面与 [`user_of`]/[`block_of`]
 /// 外，模块内不再触碰分配器与块布局。
 fn alloc_block(size: usize) -> Option<NonNull<c_void>> {
@@ -118,6 +120,42 @@ unsafe fn block_of(user: NonNull<c_void>) -> (NonNull<u8>, Layout) {
   }
 }
 
+/// 释放面（[`free`] 与 [`realloc`] 的 size==0 分支共用的唯一收口）：经
+/// [`block_of`] 复原起点与 layout 后交还全局分配器。
+///
+/// # Safety
+/// `user` 必须是本模块 [`alloc_block`]（即 `malloc`/`realloc`）返回且未释放的
+/// 非空用户指针。
+unsafe fn dealloc_block(user: NonNull<c_void>) {
+  // Safety: 前置条件即 [`block_of`] 的契约（逐字转授）。
+  let (base, layout) = unsafe { block_of(user) };
+  // Safety: `base`/`layout` 即原分配的起点与 layout（上一行契约所证），
+  // 满足 dealloc 的「同源同 layout」前提。
+  unsafe { dealloc(base.as_ptr(), layout) };
+}
+
+/// resize 面（[`realloc`] 非空非零形态的唯一收口）：layout 复原 +
+/// `alloc_realloc` + 重写头部交回新用户指针，全程不触碰裸的块起点。
+/// 新总大小溢出/达上限/分配失败统一回 `None`——三者按 C 契约都是
+/// 「回报 NULL 且原块保持不变」；本面只读头部、不释放原块，该性质天然成立。
+///
+/// # Safety
+/// `user` 必须是本模块 [`alloc_block`]（即 `malloc`/`realloc`）返回且未释放的
+/// 非空用户指针。
+unsafe fn resize_block(user: NonNull<c_void>, size: usize) -> Option<NonNull<c_void>> {
+  // Safety: 前置条件即 [`block_of`] 的契约（逐字转授）。
+  let (base, old_layout) = unsafe { block_of(user) };
+  let new_layout = layout_of(size)?;
+  // Safety: `base`/`old_layout` 即原分配的起点与 layout（block_of 所证）；
+  // `new_layout` 与 alloc_block 同形（对齐 HEADER、总大小经 checked_add 不回绕），
+  // 满足 alloc_realloc 前提；空指针是分配失败形态，经 NonNull::new 归一为 None。
+  let new_base =
+    NonNull::new(unsafe { alloc_realloc(base.as_ptr(), old_layout, new_layout.size()) })?;
+  // Safety: 成功的新块与 alloc_block 块同形（HEADER 对齐、总大小 `size + HEADER`），
+  // [`user_of`] 的界内前提成立。
+  Some(unsafe { user_of(new_base.cast(), size) })
+}
+
 /// `malloc(size)` — 分配 `size` 字节（带大小前缀）。
 ///
 /// # Safety
@@ -141,10 +179,8 @@ pub unsafe extern "C-unwind" fn free(ptr: *mut c_void) {
     return;
   };
   // Safety: `# Safety` 契约保证非空 `ptr` 是本模块分配且未释放的块，
-  // 即 [`block_of`] 的前置条件。
-  let (base, layout) = unsafe { block_of(user) };
-  // Safety: `base`/`layout` 即原分配的起点与 layout（上一行契约所证）。
-  unsafe { dealloc(base.as_ptr(), layout) };
+  // 即 [`dealloc_block`] 的前置条件。
+  unsafe { dealloc_block(user) };
 }
 
 /// `realloc(ptr, size)` — 调整块大小，保留内容。
@@ -159,31 +195,21 @@ pub unsafe extern "C-unwind" fn free(ptr: *mut c_void) {
 #[unsafe(no_mangle)]
 pub unsafe extern "C-unwind" fn realloc(ptr: *mut c_void, size: usize) -> *mut c_void {
   let Some(user) = NonNull::new(ptr) else {
-    // C 约定：realloc(NULL, n) 与 malloc(n) 等价（含 n==0 的唯一指针形态）
+    // Safety: `malloc` 不解引用任何入参指针，任意 `size` 都满足其 `# Safety`
+    // 契约；realloc(NULL, n) ≡ malloc(n) 为 C 约定。
     return unsafe { malloc(size) };
   };
   if size == 0 {
-    // FFI: glibc 约定释放该块并回报 NULL（free 的 null 分支此处不可达）
-    unsafe { free(ptr) };
+    // Safety: `ptr` 非空（上一分支已排除）且按本函数 `# Safety` 契约是本模块
+    // 分配且未释放的块，即 [`dealloc_block`] 的前置条件。
+    // FFI: glibc 约定释放该块并回报 NULL。
+    unsafe { dealloc_block(user) };
     return null_mut();
   }
-  // FFI: 新总大小溢出/达上限，按 C 契约回 NULL 且保持原块不变。
-  let Some(new_layout) = layout_of(size) else {
-    return null_mut();
-  };
-  // Safety: `# Safety` 契约保证 `ptr` 由本模块分配且未释放，即 [`block_of`] 前置。
-  let (base, old_layout) = unsafe { block_of(user) };
-  // Safety: `base`/`old_layout` 即原分配的起点与 layout（block_of 所证）；
-  // `new_layout` 与 alloc_block 同形（对齐 HEADER、总大小经 checked_add 不回绕），
-  // 满足 alloc_realloc 前提；FFI: C 契约要求分配失败回 NULL 且保留原块。
-  let Some(new_base) =
-    NonNull::new(unsafe { alloc_realloc(base.as_ptr(), old_layout, new_layout.size()) })
-  else {
-    return null_mut();
-  };
-  // Safety: 成功的新块与 alloc_block 块同形（HEADER 对齐、总大小含头部），
-  // [`user_of`] 的界内前提成立。
-  unsafe { user_of(new_base.cast(), size) }.as_ptr()
+  // Safety: `ptr` 非空分支与本函数 `# Safety` 契约合成即 [`resize_block`] 的
+  // 前置条件；新总大小溢出/达上限/分配失败统一折成 None→NULL 且原块保持不变
+  // （C 契约，见 resize_block 文档）。
+  unsafe { resize_block(user, size) }.map_or(null_mut(), NonNull::as_ptr)
 }
 
 /// `sysconf(name)` — 页大小查询。全仓唯一 extern 消费方为 `ulua-analysis`

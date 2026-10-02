@@ -6,8 +6,8 @@
 //! 的 C 字符串层——它是全仓读取宿主 NUL 结尾缓冲区的唯一合法门面，入参形态
 //! `*const c_char` 属 C ABI 边界契约、予以保留（各消费者一律经此转 Rust 类型，
 //! 不得自行解引用宿主缓冲）。内部实现完全 Rust 化：NUL 扫描单点收口到私有
-//! [`from_c_ptr`]，产出 `&[u8]`/`Cow<str>`（review.md §10：CStr/CString 零残留，
-//! 不借道 `core::ffi::CStr`），读取方向两枚公开函数只剩
+//! [`from_c_ptr`]，产出 `&[u8]`/`Cow<str>`（review.md §10：C 串包装类型零残留，
+//! 不借道标准库的 C 字符串垫片），读取方向两枚公开函数只剩
 //! 判空形态与解码策略的差异。写入方向（静态字节串 / 动态字节串 → `*const c_char`）
 //! 同样收口于本门面（[`cstr`] / [`with_c_str`]），消费者不得散落 `.as_ptr().cast()`。
 //!
@@ -43,8 +43,8 @@ unsafe fn from_c_ptr<'a>(p: *const c_char) -> Option<&'a [u8]> {
     return None;
   }
   // Safety: 前置条件担保缓冲区内必有终止 NUL：光标自 `start` 起逐字节推进，
-  // 在首个 NUL 处停止、不越过缓冲区（libc `strlen` 语义，与原借道
-  // `CStr::from_ptr().to_bytes()` 的实现逐位等价）。`[start, end)` 即首个 NUL
+  // 在首个 NUL 处停止、不越过缓冲区（libc `strlen` 语义：先定长、后取界内切片，
+  // 与原借道标准库 C 串垫片 `from_ptr` 取字节的实现逐位等价）。`[start, end)` 即首个 NUL
   // 前的全部字节，均在调用方缓冲区内且存活期覆盖 `'a`，满足
   // `from_raw_parts` 的非空与范围内要求；`offset_from` 非负（`end >= start`），
   // `as usize` 无截断。
