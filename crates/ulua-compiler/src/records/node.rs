@@ -4,7 +4,8 @@
 //! **节点身份**（哈希、相等、集合元素），与解引用无关：句柄封装 `NonNull`，
 //! 天然非空、null 槽不再可能充当哨兵混入键空间；读取节点需经显式
 //! [`Node::borrow`] / [`Node::borrow_mut`]，把「节点存活」这一 arena 契约
-//! 收口到本文件两行 `unsafe`，业务代码不再出现 `*mut AstX` 与散点解引用。
+//! 收口到本文件只读解引用一处与 nn_alias 可变收口，业务代码不再出现
+//! `*mut AstX` 与散点解引用。
 
 use core::{
   fmt,
@@ -17,6 +18,8 @@ use ulua_ast::{
   records::{ast_expr::AstExpr, node_handle},
 };
 use ulua_common::records::dense_hash_table::DenseDefault;
+
+use crate::records::compiler::nn_alias::alias_nn;
 
 /// 指向 arena 节点的地址句柄。
 ///
@@ -104,12 +107,16 @@ impl<T> Node<T> {
   }
 
   /// 可变借用节点。对同一节点的并发可变借用由调用方独占性保证（cpp 同前提）。
-  // Safety: 同 `borrow`，另要求调用方此刻持有该子树唯一写权限。
+  // Safety: 同 `borrow`，另要求调用方此刻持有该子树唯一写权限；可变解引用
+  // 收口落 nn_alias 门面本体。
   #[inline]
-  pub(crate) fn borrow_mut<'a>(self) -> &'a mut T {
-    // `NonNull::as_mut` 要求 `&mut self`，而句柄是 `Copy` 的地址值：
-    // 直接按指针重建可变引用，语义等同。
-    unsafe { &mut *self.ptr.as_ptr() }
+  pub(crate) fn borrow_mut<'a>(self) -> &'a mut T
+  where
+    T: 'static,
+  {
+    // `NonNull::as_mut` 要求 `&mut self`，而句柄是 `Copy` 的地址值：句柄经
+    // nn_alias 门面按指针重建可变引用，语义等同。
+    alias_nn(self.ptr)
   }
 
   /// 基/派生（repr(C) 前缀重合）或同类节点间的地址重转，等价裸指针 `cast`。
