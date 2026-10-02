@@ -12,19 +12,29 @@ use crate::{
   type_aliases::stk_id::StkId,
 };
 
-/// `lua_rawgetptagged` 核心（cpp lapi.cpp:886）。
-/// # Safety
-/// C-ABI 镜像垫片（`p` 为调用方保证有效的裸键指针，按 review.md §2 保留 unsafe 形）；调用序契约（正确性，非内存安全）：
-/// `idx` 为当前帧可解析的合法索引且该槽必须是表
-/// （cpp lapi.cpp:891 `api_check!(ttype_is_table(gct(ptr)))`）；`p/tag` 仅作 lightuserdata 键的
-/// 位模式比较、不被解引用，返回的 ttype 与压栈槽 `top.sub(1)` 处的值配套对应。
-pub unsafe fn lua_rawgetptagged(l: &mut LuaState, idx: i32, p: *mut c_void, tag: i32) -> i32 {
-  // SAFETY: 契约保证 `l` 存活、索引处为可读表，块内 rawget 取回的 userdata 引用与 tag 匹配性检查仅在栈槽界内进行
+/// `lua_rawgetptagged` 核心（cpp lapi.cpp:886）。r16-v4b 引用形收口：`unsafe fn` 消亡
+/// 转 safe fn，`l` 存活与独占由 `&mut LuaState` 类型承载；unsafe 内移到真实裸触点
+/// （栈槽解引用读数与 `lua_c_threadbarrier_lapi`/`ensure_stack`/`lua_h_getp` 三个
+/// C-ABI 镜像点，`&mut` 引用隐式转裸实参系本仓既有形制，同 `lua_rawset` 先例）。
+/// 调用序契约（正确性，非内存安全）：`idx` 为当前帧可解析的合法索引且该槽必须是表
+/// （cpp lapi.cpp:891 `api_check!(ttype_is_table(gct(ptr)))`，debug 断言；release 非表
+/// 由调用方违约当场错读，无静默兜底）；`p/tag` 仅作 lightuserdata 键的位模式比较与
+/// 入 TValue 载荷，全程不被解引用（可空/可为任意整数编码值）；取回引用先于
+/// `api_incr_top` 落笔、与压栈槽 `top.sub(1)` 处的值配套对应，返回的 ttype 即该槽 tag。
+pub fn lua_rawgetptagged(l: &mut LuaState, idx: i32, p: *mut c_void, tag: i32) -> i32 {
+  // SAFETY: 契约保证 `l` 存活且独占驱动（类型承载）；thread 屏障与栈扩容为 C-ABI
+  // 镜像裸触点，扩容先行其后才可派生栈槽地址（「扩容先行、借用后派生」纪律）；
+  // `p` 在本块仅作透明转发值，不解引用。
   unsafe {
     lua_c_threadbarrier_lapi(l);
     ensure_stack(l, 1);
+  }
 
-    let t: StkId = index_2_addr(l, idx);
+  let t: StkId = index_2_addr(l, idx);
+  // SAFETY: 契约保证 `idx` 解析出的槽（含 `LUA_O_NILOBJECT` 哨兵）在使用点可读且为
+  // 表；`lua_h_getp` 只读表取回存活槽引用，`setobj_2_s` 写顶后保留槽（扩容已先行），
+  // `api_incr_top`/`ttype` 均在栈数组界内；块内 `p` 始终仅作键位模式/载荷，无解引用。
+  unsafe {
     api_check!(l, (*t).is_table());
 
     setobj_2_s!(l, l.top, lua_h_getp((*t).as_table_ptr(), p, tag));

@@ -90,8 +90,8 @@ impl LuaState {
   /// `idx` 为合法表索引，`p` 为有效指针。
   #[inline(always)]
   pub unsafe fn raw_get_ptr(&mut self, idx: i32, p: *mut c_void) -> i32 {
-    // SAFETY: `p` 的有效性由本方法 `# Safety` 契约承载（调用方保证），本帧重建可变引用即结束借用窗口。
-    unsafe { lua_rawgetptagged(self, idx, p, 0) }
+    // r16-v4b：被调方已引用形 safe 化（`&mut` 短借于本调用语句即结束），原 unsafe 块随消亡。
+    lua_rawgetptagged(self, idx, p, 0)
   }
 
   /// # Safety
