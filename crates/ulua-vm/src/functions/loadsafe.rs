@@ -326,11 +326,13 @@ pub(crate) unsafe fn loadsafe(
       let p = lua_f_newproto(l);
       (*p).source = source;
       (*p).bytecodeid = i as i32;
-      (*p).funid = if (*(*l).global).lastprotoid == 0 {
+      // r16-b3 收编：条件读/复用读经 gs_ref 只读门面（与 gs_mut 写句同帧直线条款，
+      // 中间无旁路写点，`id` 即原 RHS 裸重读之同值），RMW 写经 gs_mut 一句一借
+      (*p).funid = if (*l).gs_ref().lastprotoid == 0 {
         0
       } else {
-        let id = (*(*l).global).lastprotoid;
-        (*(*l).global).lastprotoid = (*(*l).global).lastprotoid.wrapping_add(1);
+        let id = (*l).gs_ref().lastprotoid;
+        (*l).gs_mut().lastprotoid = id.wrapping_add(1);
         id
       };
 
