@@ -338,9 +338,8 @@ pub fn c_validate(l: L) {
 
 /// `lua_resumeerror(co, from)`：向协程 `co` 注入来自 `from` 的错误恢复。
 pub fn resumeerror(co: L, from: L) -> c_int {
-  // r16-v3：callee 的 `co` 侧已前移 `&mut` 引用形（经 `state_mut` 收口点），`from`
-  // 按 callee 契约保持裸指针（可空）。均存活且同属一个 VM（模块级契约 + 用例布线）。
-  lua_resumeerror(state_mut(co), from)
+  // Safety: `co`/`from` 均存活且同属一个 VM（模块级契约 + 用例布线）。
+  unsafe { lua_resumeerror(co, from) }
 }
 
 // ---------------------------------------------------------------------------
