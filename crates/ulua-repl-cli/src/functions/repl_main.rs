@@ -135,10 +135,9 @@ pub fn repl_main(args: &[impl AsRef<str>]) -> i32 {
   let files: Vec<String> = get_source_files_from_slice(args);
 
   if files.is_empty() {
-    // Safety: run_repl 的 /// # Safety（进程级信号处理与单线程驱动）在 main 入口路径成立：此刻无其它 REPL/VM 驱动者。
-    unsafe {
-      run_repl();
-    }
+    // run_repl 现为 crate 内安全编排入口；其单线程 / 进程级信号处理契约在本 main
+    // 入口路径成立：此刻无其它 REPL/VM 驱动者。
+    run_repl();
     0
   } else {
     // cpp Repl.cpp:844 `unique_ptr<LuaState, void (*)(LuaState*)>` —— 由守卫关闭
@@ -168,8 +167,9 @@ pub fn repl_main(args: &[impl AsRef<str>]) -> i32 {
     let mut iter = files.iter().peekable();
     while let Some(file) = iter.next() {
       let is_last_file = iter.peek().is_none();
-      // Safety: l 在守卫作用域内存活（close 在循环之后），run_file 的 gl 契约满足；file/program_args 借自本帧 Vec 迭代、调用窗口内不失效。
-      let ran = unsafe { run_file(file, l, interactive && is_last_file, program_args) };
+      // run_file 现为 crate 内安全编排入口；l 在守卫作用域内存活（close 在循环之后）
+      // 满足其 gl 契约；file/program_args 借自本帧 Vec 迭代、调用窗口内不失效。
+      let ran = run_file(file, l, interactive && is_last_file, program_args);
       failed += (!ran) as i32;
     }
 

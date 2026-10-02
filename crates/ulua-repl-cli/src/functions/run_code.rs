@@ -24,6 +24,10 @@ use crate::functions::compile_source::compile_source;
 // DELIBERATE DEVIATION（review.md §9.3）：`Repl.h` 导出入口，编译产物经
 // `run_loaded_chunk`（ulua-vm c-API）在 `*mut LuaState` 上执行；成功/失败以
 // `Option<String>` 表达（cpp 空串哨兵的 Rust 化），本处不再有可空指针。
+// 保留 `pub unsafe fn` 定性：本入口是跨 crate `pub` 句柄边界——`ulua-cli-test` 夹具以
+// 专属 `unsafe { run_code(..) }` 块断言传入句柄有效，改 safe fn 会撤掉这层调用方契约
+// 强制（且 `pub fn` 解引用裸指针形参将命中 `clippy::not_unsafe_ptr_arg_deref`），故属
+// 「确属 c-API 句柄边界」而非纯逻辑层，签名不动。
 pub unsafe fn run_code(l: *mut LuaState, source: &str) -> Option<String> {
   // Safety: l 是 REPL 循环全程有效的主线程状态（fn /// # Safety），checkstack
   // 预留后续 VM 调用所需槽位。

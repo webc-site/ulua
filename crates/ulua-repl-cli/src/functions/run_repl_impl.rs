@@ -103,15 +103,19 @@ fn is_incomplete_chunk(source: &str) -> bool {
   message[1..].ends_with(b"<eof>")
 }
 
-/// # Safety
+/// 交互式 REPL 主循环：在 `l` 上驱动 rustyline 编辑循环，逐行经 `run_code` 执行、
+/// 经 `complete_repl` 补全。
 ///
+/// 调用契约（本 fn 为 `pub(crate)` 安全 fn，crate 内调用方 run_repl / run_file 保证）：
 /// `l` 必须指向存活、已 sandbox 的主线程 `LuaState`，并在整个交互式循环期间保持有效；
-/// REPL 为单线程驱动，循环内经 `run_code`/`complete_repl` 直接解引用该指针（含作为补全
+/// REPL 为单线程驱动，循环内经 `run_code`/`complete_repl` 解引用该句柄（含作为补全
 /// helper 的 `ReplHelper { l }` 长期持有者）。
 // DELIBERATE DEVIATION（review.md §9.3）：`ReplHelper` 在 rustyline 回调中解引用
 // `*mut LuaState` 遍历全局表补全（ulua-vm c-API）；该裸句柄的存活期被本帧 editor
-// 包住、单线程串行驱动，其可空性无缺席态（恒为活动主状态），故非 Option 场景。
-pub(crate) unsafe fn run_repl_impl(l: *mut LuaState) {
+// 包住、单线程串行驱动，其可空性无缺席态（恒为活动主状态），故非 Option 场景。本入口
+// 为 crate 内编排函数：句柄由调用方交出的存活状态传入，解引用关在 `run_code` 边界与
+// `complete_repl` 的 `state` 门面内，故收编为安全 fn、原 `unsafe fn` 契约降级为文档约定。
+pub(crate) fn run_repl_impl(l: *mut LuaState) {
   // isocline's `ic_set_history(path, -1)` capped history at its default of 200
   // entries; mirror that via the editor configuration.
   // rustyline 的初始化是可失败的（isocline 不是），失败原因必须可见，
@@ -129,7 +133,7 @@ pub(crate) unsafe fn run_repl_impl(l: *mut LuaState) {
     }
   };
   // ReplHelper 只拷贝裸地址（构造本身是安全的），其存活期被 editor（本帧局部）
-  // 包住；补全/校验回调经 helper 解引用 l，前提由 fn /// # Safety（l 全程有效、
+  // 包住；补全/校验回调经 helper 解引用 l，前提由本 fn 文档契约（l 全程有效、
   // 单线程驱动）与调用方 run_repl 的守卫保证，editor 析构先于任何状态失效。
   editor.set_helper(Some(ReplHelper { l }));
 
@@ -159,7 +163,8 @@ pub(crate) unsafe fn run_repl_impl(l: *mut LuaState) {
           let mut wrapped = String::with_capacity("return ".len() + line.len());
           wrapped.push_str("return ");
           wrapped.push_str(&line);
-          // Safety: l 自本循环开始到返回全程有效且仅本线程驱动（fn /// # Safety）。
+          // Safety: l 自本循环开始到返回全程有效且仅本线程驱动（本 fn 文档契约；
+          // run_code 为跨 crate `pub` c-API 句柄边界，保留 `unsafe fn` 签名）。
           if unsafe { run_code(l, &wrapped) }.is_none() {
             let _ = editor.add_history_entry(line.as_str());
             continue;

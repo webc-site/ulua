@@ -21,22 +21,43 @@ use crate::functions::{
 // `luau_load`/`lua_resume` 的成功返回码（免散落字面 0）
 const OK: i32 = LuaStatus::Ok as i32;
 
+/// FFI 边界（ulua-vm c-API）：在 `gl` 上新建线程并即时沙箱化其全局——两步成对出现，
+/// 新线程只有经 `lua_l_sandboxthread` 隔离全局后才能被脚本运行，单独看任一步都不成立
+/// （沿用 w1e `load.rs` 的 `spawn_module_thread` 多步收口体例，此处为 runFile 专用的
+/// 简化两步版）。
+///
 /// # Safety
 ///
-/// `gl` must be a valid, active pointer to a `LuaState`.
+/// `gl` 为存活主状态；返回的线程指针自此由 `gl` 的栈槽持有（调用方以 `gl.pop(1)` 配平），
+/// 与 `gl` 在整个脚本运行窗口内共同存活。
+unsafe fn sandboxed_thread(gl: &mut LuaState) -> *mut LuaState {
+  // Safety: 两步同属本 fn 契约覆盖的存活主状态窗口。
+  unsafe {
+    let l = lua_newthread(gl);
+    // new thread needs to have the globals sandboxed
+    lua_l_sandboxthread(l);
+    l
+  }
+}
+
+/// 调用契约（本 fn 为 `pub(crate)` 安全 fn，crate 内唯一调用方 repl_main 保证）：`gl`
+/// 必须指向存活、有效的 `LuaState` 主状态。
 // DELIBERATE DEVIATION（review.md §9.3）：在新线程上编译并运行脚本的 VM 驱动
 // （newthread/sandboxthread/luau_load/codegen/coverage/counters/resume 全为 ulua-vm
-// c-API）；主线程恢复的 `from == NULL` 已由 `resume_main` 门面收口，本处不留裸 null。
+// c-API）；不可拆的 newthread+sandboxthread 两步收在私有 `# Safety` 封装
+// `sandboxed_thread`，单步 c-API 调用以带 `// Safety:` 论证的最小 `unsafe` 块就地使用，
+// `gl`/线程句柄的解引用关在 `state` 门面内，故本编排入口自身收编为安全 fn。主线程恢复
+// 的 `from == NULL` 已由 `resume_main` 门面收口，本处不留裸 null。
 // `repl` is used to indicate if a repl should be started after executing the file.
 // `program_args` 是 `--program-args` 之后的原样参数（cpp 的 `program_argv/argc`）。
-pub(crate) unsafe fn run_file(
+pub(crate) fn run_file(
   name: &str,
   gl: *mut LuaState,
   repl: bool,
   program_args: &[impl AsRef<str>],
 ) -> bool {
-  // Safety: `# Safety` 契约保证 `gl` 非空、活跃，经 `state` 门面物化后全走安全方法
-  // （仍是 unsafe fn 的 `lua_*` 导出在各块内论证）。
+  // Safety: 调用契约保证 `gl` 非空、活跃，经 `state` 门面物化后全走安全方法
+  // （单步 unsafe c-API 导出在各块内论证）。
   let gl = state(gl);
   // cpp `readFile(getFilePath(name))`：读文件走 getFilePath 的 .luau/.lua 回退，
   // 失败信息仍打印用户给定的原始名字（chunkname 同样基于它）。
@@ -46,18 +67,9 @@ pub(crate) unsafe fn run_file(
   };
 
   // module needs to run in a new thread, isolated from the rest
-  // Safety: `lua_newthread`/`lua_l_sandboxthread` 为 unsafe 导出；gl 为 fn /// # Safety
-  // 保证的存活主状态，lua_newthread 返回的线程 l 由 gl 栈槽持有（末段 lua_pop(gl,1)
-  // 统一配平），sandboxthread 只操作该新线程。
-  let l = unsafe {
-    let l = lua_newthread(gl);
-    // new thread needs to have the globals sandboxed
-    lua_l_sandboxthread(l);
-    l
-  };
-  // Safety: l 是上两步新建、由 gl 栈槽持有的活跃线程（见上），经 `state` 门面
-  // 物化后栈操作走安全方法。
-  let l = state(l);
+  // Safety: `sandboxed_thread` 前置即本入口的 gl 存活契约——返回线程由 gl 栈槽持有、
+  // 末段 `gl.pop(1)` 配平，并经 `state` 门面物化后栈操作走安全方法。
+  let l = state(unsafe { sandboxed_thread(gl) });
 
   // cpp Repl.cpp:604 `("@" + normalizePath(name)).c_str()`：源名直接以 String
   // 持有，内部 NUL 由 `luau_load` 按 cpp `strlen` 规则截断，无需预补终止符
@@ -101,9 +113,9 @@ pub(crate) unsafe fn run_file(
   }
 
   if repl {
-    // Safety: `run_repl_impl` 为 unsafe fn；l 在交互循环期间有效且单线程驱动
-    // （run_repl_impl 的 /// # Safety）。
-    unsafe { run_repl_impl(l) };
+    // run_repl_impl 现为 crate 内安全编排 fn；l 在交互循环期间有效且单线程驱动
+    // （其文档契约）由本入口的存活前提保证。
+    run_repl_impl(l);
   }
   // 与 lua_newthread 在 gl 上留下的线程槽配平。
   gl.pop(1);

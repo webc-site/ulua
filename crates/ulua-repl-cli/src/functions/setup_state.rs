@@ -22,6 +22,10 @@ use crate::functions::{
 /// `luau_codegen_create`/`luaL_openlibs`/`luaL_register`/`luaopen_require`/
 /// `luaL_sandbox` 并以裸 `*mut LuaState` 收发，`unsafe` 与裸指针系 ulua-vm 边界固有
 /// 形态，非纯 Rust 逻辑；理由即下条 `# Safety` 契约。
+/// 保留 `pub unsafe fn` 定性：本入口是跨 crate `pub` 句柄边界（`Repl.h` 的 setupState），
+/// 由 `ulua-cli-test`/`repl_main`/`run_repl` 以 `unsafe` 块断言刚创建状态有效；改 safe
+/// fn 会撤掉这层调用方契约强制（且 `pub fn` 解引用裸指针形参将命中
+/// `clippy::not_unsafe_ptr_arg_deref`），故属「确属 c-API 句柄边界」而非纯逻辑层，签名不动。
 ///
 /// # Safety
 ///

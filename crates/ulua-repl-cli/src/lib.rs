@@ -16,7 +16,13 @@
 //! - ulua-vm 的 Lua/C API：以 `*mut LuaState` 收发的栈操作（`lua_*`/`luaL_*`/
 //!   `luau_load`/`(*l).resume` 等），单步调用点带 `// Safety:` 论证其存活与栈配平；
 //!   多步不可拆序列收敛为带 `# Safety` 契约的最小私有封装（`load.rs` 的
-//!   `spawn_module_thread`/`throw`/`prepare`/`check_run`）；
+//!   `spawn_module_thread`/`prepare`/`check_run`、`run_file.rs` 的 `sandboxed_thread`；
+//!   发散抛出经 `load.rs` 的 `throw` 单点，`pub(crate)` 供 `sigint_callback` 复用）。
+//!   纯编排入口 `run_repl`/`run_repl_impl`/`run_file` 已收编为 `pub(crate)` 安全 fn
+//!   （解引用关在 `state` 门面与各消费点 `unsafe` 块内，句柄契约降级为文档约定）；仅
+//!   `run_code`/`setup_state` 因是跨 crate `pub` c-API 句柄边界（夹具以 `unsafe` 块断言
+//!   句柄有效，safe 化会撤掉该契约强制并命中 `not_unsafe_ptr_arg_deref`）而保留
+//!   `pub unsafe fn` 签名，逐处 `DELIBERATE DEVIATION` 定性；
 //! - 装入 VM 的 C-ABI 回调（`extern "C-unwind"`：`lua_loadstring`、`sigint_callback`、
 //!   `profiler_interrupt`、`c_abi_cb!` 生成的 coverage/counters 外壳）——各自带
 //!   `DELIBERATE DEVIATION` 说明；
