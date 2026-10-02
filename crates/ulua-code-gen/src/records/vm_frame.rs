@@ -11,10 +11,13 @@
 //!
 //! - 字节码/栈槽/表 node/array 的读取一律收敛为切片视图（[`VmFrame::insns`]/
 //!   [`VmFrame::slots`]·[`VmFrame::slots_mut`]/[`VmFrame::table_nodes`]·
-//!   [`VmFrame::table_array`]），下标界内检查替代裸指针算术；`from_raw_parts*` 全文件
+//!   [`VmFrame::table_array`]），下标界内检查替代裸指针算术；热槽位
+//!   `table_node`/`array_slot` 的界内性以调用点掩码/扩容不变量论证后收
+//!   `get_unchecked`（review.md §5，各附 `// Safety`）。`from_raw_parts*` 全文件
 //!   唯二落点为带 `# Safety` 契约的泛型单源壳 `view`/`view_mut`。`reg`/`slot_at` 等
-//!   「仅算不解引用」的地址平移统一经泛型壳 `shift`/`shift_back`/`shift_ro`
-//!   （wrapping 算术，机器语义与原 `ptr::add` 一致），论证单源一处；
+//!   「仅算不解引用」的地址平移统一经泛型壳 `shift`/`shift_back`/`shift_ro`/
+//!   `shift_off`（wrapping 算术，机器语义与原 `ptr::add`/带符号 `offset` 一致），
+//!   论证单源一处；
 //! - 可空指针（metatable、元方法、direct-field 表）以 `Option` 判别返回，
 //!   null 哨兵只在 `meta_table_ptr` 等边界壳处还原，不再渗透到业务层；
 //! - 单行「活对象字段读/写壳」经 `define_vm_frame_accessor!` 宏表同形收口（含
@@ -102,8 +105,8 @@ impl VmFrame {
   // —— 泛型单源壳（review.md §2「把 unsafe 关进有契约的最小边界」、§4 泛型化）——
   //
   // 本文件全部「解引用建切片」只经 `view`/`view_mut` 两处，「同段地址平移」
-  // 只经 `shift`/`shift_back` 两处：机器语义与 ABI 论证单源收口，各业务方法
-  // 只按自身入参论证一行。
+  // 只经 `shift`/`shift_back`/`shift_ro`/`shift_off` 四处：机器语义与 ABI 论证
+  // 单源收口，各业务方法只按自身入参论证一行。
 
   /// 原始内存 → 只读切片视图 `[ptr, ptr+n)` 的**本文件唯一** `from_raw_parts` 落点。
   ///
@@ -147,6 +150,14 @@ impl VmFrame {
     Self::shift(ptr.cast_mut(), n).cast_const()
   }
 
+  /// 同段地址带符号平移（cpp `pc + LUAU_INSN_D(insn)`）：纯算术、从不解引用，
+  /// 复用 [`VmFrame::shift`] 的 wrapping 语义论证（带符号跳距无法表为 `usize`
+  /// 前移，故独立成第四壳，方法体内不再出现游离 `wrapping_offset`）。
+  #[inline]
+  fn shift_off<T>(ptr: *const T, delta: isize) -> *const T {
+    ptr.wrapping_offset(delta)
+  }
+
   /// 本指令之后的字流起点为 `pc`、可读 `n` 个指令字的切片视图。
   #[inline]
   pub(crate) fn insns(&self, pc: *const Instruction, n: usize) -> &[Instruction] {
@@ -185,8 +196,8 @@ impl VmFrame {
   /// 可为 one-past-end，仅算不读）。
   #[inline]
   pub(crate) fn insn_jump(&self, pc: *const Instruction, delta: isize) -> *const Instruction {
-    // 纯地址算术、从不解引用（跳转目标落在活字节码数组内由编译器保证，调用点契约）。
-    pc.wrapping_offset(delta)
+    // 跳转目标落在活字节码数组内由编译器保证（调用点契约）；平移算术单源于 `shift_off`。
+    Self::shift_off(pc, delta)
   }
 
   /// 常量表第 `i` 槽地址（调用点已断言 `i < proto->sizek`）。
@@ -628,8 +639,12 @@ impl VmFrame {
   /// 形参的传递由 `&TValue` 的隐式强转完成，不再以裸地址出借。
   #[inline]
   pub(crate) fn table_node(&self, h: *mut LuaTable, slot: usize) -> (&TValue, &TValue) {
-    // 槽号由调用点以 `nodemask8`（= 节点数 − 1）掩码，界内性由切片下标复核。
-    let n = &self.table_nodes(h)[slot];
+    // Safety: 热路径去界检（review.md §5）——槽号由调用点以 `nodemask8` 掩码，
+    // 该字段在 vm 侧恒按 `(1 << lsizenode) - 1` 窄化 u8 赋值（空表/克隆为 0），
+    // 两分支均满足 `slot ≤ nodemask8 < 1 << lsizenode`（`lsizenode ≥ 8` 时窄化后
+    // mask ≤ 255 < 窗长；`lsizenode == 0` 时 mask 为 0，哨兵窗长 1）；与原 cpp
+    // `node + slot` 非界检寻址逐位等价。
+    let n = unsafe { self.table_nodes(h).get_unchecked(slot) };
     // Safety: TKey 与 TValue 共享偏移 0 的标签/值域（vm 侧 LuaNode 布局约定），
     // key 域按 TValue 引用视图读出与原 `from_ref().cast()` 逐位等价（仅改挂寿命）。
     let key: &TValue = unsafe { &*from_ref(&n.key).cast() };
@@ -656,8 +671,11 @@ impl VmFrame {
   /// `array[index]`：序列部分槽地址（调用点已证 `index < sizearray`）。
   #[inline]
   pub(crate) fn array_slot(&self, h: *mut LuaTable, index: usize) -> *mut TValue {
-    // 经切片视图界内下标取槽；越界由切片检查兜底（原实现为 UB）。
-    from_mut(&mut self.table_array(h)[index])
+    // Safety: 热路径去界检（review.md §5）——唯一消费方 `execute_setlist` 在
+    // `resize_array` 补足界后经本壳重取基址，`index < sizearray` 由该扩容不变量
+    // 保证；与原 cpp `h->array + index` 非界检寻址逐位等价。
+    let array = self.table_array(h);
+    from_mut(unsafe { array.get_unchecked_mut(index) })
   }
 
   /// 把节点 key 的 `value/extra/tt` 逐字段拷入栈槽 `dst` 并复核 liveness
