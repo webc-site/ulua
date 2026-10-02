@@ -27,24 +27,25 @@ pub unsafe fn lua_registeruserdatadirectaccess(
 
     let h = (*l).gs_ref().udatamt[tag as usize];
     if !h.is_null() {
-      let udatadirect = &mut (*(*l).global).udatadirect[tag as usize];
-
+      // r16-b3 收编：原 `&mut (*(*l).global).udatadirect[..]` 绑定跨三次 `fasttm`
+      // （经裸场域别名读 gs）持有，拆为逐写句 gs_mut 一句一借、原位现取；
+      // 右值为 `fasttm` 返回裸指针的即时读数或入参，与 gs 无别名交叉
       let indextm = fasttm(l, h, TMS::TmIndex);
       if !indextm.is_null() {
-        udatadirect.indextm = *indextm;
-        udatadirect.index = get;
+        (*l).gs_mut().udatadirect[tag as usize].indextm = *indextm;
+        (*l).gs_mut().udatadirect[tag as usize].index = get;
       }
 
       let newindextm = fasttm(l, h, TMS::TmNewIndex);
       if !newindextm.is_null() {
-        udatadirect.newindextm = *newindextm;
-        udatadirect.newindex = set;
+        (*l).gs_mut().udatadirect[tag as usize].newindextm = *newindextm;
+        (*l).gs_mut().udatadirect[tag as usize].newindex = set;
       }
 
       let namecalltm = fasttm(l, h, TMS::TmNameCall);
       if !namecalltm.is_null() {
-        udatadirect.namecalltm = *namecalltm;
-        udatadirect.namecall = namecall;
+        (*l).gs_mut().udatadirect[tag as usize].namecalltm = *namecalltm;
+        (*l).gs_mut().udatadirect[tag as usize].namecall = namecall;
       }
 
       return 1;
