@@ -27,11 +27,12 @@ Luau 代码的绝大多数）JIT 等于关闭；纯局部变量脚本（fannkuch
 tests::test_fields，6572 项其余全绿）。已知刻意偏差：cpp linit 同时 setreadonly
 (GLOBALS)，本仓库嵌入 API 契约是可写全局，未随。
 
-实测（exec_probe，同 binary 前后）：nbody 74ms→17ms（4.4x）、fasta -50%、
-microbig_gettable -29%、oop -16%，samply 证实环路 100% 落在 JIT 代码段。
-bench exec 组 A/B 持平的量化解释：runner 每次 eval 新建 state，**native codegen pass
-（约 50ms/6KB，cpp 同量级任务 1-2ms）在计时窗内**，恰好吃掉 57ms 的执行节省；
-codegen 吞吐是下一个独立优化靶点。
+实测（exec_probe 与 runner 分相计时双重证实）：nbody 74ms→17-18ms（4.1x）、
+fasta -50%、microbig_gettable -29%、oop -16%，samply 证实环路 100% 落在 JIT 代码段。
+native codegen pass 本身仅 ~1.25ms/模块（cg_probe 实测，cpp 量级，无吞吐问题）；
+runner 分相：new≈0.9ms、jit≈0.3ms、load≈0、eval=run 17-18ms——此前「codegen pass
+~50ms」的说法是首轮 A/B 遭遇外部构建负载（load 10-47，opt 列 spread 高达 46.6%）
+后的错误归因，静息重测即消失。
 
 表访问 IC 三方案（动态键内联 / 两层 __index+mini-PIC / megamorphic stub cache，
 见 git history 调研票）以此修复为前置。
