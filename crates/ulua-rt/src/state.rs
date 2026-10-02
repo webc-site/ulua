@@ -567,8 +567,10 @@ pub(crate) fn push_lightuserdata_tagged(state: StateView<'_>, p: *mut c_void, ta
 /// 读 light userdata 指针（`lua_tolightuserdata_ref` 收口点；缺省 null）。
 #[inline]
 pub(crate) fn lightuserdata_at(state: StateView<'_>, idx: i32) -> *mut c_void {
-  // Safety: 族级契约;返回的是 VM 存的裸 token,本层不解引用。
-  unsafe { lua_tolightuserdata_ref(state.as_ptr().cast_mut(), idx) }.unwrap_or(null_mut())
+  // r16-v4b：被调方已转 `&LuaState` 引用形 safe fn——`&state` 经 `StateView::deref`
+  // 既有安全读数门面短借（存活论证收口于视图产生点），原 `read_ptr().cast_mut()`
+  // 裸转发与 unsafe 块随消亡；返回的是 VM 存的裸 token，本层不解引用。
+  lua_tolightuserdata_ref(&state, idx).unwrap_or(null_mut())
 }
 
 /// 读 full userdata 的数据区指针（`lua_touserdata` 收口点；非 userdata 或空载荷

@@ -175,8 +175,9 @@ impl LuaState {
   /// 仅本模块的 `to_lightuserdata_ptr`（全仓唯一消费面）使用；外部一律走 `_ptr` 变体。
   #[inline(always)]
   pub(super) fn to_lightuserdata(&self, idx: i32) -> Option<*mut c_void> {
-    // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_tolightuserdata_ref(self.read_ptr(), idx) }
+    // r16-v4b：被调方已转 `&LuaState` 引用形 safe fn——`&self` 即既有安全读数门面短借，
+    // 原 `read_ptr()` 裸转发与 unsafe 块随消亡（无写穿面，借用窗止于本调用语句）。
+    lua_tolightuserdata_ref(self, idx)
   }
 
   #[inline(always)]
