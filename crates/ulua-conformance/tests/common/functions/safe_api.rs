@@ -613,8 +613,9 @@ pub fn pushlightuserdatatagged(l: L, p: *mut c_void, tag: c_int) {
 
 /// `lua_lightuserdatatag(l, idx)`。
 pub fn lightuserdatatag(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活；`idx` 为 lightuserdata 槽（用例契约）。
-  unsafe { lua_lightuserdatatag(l, idx) }
+  // r16-v4：callee 已引用形 safe 化（纯读数），`state_ref` 判空重建 `&LuaState` 收口；
+  // `idx` 为 lightuserdata 槽由用例契约保证
+  lua_lightuserdatatag(state_ref(l), idx)
 }
 
 /// `lua_tolightuserdatatagged(l, idx, tag)`：tag 不符或非 lightuserdata 得 `None`。
@@ -683,8 +684,9 @@ pub fn newuserdatataggedwithmetatable(l: L, sz: usize, tag: c_int) -> *mut c_voi
 
 /// `lua_userdatatag(l, idx)`。
 pub fn userdatatag(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活；`idx` 为 userdata 槽（用例契约）。
-  unsafe { lua_userdatatag(l, idx) }
+  // r16-v4：callee 已引用形 safe 化（纯读数），`state_ref` 判空重建 `&LuaState` 收口；
+  // `idx` 为 userdata 槽由用例契约保证
+  lua_userdatatag(state_ref(l), idx)
 }
 
 /// `lua_setuserdatatag(l, idx, tag)`。
