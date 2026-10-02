@@ -14,7 +14,7 @@ use crate::{
 /// cpp VM/src/lcorolib.cpp:218
 pub(crate) unsafe fn coresumey(l: *mut LuaState) -> i32 {
   unsafe {
-    let co = lua_tothread(l, 1);
+    let co = lua_tothread(&mut *l, 1);
     (*l).arg_expected(co.is_some(), 1, "thread");
     let co = co.expect("arg_expected 已证 co 非空");
     // r16-b2 收编：顶-基槽距读数落既有 get_top 门面——其本体 slot_distance(base, top)

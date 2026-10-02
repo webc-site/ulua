@@ -10,12 +10,15 @@ use crate::{
 /// LuaState`：`LuaState` 在执行中被 VM 持续原地改写，给出引用会谎称独占/非别名（Stacked
 /// Borrows 违例），[`ValueView::Thread`] 本身即以裸指针承载该 payload。`None` 即"非线程槽"。
 ///
+/// r16-v8 收口：`pub unsafe fn` → `pub fn`，首参转引用形（非空/对齐由引用承载，
+/// v5 `lua_o_rawequal_obj` 同款话术）。
 /// # Safety
-/// `l` 须为存活 `LuaState` 且 `idx` 为合法（伪）索引；命中的 thread 值其 `(*o).value.gc` 须指向
-/// 存活 thread GCObject（返回其内嵌 `th` 状态指针）。
-pub unsafe fn lua_tothread(l: *mut LuaState, idx: i32) -> Option<*mut LuaState> {
+/// 调用序契约（正确性，非内存安全；safe fn 文档断言，由调用方承载）：`idx` 为合法（伪）索引；
+/// 命中的 thread 值其 `(*o).value.gc` 须指向存活 thread GCObject（返回其内嵌 `th` 状态指针）。
+pub fn lua_tothread(l: &mut LuaState, idx: i32) -> Option<*mut LuaState> {
+  // SAFETY: 引用接收者保证非空与对齐；仅读栈槽取 payload 裸指针，从不解引用该指针。
   unsafe {
-    let o: StkId = index_2_addr(&*l, idx);
+    let o: StkId = index_2_addr(l, idx);
 
     match ValueView::from_tvalue(&*o) {
       ValueView::Thread(th) => Some(th),

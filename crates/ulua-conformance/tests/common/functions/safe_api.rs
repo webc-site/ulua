@@ -891,8 +891,9 @@ pub fn l_checkbuffer_len(l: L, narg: c_int, len: &mut usize) -> *mut c_void {
 
 /// `lua_topointer`。
 pub fn topointer(l: L, idx: c_int) -> *const c_void {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_topointer(l, idx) }
+  // r16-v8：callee 已前移引用形 safe fn，经 `state_mut` 收口点直传独占引用；
+  // 结果仅作身份比较。
+  lua_topointer(state_mut(l), idx)
 }
 
 // ---------------------------------------------------------------------------
@@ -1238,8 +1239,9 @@ pub fn pushlstring(l: L, s: &[u8]) {
 
 /// `lua_tothread`：`idx` 处 thread 的状态指针（非 thread 得 `None`）。
 pub fn tothread(l: L, idx: c_int) -> Option<L> {
-  // Safety: `l` 存活；只读槽位，返回线程状态随该 thread 对象存活。
-  unsafe { lua_tothread(l, idx) }
+  // r16-v8：callee 已前移引用形 safe fn，经 `state_mut` 收口点直传独占引用；
+  // 只读槽位，返回线程状态随该 thread 对象存活。
+  lua_tothread(state_mut(l), idx)
 }
 
 /// `lua_xmove`：同 VM 内两线程间搬 `n` 个栈值。
