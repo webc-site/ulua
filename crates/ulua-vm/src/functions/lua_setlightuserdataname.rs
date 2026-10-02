@@ -17,12 +17,14 @@ pub unsafe fn lua_setlightuserdataname(l: *mut LuaState, tag: i32, name: *const 
   unsafe {
     api_check!(l, (tag as u32) < LUA_LUTAG_LIMIT as u32);
     // renaming not supported
-    api_check!(l, (*(*l).global).lightuserdataname[tag as usize].is_null());
+    api_check!(l, (*l).gs_ref().lightuserdataname[tag as usize].is_null());
 
     if (*l).gs_ref().lightuserdataname[tag as usize].is_null() {
       // 入参为 NUL 结尾 C 串，经 cstr_bytes 扫首个 NUL 得字节切片（保持原 lua_s_new 的 strlen 语义）
       let ts = lua_s_new(l, cstr_bytes(name));
-      (*(*l).global).lightuserdataname[tag as usize] = ts;
+      // r16-b3 收编：槽写改经 gs_mut 一句一借——借用起于 lua_s_new（分配/可 GC）
+      // 返回之后，窗内再无其它调用，红线不跨
+      (*l).gs_mut().lightuserdataname[tag as usize] = ts;
       l_setbit!((*ts).hdr.marked, FIXEDBIT); // never collect these names
     }
   }
