@@ -1,5 +1,5 @@
 use crate::{
-  functions::lua_newbuffer::lua_newbuffer, macros::lua_lib_fn::lua_lib_fn,
+  functions::lua_newbuffer::lua_newbuffer_push_ref, macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
 };
 
@@ -13,7 +13,7 @@ pub(crate) unsafe fn buffer_create(l: *mut LuaState) -> i32 {
 
     (*l).arg_check(size >= 0, 1, "size");
 
-    lua_newbuffer(l, size as usize);
+    lua_newbuffer_push_ref(&mut *l, size as usize);
     1
   }
 }

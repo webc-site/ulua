@@ -281,12 +281,13 @@ impl Seek for BufferCursor {
 // ---------------------------------------------------------------------------
 // Buffer creation
 //
-// `lua_newbuffer` allocates a GC buffer and pushes it. When `size` exceeds the
-// VM's `MAX_BUFFER_SIZE` (1GB) the underlying `luaM_toobig` *raises* a Lua
-// error (longjmp) rather than returning. Unwinding that across Rust frames is
-// UB, so we run `lua_newbuffer` inside `lua_pcall` via a small C trampoline:
-// the requested size is passed as a number argument, and a raising allocation
-// is reported as an ordinary non-zero status with the error on the stack.
+// `lua_newbuffer_push_ref` allocates a GC buffer and pushes it. When `size`
+// exceeds the VM's `MAX_BUFFER_SIZE` (1GB) the underlying `luaM_toobig`
+// *raises* a Lua error (longjmp) rather than returning. Unwinding that across
+// Rust frames is UB, so we run `lua_newbuffer_push_ref` inside `lua_pcall` via a
+// small C trampoline: the requested size is passed as a number argument, and a
+// raising allocation is reported as an ordinary non-zero status with the error
+// on the stack.
 // ---------------------------------------------------------------------------
 
 /// `c_newbuffer` 闭包的调试名：静态 NUL 结尾字节串，交给 `lua_pushcclosurek` 的
@@ -295,7 +296,7 @@ impl Seek for BufferCursor {
 const NEWBUFFER_NAME: &[u8] = b"ulua-rt-newbuffer\0";
 
 /// C trampoline: stack is `[size]` (a number). Allocates a buffer of that many
-/// bytes via `lua_newbuffer`, leaving the buffer object on top.
+/// bytes via `lua_newbuffer_push_ref`, leaving the buffer object on top.
 ///
 /// # Safety
 /// 仅由 `lua_pcall` 在被调闭包帧内调用：`state` 存活且带 `LUA_MINSTACK` 头寸，
@@ -308,12 +309,12 @@ unsafe extern "C-unwind" fn c_newbuffer(raw: *mut LuaState) -> i32 {
   // 占据（契约"栈为 [size]"），经 `number_at` 只读消费；理论上的非数值形态
   // 回落到 0，与旧形 `lua_tonumberx(.., NULL)` 对非数值返 0.0 的取值逐位一致，
   // `f64 as usize` 饱和转换是 Rust 定义行为。`lua_settop(state, 0)` 丢弃实参后
-  // `lua_newbuffer` 在空帧上分配并压回恰好一个值（其 toobig 错误经外层受保护
+  // `lua_newbuffer_push_ref` 在空帧上分配并压回恰好一个值（其 toobig 错误经外层受保护
   // 调用转成非零 status，不跨帧 unwind），返回 1 与之相符。
   unsafe {
     let size = number_at(state, 1).unwrap_or(0.0) as usize;
     set_stack_top(state, 0);
-    lua_newbuffer(state.as_mut_ptr(), size);
+    lua_newbuffer_push_ref(&mut *state.as_mut_ptr(), size);
     1
   }
 }

@@ -95,7 +95,7 @@ use ulua_vm::{
     lua_l_typename::lua_l_typename,
     lua_lightuserdatatag::lua_lightuserdatatag,
     lua_namecallatom::lua_namecallatom,
-    lua_newbuffer::lua_newbuffer,
+    lua_newbuffer::lua_newbuffer_push_ref,
     lua_newstate::lua_newstate,
     lua_newthread::lua_newthread,
     lua_newuserdatadtor::lua_newuserdatadtor,
@@ -836,18 +836,24 @@ pub fn setfenv(l: L, idx: c_int) -> c_int {
 // ---------------------------------------------------------------------------
 // buffer / 指针读取
 //
-// r12 T11 裁决（镜像保留）：以下 6 个门面是 C-ABI 镜像契约本体——逐字对应
-// `lua_newbuffer`/`lua_tobuffer`/`luaL_checkbuffer`/`lua_topointer` 公共 C 签名，
+// r12 T11 裁决（镜像保留，r12-w6b 修订）：以下门面中 5 个是 C-ABI 镜像契约本体——
+// 逐字对应 `lua_tobuffer`/`luaL_checkbuffer`/`lua_topointer` 公共 C 签名，
 // 且 `conformance_api_buffer` 的断言对象正是 `(void*, size_t* len)` 出参语义
 // （NULL 仅取址分支、非 NULL 写长度、跨调用指针同一性）与 cpp 用例对齐；切片
 // 形（`lua_tobuffer_bytes_ref`/`lua_l_checkbuffer_ref`）无法观察出参可观察面，
 // 故保留裸形 + 逐门面 Safety 注，不随 ulua-rt 消费方迁移。
+// `newbuffer` 门面经 r12-w6b 收窄为 `()` 形：其返回裸指针全仓实测零终端消费
+// （api.rs:137/170、gc.rs:100 均语句形弃值，指针同一性断言走 `tobuffer_ptr`），
+// 属 r12 T9 在 `lua_newbuffer` 旧注释中登记「门面收窄为单元形后返回值改 ()」
+// 的兑现，非出参可观察面，不在 T11 镜像保留清单射程内。
 // ---------------------------------------------------------------------------
 
-/// `lua_newbuffer`：返回数据块裸指针（VM 持有）。
-pub fn newbuffer(l: L, sz: usize) -> *mut c_void {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_newbuffer(l, sz) }
+/// `lua_newbuffer_push_ref` 的 `()` 形门面（r12-w6b 收窄）：分配 sz 字节 buffer 并压栈，
+/// 返回值面实测零消费故不镜像 cpp 的 `void*` 返回；数据读回走 `tobuffer_ptr`/`tobuffer_len`。
+pub fn newbuffer(l: L, sz: usize) {
+  // Safety: `l` 存活（模块级契约），本帧重建独占引用后即结束借用窗口；空帧受保护
+  // 前提由调用方 `new_state()` 帧满足。
+  unsafe { lua_newbuffer_push_ref(&mut *l, sz) }
 }
 
 /// `lua_tobuffer` 只取址形态（C 侧 NULL 长出参边界契约，既有约定 review.md §2）。

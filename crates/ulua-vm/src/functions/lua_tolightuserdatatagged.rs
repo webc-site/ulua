@@ -9,6 +9,14 @@ use crate::{
 /// cpp `lua_tolightuserdatatagged`（`VM/src/lapi.cpp`）：`idx` 槽为 light userdata 且其 user tag
 /// 等于 `tag` 时返回其存储的裸指针，否则 `None`。
 ///
+/// r12-w6b T9 普查裁决**保留**：全仓实测唯一 Rust 消费面为 `ulua-conformance` 门面
+/// `safe_api.rs::tolightuserdatatagged`（safe_api.rs:623，终端调用点 userdata.rs:22-23 断言
+/// tag 失配 `None` 与 `Some(value)` 指针同一性——返回指针本体即断言对象，非弃值面）；
+/// `ulua-capi` 实测零导出壳，`ulua-rt`/`ulua-vm` 内部零直调（迭代器哨兵读点走
+/// `ValueView::IteratorDone`/`lightuserdatatag!` 形，不经本名）。本体即最小读形
+/// （index_2_addr + 一次 `ValueView` match，无业务逻辑面可再收 ref 核心），故按消费面
+/// 实测原形保留，不另立 ref 核心、不降可见性。
+///
 /// 空指针哨兵收口为 `Option<*mut c_void>`：light userdata 的载荷是**存在 TValue 里的地址
 /// 值**（无 backing 对象、可为 null），并非可借用的活内存，故用指针值而非 `&mut`。`Some(p)` 含
 /// p 为 null 的情形（用户 push 了 null light userdata），`None` 严格表示"非 light userdata 或
