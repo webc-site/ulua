@@ -17,12 +17,12 @@ pub(crate) unsafe fn lua_b_xpcallcont(l: *mut LuaState, status: i32) -> i32 {
     } else {
       lua_rawcheckstack(l, 1);
       // r12-w7a2 收编（pcallcont 族同形单点）：rawcheckstack 后单次窗读预绑定，
-      // 挪位/写 bool 均在已保余量窗内、无场域写，抬顶经 raise_top 原语逐位同值
+      // 挪位/写 bool 均在已保余量窗内、无场域写，抬顶经 advance_top 原语逐位同值
       let top = (*l).top;
       // Move error 1 right to make space for the 'false' status
       setobj_2_s!(l, top, top.sub(1));
       setbvalue!(top.sub(1), 0);
-      (*l).raise_top(1);
+      (*l).advance_top(1);
       2
     }
   }

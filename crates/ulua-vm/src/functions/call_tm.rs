@@ -32,7 +32,7 @@ pub(crate) unsafe fn call_tm(
     setobj_2_s!(l, &raw mut args[3], p3);
 
     luaD_checkstack!(l, 4);
-    (*l).raise_top(4); // 收编：裸场域抬顶经 raise_top 原语
+    (*l).advance_top(4); // 收编：裸场域抬顶经 advance_top 原语
 
     // 保留（恢复点后现读）：checkstack 可搬栈，被调函数槽须现读场域——
     // cpp 同形最小读面，无可收编的重复重读

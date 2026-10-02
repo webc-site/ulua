@@ -19,9 +19,9 @@ pub(crate) unsafe fn resume_error(l: *mut LuaState, msg: *const c_char, narg: i3
   // SAFETY: 契约保证 `l` 为正在 resume 的协程存活状态、narg 不超过当前栈内实参数，top 回退不越过 base
   unsafe {
     // l->top -= narg;
-    // r12-w7a2 收编（同形单点·resume 错误族）：裸场域回落经 lower_top 原语，
+    // r12-w7a2 收编（同形单点·resume 错误族）：裸场域回落经 rewind_top 原语，
     // 与被替代式同址同宽；cpp 同形 `L->top -= narg;`
-    (*l).lower_top(narg as usize);
+    (*l).rewind_top(narg as usize);
 
     // setsvalue(l, l->top, lua_s_new(l, msg));
     // setsvalue! 宏接收 TValue 指针
@@ -41,9 +41,9 @@ pub(crate) unsafe fn resume_error(l: *mut LuaState, msg: *const c_char, narg: i3
       lua_d_growstack(l, 1);
     }
 
-    // 收编：growstack 恢复点后的裸场域抬顶经 raise_top 原语（现读场，同址同宽；
+    // 收编：growstack 恢复点后的裸场域抬顶经 advance_top 原语（现读场，同址同宽；
     // 手动 limit 检查时序保持原样，非本票面）
-    (*l).raise_top(1);
+    (*l).advance_top(1);
 
     LuaStatus::ErrRun as i32
   }
