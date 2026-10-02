@@ -568,14 +568,14 @@ fn settable_slow(
 ///
 /// # Safety（内部 unsafe 块契约，签名安全：调用方无需 unsafe 上下文）
 ///
-/// `l` 指向当前执行的存活 `LuaState` 且其 `ci` 活动；`tm` 非空且为 is_c 闭包（调用点已判）；
-/// `args` 各项指向存活栈槽；`l->top + args.len() + 1` 仍在栈预留区内。
+/// `l` 指向当前执行的存活 `LuaState` 且其 `ci` 活动；`tm`/`args` 各项为非空槽引用
+/// （非空由引用类型承载，is_c 判定在调用点）；`l->top + args.len() + 1` 仍在栈预留区内。
 #[inline(always)]
 fn call_c_tm(
   l: *mut LuaState,
   pc: *const Instruction,
-  tm: *const TValue,
-  args: &[*const TValue],
+  tm: &TValue,
+  args: &[&TValue],
   res: i32,
 ) -> StkId {
   // SAFETY: 上述契约保证 l/tm/args 有效，且 top+nparams+1 在 stack..stack+stacksize 内（下方 LUAU_ASSERT 兜底）
@@ -608,7 +608,7 @@ fn call_c_tm(
 /// 避免第 1 轮整段 match 复制两份导致 `luau_execute_impl` 代码膨胀（matmul +6.8% 回退）。
 /// `is_not` 在此仅作冷路径的 `^`，不落在热循环 pc 关键路径上。逐输入语义与原合臂等价。
 ///
-/// # Safety
+/// # Safety（内部 unsafe 块契约，签名安全：调用方是派发环内的 `JUMPIFEQ`/`JUMPIFNOTEQ` 两臂）
 /// 调用臂保证 `ttype!(ra) == ttype!(rb)` 且 `ra` 为 Table/Userdata/Object 之一；`pc` 指向
 /// `insn` 之后的 aux 字；`base`/`l`/`cl` 满足 `luau_execute` 帧契约；`frame` 由同一 `l` 构造。
 #[cold]
@@ -620,7 +620,7 @@ fn luau_jump_eq_heavy(
   mut base: StkId,
   ra: StkId,
   rb: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
   frame: &VmFrame,
   is_not: bool,
 ) -> (*const Instruction, StkId) {
@@ -657,7 +657,7 @@ fn luau_jump_eq_heavy(
           ) {
             // note: it's safe to push arguments past top (see top of the file)
             let res = (*l).top.offset_from(base) as i32;
-            base = call_c_tm(l, pc, fn_tm, &[ra, rb], res);
+            base = call_c_tm(l, pc, &*fn_tm, &[&*ra, &*rb], res);
             // l_isfalse 的 nil/boolean 判链收敛为 ValueView match
             let truthy = !matches!(
               ValueView::from_tvalue(&*base.add(res as usize)),
@@ -842,8 +842,12 @@ macro_rules! vm_hot {
 ///  * `vm-opcount` —— 计数点只在环头，融合把两条指令计成一条，热点直方图与转移表失真。
 ///
 /// 判据本身是一次 `L` 热字段读 + 一条可预测分支；`cfg` 分支编译期即定。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的融合 helper）
+///
+/// `l` 为执行中的存活 `LuaState`。
 #[inline(always)]
-unsafe fn fuse_ok(l: *mut LuaState) -> bool {
+fn fuse_ok(l: *mut LuaState) -> bool {
   // SAFETY: 契约由调用方（派发环）保证，l 为执行中的存活 LuaState
   unsafe { !cfg!(feature = "vm-opcount") && !(*l).singlestep }
 }
@@ -863,11 +867,11 @@ unsafe fn fuse_ok(l: *mut LuaState) -> bool {
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向**下一条待执行指令**且落在 `cl` 的 proto
 /// code 段内，`base` 为该指令可寻址的栈槽基。
 #[inline(always)]
-unsafe fn fuse_jumpifnot(
+fn fuse_jumpifnot(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -909,11 +913,11 @@ unsafe fn fuse_jumpifnot(
 ///
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
 #[inline(always)]
-unsafe fn fuse_succ_gettable(
+fn fuse_succ_gettable(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -968,12 +972,12 @@ unsafe fn fuse_succ_gettable(
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基，
 /// `k` 为当前 proto 常量数组基址。
 #[inline(always)]
-unsafe fn fuse_succ_addk(
+fn fuse_succ_addk(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
   k: *mut TValue,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1015,11 +1019,11 @@ unsafe fn fuse_succ_addk(
 ///
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
 #[inline(always)]
-unsafe fn fuse_succ_fornloop(
+fn fuse_succ_fornloop(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1062,11 +1066,11 @@ unsafe fn fuse_succ_fornloop(
 ///
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
 #[inline(always)]
-unsafe fn fuse_succ_settable(
+fn fuse_succ_settable(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1115,11 +1119,11 @@ unsafe fn fuse_succ_settable(
 ///
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
 #[inline(always)]
-unsafe fn fuse_succ_add(
+fn fuse_succ_add(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1159,11 +1163,11 @@ unsafe fn fuse_succ_add(
 ///
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
 #[inline(always)]
-unsafe fn fuse_succ_mul(
+fn fuse_succ_mul(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1201,12 +1205,12 @@ unsafe fn fuse_succ_mul(
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基，
 /// `k`/`cl` 为该帧的常量数组与闭包（[`VM_KV!`] 的既有前置）。
 #[inline(always)]
-unsafe fn fuse_succ_subk(
+fn fuse_succ_subk(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
   k: *mut TValue,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1245,11 +1249,11 @@ unsafe fn fuse_succ_subk(
 ///
 /// `l` 为执行中的存活 `LuaState`，`pc` 指向下一条待执行指令，`base` 为其可寻址栈槽基。
 #[inline(always)]
-unsafe fn fuse_succ_jumpifnotlt(
+fn fuse_succ_jumpifnotlt(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
-  cl: *mut Closure,
+  cl: &Closure,
 ) -> *const Instruction {
   // SAFETY: 契约由调用方保证（紧随本臂 `pc = pc.add(1)` 之后）
   unsafe {
@@ -1283,11 +1287,11 @@ unsafe fn fuse_succ_jumpifnotlt(
 /// C++ `reentry:` 标签的状态来源：解释器循环局部量全部从 `L->ci` 重取（原生返回、
 /// 协程恢复、native-call 之后都是这个口径），不与调用点的旧值掺混。
 ///
-/// # Safety（内部 unsafe 块契约）
+/// # Safety（内部 unsafe 块契约，签名安全：调用方是本文件的派发环与 [`tier_reentry`]）
 ///
 /// `l` 指向存活且 `isactive` 的 `LuaState`，其 `ci` 当前为 Lua 闭包帧。
 #[inline(always)]
-unsafe fn vm_state_from_ci(l: *mut LuaState) -> VmSt {
+fn vm_state_from_ci(l: *mut LuaState) -> VmSt {
   // SAFETY: 契约保证 l 为就绪的 Lua 帧状态
   unsafe {
     LUAU_ASSERT!(isLua!((*l).ci));
@@ -1326,18 +1330,13 @@ macro_rules! vm_reentry {
 /// 原生返回、协程恢复、native-call 之后都是这个口径，不与调用点的旧值掺混。环内需要
 /// reentry 的臂走 [`vm_reentry!`]（同一条口径 + `continue 'dispatch`）。
 ///
-/// # Safety（内部 unsafe 块契约，签名安全：调用方全部在 crate 内）
-///
-/// `l` 必须指向存活且 `isactive` 的 `LuaState`，其 `ci` 当前为 Lua 闭包帧
-/// （入口 `LUAU_ASSERT!(isLua!((*l).ci))` 兜底），且同一 VM 状态任一时刻仅单线程解释执行。
-unsafe fn tier_reentry<const SINGLE_STEP: bool>(l: *mut LuaState) {
-  // SAFETY: 契约保证 l 为就绪的 Lua 帧状态，const 分支仅切换单步开关
-  unsafe {
-    // 循环状态量一律从 `L->ci` 重取（与 C++ `goto reentry` 后循环头重读一致），
-    // 见 [`vm_state_from_ci`]。
-    let st = vm_state_from_ci(l);
-    tier_cold::<SINGLE_STEP>(l, st.pc, st.base, st.k, st.cl);
-  }
+/// 签名安全：本函数自身无 unsafe 操作，`l` 的前置（存活且 `isactive`、`ci` 为 Lua
+/// 闭包帧、单线程独占）由被调 [`vm_state_from_ci`]/[`tier_cold`] 的块契约承担。
+fn tier_reentry<const SINGLE_STEP: bool>(l: *mut LuaState) {
+  // 循环状态量一律从 `L->ci` 重取（与 C++ `goto reentry` 后循环头重读一致），
+  // 见 [`vm_state_from_ci`]。
+  let st = vm_state_from_ci(l);
+  tier_cold::<SINGLE_STEP>(l, st.pc, st.base, st.k, st.cl);
 }
 
 /// `LOP_GETTABLE` 的 handler：派发环同名 `match` 臂的臂体原样搬出，`#[inline(always)]` 折回该臂，判定顺序与 C++ `VM_CASE` 逐句一致。
@@ -1350,7 +1349,7 @@ unsafe fn tier_reentry<const SINGLE_STEP: bool>(l: *mut LuaState) {
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_gettable(
+fn h_gettable(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1378,9 +1377,9 @@ unsafe fn h_gettable(
         && index as f64 == indexd
       {
         setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
-        pc = fuse_jumpifnot(l, pc, base, cl);
+        pc = fuse_jumpifnot(l, pc, base, &*cl);
         // `GETTABLE → MUL` 是 `matmul` 内层 `a[i][k] * b[k][j]` 的那条边；链只在臂点起
-        pc = fuse_succ_mul(l, pc, base, cl);
+        pc = fuse_succ_mul(l, pc, base, &*cl);
         vm_next!(pc, base, k, cl);
       }
     }
@@ -1398,7 +1397,7 @@ unsafe fn h_gettable(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_gettable(
+fn s_gettable(
   l: *mut LuaState,
   mut pc: *const Instruction,
   mut base: StkId,
@@ -1413,8 +1412,8 @@ unsafe fn s_gettable(
     let rc = VM_REG!(luau_insn_c(insn), l, base);
 
     base = gettable_slow(l, pc, ra, rb, rc);
-    pc = fuse_jumpifnot(l, pc, base, cl);
-    pc = fuse_succ_mul(l, pc, base, cl);
+    pc = fuse_jumpifnot(l, pc, base, &*cl);
+    pc = fuse_succ_mul(l, pc, base, &*cl);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -1429,7 +1428,7 @@ unsafe fn s_gettable(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_setupval(
+fn h_setupval(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1462,7 +1461,7 @@ unsafe fn h_setupval(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_getupval(
+fn h_getupval(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1484,7 +1483,7 @@ unsafe fn h_getupval(
 
     setobj_2_s!(l, ra, v);
     // `GETUPVAL → SUBK` 是 `fib` 里 `n - 1` 的那条边（4.36M/28.3M ≈ 15.4%）
-    pc = fuse_succ_subk(l, pc, base, k, cl);
+    pc = fuse_succ_subk(l, pc, base, k, &*cl);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -1499,7 +1498,7 @@ unsafe fn h_getupval(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_move(
+fn h_move(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1529,7 +1528,7 @@ unsafe fn h_move(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_loadk(
+fn h_loadk(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1559,7 +1558,7 @@ unsafe fn h_loadk(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_loadn(
+fn h_loadn(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1578,9 +1577,9 @@ unsafe fn h_loadn(
     // （14.4M/45.6M ≈ 32%），配上 SETTABLE 臂已融合的 `SETTABLE → FORNLOOP`，
     // 三指令回边只付一次派发。探测置于 JUMPIFNOTLT 之前：命中即吞，未命中
     // （pc 原样）再走 `LOADN → JUMPIFNOTLT`（fib 的 while n < 2，4.36M/28.3M ≈ 15.4%）
-    let npc = fuse_succ_settable(l, pc, base, cl);
+    let npc = fuse_succ_settable(l, pc, base, &*cl);
     if eq(npc, pc) {
-      pc = fuse_succ_jumpifnotlt(l, npc, base, cl);
+      pc = fuse_succ_jumpifnotlt(l, npc, base, &*cl);
     } else {
       pc = npc;
     }
@@ -1598,7 +1597,7 @@ unsafe fn h_loadn(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_loadb(
+fn h_loadb(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1619,7 +1618,7 @@ unsafe fn h_loadb(
     LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
     // LOADB 的跳转偏移已在上面并进来，尾融合从新 pc 起（`LOADB → SETTABLE` 是 `nsieve`
     // 内层 `isprime[i] = false` 的那条边）
-    pc = fuse_succ_settable(l, pc, base, cl);
+    pc = fuse_succ_settable(l, pc, base, &*cl);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -1634,7 +1633,7 @@ unsafe fn h_loadb(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_loadnil(
+fn h_loadnil(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1663,7 +1662,7 @@ unsafe fn h_loadnil(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_settablen(
+fn h_settablen(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1708,7 +1707,7 @@ unsafe fn h_settablen(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令、该指令确为数组命中且值已写回。
 #[inline(never)]
-unsafe fn s_settablen_bar(
+fn s_settablen_bar(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -1737,7 +1736,7 @@ unsafe fn s_settablen_bar(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_settablen(
+fn s_settablen(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -1776,7 +1775,7 @@ unsafe fn s_settablen(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_gettablen(
+fn h_gettablen(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1815,7 +1814,7 @@ unsafe fn h_gettablen(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_gettablen(
+fn s_gettablen(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -1854,7 +1853,7 @@ unsafe fn s_gettablen(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_settable(
+fn h_settable(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1887,7 +1886,7 @@ unsafe fn h_settable(
         if luaC_barriert_pending!(h, ra) {
           return s_settable_bar(l, pc, base, k, cl);
         }
-        pc = fuse_succ_fornloop(l, pc, base, cl);
+        pc = fuse_succ_fornloop(l, pc, base, &*cl);
         vm_next!(pc, base, k, cl);
       }
     }
@@ -1906,7 +1905,7 @@ unsafe fn h_settable(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令、该指令确为数组命中且值已写回。
 #[inline(never)]
-unsafe fn s_settable_bar(
+fn s_settable_bar(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -1933,7 +1932,7 @@ unsafe fn s_settable_bar(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_settable(
+fn s_settable(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -1962,7 +1961,7 @@ unsafe fn s_settable(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_modk(
+fn h_modk(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1982,7 +1981,7 @@ unsafe fn h_modk(
       let nb = (*rb).as_number();
       let nk = (*kv).as_number();
       setnvalue!(ra, luai_nummod(nb, nk));
-      pc = fuse_succ_addk(l, pc, base, k, cl);
+      pc = fuse_succ_addk(l, pc, base, k, &*cl);
       vm_next!(pc, base, k, cl);
     }
     // 非数字 rb：`__mod`/ coercion 慢路交 [`s_modk`]，本函数保持叶函数
@@ -1997,7 +1996,7 @@ unsafe fn h_modk(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_modk(
+fn s_modk(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2026,7 +2025,7 @@ unsafe fn s_modk(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_mulk(
+fn h_mulk(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2047,7 +2046,7 @@ unsafe fn h_mulk(
     if (*rb).is_number() {
       setnvalue!(ra, (*rb).as_number() * (*kv).as_number());
       // `MULK → ADD` 是 `micro_arith` 内层的一条边（2.0M/18.0M ≈ 11%）
-      pc = fuse_succ_add(l, pc, base, cl);
+      pc = fuse_succ_add(l, pc, base, &*cl);
       vm_next!(pc, base, k, cl);
     } else if (*rb).is_vector() {
       vec_scalar_op!(
@@ -2073,7 +2072,7 @@ unsafe fn h_mulk(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_mulk(
+fn s_mulk(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2089,7 +2088,7 @@ unsafe fn s_mulk(
     let kv = VM_KV!(luau_insn_c(insn), cl, k);
 
     if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmMul) {
-      base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
+      base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*kv], luau_insn_a(insn) as i32);
     } else {
       arith_slow!(l, pc, base, ra, rb, kv, TMS::TmMul, {});
     }
@@ -2107,7 +2106,7 @@ unsafe fn s_mulk(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_subk(
+fn h_subk(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2139,7 +2138,7 @@ unsafe fn h_subk(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_subk(
+fn s_subk(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2168,7 +2167,7 @@ unsafe fn s_subk(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_addk(
+fn h_addk(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2186,8 +2185,8 @@ unsafe fn h_addk(
 
     if (*rb).is_number() {
       setnvalue!(ra, (*rb).as_number() + (*kv).as_number());
-      pc = fuse_succ_gettable(l, pc, base, cl);
-      pc = fuse_succ_fornloop(l, pc, base, cl);
+      pc = fuse_succ_gettable(l, pc, base, &*cl);
+      pc = fuse_succ_fornloop(l, pc, base, &*cl);
       vm_next!(pc, base, k, cl);
     }
     // 非数字 rb：`__add`/ coercion 慢路交 [`s_addk`]，本函数保持叶函数
@@ -2202,7 +2201,7 @@ unsafe fn h_addk(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_addk(
+fn s_addk(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2231,7 +2230,7 @@ unsafe fn s_addk(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_mul(
+fn h_mul(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2253,7 +2252,7 @@ unsafe fn h_mul(
     if (*rb).is_number() && (*rc).is_number() {
       setnvalue!(ra, (*rb).as_number() * (*rc).as_number());
       // `MUL → ADD` 是 `matmul` 内层 `s = s + a*b` 的那条边
-      pc = fuse_succ_add(l, pc, base, cl);
+      pc = fuse_succ_add(l, pc, base, &*cl);
       vm_next!(pc, base, k, cl);
     } else if (*rb).is_vector() && (*rc).is_number() {
       let vc = (*rc).as_number() as f32;
@@ -2295,7 +2294,7 @@ unsafe fn h_mul(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_mul(
+fn s_mul(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2312,7 +2311,7 @@ unsafe fn s_mul(
 
     let rbc = if (*rb).is_number() { rc } else { rb };
     if let Some(fn_tm) = frame.c_tm_by_obj(rbc, TMS::TmMul) {
-      base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+      base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*rc], luau_insn_a(insn) as i32);
     } else {
       arith_slow!(l, pc, base, ra, rb, rc, TMS::TmMul, {});
     }
@@ -2330,7 +2329,7 @@ unsafe fn s_mul(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_sub(
+fn h_sub(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2376,7 +2375,7 @@ unsafe fn h_sub(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_sub(
+fn s_sub(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2392,7 +2391,7 @@ unsafe fn s_sub(
     let rc = VM_REG!(luau_insn_c(insn), l, base);
 
     if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmSub) {
-      base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+      base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*rc], luau_insn_a(insn) as i32);
     } else {
       arith_slow!(l, pc, base, ra, rb, rc, TMS::TmSub, {});
     }
@@ -2410,7 +2409,7 @@ unsafe fn s_sub(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_add(
+fn h_add(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2432,7 +2431,7 @@ unsafe fn h_add(
     if (*rb).is_number() && (*rc).is_number() {
       setnvalue!(ra, (*rb).as_number() + (*rc).as_number());
       // `ADD → SETTABLE` 是 `matmul` 内层 `c[i][j] = s` 的那条边
-      pc = fuse_succ_settable(l, pc, base, cl);
+      pc = fuse_succ_settable(l, pc, base, &*cl);
       vm_next!(pc, base, k, cl);
     } else if (*rb).is_vector() && (*rc).is_vector() {
       let vb = frame.lanes(rb);
@@ -2462,7 +2461,7 @@ unsafe fn h_add(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_add(
+fn s_add(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2478,7 +2477,7 @@ unsafe fn s_add(
     let rc = VM_REG!(luau_insn_c(insn), l, base);
 
     if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmAdd) {
-      base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+      base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*rc], luau_insn_a(insn) as i32);
     } else {
       arith_slow!(l, pc, base, ra, rb, rc, TMS::TmAdd, {});
     }
@@ -2496,8 +2495,12 @@ unsafe fn s_add(
 ///
 /// 保守判定：`get_unshadowed()` 返回 `None`（本进程装过线程本地覆盖，只有测试会）
 /// 时按「旗标为真」处理，交冷续延用 `get()` 复核 —— 与拆分前逐位同语义。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的派发 handler 与融合链）
+///
+/// `l` 为执行中的存活 `LuaState`，其 `global` 为其稳定字段指针。
 #[inline(always)]
-unsafe fn backedge_idle(l: *mut LuaState) -> bool {
+fn backedge_idle(l: *mut LuaState) -> bool {
   // SAFETY: 契约同热 handler —— l 指向存活 LuaState，global 为其稳定字段指针
   unsafe {
     let hooked = (*(*l).global).cb.interrupt.is_some();
@@ -2519,7 +2522,7 @@ unsafe fn backedge_idle(l: *mut LuaState) -> bool {
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_jumpback(
+fn h_jumpback(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2553,7 +2556,7 @@ unsafe fn h_jumpback(
 ///
 /// 与 [`h_jumpback`] 同前置。
 #[inline(never)]
-unsafe fn s_jumpback(
+fn s_jumpback(
   l: *mut LuaState,
   mut pc: *const Instruction,
   mut base: StkId,
@@ -2589,7 +2592,7 @@ unsafe fn s_jumpback(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_fornloop(
+fn h_fornloop(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2607,7 +2610,7 @@ unsafe fn h_fornloop(
     let insn = *pc;
     pc = pc.add(1);
     let ra = VM_REG!(luau_insn_a(insn), l, base);
-    let (cont, backedge) = fornloop_step(pc, cl, insn, ra);
+    let (cont, backedge) = fornloop_step(pc, &*cl, insn, ra);
     // 见 [`jump_split!`]：回边与退出两条路各带一份独立取指尾块（把 FP 比较留在尾块
     // 之外，不挂进取指地址依赖链）。两条尾块各再试一次 GETTABLE 尾融合：实测
     // `FORNLOOP → GETTABLE` 是表格访问用例里权重最大的一条边。
@@ -2615,11 +2618,11 @@ unsafe fn h_fornloop(
       let npc = pc.offset(backedge);
       let p = cl_proto!(cl);
       LUAU_ASSERT!((npc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
-      vm_next!(fuse_succ_gettable(l, npc, base, cl), base, k, cl);
+      vm_next!(fuse_succ_gettable(l, npc, base, &*cl), base, k, cl);
     }
     let p = cl_proto!(cl);
     LUAU_ASSERT!((pc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
-    vm_next!(fuse_succ_gettable(l, pc, base, cl), base, k, cl);
+    vm_next!(fuse_succ_gettable(l, pc, base, &*cl), base, k, cl);
   }
 }
 
@@ -2631,7 +2634,7 @@ unsafe fn h_fornloop(
 ///
 /// 与 [`h_fornloop`] 同前置。
 #[inline(never)]
-unsafe fn s_fornloop(
+fn s_fornloop(
   l: *mut LuaState,
   mut pc: *const Instruction,
   mut base: StkId,
@@ -2650,7 +2653,7 @@ unsafe fn s_fornloop(
     let insn = *pc;
     pc = pc.add(1);
     let ra = VM_REG!(luau_insn_a(insn), l, base);
-    let (cont, backedge) = fornloop_step(pc, cl, insn, ra);
+    let (cont, backedge) = fornloop_step(pc, &*cl, insn, ra);
     jump_split!(l, pc, cl, cont, backedge, base, k);
   }
 }
@@ -2667,9 +2670,9 @@ unsafe fn s_fornloop(
 /// `ra` 是本指令 `A` 槽（`limit`/`step`/`idx` 三元组首槽）且三槽均为数值，`pc` 已越过
 /// 本指令。
 #[inline(always)]
-unsafe fn fornloop_step(
+fn fornloop_step(
   pc: *const Instruction,
-  cl: *mut Closure,
+  cl: &Closure,
   insn: Instruction,
   ra: *mut TValue,
 ) -> (bool, isize) {
@@ -2709,7 +2712,7 @@ unsafe fn fornloop_step(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_fornprep(
+fn h_fornprep(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2729,7 +2732,7 @@ unsafe fn h_fornprep(
       return s_fornprep(l, pc, base, k, cl);
     }
 
-    pc = fornprep_step(pc, cl, insn, ra);
+    pc = fornprep_step(pc, &*cl, insn, ra);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -2741,7 +2744,7 @@ unsafe fn h_fornprep(
 ///
 /// 与 [`h_fornprep`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_fornprep(
+fn s_fornprep(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2760,7 +2763,7 @@ unsafe fn s_fornprep(
     // luaV_prepareFORN 按 StkId 形参收三槽可写指针
     lua_v_prepare_forn(l, ra, ra.add(1), ra.add(2));
 
-    pc = fornprep_step(pc, cl, insn, ra);
+    pc = fornprep_step(pc, &*cl, insn, ra);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -2773,9 +2776,9 @@ unsafe fn s_fornprep(
 ///
 /// `ra` 指向 `limit`/`step`/`idx` 三元组首槽且三者均为数值，`pc` 已越过本指令。
 #[inline(always)]
-unsafe fn fornprep_step(
+fn fornprep_step(
   mut pc: *const Instruction,
-  cl: *mut Closure,
+  cl: &Closure,
   insn: Instruction,
   ra: *mut TValue,
 ) -> *const Instruction {
@@ -2809,7 +2812,7 @@ unsafe fn fornprep_step(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_newtable(
+fn h_newtable(
   l: *mut LuaState,
   mut pc: *const Instruction,
   mut base: StkId,
@@ -2850,7 +2853,7 @@ unsafe fn h_newtable(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_jumpifnot(
+fn h_jumpifnot(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2873,8 +2876,8 @@ unsafe fn h_jumpifnot(
       LUAU_ASSERT!((npc.offset_from((*p).code) as u32) < (*p).sizecode as u32);
       vm_next!(npc, base, k, cl);
     }
-    pc = fuse_succ_addk(l, pc, base, k, cl);
-    pc = fuse_succ_fornloop(l, pc, base, cl);
+    pc = fuse_succ_addk(l, pc, base, k, &*cl);
+    pc = fuse_succ_fornloop(l, pc, base, &*cl);
     vm_next!(pc, base, k, cl);
   }
 }
@@ -2889,7 +2892,7 @@ unsafe fn h_jumpifnot(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_jumpif(
+fn h_jumpif(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2926,7 +2929,7 @@ unsafe fn h_jumpif(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_jump(
+fn h_jump(
   // 形参 `l` 只为凑齐 handler 的统一签名（`vm_hot!` 逐位传同一组状态量）：
   // LOP_JUMP 纯粹搬 pc，不碰栈也不碰 state。
   _l: *mut LuaState,
@@ -3024,7 +3027,7 @@ unsafe fn h_jump(
 /// `l` 指向存活且 `isactive` 的 `LuaState`；`pc`/`base`/`k`/`cl` 必须是同一 Lua 闭包帧
 /// 的一致解释器状态（由 [`tier_reentry`] 或原生返回路径建立），且任一时刻仅单线程使用。
 ///
-unsafe fn tier_cold<const SINGLE_STEP: bool>(
+fn tier_cold<const SINGLE_STEP: bool>(
   l: *mut LuaState,
   mut pc: *const Instruction,
   mut base: StkId,
@@ -3335,7 +3338,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
               // fast-path: user data with C __index TM
               if let Some(fn_tm) = frame.c_udata_tm(rb, TMS::TmIndex) {
                 (*l).cachedslot = luau_insn_c(insn) as i32;
-                base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
+                base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*kv], luau_insn_a(insn) as i32);
                 vm_patch_c(pc.sub(2), (*l).cachedslot);
                 continue 'dispatch;
               } else if (*rb).is_vector() {
@@ -3352,7 +3355,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
                 if let Some(fn_tm) = frame.type_metatable_c_tm(LuaType::Vector as u32, TMS::TmIndex)
                 {
                   (*l).cachedslot = luau_insn_c(insn) as i32;
-                  base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
+                  base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*kv], luau_insn_a(insn) as i32);
                   vm_patch_c(pc.sub(2), (*l).cachedslot);
                   continue 'dispatch;
                 }
@@ -3443,7 +3446,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
               // fast-path: user data with C __newindex TM
               if let Some(fn_tm) = frame.c_udata_tm(rb, TMS::TmNewIndex) {
                 (*l).cachedslot = luau_insn_c(insn) as i32;
-                base = call_c_tm(l, pc, fn_tm, &[rb, kv, ra], -1);
+                base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*kv, &*ra], -1);
                 vm_patch_c(pc.sub(2), (*l).cachedslot);
                 continue 'dispatch;
               } else {
@@ -3873,7 +3876,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
                 jump_and_next!(pc, cl, insn, 'dispatch, eq(classvalue!(ra), classvalue!(rb)))
               }
               ValueView::Table(_) | ValueView::Userdata(_) | ValueView::Object(_) => {
-                let (npc, nbase) = luau_jump_eq_heavy(l, pc, insn, base, ra, rb, cl, &frame, false);
+                let (npc, nbase) = luau_jump_eq_heavy(l, pc, insn, base, ra, rb, &*cl, &frame, false);
                 pc = npc;
                 base = nbase;
                 continue 'dispatch;
@@ -3936,7 +3939,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
                 jump_and_next!(pc, cl, insn, 'dispatch, !(eq(classvalue!(ra), classvalue!(rb))))
               }
               ValueView::Table(_) | ValueView::Userdata(_) | ValueView::Object(_) => {
-                let (npc, nbase) = luau_jump_eq_heavy(l, pc, insn, base, ra, rb, cl, &frame, true);
+                let (npc, nbase) = luau_jump_eq_heavy(l, pc, insn, base, ra, rb, &*cl, &frame, true);
                 pc = npc;
                 base = nbase;
                 continue 'dispatch;
@@ -4090,7 +4093,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
             } else {
               let rbc = if (*rb).is_number() { rc } else { rb };
               if let Some(fn_tm) = frame.c_tm_by_obj(rbc, TMS::TmDiv) {
-                base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+                base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*rc], luau_insn_a(insn) as i32);
                 continue 'dispatch;
               } else {
                 arith_slow!(l, pc, base, ra, rb, rc, TMS::TmDiv, {
@@ -4126,7 +4129,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
             } else {
               let rbc = if (*rb).is_number() { rc } else { rb };
               if let Some(fn_tm) = frame.c_tm_by_obj(rbc, TMS::TmIDiv) {
-                base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+                base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*rc], luau_insn_a(insn) as i32);
                 continue 'dispatch;
               } else {
                 arith_slow!(l, pc, base, ra, rb, rc, TMS::TmIDiv, {
@@ -4204,7 +4207,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
                 }
               );
             } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmDiv) {
-              base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
+              base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*kv], luau_insn_a(insn) as i32);
               continue 'dispatch;
             } else {
               arith_slow!(l, pc, base, ra, rb, kv, TMS::TmDiv, {
@@ -4235,7 +4238,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
                 }
               );
             } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmIDiv) {
-              base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
+              base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*kv], luau_insn_a(insn) as i32);
               continue 'dispatch;
             } else {
               arith_slow!(l, pc, base, ra, rb, kv, TMS::TmIDiv, {
@@ -4370,7 +4373,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
               setvvalue!(ra, -vb[0], -vb[1], -vb[2], -frame.lane_at(rb, 3));
               continue 'dispatch;
             } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmUnm) {
-              base = call_c_tm(l, pc, fn_tm, &[rb], luau_insn_a(insn) as i32);
+              base = call_c_tm(l, pc, &*fn_tm, &[&*rb], luau_insn_a(insn) as i32);
               continue 'dispatch;
             } else {
               arith_slow!(l, pc, base, ra, rb, rb, TMS::TmUnm, {
