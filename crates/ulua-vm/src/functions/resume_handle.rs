@@ -27,6 +27,16 @@ use crate::{
 /// `cont`，`ud` 是 handler 帧指针；`resume` 为首次进入重放整个协程体，`ud` 是
 /// 首实参栈槽。恢复粒度不同，两者 `ud` 不可互换。
 pub(crate) unsafe extern "C-unwind" fn resume_handle(l: *mut LuaState, ud: *mut c_void) {
+  // r14-p2 逐点定性（w6d 口径保留面）：status 三处消费形点位——`!=0` 裸谓词（入口断言）、
+  // `as i32` 原值消费（存值读回透传）、`!=Ok` 否定谓词（cont 恢复点后）——status() 门面
+  // 的 non-repr→Ok 兜底把 0x7f（SCHEDULED_REENTRY）等越界值折成 Ok，前两者改写原谓词/
+  // 原值真值、第三者把判真折成判假，均不逐位等价（r13-w1b 真值表反证红线），保留 C 形；
+  // status/base 落笔与 n_ccalls/base_ccalls 读写（LuaState 无 status 写面、无 ccount 门面）、
+  // ci 场域回写与 close/base 帧面读（含落笔行 RHS 同形单点，r12 既有判例）均属 CallInfo/
+  // 场域建立面无既有门面，B 红线不翻案，全数原样保留。
+  // 收编共三处读数：两处 seterrorobj 顶槽/顶下槽地址入参经 top_slot(0)/top_slot(-1)
+  // 边界原语（resume_finish:89 先例，同址同现读位点），cont 恢复点后 poscall 参数槽经
+  // top_slot(-(n as isize))——位点保持现读，禁预绑定（见行内注）。
   unsafe {
     let mut ci = ud as *mut CallInfo;
     let cl = ci_func!(ci);
@@ -45,7 +55,9 @@ pub(crate) unsafe extern "C-unwind" fn resume_handle(l: *mut LuaState, ud: *mut 
 
     // push error object to stack top if it's not already there
     if status != LuaStatus::ErrRun as i32 {
-      lua_d_seterrorobj(l, status, (*l).top);
+      // 收编：顶槽地址读数经 top_slot(0) 边界原语（镜像 cpp `L->top` 读数形，
+      // off=0 即保留顶槽；resume_finish 错误收尾同款先例，入参求值位现读不变）
+      lua_d_seterrorobj(l, status, (*l).top_slot(0));
     }
 
     // call user-defined error function
@@ -81,7 +93,9 @@ pub(crate) unsafe extern "C-unwind" fn resume_handle(l: *mut LuaState, ud: *mut 
         status = LuaStatus::ErrErr as i32;
       }
 
-      lua_d_seterrorobj(l, status, (*l).top.offset(-1));
+      // 收编：顶下槽地址读数经 top_slot(-1) 边界原语（同址现读；errfunc 收口后
+      // 顶槽即新错误对象落位，槽距 -1 与原 `offset(-1)` 逐指令等价）
+      lua_d_seterrorobj(l, status, (*l).top_slot(-1));
 
       ci = restoreci!(l, old_ci);
       (*ci).errfunc = 0;
@@ -115,7 +129,10 @@ pub(crate) unsafe extern "C-unwind" fn resume_handle(l: *mut LuaState, ud: *mut 
     }
 
     // finish cont call and restore stack to previous ci top
-    luau_poscall(l, (*l).top.offset(-(n as isize)));
+    // 收编：poscall 结果窗基址读数经 top_slot(-(n as isize)) 边界原语（同址现读）。
+    // 红线：cont()/handler 再入可搬栈，读数必须保持本恢复点现读位点——原语内联
+    // 即场域读，禁把读数提出到 cont 调用之前预绑定（r12/r13 恢复点禁预绑定纪律）
+    luau_poscall(l, (*l).top_slot(-(n as isize)));
 
     // run remaining continuations from the stack; typically resumes pcalls
     resume_continue(l);
