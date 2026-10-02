@@ -1,5 +1,3 @@
-use core::ptr::from_ref;
-
 use ulua_analysis::records::{arena_handle::Handle, control_flow_graph::ControlFlowGraph};
 
 use crate::records::cfg_fixture::CfgFixture;
@@ -17,19 +15,16 @@ impl CfgFixture {
     };
     use ulua_common::fflag;
 
-    // `parse` 返回借用引用；引用 → 裸地址用 `from_ref + cast_mut`（存入 `*mut`
-    // 字段后借用立即结束，AST 在 fixture.allocator 中存活至 `make_cfg` 使用
-    // 结束），免 `as *const _ as *mut _` 双重 `as` 反模式。
-    self.root = from_ref(self.parse(code)).cast_mut();
+    // cpp `root = parse(code)`：`parse` 返回借用引用，经 `Handle::from_ref`
+    // 折叠为 arena 别名句柄入位 `self.root`（AST 由 `allocator` 字段保活、
+    // bump 块地址稳定，句柄不拥有不释放），借用随语句结束。
+    let root = Handle::from_ref(self.parse(code));
+    self.root = Some(root);
 
-    // `make_cfg` 入口已全 safe：arena 侧经 `Handle::from_mut` 编码非空与存活
+    // `make_cfg` 入口全 safe：arena 侧经 `Handle::from_mut` 编码非空与存活
     // （借用止于调用表达式，cfg_allocator 作为夹具字段比返回的 CFG 长寿），
-    // block 侧仍是 `root` 裸字段的首层解引用（句柄化在下一步收敛）。
-    // Safety: root 由上一行从 `parse` 返回引用写入，指向 fixture allocator
-    // arena 内活 AstStatBlock，借用半径止于本次调用表达式。
-    let cfg = CfgBuilder::make_cfg(Handle::from_mut(&mut self.cfg_allocator), unsafe {
-      &*self.root
-    });
+    // block 侧由 `root.get()` 直接物化只读借用（Handle 模块契约）。
+    let cfg = CfgBuilder::make_cfg(Handle::from_mut(&mut self.cfg_allocator), root.get());
 
     if fflag::DebugLuauLogCFG.get() {
       print!("{}", dump_cfg(&cfg));
