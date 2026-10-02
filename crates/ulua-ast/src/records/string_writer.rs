@@ -108,6 +108,20 @@ impl StringWriter {
     self.last_char = c as char;
   }
 
+  /// 连续写 `count` 个同一字节，与 `count` 次 `write_char` 逐位一致：输出
+  /// `count` 个字节、列位累加 `count`、`last_char` 取该字节；`count == 0` 时
+  /// 不改动任何状态（与空循环一致）。走 `repeat_n` 一次 extend，省临时堆分配。
+  fn write_repeat(&mut self, byte: u8, count: u32) {
+    if count == 0 {
+      return;
+    }
+
+    self.ss.reserve(count as usize);
+    self.ss.extend(repeat_n(byte, count as usize));
+    self.pos.column += count;
+    self.last_char = byte as char;
+  }
+
   // C++ StringWriter::identifier 与 keyword 函数体逐字相同（见
   // PrettyPrinter.cpp）；抽公共实现消除重复。
   fn word(&mut self, s: &[u8]) {
@@ -159,18 +173,15 @@ impl StringWriter {
 
   pub(crate) fn source_string(&mut self, s: &[u8], quote_style: QuoteStyle, block_depth: u32) {
     if quote_style == QuoteStyle::QuotedRaw {
-      // C++ 先构造 `std::string(blockDepth, '=')` 再写三次；此处直接逐
-      // 字符写 '='，省一次临时堆分配（write_char 同步推进 column）。
+      // C++ 先构造 `std::string(blockDepth, '=')` 再写三次；此处用 `write_repeat`
+      // 一次成型写 block_depth 个 '='（省临时堆分配，列位/last_char 与逐次
+      // `write_char` 等价）。
       self.write_char(b'[');
-      for _ in 0..block_depth {
-        self.write_char(b'=');
-      }
+      self.write_repeat(b'=', block_depth);
       self.write_char(b'[');
       self.write_multiline(s);
       self.write_char(b']');
-      for _ in 0..block_depth {
-        self.write_char(b'=');
-      }
+      self.write_repeat(b'=', block_depth);
       self.write_char(b']');
       return;
     }
