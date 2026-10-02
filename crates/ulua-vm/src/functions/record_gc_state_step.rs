@@ -14,6 +14,12 @@ use crate::{
 /// # Safety
 ///
 /// `g` must point to a valid, properly initialized `global_State`.
+//
+// r15-v1 保留注记（w6d 逐点定性）：本体 14 处场域读点（13 处 gcmetrics 计时/
+// 记账 + 1 处 gcstate 判别读）皆经函数参数域句柄进入——`g` 的来源是调用方
+// 透传的裸指针而非状态开场字段的局部别名，属票面「函数参数来源」定性保留类，
+// 不入 gs_ref 门面迁移面。本函数自身即调用簇的字段写收口体（单 unsafe 体+
+// 契约形制，与 nn_alias 判例同格），无散点裸解引用可收，故亦不另造句柄。
 #[cfg(feature = "luai_gcmetrics")]
 pub(crate) unsafe fn record_gc_state_step(
   g: *mut global_State,
