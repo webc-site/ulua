@@ -48,7 +48,7 @@ pub(crate) use ulua_vm::functions::lua_l_tolstring::lua_l_tolstring_ref;
 // ---- traceback -----------------------------------------------------------
 pub(crate) use ulua_vm::functions::lua_l_traceback::lua_l_traceback;
 // ---- buffers / vectors (Luau) --------------------------------------------
-pub(crate) use ulua_vm::functions::lua_newbuffer::lua_newbuffer;
+pub(crate) use ulua_vm::functions::lua_newbuffer::lua_newbuffer_push_ref;
 // ---- closures / userdata -------------------------------------------------
 pub(crate) use ulua_vm::functions::lua_newuserdatadtor::lua_newuserdatadtor;
 // ---- async bridge (Future <-> coroutine) ---------------------------------
