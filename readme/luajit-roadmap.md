@@ -40,6 +40,13 @@ vs LuaJIT asm ~10），前者已到融合收益边界：micro_call 的 `LOADN �
 不可融合（帧转换）。fib/micro_call 的剩余差距记为**调用帧建立成本的结构性差距**；
 可做残余：checkstackfornewci 与 ci 字段写的微成本（需 samply 精确归因后另立项）。
 
+**2026-10-02（第二次）E2-a 复测终审**：`LOADN → JUMPIFNOTLE` 融合以 CPU 时间
+（getrusage 配对，13 轮交错）复测——micro_call +0.8%、fib +0.2%、mtg +1.3%，
+三用例一致中性偏负，永久弃用。根因定论：LOADN 尾已有 SETTABLE/JUMPIFNOTLT
+双探针，micro_call 命中 JUMPIFNOTLE 前需吃 2 次 probe miss，与省下的 1 次派发
+零和。LOADN 尾探针已饱和，后续任何 LOADN 边（不同负载后继不同）的融合预期
+收益为负，不再尝试。
+
 **2026-10-02 E2 残余归因的教训**：samply 剖证必须先看样本量——fib 归因仅 429 样本，
 「SETTABLE 探测 miss 占 7.2%」实为 31 个样本的统计噪声；据此做的双探针换序
 （JUMPIFNOTLT 先探）在 CPU 时间（getrusage RUSAGE_CHILDREN，抗调度噪声）配对下
