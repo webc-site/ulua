@@ -1,3 +1,4 @@
+use core::ptr::{null_mut, NonNull};
 use core::slice::from_raw_parts;
 
 use crate::{
@@ -10,14 +11,15 @@ use crate::{
 };
 
 /// # Safety
-/// `b` 须指向存活 `LuaLStrbuf`，其 `l` 为处于可 GC 受保护帧的 lua_State、`(*l).top - 1` 为预留结果槽；
-/// `storage` 若非空须为存活缓冲区且写入位置 `b.p` 落在 `storage.data..=end`（`offset_from` 求长度须同数组），
-/// 否则走内联 `buffer`。`luaC_checkGC`/`luaS_newlstr`/`lua_pushlstring` 可分配/GC。cpp/VM/src/laux.cpp:580 luaL_pushresult。
+/// `b` 须指向存活 `LuaLStrbuf`，其 `l` 为 `Some` 且指向处于可 GC 受保护帧的 lua_State、`(*l).top - 1` 为预留结果槽；
+/// `storage` 为 `Some` 时须为存活缓冲区且写入位置 `b.p` 落在 `storage.data..=end`（`offset_from` 求长度须同数组），
+/// `None` 则走内联 `buffer`。`luaC_checkGC`/`luaS_newlstr`/`lua_pushlstring` 可分配/GC。cpp/VM/src/laux.cpp:580 luaL_pushresult。
 pub(crate) unsafe fn lua_l_pushresult(b: *mut LuaLStrbuf) {
   unsafe {
     let b = &*b;
-    let l = b.l;
-    let storage = b.storage;
+    // 句柄 → 裸指针契约边界：l/storage 在 buffinit 后为 Some，map 出裸指针供既有 *mut 下游沿用
+    let l = b.l.map(NonNull::as_ptr).unwrap_or(null_mut());
+    let storage = b.storage.map(NonNull::as_ptr).unwrap_or(null_mut());
 
     if !storage.is_null() {
       lua_c_check_gc!(l);

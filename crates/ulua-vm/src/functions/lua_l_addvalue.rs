@@ -1,4 +1,4 @@
-use core::ptr::copy_nonoverlapping;
+use core::ptr::{copy_nonoverlapping, null_mut, NonNull};
 
 use crate::{
   functions::{extendstrbuf::extendstrbuf, lua_tolstring::lua_tolstring_ref},
@@ -12,9 +12,10 @@ use crate::{
 /// 扩容走 `extendstrbuf` 的 boxloc `-2`（串框须落在栈顶值之下）并弹出该临时串；转换失败
 /// （`None`，非串非数值）则不追加也不弹栈，与 cpp 一致。cpp laux.cpp:508 `luaL_addvalue`。
 pub(crate) unsafe fn lua_l_addvalue(b: &mut LuaLStrbuf) {
-  // SAFETY: 契约保证 b.l 栈顶可转换、b 的 p/end 为界内游标；扩容后 copy/pop 仅触及新缓冲与栈顶
+  // SAFETY: 契约保证 b.l 为 Some 且栈顶可转换、b 的 p/end 为界内游标；扩容后 copy/pop 仅触及新缓冲与栈顶
   unsafe {
-    let l = b.l;
+    // 句柄 → 裸指针契约边界：l 在 buffinit 后为 Some，map 出裸指针供既有 *mut LuaState 下游沿用
+    let l = b.l.map(NonNull::as_ptr).unwrap_or(null_mut());
 
     if let Some(s) = lua_tolstring_ref(l, -1) {
       let vl = s.len();
