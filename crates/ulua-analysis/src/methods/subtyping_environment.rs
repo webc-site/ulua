@@ -8,10 +8,16 @@ use crate::{
     dense_hash_map_find_mut_no_default, dense_hash_map_find_no_default,
   },
   records::{
-    apply_mapped_generics::ApplyMappedGenerics, arena_handle::Handle, builtin_types::BuiltinTypes,
-    generic_bounds::GenericBounds, internal_error_reporter::InternalErrorReporter,
-    substitution::Substitution, subtyping_environment::SubtypingEnvironment,
-    subtyping_result::SubtypingResult, txn_log::TxnLog, type_arena::TypeArena,
+    apply_mapped_generics::ApplyMappedGenerics,
+    arena_handle::{Handle, alias, alias_ref},
+    builtin_types::BuiltinTypes,
+    generic_bounds::GenericBounds,
+    internal_error_reporter::InternalErrorReporter,
+    substitution::Substitution,
+    subtyping_environment::SubtypingEnvironment,
+    subtyping_result::SubtypingResult,
+    txn_log::TxnLog,
+    type_arena::TypeArena,
   },
   type_aliases::{lookup_result::LookupResult, type_id::TypeId, type_pack_id::TypePackId},
 };
@@ -54,7 +60,7 @@ impl SubtypingEnvironment {
       LookupResult::V0(_) => true,
       _ => {
         if !self.parent.is_null() {
-          unsafe { (*self.parent).contains_mapped_pack(tp) }
+          alias_ref(self.parent).contains_mapped_pack(tp)
         } else {
           false
         }
@@ -73,7 +79,7 @@ impl SubtypingEnvironment {
     }
 
     if !self.parent.is_null() {
-      return unsafe { (*self.parent).contains_mapped_type(ty) };
+      return alias_ref(self.parent).contains_mapped_type(ty);
     }
 
     false
@@ -103,9 +109,11 @@ impl SubtypingEnvironment {
 
     if !self.parent.is_null() {
       // Safety: 上方 `!self.parent.is_null()` 已保证父环境句柄非空；它是构造期接线的
-      // 环境父链裸指针，指向比 `&mut self` 长寿的外层环境，故递归返回的 `&mut GenericBounds`
-      // 在此存活有效。递归调用的 unsafe fn 契约（父链/`ice_reporter`/`ty`）与原调用一致。
-      return unsafe { (*self.parent).get_mapped_type_bounds(ty, ice_reporter) };
+      // 环境父链裸指针，指向比 `&mut self` 长寿的外层环境，父链严格向外指无自别名，
+      // alias() 的 &mut 满足门面契约，递归返回的 `&mut GenericBounds` 在此存活有效。
+      // 本 unsafe 块现仅覆盖对 unsafe fn 的递归调用（解引用本身已收编入门面），
+      // 契约（父链/`ice_reporter`/`ty`）与原调用一致。
+      return unsafe { alias(self.parent).get_mapped_type_bounds(ty, ice_reporter) };
     }
 
     LUAU_ASSERT!(false);
@@ -124,7 +132,7 @@ impl SubtypingEnvironment {
     if result.get_if::<TypePackId>().is_some() {
       result
     } else if !self.parent.is_null() {
-      unsafe { (*self.parent).lookup_generic_pack(tp) }
+      alias_ref(self.parent).lookup_generic_pack(tp)
     } else {
       result
     }
@@ -138,7 +146,7 @@ impl SubtypingEnvironment {
     }
 
     if !self.parent.is_null() {
-      return unsafe { (*self.parent).try_find_substitution(ty) };
+      return alias_ref(self.parent).try_find_substitution(ty);
     }
 
     None
@@ -155,7 +163,7 @@ impl SubtypingEnvironment {
     }
 
     if !self.parent.is_null() {
-      return unsafe { (*self.parent).try_find_subtyping_result(sub_and_super) };
+      return alias_ref(self.parent).try_find_subtyping_result(sub_and_super);
     }
 
     None

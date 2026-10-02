@@ -8,6 +8,7 @@ use crate::{
   enums::tarjan_result::TarjanResult,
   functions::{get_type, get_type_pack},
   records::{
+    arena_handle::alias_ref,
     extern_type::ExternType,
     function_type::FunctionType,
     intersection_type::IntersectionType,
@@ -136,7 +137,8 @@ impl Tarjan {
     // Safety: self.log 由 clear_tarjan/reset_state 在每轮 substitute 前接线，取值只
     // 可能是调用方存活的 &TxnLog 或 TxnLog::empty() 进程级单例指针，均非空且比本
     // 遍历长寿；follow_type_id 为 &self 只读解析，返回仍指向 arena 存活 Type。
-    let ty = unsafe { (*self.log).follow_type_id(ty) };
+    // 借用面仅覆盖本条只读解析调用，返回值是标量句柄，不与后续 self 字段写入交叠。
+    let ty = alias_ref(self.log).follow_type_id(ty);
 
     if let Some(&index) = self.type_to_index.find(&ty) {
       (index, false)
@@ -157,7 +159,7 @@ impl Tarjan {
   pub(crate) fn indexify_type_pack_id(&mut self, mut tp: TypePackId) -> (i32, bool) {
     // Safety: 同 TypeId 版——self.log 为上轮接线保留的非空存活 TxnLog 句柄，
     // follow_type_pack_id 只读沿日志链解析，返回仍指向 arena 存活 TypePack。
-    tp = unsafe { (*self.log).follow_type_pack_id(tp) };
+    tp = alias_ref(self.log).follow_type_pack_id(tp);
 
     if let Some(&index) = self.pack_to_index.find(&tp) {
       (index, false)
@@ -345,13 +347,13 @@ impl Tarjan {
   }
 
   pub(crate) fn visit_child_type_id(&mut self, ty: TypeId) {
-    let ty = unsafe { (*self.log).follow_type_id(ty) };
+    let ty = alias_ref(self.log).follow_type_id(ty);
 
     self.edges.push(TarjanEdge::Type(ty));
   }
 
   pub(crate) fn visit_child_type_pack_id(&mut self, tp: TypePackId) {
-    let tp = unsafe { (*self.log).follow_type_pack_id(tp) };
+    let tp = alias_ref(self.log).follow_type_pack_id(tp);
 
     self.edges.push(TarjanEdge::Pack(tp));
   }
@@ -363,9 +365,7 @@ impl Tarjan {
     // Safety: self.log 由 clear_tarjan/reset_state 在每轮 substitute 前接线，取值只
     // 可能是调用方存活的 &TxnLog 或 TxnLog::empty() 进程级单例指针，均非空且比本次
     // 遍历长寿；follow_type_id 按 &self 只读。
-    unsafe {
-      LUAU_ASSERT!(ty == (*self.log).follow_type_id(ty));
-    }
+    LUAU_ASSERT!(ty == alias_ref(self.log).follow_type_id(ty));
 
     if self.ignore_children_visit_type_id(ty) {
       return;
@@ -373,7 +373,7 @@ impl Tarjan {
 
     // Safety: 同上，self.log 非空存活；pending_type_id 沿 parent 链只读查找，返回值
     // 要么是日志映射中 Box<PendingType> 堆对象的指针、要么是 null。
-    let pty = unsafe { (*self.log).pending_type_id(ty) };
+    let pty = alias_ref(self.log).pending_type_id(ty);
     if !pty.is_null() {
       // Safety: pty 指向 Box<PendingType> 的堆对象——容器 rehash 只移动 Box 指针不
       // 移动堆内容，且本轮遍历期间不回滚该日志，pending 字段保持存活；仅取共享引用。
@@ -502,9 +502,7 @@ impl Tarjan {
     let mut tp = tp;
     // Safety: 与 TypeId 版同源——self.log 每轮 substitute 前由 reset_state 接线为
     // 存活 &TxnLog 或 TxnLog::empty() 单例，非空且长寿；follow_type_pack_id 只读。
-    unsafe {
-      LUAU_ASSERT!(tp == (*self.log).follow_type_pack_id(tp));
-    }
+    LUAU_ASSERT!(tp == alias_ref(self.log).follow_type_pack_id(tp));
 
     if self.ignore_children_visit_type_pack_id(tp) {
       return;
@@ -512,7 +510,7 @@ impl Tarjan {
 
     // Safety: self.log 非空存活（同上）；pending_type_pack_id 沿 parent 链只读查找，
     // 返回 Box<PendingTypePack> 堆对象指针或 null。
-    let ptp = unsafe { (*self.log).pending_type_pack_id(tp) };
+    let ptp = alias_ref(self.log).pending_type_pack_id(tp);
     if !ptp.is_null() {
       // Safety: ptp 指向 Box 堆对象，容器重排不移动堆内容；遍历期间日志不回滚，
       // pending 字段存活，仅取共享引用。
@@ -551,7 +549,7 @@ impl Tarjan {
       self.child_limit = fint::LuauTarjanChildLimit.get();
     }
 
-    let ty = unsafe { (*self.log).follow_type_id(ty) };
+    let ty = alias_ref(self.log).follow_type_id(ty);
 
     let (index, _fresh) = self.indexify_type_id(ty);
     self.worklist.push(TarjanWorklistVertex {
@@ -569,7 +567,7 @@ impl Tarjan {
       self.child_limit = fint::LuauTarjanChildLimit.get();
     }
 
-    let tp = unsafe { (*self.log).follow_type_pack_id(tp) };
+    let tp = alias_ref(self.log).follow_type_pack_id(tp);
 
     let (index, _fresh) = self.indexify_type_pack_id(tp);
     self.worklist.push(TarjanWorklistVertex {

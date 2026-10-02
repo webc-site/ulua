@@ -15,7 +15,7 @@ use ulua_common::records::dense_hash_map::DenseHashMap;
 
 use crate::{
   records::{
-    arena_handle::{alias_opt, alias_ref},
+    arena_handle::{alias, alias_opt, alias_ref},
     file_resolver::FileResolver,
     module_info::ModuleInfo,
     require_trace_result::RequireTraceResult,
@@ -91,23 +91,23 @@ impl RequireTracer<'_> {
       i += 1;
     }
 
-    // Safety: 块内解引用只触及三类长寿对象——self.result 为构造期接线的
-    // *mut RequireTraceResult（C++ 引用成员等价，指向调用方 trace_requires
-    // 持有的活对象，比本 tracer 长寿）；work/require_calls 的元素全部源自
-    // AST arena 节点（地址不移动、活过整个 trace），require 的 args 首参存
-    // 在性由 cpp visit(AstExprCall*) 的 args.size>=1 访问契约保证（与上方
-    // 23-24 行同一论证）；(*expr).as_expr() 为 class-index 判型，结果判空
-    // 后才再借用。get_dependent 与 exprs.find/insert 均单线程串行独占，
-    // file_resolver 是 &mut 'a 借用字段，块内无并存别名、无悬垂读。
+    // Safety: 块内残余裸解引用只触及两类长寿对象——work/require_calls 的元素全部源自
+    // AST arena 节点（地址不移动、活过整个 trace），require 的 args 首参存在性由 cpp
+    // visit(AstExprCall*) 的 args.size>=1 访问契约保证（与上方 23-24 行同一论证）；
+    // (*expr).as_expr() 为 class-index 判型，结果判空后才再借用。self.result 侧读点
+    // 已收编 alias_ref、独占写点已收编 alias（长寿接线论证见各门面调用点），仅
+    // find 借用点与相邻 push 写点按红线 1 保留裸形（见就地注记）。get_dependent 与
+    // exprs.find/insert 均单线程串行独占，file_resolver 是 &mut 'a 借用字段，块内无
+    // 并存别名、无悬垂读。
     unsafe {
       while let Some(expr) = self.work.pop() {
-        if (*self.result).exprs.find(&expr).is_some() {
+        if alias_ref(self.result).exprs.find(&expr).is_some() {
           continue;
         }
 
         let mut info: Option<ModuleInfo> = None;
         if let Some(dep) = self.get_dependent(expr) {
-          let context = (*self.result).exprs.find(&dep);
+          let context = alias_ref(self.result).exprs.find(&dep);
           // cpp 的 if/else-if 链：有上下文时透传类型节点，否则交由 resolver
           // 处理（context 可能为 None，对应 cpp 传入 nullptr）。
           if context.is_some() && {
@@ -133,30 +133,35 @@ impl RequireTracer<'_> {
         }
 
         if let Some(info) = info {
-          (*self.result).exprs.insert(expr, info);
+          alias(self.result).exprs.insert(expr, info);
         }
       }
 
-      (*self.result)
+      alias(self.result)
         .require_list
         .reserve(self.require_calls.len());
       for &require in &self.require_calls {
         // SAFETY 同上：arena 存活，args 首参存在。
         let require_ref = &*require;
         let arg = require_ref.args.as_slice()[0].cast::<AstNode>();
+        // 不迁（红线 1「借用跨写」）：info 的借用存活期横跨下方 push（同一 *self.result
+        // 的可变写）直至 insert 前才终止；原裸形 autoref 仅及 exprs/require_list 两个
+        // 不相交字段，改门面 &'static/&'static mut 会整结构体扩面——保留裸形
+        // （#60 形制：不迁≠缺陷）。
         if let Some(info) = (*self.result).exprs.find(&arg) {
+          // 不迁（红线 1）：同上，本写与仍存活的 find 借用跨语句并存。
           (*self.result)
             .require_list
             .push((info.name.clone(), require_ref.base.base.location));
           // cpp `result.exprs[require] = std::move(infoCopy)`：先取出副本再写入，
           // 因为写入会使 info 失效。
           let info_copy = info.clone();
-          (*self.result)
+          alias(self.result)
             .exprs
             .insert(require.cast::<AstNode>(), info_copy);
         } else {
           // cpp: mark require as unresolved
-          (*self.result)
+          alias(self.result)
             .exprs
             .insert(require.cast::<AstNode>(), ModuleInfo::default());
         }
