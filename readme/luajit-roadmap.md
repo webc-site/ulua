@@ -73,6 +73,13 @@ proto#1 pc=6：**480K 次 miss、last_tag=7（table 恒定）** = spike 剧本�
 
 ### E2 CALL/RETURN 快路内联 + arity 特化（fib 2.1 / micro_call 1.5 / binarytrees 1.4）
 
+**2026-10-03 J2 单态调用内联实施失败（已否决，未合并）**：子代理实现 CALL lowering
+内联 native-callee 快路（守卫 + 内联建帧 + 直 br callee exectarget，合成负载
+fib -25%/micro_call -22%/三靶束 -18%），但独立复核 **conformance_tables 红**
+（getheaptrigger.rs:24 panic——内联快路与堆触发器交互缺陷）。**未合并**，分支
+opt-j2-inline 6513efd9 保留供排查。教训：子代理自报门禁全绿不可信，独立复核
+是合并前置必需（本次为独立复核第二次抓到子代理漏报）。
+
 **2026-10-02 补充实测**：本轮核查发现 `call_arm` 宏已是 cpp 式内联快路
 （Lua→Lua 调用直接 `continue` 同一循环，无 performcall 重入）——E2 的
 「重入开销」前提不成立。剩余差距 = 派发次数 + 每调用帧建立开销（Rust ~20+ 指令
