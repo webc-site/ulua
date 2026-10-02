@@ -1,5 +1,7 @@
+use alloc::string::String;
+
 use crate::{
-  functions::{cstr, cstr_cow, lua_l_optlstring::lua_l_optlstring},
+  functions::lua_l_checklstring::lua_l_checklstring_ref,
   macros::{lua_l_error::luaL_error, lua_lib_fn::lua_lib_fn},
   records::lua_state::LuaState,
 };
@@ -10,13 +12,12 @@ use crate::{
 pub fn lua_b_assert(l: &mut LuaState) -> i32 {
   l.check_any(1);
   if !l.to_boolean(1) {
-    let mut len = 0;
-    // SAFETY: `l` 存活（引用形保证）；`lua_l_optlstring` 的 `# Safety` 其余前提
-    // （2 号槽可读或无值、默认串为 NUL 结尾字面量、len 可写）由库函数约定与实参成立。
-    let msg = unsafe { lua_l_optlstring(l, 2, cstr(b"assertion failed!\0"), &mut len) };
-    // SAFETY: `msg` 为 `lua_l_optlstring` 返回的 NUL 结尾串指针（默认串或 2 号槽串），
-    // 本调用内未被回收；cstr_cow 只读建立字节串视图。
-    let msg = unsafe { cstr_cow(msg) };
+    if l.is_none_or_nil(2) {
+      // SAFETY: 抛错族契约——`l` 存活且处于受保护帧（库函数调用约定），本调用不返回。
+      unsafe { luaL_error!(l.as_mut_ptr(), "assertion failed!") };
+    }
+    let msg = lua_l_checklstring_ref(l, 2);
+    let msg = String::from_utf8_lossy(msg);
     // SAFETY: 抛错族契约——`l` 存活且处于受保护帧（库函数调用约定），本调用不返回。
     unsafe { luaL_error!(l.as_mut_ptr(), "{}", msg) };
   }

@@ -1,6 +1,6 @@
 use crate::{
   enums::lua_status::LuaStatus,
-  functions::{cstr, lua_d_throw_ldo::lua_d_throw, lua_g_pusherror::lua_g_pusherror},
+  functions::{lua_d_throw_ldo::lua_d_throw, lua_g_pusherror::lua_g_pusherror_bytes},
   records::lua_state::LuaState,
 };
 
@@ -9,9 +9,9 @@ use crate::{
 pub unsafe fn lua_break(l: *mut LuaState) -> i32 {
   unsafe {
     if (*l).n_ccalls > (*l).base_ccalls {
-      lua_g_pusherror(
+      lua_g_pusherror_bytes(
         l,
-        cstr(b"attempt to break across metamethod/C-call boundary\0"),
+        b"attempt to break across metamethod/C-call boundary",
       );
       lua_d_throw(l, LuaStatus::ErrRun as i32);
     }

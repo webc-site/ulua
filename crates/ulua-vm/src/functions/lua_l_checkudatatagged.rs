@@ -2,7 +2,7 @@ use core::{ffi::c_void, str::from_utf8};
 
 use crate::{
   functions::{
-    cstr_bytes, lua_getuserdataname::lua_getuserdataname, lua_l_typeerror_l::lua_l_typeerror_l,
+    lua_getuserdataname::lua_getuserdataname_bytes, lua_l_typeerror_l::lua_l_typeerror_l,
     lua_touserdatatagged::lua_touserdatatagged_ref,
   },
   records::lua_state::LuaState,
@@ -18,8 +18,8 @@ pub(crate) unsafe fn lua_l_checkudatatagged(l: *mut LuaState, ud: i32, tag: i32)
       return p as *mut c_void;
     }
 
-    let tname = lua_getuserdataname(l, tag);
-    let tname_str = from_utf8(cstr_bytes(tname)).unwrap_or("userdata");
+    let tname = lua_getuserdataname_bytes(l, tag);
+    let tname_str = from_utf8(tname).unwrap_or("userdata");
     lua_l_typeerror_l(l, ud, tname_str);
   }
 }

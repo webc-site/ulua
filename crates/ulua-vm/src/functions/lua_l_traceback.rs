@@ -5,8 +5,8 @@ use itoa::Buffer;
 use crate::{
   functions::{
     cstr, cstr_bytes, lua_getinfo::lua_getinfo, lua_l_addchar::lua_l_addchar,
-    lua_l_addlstring::lua_l_addlstring, lua_l_addstring::lua_l_addstring,
-    lua_l_buffinit::lua_l_buffinit, lua_l_pushresult::lua_l_pushresult,
+    lua_l_addlstring::lua_l_addlstring, lua_l_buffinit::lua_l_buffinit,
+    lua_l_pushresult::lua_l_pushresult,
   },
   records::{lua_debug::LuaDebug, lua_l_strbuf::LuaLStrbuf, lua_state::LuaState},
 };
@@ -44,7 +44,7 @@ pub unsafe fn lua_l_traceback(l: *mut LuaState, l1: *mut LuaState, msg: Option<&
       let bytes = msg_str.as_bytes();
       let end = memchr::memchr(0, bytes).unwrap_or(bytes.len());
       lua_l_addlstring(&mut buf, &bytes[..end]);
-      lua_l_addstring(&mut buf, cstr(b"\n\0"));
+      lua_l_addchar(&mut buf, b'\n');
     }
 
     let mut ar: LuaDebug = zeroed();
@@ -57,7 +57,7 @@ pub unsafe fn lua_l_traceback(l: *mut LuaState, l1: *mut LuaState, msg: Option<&
       }
 
       if !ar.source.is_null() {
-        lua_l_addstring(&mut buf, ar.short_src);
+        lua_l_addlstring(&mut buf, cstr_bytes(ar.short_src));
       }
 
       if ar.currentline > 0 {
@@ -66,8 +66,8 @@ pub unsafe fn lua_l_traceback(l: *mut LuaState, l1: *mut LuaState, msg: Option<&
       }
 
       if !ar.name.is_null() {
-        lua_l_addstring(&mut buf, cstr(b" function \0"));
-        lua_l_addstring(&mut buf, ar.name);
+        lua_l_addlstring(&mut buf, b" function ");
+        lua_l_addlstring(&mut buf, cstr_bytes(ar.name));
       }
 
       lua_l_addchar(&mut buf, b'\n');

@@ -1,34 +1,13 @@
-use core::{
-  ffi::c_char,
-  slice::{from_raw_parts, from_raw_parts_mut},
-};
+//! 缓冲区字节切片安全追加（取代旧 C 风格 strlen 扫描与裸指针拷贝）。
 
-use crate::functions::cstr_bytes;
-/// # Safety
-///
-/// `buf` 必须指向至少 `bufsize` 字节、正确对齐且可写的缓冲区，且 `offset < bufsize`
-/// （否则越界分支的 `bufsize - offset - 1` 无符号下溢）；`data` 必须指向 NUL 结尾的
-/// C 字符串。写入区间为 `[offset, offset + copy)`，`copy` 经裁剪不超过
-/// `bufsize - offset - 1`，故至少留一字节供调用方补终止符。
-pub(crate) unsafe fn append(
-  buf: *mut c_char,
-  bufsize: usize,
-  offset: usize,
-  data: *const c_char,
-) -> usize {
-  // SAFETY: 契约保证 data 为 NUL 结尾字符串，cstr_bytes 扫描必然在缓冲内终止
-  let size = unsafe { cstr_bytes(data as *mut c_char) }.len();
-  let copy = if offset + size >= bufsize {
-    bufsize - offset - 1
-  } else {
-    size
-  };
-
-  // SAFETY: 契约保证 offset<bufsize 且 copy<=bufsize-offset-1，dst 区间在 buf 可写界内
-  let dst = unsafe { from_raw_parts_mut(buf.add(offset) as *mut u8, copy) };
-  // SAFETY: src 区间取自上方 cstr_bytes 已扫描过的 data 前 copy 字节，必可读
-  let src = unsafe { from_raw_parts(data as *const u8, copy) };
-  dst.copy_from_slice(src);
-
+/// 安全追加字节切片到缓冲区；写入区间为 `[offset, offset + copy)`。
+/// `copy` 经裁剪不超过 `buf.len().saturating_sub(1) - offset`，为尾部留至少一字节放终止符。
+pub(crate) fn append_bytes(buf: &mut [u8], offset: usize, data: &[u8]) -> usize {
+  let cap = buf.len().saturating_sub(1);
+  if offset >= cap {
+    return offset;
+  }
+  let copy = data.len().min(cap - offset);
+  buf[offset..offset + copy].copy_from_slice(&data[..copy]);
   offset + copy
 }

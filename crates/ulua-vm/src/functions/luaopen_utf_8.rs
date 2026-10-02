@@ -1,8 +1,8 @@
 use crate::{
   functions::{
-    byteoffset::byteoffset_arm, codepoint::codepoint_arm, cstr, iter_codes::iter_codes_arm,
-    lua_l_register::lua_l_register, lua_pushlstring::lua_pushlstring_bytes, utfchar::utfchar_arm,
-    utflen::utflen_arm,
+    byteoffset::byteoffset_arm, codepoint::codepoint_arm, iter_codes::iter_codes_arm,
+    lua_l_register::lua_l_register_bytes, lua_pushlstring::lua_pushlstring_bytes,
+    utfchar::utfchar_arm, utflen::utflen_arm,
   },
   macros::lua_lib_fn::lua_lib_fn,
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
@@ -20,7 +20,7 @@ static FUNCS: [LuaLReg; 5] = [
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub unsafe fn luaopen_utf_8(l: *mut LuaState) -> i32 {
   unsafe {
-    lua_l_register(l, cstr(b"utf8\0"), &FUNCS);
+    lua_l_register_bytes(l, Some(b"utf8"), &FUNCS);
 
     // UTF8PATT = "[\0-\x7F\xC2-\xF4][\x80-\xBF]*" — contains an embedded NUL, so a
     // byte slice (not a C string literal). 14 bytes, pushed via lua_pushlstring.
