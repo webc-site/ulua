@@ -41,7 +41,7 @@ pub unsafe fn lua_rawgetptagged(l: &mut LuaState, idx: i32, p: *mut c_void, tag:
   unsafe {
     api_check!(l, (*t).is_table());
 
-    setobj_2_s!(l, l.top, lua_h_getp((*t).as_table_ptr(), p, tag));
+    setobj_2_s!(l, l.top, lua_h_getp((*t).as_table(), p, tag));
     api_incr_top!(l);
 
     ttype!(l.top.sub(1)) as i32

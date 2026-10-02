@@ -26,7 +26,7 @@ pub(crate) unsafe fn lua_h_setp(
 ) -> *mut TValue {
   // SAFETY: 契约保证 `t` 为存活 LuaTable 且 tag 匹配指针键类型，块内 lightuserdata 键哈希与写入不越 node 界
   unsafe {
-    let p = lua_h_getp(t, key, tag);
+    let p = lua_h_getp(&*t, key, tag);
 
     if p != LUA_O_NILOBJECT {
       p as *mut TValue
