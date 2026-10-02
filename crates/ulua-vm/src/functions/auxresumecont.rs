@@ -19,7 +19,7 @@ pub unsafe fn auxresumecont(l: *mut LuaState, co: *mut LuaState) -> i32 {
       lua_xmove(co, l, nres);
       nres
     } else {
-      lua_rawcheckstack(l, 2);
+      lua_rawcheckstack(&mut *l, 2);
       lua_xmove(co, l, 1);
       CO_STATUS_ERROR
     }

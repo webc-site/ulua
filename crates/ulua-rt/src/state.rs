@@ -205,9 +205,8 @@ pub(crate) fn ensure_stack_or_panic(state: StateView<'_>, slots: i32) {
 /// interrupt trampoline 在 `raise_lua_error` 前用它——该 facade 自身的 `push_bytes`
 /// 需要一个已就位的空位才能维持 `api_incr_top` 不变式。
 #[inline]
-pub(crate) fn raw_reserve_stack(state: StateView<'_>, slots: i32) {
-  // Safety: 族级契约;`lua_rawcheckstack` 只调整该 state 的栈窗口、不越界读写。
-  unsafe { lua_rawcheckstack(state.as_mut_ptr(), slots) }
+pub(crate) fn raw_reserve_stack(mut state: StateView<'_>, slots: i32) {
+  lua_rawcheckstack(&mut state, slots)
 }
 
 /// `idx` 处当前是否处于可让出点（`lua_isyieldable` 收口点，返回布尔）。

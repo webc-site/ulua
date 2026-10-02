@@ -10,7 +10,7 @@ use crate::{
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub(crate) unsafe fn lua_g_pusherror_bytes(l: *mut LuaState, error: &[u8]) {
   unsafe {
-    lua_rawcheckstack(l, 1);
+    lua_rawcheckstack(&mut *l, 1);
     pusherror_bytes(l, error);
   }
 }
