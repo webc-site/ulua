@@ -16,7 +16,7 @@ pub fn lua_rawequal(l: &LuaState, index1: i32, index2: i32) -> i32 {
   if eq(o1, LUA_O_NILOBJECT) || eq(o2, LUA_O_NILOBJECT) {
     0
   } else {
-    // SAFETY:两个指针均指向栈上有效 TValue，仅读值。
-    unsafe { lua_o_rawequal_obj(o1, o2) }
+    // SAFETY:两个指针均指向栈上有效 TValue，引用重建仅收形（非空/对齐由指针窗内解引用保证）。
+    unsafe { lua_o_rawequal_obj(&*o1, &*o2) }
   }
 }

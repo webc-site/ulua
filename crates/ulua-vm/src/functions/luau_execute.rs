@@ -4862,7 +4862,7 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
               };
 
               // check if the existing closure is safe to reuse
-              if ncl == kcl && lua_o_rawequal_obj(uref, uv) != 0 {
+              if ncl == kcl && lua_o_rawequal_obj(&*uref, &*uv) != 0 {
                 ui += 1;
                 continue;
               }

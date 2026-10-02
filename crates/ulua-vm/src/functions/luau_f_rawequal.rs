@@ -17,7 +17,7 @@ luau_f_arm! {
       if nparams >= 2 && nresults <= 1 {
         setbvalue!(
           res,
-          lua_o_rawequal_obj(arg0 as *const TValue, args as *const TValue)
+          lua_o_rawequal_obj(&*(arg0 as *const TValue), &*(args as *const TValue))
         );
         return 1;
       }

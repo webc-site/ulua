@@ -312,8 +312,8 @@ fn lightuserdata_equality_requires_pointer_and_tag() {
     let t1 = value(p1, tag1);
     let t2 = value(p2, tag2);
 
-    // Safety: lua_o_rawequal_obj/lua_v_equalval_export 只要求存活 L 与两个
-    // 本作用域 TValue；p1/p2 只作指针值比较，从不解引用。
+    // Safety: lua_v_equalval_export 只要求存活 L 与两个本作用域 TValue；
+    // p1/p2 只作指针值比较，从不解引用（lua_o_rawequal_obj 已 safe 化，引用直传）。
     unsafe {
       assert_eq!(
         lua_o_rawequal_obj(&t1, &t2),
