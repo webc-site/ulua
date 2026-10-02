@@ -23,7 +23,9 @@ pub const LUA_O_NILOBJECT_VALUE: NilSentinel = NilSentinel(TValue {
   tt: 0, // LUA_TNIL
 });
 
-pub static LUA_O_NILOBJECT_: NilSentinel = LUA_O_NILOBJECT_VALUE;
+/// 哨兵对象本体：仅用于在下方 `LUA_O_NILOBJECT` 常量中钉住静态存储地址，
+/// 无外部消费者，收窄到 crate 内。
+pub(crate) static LUA_O_NILOBJECT_: NilSentinel = LUA_O_NILOBJECT_VALUE;
 
 /// C++ `#define LUA_O_NILOBJECT (&luaO_nilobject_)`.
 pub const LUA_O_NILOBJECT: *const TValue = &LUA_O_NILOBJECT_.0 as *const TValue;
