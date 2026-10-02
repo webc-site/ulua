@@ -1330,18 +1330,13 @@ macro_rules! vm_reentry {
 /// 原生返回、协程恢复、native-call 之后都是这个口径，不与调用点的旧值掺混。环内需要
 /// reentry 的臂走 [`vm_reentry!`]（同一条口径 + `continue 'dispatch`）。
 ///
-/// # Safety（内部 unsafe 块契约，签名安全：调用方全部在 crate 内）
-///
-/// `l` 必须指向存活且 `isactive` 的 `LuaState`，其 `ci` 当前为 Lua 闭包帧
-/// （入口 `LUAU_ASSERT!(isLua!((*l).ci))` 兜底），且同一 VM 状态任一时刻仅单线程解释执行。
+/// 签名安全：本函数自身无 unsafe 操作，`l` 的前置（存活且 `isactive`、`ci` 为 Lua
+/// 闭包帧、单线程独占）由被调 [`vm_state_from_ci`]/[`tier_cold`] 的块契约承担。
 fn tier_reentry<const SINGLE_STEP: bool>(l: *mut LuaState) {
-  // SAFETY: 契约保证 l 为就绪的 Lua 帧状态，const 分支仅切换单步开关
-  unsafe {
-    // 循环状态量一律从 `L->ci` 重取（与 C++ `goto reentry` 后循环头重读一致），
-    // 见 [`vm_state_from_ci`]。
-    let st = vm_state_from_ci(l);
-    tier_cold::<SINGLE_STEP>(l, st.pc, st.base, st.k, st.cl);
-  }
+  // 循环状态量一律从 `L->ci` 重取（与 C++ `goto reentry` 后循环头重读一致），
+  // 见 [`vm_state_from_ci`]。
+  let st = vm_state_from_ci(l);
+  tier_cold::<SINGLE_STEP>(l, st.pc, st.base, st.k, st.cl);
 }
 
 /// `LOP_GETTABLE` 的 handler：派发环同名 `match` 臂的臂体原样搬出，`#[inline(always)]` 折回该臂，判定顺序与 C++ `VM_CASE` 逐句一致。
@@ -1354,7 +1349,7 @@ fn tier_reentry<const SINGLE_STEP: bool>(l: *mut LuaState) {
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_gettable(
+fn h_gettable(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1402,7 +1397,7 @@ unsafe fn h_gettable(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_gettable(
+fn s_gettable(
   l: *mut LuaState,
   mut pc: *const Instruction,
   mut base: StkId,
@@ -1433,7 +1428,7 @@ unsafe fn s_gettable(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_setupval(
+fn h_setupval(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1466,7 +1461,7 @@ unsafe fn h_setupval(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_getupval(
+fn h_getupval(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1503,7 +1498,7 @@ unsafe fn h_getupval(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_move(
+fn h_move(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1533,7 +1528,7 @@ unsafe fn h_move(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_loadk(
+fn h_loadk(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1563,7 +1558,7 @@ unsafe fn h_loadk(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_loadn(
+fn h_loadn(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1602,7 +1597,7 @@ unsafe fn h_loadn(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_loadb(
+fn h_loadb(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1638,7 +1633,7 @@ unsafe fn h_loadb(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_loadnil(
+fn h_loadnil(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1667,7 +1662,7 @@ unsafe fn h_loadnil(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_settablen(
+fn h_settablen(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1712,7 +1707,7 @@ unsafe fn h_settablen(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令、该指令确为数组命中且值已写回。
 #[inline(never)]
-unsafe fn s_settablen_bar(
+fn s_settablen_bar(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -1741,7 +1736,7 @@ unsafe fn s_settablen_bar(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_settablen(
+fn s_settablen(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -1780,7 +1775,7 @@ unsafe fn s_settablen(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_gettablen(
+fn h_gettablen(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1819,7 +1814,7 @@ unsafe fn h_gettablen(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_gettablen(
+fn s_gettablen(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -1858,7 +1853,7 @@ unsafe fn s_gettablen(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_settable(
+fn h_settable(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -1910,7 +1905,7 @@ unsafe fn h_settable(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令、该指令确为数组命中且值已写回。
 #[inline(never)]
-unsafe fn s_settable_bar(
+fn s_settable_bar(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -1937,7 +1932,7 @@ unsafe fn s_settable_bar(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_settable(
+fn s_settable(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -1966,7 +1961,7 @@ unsafe fn s_settable(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_modk(
+fn h_modk(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2001,7 +1996,7 @@ unsafe fn h_modk(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_modk(
+fn s_modk(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2030,7 +2025,7 @@ unsafe fn s_modk(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_mulk(
+fn h_mulk(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2077,7 +2072,7 @@ unsafe fn h_mulk(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_mulk(
+fn s_mulk(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2111,7 +2106,7 @@ unsafe fn s_mulk(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_subk(
+fn h_subk(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2143,7 +2138,7 @@ unsafe fn h_subk(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_subk(
+fn s_subk(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2172,7 +2167,7 @@ unsafe fn s_subk(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_addk(
+fn h_addk(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2206,7 +2201,7 @@ unsafe fn h_addk(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_addk(
+fn s_addk(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2235,7 +2230,7 @@ unsafe fn s_addk(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_mul(
+fn h_mul(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2299,7 +2294,7 @@ unsafe fn h_mul(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_mul(
+fn s_mul(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2334,7 +2329,7 @@ unsafe fn s_mul(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_sub(
+fn h_sub(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2380,7 +2375,7 @@ unsafe fn h_sub(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_sub(
+fn s_sub(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2414,7 +2409,7 @@ unsafe fn s_sub(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_add(
+fn h_add(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2466,7 +2461,7 @@ unsafe fn h_add(
 ///
 /// 与 [`tier_cold`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_add(
+fn s_add(
   l: *mut LuaState,
   pc: *const Instruction,
   mut base: StkId,
@@ -2527,7 +2522,7 @@ fn backedge_idle(l: *mut LuaState) -> bool {
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_jumpback(
+fn h_jumpback(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2561,7 +2556,7 @@ unsafe fn h_jumpback(
 ///
 /// 与 [`h_jumpback`] 同前置。
 #[inline(never)]
-unsafe fn s_jumpback(
+fn s_jumpback(
   l: *mut LuaState,
   mut pc: *const Instruction,
   mut base: StkId,
@@ -2597,7 +2592,7 @@ unsafe fn s_jumpback(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_fornloop(
+fn h_fornloop(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2639,7 +2634,7 @@ unsafe fn h_fornloop(
 ///
 /// 与 [`h_fornloop`] 同前置。
 #[inline(never)]
-unsafe fn s_fornloop(
+fn s_fornloop(
   l: *mut LuaState,
   mut pc: *const Instruction,
   mut base: StkId,
@@ -2717,7 +2712,7 @@ fn fornloop_step(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_fornprep(
+fn h_fornprep(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2749,7 +2744,7 @@ unsafe fn h_fornprep(
 ///
 /// 与 [`h_fornprep`] 同前置，且 `pc` 已越过当前指令。
 #[inline(never)]
-unsafe fn s_fornprep(
+fn s_fornprep(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2817,7 +2812,7 @@ fn fornprep_step(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_newtable(
+fn h_newtable(
   l: *mut LuaState,
   mut pc: *const Instruction,
   mut base: StkId,
@@ -2858,7 +2853,7 @@ unsafe fn h_newtable(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_jumpifnot(
+fn h_jumpifnot(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2897,7 +2892,7 @@ unsafe fn h_jumpifnot(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_jumpif(
+fn h_jumpif(
   l: *mut LuaState,
   mut pc: *const Instruction,
   base: StkId,
@@ -2934,7 +2929,7 @@ unsafe fn h_jumpif(
 /// 与 [`tier_cold`] 同前置：`l` 指向存活且 `isactive` 的 `LuaState`，`pc`/`base`/`k`/`cl`
 /// 是同一 Lua 闭包帧的一致解释器状态，且单线程独占。
 #[inline(always)]
-unsafe fn h_jump(
+fn h_jump(
   // 形参 `l` 只为凑齐 handler 的统一签名（`vm_hot!` 逐位传同一组状态量）：
   // LOP_JUMP 纯粹搬 pc，不碰栈也不碰 state。
   _l: *mut LuaState,
@@ -3032,7 +3027,7 @@ unsafe fn h_jump(
 /// `l` 指向存活且 `isactive` 的 `LuaState`；`pc`/`base`/`k`/`cl` 必须是同一 Lua 闭包帧
 /// 的一致解释器状态（由 [`tier_reentry`] 或原生返回路径建立），且任一时刻仅单线程使用。
 ///
-unsafe fn tier_cold<const SINGLE_STEP: bool>(
+fn tier_cold<const SINGLE_STEP: bool>(
   l: *mut LuaState,
   mut pc: *const Instruction,
   mut base: StkId,
