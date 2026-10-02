@@ -1,5 +1,7 @@
 //! Source: `VM/src/laux.cpp:529-582` (hand-ported)
 
+use core::ptr::{null_mut, NonNull};
+
 use crate::{
   enums::lua_type::LuaType,
   functions::{
@@ -25,7 +27,8 @@ pub(crate) unsafe fn lua_l_addvalueany(b: &mut LuaLStrbuf, idx: i32) {
   // SAFETY: 契约保证 b 与其 lua_State 一致、idx 栈槽可读；定长数字缓冲按 luai_num2str/int2str
   // 返回长度截取读取，界内
   unsafe {
-    let l = b.l;
+    // 句柄 → 裸指针契约边界：l 在 buffinit 后为 Some，map 出裸指针供既有 *mut LuaState 下游沿用
+    let l = b.l.map(NonNull::as_ptr).unwrap_or(null_mut());
 
     match (*l).type_of(idx) {
       // cpp release 构建 LUAU_ASSERT 编译掉后 break 直落：不追加任何内容
