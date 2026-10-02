@@ -30,7 +30,10 @@ pub(crate) unsafe fn resolve_import_safe(l: *mut LuaState, k: *mut TValue, id: u
       LUAU_ASSERT!(old_top + 1 == (*l).get_top());
 
       if status != LuaStatus::Ok as i32 {
-        setnilvalue!((*l).top.sub(1));
+        // r12-w9b 收编：恢复点（lua_d_pcall）后错误位写 nil 的裸偏移读数改经
+        // `top_slot(-1)` 边界原语——原语即调用现读 `self.top`，与替代前
+        // `(*l).top.sub(1)` 同位点现读，跨搬栈不预绑定（correctstack 悬窗教训）
+        setnilvalue!((*l).top_slot(-1));
       }
     } else {
       // r12-w7a2 收编（同形单点·protected 路径 else 分支）：写 nil 到保留顶槽后经

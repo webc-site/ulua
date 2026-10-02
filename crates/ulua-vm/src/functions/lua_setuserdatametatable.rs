@@ -18,8 +18,10 @@ pub unsafe fn lua_setuserdatametatable(l: *mut LuaState, tag: i32) {
     // reassignment not supported
     api_check!(l, (*(*l).global).udatamt[tag as usize].is_null());
 
-    // r12-w7a2 收编：栈顶单槽预绑定读柄（既有形制确认——本函数体仅此一读）
-    let t = (*l).top.offset(-1);
+    // r12-w7a2 收编：栈顶单槽预绑定读柄（既有形制确认——本函数体仅此一读）；
+    // r12-w9b 续收：裸偏移读数改经 `top_slot(-1)` 边界原语，顶下界由上方
+    // `api_checknelems!` 前置断言保证（契约见 top_slot），求值位点不动
+    let t = (*l).top_slot(-1);
     let Some(h) = (*(*t).value.gc).as_table_mut() else {
       api_check!(l, false);
       return;
