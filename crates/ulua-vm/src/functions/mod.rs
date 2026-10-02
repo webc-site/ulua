@@ -83,15 +83,15 @@ pub mod coresumey;
 pub mod correctstack;
 pub mod corunning;
 pub mod costatus;
-// r16-v4c 步骤 4：crate 内 C 串读取 safe 门面（形制仿 ulua-repl-cli `state_ref` 先例，
-// `pub(crate) mod` + `pub(crate) fn` 双重非导出=lint 免检域）。
-pub(crate) mod cstr_bytes_ref;
 pub mod countint;
 pub mod cowrap;
 pub mod coyield;
 pub mod coyieldable;
 pub mod createmetatable_lstrlib;
 pub mod createmetatable_lveclib;
+// r16-v4c 步骤 4：crate 内 C 串读取 safe 门面（形制仿 ulua-repl-cli `state_ref` 先例，
+// `pub(crate) mod` + `pub(crate) fn` 双重非导出=lint 免检域）。
+pub(crate) mod cstr_bytes_ref;
 pub mod currentline;
 pub mod currentpc;
 pub mod currfuncname;
