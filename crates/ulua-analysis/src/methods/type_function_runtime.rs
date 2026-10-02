@@ -46,7 +46,7 @@ use ulua_vm::{
 
 use crate::{
   functions::{
-    arena_ref::arena_ref, check_result_for_error::check_result_for_error,
+    check_result_for_error::check_result_for_error,
     check_result_for_error_deprecated::check_result_for_error_deprecated,
     register_type_user_data::register_type_user_data,
     register_types_library::register_types_library,
@@ -90,12 +90,15 @@ impl TypeFunctionRuntime {
 
 /// `lua_close` 的 C ABI 析构 thunk：`StateRef` 的 deleter 签名要求
 /// `unsafe extern "C-unwind"`（ulua-vm 生命周期回调边界）。
+///
+/// # Safety
+/// `l` 由 `prepare_state` 以 `lua_newstate` 返回值写入 `StateRef`，指向存活
+/// `LuaState`；deleter 至多调用一次，与 cpp `shared_ptr` 定制删除器的
+/// `lua_close` 语义等价。
 unsafe extern "C-unwind" fn lua_close_thunk(l: *mut LuaState) {
-  // SAFETY: FFI 边界——`l` 由 `prepare_state` 以 `lua_newstate` 返回值写入
-  // `StateRef`，指向存活 `LuaState`；deleter 至多调用一次，与 cpp `shared_ptr`
-  // 定制删除器的 lua_close 语义等价。
+  // SAFETY: FFI 边界——契约见本函数 `# Safety`。
   unsafe {
-    lua_close(l as *mut lua_state::LuaState);
+    lua_close(l.cast());
   }
 }
 impl TypeFunctionRuntime {
@@ -115,7 +118,7 @@ impl TypeFunctionRuntime {
     // state = StateRef(lua_newstate(typeFunctionAlloc, nullptr), lua_close);
     // SAFETY: FFI 边界——`type_function_alloc` 符合 ulua-vm 分配器签名，ud 为
     // null 合法（该分配器不使用 ud）；返回值为新建存活 state。
-    let new_state = unsafe { lua_newstate(Some(type_function_alloc), null_mut()) } as *mut LuaState;
+    let new_state = unsafe { lua_newstate(Some(type_function_alloc), null_mut()) }.cast();
     self.state = (new_state, Some(lua_close_thunk));
 
     // lua_State* l = state.get();
@@ -126,7 +129,7 @@ impl TypeFunctionRuntime {
     // `self` 地址只转手存入线程 data 槽、此处不解引用；VM 回调侧
     // （get_type_function_runtime / user_defined_type_function）仅在回调窗口内
     // 经同一地址重建借用——单线程串行，窗口外本 runtime 独占驱动。
-    lua_setthreaddata(vm_l, (self as *mut TypeFunctionRuntime).cast());
+    lua_setthreaddata(vm_l, from_mut(self).cast());
 
     // setTypeFunctionEnvironment(l); registerTypeUserData(l); registerTypesLibrary(l);
     // SAFETY: VM 边界——`l` 是本帧刚建 state；三入口各自的 Safety 契约见其函数
@@ -173,12 +176,13 @@ impl RegisterErr for TypeFunctionError {
   }
 }
 impl TypeFunctionRuntime {
-  /// 契约：`function` 非空且指向分析期存活的 parse arena
-  /// `AstStatTypeFunction` 节点（调用方由 `Node::as_ptr` 取得）。解引用经
-  /// `arena_ref` 判空 panic 门面收口，unsafe 不再出现在签名上。
+  /// 契约：`function` 指向分析期存活的 parse arena `AstStatTypeFunction`
+  /// 节点（调用方经 `arena_handle::alias` 由 arena 节点句柄物化，非空与
+  /// 对齐由引用编码）。登记用的身份键取自该引用的指针值，仅透传给 VM 作
+  /// lightuserdata，不解引用之外的存活事项。
   pub(crate) fn register_function(
     &mut self,
-    function: *mut AstStatTypeFunction,
+    function: &mut AstStatTypeFunction,
   ) -> Option<TypeFunctionError> {
     self.register_function_impl::<TypeFunctionError>(function)
   }
@@ -212,7 +216,7 @@ impl TypeFunctionRuntime {
   /// 同 [`Self::register_function`]，旧版字符串错误形态；入参契约同注。
   pub(crate) fn register_function_deprecated(
     &mut self,
-    function: *mut AstStatTypeFunction,
+    function: &mut AstStatTypeFunction,
   ) -> Option<String> {
     self.register_function_impl::<String>(function)
   }
@@ -235,16 +239,16 @@ pub(super) trait RegisterErr: Sized {
 impl TypeFunctionRuntime {
   /// 共享核心：编译、沙箱执行并把用户类型函数登记进注册表。
   ///
-  /// 契约：`function` 非空且指向分析期存活的 parse arena
-  /// `AstStatTypeFunction`（调用方由 `Node::as_ptr` 取handle）。形态注（§2
-  /// 收口后）：原整体 `unsafe` 块拆解完毕——裸引用一律经
-  /// `arena_handle::alias`/`arena_ref` 判空门面物化，余下每个 `unsafe {}` 都
-  /// 紧贴一处 ulua-vm `pub unsafe fn` 边界调用，携带该函数自身文档的契约
-  /// （传入 state 均为本帧惰性新建/新建线程、单线程串行且窗口内无其它别名，
-  /// 与原块前提逐条同构）。
+  /// 契约：`function` 指向分析期存活的 parse arena
+  /// `AstStatTypeFunction`（引用编码非空；调用方经 `alias` 物化）。形态注
+  /// （§2 收口后）：原整体 `unsafe` 块拆解完毕——裸引用一律经
+  /// `arena_handle::alias` 门面物化，余下每个 `unsafe {}` 都紧贴一处 ulua-vm
+  /// `pub unsafe fn` 边界调用，携带该函数自身文档的契约（传入 state 均为
+  /// 本帧惰性新建/新建线程、单线程串行且窗口内无其它别名，与原块前提逐条
+  /// 同构）。
   pub(super) fn register_function_impl<E: RegisterErr>(
     &mut self,
-    function: *mut AstStatTypeFunction,
+    function: &mut AstStatTypeFunction,
   ) -> Option<E> {
     // If evaluation is disabled, we do not generate additional error messages
     if !self.allow_evaluation {
@@ -252,8 +256,7 @@ impl TypeFunctionRuntime {
     }
 
     // Do not evaluate type functions with parse errors inside
-    let function_ref = arena_ref(function, "register_function function");
-    if function_ref.has_errors {
+    if function.has_errors {
       return None;
     }
 
@@ -266,23 +269,22 @@ impl TypeFunctionRuntime {
     // Fetch to check if function is already registered
     // LUA_PUSHLIGHTUSERDATA(global, function); lua_gettable(global, LUA_REGISTRYINDEX);
     // SAFETY: VM 边界——`global_vm` 为 prepare_state 懒建的主线程存活 state，
-    // 单线程串行驱动，本次调用窗口内无其它别名；`function` 按上文契约非空，
-    // 仅取指针值作 lightuserdata 身份键。
-    unsafe {
-      alias(global_vm).push_lightuserdata((function as *mut ()).cast());
-      lua_gettable(&mut *global_vm, LUA_REGISTRYINDEX);
-    }
+    // 单线程串行驱动，本次调用窗口内无其它别名；仅取 `function` 的地址值作
+    // lightuserdata 身份键，被调方按契约不解引用。
+    let g = alias(global_vm);
+    unsafe { g.push_lightuserdata(from_mut(&mut *function).cast()) };
+    lua_gettable(&mut *g, LUA_REGISTRYINDEX);
 
     // if (!lua_isnil(global, -1)) { lua_pop(global, 1); return std::nullopt; }
-    if !alias(global_vm).is_nil(-1) {
-      alias(global_vm).pop(1);
+    if !g.is_nil(-1) {
+      g.pop(1);
       return None;
     }
 
-    alias(global_vm).pop(1);
+    g.pop(1);
 
     // AstName name = function->name;
-    let name = function_ref.name;
+    let name = function.name;
     let name_str = ast_name_to_string(name);
 
     // Construct ParseResult containing the type function
@@ -292,12 +294,12 @@ impl TypeFunctionRuntime {
     let mut names = AstNameTable::new(&mut allocator);
 
     // AstExpr* exprFunction = function->body;
-    let expr_function: *mut AstExpr = function_ref.body.cast::<AstExpr>();
+    let expr_function = function.body.cast::<AstExpr>();
     // AstArray<AstExpr*> exprReturns{&exprFunction, 1};
     // 借用视图构造：`from_ref` 切片的元素地址即 `&exprFunction` 本地槽位
-    // （编译器读 `data[0]` 取到的指针值与手写裸指针逐位相同），指针运算
+    //（编译器读 `data[0]` 取到的指针值与手写裸指针逐位相同），指针运算
     // 收口在 `AstArray::from_slice` 门面。
-    let expr_returns: AstArray<*mut AstExpr> = AstArray::from_slice(from_ref(&expr_function));
+    let expr_returns = AstArray::from_slice(from_ref(&expr_function));
     // AstStatReturn stmtReturn{Location{}, exprReturns};
     let mut stmt_return = AstStatReturn::new(Location::default(), expr_returns);
     let stat_node = Node::from_mut(&mut stmt_return).cast::<AstStat>();
@@ -349,7 +351,7 @@ impl TypeFunctionRuntime {
     // SAFETY: VM 边界——`global_vm` 存活主线程（同上方调用窗口前提），
     // 新线程由其拥有、活至 popper 弹出。
     let l_vm = unsafe { lua_newthread(global_vm) };
-    let l = l_vm as *mut LuaState;
+    let l = l_vm.cast::<LuaState>();
     // luau_temp_thread_popper popper(global);
     let mut popper = LuauTempThreadPopper::new(global);
 
@@ -399,13 +401,13 @@ impl TypeFunctionRuntime {
 
     // Store resulting function in the registry
     // LUA_PUSHLIGHTUSERDATA(global, function); lua_xmove(l, global, 1); lua_settable(global, LUA_REGISTRYINDEX);
-    // SAFETY: VM 边界——`global_vm`/`l_vm` 皆存活且本帧独占；`function` 仅按
-    // 指针值作注册表键（上方同一契约）。
-    unsafe {
-      alias(global_vm).push_lightuserdata((function as *mut ()).cast());
-      lua_xmove(l_vm, global_vm, 1);
-      lua_settable(&mut *global_vm, LUA_REGISTRYINDEX);
-    }
+    // SAFETY: VM 边界——`global_vm`/`l_vm` 皆存活且本帧独占；仅取 `function`
+    // 的地址值作注册表键（上方同一契约），被调方不解引用该值。
+    let g = alias(global_vm);
+    unsafe { g.push_lightuserdata(from_mut(&mut *function).cast()) };
+    // SAFETY: VM 边界——同帧新建线程与主线程间搬运 1 槽，单线程串行。
+    unsafe { lua_xmove(l_vm, global_vm, 1) };
+    lua_settable(&mut *g, LUA_REGISTRYINDEX);
 
     popper.luau_temp_thread_popper();
     None

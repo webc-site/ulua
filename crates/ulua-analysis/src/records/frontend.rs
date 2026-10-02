@@ -67,10 +67,14 @@ pub struct Frontend {
   /// ErrorConverter / autocomplete / TypeErrorToStringOptions 均已改为受命
   /// 周期引用的安全消费方。
   ///
-  /// 此处 `dyn` 保留（运行期开放类型集）：`FileResolver` 由宿主注入实现，
-  /// 跨 crate 有 NullFileResolver、unit-test、web、rt、cli 等多家实现方，
-  /// 无法 enum_dispatch 穷举；Frontend 泛型化 `FR: FileResolver` 会波及
-  /// 上述 30+ 调用点与自引用布线，编译期成本不合理。
+  /// 此处 `dyn` 保留（review.md §4「类型集合运行期开放、泛型导致编译期成本
+  /// 不合理」条款，r13-w1c 逐处复核）：`FileResolver` 由宿主注入实现，rg 交叉
+  /// 核对实现方横跨本 crate（NullFileResolver）、ulua-unit-test（Test /
+  /// NaiveFileResolver）、ulua-web（DemoFileResolver）、ulua-rt（Check /
+  /// CheckModuleFileResolver）、ulua-analyze-cli（CliFileResolver）与游离
+  /// workspace benchmarks（BenchFileResolver），集合运行期开放，无法
+  /// enum_dispatch 穷举；Frontend 泛型化 `FR: FileResolver` 会波及上述 30+
+  /// 调用点与自引用布线，编译期成本不合理。
   pub file_resolver: NonNull<dyn FileResolver>,
   pub module_resolver: FrontendModuleResolver,
   pub module_resolver_for_autocomplete: FrontendModuleResolver,
@@ -97,14 +101,16 @@ pub struct Frontend {
 impl Frontend {
   /// C++ `fileResolver` 成员的受控读取。构造方布线后指针恒非空且指向存活
   /// 对象（与 `Frontend` 同生命周期约定），此处集中解引用，调用点免 unsafe。
-  /// `dyn` 保留理由同 [`Frontend::file_resolver`] 字段注（宿主注入，集合开放）。
+  /// `dyn` 保留理由见 [`Frontend::file_resolver`] 字段注（宿主注入、集合运行期
+  /// 开放，review.md §4）。
   pub fn file_resolver_ref(&self) -> &dyn FileResolver {
     // SAFETY: 见上；`file_resolver` 由构造方布线为有效对象，未被置空。
     unsafe { self.file_resolver.as_ref() }
   }
 
   /// 同 [`Frontend::file_resolver_ref`]，可变版（`readSource` / `resolveModule`
-  /// 契约为 `&mut self`）；`dyn` 保留理由亦同（借出同一 trait object 的可变别名）。
+  /// 契约为 `&mut self`）；`dyn` 保留理由亦同（借出同一 trait object 的可变别名，
+  /// review.md §4 运行期开放集条款）。
   pub fn file_resolver_mut(&mut self) -> &mut dyn FileResolver {
     // SAFETY: 见上。
     unsafe { self.file_resolver.as_mut() }
