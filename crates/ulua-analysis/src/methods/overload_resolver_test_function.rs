@@ -95,6 +95,8 @@ impl OverloadResolver<'_> {
       ice,
       limits: NonNull::from(self.limits),
       subtyping: NonNull::from(&mut self.subtyping),
+      // §2 判定注（B 型·接线槽）：同 `type_function_context.rs` 构造器——cpp
+      // `solver/constraint` 默认空、后续接线，空=「未接线」。
       solver: null_mut(),
       constraint: null(),
       user_func_name: None,

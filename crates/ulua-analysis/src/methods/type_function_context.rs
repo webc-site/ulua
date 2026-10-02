@@ -123,6 +123,9 @@ impl TypeFunctionContext {
       ice,
       limits,
       subtyping,
+      // §2 判定注（B 型·接线槽）：cpp `TypeFunctionContext` 默认 `solver=nullptr、
+      // constraint=nullptr`，由 `from_solver` 系后续接线；空=「未接线」与
+      // `check_frontend.rs` builder 接线槽同族，读取侧判读、本批不改字段类型。
       solver: null_mut(),
       constraint: null(),
       user_func_name: None,

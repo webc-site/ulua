@@ -1,7 +1,4 @@
-use core::{
-  ptr::{NonNull, null_mut},
-  str::from_utf8,
-};
+use core::str::from_utf8;
 
 use ulua_ast::{
   records::{
@@ -192,13 +189,12 @@ impl AstJsonEncoder {
     let c = self.push_comma();
     self.write_type_string_view("AstGenericType");
     self.write("name", &generic_type.name);
-    if generic_type.default_value.is_some() {
-      self.write(
-        "luauType",
-        &generic_type
-          .default_value
-          .map_or(null_mut(), NonNull::as_ptr),
-      );
+    // §2 清扫批（W3）判定：C 型死空臂消除——cpp AstJsonEncoder 即为 `if (v.defaultValue)
+    // WRITE_PROPERTY("luauType", *v.defaultValue);`，缺席分支由守卫承载；原「is_some 守卫 +
+    // map_or(null_mut, as_ptr)」的空臂在该守卫下不可达，属可免折返（与
+    // type_checker_create_generic_types.rs 已折叠的 C 型哨兵同族），收口为 `if let`。
+    if let Some(default_value) = generic_type.default_value {
+      self.write("luauType", &default_value.as_ptr());
     }
     self.pop_comma(c);
     self.write_raw_string_view("}");
@@ -212,13 +208,10 @@ impl AstJsonEncoder {
     let c = self.push_comma();
     self.write_type_string_view("AstGenericTypePack");
     self.write("name", &generic_type_pack.name);
-    if generic_type_pack.default_value.is_some() {
-      self.write(
-        "luauType",
-        &generic_type_pack
-          .default_value
-          .map_or(null_mut(), NonNull::as_ptr),
-      );
+    // §2 清扫批（W3）判定：同 `write_ast_generic_type`，死空臂消除，缺席分支由 `if let`
+    // 守卫承载，JSON 输出与原式逐字节一致。
+    if let Some(default_value) = generic_type_pack.default_value {
+      self.write("luauType", &default_value.as_ptr());
     }
     self.pop_comma(c);
     self.write_raw_string_view("}");

@@ -41,6 +41,8 @@ impl ConstraintSolver {
         fn_type: next_ty,
         args_pack: table_ty_pack,
         result: variables_pack,
+        // §2 判定注（B 型·落点字段布局）：合成约束无 AST 调用点，cpp 同处默认
+        // `callSite/astOverloadResolvedTypes = nullptr`，空=「无载荷」由字段读取侧判读。
         call_site: null_mut(),
         discriminant_types: Vec::new(),
         type_arguments: Vec::new(),
