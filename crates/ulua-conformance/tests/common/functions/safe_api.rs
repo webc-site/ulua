@@ -632,9 +632,10 @@ pub fn tolightuserdata(l: L, idx: c_int) -> *mut c_void {
 
 /// `lua_setlightuserdataname(l, tag, name)`。
 pub fn setlightuserdataname(l: L, tag: c_int, name: &'static [u8]) {
-  // r16-v4b：callee 已引用形 safe 化，`state_mut` 判空重建 `&mut LuaState` 即收口；
-  // `cstr(name)` NUL 结尾静态名串裸形透传（不切片化，同被调契约）。
-  lua_setlightuserdataname(state_mut(l), tag, cstr(name))
+  // r16-v4b：callee 接收者已 `&mut` 引用形，`state_mut` 判空重建短借；`cstr(name)`
+  // NUL 结尾静态名串裸形透传（不切片化）；unsafe 仅剩 callee 留形转达（lint 裁决见
+  // callee 文档）。
+  unsafe { lua_setlightuserdataname(state_mut(l), tag, cstr(name)) }
 }
 
 /// `lua_getlightuserdataname(l, tag)`：未注册得 `None`，否则为登记名原始字节。
@@ -788,16 +789,15 @@ pub fn rawseti(l: L, idx: c_int, n: c_int) {
 
 /// `lua_rawgetptagged`。
 pub fn rawgetptagged(l: L, idx: c_int, p: *mut c_void, tag: c_int) -> c_int {
-  // r16-v4b：callee 已引用形 safe 化，`state_mut` 判空重建 `&mut LuaState` 即收口；
-  // `p` 仅作位模式键不解引用。
-  lua_rawgetptagged(state_mut(l), idx, p, tag)
+  // r16-v4b：callee 接收者已 `&mut` 引用形，`state_mut` 判空重建短借；`p` 仅作位模式
+  // 键不解引用，unsafe 仅剩 callee 留形转达（lint 裁决见 callee 文档）。
+  unsafe { lua_rawgetptagged(state_mut(l), idx, p, tag) }
 }
 
 /// `lua_rawsetptagged`。
 pub fn rawsetptagged(l: L, idx: c_int, p: *mut c_void, tag: c_int) {
-  // r16-v4b：callee 已引用形 safe 化，`state_mut` 判空重建 `&mut LuaState` 即收口；
-  // 同 [`rawgetptagged`]，`p` 仅作位模式键不解引用。
-  lua_rawsetptagged(state_mut(l), idx, p, tag)
+  // Safety: 同 [`rawgetptagged`]。
+  unsafe { lua_rawsetptagged(state_mut(l), idx, p, tag) }
 }
 
 /// `lua_rawgetp`（tag 0，宏形态）。
