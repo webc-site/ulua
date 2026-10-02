@@ -1,4 +1,4 @@
-use core::mem::size_of;
+use core::{mem::size_of, slice::from_raw_parts_mut};
 
 use crate::{
   functions::{lua_m_realloc::lua_m_realloc_, runerror::runerror},
@@ -29,11 +29,11 @@ pub(crate) unsafe fn setarrayvector(l: *mut LuaState, t: *mut LuaTable, size: i3
     (*t).array = newarray;
 
     if size > oldsize {
-      let mut p = newarray.add(oldsize as usize);
-      let end = newarray.add(size as usize);
-      while p < end {
-        setnilvalue!(p);
-        p = p.add(1);
+      // 先分配换指针（上方 realloc + `(*t).array` 回写已完成），后派生窗：
+      // 新增尾段改窗内遍历置 nil，消除 p/end 双指针游走（cpp ltable.cpp:505-509 逐槽同形）
+      let tail = from_raw_parts_mut(newarray.add(oldsize as usize), (size - oldsize) as usize);
+      for slot in tail {
+        setnilvalue!(slot);
       }
     }
 
