@@ -88,7 +88,7 @@ use ulua_vm::{
     lua_l_openlibs::lua_l_openlibs,
     lua_l_optboolean::lua_l_optboolean,
     lua_l_optinteger::lua_l_optinteger,
-    lua_l_register::lua_l_register,
+    lua_l_register::lua_l_register_bytes,
     lua_l_sandbox::lua_l_sandbox,
     lua_l_sandboxthread::lua_l_sandboxthread,
     lua_l_typeerror_l::lua_l_typeerror_l,
@@ -312,10 +312,11 @@ pub fn open_base(l: L) -> c_int {
   unsafe { luaopen_base(l) }
 }
 
-/// `luaL_register(l, NULL, funcs)`。
+/// `luaL_register(l, NULL, funcs)` 的 bytes 核心形：`libname` 以 `None` 表达
+/// 「注册到当前栈顶」。
 pub fn l_register(l: L, funcs: &[LuaLReg]) {
-  // Safety: `l` 存活；指针仅在本调用期内被读取。
-  unsafe { lua_l_register(l, null(), funcs) }
+  // Safety: `l` 存活；`funcs` 为借用切片，各项 name/func 仅在本调用期内被读取。
+  unsafe { lua_l_register_bytes(l, None, funcs) }
 }
 
 /// `luaL_sandbox`。

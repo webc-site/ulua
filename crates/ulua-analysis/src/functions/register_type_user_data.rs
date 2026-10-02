@@ -11,7 +11,7 @@ use core::{ffi::c_void, ptr::null};
 use ulua_common::fflag;
 use ulua_vm::{
   functions::{
-    lua_l_register::lua_l_register, lua_pushlstring::lua_pushlstring_bytes,
+    lua_l_register::lua_l_register_bytes, lua_pushlstring::lua_pushlstring_bytes,
     lua_setuserdatadtor::lua_setuserdatadtor,
   },
   records::{lua_l_reg::LuaLReg, lua_state},
@@ -187,7 +187,7 @@ pub(crate) unsafe fn register_type_user_data(l: *mut LuaState) {
     // lua_newtable(l);
     (*vm_l).new_table();
     // luaL_register(l, nullptr, typeUserdataMethods);
-    lua_l_register(vm_l, null(), &TYPE_USERDATA_METHODS);
+    lua_l_register_bytes(vm_l, None, &TYPE_USERDATA_METHODS);
 
     // if (FFlag::LuauUdtfTypeIsSubtypeOf)
     if fflag::LuauUdtfTypeIsSubtypeOf.get() {
