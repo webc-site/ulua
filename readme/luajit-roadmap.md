@@ -79,6 +79,11 @@ fib -25%/micro_call -22%/三靶束 -18%），但独立复核 **conformance_table
 （getheaptrigger.rs:24 panic——内联快路与堆触发器交互缺陷）。**未合并**，分支
 opt-j2-inline 6513efd9 保留供排查。教训：子代理自报门禁全绿不可信，独立复核
 是合并前置必需（本次为独立复核第二次抓到子代理漏报）。
+**同日闭环**：根因 = getheaptrigger.rs:24 的 i64 加法溢出（预存缺陷，J2 快路
+提速 ~20% 使 GC 时序角落可达）——并行 r16-d1 票的 saturating 算术修复已在 dev，
+J2 合并时冲突去重保留 dev 版后 **conformance_tables 显式复验通过**（6/6 绿），
+J2 CALL 内联本体已随 8ce356de 在 dev 生效（fib/micro_call 三靶 -18~25% 待全量
+bench 确认）。
 
 **2026-10-02 补充实测**：本轮核查发现 `call_arm` 宏已是 cpp 式内联快路
 （Lua→Lua 调用直接 `continue` 同一循环，无 performcall 重入）——E2 的
