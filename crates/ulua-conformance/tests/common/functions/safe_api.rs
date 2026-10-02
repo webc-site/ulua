@@ -1152,8 +1152,8 @@ pub fn singlestep(l: L, enabled: bool) {
 
 /// `lua_g_isnative`（C 侧 0/非 0）：`level` 帧是否为原生编译帧。
 pub fn g_isnative(l: L, level: c_int) -> c_int {
-  // Safety: `l` 存活；`level` 由用例按栈深限定，只读帧槽。
-  unsafe { lua_g_isnative(l, level) }
+  // r16-v4b：callee 已引用形 safe 化，`state_ref` 判空重建 `&LuaState` 即收口（纯帧槽读数）。
+  lua_g_isnative(state_ref(l), level)
 }
 
 /// `lua_is_lfunction`（C 侧 0/非 0）：`idx` 是否为 Lua 闭包。
