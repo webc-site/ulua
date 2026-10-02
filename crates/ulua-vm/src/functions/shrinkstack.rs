@@ -13,9 +13,17 @@ use crate::{
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub(crate) unsafe fn shrinkstack(l: *mut LuaState) {
+  // r13-w1b 逐点定性（w6d 口径保留面）：base_ci/ci 帧数组遍历、`ci - base_ci` 与
+  // `lim - stack` 的 array→array offset_from 算术、stack_last 界缘判读、size_ci/
+  // stacksize 容量读写均无 LuaState 门面（边界原语只覆盖 `top` 槽算术，CallInfo
+  // 数组面与容量字段系 records/slot.rs 红线原样保留）；`(*ci).top` 为 CallInfo
+  // 裸字段。收编仅入口顶槽读数一处（top_slot(0)，位点在任何 realloc 先行之前，
+  // 未新增预绑定窗）。
   unsafe {
     // compute used stack - note that we can't use th->top if we're in the middle of vararg call
-    let mut lim: StkId = (*l).top;
+    // 收编：入口顶槽读数经 top_slot(0) 边界原语（镜像 cpp `StkId lim = L->top;`
+    // 单次绑定形，读数位点不变）
+    let mut lim: StkId = (*l).top_slot(0);
     let mut ci: *mut CallInfo = (*l).base_ci;
     while ci <= (*l).ci {
       LUAU_ASSERT!((*ci).top <= (*l).stack_last);
