@@ -12,7 +12,11 @@ const ERR_YIELD_ACROSS_C_CALL: &[u8] = b"attempt to yield across metamethod/C-ca
 pub unsafe fn lua_yield(l: *mut LuaState, nresults: i32) -> i32 {
   unsafe {
     api_check!(l, nresults >= 0);
-    api_check!(l, nresults as isize <= (*l).top.offset_from((*l).base));
+    // r16-b2 收编：顶-基槽距读数落既有 get_top 门面（本体 slot_distance(base, top) 即
+    // 被替代式同址同宽镜像）。api_check! 系 debug 期断言、release 编译掉 ⇒ 换形等价
+    // 平凡真（r14 p1 判例②）；nresults 本为 i32，isize 式与 i32 式在现域逐值同真值、
+    // 比较方向不变
+    api_check!(l, nresults <= (*l).get_top());
 
     if (*l).n_ccalls > (*l).base_ccalls {
       lua_g_pusherror_bytes(l, ERR_YIELD_ACROSS_C_CALL);
