@@ -447,9 +447,9 @@ where
   // 纯 Rust：闸门已过，按共享引用取出闭包（本函数只 `&F` 调用，不取走载荷）。
   let func = &*upvalue.func;
 
-  // `Lua::from_borrowed` 是带契约的 safe 门面（只存指针不解引用）：本 trampoline 的
-  // 运行区间即「state 存活期覆盖句柄及其克隆」。
-  let lua = Lua::from_borrowed(raw);
+  // `Lua::from_borrowed` 是带契约的 safe 门面（只复制视图指针位、不解引用）：本
+  // trampoline 的运行区间即「state 存活期覆盖句柄及其克隆」。
+  let lua = Lua::from_borrowed(state);
   // `stack_top` 是带契约的 safe 门面：只读当前栈深（存活 state），故 `1..=nargs`
   // 是有效槽位，正是 `collect_stack_args` 的头注释前提；收集本身是 safe fn，无
   // 边界块，转换失败经 `raise`（safe 门面）发散。
@@ -553,9 +553,9 @@ where
     raise(state, &e.to_string())
   }
 
-  // 纯 Rust：`from_borrowed`/`current_waker` 都是带契约的 safe 门面（前者只存指针，
-  // 后者内部按 `vm_key` 契约读 per-VM waker 槽）。
-  let lua = Lua::from_borrowed(raw);
+  // 纯 Rust：`from_borrowed`/`current_waker` 都是带契约的 safe 门面（前者只复制
+  // 视图指针位，后者内部按 `vm_key` 契约读 per-VM waker 槽）。
+  let lua = Lua::from_borrowed(state);
   let waker = current_waker(state);
   let mut cx = Context::from_waker(&waker);
 
