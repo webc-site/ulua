@@ -64,17 +64,17 @@ pub(crate) fn lua_pushcclosurek_ref(
     (*cc).debugname = debugname;
 
     // 出栈 nup：待捕获值窗自新 top 起
-    (*l).top = (*l).top.sub(nup as usize);
+    l.top = l.top.sub(nup as usize);
 
     // k 值登记（切片形）：dst=闭包 upvals 堆块、src=出栈后的栈值窗，二者不相交
     let captured: &mut [TValue] =
       c_slice_mut(addr_of_mut!((*cc).upvals) as *mut TValue, nup as usize);
-    let pending: &[TValue] = c_slice((*l).top, nup as usize);
+    let pending: &[TValue] = c_slice(l.top, nup as usize);
     for (dst, src) in captured.iter_mut().zip(pending) {
       setobj2n!(l, dst as *mut TValue, src as *const TValue);
     }
 
-    setclvalue!(l, (*l).top, cl);
+    setclvalue!(l, l.top, cl);
     ulua_common::LUAU_ASSERT!(iswhite!(cl as *mut GCObject));
     api_incr_top!(l);
   }

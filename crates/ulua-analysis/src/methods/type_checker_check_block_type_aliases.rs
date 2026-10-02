@@ -1,7 +1,9 @@
 use alloc::string::ToString;
 
 use ulua_ast::{
-  records::{ast_stat::AstStat, ast_stat_type_alias::AstStatTypeAlias, node_handle::Node as StatHandle},
+  records::{
+    ast_stat::AstStat, ast_stat_type_alias::AstStatTypeAlias, node_handle::Node as StatHandle,
+  },
   rtti::ast_node_try_as,
 };
 
@@ -11,11 +13,8 @@ use crate::{
     magic_names::is_reserved_type_alias_name,
   },
   records::{
-    arena_handle::alias,
-    free_type::FreeType,
-    occurs_check_failed::OccursCheckFailed,
-    type_checker::TypeChecker,
-    type_error::TypeError,
+    arena_handle::alias, free_type::FreeType, occurs_check_failed::OccursCheckFailed,
+    type_checker::TypeChecker, type_error::TypeError,
   },
   type_aliases::{
     name_type::Name, scope_ptr_type::ScopePtr, type_error_data::TypeErrorData,
@@ -23,11 +22,7 @@ use crate::{
   },
 };
 impl TypeChecker {
-  pub fn check_block_type_aliases(
-    &mut self,
-    scope: &ScopePtr,
-    sorted: &mut [StatHandle<AstStat>],
-  ) {
+  pub fn check_block_type_aliases(&mut self, scope: &ScopePtr, sorted: &mut [StatHandle<AstStat>]) {
     for stat in sorted.iter() {
       let Some(typealias) = ast_node_try_as::<AstStatTypeAlias>(&stat.get().base) else {
         continue;
