@@ -9,7 +9,7 @@ use crate::{
     has_unification_too_complex::has_unification_too_complex,
   },
   records::{
-    arena_handle::alias_ref, table_type::TableType, r#type::Type, type_error::TypeError,
+    arena_handle::alias_nn_ref, table_type::TableType, r#type::Type, type_error::TypeError,
     unifier::Unifier,
   },
   type_aliases::{type_id::TypeId, type_variant::TypeVariant},
@@ -38,7 +38,7 @@ impl Unifier {
 
     let super_table = self.log.txn_log_get_mutable::<TableType, TypeId>(super_ty);
 
-    if super_table.is_null() || alias_ref(super_table).state != TableState::Free {
+    if super_table.is_none_or(|t| alias_nn_ref(t).state != TableState::Free) {
       self.unifier_report_type_mismatch(osuper_ty, osub_ty);
       return;
     }

@@ -11,7 +11,7 @@ use crate::{
   macros::{substitution_entry::substitution_entry, substitution_vtable},
   records::{
     anyification::Anyification,
-    arena_handle::{Handle, alias_ref},
+    arena_handle::{Handle, alias_nn_opt, alias_ref},
     builtin_types::BuiltinTypes,
     extern_type::ExternType,
     free_type::FreeType,
@@ -75,8 +75,7 @@ impl Anyification {
 
     let log = self.base.base.log;
     let ttv = alias_ref(log).txn_log_get_mutable::<TableType, TypeId>(ty);
-    if !ttv.is_null() {
-      let ttv = alias_ref(ttv);
+    if let Some(ttv) = alias_nn_opt(ttv) {
       let mut clone = TableType::table_type_props_optional_table_indexer_type_level_table_state(
         &ttv.props,
         ttv.indexer,
@@ -142,13 +141,12 @@ impl Anyification {
     let log = self.base.base.log;
 
     let ttv = alias_ref(log).txn_log_get_mutable::<TableType, TypeId>(ty);
-    if !ttv.is_null() {
-      return alias_ref(ttv).state == TableState::Free
-        || alias_ref(ttv).state == TableState::Unsealed;
+    if let Some(ttv) = alias_nn_opt(ttv) {
+      return ttv.state == TableState::Free || ttv.state == TableState::Unsealed;
     }
 
     let ftv = alias_ref(log).txn_log_get_mutable::<FreeType, TypeId>(ty);
-    !ftv.is_null()
+    ftv.is_some()
   }
 
   /// 判定类型包是否「脏」（FreeTypePack 即脏）。
@@ -166,6 +164,6 @@ impl Anyification {
     // C++: `if (log->get_mutable<FreeTypePack>(tp)) return true; else return false;`
     let log = self.base.base.log;
     let ftp = alias_ref(log).txn_log_get_mutable::<FreeTypePack, TypePackId>(tp);
-    !ftp.is_null()
+    ftp.is_some()
   }
 }

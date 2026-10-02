@@ -21,7 +21,7 @@ use crate::{
   },
   methods::txn_log_get_mutable::TxnLogGetMutable,
   records::{
-    arena_handle::{alias, alias_opt, alias_ref},
+    arena_handle::{alias, alias_nn_opt, alias_ref},
     pending_slot::PendingSlot,
     pending_type::PendingType,
     pending_type_pack::PendingTypePack,
@@ -145,13 +145,13 @@ impl TxnLog {
 
 impl TxnLog {
   /// C++ `TxnLog::get<T>(TID)` 的 Rust 惯用形态：命中变体返回引用，否则 `None`。
-  /// 判空与解引用合并进 [`alias_opt`] 这一唯一收口点（null 哨兵 → `None`）；
+  /// 判空与解引用合并进 [`alias_nn_opt`] 这一唯一收口点（`None` 哨兵 → `None`）；
   /// 可变性场景仍走 [`TxnLog::txn_log_get_mutable`]。
   pub fn txn_log_get<T, TID>(&self, ty: TID) -> Option<&T>
   where
     T: TxnLogGetMutable<TID> + 'static,
   {
-    alias_opt(self.txn_log_get_mutable::<T, TID>(ty))
+    alias_nn_opt(self.txn_log_get_mutable::<T, TID>(ty))
   }
 }
 

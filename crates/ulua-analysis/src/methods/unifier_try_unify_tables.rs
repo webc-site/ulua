@@ -1,13 +1,12 @@
 //! Source: `Analysis/src/Unifier.cpp` (Unifier::tryUnifyTables, L1829-2149)
 //!
-//! 裸指针安全说明：类型条目经 `TxnLog::txn_log_get_mutable` 以 `*mut TableType`
+//! §2 句柄化：类型条目经 `TxnLog::txn_log_get_mutable` 以 `Option<NonNull<TableType>>`
 //! 暴露（对应 C++ TxnLog 的 pending 存储模型，条目可被日志变更重定位，故每次
-//! 递归后须重新获取指针，这正是 C++ 原实现的固有形态）。所有 `(*ptr).field`
-//! 解引用要么经 `is_null` 检查后进行，要么指针来自刚获取的合法条目；在不改动
-//! `functions/` 层 API 的前提下无法替换为安全引用，函数级 `# Safety` 契约覆盖
-//! 全部解引用。
+//! 递归后须重新获取句柄，这正是 C++ 原实现的固有形态）。所有对表项的读写都经
+//! `arena_handle::alias_nn*` 收口门面；`None` ≡ C++ `getMutable` 未命中的 null 哨兵，
+//! 判据在函数头 `is_none` 后进入 `ice_string`（与 cpp 判空短路一致）。
 use alloc::{string::String, vec::Vec};
-use core::{mem::take, ptr::from_mut};
+use core::{mem::take, ptr::NonNull};
 
 use ulua_common::fflag;
 
@@ -18,7 +17,7 @@ use crate::{
     maybe_string::maybe_string,
   },
   records::{
-    arena_handle::{alias, alias_ref},
+    arena_handle::{alias_nn, alias_nn_ref},
     instantiation::Instantiation,
     missing_properties::{Context as MissingPropertiesContext, MissingProperties},
     primitive_type::Type as PrimType,
@@ -33,6 +32,18 @@ use crate::{
     type_error_data::TypeErrorData, type_id::TypeId,
   },
 };
+
+/// 表项句柄 → 只读借用的局部收口：`None` 即违反「函数头 `is_none` 已入 ice 分支」
+/// 的 fn 契约（cpp 同处解引用 null 即崩溃），故 `expect` 与 cpp 行为等价。
+fn table_ref(t: Option<NonNull<TableType>>) -> &'static TableType {
+  alias_nn_ref(t.expect("unifier_try_unify_tables 非空契约：表项句柄必为 Some"))
+}
+
+/// 表项句柄 → 独占可变借用的局部收口（写入路径，契约同 [`table_ref`]）。
+fn table_mut(t: Option<NonNull<TableType>>) -> &'static mut TableType {
+  alias_nn(t.expect("unifier_try_unify_tables 非空契约：表项句柄必为 Some"))
+}
+
 impl Unifier {
   /// 吸收子 unifier 结果：上报属性错误、合并事务日志、累计失败标记，并恢复方差。
   /// 雷同逻辑抽自 `try_unify_tables` 的三处属性统一分支。
@@ -91,7 +102,7 @@ impl Unifier {
     let mut super_table = self.log.txn_log_get_mutable::<TableType, TypeId>(super_ty);
     let mut sub_table = self.log.txn_log_get_mutable::<TableType, TypeId>(sub_ty);
 
-    if super_table.is_null() || sub_table.is_null() {
+    if super_table.is_none() || sub_table.is_none() {
       self.ice_string("passed non-table types to unifyTables");
     }
 
@@ -110,11 +121,11 @@ impl Unifier {
         &self.log as *const _,
         Some(self.types),
         self.builtin_types,
-        // `sub_table` 是函数头 txn_log_get_mutable 取得的 pending 表项指针，
-        // 按 fn 契约非空（上方 is_null 已入 ice 分支）；此处只读 Copy
+        // `sub_table` 是函数头 txn_log_get_mutable 取得的 pending 表项句柄，
+        // 按 fn 契约非空（上方 is_none 已入 ice 分支）；此处只读 Copy
         // `level`（C++ `subTable->level` 同形），Instantiation 仅在本分支同步
         // 使用它。
-        alias_ref(sub_table).level,
+        table_ref(sub_table).level,
         Some(self.scope.get()),
       );
 
@@ -124,7 +135,7 @@ impl Unifier {
           .log
           .txn_log_get_mutable::<TableType, TypeId>(active_sub_ty);
 
-        if sub_table.is_null() {
+        if sub_table.is_none() {
           self
             .ice_string("instantiation made a table type into a non-table type in tryUnifyTables");
         }
@@ -138,10 +149,10 @@ impl Unifier {
 
     // Optimization: First test that the property sets are compatible without doing any recursive unification
     if !has_indexer(sub_table) && table_state(sub_table) != TableState::Free {
-      // `super_table` 是函数头 txn_log_get_mutable 返回的 pending 表项指针，按
+      // `super_table` 是函数头 txn_log_get_mutable 返回的 pending 表项句柄，按
       // fn 契约非空；循环体对该表仅经 props_contains/table_state 等只读访问器
       // 触碰，props 本身无任何写入路径，唯一写入目标是局部 `missing_properties`。
-      for (prop_name, super_prop) in alias_ref(super_table).props.iter() {
+      for (prop_name, super_prop) in table_ref(super_table).props.iter() {
         if !props_contains(sub_table, prop_name)
           && table_state(sub_table) == TableState::Unsealed
           && !is_optional(super_prop.type_deprecated())
@@ -170,9 +181,9 @@ impl Unifier {
       && table_state(super_table) != TableState::Unsealed
       && table_state(super_table) != TableState::Free
     {
-      // 镜像上一处——`sub_table` 同为函数头契约保证非空的 pending 表项指针；
+      // 镜像上一处——`sub_table` 同为函数头契约保证非空的 pending 表项句柄；
       // 本循环只读其 props（经 props_contains），只写局部 `extra_properties`。
-      for prop_name in alias_ref(sub_table).props.keys() {
+      for prop_name in table_ref(sub_table).props.keys() {
         if !props_contains(super_table, prop_name) {
           extra_properties.push(prop_name.clone());
         }
@@ -253,10 +264,10 @@ impl Unifier {
         // Safety: pending_sub 为上一行 queue_type_id 返回的非空指针；active_sub_ty
         // 按契约是表类型，克隆项变体即 TableType（原 LUAU_ASSERT 钉住，同 C++），
         // 故 `Some` 必命中，其内指针即有效变体字段。
-        let ttv = from_mut(
+        let ttv = Some(NonNull::from(
           unsafe { get_mutable_pending_type::<TableType>(pending_sub) }
             .expect("LUAU_ASSERT 钉住：pending 变体必为 TableType"),
-        );
+        ));
         props_insert(ttv, name.clone(), prop_clone);
         sub_table = ttv;
       } else {
@@ -324,10 +335,10 @@ impl Unifier {
         // Safety: pending_super 非空源自上一行；本分支 table_state(super_table)
         // ==Unsealed 已确证该项变体为 TableType，`Some` 必命中，字段指针有效，
         // props_insert 继承同一非空前提。
-        let pending_super_ttv = from_mut(
+        let pending_super_ttv = Some(NonNull::from(
           unsafe { get_mutable_pending_type::<TableType>(pending_super) }
             .expect("Unsealed 分支已确证 pending 变体为 TableType"),
-        );
+        ));
         props_insert(pending_super_ttv, name.clone(), clone);
         super_table = pending_super_ttv;
       } else if self.variance == Variance::Covariant {
@@ -339,10 +350,10 @@ impl Unifier {
         // Safety: pending_super 非空（上一行），且进入本分支的前提
         // table_state(super_table)==Free 由同一 pending 表项读出，变体为
         // TableType，`Some` 必命中，字段指针有效。
-        let pending_super_ttv = from_mut(
+        let pending_super_ttv = Some(NonNull::from(
           unsafe { get_mutable_pending_type::<TableType>(pending_super) }
             .expect("Free 分支已确证 pending 变体为 TableType"),
-        );
+        ));
         props_insert(pending_super_ttv, name.clone(), prop.clone());
         super_table = pending_super_ttv;
       } else {
@@ -433,7 +444,7 @@ impl Unifier {
       }
     }
 
-    // Changing the indexer can invalidate the table pointers.
+    // Changing the indexer can invalidate the table handles.
     let super_ty_f = self.log.follow_type_id(super_ty);
     let sub_ty_f = self.log.follow_type_id(active_sub_ty);
     super_table = self
@@ -441,7 +452,7 @@ impl Unifier {
       .txn_log_get_mutable::<TableType, TypeId>(super_ty_f);
     sub_table = self.log.txn_log_get_mutable::<TableType, TypeId>(sub_ty_f);
 
-    if super_table.is_null() || sub_table.is_null() {
+    if super_table.is_none() || sub_table.is_none() {
       return;
     }
 
@@ -485,10 +496,10 @@ impl Unifier {
     }
   }
 
-  /// 递归统一可能改写 txn log 使旧表指针失效；若检测到已发生，按 C++ 重启。
+  /// 递归统一可能改写 txn log 使旧表句柄失效；若检测到已发生，按 C++ 重启。
   /// 返回 true 表示已触发重启，调用方须立即 return。
   ///
-  /// 内部契约：首个重启路径（类型不再相同）先于指针比对返回，故走到比对时
+  /// 内部契约：首个重启路径（类型不再相同）先于句柄比对返回，故走到比对时
   /// sub_ty/super_ty 的表身份未变，递归 `unifier_try_unify_tables` 的调用契约
   /// 由本函数自身成立，无需调用方再保证。
   fn try_unify_tables_restart(
@@ -497,8 +508,8 @@ impl Unifier {
     super_ty: TypeId,
     active_sub_ty: TypeId,
     is_intersection: bool,
-    super_table: *mut TableType,
-    sub_table: *mut TableType,
+    super_table: Option<NonNull<TableType>>,
+    sub_table: Option<NonNull<TableType>>,
   ) -> bool {
     let super_ty_new = self.log.follow_type_id(super_ty);
     let sub_ty_new = self.log.follow_type_id(active_sub_ty);
@@ -521,12 +532,14 @@ impl Unifier {
       .log
       .txn_log_get_mutable::<TableType, TypeId>(sub_ty_new);
 
+    // `Option<NonNull<T>>` 的相等即地址相等，与原 `*mut TableType != *mut TableType`
+    // 逐位等价：捕获 follow/commit 后 pending 表项换址（同一逻辑表但不同节点）。
     if super_table != new_super_table || sub_table != new_sub_table {
       if self.errors.is_empty() {
         // Safety: 走到此处说明 follow 后 sub_ty/super_ty 表身份未变（仍是表
-        // 类型句柄，仅 txn log pending 重写导致指针换址），被调方
-        // `unifier_try_unify_tables` 的表句柄契约成立；末参传 null 即 C++
-        // 默认 nullptr，满足其「null 或调用期内存活」的字面量属性契约。
+        // 类型句柄，仅 txn log pending 重写导致句柄换址），被调方
+        // `unifier_try_unify_tables` 的表句柄契约成立；末参传 None 即 C++
+        // 默认 nullptr，满足其「None 或调用期内存活」的字面量属性契约。
         unsafe { self.unifier_try_unify_tables(sub_ty, super_ty, is_intersection, None) };
       }
       return true;
@@ -535,34 +548,34 @@ impl Unifier {
   }
 }
 
-/// 读取表状态（t 非空；裸指针契约同 C++ `getMutable`，只读）。
-fn table_state(t: *const TableType) -> TableState {
+/// 读取表状态（`Option<NonNull<TableType>>` 表项句柄；契约同 C++ `getMutable`，只读）。
+fn table_state(t: Option<NonNull<TableType>>) -> TableState {
   // 调用点的 t 均为 unifier_try_unify_tables 函数头/重启换址后的
-  // pending 表项指针，按其 fn 契约非空；state 是 Copy 只读。
-  alias_ref(t).state
+  // pending 表项句柄，按其 fn 契约非空；state 是 Copy 只读。
+  table_ref(t).state
 }
 
 /// t 是否有 indexer（t 非空，只读）。
-fn has_indexer(t: *const TableType) -> bool {
-  alias_ref(t).indexer.is_some()
+fn has_indexer(t: Option<NonNull<TableType>>) -> bool {
+  table_ref(t).indexer.is_some()
 }
 
 /// t 的 indexer 键类型是否为 string（t 非空，只读）。
-fn has_string_indexer(t: *const TableType) -> bool {
-  alias_ref(t)
+fn has_string_indexer(t: Option<NonNull<TableType>>) -> bool {
+  table_ref(t)
     .indexer
     .as_ref()
     .is_some_and(|ix| maybe_string(ix.index_type))
 }
 
 /// t 的 indexer 整体拷贝（TableIndexer 为 Copy；t 非空，只读）。
-fn indexer_of(t: *const TableType) -> Option<TableIndexer> {
-  alias_ref(t).indexer
+fn indexer_of(t: Option<NonNull<TableType>>) -> Option<TableIndexer> {
+  table_ref(t).indexer
 }
 
 /// t 的 indexer 键类型（调用分支已保证 Some；t 非空，只读）。
-fn index_key_of(t: *const TableType) -> TypeId {
-  alias_ref(t)
+fn index_key_of(t: Option<NonNull<TableType>>) -> TypeId {
+  table_ref(t)
     .indexer
     .as_ref()
     .expect("双侧 Some 判定方进入本 fn（见 Safety 注）")
@@ -570,8 +583,8 @@ fn index_key_of(t: *const TableType) -> TypeId {
 }
 
 /// t 的 indexer 值类型（调用分支已保证 Some；t 非空，只读）。
-fn index_result_of(t: *const TableType) -> TypeId {
-  alias_ref(t)
+fn index_result_of(t: Option<NonNull<TableType>>) -> TypeId {
+  table_ref(t)
     .indexer
     .as_ref()
     .expect("与 index_key_of 同一批调用点，indexer 双侧 Some 已判（见 Safety 注）")
@@ -579,33 +592,33 @@ fn index_result_of(t: *const TableType) -> TypeId {
 }
 
 /// t 是否已绑定到其他表（t 非空，只读）。
-fn has_bound(t: *const TableType) -> bool {
-  alias_ref(t).bound_to.is_some()
+fn has_bound(t: Option<NonNull<TableType>>) -> bool {
+  table_ref(t).bound_to.is_some()
 }
 
 /// props 是否含属性（t 非空，只读）。
-fn props_contains(t: *const TableType, name: &Name) -> bool {
-  alias_ref(t).props.contains_key(name)
+fn props_contains(t: Option<NonNull<TableType>>, name: &Name) -> bool {
+  table_ref(t).props.contains_key(name)
 }
 
 /// props 中属性的类型句柄（t 非空，只读）。
-fn props_type_of(t: *const TableType, name: &Name) -> Option<TypeId> {
-  alias_ref(t).props.get(name).map(|p| p.type_deprecated())
+fn props_type_of(t: Option<NonNull<TableType>>, name: &Name) -> Option<TypeId> {
+  table_ref(t).props.get(name).map(|p| p.type_deprecated())
 }
 
 /// props 中属性的克隆（t 非空，只读）。
-fn props_get_clone(t: *const TableType, name: &Name) -> Option<Property> {
-  alias_ref(t).props.get(name).cloned()
+fn props_get_clone(t: Option<NonNull<TableType>>, name: &Name) -> Option<Property> {
+  table_ref(t).props.get(name).cloned()
 }
 
 /// props 键快照（循环体内 props 可能被写入，须先取键再统一）。
-fn props_keys(t: *const TableType) -> Vec<String> {
-  alias_ref(t).props.keys().cloned().collect()
+fn props_keys(t: Option<NonNull<TableType>>) -> Vec<String> {
+  table_ref(t).props.keys().cloned().collect()
 }
 
 /// props 插入属性（t 非空；写入路径，契约同 C++ `ttv->props[name] = prop`）。
-fn props_insert(t: *mut TableType, name: Name, prop: Property) {
-  alias(t).props.insert(name, prop);
+fn props_insert(t: Option<NonNull<TableType>>, name: Name, prop: Property) {
+  table_mut(t).props.insert(name, prop);
 }
 
 /// `!literalProperties || !literalProperties->contains(name)`（C++ Resetter 分支同款）。

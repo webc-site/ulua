@@ -113,12 +113,12 @@ impl TypeChecker {
         // But if one side has a free tail and the other has none at all, we create an empty pack and bind the free tail to that.
 
         if let Some(arg_tail) = arg_tail {
-          if !state
+          if state
             .log
             .txn_log_get_mutable::<FreeTypePack, TypePackId>(
               state.log.follow_type_pack_id(arg_tail),
             )
-            .is_null()
+            .is_some()
           {
             if let Some(param_tail) = param_tail {
               state.try_unify_type_pack_id_type_pack_id_bool_entry(param_tail, arg_tail, false);
@@ -132,12 +132,12 @@ impl TypeChecker {
           }
         } else if let Some(param_tail) = param_tail {
           // argTail is definitely empty
-          if !state
+          if state
             .log
             .txn_log_get_mutable::<FreeTypePack, TypePackId>(
               state.log.follow_type_pack_id(param_tail),
             )
-            .is_null()
+            .is_some()
           {
             state
               .log
@@ -231,7 +231,7 @@ impl TypeChecker {
         // If any remaining unfulfilled parameters are nonoptional, this is a problem.
         while param_iter != end_iter {
           let t = state.log.follow_type_id(*param_iter.current());
-          if is_optional(t) || !state.log.txn_log_get_mutable::<ErrorType, _>(t).is_null() {
+          if is_optional(t) || state.log.txn_log_get_mutable::<ErrorType, _>(t).is_some() {
             // ok
           } else {
             let tail = flatten(param_pack, &state.log).1;
@@ -362,19 +362,19 @@ impl TypeChecker {
           state.try_unify_type_pack_id_type_pack_id_bool_entry(var_pack, tail, false);
 
           return;
-        } else if !state
+        } else if state
           .log
           .txn_log_get_mutable::<FreeTypePack, TypePackId>(tail)
-          .is_null()
+          .is_some()
         {
           state
             .log
             .replace_type_pack_id_type_pack_var(tail, TypePackVar::from(TypePack::empty()));
           return;
-        } else if !state
+        } else if state
           .log
           .txn_log_get_mutable::<GenericTypePack, TypePackId>(tail)
-          .is_null()
+          .is_some()
         {
           // For this case, we want the error span to cover every errant extra parameter
           let mut location = state.location;

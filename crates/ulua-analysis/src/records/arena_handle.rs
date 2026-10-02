@@ -191,3 +191,21 @@ pub(crate) fn alias_opt_mut<T>(p: *mut T) -> Option<&'static mut T> {
   // 本次借用为独占可变别名（原 `unsafe { p.as_mut() }` 逐条同构）。
   unsafe { p.as_mut() }
 }
+
+/// [`NonNull`] 句柄 → `&'static mut T` 的收口门面，复用 [`alias`] 的模块级契约。
+/// 由 `Option<NonNull<T>>`（§2 里 txn_log 可变面的 Rust 形态）命中后调用；
+/// 本函数自身 safe，`unsafe` 仍只落在 [`alias`] 这一唯一解引用收口点。
+pub(crate) fn alias_nn<T>(p: NonNull<T>) -> &'static mut T {
+  alias(p.as_ptr())
+}
+
+/// [`NonNull`] 句柄 → `&'static T` 的收口门面（[`alias_nn`] 的只读形态）。
+pub(crate) fn alias_nn_ref<T>(p: NonNull<T>) -> &'static T {
+  alias_ref(p.as_ptr())
+}
+
+/// `Option<NonNull<T>>` → `Option<&'static T>` 的收口门面（[`alias_opt`] 的
+/// `NonNull` 形态）：`None` ≡ 原 null 哨兵未命中，`Some` 折叠为共享借用。
+pub(crate) fn alias_nn_opt<T>(p: Option<NonNull<T>>) -> Option<&'static T> {
+  p.map(alias_nn_ref)
+}

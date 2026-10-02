@@ -9,7 +9,7 @@ use crate::{
   functions::{as_mutable_type::as_mutable_type_id, get_type},
   macros::{substitution_entry::substitution_entry, substitution_vtable},
   records::{
-    arena_handle::{Handle, alias, alias_ref},
+    arena_handle::{Handle, alias, alias_nn_opt, alias_nn_ref, alias_ref},
     builtin_types::BuiltinTypes,
     extern_type::ExternType,
     function_type::FunctionType,
@@ -27,8 +27,8 @@ use crate::{
 impl Instantiation {
   pub(crate) fn clean_type_id(&mut self, ty: TypeId) -> TypeId {
     let ftv = alias_ref(self.base.base.log).txn_log_get_mutable::<FunctionType, TypeId>(ty);
-    LUAU_ASSERT!(!ftv.is_null());
-    let ftv = alias_ref(ftv);
+    LUAU_ASSERT!(ftv.is_some());
+    let ftv = alias_nn_ref(ftv.expect("LUAU_ASSERT 判 FunctionType pending 命中"));
 
     let mut clone = FunctionType::function_type_new(
       ftv.arg_types,
@@ -79,7 +79,7 @@ impl Instantiation {
     // （txn_log_get_mutable）；ExternType 在 cpp 中本就是 plain get，保持不变。
     let log = self.base.base.log;
     let ft = alias_ref(log).txn_log_get_mutable::<FunctionType, TypeId>(ty);
-    if !ft.is_null() {
+    if ft.is_some() {
       return true;
     }
 
@@ -130,8 +130,8 @@ impl Instantiation {
   pub fn is_dirty_type_id(&self, ty: TypeId) -> bool {
     let log = self.base.base.log;
     let ftv = alias_ref(log).txn_log_get_mutable::<FunctionType, TypeId>(ty);
-    if !ftv.is_null() {
-      if alias_ref(ftv).has_no_free_or_generic_types {
+    if let Some(ftv) = alias_nn_opt(ftv) {
+      if ftv.has_no_free_or_generic_types {
         return false;
       }
       return true;
