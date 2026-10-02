@@ -34,7 +34,7 @@ pub(crate) unsafe fn db_traceback(l: *mut LuaState) -> i32 {
 
     (*l).arg_check(level >= 0, arg + 2, "level can't be negative");
 
-    lua_l_traceback(&mut *l, l1, msg, level);
+    lua_l_traceback(l, l1, msg, level);
 
     1
   }

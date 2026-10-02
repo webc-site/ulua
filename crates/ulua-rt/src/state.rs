@@ -487,10 +487,9 @@ fn open_std_libs(mut state: StateView<'_>) {
 /// `msg` 的字节当场被格式进结果串，不寄存指针。
 #[inline]
 fn push_traceback(state: StateView<'_>, msg: Option<&str>, level: i32) {
-  // Safety: 族级契约;两个 state 实参同属一个存活 VM(自回溯),`l` 侧为边界裸指针
-  // 即时建的 `&mut`(r16-v3 引用形),`l1` 侧保持裸 ptr(自回溯别名形态,见 callee 契约);
-  // `msg` 是普通 Rust `Option<&str>`,调用当场拷成内部字符串、不跨帧存续借用。
-  unsafe { lua_l_traceback(&mut *state.as_mut_ptr(), state.as_mut_ptr(), msg, level) }
+  // Safety: 族级契约;两个 state 实参同属一个存活 VM(自回溯),`msg` 是普通
+  // Rust `Option<&str>`,调用当场拷成内部字符串、不跨帧存续借用。
+  unsafe { lua_l_traceback(state.as_mut_ptr(), state.as_mut_ptr(), msg, level) }
 }
 
 /// 读 `idx` 处值的 metatable-aware `tostring` 结果字节（`lua_l_tolstring_ref` 的
