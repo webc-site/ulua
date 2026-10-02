@@ -64,6 +64,16 @@ static MATH_FUNCS: [LuaLReg; 37] = [
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub unsafe fn luaopen_math(l: *mut LuaState) -> i32 {
+  // r13-w1a 逐点定性（w6d 口径保留面；普查 15 行命中，注记零新增命中行）：其中
+  // 14 行 push_number/set_field_bytes 七对，皆 records/lua_state/{stack,table}.rs
+  // 既有门面收编形态（前波 safe-ify 已收），零翻案、零新造门面、本席零动作。
+  // 保留一处：经 l 的 global 字段向 global_State 链 rngstate 的 pcg 种子落笔，
+  // 不属栈门面/边界原语覆盖面——已 grep 核遍 LuaState 门面全方法面（stack/
+  // access/table/error/thread 与 slot.rs 的 api 索引域构造子，全部方法清点），
+  // 无 global 侧既有方法，按 r13-w1b 判例原样保留；不新造 getglobal/read_global
+  // 类方法（不在派单面，免生造名）。lua_encodepointer（引用形取参、指针身份种子
+  // 读数，cpp 同形）与 lua_l_register_bytes（裸指针取参）为自由函数调用点，
+  // 非裸解引用收编面，保留。
   unsafe {
     let mut seed = lua_encodepointer(&*l, l as usize) as u64;
     seed ^= 0;

@@ -90,8 +90,8 @@ unsafe fn move_stack_range(
 
 /// # Safety
 ///
-/// `l` 必须指向当前执行 C 函数的存活 `LuaState`（读 `(*l).base + srct-1/dstt-1` 两栈槽）；
-/// `srct`/`dstt` 解析出的栈值必须是表（hvalue 直接取 LuaTable 指针），`f <= e + 1`。
+/// `l` 必须指向当前执行 C 函数的存活 `LuaState`（经 api 索引域既有方法读 srct-1/dstt-1
+/// 两栈槽）；`srct`/`dstt` 解析出的栈值必须是表（hvalue 直接取 LuaTable 指针），`f <= e + 1`。
 pub(crate) unsafe fn moveelements(
   l: *mut LuaState,
   srct: i32,
@@ -101,10 +101,20 @@ pub(crate) unsafe fn moveelements(
   t: i32,
   sparsemove: bool,
 ) {
-  // SAFETY: 契约保证 base+srct-1/base+dstt-1 落在当前帧栈内且槽值为表，hvalue 解引用合法
+  // r13-w1a 逐点定性（w6d 口径保留面；原普查 13 行）：两处帧槽 hvalue 式取表指针
+  // 收编为 records/slot.rs 既有 api 索引域构造方法 slot(idx)（非新增门面，读面
+  // 同形判例 lua_v_settable 的 get+as_table_ptr）——全部调用方（tinsert/tremove
+  // 恒传 1、tmove 传 1/5）为契约内正帧索引，index_2_addr 正索引分支界内路径恰为
+  // base+idx-1，地址逐位恒等、读数位点不变；api_check 与 nil 哨兵分支在契约域
+  // 不可达。CallInfo 裸字段红线不动。check_writable 指针取参与
+  // lua_rawgeti/lua_rawseti/lua_rawiter/abs_index 引用形取参系自由函数调用点，
+  // 非裸解引用面，保留。其余命中——new_table/pop×5/push_nil/to_integer 与
+  // tovalidintkey 的 type_of/to_number——皆 records/lua_state 既有门面收编形态，
+  // 零翻案、零新造门面、零动作。
+  // SAFETY: 契约保证 srct/dstt 为界内正帧索引，slot 换算落当前帧栈内且槽值为表，hvalue 解引用合法
   unsafe {
-    let src = (*(*l).base.offset((srct - 1) as isize)).as_table_ptr();
-    let dst = (*(*l).base.offset((dstt - 1) as isize)).as_table_ptr();
+    let src = (*l).slot(srct).get().as_table_ptr();
+    let dst = (*l).slot(dstt).get().as_table_ptr();
 
     check_writable(l, dst);
 
