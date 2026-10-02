@@ -248,17 +248,15 @@ where
   // `typed_userdata`（userdata.rs 的类型化下转 safe 门面）：闸门（userdata 类型 /
   // 载荷非空 / 长度覆盖）与 `cast`/`as_ref` 边界全收口在其函数体一处；解读的布局
   // 即写入布局——同一 `(F, A, R)` 单态化、脚本不可替换，块内只读、无并存别名。
-  // 缺失仍经 `raise_lua_error` 在同一表达式内发散收敛。
-  let slot: Option<&CallbackSlot<F>> =
-    match typed_userdata::<CallbackSlot<F>>(state, lua_upvalueindex(1)) {
-      Some(slot) => Some(slot),
-      None => raise_lua_error(state, "ulua-rt: missing callback upvalue"),
-    };
+  // 缺失仍经 `raise_lua_error` 发散收敛（let-else 的发散臂）。
+  let Some(slot) = typed_userdata::<CallbackSlot<F>>(state, lua_upvalueindex(1)) else {
+    raise_lua_error(state, "ulua-rt: missing callback upvalue")
+  };
   // 2. A destructed scope callback reports the structured
   //    `CallbackDestructed` (identical externally to the previous design's
-  //    sentinel box). `slot.as_ref()` 只是把 `&Option<Box<F>>` 收成
+  //    sentinel box). `slot.as_ref()` 把 `&Option<Box<F>>` 收成
   //    `Option<&Box<F>>`，纯 Rust。
-  let Some(callback) = slot.and_then(|slot| slot.as_ref()) else {
+  let Some(callback) = slot.as_ref() else {
     // 共用前置成立；`err` 按值移入，错误 userdata 由被调方自行分配写入。
     raise_structured_error(state, Error::CallbackDestructed)
   };
@@ -298,9 +296,8 @@ where
       //     (SIGTRAP) instead of erroring. Guard it and raise a
       //     catchable error if the results cannot fit (mirroring mlua).
       let n = results.len() as i32;
-      // `ensure_stack`（safe 门面族）只报告头寸（`Err` 表示扩不动）。
-      let fits = ensure_stack(state, n.max(1)).is_ok();
-      if !fits {
+      // `ensure_stack`（safe 门面族）只报告头寸（`Err` 表示扩不动）；放不下即发散。
+      if ensure_stack(state, n.max(1)).is_err() {
         // 共用前置成立（消息当场被 `push_bytes` 门面拷贝，不寄存指针）。
         raise_lua_error(state, "too many results to return to Lua")
       }
