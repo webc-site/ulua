@@ -835,6 +835,13 @@ pub fn setfenv(l: L, idx: c_int) -> c_int {
 
 // ---------------------------------------------------------------------------
 // buffer / 指针读取
+//
+// r12 T11 裁决（镜像保留）：以下 6 个门面是 C-ABI 镜像契约本体——逐字对应
+// `lua_newbuffer`/`lua_tobuffer`/`luaL_checkbuffer`/`lua_topointer` 公共 C 签名，
+// 且 `conformance_api_buffer` 的断言对象正是 `(void*, size_t* len)` 出参语义
+// （NULL 仅取址分支、非 NULL 写长度、跨调用指针同一性）与 cpp 用例对齐；切片
+// 形（`lua_tobuffer_bytes_ref`/`lua_l_checkbuffer_ref`）无法观察出参可观察面，
+// 故保留裸形 + 逐门面 Safety 注，不随 ulua-rt 消费方迁移。
 // ---------------------------------------------------------------------------
 
 /// `lua_newbuffer`：返回数据块裸指针（VM 持有）。

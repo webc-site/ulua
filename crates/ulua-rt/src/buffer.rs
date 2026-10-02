@@ -7,14 +7,14 @@
 //! re-push it onto the stack on demand.
 //!
 //! The data lives in VM-managed memory; [`Buffer::as_slice`] / [`as_slice_mut`]
-//! borrow the raw bytes directly through ulua's `lua_tobuffer`, so reads and
-//! writes go straight to the buffer with no copy.
+//! borrow the bytes directly through ulua's `lua_tobuffer_bytes_ref` (via the
+//! single derivation point [`Buffer::bytes`]), so reads and writes go straight
+//! to the buffer with no copy.
 
 use core::{
   ffi::c_void,
   fmt::{self, Debug, Formatter},
   ptr,
-  slice::{from_raw_parts, from_raw_parts_mut},
 };
 use std::io::{self, Error, ErrorKind, Read, Seek, SeekFrom, Write};
 
@@ -157,48 +157,40 @@ impl Buffer {
   /// 的调用点（serde）必须先 [`Buffer::to_vec`] 拷贝。
   pub(crate) fn as_slice(&self) -> &[u8] {
     ensure_stack_or_panic(self.reference.state(), 1);
-    let (buf, size) = self.as_raw_parts();
-    // Safety: `buf`/`size` 指向同一存活 buffer 对象的内联字节区——对象被注册表
-    // 引用钉住且 Luau GC 不移动对象，故切片在 `&self` 借用期内有效（文档纪律：
-    // 借出期间不得有并发写）。
-    unsafe { from_raw_parts(buf, size) }
+    self.bytes()
   }
 
   /// Mutably borrow the buffer's bytes directly (no copy).
   pub(crate) fn as_slice_mut(&mut self) -> &mut [u8] {
     ensure_stack_or_panic(self.reference.state(), 1);
-    let (buf, size) = self.as_raw_parts();
-    // Safety: 同 `as_slice`；可变性纪律由 `&mut self` 接收者承担——本 crate
-    // 内所有取字节路径都经本方法或 `as_slice`，`&mut` 借用期间不存在其他
-    // 活跃 Rust 借用指向同一句柄；跨克隆句柄的并发借用由 `as_slice` 文档
-    // 明示为禁止（mlua `Buffer::as_slice_mut` 同型契约）。
-    unsafe { from_raw_parts_mut(buf, size) }
+    self.bytes()
   }
 
-  /// The raw `(ptr, len)` of the underlying buffer object via ulua's
-  /// `lua_tobuffer`. Pushes the buffer, reads the parts, then pops — the
-  /// pointer remains valid because the registry ref keeps the object alive.
+  /// The single borrow-window derivation point for this handle — the only
+  /// `lua_tobuffer_bytes_ref` call site in the crate (r12 T11：裸
+  /// `(ptr, len)` 形 `as_raw_parts` 由切片核心取代，全 crate 无裸窗构造)。
+  /// Pushes the buffer, borrows the window, then pops — the slice remains
+  /// valid because the registry ref keeps the object alive.
   ///
   /// 调用序契约（正确性，非内存安全）：owning VM 必须存活且由当前线程驱动，
-  /// 且 main state 上已预留至少 1 个栈空位（内部 push/pop 一层，即上面两个
-  /// 门面紧邻的 `ensure_stack_or_panic`）。返回的裸指针未编码生命周期：仅当
-  /// `self` 的注册表引用仍然钉住该 buffer 对象时有效。
-  fn as_raw_parts(&self) -> (*mut u8, usize) {
+  /// 且 main state 上已预留至少 1 个栈空位（内部 push/pop 一层，即门面
+  /// [`Buffer::as_slice`] / [`as_slice_mut`] 紧邻的 `ensure_stack_or_panic`）。
+  /// 返回切片未编码生命周期：仅当 `self` 的注册表引用仍然钉住该 buffer 对象
+  /// 时有效（文档纪律：借出期间不得有并发写，见 [`Buffer::as_slice`]）。
+  ///
+  /// # Safety
+  /// `state` 存活（调用点契约）；注册表引用指向登记时的 buffer 对象，
+  /// `reference.push()`（`lua_rawgeti`）取回原对象压到已预留的空位上；
+  /// `lua_tobuffer_bytes_ref(-1)` 对刚压入的 buffer 值借出其内联数据块切片
+  /// （非 buffer 才返回 `None`，`expect` 收口为 panic 而非 UB）；`pop_stack`
+  /// 后切片仍有效——对象由注册表引用钉住、Luau GC 不移动对象且 buffer 定长
+  /// 不 resize（契约三要素见 `lua_tobuffer_bytes_ref`），栈槽只是视图。
+  fn bytes(&self) -> &mut [u8] {
     let state = self.reference.state();
     self.reference.push();
-    let mut size = 0usize;
-    // Safety: `state` 存活（调用点契约）；注册表引用指向登记时的 buffer 对象，
-    // `reference.push()`（`lua_rawgeti`）取回原对象压到已预留的空位上；
-    // `lua_tobuffer(-1)` 对刚压入的 buffer 值返回其内联数据指针与真实长度
-    // （非 buffer 才返回 `None`，`expect` 收口为 panic 而非 UB）；`pop_stack`
-    // 后指针仍有效——对象由注册表引用钉住、GC 不移动，栈槽只是视图。
-    let buf = unsafe { lua_tobuffer(state.as_mut_ptr(), -1, &mut size) };
+    let bytes = unsafe { lua_tobuffer_bytes_ref(&mut *state.as_mut_ptr(), -1) };
     pop_stack(state, 1);
-    // `ptr::from_mut` 取代旧 `&mut c_void as *mut c_void` 裸 cast（§3 C 习语退役）。
-    (
-      ptr::from_mut(buf.expect("invalid Luau buffer")).cast::<u8>(),
-      size,
-    )
+    bytes.expect("invalid Luau buffer")
   }
 }
 

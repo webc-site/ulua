@@ -188,7 +188,7 @@ pub(crate) fn ensure_stack(state: StateView<'_>, slots: i32) -> Result<()> {
 /// （如 [`Table::raw_len`]、[`LuaString::as_bytes`]、[`Buffer::as_slice`]、
 /// [`Thread::from_ref`]）使用。这些入口若栈头寸不足，其内部句柄 push 在裁剪
 /// 断言后会越栈写（UB）；相比静默返回错误数据或跳过写操作，panic 是仓库既有
-/// 约定（`as_raw_parts`/`write_bytes` 即以 `assert!` 收口）下唯一可观察的失败
+/// 约定（`Buffer::bytes`/`write_bytes` 即以 `assert!`/`expect` 收口）下唯一可观察的失败
 /// 方式，故与可抛错入口共用同一道 `lua_checkstack` 闸门，只是把 `Err` 转成
 /// panic。`#[track_caller]` 让 panic 定位到调用点而非本函数。
 #[track_caller]

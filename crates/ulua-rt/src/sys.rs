@@ -76,7 +76,7 @@ pub(crate) use ulua_vm::{
     lua_rawcheckstack::lua_rawcheckstack, lua_rawget::lua_rawget, lua_rawset::lua_rawset,
     lua_ref::lua_ref, lua_resetthread::lua_resetthread, lua_resumeerror::lua_resumeerror,
     lua_setfenv::lua_setfenv, lua_setmemcat::lua_setmemcat, lua_setsafeenv::lua_setsafeenv,
-    lua_settable::lua_settable, lua_status::lua_status, lua_tobuffer::lua_tobuffer,
+    lua_settable::lua_settable, lua_status::lua_status, lua_tobuffer::lua_tobuffer_bytes_ref,
     lua_tolightuserdata::lua_tolightuserdata_ref, lua_tolstring::lua_tolstring_ref,
     lua_tonumberx::lua_tonumberx, lua_topointer::lua_topointer, lua_tothread::lua_tothread,
     lua_touserdata::lua_touserdata, lua_tovector::lua_tovector, lua_unref::lua_unref,
