@@ -28,7 +28,7 @@ pub unsafe fn lua_getcounters(
       (*func).is_function() && (*(*func).as_closure_ptr()).is_c == 0
     );
 
-    if (*(*l).global).ecb.getcounterdata.is_none() {
+    if (*l).gs_ref().ecb.getcounterdata.is_none() {
       return;
     }
 

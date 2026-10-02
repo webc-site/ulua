@@ -23,7 +23,7 @@ pub unsafe fn lua_resume(l: *mut LuaState, from: *mut LuaState, nargs: i32) -> i
 
     // Some profilers can use preresume/postresume to push one Luau execution
     // frame covering the entire resume and pop it on exit.（cpp ldo.cpp:795-798）
-    if let Some(preresume) = (*(*l).global).cb.preresume {
+    if let Some(preresume) = (*l).gs_ref().cb.preresume {
       preresume(l);
     }
 
@@ -40,7 +40,7 @@ pub unsafe fn lua_resume(l: *mut LuaState, from: *mut LuaState, nargs: i32) -> i
 
     let result = resume_finish(l, status, old_n_ccalls);
 
-    if let Some(postresume) = (*(*l).global).cb.postresume {
+    if let Some(postresume) = (*l).gs_ref().cb.postresume {
       postresume(l);
     }
 

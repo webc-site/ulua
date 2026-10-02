@@ -27,7 +27,7 @@ pub(crate) unsafe fn lua_g_breakpoint(l: *mut LuaState, p: *mut Proto, line: i32
   // SAFETY: 契约保证 `l`/`p` 存活贯穿调用；块内对 `code`/`debuginsn` 的原位写全部经
   // `c_slice(_mut)` 折叠为切片下标写，且派生借用在跨分配/跨回调点之前终止（指针重取）。
   unsafe {
-    let ondisable = (*(*l).global).ecb.disable;
+    let ondisable = (*l).gs_ref().ecb.disable;
 
     if !(*p).lineinfo.is_null() && (ondisable.is_some() || (*p).execdata.is_null()) {
       // 先扫后改：命中下标经 find_map 按值带出，code 的共享切片视图在下标确定后即止，

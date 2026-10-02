@@ -25,7 +25,7 @@ pub unsafe fn lua_registeruserdatadirectaccess(
     api_check!(l, (tag as u32) < LUA_UTAG_LIMIT as u32);
     lua_c_threadbarrier_lapi(l);
 
-    let h = (*(*l).global).udatamt[tag as usize];
+    let h = (*l).gs_ref().udatamt[tag as usize];
     if !h.is_null() {
       let udatadirect = &mut (*(*l).global).udatadirect[tag as usize];
 

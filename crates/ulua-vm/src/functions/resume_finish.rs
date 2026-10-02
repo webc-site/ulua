@@ -36,7 +36,7 @@ pub(crate) unsafe fn resume_finish(l: *mut LuaState, mut status: i32, old_n_ccal
   // `isactive` 落笔、`status` 两处写入、收尾 else-if 的 Ok 谓词与末行原值回传均
   // 无既有门面（LuaState 无 ccount/status 写面；status() 门面自带 non-repr→Ok 兜底，
   // 仅对 Break 谓词逐位等价，Ok 谓词与裸 u8 回传不可换用），恢复点动作位原样保留；
-  // `(*(*l).global).cb` 为 global_State 链读数，不属栈顶门面/边界原语覆盖面，保留。
+  // `(*l).gs_ref().cb` 为 global_State 链读数，r16-b1 收编经 gs_ref 只读门面（见其契约），非栈顶门面/边界原语覆盖面。
   // 收编共三处读数：循环内 Break 谓词经既有 status() 门面；错误收尾与栈顶归位两处
   // top 现读经 top_slot(0) 读数原语（见行内注）。
   unsafe {
@@ -47,7 +47,7 @@ pub(crate) unsafe fn resume_finish(l: *mut LuaState, mut status: i32, old_n_ccal
       }
 
       if lua_isyieldable(l) != 0
-        && let Some(debugprotectederror) = (*(*l).global).cb.debugprotectederror
+        && let Some(debugprotectederror) = (*l).gs_ref().cb.debugprotectederror
       {
         debugprotectederror(l);
 

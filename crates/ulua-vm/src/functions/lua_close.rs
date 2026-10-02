@@ -9,7 +9,7 @@ use crate::{
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub unsafe fn lua_close(l: *mut LuaState) {
   unsafe {
-    let l = (*(*l).global).mainthread; // only the main thread can be closed
+    let l = (*l).gs_ref().mainthread; // only the main thread can be closed
     lua_f_close(l, (*l).stack); // close all upvalues for this thread
     close_state(l);
   }

@@ -53,7 +53,7 @@ pub(crate) unsafe fn new_udata_impl(
     if with_metatable {
       ulua_common::LUAU_ASSERT!(!isblack!(u as *mut GCObject));
 
-      let h = (*(*l).global).udatamt[tag as usize];
+      let h = (*l).gs_ref().udatamt[tag as usize];
       api_check!(l, !h.is_null());
 
       (*u).metatable = h;

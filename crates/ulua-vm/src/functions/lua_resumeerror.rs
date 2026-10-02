@@ -22,7 +22,7 @@ pub unsafe fn lua_resumeerror(l: *mut LuaState, from: *mut LuaState) -> i32 {
       return starterror;
     }
 
-    if let Some(preresume) = (*(*l).global).cb.preresume {
+    if let Some(preresume) = (*l).gs_ref().cb.preresume {
       preresume(l);
     }
 
@@ -43,7 +43,7 @@ pub unsafe fn lua_resumeerror(l: *mut LuaState, from: *mut LuaState) -> i32 {
     // cpp ldo.cpp:840-847：单一公共尾部 resume_finish + postresume
     let result = resume_finish(l, status, old_n_c_calls_i32);
 
-    if let Some(postresume) = (*(*l).global).cb.postresume {
+    if let Some(postresume) = (*l).gs_ref().cb.postresume {
       postresume(l);
     }
 

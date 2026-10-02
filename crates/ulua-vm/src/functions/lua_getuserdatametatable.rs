@@ -19,7 +19,7 @@ pub unsafe fn lua_getuserdatametatable(l: *mut LuaState, tag: i32) {
     lua_c_threadbarrier_lapi(l);
     ensure_stack(l, 1);
 
-    let h = (*(*l).global).udatamt[tag as usize];
+    let h = (*l).gs_ref().udatamt[tag as usize];
     if !h.is_null() {
       sethvalue!(l, (*l).top, h);
     } else {

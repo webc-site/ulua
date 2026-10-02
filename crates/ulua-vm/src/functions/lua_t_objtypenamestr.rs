@@ -26,13 +26,13 @@ pub(crate) unsafe fn lua_t_objtypenamestr(l: *mut LuaState, o: &TValue) -> *cons
       if (*u).tag as i32 != UTAG_PROXY && !mt.is_null() {
         // B2-2a 任务B：同借用窗口内即时读判定——Option<Slot> 原生收口，
         // miss(None)/非串值均如原 sentinel-nil 路径落空继续下行
-        if let Some(type_) = lua_h_getstr(&*mt, (*(*l).global).tmname[TMS::TmType as usize])
+        if let Some(type_) = lua_h_getstr(&*mt, (*l).gs_ref().tmname[TMS::TmType as usize])
           && type_.get().is_string()
         {
           return type_.get().as_string_ptr();
         }
 
-        return (*(*l).global).ttname[ttype!(o) as usize];
+        return (*l).gs_ref().ttname[ttype!(o) as usize];
       }
     }
 
@@ -41,7 +41,7 @@ pub(crate) unsafe fn lua_t_objtypenamestr(l: *mut LuaState, o: &TValue) -> *cons
       let tag = lightuserdatatag!(o);
 
       if (tag as u32) < LUA_LUTAG_LIMIT as u32 {
-        let name = (*(*l).global).lightuserdataname[tag as usize];
+        let name = (*l).gs_ref().lightuserdataname[tag as usize];
         if !name.is_null() {
           return name;
         }
@@ -49,17 +49,17 @@ pub(crate) unsafe fn lua_t_objtypenamestr(l: *mut LuaState, o: &TValue) -> *cons
     }
 
     // For all types except userdata and table, a global metatable can be set with a global name override
-    let mt = (*(*l).global).mt[ttype!(o) as usize];
+    let mt = (*l).gs_ref().mt[ttype!(o) as usize];
     if !mt.is_null() {
       // 同上：同窗口即时读判定，Option<Slot> 原生收口
-      if let Some(type_) = lua_h_getstr(&*mt, (*(*l).global).tmname[TMS::TmType as usize])
+      if let Some(type_) = lua_h_getstr(&*mt, (*l).gs_ref().tmname[TMS::TmType as usize])
         && type_.get().is_string()
       {
         return type_.get().as_string_ptr();
       }
     }
 
-    (*(*l).global).ttname[ttype!(o) as usize]
+    (*l).gs_ref().ttname[ttype!(o) as usize]
   }
 }
 

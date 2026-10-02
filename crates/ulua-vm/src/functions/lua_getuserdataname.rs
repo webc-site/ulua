@@ -16,9 +16,9 @@ pub(crate) unsafe fn lua_getuserdataname_bytes<'a>(l: *mut LuaState, tag: i32) -
   unsafe {
     api_check!(l, (tag as u32) < LUA_UTAG_LIMIT as u32);
 
-    let mt = (*(*l).global).udatamt[tag as usize];
+    let mt = (*l).gs_ref().udatamt[tag as usize];
     if !mt.is_null()
-      && let Some(type_) = lua_h_getstr(&*mt, (*(*l).global).tmname[TMS::TmType as usize])
+      && let Some(type_) = lua_h_getstr(&*mt, (*l).gs_ref().tmname[TMS::TmType as usize])
       && type_.get().is_string()
     {
       let ts = type_.get().as_string_ptr();
@@ -35,9 +35,9 @@ pub(crate) unsafe fn lua_getuserdataname(l: *mut LuaState, tag: i32) -> *const c
   unsafe {
     api_check!(l, (tag as u32) < LUA_UTAG_LIMIT as u32);
 
-    let mt = (*(*l).global).udatamt[tag as usize];
+    let mt = (*l).gs_ref().udatamt[tag as usize];
     if !mt.is_null()
-      && let Some(type_) = lua_h_getstr(&*mt, (*(*l).global).tmname[TMS::TmType as usize])
+      && let Some(type_) = lua_h_getstr(&*mt, (*l).gs_ref().tmname[TMS::TmType as usize])
       && type_.get().is_string()
     {
       return svalue!(type_.get());

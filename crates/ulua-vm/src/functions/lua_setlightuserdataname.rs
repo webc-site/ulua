@@ -19,7 +19,7 @@ pub unsafe fn lua_setlightuserdataname(l: *mut LuaState, tag: i32, name: *const 
     // renaming not supported
     api_check!(l, (*(*l).global).lightuserdataname[tag as usize].is_null());
 
-    if (*(*l).global).lightuserdataname[tag as usize].is_null() {
+    if (*l).gs_ref().lightuserdataname[tag as usize].is_null() {
       // 入参为 NUL 结尾 C 串，经 cstr_bytes 扫首个 NUL 得字节切片（保持原 lua_s_new 的 strlen 语义）
       let ts = lua_s_new(l, cstr_bytes(name));
       (*(*l).global).lightuserdataname[tag as usize] = ts;

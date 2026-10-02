@@ -20,7 +20,7 @@ pub(crate) unsafe fn lua_u_freeudata(l: *mut LuaState, u: *mut Udata, page: *mut
     let tag = (*u).tag as i32;
 
     if tag < LUA_UTAG_LIMIT {
-      let dtor = (*(*l).global).udatagc[tag as usize];
+      let dtor = (*l).gs_ref().udatagc[tag as usize];
       if let Some(dtor_fn) = dtor {
         dtor_fn(l, (*u).data.as_mut_ptr().cast());
       }
