@@ -11,11 +11,13 @@ pub const fn is_non_terminating_jump(cmd: IrCmd) -> bool {
       | IrCmd::CheckTruthy
       | IrCmd::CheckReadonly
       | IrCmd::CheckNoMetatable
+      | IrCmd::CheckNoNewindexMeta
       | IrCmd::CheckSafeEnv
       | IrCmd::CheckArraySize
       | IrCmd::CheckSlotMatch
       | IrCmd::CheckNodeNoNext
       | IrCmd::CheckNodeValue
+      | IrCmd::CheckNodeInsertable
       | IrCmd::CheckBufferLen
       | IrCmd::CheckUserdataTag
       | IrCmd::CheckCmpNum

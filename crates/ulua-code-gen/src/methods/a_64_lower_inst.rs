@@ -61,6 +61,9 @@ const K_TSTRING_LEN_OFFSET: i32 = offset_of!(tstring, len) as i32;
 const K_BUFFER_LEN_OFFSET: i32 = offset_of!(LuauBuffer, len) as i32;
 const K_OFFSET_OF_TKEY_TAG_NEXT: i32 = 12;
 const K_TKEY_TAG_BITS: i32 = 4;
+/// `TKey.extra`（+8，与 `tt_next`(+12) 相邻）；`t_key` 模块私有，offset 数值冻结于
+/// `TKey` repr(C) 布局（value 8B + extra 4B + tt_next 4B）。
+const K_OFFSET_OF_TKEY_EXTRA: i32 = K_OFFSET_OF_TKEY_TAG_NEXT - 4;
 const FEATURE_JSCVT: u32 = FeaturesA64::FeatureJscvt as u32;
 const FEATURE_ADV_SIMD: u32 = FeaturesA64::FeatureAdvSimd as u32;
 const LUA_TNIL: u8 = LuaType::Nil as u8;
@@ -2909,6 +2912,37 @@ impl IrLoweringA64 {
           self.finalize_target_label(inst.op(1), index, &mut fresh);
         }
       }
+      IrCmd::CheckNoNewindexMeta => {
+        {
+          // J4b：cpp `fastnotm(metatable, TM_NEWINDEX)`（ltm.h:52——位=1 为缺失、
+          // TmNewIndex=1）直插前提：metatable 为 NULL 或 tmcache 缺席位已置才可插；
+          // metatable 存在且未标缺失（__newindex 存在）跳 op(1)（helper 块）。
+          let mut fresh = Label::default(); // used when guard aborts execution or jumps to a VM exit
+          let mut fast = Label::default();
+          let temp = self.regs.alloc_temp(KindA64::X);
+          let tempw = cast_reg(KindA64::W, temp);
+
+          let hoist_tbl = self.reg_op(inst.op(0));
+          self.emit_ldr(
+            temp,
+            mem(hoist_tbl, (offset_of!(LuaTable, metatable) as i32)),
+          );
+          self.build_mut().cbz(temp, &mut fast);
+
+          // temp 持 metatable 指针：读其 tmcache 缺席位
+          self.emit_ldrb(
+            tempw,
+            mem(temp, (offset_of!(LuaTable, tmcache) as i32)),
+          );
+          CODEGEN_ASSERT!((TMS::TmNewIndex as u32) < 8);
+          let target = self.get_target_label(inst.op(1), index, &mut fresh);
+          self.with_target_label(target, |s, l| {
+            s.build_mut().tbz(tempw, TMS::TmNewIndex as u8, l)
+          });
+          self.build_mut().set_label_label(&mut fast);
+          self.finalize_target_label(inst.op(1), index, &mut fresh);
+        }
+      }
       IrCmd::CheckSafeEnv => {
         self.check_safe_env(inst.op(0), index, next);
       }
@@ -3054,6 +3088,110 @@ impl IrLoweringA64 {
           let target = self.get_target_label(inst.op(1), index, &mut fresh);
           self.with_target_label(target, |s, l| s.build_mut().cbz(temp, l));
           self.finalize_target_label(inst.op(1), index, &mut fresh);
+        }
+      }
+      IrCmd::CheckNodeInsertable => {
+        {
+          // J4b：主位可插判定（cpp `luaH_newkey` 主位空分支前提），两查皆过才落
+          // 插入 store 序列；任一失败跳 op(2)（helper 块）。
+          let mut fresh = Label::default(); // used when guard aborts execution or jumps to a VM exit
+          let temp1 = self.regs.alloc_temp(KindA64::X);
+          let temp2 = self.regs.alloc_temp(KindA64::X);
+
+          // 哨兵表（t->node == dummynode）→ 不可插：插入需 rehash 换发实向量
+          let hoist_tbl = self.reg_op(inst.op(1));
+          self.emit_ldr(
+            temp1,
+            mem(hoist_tbl, (offset_of!(LuaTable, node) as i32)),
+          );
+          self.emit_ldr(
+            temp2,
+            native_ctx(offset_of!(NativeContext, dummynode)),
+          );
+          self.build_mut().cmp_rr(temp1, temp2);
+          let target = self.get_target_label(inst.op(2), index, &mut fresh);
+          self.with_target_label(target, |s, l| {
+            s.build_mut().b_cond(ConditionA64::Equal, l)
+          });
+
+          // 主位被占（val.tt != NIL）→ 不可插：cpp 走 freepos/碰撞链
+          // temp1 的 node 比较已完成，复用为装载寄存器
+          let tempw = cast_reg(KindA64::W, temp1);
+          let hoist_node = self.reg_op(inst.op(0));
+          self.emit_ldr(
+            tempw,
+            mem(
+              hoist_node,
+              (offset_of!(LuaNode, val) + offset_of!(TValue, tt)) as i32,
+            ),
+          );
+          CODEGEN_ASSERT!(LUA_TNIL == 0);
+          self.with_target_label(target, |s, l| s.build_mut().cbnz(tempw, l));
+          self.finalize_target_label(inst.op(2), index, &mut fresh);
+        }
+      }
+      IrCmd::StoreNodeKey => {
+        {
+          // J4b：cpp `luaH_set` 前提的 `invalidateTMcache(t)`（ltable.h:15，
+          // t->tmcache = 0）——新键插入作废本表作为 metatable 的元方法缺席缓存。
+          // 单字节写（tmcache 与 readonly/safeenv/lsizenode/nodemask8 同处一个字）。
+          let hoist_tbl = self.reg_op(inst.op(2));
+          self.build_mut().strb(
+            WZR,
+            mem(hoist_tbl, (offset_of!(LuaTable, tmcache) as i32)),
+          );
+
+          // cpp `setnodekey` 三件套——key.value 拷自 k[aux].value（8B）、
+          // extra 清零、tt=LUA_TSTRING 且 next 位随整字归零。
+          // 红线：禁止 16B 整拷 k TValue（TKey.extra 与 TValue.tt/extra 语义不同位）。
+          let temp = self.regs.alloc_temp(KindA64::X);
+          let addr = self.temp_addr(
+            inst.op(1),
+            (offset_of!(TValue, value) as i32),
+            RegisterA64::NOREG,
+          );
+          self.emit_ldr(temp, addr);
+
+          let hoist = self.reg_op(inst.op(0));
+          self.emit_str(
+            temp,
+            mem(
+              hoist,
+              (offset_of!(LuaNode, key) as i32) + (offset_of!(TValue, value) as i32),
+            ),
+          );
+
+          let tempw = cast_reg(KindA64::W, temp);
+          let hoist_extra = self.reg_op(inst.op(0));
+          self.emit_str(
+            WZR,
+            mem(
+              hoist_extra,
+              (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_EXTRA,
+            ),
+          );
+
+          // cpp `setnodekey` 的 `n_->key.tt = i_o->tt` 是位域写：仅置 tt 低 4 位，
+          // next 高 28 位保留——被 removeentry 逻辑删除过的链节点重插时（val 空、
+          // 链仍挂着）清零 next 即砍断哈希链，后续查找/rehash 沿链全部失真。
+          let hoist_tt_load = self.reg_op(inst.op(0));
+          self.emit_ldr(
+            tempw,
+            mem(
+              hoist_tt_load,
+              (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_TAG_NEXT,
+            ),
+          );
+          self.build_mut().and_rr_u32(tempw, tempw, 0xFFFFFFF0);
+          self.build_mut().orr_rr_u32(tempw, tempw, LUA_TSTRING as u32);
+          let hoist_tt = self.reg_op(inst.op(0));
+          self.emit_str(
+            tempw,
+            mem(
+              hoist_tt,
+              (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_TAG_NEXT,
+            ),
+          );
         }
       }
       IrCmd::CheckBufferLen => {
