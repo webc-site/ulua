@@ -16,6 +16,6 @@ pub fn lua_rawcheckstack(l: &mut LuaState, size: i32) {
   // SAFETY: 契约保证 `l` 存活且 size 已在上限内校验，扩容经 resize_stack 重建 top/base/stack_last 指针后不保留旧引用
   unsafe {
     luaD_checkstack!(l, size);
-    expandstacklimit!(l, (*l).top.wrapping_add(size as usize));
+    expandstacklimit!(l, l.top.wrapping_add(size as usize));
   }
 }

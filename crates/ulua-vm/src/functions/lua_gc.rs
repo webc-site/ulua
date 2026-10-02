@@ -25,7 +25,7 @@ pub fn lua_gc(l: &mut LuaState, what: i32, data: i32) -> i32 {
   // SAFETY: 契约保证 `l` 为存活调用帧且 what/data 参数配对满足各分支约定（如 setpause 传指针或 null）
   unsafe {
     condhardmemtests!(lua_c_validate(l), 1);
-    let g: *mut global_State = (*l).global;
+    let g: *mut global_State = l.global;
     let Some(op) = LuaGcOp::from_repr(what) else {
       return -1;
     };

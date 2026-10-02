@@ -23,7 +23,7 @@ pub fn lua_checkstack(l: &mut LuaState, size: i32) -> i32 {
     api_check!(l, size >= 0);
 
     let mut res = 1;
-    if size > LUAI_MAXCSTACK || ((*l).top.offset_from((*l).base) as i32 + size) > LUAI_MAXCSTACK {
+    if size > LUAI_MAXCSTACK || (l.top.offset_from(l.base) as i32 + size) > LUAI_MAXCSTACK {
       res = 0; // stack overflow
     } else if size > 0 {
       if stacklimitreached(&*l, size) {
