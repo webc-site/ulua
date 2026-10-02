@@ -11,7 +11,12 @@ pub unsafe fn tfreeze(l: *mut LuaState) -> i32 {
   unsafe {
     (*l).check_type(1, LuaType::Table);
 
-    (*l).arg_check(lua_getreadonly(l, 1) == 0, 1, "table is already frozen");
+    // r16-v3 #60 拆两语句：`lua_getreadonly` 前移 `&LuaState` 只读形后与
+    // `arg_check` 独占接收者借用冲突；原位现读（求值序本即先读标志后落 arg_check，
+    // 句间无场写），拆句逐位等价。
+    let not_frozen = lua_getreadonly(&*l, 1) == 0;
+
+    (*l).arg_check(not_frozen, 1, "table is already frozen");
 
     (*l).arg_check(
       lua_l_getmetafield(l, 1, TM_METATABLE.as_ptr().cast()) == 0,

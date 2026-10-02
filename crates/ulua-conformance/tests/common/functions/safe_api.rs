@@ -935,8 +935,8 @@ pub fn to_str<'a>(l: L, idx: c_int) -> Option<&'a str> {
 
 /// `lua_getreadonly(l, idx)`（C 侧 0/非 0）。
 pub fn getreadonly(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_getreadonly(l, idx) }
+  // r16-v3：callee 已前移 `&LuaState` 引用形，经 `state_ref` 收口点直传只读引用。
+  lua_getreadonly(state_ref(l), idx)
 }
 
 // ---------------------------------------------------------------------------

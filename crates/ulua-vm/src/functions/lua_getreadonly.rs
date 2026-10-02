@@ -5,11 +5,16 @@ use crate::{
   type_aliases::t_value::TValue,
 };
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn lua_getreadonly(l: *mut LuaState, objindex: i32) -> i32 {
+/// `lua_getreadonly`：读 `objindex` 处 table 的只读标志（cpp `lua_getreadonly`）。
+/// 调用序契约（正确性，非内存安全）：`l` 须为存活 `LuaState`，`objindex` 须解析到
+/// table 槽（`api_check!` 断言 `(*o).is_table()` 兜底）；`index_2_addr` 所得 `o` 与
+/// 其 `as_table_ptr()` 所得 `t` 均为栈内合法槽/活表指针，属本实现内部裸指针读数，
+/// unsafe 收进实现、不再外包给调用方（r16-v3 引用形前移）。
+pub fn lua_getreadonly(l: &LuaState, objindex: i32) -> i32 {
+  // SAFETY: 契约保证 `l` 存活且 `objindex` 为合法栈索引；`o`/`t` 只读 is_table/readonly，
+  // 不写场域、不触 GC。
   unsafe {
-    let o: *const TValue = index_2_addr(&*l, objindex);
+    let o: *const TValue = index_2_addr(l, objindex);
 
     api_check!(l, (*o).is_table());
 

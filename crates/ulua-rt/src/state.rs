@@ -558,8 +558,7 @@ pub(crate) fn slots_equal(mut state: StateView<'_>, a: i32, b: i32) -> bool {
 /// 读 `idx` 处 table 的只读标志（`lua_getreadonly` 收口点）。
 #[inline]
 pub(crate) fn readonly_at(state: StateView<'_>, idx: i32) -> bool {
-  // Safety: 族级契约;只读该槽头部。
-  unsafe { lua_getreadonly(state.as_ptr().cast_mut(), idx) != 0 }
+  lua_getreadonly(&state, idx) != 0
 }
 
 /// 压出 tagged light userdata（poll/回调分派用的不透明标记指针）。
