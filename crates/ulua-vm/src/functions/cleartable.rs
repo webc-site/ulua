@@ -1,16 +1,11 @@
 use core::{ffi::c_char, mem::size_of};
 
 use crate::{
-  functions::{
-    c_slice_mut, gettablemode::gettablemode, removeentry::removeentry,
-    tableresizeprotected::tableresizeprotected,
-  },
+  functions::{gettablemode::gettablemode, removeentry::removeentry, tableresizeprotected::tableresizeprotected},
   macros::{
-    dummynode::dummynode,
     gkey::{gkey, gval},
     iscleared::iscleared,
     setnilvalue::setnilvalue,
-    sizenode::sizenode,
   },
   records::{gc_object::GCObject, lua_node::LuaNode, lua_state::LuaState, lua_table::LuaTable},
   type_aliases::t_value::TValue,
@@ -43,23 +38,23 @@ pub(crate) unsafe fn cleartable(l: *mut LuaState, mut list: *mut GCObject) -> us
 
     while !list.is_null() {
       let h = list as *mut LuaTable;
-      let hsize = sizenode!(h);
-      // cpp lgc.cpp:692：工作量估算时空哈希部（node == dummynode）计 0；遍历仍按 sizenode
-      let hashwork = if (*h).node == dummynode.cast_mut() {
+      // 窗形口径：hsize ⇔ sizenode!(h)（实向量窗长 twoto(lsizenode)；哨兵表窗长恒 1，
+      // 即 cpp「dummynode 表 size 计 1」口径）
+      let hsize = (*h).node_window().len() as i32;
+      // cpp lgc.cpp:692：工作量估算时空哈希部（is_hash_dummy 哨兵判据）计 0；遍历仍按窗长走查
+      let hashwork = if (*h).is_hash_dummy() {
         0
       } else {
         hsize as usize
       };
       work += size_of::<LuaTable>()
-        + size_of::<TValue>() * (*h).sizearray as usize
+        + size_of::<TValue>() * (*h).array_window().len()
         + size_of::<LuaNode>() * hashwork;
 
-      // 数组段窗口：array 与 sizearray 自洽（契约），每格判清与否只看自身白性，
-      // 逆序切片遍历与 cpp `while (i--)` 逐指令序等价，免 `array.add(i)` 裸走查
-      for o in c_slice_mut((*h).array, (*h).sizearray as usize)
-        .iter_mut()
-        .rev()
-      {
+      // 数组段切 array_window_mut 共享窗：array 与 sizearray 自洽（契约），null 数组
+      // 归空窗；每格判清与否只看自身白性，逆序切片遍历与 cpp `while (i--)` 逐指令
+      // 序等价，免 `array.add(i)` 裸走查
+      for o in (*h).array_window_mut().iter_mut().rev() {
         // 读宏（iscleared/gcvalue）按值取槽指针，与收敛前 `array.add(i)` 同形
         let o = &raw mut *o;
         if iscleared!(o) {
@@ -67,10 +62,13 @@ pub(crate) unsafe fn cleartable(l: *mut LuaState, mut list: *mut GCObject) -> us
         }
       }
 
-      // 哈希段窗口：node 与 sizenode 自洽；gval/gkey/removeentry 均只作用于当前格，
-      // 逆序切片遍历与原 i 递减走查同序等价（dummynode 表读单格 dummy，与 cpp 一致）
+      // 哈希段切 node_window_mut：实向量窗与 hsize 同界，逆序切片遍历与原 i 递减
+      // 走查同序等价；哨兵表按 E1 裁决写侧恒空窗——C 侧从不原地写哨兵，且 dummy
+      // 单格 val 恒 nil ⇒ 空桶，cpp 走查一格即判空落过、无任何观测动作，故空窗
+      // 零迭代与 cpp 逐位一致（activevalues 不增，弱表阈值 `hsize*3/8` 判据口径不变）。
+      // gval/gkey/removeentry 均只作用于当前格，写路径只落实向量。
       let mut activevalues = 0;
-      for n in c_slice_mut((*h).node, hsize as usize).iter_mut().rev() {
+      for n in (*h).node_window_mut().iter_mut().rev() {
         if !(*gval!(n)).is_nil() {
           if iscleared!(gkey!(n)) || iscleared!(gval!(n)) {
             setnilvalue!(gval!(n));
