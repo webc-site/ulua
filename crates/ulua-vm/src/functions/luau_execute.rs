@@ -3876,7 +3876,8 @@ fn tier_cold<const SINGLE_STEP: bool>(
                 jump_and_next!(pc, cl, insn, 'dispatch, eq(classvalue!(ra), classvalue!(rb)))
               }
               ValueView::Table(_) | ValueView::Userdata(_) | ValueView::Object(_) => {
-                let (npc, nbase) = luau_jump_eq_heavy(l, pc, insn, base, ra, rb, &*cl, &frame, false);
+                let (npc, nbase) =
+                  luau_jump_eq_heavy(l, pc, insn, base, ra, rb, &*cl, &frame, false);
                 pc = npc;
                 base = nbase;
                 continue 'dispatch;
@@ -3939,7 +3940,8 @@ fn tier_cold<const SINGLE_STEP: bool>(
                 jump_and_next!(pc, cl, insn, 'dispatch, !(eq(classvalue!(ra), classvalue!(rb))))
               }
               ValueView::Table(_) | ValueView::Userdata(_) | ValueView::Object(_) => {
-                let (npc, nbase) = luau_jump_eq_heavy(l, pc, insn, base, ra, rb, &*cl, &frame, true);
+                let (npc, nbase) =
+                  luau_jump_eq_heavy(l, pc, insn, base, ra, rb, &*cl, &frame, true);
                 pc = npc;
                 base = nbase;
                 continue 'dispatch;
