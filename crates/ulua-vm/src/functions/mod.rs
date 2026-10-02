@@ -510,6 +510,7 @@ pub mod lua_setmemcat;
 pub mod lua_setmetatable;
 pub mod lua_setreadonly;
 pub mod lua_setsafeenv;
+pub mod type_feedback;
 pub mod lua_settable;
 pub mod lua_setthreaddata;
 pub mod lua_settop;

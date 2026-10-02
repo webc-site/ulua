@@ -13,6 +13,7 @@ use std::{env::args, fs::File, io::Read, panic::set_hook, process::exit};
 use ulua_common::records::f_value::set_luau_bool_flags;
 #[cfg(feature = "vm-opcount")]
 use ulua_vm::functions::op_count;
+use ulua_vm::functions::type_feedback;
 use ulua_vm::{
   enums::lua_type::LuaType,
   functions::{
@@ -57,6 +58,7 @@ fn main() {
 
   // mirror the C++ CLI: setLuauFlagsDefault(true) — v11+ bytecode needs it
   set_luau_bool_flags(true);
+  type_feedback::init_from_env();
 
   // SAFETY: 块内指针均出自本作用域 newstate/newthread 且已判非空，直到块尾单线程独占使用
   unsafe {
@@ -101,6 +103,11 @@ fn main() {
     // （luau_execute.rs 的 fuse_succ_*）与后继相邻性都据此判读，不靠猜。
     #[cfg(feature = "vm-opcount")]
     print!("{}", op_count::dump());
+
+    // J1 Phase 1a：类型观测读数（ULUA_TYPE_FEEDBACK=1 时激活）
+    if type_feedback::enabled() {
+      print!("{}", type_feedback::dump());
+    }
   }
 }
 

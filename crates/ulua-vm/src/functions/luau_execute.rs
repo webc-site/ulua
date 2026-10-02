@@ -38,6 +38,7 @@ use crate::{
   enums::{lua_type::LuaType, tms::TMS, value_view::ValueView},
   functions::{
     copy_results_pop_frame::pop_frame_copy_results, lua_d_call::lua_d_call,
+    type_feedback,
     lua_d_check_cstack::lua_d_check_cstack, lua_d_performcally::lua_d_performcally,
     lua_f_close::lua_f_close, lua_f_findupval::lua_f_findupval,
     lua_f_new_lclosure::lua_f_new_lclosure, lua_f_recordhit::lua_f_recordhit,
@@ -3068,6 +3069,14 @@ unsafe fn tier_cold<const SINGLE_STEP: bool>(
       'continue_op: loop {
         #[cfg(feature = "vm-opcount")]
         op_count::record(op);
+
+        // J1 Phase 1a：运行时类型观测（ULUA_TYPE_FEEDBACK=1；未启用为一次可预测分支）
+        if type_feedback::enabled() {
+          let fb_insn = *pc;
+          let fb_a = (*base.add(luau_insn_a(fb_insn) as usize)).tt as u8;
+          let fb_b = (*base.add(luau_insn_b(fb_insn) as usize)).tt as u8;
+          type_feedback::record(cl_proto!(cl), pc, op, fb_a, fb_b);
+        }
 
         // C++ 跳转表盲目索引 opcode 字节，越界时靠 `LUAU_UNREACHABLE()` 兜底
         // （等价 UB）。此处用 `From<u8>`：合法 opcode（< LopCount）结果与
