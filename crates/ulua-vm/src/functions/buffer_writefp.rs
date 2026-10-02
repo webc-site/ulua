@@ -18,10 +18,9 @@ use crate::{
 /// （buffer_swapbe.rs，f32/f64 经 `to_bits`/`from_bits` 按整型位宽翻转，cpp 大端
 /// 三件套 `static_cast<StorageType>` 重排的逐位等价形）承载。cpp lbuflib.cpp:174
 /// `buffer_writefp`。
-pub(crate) unsafe fn buffer_writefp<T, StorageType>(l: *mut LuaState) -> i32
+pub(crate) unsafe fn buffer_writefp<T>(l: *mut LuaState) -> i32
 where
   T: BufferFloat,
-  StorageType: SwapBe,
 {
   // SAFETY: 契约保证 #1 为 buffer、界校验后 `size_of::<T>()` 字节可写（越界即抛错不返回）；
   // 校验/取参/抛错序与旧形逐位不变（先 check 后写）

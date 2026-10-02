@@ -48,24 +48,25 @@ integer_wrappers! {
 }
 
 macro_rules! fp_wrappers {
-  ($(($name:ident, $fn:ident, $ty:ty, $raw:ty)),+ $(,)?) => {
+  ($(($name:ident, $fn:ident, $ty:ty)),+ $(,)?) => {
     $(
       /// # Safety
       /// `l` 须为存活 LuaState 且处于本 C 函数的受保护调用帧，栈上备好 buffer 库约定参数
-      /// （`$fn::<$ty, $raw>` 读取 buffer/偏移并按需抛错/GC，`$ty`/`$raw` 为编译期选定的浮点宽度对）。
+      /// （`$fn::<$ty>` 读取 buffer/偏移并按需抛错/GC，`$ty` 为编译期选定并经
+      /// `SwapBe` 位宽对固化的浮点宽度）。
       /// cpp/VM/src/lbuflib.cpp:147 buffer_readfp、:174 buffer_writefp。
       unsafe extern "C-unwind" fn $name(l: *mut LuaState) -> i32 {
-        unsafe { $fn::<$ty, $raw>(l) }
+        unsafe { $fn::<$ty>(l) }
       }
     )+
   };
 }
 
 fp_wrappers! {
-  (buffer_readfp_f32, buffer_readfp, f32, u32),
-  (buffer_readfp_f64, buffer_readfp, f64, u64),
-  (buffer_writefp_f32, buffer_writefp, f32, u32),
-  (buffer_writefp_f64, buffer_writefp, f64, u64),
+  (buffer_readfp_f32, buffer_readfp, f32),
+  (buffer_readfp_f64, buffer_readfp, f64),
+  (buffer_writefp_f32, buffer_writefp, f32),
+  (buffer_writefp_f64, buffer_writefp, f64),
 }
 
 // 共享基表（integer 开关不影响的前 26 个条目，编译期拼接出两个注册表）

@@ -16,10 +16,9 @@ use crate::{
 /// [`load_scalar_ref`] 单点：端序由 `SwapBe`（buffer_swapbe.rs，f32/f64 经
 /// `to_bits`/`from_bits` 按整型位宽翻转，cpp 大端三件套 `static_cast<StorageType>`
 /// 重排的逐位等价形）承载。cpp lbuflib.cpp:147 `buffer_readfp`。
-pub(crate) unsafe fn buffer_readfp<T, StorageType>(l: *mut LuaState) -> i32
+pub(crate) unsafe fn buffer_readfp<T>(l: *mut LuaState) -> i32
 where
   T: BufferReadableFloat,
-  StorageType: SwapBe,
 {
   // SAFETY: 窗口已挡下越界偏移（失败即抛错不返回），界内浮点字节数可读；
   // 抛错序与旧形逐位不变（先窗口校验、后压栈）

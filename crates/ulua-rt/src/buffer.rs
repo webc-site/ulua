@@ -157,13 +157,13 @@ impl Buffer {
   /// 的调用点（serde）必须先 [`Buffer::to_vec`] 拷贝。
   pub(crate) fn as_slice(&self) -> &[u8] {
     ensure_stack_or_panic(self.reference.state(), 1);
-    self.bytes()
+    &Self::bytes(&self.reference)[..]
   }
 
   /// Mutably borrow the buffer's bytes directly (no copy).
   pub(crate) fn as_slice_mut(&mut self) -> &mut [u8] {
     ensure_stack_or_panic(self.reference.state(), 1);
-    self.bytes()
+    Self::bytes(&self.reference)
   }
 
   /// The single borrow-window derivation point for this handle — the only
@@ -172,11 +172,15 @@ impl Buffer {
   /// Pushes the buffer, borrows the window, then pops — the slice remains
   /// valid because the registry ref keeps the object alive.
   ///
+  /// 形为关联函数（r12 主控收口 clippy::mut_from_ref）：返回切片的寿命 `'a`
+  /// 不经接收者传导，与 vm 侧 `buffer_data_ref` 的栈窗口契约同族—— `'a` 由
+  /// 调用点选定，真实有效期以注册表引用钉住的对象为界，非借用系统可表达。
+  ///
   /// 调用序契约（正确性，非内存安全）：owning VM 必须存活且由当前线程驱动，
   /// 且 main state 上已预留至少 1 个栈空位（内部 push/pop 一层，即门面
   /// [`Buffer::as_slice`] / [`as_slice_mut`] 紧邻的 `ensure_stack_or_panic`）。
-  /// 返回切片未编码生命周期：仅当 `self` 的注册表引用仍然钉住该 buffer 对象
-  /// 时有效（文档纪律：借出期间不得有并发写，见 [`Buffer::as_slice`]）。
+  /// 返回切片未编码生命周期：仅当 `reference` 的注册表引用仍然钉住该 buffer
+  /// 对象时有效（文档纪律：借出期间不得有并发写，见 [`Buffer::as_slice`]）。
   ///
   /// # Safety
   /// `state` 存活（调用点契约）；注册表引用指向登记时的 buffer 对象，
@@ -185,9 +189,9 @@ impl Buffer {
   /// （非 buffer 才返回 `None`，`expect` 收口为 panic 而非 UB）；`pop_stack`
   /// 后切片仍有效——对象由注册表引用钉住、Luau GC 不移动对象且 buffer 定长
   /// 不 resize（契约三要素见 `lua_tobuffer_bytes_ref`），栈槽只是视图。
-  fn bytes(&self) -> &mut [u8] {
-    let state = self.reference.state();
-    self.reference.push();
+  fn bytes(reference: &XRc<LuaRef>) -> &'static mut [u8] {
+    let state = reference.state();
+    reference.push();
     let bytes = unsafe { lua_tobuffer_bytes_ref(&mut *state.as_mut_ptr(), -1) };
     pop_stack(state, 1);
     bytes.expect("invalid Luau buffer")
