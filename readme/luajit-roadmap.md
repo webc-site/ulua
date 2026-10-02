@@ -58,7 +58,11 @@ proto#1 pc=6：**480K 次 miss、last_tag=7（table 恒定）** = spike 剧本�
   ——非形状轮换、非插入型，是 method-JIT 对 metatable'd read 的固有形态。
   **J4-real（超越 cpp 的新特性）**：__index 感知 IC——对带元表接收者缓存
   (metatable ptr, __index 表 node val 地址)，guard 链 = CheckTag(table) +
-  mt cmp + 键校验，miss 落 helper。LuaJIT 以 trace 级做到；cpp 无；我们做成即
+  mt cmp + 键校验，miss 落 helper。
+  **opcode 已实测定案（TSFB opcode 读数）**：480K miss 站点 op=20 = **NAMECALL**
+  ——`a:dot(b)` 方法派发在 __index 链实例上每次落 helper（我们的第二快路
+  fastgettm(TM_INDEX)→类表槽查在该形态未命中，cpp 同构同症）。J4-real 的
+  首个靶点即 NAMECALL 的 __index 链缓存。LuaJIT 以 trace 级做到；cpp 无；我们做成即
   oop JIT 从 25.3 向 interp-LuaJIT 差距方向实质逼近，且为对 cpp 的净超越项。
   工作量：大（guard 链 + GC 失效语义 + census 选点），需专项立项。
 - **J4b 落地后 oop 实测（CPU 时间配对）= +0.6%（零收益）**：census 的 480K miss
