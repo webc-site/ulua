@@ -632,8 +632,10 @@ pub fn tolightuserdata(l: L, idx: c_int) -> *mut c_void {
 
 /// `lua_setlightuserdataname(l, tag, name)`。
 pub fn setlightuserdataname(l: L, tag: c_int, name: &'static [u8]) {
-  // Safety: `l` 存活；`tag` 界内；`cstr` NUL 结尾静态名串。
-  unsafe { lua_setlightuserdataname(l, tag, cstr(name)) }
+  // r16-v4b：callee 接收者已 `&mut` 引用形，`state_mut` 判空重建短借；`cstr(name)`
+  // NUL 结尾静态名串裸形透传（不切片化）；unsafe 仅剩 callee 留形转达（lint 裁决见
+  // callee 文档）。
+  unsafe { lua_setlightuserdataname(state_mut(l), tag, cstr(name)) }
 }
 
 /// `lua_getlightuserdataname(l, tag)`：未注册得 `None`，否则为登记名原始字节。
@@ -787,14 +789,15 @@ pub fn rawseti(l: L, idx: c_int, n: c_int) {
 
 /// `lua_rawgetptagged`。
 pub fn rawgetptagged(l: L, idx: c_int, p: *mut c_void, tag: c_int) -> c_int {
-  // Safety: `l` 存活；`p` 为用例持有的载荷指针（仅比较，不解引用）。
-  unsafe { lua_rawgetptagged(&mut *l, idx, p, tag) }
+  // r16-v4b：callee 接收者已 `&mut` 引用形，`state_mut` 判空重建短借；`p` 仅作位模式
+  // 键不解引用，unsafe 仅剩 callee 留形转达（lint 裁决见 callee 文档）。
+  unsafe { lua_rawgetptagged(state_mut(l), idx, p, tag) }
 }
 
 /// `lua_rawsetptagged`。
 pub fn rawsetptagged(l: L, idx: c_int, p: *mut c_void, tag: c_int) {
   // Safety: 同 [`rawgetptagged`]。
-  unsafe { lua_rawsetptagged(&mut *l, idx, p, tag) }
+  unsafe { lua_rawsetptagged(state_mut(l), idx, p, tag) }
 }
 
 /// `lua_rawgetp`（tag 0，宏形态）。
@@ -1150,14 +1153,14 @@ pub fn singlestep(l: L, enabled: bool) {
 
 /// `lua_g_isnative`（C 侧 0/非 0）：`level` 帧是否为原生编译帧。
 pub fn g_isnative(l: L, level: c_int) -> c_int {
-  // Safety: `l` 存活；`level` 由用例按栈深限定，只读帧槽。
-  unsafe { lua_g_isnative(l, level) }
+  // r16-v4b：callee 已引用形 safe 化，`state_ref` 判空重建 `&LuaState` 即收口（纯帧槽读数）。
+  lua_g_isnative(state_ref(l), level)
 }
 
 /// `lua_is_lfunction`（C 侧 0/非 0）：`idx` 是否为 Lua 闭包。
 pub fn is_lfunction(l: L, idx: c_int) -> c_int {
-  // Safety: `l` 存活；只读槽位类型标签。
-  unsafe { lua_is_lfunction(l, idx) }
+  // r16-v4b：callee 已引用形 safe 化，`state_ref` 判空重建 `&LuaState` 即收口（纯读数）。
+  lua_is_lfunction(state_ref(l), idx)
 }
 
 // ---------------------------------------------------------------------------

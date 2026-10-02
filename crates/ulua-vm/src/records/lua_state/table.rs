@@ -90,7 +90,9 @@ impl LuaState {
   /// `idx` 为合法表索引，`p` 为有效指针。
   #[inline(always)]
   pub unsafe fn raw_get_ptr(&mut self, idx: i32, p: *mut c_void) -> i32 {
-    // SAFETY: `p` 的有效性由本方法 `# Safety` 契约承载（调用方保证），本帧重建可变引用即结束借用窗口。
+    // SAFETY: `p` 的有效性由本方法 `# Safety` 契约承载（调用方保证，被调端仅作位
+    // 模式载荷不解引用）；r16-v4b 后 callee 已是 `&mut` 引用形，本帧 `self` 短借于
+    // 调用语句即时结束，unsafe 仅剩 callee 留形转达（lint 裁决见 callee 文档）。
     unsafe { lua_rawgetptagged(self, idx, p, 0) }
   }
 
@@ -98,7 +100,9 @@ impl LuaState {
   /// `idx` 为合法表索引，`p` 为有效指针。
   #[inline(always)]
   pub unsafe fn raw_set_ptr(&mut self, idx: i32, p: *mut c_void) {
-    // SAFETY: `p` 的有效性由本方法 `# Safety` 契约承载（调用方保证），本帧重建可变引用即结束借用窗口。
+    // SAFETY: `p` 的有效性由本方法 `# Safety` 契约承载（调用方保证，被调端仅作位
+    // 模式载荷不解引用）；r16-v4b 后 callee 已是 `&mut` 引用形，本帧 `self` 短借于
+    // 调用语句即时结束，unsafe 仅剩 callee 留形转达（lint 裁决见 callee 文档）。
     unsafe { lua_rawsetptagged(self, idx, p, 0) }
   }
 

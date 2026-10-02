@@ -101,7 +101,7 @@ pub unsafe fn compile_internal(
   // Safety: 契约保证 `l` 为存活 LuaState*、`idx` 为界内栈位，`lua_is_lfunction` 与
   // `lua_a_toobject` 按 Lua C-ABI 读取该栈位。
   unsafe {
-    CODEGEN_ASSERT!(lua_is_lfunction(l, idx) != 0);
+    CODEGEN_ASSERT!(lua_is_lfunction(&*l, idx) != 0);
   }
   // Safety: 同上，且上一条断言确认该栈位是 Lua 闭包，`as_closure` 的 TValue→GCObject→
   // Closure 解引用链由此前提保证；`inner.l.p` 为构造期接线的非空 root Proto*。
