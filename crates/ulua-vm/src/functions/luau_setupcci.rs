@@ -29,6 +29,11 @@ pub(crate) unsafe fn luau_setupcci(l: *mut LuaState, nresults: i32, fun: StkId) 
 
     (*ci).func = fun;
     (*ci).base = fun.add(1);
+    // 保留（r12-w9b 逐点定性，w6d 口径钉死合法）：本行为 CallInfo 帧建立面的裸字段
+    // 落库（帧 ABI 本体，slot.rs 红线），且算术操作数 `top + LUA_MINSTACK` 求值于
+    // 下方 lua_d_checkstackfornewci 扩容之前——正向界彼时尚未被扩容先行覆盖，不满足
+    // `top_slot` 读数原语的分配界内契约；形制同已判保留的 lua_v_call_tm 建立点与
+    // 豁免面 luau_callhook/luau_precall 同款建立点，不强收。
     (*ci).top = (*l).top.add(LUA_MINSTACK as usize);
     (*ci).savedpc = null();
     (*ci).flags = 0;

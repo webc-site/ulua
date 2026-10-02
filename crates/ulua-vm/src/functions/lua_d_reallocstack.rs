@@ -28,7 +28,11 @@ pub(crate) unsafe fn lua_d_reallocstack(l: *mut LuaState, newsize: i32, fornewci
 
         (*l).ci = cip;
         (*l).base = (*cip).base;
-        (*l).top = (*cip).top;
+        // r12-w9b 收编（弹收形提交·同形单点）：场到场拷贝无算术操作数，
+        // reanchor_top 为纯字段落笔（不自带断言），与裸赋值逐位同值；读侧
+        // `(*cip).top` 为 CallInfo 裸字段，按 w6d 口径红线保留不收。本三行是
+        // newsize 越限回退待回退新 CI 的恢复动作本体，时序不动（其后即 throw）。
+        (*l).reanchor_top((*cip).top);
       }
 
       lua_d_throw(l, LuaStatus::ErrMem as i32);

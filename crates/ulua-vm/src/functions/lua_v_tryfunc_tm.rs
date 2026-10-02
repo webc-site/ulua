@@ -26,9 +26,9 @@ pub unsafe fn lua_v_tryfunc_tm(l: *mut LuaState, func: Slot<'_>) {
     }
 
     // r12-w7a2 收编（同形单点·挪位协议窗）：`(*l).top` 预绑定单次读，供后移循环
-    // 与抬顶尾写共用——本函数契约保证全程不重分配栈（见 # Safety），循环仅写
-    // 已界内槽、不触场域，故尾写与原「场域再读后 wrapping_add」逐位同值；
-    // wrapping 形态保留（与原式同宽同回绕语义）
+    // 起点 cursor——本函数契约保证全程不重分配栈（见 # Safety），循环仅写
+    // 已界内槽、不触场域；r12-w9b 续收后尾写不再消费本绑定，改经 advance_top
+    // 现读场域提交（见下方尾写注记，两者在契约下同值）
     let top = (*l).top;
     let mut p = top;
     while p > func {
@@ -36,7 +36,11 @@ pub unsafe fn lua_v_tryfunc_tm(l: *mut LuaState, func: Slot<'_>) {
       p = p.wrapping_sub(1);
     }
 
-    (*l).top = top.wrapping_add(1);
+    // r12-w9b 收编（抬顶提交形）：尾写经 advance_top(1) 原语落笔——本函数契约保证
+    // 全程不重分配栈、循环只写已界内槽不触 `top` 场域，故原式「场再读后 wrapping_add」
+    // 与原语内 `self.top.add(1)` 同址同值（top 有空余槽见 # Safety），逐位等价且更贴
+    // cpp `L->top++` 的现读场语义；断言位点原无，维持不带断言的提交形。
+    (*l).advance_top(1);
     setobj_2_s!(l, func, tm);
   }
 }

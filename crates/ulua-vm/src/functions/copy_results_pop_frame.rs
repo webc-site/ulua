@@ -83,11 +83,13 @@ pub(crate) unsafe fn pop_frame_copy_results(
   unsafe {
     let res = copy_results_pop_frame(l, vali, valend, nresults);
 
-    // 弹帧后 (*l).ci 即父帧 cip
-    (*l).top = if nresults == LUA_MULTRET {
+    // r12-w9b 收编（弹收形提交）：`top` 场写经 reanchor_top 原语落笔——`res` 与父帧
+    // `ci->top` 均在弹帧写完后现读场域取值，无预绑定（B2-2b 保留裁决仅约束上方拷贝
+    // 步进循环本体）；else 臂读面为 CallInfo 裸字段，按 w6d 口径红线保留不收。
+    (*l).reanchor_top(if nresults == LUA_MULTRET {
       res
     } else {
       (*(*l).ci).top
-    };
+    });
   }
 }
