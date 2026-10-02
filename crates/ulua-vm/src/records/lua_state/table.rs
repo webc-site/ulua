@@ -5,8 +5,8 @@ use crate::{
   functions::{
     lua_createtable::lua_createtable, lua_getfield::lua_getfield_bytes,
     lua_getmetatable::lua_getmetatable, lua_gettable::lua_gettable,
-    lua_l_getmetafield::lua_l_getmetafield_bytes, lua_next::lua_next, lua_rawget::lua_rawget,
-    lua_rawgeti::lua_rawgeti, lua_rawgetptagged::lua_rawgetptagged, lua_rawset::lua_rawset,
+    lua_l_getmetafield::lua_l_getmetafield_bytes, lua_next::lua_next, lua_rawgeti::lua_rawgeti,
+    lua_rawgetptagged::lua_rawgetptagged, lua_rawset::lua_rawset,
     lua_rawsetptagged::lua_rawsetptagged, lua_setfield::lua_setfield_bytes,
     lua_setmetatable::lua_setmetatable, lua_setreadonly::lua_setreadonly,
     lua_settable::lua_settable,
@@ -34,11 +34,6 @@ impl LuaState {
   #[inline(always)]
   pub fn set_table(&mut self, idx: i32) {
     lua_settable(self, idx)
-  }
-
-  #[inline(always)]
-  pub fn raw_get(&mut self, idx: i32) -> i32 {
-    lua_rawget(self, idx)
   }
 
   #[inline(always)]

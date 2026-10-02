@@ -149,35 +149,3 @@ impl LuaState {
     unsafe { Slot::from_raw(index_2_addr(self, idx)) }
   }
 }
-
-/// 当前帧槽视图：`Slot<'a>` 的帧存活期锚定器。
-///
-/// [`FrameView::current`] 收下 `&'a mut LuaState` 的独占借用后，[`FrameView::reg`]
-/// 由当前帧 `base`（`(*l).base` 与 `ci->base` 为 VM 同构镜像）派生 `Slot<'a>`；
-/// 句柄与视图共享同一 `'a` 锚——句柄存活期内该 `LuaState` 的独占使用被借用检查
-/// 禁止，扩容类调用必须先于句柄派生完成。
-pub struct FrameView<'a> {
-  l: &'a mut LuaState,
-}
-
-impl<'a> FrameView<'a> {
-  /// 收下当前帧视图：仅存借用、不解引用、无 unsafe。
-  #[inline(always)]
-  pub fn current(l: &'a mut LuaState) -> Self {
-    Self { l }
-  }
-
-  /// 当前帧寄存器槽 `base[i]` 的句柄。
-  ///
-  /// # Safety
-  /// `l` 为执行中的存活 `LuaState` 且 `ci` 已接线（活动 CallInfo 不变量），
-  /// `base` 落在分配栈界内；`i` 为帧内合法寄存器索引：`base + i` 不越
-  /// `top..ci->top` 的分配栈窗口。同帧重复派生的句柄间无 Rust 别名保证（模块
-  /// 文档纪律），使用窗口由调用方按 lvmexecute 串行纪律排序。
-  #[inline(always)]
-  pub unsafe fn reg(&self, i: i32) -> Slot<'a> {
-    // SAFETY: 本方法契约——`ci` 已接线、`self.l.base` 在分配栈界内，`base + i`
-    // 为界内槽地址；这是句柄派生的唯一一处指针算术。
-    unsafe { Slot::from_raw(self.l.base.add(i as usize)) }
-  }
-}

@@ -70,7 +70,7 @@ impl lua_TValue {
   }
 
   #[inline]
-  pub fn set_tt(&mut self, tt: i32) {
+  pub(crate) fn set_tt(&mut self, tt: i32) {
     self.tt = tt;
   }
 
@@ -205,13 +205,13 @@ impl lua_TValue {
 
   /// 判断该值是否为假（cpp `l_isfalse(o)`，lobject.h:112: nil 或 0 值的 boolean 为假）。
   #[inline(always)]
-  pub fn is_falsy(&self) -> bool {
+  pub(crate) fn is_falsy(&self) -> bool {
     self.is_nil() || (self.is_boolean() && self.as_boolean_raw() == 0)
   }
 
   /// 判断该值是否为真（cpp `!l_isfalse(o)`）。
   #[inline(always)]
-  pub fn is_truthy(&self) -> bool {
+  pub(crate) fn is_truthy(&self) -> bool {
     !self.is_falsy()
   }
 
@@ -222,7 +222,7 @@ impl lua_TValue {
   /// 谓词命中分支执行，其前提——tag 与 payload union 成员同步有效（各
   /// `set*value!` 宏的不变量）——与 `ValueView::from_tvalue` 等既有读数路径共享。
   #[inline(always)]
-  pub fn is_c_closure(&self) -> bool {
+  pub(crate) fn is_c_closure(&self) -> bool {
     // SAFETY: is_function() 命中后 as_closure 为同址类型化读数（tag 有效性不变量）。
     self.is_function() && unsafe { self.as_closure() }.is_c != 0
   }
@@ -263,7 +263,7 @@ impl lua_TValue {
   /// （裸指针非空/对齐/已初始化/noalias 独占，寿命不跨栈扩容）随宏收口
   /// 下沉至调用点解引用处保证，同 [`Self::set_nil`]。
   #[inline(always)]
-  pub fn set_bvalue(&mut self, b: i32) {
+  pub(crate) fn set_bvalue(&mut self, b: i32) {
     self.value.b = b;
     self.tt = LuaType::Boolean as i32;
   }
@@ -374,7 +374,7 @@ impl lua_TValue {
   /// # Safety
   /// 同共享核心 `set_gc_tagged`（含「屏障留调用点」红线与 `g` 有效性前提）。
   #[inline]
-  pub unsafe fn set_svalue(&mut self, gc: *mut GCObject, g: *mut global_State) {
+  pub(crate) unsafe fn set_svalue(&mut self, gc: *mut GCObject, g: *mut global_State) {
     // SAFETY: 契约见共享核心 `set_gc_tagged`
     unsafe { self.set_gc_tagged(gc, g, LuaType::String) }
   }

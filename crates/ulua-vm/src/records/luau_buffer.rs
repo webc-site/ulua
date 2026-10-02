@@ -12,4 +12,4 @@ pub struct LuauBuffer {
 }
 
 pub type Buffer = LuauBuffer;
-pub type LuaBuffer = LuauBuffer;
+pub(crate) type LuaBuffer = LuauBuffer;

@@ -9,13 +9,13 @@ impl LuaState {
   }
 
   #[inline(always)]
-  pub fn arg_error(&mut self, narg: i32, extramsg: &str) -> ! {
+  pub(crate) fn arg_error(&mut self, narg: i32, extramsg: &str) -> ! {
     // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
     unsafe { lua_l_argerror_l(self.as_mut_ptr(), narg, extramsg) }
   }
 
   #[inline(always)]
-  pub fn arg_check(&mut self, cond: bool, narg: i32, extramsg: &str) {
+  pub(crate) fn arg_check(&mut self, cond: bool, narg: i32, extramsg: &str) {
     if !cond {
       self.arg_error(narg, extramsg);
     }
