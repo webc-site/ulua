@@ -14,10 +14,15 @@ use crate::{
 /// Build a traceback string from `l1`, optionally prepending `msg`, and push
 /// the result onto `l`. Faithful 1:1 port of `luaL_traceback` from
 /// `luau/VM/src/laux.cpp:381-425`.
-/// # Safety
-/// `l`/`l1` 均须指向存活 `LuaState`：`l1` 的调用栈自 `level` 起各帧可读（逐帧 lua_getinfo 游走），`l` 承接
-/// 最终 pushresult 压栈；`msg` 仅按 C 语义截读至首个 NUL。对应 cpp laux.cpp:377。
-pub unsafe fn lua_l_traceback(l: *mut LuaState, l1: *mut LuaState, msg: Option<&str>, level: i32) {
+/// 调用序契约（正确性，非内存安全；r16-v3 引用形前移：`l` 已为 `&mut LuaState`，
+/// 存活由类型承载）：`l1` 的调用栈自 `level` 起各帧可读（逐帧 lua_getinfo 游走），`l` 承接
+/// 最终 pushresult 压栈；`l1` 保留裸指针——`l1 == l` 的自回溯形态真实存在（rt 全部调用点
+/// 回溯自身、db_traceback `l == l1` 分支同款），引用形将要求声明两笔同时独占借用不相干、
+/// 与既有使用矛盾（同 [`lua_resumeerror`] 的 `from` 判例形）；`msg` 仅按 C 语义截读至
+/// 首个 NUL。对应 cpp laux.cpp:377。
+///
+/// [`lua_resumeerror`]: crate::functions::lua_resumeerror
+pub fn lua_l_traceback(l: &mut LuaState, l1: *mut LuaState, msg: Option<&str>, level: i32) {
   // SAFETY: 契约保证 `L1` 调用栈自 level 起可读、`buf` 可写，帧遍历按 lua_getinfo 语义在界内推进
   unsafe {
     debug_assert!(level >= 0);
