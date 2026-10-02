@@ -3,9 +3,7 @@ use ulua_common::macros::luau_assert::LUAU_ASSERT;
 use crate::{
   enums::{lua_type::LuaType, value_view::ValueView},
   functions::{validateobjref::validateobjref, validateref::validateref},
-  records::{
-    gc_object::GCObject, global_state::global_State, lua_table::LuaTable,
-  },
+  records::{gc_object::GCObject, global_state::global_State, lua_table::LuaTable},
   type_aliases::t_value::TValue,
 };
 

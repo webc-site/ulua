@@ -1,7 +1,10 @@
 use core::{ffi::c_char, mem::size_of};
 
 use crate::{
-  functions::{gettablemode::gettablemode, removeentry::removeentry, tableresizeprotected::tableresizeprotected},
+  functions::{
+    gettablemode::gettablemode, removeentry::removeentry,
+    tableresizeprotected::tableresizeprotected,
+  },
   macros::{
     gkey::{gkey, gval},
     iscleared::iscleared,

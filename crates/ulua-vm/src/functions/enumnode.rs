@@ -1,8 +1,4 @@
-use core::{
-  ffi::c_char,
-  ptr,
-  slice::from_ref,
-};
+use core::{ffi::c_char, ptr, slice::from_ref};
 
 use crate::{
   functions::{c_slice, c_slice_mut, enumtopointer::enumtopointer},
@@ -11,8 +7,8 @@ use crate::{
     twoto::twoto,
   },
   records::{
-    enum_context::EnumContext, gc_object::GCObject, lua_node::LuaNode, lua_table::LuaTable,
-    lua_t_value::TValue,
+    enum_context::EnumContext, gc_object::GCObject, lua_node::LuaNode, lua_t_value::TValue,
+    lua_table::LuaTable,
   },
 };
 
