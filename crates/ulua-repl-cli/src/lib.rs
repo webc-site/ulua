@@ -14,7 +14,9 @@
 //! 边界，其余业务逻辑均为安全 Rust——
 //!
 //! - ulua-vm 的 Lua/C API：以 `*mut LuaState` 收发的栈操作（`lua_*`/`luaL_*`/
-//!   `luau_load`/`(*l).resume` 等），每个调用点带 `// SAFETY:` 论证其存活与栈配平；
+//!   `luau_load`/`(*l).resume` 等），单步调用点带 `// Safety:` 论证其存活与栈配平；
+//!   多步不可拆序列收敛为带 `# Safety` 契约的最小私有封装（`load.rs` 的
+//!   `spawn_module_thread`/`throw`/`prepare`/`check_run`）；
 //! - 装入 VM 的 C-ABI 回调（`extern "C-unwind"`：`lua_loadstring`、`sigint_callback`、
 //!   `profiler_interrupt`、`c_abi_cb!` 生成的 coverage/counters 外壳）——各自带
 //!   `DELIBERATE DEVIATION` 说明；
