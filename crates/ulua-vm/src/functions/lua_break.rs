@@ -4,12 +4,14 @@ use crate::{
   records::lua_state::LuaState,
 };
 
+const ERR_BREAK_ACROSS_C_CALL: &[u8] = b"attempt to break across metamethod/C-call boundary";
+
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub unsafe fn lua_break(l: *mut LuaState) -> i32 {
   unsafe {
     if (*l).n_ccalls > (*l).base_ccalls {
-      lua_g_pusherror_bytes(l, b"attempt to break across metamethod/C-call boundary");
+      lua_g_pusherror_bytes(l, ERR_BREAK_ACROSS_C_CALL);
       lua_d_throw(l, LuaStatus::ErrRun as i32);
     }
 

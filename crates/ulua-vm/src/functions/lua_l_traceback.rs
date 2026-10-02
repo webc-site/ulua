@@ -22,18 +22,6 @@ pub unsafe fn lua_l_traceback(l: *mut LuaState, l1: *mut LuaState, msg: Option<&
   unsafe {
     debug_assert!(level >= 0);
 
-    // 行号十进制直写：itoa 输出与 `core::fmt` 逐字节一致，
-    // 取代 cpp `laux.cpp:401-408` 的手写 `% 10` 反序循环（0 与负数同样正确）
-    /// 前置条件由外层 `lua_l_traceback` 建立：`buf` 已由 `lua_l_buffinit` 初始化，
-    /// `lua_l_addlstring` 经其可写游标追加 itoa 输出。itoa 取数与格式化均为安全运算，
-    /// 故本嵌套私有函数签名安全，`unsafe` 只留在追加游标的内核。
-    fn addsignednum(buf: &mut LuaLStrbuf, n: i32) {
-      let mut digits = Buffer::new();
-      let s = digits.format(n);
-      // SAFETY: 外层 unsafe fn 已对 `buf` 完成 buffinit，游标 p/end 为界内可写区间
-      unsafe { lua_l_addlstring(buf, s.as_bytes()) };
-    }
-
     let mut buf = LuaLStrbuf::new();
     lua_l_buffinit(&mut *l, &mut buf);
 
@@ -48,6 +36,7 @@ pub unsafe fn lua_l_traceback(l: *mut LuaState, l1: *mut LuaState, msg: Option<&
     }
 
     let mut ar: LuaDebug = zeroed();
+    let mut num = Buffer::new();
     let mut i: i32 = level;
 
     while lua_getinfo(l1, i, cstr(b"sln\0"), &mut ar) != 0 {
@@ -62,7 +51,7 @@ pub unsafe fn lua_l_traceback(l: *mut LuaState, l1: *mut LuaState, msg: Option<&
 
       if ar.currentline > 0 {
         lua_l_addchar(&mut buf, b':');
-        addsignednum(&mut buf, ar.currentline);
+        lua_l_addlstring(&mut buf, num.format(ar.currentline).as_bytes());
       }
 
       if !ar.name.is_null() {

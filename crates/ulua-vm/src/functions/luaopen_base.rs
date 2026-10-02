@@ -43,16 +43,19 @@ static BASE_FUNCS: [LuaLReg; 19] = [
   LuaLReg::new(b"typeof", lua_b_typeof_arm),
 ];
 
+const G_NAME: &[u8] = b"_G";
+const VERSION_NAME: &[u8] = b"_VERSION";
+
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub unsafe fn luaopen_base(l: *mut LuaState) -> i32 {
   unsafe {
     (*l).push_value(LUA_GLOBALSINDEX);
-    (*l).set_global_bytes(b"_G");
+    (*l).set_global_bytes(G_NAME);
 
-    lua_l_register_bytes(l, Some(b"_G"), &BASE_FUNCS);
+    lua_l_register_bytes(l, Some(G_NAME), &BASE_FUNCS);
     lua_pushlstring_bytes(l, b"Luau");
-    (*l).set_global_bytes(b"_VERSION");
+    (*l).set_global_bytes(VERSION_NAME);
 
     auxopen(
       l,

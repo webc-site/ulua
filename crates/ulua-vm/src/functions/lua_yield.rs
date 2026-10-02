@@ -5,6 +5,8 @@ use crate::{
   records::lua_state::LuaState,
 };
 
+const ERR_YIELD_ACROSS_C_CALL: &[u8] = b"attempt to yield across metamethod/C-call boundary";
+
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub unsafe fn lua_yield(l: *mut LuaState, nresults: i32) -> i32 {
@@ -13,7 +15,7 @@ pub unsafe fn lua_yield(l: *mut LuaState, nresults: i32) -> i32 {
     api_check!(l, nresults as isize <= (*l).top.offset_from((*l).base));
 
     if (*l).n_ccalls > (*l).base_ccalls {
-      lua_g_pusherror_bytes(l, b"attempt to yield across metamethod/C-call boundary");
+      lua_g_pusherror_bytes(l, ERR_YIELD_ACROSS_C_CALL);
       lua_d_throw(l, LuaStatus::ErrRun as i32);
     }
 

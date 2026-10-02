@@ -8,6 +8,8 @@ use crate::{
   records::lua_state::LuaState,
 };
 
+const DEFAULT_USERDATA_TYPE: &str = "userdata";
+
 /// # Safety
 /// 调用方须保证：`l` 为存活调用帧、`ud` 为可读实参栈槽、`tag` 落在 userdata 元表注册界内
 /// （否则 `lua_touserdatatagged` 解引用 `udatametatable[tag]` 即 UB）；失配路径经 `l` 抛错、不返回空。cpp laux.cpp:140
@@ -19,7 +21,7 @@ pub(crate) unsafe fn lua_l_checkudatatagged(l: *mut LuaState, ud: i32, tag: i32)
     }
 
     let tname = lua_getuserdataname_bytes(l, tag);
-    let tname_str = from_utf8(tname).unwrap_or("userdata");
+    let tname_str = from_utf8(tname).unwrap_or(DEFAULT_USERDATA_TYPE);
     lua_l_typeerror_l(l, ud, tname_str);
   }
 }

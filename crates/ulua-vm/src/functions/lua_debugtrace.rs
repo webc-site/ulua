@@ -40,7 +40,7 @@ pub unsafe fn lua_debugtrace(l: *mut LuaState) -> *const c_char {
       let mut num = Buffer::new();
 
       let mut level: i32 = 0;
-      while lua_getinfo(l, level, cstr(b"sln\0"), &mut ar as *mut LuaDebug) != 0 {
+      while lua_getinfo(l, level, cstr(b"sln\0"), &mut ar) != 0 {
         if !ar.short_src.is_null() {
           offset = append_bytes(buf, offset, cstr_bytes(ar.short_src));
         }
