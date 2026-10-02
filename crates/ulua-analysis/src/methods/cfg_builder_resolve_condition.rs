@@ -53,10 +53,12 @@ impl CfgBuilder {
           .use_defs
           .get_or_insert(from_ref(expr).cast_mut()) = def;
         // return arena.proposition(def, /* sense */ true);
-        // Safety: CfgBuilder 构造契约——`allocator` 指向存活 Allocator，本 pass
-        // 单线程独占；按次 deref 对应 cpp `allocator->refinementArena`。
+        // arena 句柄经 `get_mut` 物化本帧独占借用（arena_handle 模块契约，
+        // 对应 cpp `allocator->refinementArena`），原裸指针 deref 的 unsafe 消亡。
         return Some(
-          unsafe { &mut *self.allocator }
+          self
+            .allocator
+            .get_mut()
             .refinement_arena
             .proposition_def_id_bool(def, true),
         );
@@ -87,8 +89,8 @@ impl CfgBuilder {
             // bool sense = binop->op == AstExprBinary::CompareEq;
             let sense = op == AstExprBinaryOp::CompareEq;
             // return arena.typeProposition(def, tg->type, tg->is_typeof, sense);
-            // Safety: 同上——allocator 存活且本 pass 独占。
-            let arena = &mut unsafe { &mut *self.allocator }.refinement_arena;
+            // arena 句柄经 `get_mut` 物化本帧独占借用（arena_handle 模块契约）。
+            let arena = &mut self.allocator.get_mut().refinement_arena;
             return Some(refinement_arena_type_proposition(
               arena,
               def,
@@ -109,9 +111,11 @@ impl CfgBuilder {
         if op == AstExprBinaryOp::And {
           // (A and B) truthy => both truthy; a missing side still preserves the other.
           if let (Some(l), Some(r)) = (l_ref, r_ref) {
-            // Safety: 同上——allocator 存活且本 pass 独占，读改写仅触及 refinementArena。
+            // arena 句柄经 `get_mut` 物化本帧独占借用（arena_handle 模块契约）。
             return Some(
-              unsafe { &mut *self.allocator }
+              self
+                .allocator
+                .get_mut()
                 .refinement_arena
                 .conjunction_mut(l, r),
             );
@@ -120,9 +124,11 @@ impl CfgBuilder {
         } else if op == AstExprBinaryOp::Or {
           // (A or B) truthy => at least one truthy; an unrefined side means we can't narrow.
           if let (Some(l), Some(r)) = (l_ref, r_ref) {
-            // Safety: 同上——allocator 存活且本 pass 独占，读改写仅触及 refinementArena。
+            // arena 句柄经 `get_mut` 物化本帧独占借用（arena_handle 模块契约）。
             return Some(
-              unsafe { &mut *self.allocator }
+              self
+                .allocator
+                .get_mut()
                 .refinement_arena
                 .disjunction_mut(l, r),
             );
@@ -140,9 +146,11 @@ impl CfgBuilder {
           //     return arena.negation(*inner);
           // expr 已句柄化；resolve_condition 为既有裸指针 API，经 as_ptr 桥接。
           if let Some(inner) = self.resolve_condition(unop.expr.as_ptr()) {
-            // Safety: 同上——allocator 存活且本 pass 独占，读改写仅触及 refinementArena。
+            // arena 句柄经 `get_mut` 物化本帧独占借用（arena_handle 模块契约）。
             return Some(
-              unsafe { &mut *self.allocator }
+              self
+                .allocator
+                .get_mut()
                 .refinement_arena
                 .negation_mut(inner),
             );

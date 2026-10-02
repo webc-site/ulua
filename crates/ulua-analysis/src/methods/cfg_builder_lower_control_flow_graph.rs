@@ -15,12 +15,8 @@ use crate::{
   enums::block_kind::BlockKind,
   functions::extract_l_value_symbol::extract_l_value_symbol,
   records::{
-    arena_handle::{alias, alias_ref},
-    assign::Assign,
-    block_registry::resolve_block_mut,
-    cfg_builder::CfgBuilder,
-    declare::Declare,
-    symbol::Symbol,
+    arena_handle::alias_ref, assign::Assign, block_registry::resolve_block_mut,
+    cfg_builder::CfgBuilder, declare::Declare, symbol::Symbol,
   },
   type_aliases::{
     block_id::BlockId, def_id_control_flow_graph::DefId,
@@ -174,7 +170,7 @@ impl CfgBuilder {
     self.seal(else_block);
     // if (ref) emitRefineInstruction(elseBlock, allocator->refinementArena.negation(*ref));
     if let Some(r) = ref_opt {
-      let neg = alias(self.allocator).refinement_arena.negation_mut(r);
+      let neg = self.allocator.get_mut().refinement_arena.negation_mut(r);
       self.emit_refine_instruction(else_block, neg);
     }
 
@@ -264,7 +260,7 @@ impl CfgBuilder {
     );
     // if (ref) emitRefineInstruction(exitBlock, allocator->refinementArena.negation(*ref));
     if let Some(r) = ref_opt {
-      let neg = alias(self.allocator).refinement_arena.negation_mut(r);
+      let neg = self.allocator.get_mut().refinement_arena.negation_mut(r);
       self.emit_refine_instruction(exit_block, neg);
     }
     // seal(exitBlock);

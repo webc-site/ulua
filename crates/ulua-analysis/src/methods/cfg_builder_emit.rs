@@ -9,8 +9,8 @@ use ulua_ast::records::{ast_stat_assign::AstStatAssign, ast_stat_local::AstStatL
 
 use crate::{
   records::{
-    arena_handle::alias, assign::Assign, block_registry::resolve_block_mut,
-    cfg_builder::CfgBuilder, declare::Declare, join::Join, refine::Refine,
+    assign::Assign, block_registry::resolve_block_mut, cfg_builder::CfgBuilder, declare::Declare,
+    join::Join, refine::Refine,
   },
   type_aliases::{
     block_id::BlockId, def_id_control_flow_graph::DefId, instr_id::InstrId,
@@ -69,7 +69,8 @@ impl CfgBuilder {
     //   InstrId inst = allocator->newInstruction<T>(std::forward<Args>(args)...);
     //   block->instructions.emplace_back(inst);
     //   return NotNull{inst->template get_if<T>()};
-    let allocator = alias(self.allocator);
+    // arena 句柄经 `get_mut` 物化本帧独占借用（arena_handle 模块契约）。
+    let allocator = self.allocator.get_mut();
     let inst = allocator.new_instruction(args.into_instruction());
     // block 句柄经注册表写回（见 `block_registry` 模块契约）：inst 是上一行刚
     // 发放的存活指令句柄，只入列不解析（转储/Join 补全侧再经
