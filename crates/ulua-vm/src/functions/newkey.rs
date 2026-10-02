@@ -84,12 +84,22 @@ pub(crate) unsafe fn newkey(l: *mut LuaState, t: *mut LuaTable, key: &TValue) ->
 
     let mut mp = mainposition(t, key);
     if !matches!(ValueView::from_tvalue(&*gval!(mp)), ValueView::Nil) || eq(mp, dummynode) {
-      let n = getfreepos(t);
-      if n.is_null() {
+      // cpp `LuaNode* n = getfreepos(t); if (n == NULL)`：`None` 即「哈希部分无空槽」，
+      // 走 rehash 扩容后转 `arrayornewkey`。空槽缺席是 cpp 的正常控制流分支，不是
+      // 不变式违例，故此处用 `let-else` 消费 `Option`，无 unwrap 也无断言被吞。
+      let Some(free) = getfreepos(t) else {
         rehash(l, t, key);
         return arrayornewkey(l, t, key);
-      }
+      };
 
+      // cpp `LUAU_ASSERT(n != dummynode)`：断言语义原样保留，且可论证恒成立（§6 允许
+      // 的 100% 安全处）—— `getfreepos` 只可能返回 `gnode!(t, i)`（`i < lastfree`）落点，
+      // 而哨兵表由 `luaH_new`/`setnodevector(size=0)` 建立 `node == DUMMYNODE` 与
+      // `lastfree == 0` 的配对不变式（见 `LuaTable::is_hash_dummy`），`lastfree == 0` 使
+      // 扫描循环一次都不执行，故 `Some` 永不携带哨兵地址；非哨兵表的 `node` 是
+      // `setnodevector` 经 `luaM_newarray` 分配的恰 `sizenode` 个桶的实向量，`as_ptr` 与
+      // 后续节点搬运（`*n = *mp`、`offset_from` 链改写）均落在该界内。
+      let n = free.as_ptr();
       LUAU_ASSERT!(!eq(n, dummynode));
 
       let mut mk = TValue::default();
