@@ -30,6 +30,15 @@ s_settable/lua_v_settable 3.2%），COUNT 循环读走 lua_h_get 哈希查找 18
 setnodekey 拷贝宽度），收益有限。
 
 ### E2 CALL/RETURN 快路内联 + arity 特化（fib 2.1 / micro_call 1.5 / binarytrees 1.4）
+
+**2026-10-02 补充实测**：本轮核查发现 `call_arm` 宏已是 cpp 式内联快路
+（Lua→Lua 调用直接 `continue` 同一循环，无 performcall 重入）——E2 的
+「重入开销」前提不成立。剩余差距 = 派发次数 + 每调用帧建立开销（Rust ~20+ 指令
+vs LuaJIT asm ~10），前者已到融合收益边界：micro_call 的 `LOADN → JUMPIFNOTLE`
+（13.7% 边）融合实测 +1.2%（不显著）、fib 付探针税 -10% 风险 → 还原弃用
+（LOADN 尾过热，单一用例的边不配探针）。call-boundary 边（Subk→Callfb 等）
+不可融合（帧转换）。fib/micro_call 的剩余差距记为**调用帧建立成本的结构性差距**；
+可做残余：checkstackfornewci 与 ci 字段写的微成本（需 samply 精确归因后另立项）。
 fib/micro_call/binarytrees 的转移表被 CALLFB/RETURN 边主导（各 15%），
 融合无法跨调用帧。LuaJIT asm fast path：判 Lua 闭包 + nargs==nparams + 推帧
 全在解释器循环内完成，不重入。落点：`luau_execute.rs` CALL 臂内联 precall 的
