@@ -29,6 +29,16 @@ s_settable/lua_v_settable 3.2%），COUNT 循环读走 lua_h_get 哈希查找 18
 **语义受限差距**；残余可做：cpp 同构下哈希路径微成本（getfreepos 扫描、
 setnodekey 拷贝宽度），收益有限。
 
+### J4 census 裁决（2026-10-02，读数已入册）
+oop native census（3 轮 + 预热，TSFB 全站点）：主体 proto#0 的 16 个 KS 站点每站
+仅 4 次 miss（= 启动调用数，稳态零 miss——单态 IC 全命中）；热点集中在
+proto#1 pc=6：**480K 次 miss、last_tag=7（table 恒定）** = spike 剧本一的
+**插入型 SETTABLEKS**（每轮新表构造 `{x=x,y=y}`，键缺席 → IC 无槽可命中）。
+- PIC-2 对插入型站点**无收益**（键缺席无缓存可命中）→ J4「2 槽 PIC」降级搁置；
+- oop 的实际杠杆 = ① `SETTABLEKS` fallback 的**插入快路**（fresh-slot 直插，
+  绕过 execute_settableks 全帧路径）+ ② NEWTABLE 尺寸提示消费；
+- 观测基建（P0 门控修复 + SETTABLEKS bump 对称接线 + census 探针）已就位。
+
 ### E2 CALL/RETURN 快路内联 + arity 特化（fib 2.1 / micro_call 1.5 / binarytrees 1.4）
 
 **2026-10-02 补充实测**：本轮核查发现 `call_arm` 宏已是 cpp 式内联快路

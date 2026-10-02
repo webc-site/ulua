@@ -6,6 +6,7 @@ use ulua_common::{
   },
 };
 use ulua_vm::{
+  functions::type_feedback::tsfb_bump,
   enums::tms::TMS,
   type_aliases::{stk_id::StkId, t_value::TValue},
 };
@@ -37,6 +38,16 @@ pub unsafe fn execute_settableks(
   let pc_ptr = frame.insn_offset(pc, 2);
   let ra = frame.reg(luau_insn_a(insn) as i32);
   let rb = frame.reg(luau_insn_b(insn) as i32);
+
+  // J1 Phase 2a/2b：guard-miss 观测入口（与 execute_gettableks 对称；
+  // 区分 GET vs SET 插入/轮换的 census 归因）。
+  {
+    let cl = frame.current_closure();
+    let proto = unsafe { (*cl).inner.l.p };
+    let pc_off = unsafe { pc.offset_from((*proto).code) } as u32;
+    let tag = unsafe { (*rb).tt } as u8;
+    unsafe { tsfb_bump(proto, pc_off, tag) };
+  }
   // SETUDATAKS 的常量号在 AUX 字低 16 位, 其余走整 AUX 字。
   let kw = if luau_insn_op(insn) == LuauOpcode::LOP_SETUDATAKS as u32 {
     luau_insn_aux_kv16(aux)
