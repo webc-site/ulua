@@ -534,7 +534,7 @@ pub fn objlen(l: L, idx: c_int) -> c_int {
 
 /// `lua_gc`：`what` 传 [`LuaGcOp`] 的 C 编码值。
 pub fn gc(l: L, what: c_int, data: c_int) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
+  // r16-v3：callee 已前移 `&mut LuaState` 引用形，经 `state_mut` 收口点直传独占引用。
   lua_gc(state_mut(l), what, data)
 }
 
