@@ -1,5 +1,7 @@
 //! Source: `VM/src/lgc.cpp` (lgc.cpp:321-366, hand-ported)
 
+use core::slice::from_raw_parts;
+
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
@@ -45,12 +47,22 @@ pub(crate) unsafe fn traversetable(g: *mut global_State, h: *mut LuaTable) -> i3
       return 1;
     }
     if weakvalue == 0 {
-      let mut i = (*h).sizearray;
-      while i > 0 {
-        i -= 1;
-        markvalue!(g, (*h).array.add(i as usize));
+      // r12-E4 窗化（数组段取窗遍历）：倒序 `.rev()` 与 cpp `for (i = luaH_size(t); i--; )`
+      // 逐位同序；markvalue 只读槽位、经 reallymarkobject 染灰**他对象**头部，不写不搬
+      // 本表 array（窗存续期内无重分配）。sizearray==0 时 array 可为 null，cpp 零次
+      // 迭代同形，判空后派生窗。
+      if !(*h).array.is_null() {
+        for e in from_raw_parts((*h).array, (*h).sizearray as usize)
+          .iter()
+          .rev()
+        {
+          markvalue!(g, e);
+        }
       }
     }
+    // r12-E4 窗化裁决（哈希段保留原形）：哨兵表 node 指向不可变 static 单格，出借
+    // &mut 窗即别名违例，而 removeentry 收 *mut 桶指针且对可回收键就地写 DeadKey；
+    // 白灰判据/倒序/removeentry 次序逐字保持，gnode! 依 E1 裁决不收编。
     let mut i: i32 = sizenode!(h);
     while i > 0 {
       i -= 1;
