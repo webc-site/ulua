@@ -13,10 +13,7 @@ pub unsafe fn lua_yield(l: *mut LuaState, nresults: i32) -> i32 {
     api_check!(l, nresults as isize <= (*l).top.offset_from((*l).base));
 
     if (*l).n_ccalls > (*l).base_ccalls {
-      lua_g_pusherror_bytes(
-        l,
-        b"attempt to yield across metamethod/C-call boundary",
-      );
+      lua_g_pusherror_bytes(l, b"attempt to yield across metamethod/C-call boundary");
       lua_d_throw(l, LuaStatus::ErrRun as i32);
     }
 

@@ -9,10 +9,7 @@ use crate::{
 pub unsafe fn lua_break(l: *mut LuaState) -> i32 {
   unsafe {
     if (*l).n_ccalls > (*l).base_ccalls {
-      lua_g_pusherror_bytes(
-        l,
-        b"attempt to break across metamethod/C-call boundary",
-      );
+      lua_g_pusherror_bytes(l, b"attempt to break across metamethod/C-call boundary");
       lua_d_throw(l, LuaStatus::ErrRun as i32);
     }
 

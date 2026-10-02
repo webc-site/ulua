@@ -15,13 +15,12 @@ pub(crate) unsafe fn lua_getuserdataname_bytes<'a>(l: *mut LuaState, tag: i32) -
     api_check!(l, (tag as u32) < LUA_UTAG_LIMIT as u32);
 
     let mt = (*(*l).global).udatamt[tag as usize];
-    if !mt.is_null() {
-      if let Some(type_) = lua_h_getstr(&*mt, (*(*l).global).tmname[TMS::TmType as usize])
+    if !mt.is_null()
+      && let Some(type_) = lua_h_getstr(&*mt, (*(*l).global).tmname[TMS::TmType as usize])
         && type_.get().is_string()
       {
         return cstr_bytes(svalue!(type_.get()));
       }
-    }
 
     b"userdata"
   }
