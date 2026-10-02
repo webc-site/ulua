@@ -5,7 +5,7 @@ pub fn is_unwind_supported() -> bool {
     target_os = "windows",
     any(target_arch = "x86_64", target_arch = "x86")
   ))]
-  return true;
+  { true }
 
   // #elif defined(__APPLE__) && defined(CODEGEN_TARGET_A64)：
   // libunwind 在 macOS 12 及更早（对应 osrelease 21）假定 JIT 帧使用指针
@@ -73,7 +73,7 @@ pub fn is_unwind_supported() -> bool {
       any(target_arch = "x86_64", target_arch = "x86")
     ))
   ))]
-  return true;
+  { true }
 
   // #else → false
   #[cfg(not(any(
@@ -88,5 +88,5 @@ pub fn is_unwind_supported() -> bool {
       not(all(target_os = "macos", target_arch = "aarch64"))
     )
   )))]
-  return false;
+  false
 }

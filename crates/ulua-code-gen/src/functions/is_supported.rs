@@ -43,18 +43,18 @@ pub fn is_supported() -> bool {
   #[cfg(target_arch = "x86_64")]
   {
     use core::arch::x86_64::__cpuid;
-    return __cpuid(1).ecx & (1 << 28) != 0;
+    __cpuid(1).ecx & (1 << 28) != 0
   }
 
   #[cfg(target_arch = "x86")]
   {
     use core::arch::x86::__cpuid;
-    return __cpuid(1).ecx & (1 << 28) != 0;
+    __cpuid(1).ecx & (1 << 28) != 0
   }
 
   // cpp: #elif defined(CODEGEN_TARGET_A64) return true;
   #[cfg(all(target_arch = "aarch64", not(target_os = "windows")))]
-  return true;
+  { true }
 
   // cpp: #else return false;
   #[cfg(not(any(
@@ -62,5 +62,5 @@ pub fn is_supported() -> bool {
     target_arch = "x86",
     all(target_arch = "aarch64", not(target_os = "windows"))
   )))]
-  return false;
+  false
 }
