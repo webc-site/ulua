@@ -36,8 +36,8 @@ impl LuaState {
 
   #[inline(always)]
   pub fn is_yieldable(&self) -> bool {
-    // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_isyieldable(self.read_ptr()) != 0 }
+    // r16-v3：callee 已前移 `&LuaState` 引用形，本门面直传只读借用，无 unsafe 残留。
+    lua_isyieldable(self) != 0
   }
 
   #[inline(always)]

@@ -46,7 +46,7 @@ pub(crate) unsafe fn resume_finish(l: *mut LuaState, mut status: i32, old_n_ccal
         break;
       }
 
-      if lua_isyieldable(l) != 0
+      if lua_isyieldable(&*l) != 0
         && let Some(debugprotectederror) = (*l).gs_ref().cb.debugprotectederror
       {
         debugprotectederror(l);

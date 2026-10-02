@@ -6,8 +6,8 @@
 /// `lua_v_doarithimpl.rs` 的 `arith_tm_exports!` 先例同构（lua_b_* 族 16 壳与
 /// lua_gettop/lua_status/lua_isthreadreset/lua_singlestep/lua_c_allocationrate/
 /// lua_encodepointer/lua_g_hasnative/lua_g_onbreak/lua_l_buffinit/
-/// lua_pushinteger_64/lua_setthreaddata/lua_stackdepth/lua_a_pushvalue 已随 vm 侧
-/// 接收者前移退役为显式壳，见 `functions/lua_status.rs` 先例）。与手写逐壳的差异仅在
+/// lua_pushinteger_64/lua_setthreaddata/lua_stackdepth/lua_a_pushvalue/lua_isyieldable
+/// 已随 vm 侧接收者前移退役为显式壳，见 `functions/lua_status.rs` 先例）。与手写逐壳的差异仅在
 /// 文本层：透传目标在 doc 契约中以 `ulua_vm::functions::` 全路径书写；体内
 /// `// Safety:` 理由注释转通用表述。导出符号名、签名与 rustdoc 逐参数契约语义与
 /// 逐字节手写版一致。

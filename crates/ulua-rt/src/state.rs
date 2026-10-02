@@ -216,8 +216,7 @@ pub(crate) fn raw_reserve_stack(state: StateView<'_>, slots: i32) {
 /// 保证 state 正由当前线程驱动。
 #[inline]
 pub(crate) fn is_yieldable(state: StateView<'_>) -> bool {
-  // Safety: 族级契约;`lua_isyieldable` 只读执行上下文。
-  unsafe { lua_isyieldable(state.as_ptr().cast_mut()) != 0 }
+  lua_isyieldable(&state) != 0
 }
 
 /// 读栈深（`lua_gettop`）的 safe 门面：`LuaState::get_top` 是 ulua-vm 已收口的

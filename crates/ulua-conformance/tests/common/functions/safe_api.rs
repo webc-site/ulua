@@ -1048,8 +1048,8 @@ pub fn dump(
 
 /// `lua_isyieldable`（C 侧 0/非 0）。
 pub fn isyieldable(l: L) -> c_int {
-  // Safety: `l` 存活（模块级契约）；只读当前上下文的可让出位。
-  unsafe { lua_isyieldable(l) }
+  // r16-v3：callee 已前移 `&LuaState` 引用形，经 `state_ref` 收口点直传只读引用。
+  lua_isyieldable(state_ref(l))
 }
 
 /// `lua_yield`：以栈顶 `nresults` 个值让出回宿主（只应在可 yield 的 C 回调内调用）。
