@@ -704,10 +704,8 @@ pub(crate) fn co_status(from: StateView<'_>, co: StateView<'_>) -> i32 {
 /// 前提;`lua_xmove` 自身亦如此约定）；`n` 在 `to` 侧已预留头寸内；`from` 顶恰有
 /// `n` 个待搬值且不剥走活寄存器（协程须挂起）。
 #[inline]
-pub(crate) fn move_slots(from: StateView<'_>, to: StateView<'_>, n: i32) {
-  // Safety: 调用序前提由 thread.rs 的 xmove 装配(其 status 预检 +
-  // `ensure_stack` 预留)维持;搬运只界内读写。
-  unsafe { lua_xmove(from.as_mut_ptr(), to.as_mut_ptr(), n) }
+pub(crate) fn move_slots(mut from: StateView<'_>, mut to: StateView<'_>, n: i32) {
+  lua_xmove(&mut from, &mut to, n)
 }
 
 /// 对协程 `co` 跑 `lua_resume(co, from, nargs)`，返回 raw 状态码。

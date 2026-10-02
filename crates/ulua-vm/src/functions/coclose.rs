@@ -48,7 +48,7 @@ pub(crate) unsafe fn coclose(l: *mut LuaState) -> i32 {
       } else if (*co).status as i32 == LuaStatus::ErrErr as i32 {
         (*l).push_str(LUA_ERRERRMSG_STR);
       } else if (*co).get_top() != 0 {
-        lua_xmove(co, l, 1); // move error message
+        lua_xmove(&mut *co, &mut *l, 1); // move error message
       }
 
       lua_resetthread(&mut *co);

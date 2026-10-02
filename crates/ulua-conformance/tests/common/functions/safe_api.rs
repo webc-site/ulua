@@ -1235,9 +1235,8 @@ pub fn tothread(l: L, idx: c_int) -> Option<L> {
 
 /// `lua_xmove`：同 VM 内两线程间搬 `n` 个栈值。
 pub fn xmove(from: L, to: L, n: c_int) {
-  // Safety: 两侧同属一个存活 VM 且为不同 state、`from` 顶恰有 `n` 个待搬值
-  //（用例配平契约）。
-  unsafe { lua_xmove(from, to, n) }
+  // r16-v3：callee 已前移引用形，经 `state_mut` 收口点直传两侧独占引用（不同 state 前提见上）。
+  lua_xmove(state_mut(from), state_mut(to), n)
 }
 
 /// `lua_setsafeenv`：切换 `objindex` 处环境表的 safeenv 标志。

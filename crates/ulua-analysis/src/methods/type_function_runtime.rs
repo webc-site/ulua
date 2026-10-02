@@ -406,7 +406,7 @@ impl TypeFunctionRuntime {
     let g = alias(global_vm);
     unsafe { g.push_lightuserdata(from_mut(&mut *function).cast()) };
     // SAFETY: VM 边界——同帧新建线程与主线程间搬运 1 槽，单线程串行。
-    unsafe { lua_xmove(l_vm, global_vm, 1) };
+    unsafe { lua_xmove(&mut *l_vm, &mut *global_vm, 1) };
     lua_settable(&mut *g, LUA_REGISTRYINDEX);
 
     popper.luau_temp_thread_popper();

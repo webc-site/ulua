@@ -33,7 +33,7 @@ pub(crate) unsafe fn auxresume(l: *mut LuaState, co: *mut LuaState, narg: i32) -
       if lua_checkstack(&mut *co, narg) == 0 {
         luaL_error!(l, "too many arguments to resume");
       }
-      lua_xmove(l, co, narg);
+      lua_xmove(&mut *l, &mut *co, narg);
     } else {
       // coroutine might be completely full already
       if ((*co).top.offset_from((*co).base) as i32) > LUAI_MAXCSTACK {
@@ -51,13 +51,13 @@ pub(crate) unsafe fn auxresume(l: *mut LuaState, co: *mut LuaState, narg: i32) -
         if nres + 1 > LUA_MINSTACK && lua_checkstack(&mut *l, nres + 1) == 0 {
           luaL_error!(l, "too many results to resume");
         }
-        lua_xmove(co, l, nres); // move yielded values
+        lua_xmove(&mut *co, &mut *l, nres); // move yielded values
       }
       nres
     } else if status == LuaStatus::Break as i32 {
       CO_STATUS_BREAK
     } else {
-      lua_xmove(co, l, 1); // move error message
+      lua_xmove(&mut *co, &mut *l, 1); // move error message
       CO_STATUS_ERROR
     }
   }

@@ -399,7 +399,7 @@ impl RequireHost for MemHost {
     unsafe {
       let gl = lua_mainthread(&*l);
       let ml = lua_newthread(gl);
-      lua_xmove(gl, l, 1);
+      lua_xmove(&mut *gl, &mut *l, 1);
       // new thread needs to have the globals sandboxed
       lua_l_sandboxthread(ml);
 
@@ -421,7 +421,7 @@ impl RequireHost for MemHost {
       }
 
       // add ML result to l stack, then remove the ML thread slot
-      lua_xmove(ml, l, 1);
+      lua_xmove(&mut *ml, &mut *l, 1);
       (*l).remove(-2);
       1
     }
