@@ -33,7 +33,11 @@ pub unsafe fn lua_getinfo(
 
     if level < 0 {
       // element has to be within stack
-      if (-level) as isize > (*l).top.offset_from((*l).base) {
+      // r16-b2 收编：顶-基槽距读数落既有 get_top 门面——其本体 slot_distance(base, top)
+      // 即被替代式 `top.offset_from(base)` 的镜像（现读位点不变）。比较两侧同折 i32：
+      // 槽距受 LUAI_MAXSTACK 约束、远小于 i32::MAX 无截差，`-level` 本为 i32 负数取反
+      // （求值形不变），isize 式与 i32 式在现域逐值同真值、比较方向不变
+      if (-level) > (*l).get_top() {
         return 0;
       }
 
