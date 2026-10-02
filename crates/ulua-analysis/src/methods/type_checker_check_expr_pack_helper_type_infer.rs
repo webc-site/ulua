@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use core::ptr::{null, null_mut};
+use core::ptr::null;
 
 use ulua_ast::{
   enums::ast_expr_ref::AstExprRef,
@@ -76,11 +76,12 @@ impl TypeChecker {
 
     let func_loc = alias_ref(expr.func).base.location;
 
-    let mut self_type: TypeId = null_mut();
-    let function_type: TypeId;
-    let actual_function_type: TypeId;
-
-    if expr.self_ {
+    // §2 清扫批（W3）判定：业务层未初始化占位哨兵消解为 `Option`——cpp
+    // TypeInfer.cpp:4523 `TypeId selfType = nullptr;` 的空值仅在 `expr.self` 为假时存在，
+    // 且下游只在 `if (expr.self)` 守卫内读取（cpp/Rust 同条件），空值从不被消费，不属
+    // cpp 侧「未命中/缺席」语义。缺席分支（非 self 调用不前置首参）由 `Option::None` +
+    // `if let` 逐字保留，未吞掉任何守卫。
+    let (function_type, actual_function_type, self_type) = if expr.self_ {
       let Some(index_expr) =
         ast_node_try_as::<AstExprIndexName>(alias_ref(expr.func as *const AstNode))
       else {
@@ -90,7 +91,7 @@ impl TypeChecker {
         );
       };
 
-      self_type = self
+      let self_type = self
         .check_expr(
           scope,
           // index_expr.expr 已句柄化恒非空：.get() 共享引用仅供本次只读 checkExpr。
@@ -99,7 +100,7 @@ impl TypeChecker {
           false,
         )
         .r#type;
-      self_type = self.strip_from_nil_and_report(self_type, &func_loc);
+      let self_type = self.strip_from_nil_and_report(self_type, &func_loc);
 
       // Note: index 是 parser 拷入 arena 的 NUL 结尾 C 字符串，as_str_or_empty
       // 只读共享借用，不涉及 unsafe。
@@ -111,8 +112,8 @@ impl TypeChecker {
         &expr.base.base.location,
         /* addErrors= */ true,
       );
-      if let Some(prop_ty) = prop_ty {
-        function_type = prop_ty;
+      let (function_type, actual_function_type) = if let Some(prop_ty) = prop_ty {
+        let function_type = prop_ty;
         let to_instantiate =
           if fflag::LuauExplicitTypeInstantiationSupport.get() && expr.type_arguments.size != 0 {
             self.instantiate_type_parameters(
@@ -125,17 +126,25 @@ impl TypeChecker {
           } else {
             function_type
           };
-        actual_function_type = self.instantiate(scope, to_instantiate, func_loc, null());
+        (
+          function_type,
+          self.instantiate(scope, to_instantiate, func_loc, null()),
+        )
       } else {
-        function_type = self.error_recovery_type_scope_ptr(scope);
-        actual_function_type = function_type;
-      }
+        let function_type = self.error_recovery_type_scope_ptr(scope);
+        (function_type, function_type)
+      };
+      (function_type, actual_function_type, Some(self_type))
     } else {
-      function_type = self
+      let function_type = self
         .check_expr(scope, alias_ref(expr.func), None, false)
         .r#type;
-      actual_function_type = self.instantiate(scope, function_type, func_loc, null());
-    }
+      (
+        function_type,
+        self.instantiate(scope, function_type, func_loc, null()),
+        None,
+      )
+    };
 
     let ret_pack: TypePackId;
     if let Some(free) = get_type::get::<FreeType>(actual_function_type) {
@@ -189,7 +198,9 @@ impl TypeChecker {
       );
     }
 
-    if expr.self_ {
+    // 原 `if expr.self_` + 可空 `selfType` 哨兵的 cpp 形态：self_type 仅在 self 调用时为
+    // `Some`，`if let` 守卫与 cpp 缺席分支逐字同构。
+    if let Some(self_type) = self_type {
       arg_pack = self.add_type_pack_type_pack_var(TypePackVar::from(TypePack::new(
         Vec::from([self_type]),
         Some(arg_pack),
