@@ -1,6 +1,7 @@
 use core::{
   ffi::c_void,
   fmt::{Debug, Formatter, Result},
+  mem::{align_of, size_of},
   ptr, slice,
 };
 
@@ -30,6 +31,14 @@ pub type TValue = lua_TValue;
 /// `setvvalue` 的 3/4-lane 两形态）：3-lane 构建写满 `value`+`extra` 12 字节，
 /// 4-lane 构建视图多覆盖的本槽尾字节随后被 `tt` 置写覆盖，与旧宏裸指针写逐位一致。
 const VVALUE_LANES: usize = if LUA_VECTOR_SIZE == 4 { 4 } else { 3 };
+
+// 布局冻结前提（r17-c）：`as_vector_ref`/`set_vvalue` 的槽起始 f32 lane 视图
+// 唯一依赖「TValue 尺寸覆盖 lane 字节段、对齐不低于 f32」，由编译期断言背书，
+// 是两处最小 `unsafe` 视图的全部界内性论证。
+const _: () = assert!(
+  size_of::<lua_TValue>() >= VVALUE_LANES * size_of::<f32>()
+    && align_of::<lua_TValue>() >= align_of::<f32>()
+);
 
 impl Debug for lua_TValue {
   fn fmt(&self, f: &mut Formatter<'_>) -> Result {
@@ -237,6 +246,9 @@ impl lua_TValue {
   #[inline(always)]
   pub fn as_vector_ref(&self) -> &[f32; 3] {
     debug_assert!(self.is_vector());
+    // SAFETY: 布局断言（VVALUE_LANES ≥ 3 ⇒ 12 字节 ≤ size_of::<TValue>()，对齐 ≥ f32）
+    // 保证视图界内且对齐；f32 无无效位模式，任意字节读数皆有定义；tag 不变量
+    // （lane 由 `set_vvalue` 同址视图写入）与 `ValueView::from_tvalue` 读数族同前提。
     unsafe { &*(ptr::from_ref(self).cast::<[f32; 3]>()) }
   }
 
@@ -320,12 +332,13 @@ impl lua_TValue {
   /// 自写入、`w()` 仅在门内求值）与旧宏一致；调用点实参均为纯读（读他槽 lane，与
   /// 本槽写入 lane 严格不交叉），把 x/y/z 求值统一提前不改变可观察行为。
   ///
-  /// # Safety
-  /// `&mut self` 由调用点经裸指针解引用取得：非空、按 `TValue` 对齐、指向已初始化
-  /// 槽、noalias 独占、槽寿命不跨栈扩容；写入跨 `value`+`extra` 字节段，与 `w()` 的
-  /// 4-lane 越界防御共同受 `LUA_VECTOR_SIZE` 编译期常量约束。
+  /// 本方法是 safe：体内唯一 `unsafe` 是从 `&mut self` 派生的槽起始 f32 lane 视图，
+  /// 界内性与对齐由 `VVALUE_LANES` 布局断言背书；`&mut self` 的取得前提（裸指针
+  /// 非空/对齐/已初始化/noalias 独占，寿命不跨栈扩容）同 [`Self::set_nil`] 随宏
+  /// 收口下沉至调用点解引用处保证，语义不变；4-lane 越界防御仍由
+  /// `LUA_VECTOR_SIZE` 编译期常量与 `w()` 的门内求值承接。
   #[inline]
-  pub unsafe fn set_vvalue<W: FnOnce() -> f32>(&mut self, x: f32, y: f32, z: f32, w: W) {
+  pub fn set_vvalue<W: FnOnce() -> f32>(&mut self, x: f32, y: f32, z: f32, w: W) {
     // SAFETY: `lanes` 由 &mut self 独占派生（cast 至本槽起始地址的 f32 视图），
     // lane0..lane2 落在 value+extra 字节段内；4-lane 门内 lane3 亦在 TValue 尾
     // 字节内；随后经 self 写 tt 后 raw 视图不再使用（Stacked Borrows 顺序合规）
