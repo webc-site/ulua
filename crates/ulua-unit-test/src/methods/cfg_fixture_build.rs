@@ -1,14 +1,13 @@
-use core::ptr::from_ref;
-
-use ulua_analysis::records::control_flow_graph::ControlFlowGraph;
+use ulua_analysis::records::{arena_handle::Handle, control_flow_graph::ControlFlowGraph};
 
 use crate::records::cfg_fixture::CfgFixture;
 
 impl CfgFixture {
-  /// 构建 CFG：结果指针存入 `self.cfg_ptr`，经 [`CfgFixture::cfg`] 以借用形式取回。
+  /// 构建 CFG：所有权结果（`make_cfg` 按值交付，cpp `unique_ptr` 返回的 Rust
+  /// 对应）存入 `self.cfg`，经 [`CfgFixture::cfg`] 以借用形式取回。
   /// 拆成「构建（`&mut self`）+ 只读访问（`&self`）」两步，使测试在持有 CFG
   /// 引用的同时仍能调用 fixture 的 `&self` 查询方法（如
-  /// `get_definition_at_pos`），全链路免 `unsafe { &*ptr }` 解引用。
+  /// `get_definition_at_pos`），全链路免解引用样板。
   pub fn build(&mut self, code: &str) {
     use ulua_analysis::{
       functions::{dump_cfg::dump_cfg, dump_cfg_json::dump_cfg_json},
@@ -16,44 +15,32 @@ impl CfgFixture {
     };
     use ulua_common::fflag;
 
-    // `parse` 返回借用引用；引用 → 裸地址用 `from_ref + cast_mut`（存入 `*mut`
-    // 字段后借用立即结束，AST 在 fixture.allocator 中存活至 `make_cfg` 使用
-    // 结束），免 `as *const _ as *mut _` 双重 `as` 反模式。
-    self.root = from_ref(self.parse(code)).cast_mut();
+    // cpp `root = parse(code)`：`parse` 返回借用引用，经 `Handle::from_ref`
+    // 折叠为 arena 别名句柄入位 `self.root`（AST 由 `allocator` 字段保活、
+    // bump 块地址稳定，句柄不拥有不释放），借用随语句结束。
+    let root = Handle::from_ref(self.parse(code));
+    self.root = Some(root);
 
-    // Safety: make_cfg 入口 block 已引用化，此处首层解引用 `self.root`——它由
-    // 上一行从 `parse` 返回引用写入，指向 fixture allocator arena 内活
-    // AstStatBlock，借用半径止于本次调用表达式，allocator 比调用长寿。
-    let cfg = unsafe { CfgBuilder::make_cfg(&mut self.cfg_allocator as *mut _, &*self.root) };
+    // `make_cfg` 入口全 safe：arena 侧经 `Handle::from_mut` 编码非空与存活
+    // （借用止于调用表达式，cfg_allocator 作为夹具字段比返回的 CFG 长寿），
+    // block 侧由 `root.get()` 直接物化只读借用（Handle 模块契约）。
+    let cfg = CfgBuilder::make_cfg(Handle::from_mut(&mut self.cfg_allocator), root.get());
 
     if fflag::DebugLuauLogCFG.get() {
-      print!(
-        "{}",
-        dump_cfg(unsafe {
-          // Safety: cfg 指向上方 make_cfg 刚在 self.cfg_allocator arena 中构造的 ControlFlowGraph（块地址随 allocator 稳定、make_cfg 按契约非空），&* 物化临时只读借用交 dump_cfg 打印，借用随 print 结束。
-          &*cfg
-        })
-      );
+      print!("{}", dump_cfg(&cfg));
     }
 
     if fflag::DebugLuauDumpCFGJson.get() {
-      println!(
-        "{}",
-        dump_cfg_json(unsafe {
-          // Safety: 同 dump_cfg 处论证：cfg 指向 cfg_allocator arena 内存活 ControlFlowGraph（地址不动），&* 只读借用仅供 dump_cfg_json 序列化，帧内结束，单线程无并发写。
-          &*cfg
-        })
-      );
+      println!("{}", dump_cfg_json(&cfg));
     }
 
-    self.cfg_ptr = cfg;
+    // 所有权显式入位（§2 转手动作）：CFG 容器由夹具持有，节点内存留在 arena。
+    self.cfg = Some(cfg);
   }
 
-  /// CFG 只读访问器：ControlFlowGraph 存活于 `self.cfg_allocator` 的 arena 内存
-  /// （`build` 布线）；`&self` 借用期内 fixture 不可能再 `build`，引用不悬垂。
+  /// CFG 只读访问器：`build` 后经所有权字段取回；`&self` 借用期内夹具不可能
+  /// 再 `build`/移动，引用不悬垂。
   pub fn cfg(&self) -> &ControlFlowGraph {
-    assert!(!self.cfg_ptr.is_null(), "cfg() called before build()");
-    // Safety: 见上——build 保证 cfg 指向存活 ControlFlowGraph。
-    unsafe { &*self.cfg_ptr }
+    self.cfg.as_ref().expect("cfg() called before build()")
   }
 }

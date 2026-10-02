@@ -6,9 +6,7 @@ use ulua_ast::{
 };
 
 use crate::records::{
-  arena_handle::{alias, alias_ref},
-  find_full_ancestry::FindFullAncestry,
-  source_module::SourceModule,
+  arena_handle::alias_ref, find_full_ancestry::FindFullAncestry, source_module::SourceModule,
 };
 
 pub fn find_ast_ancestry_of_position_source_module_position_bool(
@@ -16,10 +14,12 @@ pub fn find_ast_ancestry_of_position_source_module_position_bool(
   pos: Position,
   include_types: bool,
 ) -> Vec<*mut AstNode> {
-  if source.root.is_null() {
+  // cpp `if (!source.root) return {};`：缺席态即 `None`，在场态经 `Handle`
+  // 物化独占借用（`AstNode::visit` 需非 const `this`，见下方 `_bool` 形参注记）。
+  let Some(root) = source.root else {
     return Vec::new();
-  }
-  find_ast_ancestry_of_position_ast_stat_block_position_bool(alias(source.root), pos, include_types)
+  };
+  find_ast_ancestry_of_position_ast_stat_block_position_bool(root.get_mut(), pos, include_types)
 }
 
 // Alias to match the published interface name

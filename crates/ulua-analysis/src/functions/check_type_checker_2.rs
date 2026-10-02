@@ -7,15 +7,9 @@ use core::ptr::NonNull;
 use crate::{
   functions::{copy_errors::copy_errors, freeze::freeze, unfreeze::unfreeze},
   records::{
-    arena_handle::{Handle, alias_ref},
-    builtin_types::BuiltinTypes,
-    dcr_logger::DcrLogger,
-    module::Module,
-    source_module::SourceModule,
-    type_check_limits::TypeCheckLimits,
-    type_checker_2::TypeChecker2,
-    type_function_runtime::TypeFunctionRuntime,
-    unifier_shared_state::UnifierSharedState,
+    arena_handle::Handle, builtin_types::BuiltinTypes, dcr_logger::DcrLogger, module::Module,
+    source_module::SourceModule, type_check_limits::TypeCheckLimits, type_checker_2::TypeChecker2,
+    type_function_runtime::TypeFunctionRuntime, unifier_shared_state::UnifierSharedState,
   },
 };
 
@@ -54,7 +48,13 @@ pub fn check(
   };
 
   // typeChecker.visit(sourceModule.root);
-  type_checker.visit_stat_block(alias_ref(source_module.root));
+  // 句柄化根块：cpp 直传非空 root，缺席即契约违例（确定性 panic 而非 UB）。
+  type_checker.visit_stat_block(
+    source_module
+      .root
+      .expect("check(typeChecker2): 根块应在场（cpp 直取 sourceModule.root）")
+      .get(),
+  );
 
   // unfreeze(module->interfaceTypes);
   // copyErrors(module->errors, module->interfaceTypes, builtinTypes);

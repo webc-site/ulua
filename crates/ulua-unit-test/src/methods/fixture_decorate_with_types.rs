@@ -34,7 +34,14 @@ impl Fixture {
     unsafe {
       let source_module = source_module.get_mut();
       attach_type_data(source_module, &mut *(raw_handle(&module)));
-      pretty_print_with_types_ast_stat_block(&mut *source_module.root)
+      // 根块已句柄化：`Handle::get_mut` 物化 arena 独占借用（cpp 直传
+      // `sourceModule->root`），不再手写 `&mut *` 解引用。
+      pretty_print_with_types_ast_stat_block(
+        source_module
+          .root
+          .expect("decorateWithTypes: 根块应在场")
+          .get_mut(),
+      )
     }
   }
 }

@@ -11,7 +11,10 @@ use ulua_common::macros::luau_timetrace_scope::{LUAU_TIMETRACE_ARGUMENT, LUAU_TI
 
 use crate::{
   functions::{get_timestamp::get_timestamp, parse_mode::parse_mode},
-  records::{frontend::Frontend, source_module::SourceModule, type_check_limits::TypeCheckLimits},
+  records::{
+    arena_handle::Handle, frontend::Frontend, source_module::SourceModule,
+    type_check_limits::TypeCheckLimits,
+  },
   type_aliases::module_name_type::ModuleName,
 };
 
@@ -61,16 +64,20 @@ impl Frontend {
     }
 
     if parse_result.errors.is_empty() || !parse_result.root.is_null() {
-      source_module.root = parse_result.root;
+      // cpp `sourceModule.root = parseResult.root`：null 产物折叠为缺席态 `None`。
+      source_module.root = Handle::from_opt_ptr(parse_result.root);
       source_module.mode = parse_mode(&parse_result.hotcomments);
     } else {
-      source_module.root = Arc::get_mut(&mut source_module.allocator)
-        .expect("SourceModule allocator must be uniquely owned while parsing")
-        .alloc(AstStatBlock::new(
-          Location::new(Position::default(), Position::default()),
-          Nodes::default(),
-          false,
-        ));
+      // 兜底空块由 arena 现分配、恒非空（cpp `NotNull` 同形），句柄直接 `Some`。
+      source_module.root = Some(Handle::from_ptr(
+        Arc::get_mut(&mut source_module.allocator)
+          .expect("SourceModule allocator must be uniquely owned while parsing")
+          .alloc(AstStatBlock::new(
+            Location::new(Position::default(), Position::default()),
+            Nodes::default(),
+            false,
+          )),
+      ));
       source_module.mode = Some(Mode::NoCheck);
     }
 

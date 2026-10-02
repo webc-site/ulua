@@ -7,7 +7,7 @@ use ulua_common::records::dense_hash_map::DenseHashMap;
 use crate::{
   enums::block_kind::BlockKind,
   records::{
-    arena_handle::alias, cfg_allocator::CfgAllocator, control_flow_graph::ControlFlowGraph,
+    arena_handle::Handle, cfg_allocator::CfgAllocator, control_flow_graph::ControlFlowGraph,
   },
   type_aliases::block_id::BlockId,
 };
@@ -16,7 +16,7 @@ use crate::{
 // C++ `explicit ControlFlowGraph::ControlFlowGraph(NotNull<CFGAllocator> allocator)`.
 
 impl ControlFlowGraph {
-  pub fn new(allocator: *mut CfgAllocator) -> Self {
+  pub fn new(allocator: Handle<CfgAllocator>) -> Self {
     Self {
       // C++ `DenseHashMap<AstExpr*, Definition*> useDefs{nullptr};`
       use_defs: DenseHashMap::default(),
@@ -38,7 +38,9 @@ impl ControlFlowGraph {
     // C++:
     //   Block* b = allocator->newBlock(kind, debugName);
     //   return blocks.emplace_back(b);
-    let b: BlockId = alias(self.allocator).new_block(kind, debug_name);
+    // arena 句柄经 `get_mut` 物化本次调用的独占借用（arena_handle 模块契约，
+    // 对应 cpp `allocator->newBlock`）。
+    let b: BlockId = self.allocator.get_mut().new_block(kind, debug_name);
     self.blocks.push(b);
     b
   }

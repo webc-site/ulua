@@ -5,7 +5,7 @@ use ulua_ast::{
   records::{parse_options::ParseOptions, parse_result::ParseResult, parser::Parser},
 };
 
-use crate::records::source_module::SourceModule;
+use crate::records::{arena_handle::Handle, source_module::SourceModule};
 pub fn parse_source_for_module(
   source: &str,
   source_module: &mut SourceModule,
@@ -26,7 +26,8 @@ pub fn parse_source_for_module(
     options.clone(),
   );
 
-  source_module.root = parse_result.root;
+  // cpp `source->root = parseResult.root`：null 产物折叠为缺席态 `None`。
+  source_module.root = Handle::from_opt_ptr(parse_result.root);
   source_module.mode = Some(Mode::Definition);
 
   if options.capture_comments {

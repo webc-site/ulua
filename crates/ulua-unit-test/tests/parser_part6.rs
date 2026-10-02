@@ -121,17 +121,16 @@ mod parser_recovery_of_parenthesized_expressions {
 
   /// cpp `sourceModule->root->visit(&counter)`：统计当前根块的节点数。
   fn count_ast_nodes(fix: &Fixture) -> u32 {
-    // visit 需要独占借用：cpp `AstNode::visit(AstVisitor*)` 的 this 非 const，
-    // 独占性经 `&mut` 句柄局部给出（测试内单线程遍历）。
-    let mut root = OptNode::from_ptr(
-      fix
-        .source_module
-        .as_deref()
-        .expect("sourceModule 必须存在")
-        .root,
-    );
+    // 根块已句柄化：visit 需要独占借用（cpp `AstNode::visit(AstVisitor*)` 的
+    // this 非 const），缺席即夹具未解析成功，确定性 panic。
+    let root = fix
+      .source_module
+      .as_deref()
+      .expect("sourceModule 必须存在")
+      .root
+      .expect("根块非空");
     let mut counter = CountAstNodes::default();
-    root.get_mut().expect("根块非空").visit(&mut counter);
+    root.get_mut().visit(&mut counter);
     counter.count
   }
 

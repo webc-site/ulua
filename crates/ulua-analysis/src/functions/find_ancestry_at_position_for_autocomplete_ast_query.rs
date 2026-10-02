@@ -6,18 +6,19 @@ use ulua_ast::{
 };
 
 use crate::records::{
-  arena_handle::alias, autocomplete_node_finder::AutocompleteNodeFinder,
-  source_module::SourceModule,
+  autocomplete_node_finder::AutocompleteNodeFinder, source_module::SourceModule,
 };
 
 pub fn find_ancestry_at_position_for_autocomplete_source_module_position(
   source: &SourceModule,
   pos: Position,
 ) -> Vec<*mut AstNode> {
-  if source.root.is_null() {
+  // cpp `if (!source.root) return {};`：缺席态即 `None`，在场态经 `Handle`
+  // 物化独占借用（visit 需非 const `this`）。
+  let Some(root) = source.root else {
     return Vec::new();
-  }
-  find_ancestry_at_position_for_autocomplete_ast_stat_block_position(alias(source.root), pos)
+  };
+  find_ancestry_at_position_for_autocomplete_ast_stat_block_position(root.get_mut(), pos)
 }
 
 // Alias to match the published interface name

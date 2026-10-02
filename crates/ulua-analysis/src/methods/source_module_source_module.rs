@@ -1,5 +1,4 @@
 use alloc::{string::String, sync::Arc, vec::Vec};
-use core::ptr::null_mut;
 
 use ulua_ast::records::{allocator::Allocator, ast_name_table::AstNameTable};
 
@@ -22,7 +21,8 @@ impl SourceModule {
       allocator,
       names: Arc::new(names),
       parse_errors: Vec::new(),
-      root: null_mut(),
+      // cpp `AstStatBlock* root = nullptr`：缺席态用 `Option::None`（§2）。
+      root: None,
       mode: None,
       hotcomments: Vec::new(),
       comment_locations: Vec::new(),

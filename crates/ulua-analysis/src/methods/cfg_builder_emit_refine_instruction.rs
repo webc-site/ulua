@@ -4,7 +4,7 @@
 use crate::{
   methods::refinement_arena_type_proposition::refinement_arena_type_proposition,
   records::{
-    arena_handle::alias, block_registry::resolve_block_mut, cfg_builder::CfgBuilder,
+    block_registry::resolve_block_mut, cfg_builder::CfgBuilder,
     proposition_control_flow_graph::Proposition, refine::Refine, sym_def_registry::resolve_sym_def,
   },
   type_aliases::{
@@ -94,7 +94,8 @@ impl CfgBuilder {
         // emitRefineInstruction(block, allocator->refinementArena.typeProposition(
         //     prop->ptr, prop->type, prop->is_typeof, !prop->sense));
         let fresh = {
-          let arena = &mut alias(self.allocator).refinement_arena;
+          // arena 句柄经 `get_mut` 物化本帧独占借用（arena_handle 模块契约）。
+          let arena = &mut self.allocator.get_mut().refinement_arena;
           refinement_arena_type_proposition(arena, p_ptr, p_type, p_is_typeof, !p_sense)
         };
         // Safety: fresh 为刚经 TypedAllocator::allocate 返回的 arena 地址（已

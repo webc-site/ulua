@@ -15,7 +15,7 @@ use crate::{
     synthesize_export_return::synthesize_export_return,
   },
   records::{
-    arena_handle::{Handle, alias_ref},
+    arena_handle::{Handle, alias_ref, opt_handle_as_ptr},
     code_too_complex::CodeTooComplex,
     free_type_pack::FreeTypePack,
     module::Module,
@@ -49,7 +49,9 @@ impl TypeChecker {
       r#type: module.r#type,
       allocator: Some(module.allocator.clone()),
       names: Some(module.names.clone()),
-      root: module.root,
+      // `Module.root` 仍持 `*mut`（下游句柄化在后续波次）：桥接透传，
+      // `None` ≡ cpp nullptr。
+      root: opt_handle_as_ptr(module.root),
       ..Default::default()
     };
 
@@ -99,7 +101,12 @@ impl TypeChecker {
 
     {
       let module_mut = shared_mut(self.expect_current_module());
-      let root_location = alias_ref(module.root).base.base.location;
+      // cpp `module->scopes.push_back({sourceModule.root->location, ...})`：
+      // 根块在场为检查契约，句柄物化只读借用。
+      let root = module
+        .root
+        .expect("checkWithoutRecursionCheck: 根块应在场（cpp 直取 sourceModule.root）");
+      let root_location = root.get().base.base.location;
       module_mut
         .scopes
         .push((root_location, module_scope.clone()));
@@ -111,7 +118,13 @@ impl TypeChecker {
       prepare_module_scope(&module_name, &module_scope);
     }
 
-    self.check_block(&module_scope, alias_ref(module.root));
+    self.check_block(
+      &module_scope,
+      module
+        .root
+        .expect("checkWithoutRecursionCheck: 根块应在场（cpp 直取 sourceModule.root）")
+        .get(),
+    );
 
     if fflag::LuauExportValueSyntax.get()
       && fflag::LuauExportValueTypecheck.get()

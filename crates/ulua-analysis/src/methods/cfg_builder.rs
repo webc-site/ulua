@@ -1,7 +1,6 @@
 //! `cfg_builder` 方法汇总：原先按 cpp 符号逐方法拆分的同前缀小文件合并至此，行为逐字保留。
 
 use alloc::{
-  boxed::Box,
   string::{String, ToString},
   vec::Vec,
 };
@@ -22,7 +21,7 @@ use crate::{
   enums::block_kind::BlockKind,
   methods::block::block_set_reaching_definition,
   records::{
-    arena_handle::alias, block_registry::resolve_block_mut, cfg_allocator::CfgAllocator,
+    arena_handle::Handle, block_registry::resolve_block_mut, cfg_allocator::CfgAllocator,
     cfg_builder::CfgBuilder, control_flow_graph::ControlFlowGraph, join::Join, symbol::Symbol,
   },
   type_aliases::{block_id::BlockId, def_id_control_flow_graph::DefId, instr_id::InstrId},
@@ -47,7 +46,7 @@ impl CfgBuilder {
 // C++ `explicit CFGBuilder::CFGBuilder(NotNull<CFGAllocator> allocator)`.
 
 impl CfgBuilder {
-  pub fn new(allocator: *mut CfgAllocator) -> Self {
+  pub fn new(allocator: Handle<CfgAllocator>) -> Self {
     // C++ member-init order:
     //   cfg(std::make_unique<ControlFlowGraph>(allocator))
     //   allocator(allocator)
@@ -98,16 +97,19 @@ impl CfgBuilder {
 // C++ `std::unique_ptr<ControlFlowGraph> CFGBuilder::makeCFG(NotNull<CFGAllocator> allocator, AstStatBlock* block)`.
 
 impl CfgBuilder {
-  /// # Safety
-  /// 对应 C++ `CFGBuilder::makeCFG(NotNull<CFGAllocator> allocator, AstStatBlock* block)`：
-  /// `allocator` 须非空且在返回的 `ControlFlowGraph` 整个使用期内存活（CFG 只存裸句柄，
-  /// 不接管其所有权）。`block` 已引用化：非空/对齐/存活由借用类型承载（cpp 第二参
-  /// `AstStatBlock*` 的首层解引用收口到调用方）。
-  /// 返回 `Box::into_raw` 产出的裸所有权指针，由调用方负责唯一释放。
-  pub unsafe fn make_cfg(
-    allocator: *mut CfgAllocator,
-    block: &AstStatBlock,
-  ) -> *mut ControlFlowGraph {
+  /// 对应 C++ `CFGBuilder::makeCFG(NotNull<CFGAllocator>, AstStatBlock*) ->
+  /// std::unique_ptr<ControlFlowGraph>`（`cpp/Analysis/src/ControlFlowGraph.cpp:135`）。
+  /// - `allocator`：arena 属主的别名句柄（`Handle` 编码恒非空，对应 cpp
+  ///   `NotNull`），须在返回的 `ControlFlowGraph` 整个使用期内存活——CFG 只存
+  ///   句柄、不接管 arena 所有权；
+  /// - `block`：借用类型承载非空/对齐/存活（cpp 第二参 `AstStatBlock*` 的首层
+  ///   解引用收口在调用方）。
+  ///
+  /// 所有权形态：cpp 用 `unique_ptr` 把 CFG 交给调用方，Rust 侧以按值返回
+  /// （move）作显式转手动作（§2 末条）。`ControlFlowGraph` 无自定义 `Drop`，
+  /// 其析构只释放自身 `Vec`/`DenseHashMap`，节点内存始终由 `CfgAllocator`
+  /// arena 属主负责，转手不会误释放 arena。
+  pub fn make_cfg(allocator: Handle<CfgAllocator>, block: &AstStatBlock) -> ControlFlowGraph {
     // C++:
     //   CFGBuilder builder(allocator);
     //   builder.lower(block);
@@ -118,8 +120,8 @@ impl CfgBuilder {
 
     // auto cfg = std::move(builder.cfg);
     // 不变式：`CfgBuilder::new` 构造期即置入 cfg（对应 C++ 构造里
-    // `cfg(allocator->acquireCFG())`），lowering 全程只经 `as_mut` 借用、
-    // 从不置 None，故 take() 必为 Some。
+    // `cfg(std::make_unique<ControlFlowGraph>(allocator))`），lowering 全程只经
+    // `as_mut` 借用、从不置 None，故 take() 必为 Some。
     let cfg = builder
       .cfg
       .take()
@@ -127,11 +129,11 @@ impl CfgBuilder {
 
     // if (FFlag::DebugLuauFreezeArena) allocator->freeze();
     if fflag::DebugLuauFreezeArena.get() {
-      alias(allocator).freeze();
+      allocator.get_mut().freeze();
     }
 
-    // return cfg;  (unique_ptr -> raw owning pointer)
-    Box::into_raw(Box::new(cfg))
+    // return cfg;  (unique_ptr -> 按值 move，所有权显式交给调用方)
+    cfg
   }
 }
 
@@ -168,8 +170,8 @@ impl CfgBuilder {
 impl CfgBuilder {
   pub fn new_definition(&mut self, sym: Symbol) -> DefId {
     let version = self.next_version_index(sym.clone());
-    let allocator = alias(self.allocator);
-    allocator.new_definition(sym, version)
+    // arena 句柄经 `get_mut` 物化本次调用的独占借用（arena_handle 模块契约）。
+    self.allocator.get_mut().new_definition(sym, version)
   }
 }
 

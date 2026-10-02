@@ -22,7 +22,7 @@ use crate::{
     constraint_solver_ctor::SolverParams,
   },
   records::{
-    arena_handle::{Handle, alias_ref},
+    arena_handle::{Handle, opt_handle_as_ptr},
     builtin_types::BuiltinTypes,
     constraint_generator::ConstraintGenerator,
     constraint_graph::ConstraintGraph,
@@ -120,17 +120,22 @@ pub fn check(args: CheckArgs<'_>) -> ModulePtr {
     module_ptr.internal_types.collect_singleton_stats = options.collect_type_allocation_stats;
     module_ptr.allocator = Some(source_module.allocator.clone());
     module_ptr.names = Some(source_module.names.clone());
-    module_ptr.root = source_module.root;
+    // `Module.root` 仍持 `*mut`（下游句柄化在后续波次）：经 `opt_handle_as_ptr`
+    // 桥接，`None` ≡ cpp nullptr 透传。
+    module_ptr.root = opt_handle_as_ptr(source_module.root);
     ice_handler.module_name = source_module.name.to_string();
   }
 
-  // `build` 入口已引用化（安全签名）：首层解引用收口在此处 `alias_ref`——
-  // source_module.root 指向解析 arena 内活 AST（`&'static` 借用由 arena 保活
-  // 契约供给）；def/key arena 借自存活的 module_ptr（写穿句柄，Arc 堆对象地址
-  // 固定），Handle 借用期覆盖 build 全程，符合 arena_handle 模块级契约（ice 侧
-  // 已为 Option<Handle>，非空/存活由类型承载）。
+  // `build` 入口已引用化（安全签名）：`source_module.root` 句柄化后由
+  // `expect + get` 物化只读借用——root 指向解析 arena 内活 AST（Handle 模块
+  // 契约：arena 保活、地址稳定）；def/key arena 借自存活的 module_ptr（写穿
+  // 句柄，Arc 堆对象地址固定），Handle 借用期覆盖 build 全程，符合
+  // arena_handle 模块级契约（ice 侧已为 Option<Handle>，非空/存活由类型承载）。
   let mut dfg = DataFlowGraphBuilder::build(
-    alias_ref(source_module.root),
+    source_module
+      .root
+      .expect("check: 解析成功后根块应在场（cpp 直取 sourceModule.root）")
+      .get(),
     Handle::from_mut(&mut module_ptr.def_arena),
     Handle::from_mut(&mut module_ptr.key_arena),
     Some(Handle::from_mut(&mut *ice_handler)),
@@ -229,7 +234,9 @@ pub fn check(args: CheckArgs<'_>) -> ModulePtr {
     cgraph,
   });
 
-  let constraint_set = cg.run(source_module.root);
+  // cpp `cg.run(sourceModule.root)`：run 形参仍持 `*mut`，nullptr 语义经
+  // `opt_handle_as_ptr` 逐位透传（缺根由 callee 契约处置）。
+  let constraint_set = cg.run(opt_handle_as_ptr(source_module.root));
   // Safety: module_ptr 写穿句柄有效（Arc 堆对象地址固定）；constraint_set
   // 是 run 的返回值、cg.recursion_limit_met 是普通字段读，均在同一
   // 单线程独占期写入 module.errors，无别名可变借用并存。
