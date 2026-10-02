@@ -23,7 +23,11 @@ pub(crate) unsafe fn lua_concat(l: *mut LuaState, n: i32) {
     if n >= 2 {
       lua_c_check_gc!(l);
       lua_c_threadbarrier_lapi(l);
-      lua_v_concat(l, n, ((*l).top.offset_from((*l).base) as i32) - 1);
+      // r16-b2 收编：顶-基槽距读数落既有 get_top 门面——其本体 slot_distance(base, top)
+      // 即被替代式 `top.offset_from(base) as i32` 的同址同宽镜像（实参位现读、求值
+      // 次序不变）；isize→i32 折形在现域无截差（栈槽距受 LUAI_MAXSTACK 约束）、
+      // `- 1` 次序保持
+      lua_v_concat(l, n, (*l).get_top() - 1);
       // n 项并为 1 项：`rewind_top(n-1)` 提交原语镜像原 `top = top.sub(n-1)` 落值
       (*l).rewind_top((n - 1) as usize);
     } else if n == 0 {
