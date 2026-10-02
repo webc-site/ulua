@@ -1,29 +1,16 @@
-//! 与 `records::call_context_lgc` 对应：lgc.cpp 三个同名局部
-//! `CallContext::run` 中转函数，类型区分见 records 模块头注释。
+//! 与 `records::call_context_lgc` 对应：lgc.cpp tableResizeProtected /
+//! stringResizeProtected 两个同名局部 `CallContext::run` 中转函数，
+//! 类型区分见 records 模块头注释；shrinkstack 变体见
+//! `functions::shrinkstackprotected` 的局部 fn。
 use core::ffi::c_void;
 
 use crate::{
-  functions::{
-    lua_h_resizehash::lua_h_resizehash, lua_s_resize::lua_s_resize, shrinkstack::shrinkstack,
-  },
+  functions::{lua_h_resizehash::lua_h_resizehash, lua_s_resize::lua_s_resize},
   records::{
-    call_context_lgc::{CallContext, StringResizeCallContext, TableResizeCallContext},
+    call_context_lgc::{StringResizeCallContext, TableResizeCallContext},
     lua_state::LuaState,
   },
 };
-
-impl CallContext {
-  /// # Safety
-  ///
-  /// 仅作为 `lua_d_pcall` 的 `Pfunc` 中转回调使用：`l` 必须指向待收缩栈的存活 `LuaState`；
-  /// `_ud` 未被读取，可传任意值（含空）。
-  pub unsafe extern "C-unwind" fn run(l: *mut LuaState, _ud: *mut c_void) {
-    // SAFETY: 契约保证 `l` 指向存活 LuaState，shrinkstack 仅在其上重排栈
-    unsafe {
-      shrinkstack(l);
-    }
-  }
-}
 
 impl TableResizeCallContext {
   /// # Safety
