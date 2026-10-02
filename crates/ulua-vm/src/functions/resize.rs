@@ -1,6 +1,7 @@
 use core::{
   mem::size_of,
   ptr::{addr_of_mut, eq},
+  slice::from_raw_parts_mut,
 };
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
@@ -44,6 +45,10 @@ pub(crate) unsafe fn resize(l: *mut LuaState, t: *mut LuaTable, nasize: i32, nhs
       // 收缩掉的数组尾段重哈希：对照 cpp ltable.cpp:622-643，每轮重新读取
       // **活的** `t->array`——`newkey` 可重入 rehash→resize→setarrayvector
       // 重分配数组（搬块后旧基址悬垂），绝不复用 `newkey` 之前算出的槽位指针。
+      // r12-E4 窗化裁决：本环保留裸 `.add` 形——窗存续期内禁 realloc，而此处
+      // realloc 由 newkey 重入触发、发生与否不可判（判据不稳），任何跨迭代切片窗
+      // 都会在其存续期内被重分配致悬垂；逐轮取窗亦因收缩期 live sizearray 已降为
+      // nasize、区间尾槽落在声明窗之外而失实。与 E1「窗存续期内禁 realloc」纪律同判。
       for i in nasize..oldasize {
         let e = (*t).array.add(i as usize);
         if !(*e).is_nil() {
@@ -74,11 +79,14 @@ pub(crate) unsafe fn resize(l: *mut LuaState, t: *mut LuaTable, nasize: i32, nhs
     let oldhsize_slots = 1i32 << oldhsize;
 
     if !eq(nold, dummynode) {
-      // 旧 node 全量搬到新表（倒序保持 cpp 搬移次序）；dummy 静态节点无内容可搬
-      let mut i = oldhsize_slots;
-      while i > 0 {
-        i -= 1;
-        let old = nold.add(i as usize);
+      // 旧 node 全量搬到新表（倒序 `.rev()` 保持 cpp 搬移次序，与 i-- 逐位同序）；
+      // dummy 静态节点无内容可搬。窗存续期内无重分配：nold 已从 t 摘链，循环内
+      // arrayornewkey 再入的 resize 只搬运/释放其自身的旧向量（当时的 (*t).node），
+      // nold 直到本窗遍历结束后才由下方 lua_m_free 释放，且写侧 dest 皆落 t 的新段。
+      for old in from_raw_parts_mut(nold, oldhsize_slots as usize)
+        .iter_mut()
+        .rev()
+      {
         if !(*gval!(old)).is_nil() {
           let mut ok = TValue::default();
           getnodekey!(l, addr_of_mut!(ok), old);

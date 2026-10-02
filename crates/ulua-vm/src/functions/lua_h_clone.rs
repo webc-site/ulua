@@ -1,7 +1,8 @@
 use core::{
   ffi::c_void,
   mem::size_of,
-  ptr::{copy_nonoverlapping, eq, null_mut},
+  ptr::{eq, null_mut},
+  slice::{from_raw_parts, from_raw_parts_mut},
 };
 
 use crate::{
@@ -17,7 +18,7 @@ use crate::{
 
 /// # Safety
 /// `l` 须存活且分配器就绪（拷贝数组/节点时可抛 ERR_MEM unwind）；`tt` 须为存活 `LuaTable` 且
-/// array/sizearray、node/lsizenode 自洽——两处 `copy_nonoverlapping` 直接以源表长度为界，失真即越界复制。
+/// array/sizearray、node/lsizenode 自洽——两处切片窗整段拷贝直接以源表长度为界，失真即越界复制。
 /// 返回的新表尚未入栈，调用方须尽快放进可达槽位。cpp ltable.cpp:1374。
 pub unsafe fn lua_h_clone(l: *mut LuaState, tt: *mut LuaTable) -> *mut LuaTable {
   unsafe {
@@ -40,7 +41,10 @@ pub unsafe fn lua_h_clone(l: *mut LuaState, tt: *mut LuaTable) -> *mut LuaTable 
       maybesetaboundary(t, getaboundary(tt));
       (*t).sizearray = (*tt).sizearray;
 
-      copy_nonoverlapping((*tt).array, (*t).array, (*t).sizearray as usize);
+      // 分配回写后派生窗：数组段整段拷贝改 copy_from_slice（源/目标互不重叠，长度同取
+      // sizearray，cpp ltable.cpp:1387-1391 copy_nonoverlapping 同形）
+      let n = (*t).sizearray as usize;
+      from_raw_parts_mut((*t).array, n).copy_from_slice(from_raw_parts((*tt).array, n));
     }
 
     if !eq((*tt).node, dummynode) {
@@ -48,7 +52,9 @@ pub unsafe fn lua_h_clone(l: *mut LuaState, tt: *mut LuaTable) -> *mut LuaTable 
       (*t).node = luaM_newarray!(l, size as usize, LuaNode, (*t).memcat);
       (*t).lsizenode = (*tt).lsizenode;
       (*t).nodemask8 = (*tt).nodemask8;
-      copy_nonoverlapping((*tt).node, (*t).node, size as usize);
+      // 同上：哈希段整段拷贝改 copy_from_slice，窗在分配回写之后派生
+      from_raw_parts_mut((*t).node, size as usize)
+        .copy_from_slice(from_raw_parts((*tt).node, size as usize));
       (*t).union.lastfree = (*tt).union.lastfree;
     }
 
