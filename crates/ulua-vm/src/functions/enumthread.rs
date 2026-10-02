@@ -81,7 +81,11 @@ pub(crate) unsafe fn enumthread(ctx: *mut EnumContext, th: &LuaState) {
         ctx,
         obj,
         th.stack,
-        th.top.offset_from(th.stack) as usize,
+        // r16-b2 收编：stack 锚槽距读数落 slot_distance 边界原语（stack.rs:53，本票升
+        // pub(crate) 解锁）——本体即被替代式 `to.offset_from(from) as i32` 的同址镜像；
+        // 上方守卫已证窗非负（top>stack），isize→i32 折形在 stacksize 约束域无截差，
+        // 非负值 `as usize` 收窄与原式逐位同值（本点位原形无 max，不补）
+        LuaState::slot_distance(th.stack, th.top) as usize,
         EDGE_STACK,
       );
     }
