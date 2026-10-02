@@ -140,7 +140,9 @@ pub unsafe fn compile_internal(
     )
     .into_iter()
     .flatten()
-    .filter(|&proto| (*proto).execdata.is_null())
+    // J1 Phase 2b：force_recompile（暖重编译）时保留已编译 proto——重编译并重绑定；
+    // 常规路径跳过已编译（NothingToCompile 语义）。
+    .filter(|&proto| options.force_recompile || (*proto).execdata.is_null())
     .collect()
   };
 

@@ -236,7 +236,12 @@ pub unsafe fn tsfb_bump(proto: *const Proto, pc_off: u32, tag: u8) {
   let hits = (st >> 8).min(0xff_ffff);
   *state_ptr = ((hits + 1) << 8) | tag as u32;
 
-  tsfb_protos().lock().unwrap_or_else(|e| e.into_inner()).push(proto as usize);
+  {
+    let mut ps = tsfb_protos().lock().unwrap_or_else(|e| e.into_inner());
+    if !ps.contains(&(proto as usize)) {
+      ps.push(proto as usize);
+    }
+  }
   }
 }
 
@@ -267,6 +272,40 @@ pub fn tsfb_dump() -> String {
           st >> 8,
           st & 0xff
         ));
+      }
+    }
+  }
+  out
+}
+
+
+/// J1 Phase 2b 选点入口：遍历已注册 TSFB 表，返回 hits ≥ `min_hits` 且
+/// 末 tag 占比 ≥ `min_share` 的站点 `(proto, pc, tag)`——暖重编译/特化的候选集。
+pub fn tsfb_over_threshold(min_hits: u32, min_share: f64) -> Vec<(usize, u32, u8)> {
+  let protos = tsfb_protos().lock().unwrap_or_else(|e| e.into_inner()).clone();
+  let mut out = Vec::new();
+  for p in protos.iter() {
+    let proto = *p as *const Proto;
+    unsafe {
+      let d = (*proto).execdata;
+      if d.is_null() {
+        continue;
+      }
+      let sc = (*proto).sizecode as usize;
+      let data = d as *const u32;
+      let (_, nslots) = match locate_tsfb(data, sc, u32::MAX) {
+        Some(x) => x,
+        None => continue,
+      };
+      for s in 0..nslots {
+        let pc = *data.add(sc + 2 + 2 * s);
+        let st = *data.add(sc + 3 + 2 * s);
+        let hits = (st >> 8) as u64;
+        let tag = (st & 0xff) as u8;
+        if hits >= u64::from(min_hits) {
+          out.push((proto as usize, pc, tag));
+        }
+        let _ = min_share; // last_tag 单值占比 = 1.0（state 只记末 tag）；接口留扩展
       }
     }
   }

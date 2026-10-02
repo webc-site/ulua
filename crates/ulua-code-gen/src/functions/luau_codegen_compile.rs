@@ -13,3 +13,19 @@ pub unsafe fn luau_codegen_compile(l: *mut LuaState, idx: i32) {
     let _ = compile_internal(&None, l, idx, &CompilationOptions::default(), None);
   }
 }
+
+/// J1 Phase 2b：暖重编译入口——对已编译闭包强制重编译并重绑定
+/// （`force_recompile` 路径；旧 native module 目前泄漏，见 CompilationOptions 注）。
+///
+/// # Safety
+/// 同 [`luau_codegen_compile`]：`l` 存活、`idx` 为界内栈位，且须处于安全点
+/// （目标 proto 无在途 native 帧——调用方在解释器环/VM 出口投递）。
+pub unsafe fn luau_codegen_warm_recompile(l: *mut LuaState, idx: i32) {
+  unsafe {
+    let options = CompilationOptions {
+      force_recompile: true,
+      ..CompilationOptions::default()
+    };
+    let _ = compile_internal(&None, l, idx, &options, None);
+  }
+}

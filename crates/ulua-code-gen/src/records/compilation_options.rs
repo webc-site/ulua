@@ -13,6 +13,10 @@ pub struct CompilationOptions {
 
   pub record_counters: bool,
 
+  /// J1 Phase 2b：暖重编译——true 时跳过「execdata 已存在则跳过」过滤器，
+  /// 对已编译 proto 重新编译并重绑定（旧 module 目前泄漏，仅诊断/探针用途）。
+  pub force_recompile: bool,
+
   /// 为 true 时在 block 之间插入随机 NOP sled，
   /// 使函数内 gadget 偏移不可预测。
   pub nop_padding: bool,

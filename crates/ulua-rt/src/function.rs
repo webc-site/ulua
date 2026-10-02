@@ -8,6 +8,8 @@ use core::{
   result::Result as StdResult,
 };
 
+#[cfg(feature = "jit")]
+use ulua_code_gen::functions::luau_codegen_compile::luau_codegen_warm_recompile;
 use ulua_common::functions::c_str::cstr_bytes;
 
 #[cfg(feature = "async")]
@@ -261,6 +263,34 @@ impl Function {
       func,
       _marker: PhantomData,
     }
+  }
+
+  /// J1 Phase 2b：对本函数的闭包树强制暖重编译（须已 `enable_jit`；
+  /// 安全点约束：本函数不得有在途 native 帧——在解释器环/VM 出口投递）。
+  ///
+  /// Mirrors chunk 装载期的 `luau_codegen_compile` 钩子，走 `force_recompile`
+  /// 路径重编译并重绑定 execdata（旧 module 释放策略见 CompilationOptions 注）。
+  #[cfg(feature = "jit")]
+  pub fn warm_recompile(&self) -> Result<()> {
+    let lua = self.lua();
+    let state = lua.state();
+    let base = stack_top(state);
+    self.reference.push();
+    // Safety: `state` 存活、由当前线程驱动；-1 即刚压入的本函数（chunk.rs jit 钩子同口径）。
+    unsafe {
+      luau_codegen_warm_recompile(&mut *state.as_mut_ptr(), -1);
+    }
+    set_stack_top(state, base);
+    Ok(())
+  }
+
+  /// 非 jit 构建变体：恒错误（镜像 [`Lua::enable_jit`] 的双变体写法）。
+  #[cfg(not(feature = "jit"))]
+  pub fn warm_recompile(&self) -> Result<()> {
+    let _ = self;
+    Err(crate::Error::runtime(
+      "Luau JIT support is not enabled in this build (requires feature 'jit')",
+    ))
   }
 
   /// A raw pointer identifying this function (for identity comparison).
