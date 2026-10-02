@@ -889,7 +889,7 @@ pub(crate) unsafe fn loadsafe(
 
     let thread_obj = l.cast::<GCObject>();
     if isblack!(thread_obj) {
-      lua_c_barrierback(l, thread_obj, &mut (*l).gclist);
+      lua_c_barrierback(&mut *l, thread_obj, &mut (*l).gclist);
     }
 
     let cl = lua_f_new_lclosure(l, 0, envt, main);

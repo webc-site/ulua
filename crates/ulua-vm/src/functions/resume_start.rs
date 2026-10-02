@@ -55,7 +55,7 @@ pub(crate) unsafe fn resume_start(l: *mut LuaState, from: *mut LuaState, nargs: 
 
     let o = l as *mut GCObject;
     if isblack!(o) {
-      lua_c_barrierback(l, o, addr_of_mut!((*l).gclist));
+      lua_c_barrierback(&mut *l, o, addr_of_mut!((*l).gclist));
     }
 
     LuaStatus::Ok as i32

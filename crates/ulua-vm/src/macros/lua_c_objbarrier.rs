@@ -9,7 +9,7 @@ macro_rules! lua_c_objbarrier {
       && $crate::macros::iswhite::iswhite!($crate::macros::obj_2_gco::obj2gco!($o))
     {
       $crate::functions::lua_c_barrierf::lua_c_barrierf(
-        $l,
+        &mut *$l,
         $crate::macros::obj_2_gco::obj2gco!($p),
         $crate::macros::obj_2_gco::obj2gco!($o),
       );

@@ -3,7 +3,7 @@ macro_rules! lua_c_barrierfast {
   ($l:expr, $t:expr) => {
     if $crate::macros::isblack::isblack!($t as *mut $crate::records::gc_object::GCObject) {
       $crate::functions::lua_c_barrierback::lua_c_barrierback(
-        $l as *mut $crate::records::lua_state::LuaState,
+        &mut *($l as *mut $crate::records::lua_state::LuaState),
         $t as *mut $crate::records::gc_object::GCObject,
         &mut (*$t).gclist,
       );
