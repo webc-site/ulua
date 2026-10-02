@@ -1,6 +1,6 @@
 use crate::{
   functions::{
-    buffer_window::{buffer_bit_bounds, buffer_data_ref, BITS_PER_BYTE},
+    buffer_window::{BITS_PER_BYTE, buffer_bit_bounds, buffer_data_ref},
     load_bits_u64::load_bits_u64,
     lua_pushunsigned::lua_pushunsigned,
   },

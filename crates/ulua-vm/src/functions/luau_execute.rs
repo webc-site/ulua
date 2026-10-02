@@ -2994,6 +2994,7 @@ unsafe fn h_jump(
 /// 4. **门禁门**：启用该 feature 必付一条 `allow(incomplete_features)`，与 `review.md` 的
 ///    零 `allow` 硬门禁冲突。要改的是门禁本身（把检查收紧成 `#!?\[allow`、并把这一条记成
 ///    显式认可的唯一豁免），而不是靠内属性写法躲过正则。
+///
 /// 状态交接：`pc`/`base`/`k`/`cl` 按值取入，臂体以 [`VmNext`] 传出续延状态。
 ///
 /// # Safety（内部 unsafe 块契约，签名安全：唯一调用方是 [`tier_reentry`]）
