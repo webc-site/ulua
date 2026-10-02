@@ -29,14 +29,14 @@ use crate::{
 
 /// 本模块串 payload 窗唯一派生点：存活 TString 共享借用的前 `len` 字节可读窗
 /// （不含终止 NUL）——与 `lua_tolstring_ref` 取栈槽串窗同入约模型（cpp
-/// `getstr(ts), ts->len` 的读界）：Lua 串不可变、不搬移，借用寿命由入参
-/// `&'a TString` 钉住，回收窗口与串对象一致。
+/// `getstr(ts), ts->len` 的读界）：Lua 串不可变、不搬移，返回切片寿命经省略
+/// 规则钉在入参 `&TString` 借用上，回收窗口与串对象一致。
 ///
 /// # Safety
 /// `ts` 须为存活 TString（调用方以 `TValue::is_string` 判定 + `as_string` 借用
-/// 建立前提）；返回切片寿命随入参借用，串须在切片使用期内不被回收。
+/// 建立前提）；返回切片随入参借用存活，串须在切片使用期内不被回收。
 #[inline]
-unsafe fn tstring_payload<'a>(ts: &'a TString) -> &'a [u8] {
+unsafe fn tstring_payload(ts: &TString) -> &[u8] {
   // SAFETY: 契约保证 `ts` 存活；`data` 为柔性数组成员首址，tstring 布局保证
   // `len` 字节可读（空串 len 0 即空窗，触不到哨兵槽）
   unsafe { from_raw_parts(ts.data.as_ptr().cast::<u8>(), ts.len as usize) }
