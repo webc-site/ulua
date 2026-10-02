@@ -7,6 +7,7 @@ use ulua_common::{
   },
 };
 use ulua_vm::{
+  functions::type_feedback,
   enums::{lua_type::LuaType, tms::TMS},
   macros::{lua_o_nilobject::LUA_O_NILOBJECT, pvalue::pvalue},
   records::{lua_table::LuaTable, udata::Udata},
@@ -119,6 +120,16 @@ pub unsafe fn execute_gettableks(
   };
   let kv = frame.kv(kw, cl, k);
   LUAU_ASSERT!(frame.is_string(kv));
+
+  // J1 Phase 2a：guard-miss 观测入口——本 helper 只在 native guard 未命中时进入，
+  // 在此把站点 pc 与真实 tag 记入 TSFB 侧表（见 ulua-vm type_feedback::tsfb_bump）。
+  {
+    let cl = frame.current_closure();
+    let proto = unsafe { (*cl).inner.l.p };
+    let pc_off = unsafe { pc.offset_from((*proto).code) } as u32;
+    let tag = unsafe { (*rb).tt } as u8;
+    unsafe { type_feedback::tsfb_bump(proto, pc_off, tag) };
+  }
 
   let (rb_is_table, rb_is_userdata, rb_is_vector) = (
     frame.is_table(rb),

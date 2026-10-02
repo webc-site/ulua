@@ -107,6 +107,7 @@ fn main() {
     // J1 Phase 1a：类型观测读数（ULUA_TYPE_FEEDBACK=1 时激活）
     if type_feedback::enabled() {
       print!("{}", type_feedback::dump());
+      print!("{}", type_feedback::tsfb_dump());
     }
   }
 }

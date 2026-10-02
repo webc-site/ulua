@@ -39,7 +39,7 @@ fn table() -> &'static Mutex<HashMap<u64, Site>> {
 
 /// 从环境激活观测（`ULUA_TYPE_FEEDBACK=1`）。须在任何 record 前调用一次。
 pub fn init_from_env() {
-  if env::var("ULUA_TYPE_FEEDBACK").is_ok() {
+  if env::var("ULUA_TYPE_FEEDBACK").is_ok() || env::var("ULUA_TSFB").is_ok() {
     ENABLED.store(true, Ordering::Relaxed);
   }
 }
@@ -124,4 +124,151 @@ pub fn record_tvs(
   tb_tv: &TValue,
 ) {
   record(proto, pc, op, ta_tv.tt as u8, tb_tv.tt as u8);
+}
+
+
+// ---------------------------------------------------------------------------
+// J1 Phase 2a：native execdata TSFB 侧表（布局由 codegen 侧
+// create_native_proto_exec_data 的 build_tsfb_table 产出）：
+//   execdata[0..sizecode]              指令偏移
+//   execdata[sizecode]                 TSFB_MAGIC = 0x5453_4642
+//   execdata[sizecode+1]               nslots
+//   execdata[sizecode+2 + 2*i]         站点 i 的 pc（升序）
+//   execdata[sizecode+3 + 2*i]         state = hits<<8 | last_tag
+// ---------------------------------------------------------------------------
+
+const TSFB_MAGIC: u32 = 0x5453_4642;
+
+/// 在 extra 区（自 data[sizecode] 起）定位 TSFB 表：前向扫描 MAGIC，
+/// 校验 nslots 与 pc 升序自洽。返回（表头字下标，nslots）。
+///
+/// # Safety
+/// `data[sc .. sc+limit]` 界内可读（extra 区 + 表自身都在分配内）。
+unsafe fn locate_tsfb(data: *const u32, sc: usize, pc_off: u32) -> Option<(usize, usize)> {
+  unsafe {
+    let mut i = 0usize;
+    while i < sc {
+      if *data.add(sc + i) == TSFB_MAGIC {
+        let nslots = *data.add(sc + i + 1) as usize;
+        let pairs = 2 * nslots;
+        if nslots > 0 && nslots <= 4096 && i + 2 + pairs <= sc + 4096 {
+          // 自洽：pc 升序且不超过 sizecode
+          let mut ok = true;
+          let mut prev = 0u32;
+          for s in 0..nslots {
+            let pc = *data.add(sc + i + 2 + 2 * s);
+            if pc < prev || pc >= sc as u32 {
+              ok = false;
+              break;
+            }
+            prev = pc;
+          }
+          if ok {
+            // 站点存在性可选（pc_off == u32::MAX 表示仅读数，不要求命中）
+            if pc_off == u32::MAX {
+              return Some((sc + i, nslots));
+            }
+            let (mut lo, mut hi) = (0usize, nslots);
+            while lo < hi {
+              let mid = (lo + hi) / 2;
+              if *data.add(sc + i + 2 + 2 * mid) < pc_off {
+                lo = mid + 1;
+              } else {
+                hi = mid;
+              }
+            }
+            if lo < nslots && *data.add(sc + i + 2 + 2 * lo) == pc_off {
+              return Some((sc + i, nslots));
+            }
+            return None;
+          }
+        }
+      }
+      i += 1;
+    }
+    None
+  }
+}
+
+/// 已见过的带 TSFB 侧表的 proto（读数用；仅诊断运行填充）。
+fn tsfb_protos() -> &'static Mutex<Vec<usize>> {
+  static P: OnceLock<Mutex<Vec<usize>>> = OnceLock::new();
+  P.get_or_init(|| Mutex::new(Vec::new()))
+}
+
+/// guard-miss 观测：把 `(pc_off, tag)` 记入 proto 的 TSFB 侧表
+/// （hits 饱和递增、last_tag 覆写）。execdata 缺失/无侧表时静默返回。
+///
+/// # Safety
+/// `proto` 须为存活 Proto 且其 `execdata`（若非空）为本模块布局的堆分配数据区。
+pub unsafe fn tsfb_bump(proto: *const Proto, pc_off: u32, tag: u8) {
+  // SAFETY: 契约保证 proto 存活；execdata/sizecode 为同址字段读，state 写落在
+  // 分配的 extra 区界内（locate_tsfb 已校验表自洽）。
+  unsafe {
+  let d = (*proto).execdata;
+  if d.is_null() {
+    return;
+  }
+  let sc = (*proto).sizecode as usize;
+  let data = d as *const u32;
+  // TSFB 表位置自描述扫描（不依赖 header 偏移）：extra 区自 data[sizecode] 起，
+  // 命中 MAGIC 且 (nslots, pc 升序≤sizecode) 自洽即认定。诊断路径，有界扫描可接受。
+  let (tsfb0, nslots) = match locate_tsfb(data, sc, pc_off) {
+    Some((t, n)) => (t, n),
+    None => return,
+  };
+  let base = data.add(tsfb0 + 2);
+  // pc 升序二分
+  let (mut lo, mut hi) = (0usize, nslots);
+  while lo < hi {
+    let mid = (lo + hi) / 2;
+    if *base.add(2 * mid) < pc_off {
+      lo = mid + 1;
+    } else {
+      hi = mid;
+    }
+  }
+  if lo == nslots || *base.add(2 * lo) != pc_off {
+    return;
+  }
+  let state_ptr = base.add(2 * lo + 1) as *mut u32;
+  let st = *state_ptr;
+  let hits = (st >> 8).min(0xff_ffff);
+  *state_ptr = ((hits + 1) << 8) | tag as u32;
+
+  tsfb_protos().lock().unwrap_or_else(|e| e.into_inner()).push(proto as usize);
+  }
+}
+
+/// TSFB 读数：各 proto 各站点的 pc/hits/last-tag 概览。
+pub fn tsfb_dump() -> String {
+  let protos = tsfb_protos().lock().unwrap_or_else(|e| e.into_inner()).clone();
+  eprintln!("[tsfb-dump] registered protos: {}", protos.len());
+  let mut out = String::new();
+  for (i, p) in protos.iter().enumerate() {
+    let proto = *p as *const Proto;
+    unsafe {
+      let d = (*proto).execdata;
+      if d.is_null() {
+        continue;
+      }
+      let sc = (*proto).sizecode as usize;
+      let data = d as *const u32;
+      let (_, nslots) = match locate_tsfb(data, sc, u32::MAX) {
+        Some(x) => x,
+        None => continue,
+      };
+      out.push_str(&format!("== proto#{i} sizecode={sc} tsfb_sites={nslots}\n"));
+      for s in 0..nslots {
+        let pc = *data.add(sc + 2 + 2 * s);
+        let st = *data.add(sc + 3 + 2 * s);
+        out.push_str(&format!(
+          "  site pc={pc:5} hits={:6} last_tag={}\n",
+          st >> 8,
+          st & 0xff
+        ));
+      }
+    }
+  }
+  out
 }
