@@ -15,7 +15,7 @@ use memchr::memchr;
 
 use crate::{
   functions::{
-    addquoted::addquoted,
+    addquoted::addquoted_ref,
     format_directive::{
       format_bytes, format_char, format_float, format_int, format_uint, parse_format_spec,
     },
@@ -124,7 +124,9 @@ pub(crate) unsafe fn str_format(l: *mut LuaState) -> i32 {
             lua_l_addlstring(&mut b, &out);
           }
           b'q' => {
-            addquoted(l, &mut b, arg);
+            // 取参序对齐 cpp `addquoted(L, b, arg)`：先 `check_bytes` 检出串实参
+            // （非串经 "string expected" 抛出），再喂切片核心转义拼接
+            addquoted_ref(&mut b, (*l).check_bytes(arg));
           }
           b's' => {
             let s = lua_l_checklstring_ref(&mut *l, arg);
