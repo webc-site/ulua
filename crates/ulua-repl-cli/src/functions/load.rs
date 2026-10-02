@@ -52,7 +52,7 @@ unsafe fn spawn_module_thread(l: &mut LuaState) -> *mut LuaState {
     let gl = lua_mainthread(l);
     let ml = lua_newthread(gl);
     lua_xmove(&mut *gl, &mut *l, 1);
-    lua_l_sandboxthread(ml);
+    lua_l_sandboxthread(&mut *ml);
     ml
   }
 }

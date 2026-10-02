@@ -62,7 +62,7 @@ pub(crate) fn run_in_sandbox(source: &str, before_sandbox: impl FnOnce(&mut LuaS
   // 当前线程为沙箱代理线程，均不悬垂传入指针。
   unsafe {
     lua_l_sandbox(from_mut(state));
-    lua_l_sandboxthread(from_mut(state));
+    lua_l_sandboxthread(state);
   }
 
   // 前置（openlibs / 钩子 / sandbox / sandboxthread）恰由上三步成立；`source`

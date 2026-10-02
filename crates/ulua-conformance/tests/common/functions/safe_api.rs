@@ -326,8 +326,8 @@ pub fn sandbox(l: L) {
 
 /// `luaL_sandboxthread`。
 pub fn sandboxthread(l: L) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_l_sandboxthread(l) }
+  // r16-v3：callee 已前移引用形，经 `state_mut` 收口点直传独占引用。
+  lua_l_sandboxthread(state_mut(l))
 }
 
 /// `lua_validate`：VM 内部一致性校验。
@@ -1004,7 +1004,7 @@ pub fn openlibs_and_sandbox_all(l: L) {
   unsafe {
     lua_l_openlibs(&mut *l);
     lua_l_sandbox(l);
-    lua_l_sandboxthread(l);
+    lua_l_sandboxthread(&mut *l);
   }
 }
 

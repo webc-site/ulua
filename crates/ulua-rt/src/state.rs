@@ -774,10 +774,8 @@ pub(crate) fn sandbox_main(state: StateView<'_>) {
 /// 对 `state` 的 `LUA_GLOBALSINDEX` 安装代理全局表，使全局写入留在本线程
 /// （`lua_l_sandboxthread` 收口点，main state 与协程通用）。
 #[inline]
-pub(crate) fn sandbox_thread(state: StateView<'_>) {
-  // Safety: 族级契约;只对该 state 自身的 `LUA_GLOBALSINDEX` 安装代理表,
-  // push/replace 自平衡,不触碰其它状态。
-  unsafe { lua_l_sandboxthread(state.as_mut_ptr()) }
+pub(crate) fn sandbox_thread(mut state: StateView<'_>) {
+  lua_l_sandboxthread(&mut state)
 }
 
 /// 设置 `idx` 处表的 `safeenv` 标志（`lua_setsafeenv` 收口点）。

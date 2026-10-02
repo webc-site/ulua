@@ -43,7 +43,7 @@ pub(crate) fn new_fixture_state(pretty_print: &str) -> Result<LuaStateGuard, Str
   // Safety: 同上，冻结线程全局表。
   unsafe {
     setup_state(l);
-    lua_l_sandboxthread(l);
+    lua_l_sandboxthread(&mut *l);
   }
 
   // Safety: `run_code` 前置（活跃状态机、已 openlibs/sandbox/sandboxthread）恰由

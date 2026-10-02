@@ -37,7 +37,7 @@ pub(crate) fn run_repl() {
   unsafe { sigint_setup::install(l) };
 
   // Safety: l 为本帧存活的刚建状态。
-  unsafe { lua_l_sandboxthread(l) };
+  unsafe { lua_l_sandboxthread(&mut *l) };
   // run_repl_impl 现为 crate 内安全编排 fn；l 在整个交互式循环期间有效且单线程驱动
   // （其文档契约）由本入口守卫保证。
   run_repl_impl(l);

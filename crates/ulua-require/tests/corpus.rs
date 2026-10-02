@@ -401,7 +401,7 @@ impl RequireHost for MemHost {
       let ml = lua_newthread(gl);
       lua_xmove(&mut *gl, &mut *l, 1);
       // new thread needs to have the globals sandboxed
-      lua_l_sandboxthread(ml);
+      lua_l_sandboxthread(&mut *ml);
 
       let load_status = luau_load(ml, &chunkname, &bytecode, 0);
       if load_status == LuaStatus::Ok as i32 {
