@@ -56,7 +56,8 @@ where
   }
 }
 
-pub trait BufferFloat {
+// review.md §7：本项无 crate 外消费，由 pub 收窄为 pub(crate)。
+pub(crate) trait BufferFloat {
   fn from_f64(value: f64) -> Self;
 }
 

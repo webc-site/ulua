@@ -49,7 +49,8 @@ where
   }
 }
 
-pub trait BufferReadableFloat {
+// review.md §7：本项无 crate 外消费，由 pub 收窄为 pub(crate)。
+pub(crate) trait BufferReadableFloat {
   fn to_f64(self) -> f64;
 }
 

@@ -19,7 +19,8 @@ use crate::{
   records::{ftypes::Ftypes, header::Header, lua_l_strbuf::LuaLStrbuf, lua_state::LuaState},
 };
 
-pub const LUAL_PACKPADBYTE: u8 = 0x00;
+// review.md §7：本项无 crate 外消费，由 pub 收窄为 pub(crate)。
+pub(crate) const LUAL_PACKPADBYTE: u8 = 0x00;
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。

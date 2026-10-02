@@ -33,7 +33,8 @@ static PREV: AtomicU16 = AtomicU16::new(NO_PREV);
 
 /// 记录一条派发。
 #[inline(always)]
-pub fn record(op: u8) {
+// review.md §7：本项无 crate 外消费，由 pub 收窄为 pub(crate)。
+pub(crate) fn record(op: u8) {
   OP_COUNT[usize::from(op)].fetch_add(1, Ordering::Relaxed);
   let prev = PREV.swap(u16::from(op), Ordering::Relaxed);
   TRANS[usize::from(prev) * 256 + usize::from(op)].fetch_add(1, Ordering::Relaxed);
