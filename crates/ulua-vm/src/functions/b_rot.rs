@@ -22,7 +22,7 @@ pub(crate) unsafe fn b_rot(l: *mut LuaState, mut i: i32) -> i32 {
       r = (r << i_u) | (r >> (NBITS as u32 - i_u));
     }
 
-    lua_pushunsigned(l, trim(r));
+    lua_pushunsigned(&mut *l, trim(r));
     1
   }
 }

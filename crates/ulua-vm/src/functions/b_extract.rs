@@ -17,7 +17,7 @@ pub(crate) unsafe fn b_extract(l: *mut LuaState) -> i32 {
     let r: BUint = lua_l_checkunsigned(&mut *l, 1);
     let (f, w) = fieldargs(l, 2);
     let r = (r >> f) & mask(w);
-    lua_pushunsigned(l, r);
+    lua_pushunsigned(&mut *l, r);
     1
   }
 }
