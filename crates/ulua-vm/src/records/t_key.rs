@@ -90,7 +90,7 @@ impl TKey {
 
   /// 判断是否为 lightuserdata 类型（cpp `ttislightuserdata`，lobject.h:111）。
   #[inline]
-  pub fn is_lightuserdata(&self) -> bool {
+  pub(crate) fn is_lightuserdata(&self) -> bool {
     self.tt() == LuaType::LightUserData as i32
   }
 
@@ -159,7 +159,7 @@ impl TKey {
   }
 
   #[inline]
-  pub fn set_tt(&mut self, tt: i32) {
+  pub(crate) fn set_tt(&mut self, tt: i32) {
     self.tt_next = (self.tt_next & !K_TT_MASK) | ((tt as u32) & K_TT_MASK);
   }
 

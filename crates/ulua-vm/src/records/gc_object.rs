@@ -1,13 +1,12 @@
 use core::mem::ManuallyDrop;
 
-pub use crate::records::t_string::TString;
 use crate::{
   enums::lua_type::LuaType,
   gc_object_accessors,
   records::{
     closure::Closure, g_cheader::GCheader, lua_state::LuaState, lua_table::LuaTable,
     luau_buffer::LuauBuffer, luau_class::LuauClass, luau_object::LuauObject, proto::Proto,
-    t_string::tstring, udata::Udata, up_val::UpVal,
+    t_string::{TString, tstring}, udata::Udata, up_val::UpVal,
   },
 };
 

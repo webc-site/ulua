@@ -5,7 +5,7 @@ use core::ptr::null_mut;
 use crate::records::{lua_state::LuaState, t_string::tstring};
 
 // luaconf.h:96
-pub const LUA_BUFFERSIZE: usize = 512;
+pub(crate) const LUA_BUFFERSIZE: usize = 512;
 
 /// `luaL_Buffer` 的字符串累加缓冲。生命周期不变量（由 `luaL_buffinit`/`luaL_addlstring`/
 /// `luaL_pushresult` 一族维护，见 functions/lua_l_buffinit.rs 等）：

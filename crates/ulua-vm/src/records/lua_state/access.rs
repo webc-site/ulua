@@ -151,7 +151,7 @@ impl LuaState {
   }
 
   #[inline(always)]
-  pub fn check_type(&mut self, narg: i32, t: LuaType) {
+  pub(crate) fn check_type(&mut self, narg: i32, t: LuaType) {
     // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
     unsafe { lua_l_checktype(self.as_mut_ptr(), narg, t as i32) }
   }
@@ -186,7 +186,7 @@ impl LuaState {
 
   /// 取 `idx` 槽协程指针；非 thread 返回 `None`（可空以 `Option` 表达，不设 null 哨兵，§2）。
   #[inline(always)]
-  pub fn to_thread(&self, idx: i32) -> Option<*mut LuaState> {
+  pub(crate) fn to_thread(&self, idx: i32) -> Option<*mut LuaState> {
     // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），被调方 `# Safety` 其余前提由调用方按文档保证。
     unsafe { lua_tothread(self.read_ptr(), idx) }
   }

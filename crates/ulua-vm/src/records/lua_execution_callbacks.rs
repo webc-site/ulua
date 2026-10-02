@@ -42,4 +42,4 @@ pub struct lua_ExecutionCallbacks {
 
 /// Rust 惯用名。原名 `lua_ExecutionCallbacks` 必须保留：`ulua-code-gen` 直接按该名字构造
 /// 零值回调表（`repr(C)` 使混合大小写命名豁免 casing lint，改动会波及跨 crate 消费方）。
-pub type LuaExecutionCallbacks = lua_ExecutionCallbacks;
+pub(crate) type LuaExecutionCallbacks = lua_ExecutionCallbacks;
