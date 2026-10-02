@@ -568,14 +568,14 @@ fn settable_slow(
 ///
 /// # Safety（内部 unsafe 块契约，签名安全：调用方无需 unsafe 上下文）
 ///
-/// `l` 指向当前执行的存活 `LuaState` 且其 `ci` 活动；`tm` 非空且为 is_c 闭包（调用点已判）；
-/// `args` 各项指向存活栈槽；`l->top + args.len() + 1` 仍在栈预留区内。
+/// `l` 指向当前执行的存活 `LuaState` 且其 `ci` 活动；`tm`/`args` 各项为非空槽引用
+/// （非空由引用类型承载，is_c 判定在调用点）；`l->top + args.len() + 1` 仍在栈预留区内。
 #[inline(always)]
 fn call_c_tm(
   l: *mut LuaState,
   pc: *const Instruction,
-  tm: *const TValue,
-  args: &[*const TValue],
+  tm: &TValue,
+  args: &[&TValue],
   res: i32,
 ) -> StkId {
   // SAFETY: 上述契约保证 l/tm/args 有效，且 top+nparams+1 在 stack..stack+stacksize 内（下方 LUAU_ASSERT 兜底）
@@ -657,7 +657,7 @@ fn luau_jump_eq_heavy(
           ) {
             // note: it's safe to push arguments past top (see top of the file)
             let res = (*l).top.offset_from(base) as i32;
-            base = call_c_tm(l, pc, fn_tm, &[ra, rb], res);
+            base = call_c_tm(l, pc, &*fn_tm, &[&*ra, &*rb], res);
             // l_isfalse 的 nil/boolean 判链收敛为 ValueView match
             let truthy = !matches!(
               ValueView::from_tvalue(&*base.add(res as usize)),
@@ -2088,7 +2088,7 @@ fn s_mulk(
     let kv = VM_KV!(luau_insn_c(insn), cl, k);
 
     if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmMul) {
-      base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
+      base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*kv], luau_insn_a(insn) as i32);
     } else {
       arith_slow!(l, pc, base, ra, rb, kv, TMS::TmMul, {});
     }
@@ -2311,7 +2311,7 @@ fn s_mul(
 
     let rbc = if (*rb).is_number() { rc } else { rb };
     if let Some(fn_tm) = frame.c_tm_by_obj(rbc, TMS::TmMul) {
-      base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+      base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*rc], luau_insn_a(insn) as i32);
     } else {
       arith_slow!(l, pc, base, ra, rb, rc, TMS::TmMul, {});
     }
@@ -2391,7 +2391,7 @@ fn s_sub(
     let rc = VM_REG!(luau_insn_c(insn), l, base);
 
     if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmSub) {
-      base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+      base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*rc], luau_insn_a(insn) as i32);
     } else {
       arith_slow!(l, pc, base, ra, rb, rc, TMS::TmSub, {});
     }
@@ -2477,7 +2477,7 @@ fn s_add(
     let rc = VM_REG!(luau_insn_c(insn), l, base);
 
     if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmAdd) {
-      base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+      base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*rc], luau_insn_a(insn) as i32);
     } else {
       arith_slow!(l, pc, base, ra, rb, rc, TMS::TmAdd, {});
     }
@@ -3338,7 +3338,7 @@ fn tier_cold<const SINGLE_STEP: bool>(
               // fast-path: user data with C __index TM
               if let Some(fn_tm) = frame.c_udata_tm(rb, TMS::TmIndex) {
                 (*l).cachedslot = luau_insn_c(insn) as i32;
-                base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
+                base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*kv], luau_insn_a(insn) as i32);
                 vm_patch_c(pc.sub(2), (*l).cachedslot);
                 continue 'dispatch;
               } else if (*rb).is_vector() {
@@ -3355,7 +3355,7 @@ fn tier_cold<const SINGLE_STEP: bool>(
                 if let Some(fn_tm) = frame.type_metatable_c_tm(LuaType::Vector as u32, TMS::TmIndex)
                 {
                   (*l).cachedslot = luau_insn_c(insn) as i32;
-                  base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
+                  base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*kv], luau_insn_a(insn) as i32);
                   vm_patch_c(pc.sub(2), (*l).cachedslot);
                   continue 'dispatch;
                 }
@@ -3446,7 +3446,7 @@ fn tier_cold<const SINGLE_STEP: bool>(
               // fast-path: user data with C __newindex TM
               if let Some(fn_tm) = frame.c_udata_tm(rb, TMS::TmNewIndex) {
                 (*l).cachedslot = luau_insn_c(insn) as i32;
-                base = call_c_tm(l, pc, fn_tm, &[rb, kv, ra], -1);
+                base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*kv, &*ra], -1);
                 vm_patch_c(pc.sub(2), (*l).cachedslot);
                 continue 'dispatch;
               } else {
@@ -4093,7 +4093,7 @@ fn tier_cold<const SINGLE_STEP: bool>(
             } else {
               let rbc = if (*rb).is_number() { rc } else { rb };
               if let Some(fn_tm) = frame.c_tm_by_obj(rbc, TMS::TmDiv) {
-                base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+                base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*rc], luau_insn_a(insn) as i32);
                 continue 'dispatch;
               } else {
                 arith_slow!(l, pc, base, ra, rb, rc, TMS::TmDiv, {
@@ -4129,7 +4129,7 @@ fn tier_cold<const SINGLE_STEP: bool>(
             } else {
               let rbc = if (*rb).is_number() { rc } else { rb };
               if let Some(fn_tm) = frame.c_tm_by_obj(rbc, TMS::TmIDiv) {
-                base = call_c_tm(l, pc, fn_tm, &[rb, rc], luau_insn_a(insn) as i32);
+                base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*rc], luau_insn_a(insn) as i32);
                 continue 'dispatch;
               } else {
                 arith_slow!(l, pc, base, ra, rb, rc, TMS::TmIDiv, {
@@ -4207,7 +4207,7 @@ fn tier_cold<const SINGLE_STEP: bool>(
                 }
               );
             } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmDiv) {
-              base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
+              base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*kv], luau_insn_a(insn) as i32);
               continue 'dispatch;
             } else {
               arith_slow!(l, pc, base, ra, rb, kv, TMS::TmDiv, {
@@ -4238,7 +4238,7 @@ fn tier_cold<const SINGLE_STEP: bool>(
                 }
               );
             } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmIDiv) {
-              base = call_c_tm(l, pc, fn_tm, &[rb, kv], luau_insn_a(insn) as i32);
+              base = call_c_tm(l, pc, &*fn_tm, &[&*rb, &*kv], luau_insn_a(insn) as i32);
               continue 'dispatch;
             } else {
               arith_slow!(l, pc, base, ra, rb, kv, TMS::TmIDiv, {
@@ -4373,7 +4373,7 @@ fn tier_cold<const SINGLE_STEP: bool>(
               setvvalue!(ra, -vb[0], -vb[1], -vb[2], -frame.lane_at(rb, 3));
               continue 'dispatch;
             } else if let Some(fn_tm) = frame.c_tm_by_obj(rb, TMS::TmUnm) {
-              base = call_c_tm(l, pc, fn_tm, &[rb], luau_insn_a(insn) as i32);
+              base = call_c_tm(l, pc, &*fn_tm, &[&*rb], luau_insn_a(insn) as i32);
               continue 'dispatch;
             } else {
               arith_slow!(l, pc, base, ra, rb, rb, TMS::TmUnm, {
