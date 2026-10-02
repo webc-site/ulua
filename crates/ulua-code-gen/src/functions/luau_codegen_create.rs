@@ -2,7 +2,10 @@ use alloc::boxed::Box;
 use core::ptr::null_mut;
 
 use ulua_common::fint::{LuauCodeGenBlockSize, LuauCodeGenMaxTotalSize};
-use ulua_vm::records::lua_state::LuaState;
+use ulua_vm::{
+  functions::lua_setsafeenv::lua_setsafeenv, macros::lua_globalsindex::LUA_GLOBALSINDEX,
+  records::lua_state::LuaState,
+};
 
 use crate::{
   enums::options::CodeGenContextKind,
@@ -15,6 +18,15 @@ use crate::{
 /// # Safety
 /// `l` 必须是有效且存活的 `LuaState` 指针（对齐 C API 调用契约）。
 pub unsafe fn luau_codegen_create(l: *mut LuaState) {
+  // 激活 safeenv（cpp linit.cpp:105 在 openlibs 里做，本仓库刻意挪到 JIT 启用点）：
+  // safeenv=0 时生成码的 implicit CHECK_SAFE_ENV guard 会把一切带全局读取的模块
+  // 逐调用弹回解释器（实测 nbody 74ms→17ms、fasta -50% 的根因即此）。纯解释路径
+  // （不开 JIT）保持 safeenv=0 的既有已测行为；解释器 import 缓存与 userdata 全局
+  // 的交互（ulua-rt tests::test_fields）在 safeenv=1 下另有一个已记待查问题。
+  unsafe {
+    lua_setsafeenv(l, LUA_GLOBALSINDEX, 1);
+  }
+
   // cpp CodeGen/src/CodeGenContext.cpp:445:
   //   void create(LuaState* L)
   //   { return create(L, size_t(FInt::LuauCodeGenBlockSize),
