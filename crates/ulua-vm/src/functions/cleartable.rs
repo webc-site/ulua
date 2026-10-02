@@ -1,4 +1,5 @@
 use core::{ffi::c_char, mem::size_of};
+use std::mem::size_of_val;
 
 use crate::{
   functions::{
@@ -11,7 +12,6 @@ use crate::{
     setnilvalue::setnilvalue,
   },
   records::{gc_object::GCObject, lua_node::LuaNode, lua_state::LuaState, lua_table::LuaTable},
-  type_aliases::t_value::TValue,
 };
 
 /// # Safety
@@ -50,9 +50,8 @@ pub(crate) unsafe fn cleartable(l: *mut LuaState, mut list: *mut GCObject) -> us
       } else {
         hsize as usize
       };
-      work += size_of::<LuaTable>()
-        + size_of::<TValue>() * (*h).array_window().len()
-        + size_of::<LuaNode>() * hashwork;
+      work +=
+        size_of::<LuaTable>() + size_of_val((*h).array_window()) + size_of::<LuaNode>() * hashwork;
 
       // 数组段切 array_window_mut 共享窗：array 与 sizearray 自洽（契约），null 数组
       // 归空窗；每格判清与否只看自身白性，逆序切片遍历与 cpp `while (i--)` 逐指令

@@ -1,10 +1,10 @@
 use core::{ffi::c_void, mem::size_of};
+use std::mem::size_of_val;
 
 use crate::{
   functions::{c_file_write_bytes, dump_json_head, dumpref::dumpref, dumprefs::dumprefs},
   macros::{gcvalue::gcvalue, iscollectable::iscollectable, obj_2_gco::obj2gco},
-  records::{lua_node::LuaNode, lua_table::LuaTable},
-  type_aliases::t_value::TValue,
+  records::lua_table::LuaTable,
 };
 
 /// # Safety
@@ -18,9 +18,9 @@ pub(crate) unsafe fn dumptable(f: *mut c_void, h: &LuaTable) {
       + if h.is_hash_dummy() {
         0
       } else {
-        nodes.len() * size_of::<LuaNode>()
+        size_of_val(nodes)
       }
-      + h.array_window().len() * size_of::<TValue>();
+      + size_of_val(h.array_window());
 
     dump_json_head(f, "table", h.memcat, size as i32);
 
