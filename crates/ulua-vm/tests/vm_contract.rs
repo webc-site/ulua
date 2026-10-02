@@ -101,7 +101,11 @@ fn gc_ispaused_follows_gcstate_contract() {
       let buf = format!("ispaused-garbage-{i}-{}", "y".repeat(256));
       lua_pushlstring(s.l, buf.as_ptr() as *const c_char, buf.len());
     }
-    assert_eq!(lua_gc(&mut *s.l, LuaGcOp::Step as i32, 1), 0, "小步不应完成周期");
+    assert_eq!(
+      lua_gc(&mut *s.l, LuaGcOp::Step as i32, 1),
+      0,
+      "小步不应完成周期"
+    );
     assert_eq!(
       lua_gc(&mut *s.l, LuaGcOp::IsPaused as i32, 0),
       0,

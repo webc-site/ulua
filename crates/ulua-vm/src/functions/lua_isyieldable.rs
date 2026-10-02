@@ -6,9 +6,5 @@ use crate::records::lua_state::LuaState;
 /// 正被当前线程驱动的存活 `LuaState`——判读语义与该前置条件由本实现内部承接，
 /// 调用方不再需要 unsafe。
 pub fn lua_isyieldable(l: &LuaState) -> i32 {
-  if l.n_ccalls <= l.base_ccalls {
-    1
-  } else {
-    0
-  }
+  if l.n_ccalls <= l.base_ccalls { 1 } else { 0 }
 }
