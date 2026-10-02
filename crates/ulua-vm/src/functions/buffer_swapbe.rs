@@ -39,6 +39,30 @@ macro_rules! impl_swap_be {
 
 impl_swap_be!(i8, u8, i16, u16, i32, u32, i64, u64);
 
+/// 浮点的 `buffer_swapbe`：cpp 调用点（`lbuflib.cpp:146-198` 的 readfp/writefp）从不把
+/// 浮点直接喂给 `buffer_swapbe<T>`，而是经同宽整型 `StorageType`（f32↔u32、f64↔u64）
+/// 中转：`memcpy` 出整型位模式 → `htole32/htole64` 翻转字节 → `memcpy` 回浮点。
+/// 本宏逐位复刻该路径：`to_bits`/`from_bits` 是 IEEE-754 位模式与整型的双射
+/// （任意位模式含 NaN 均为合法值，与 `static_cast<StorageType>` 前的 memcpy 同义），
+/// 翻转落在对应无符号整型宽度上，两端 `sizeof(T) == sizeof(StorageType)`
+/// （cpp `static_assert`）由 `$bits` 选型在编译期固化。
+macro_rules! impl_swap_be_float {
+  ($($t:ty => $bits:ty),* $(,)?) => {
+    $(
+      impl Sealed for $t {}
+
+      impl SwapBe for $t {
+        #[inline(always)]
+        fn swap_be(self) -> Self {
+          Self::from_bits(<$bits>::swap_bytes(self.to_bits()))
+        }
+      }
+    )*
+  };
+}
+
+impl_swap_be_float!(f32 => u32, f64 => u64);
+
 macro_rules! impl_buffer_int {
   ($($t:ty),* $(,)?) => {
     $(
