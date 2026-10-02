@@ -1,6 +1,6 @@
-use core::{ffi::c_char, ops::ControlFlow, slice::from_raw_parts};
+use core::ops::ControlFlow;
 
-use crate::{functions::cstr_bytes, macros::lua_l_error::luaL_error, records::header::Header};
+use crate::{macros::lua_l_error::luaL_error, records::header::Header};
 
 /// 上游 Luau MAXSSIZE：((INT_MAX >> 1) + 1)，即 1073741824
 const MAX_SSIZE: i32 = 1073741824;
@@ -57,22 +57,21 @@ const MAX_DIGIT_SCAN: usize = 32;
 
 /// 格式串读取游标（C++ `const char** fmt` 的切片/索引形态替代）。
 ///
-/// `bytes` 覆盖格式串 payload 及其终止 NUL（长度 = strlen + 1），与 C++ 游标
-/// 可读到终止符的点位同构；越界读经 `at` 归一为 NUL(0)。外层入口以
-/// `cur() != 0` 钳位，pos 恒不超过串尾。
+/// `bytes` 为格式串 **payload 切片**（不含终止 NUL；r12-w6e 入约，先例
+/// `utf_8_decode.rs`/`byteoffset.rs`）：cpp 游标可读到串尾终止 NUL 的点位，本形
+/// 同位经 [`Self::at`] 越界 `get` 归一为 0，逐点同构。游标永不跨过首个 NUL——
+/// 外层以 `cur() != 0` 钳位、`getoption` 仅在 `cur` 非零时 bump、`getnum` 数字扫描
+/// 止于非数字（NUL 恒非数字），故 payload 中首个 NUL（含内嵌零）之后的字节在
+/// 两端实现中均不可观察。
 pub(crate) struct FmtCursor<'a> {
   bytes: &'a [u8],
   pos: usize,
 }
 
 impl<'a> FmtCursor<'a> {
-  /// # Safety
-  /// `p` 必须指向可读且 NUL 终止的串数据（`luaL_checkstring` 检出的格式串 payload）。
-  pub(crate) unsafe fn from_ptr(p: *const c_char) -> Self {
-    // SAFETY: 契约保证 p 串身至终止 NUL 可读
-    let len = unsafe { cstr_bytes(p) }.len();
-    // SAFETY: 同上，p[..=len] 覆盖 payload 与终止 NUL
-    let bytes = unsafe { from_raw_parts(p as *const u8, len + 1) };
+  /// 自 payload 切片建游标（r12-w6e：替代旧 `from_ptr` 的 cstr_bytes strlen +
+  /// `from_raw_parts` 含 NUL 裸窗形；消费面实测=pack 族三入口，全数换形后核体灭形）。
+  pub(crate) fn from_slice(bytes: &'a [u8]) -> Self {
     Self { bytes, pos: 0 }
   }
 
