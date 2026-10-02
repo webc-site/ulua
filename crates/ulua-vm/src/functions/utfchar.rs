@@ -20,7 +20,7 @@ pub unsafe fn utfchar(l: *mut LuaState) -> i32 {
     if n == 1 {
       // optimize common case of single char
       let charstr = buffutfchar(l, 1, &mut buff);
-      lua_pushlstring_bytes(l, charstr);
+      lua_pushlstring_bytes(&mut *l, charstr);
     } else {
       let mut b = LuaLStrbuf::new();
       lua_l_buffinit(&mut *l, &mut b);

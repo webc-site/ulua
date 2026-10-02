@@ -40,7 +40,7 @@ pub unsafe fn lua_l_getmetafield_bytes(l: *mut LuaState, obj: i32, event: &[u8])
       return 0; // no metatable
     }
 
-    lua_pushlstring_bytes(l, event);
+    lua_pushlstring_bytes(&mut *l, event);
     metafield_rawget(l)
   }
 }
@@ -56,7 +56,8 @@ pub unsafe fn lua_l_getmetafield(l: *mut LuaState, obj: i32, event: *const c_cha
     }
 
     // 保 C 契约的 null→nil 键分支；非空即与 `lua_l_getmetafield_bytes(cstr_bytes(event))` 同路径
-    lua_pushstring(l, event);
+    // SAFETY: `l` 为存活调用帧，`&mut *l` 一次性重借用即垫片期望的接收者形
+    lua_pushstring(&mut *l, event);
     metafield_rawget(l)
   }
 }

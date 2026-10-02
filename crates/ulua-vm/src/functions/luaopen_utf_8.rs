@@ -27,7 +27,7 @@ pub unsafe fn luaopen_utf_8(l: *mut LuaState) -> i32 {
     const UTF8_PATT: [u8; 14] = [
       0x5B, 0x00, 0x2D, 0x7F, 0xC2, 0x2D, 0xF4, 0x5D, 0x5B, 0x80, 0x2D, 0xBF, 0x5D, 0x2A,
     ];
-    lua_pushlstring_bytes(l, &UTF8_PATT);
+    lua_pushlstring_bytes(&mut *l, &UTF8_PATT);
     (*l).set_field_bytes(-2, b"charpattern");
 
     1

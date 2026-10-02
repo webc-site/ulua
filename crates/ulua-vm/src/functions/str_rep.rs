@@ -26,7 +26,7 @@ pub(crate) unsafe fn str_rep(l: *mut LuaState) -> i32 {
     let n = (*l).check_integer(2);
 
     if n <= 0 {
-      lua_pushlstring_bytes(l, &[]);
+      lua_pushlstring_bytes(&mut *l, &[]);
       return 1;
     }
 

@@ -15,10 +15,10 @@ use crate::{
 /// `_fmt` 仅为镜像 cpp `laux.cpp:88` `luaL_error` 的公开签名（外部 crate 以
 /// `c"..."` 实参调用）；实际格式化由 `args`（`format_args!` 产物）完成。
 pub unsafe fn lua_l_error_l(l: *mut LuaState, _fmt: *const c_char, args: Arguments<'_>) -> ! {
-  // SAFETY: fmt 与可变参按 `%s/%d/%f` 约定严格匹配（错配即 UB），块内经 lua_o_pushvfstring 格式化后经 `l` 抛出、不返回
+  // SAFETY: fmt 与可变参按 `%s/%d/%f` 约定严格匹配（错配即 UB），块内经 lua_o_pushvfstring_ref 格式化后经 `l` 抛出、不返回
   unsafe {
     lua_l_where(l, 1);
-    lua_pushvfstring(l, args);
+    lua_pushvfstring(&mut *l, args);
     (*l).concat(2);
     lua_error(&mut *l)
   }

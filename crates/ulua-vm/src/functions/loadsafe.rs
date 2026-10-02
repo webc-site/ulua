@@ -24,7 +24,7 @@ use crate::{
     lua_h_set::lua_h_set,
     lua_h_setstr::lua_h_setstr,
     lua_o_chunkid::lua_o_chunkid,
-    lua_pushlstring::lua_pushlstring,
+    lua_pushlstring::lua_pushlstring_bytes,
     lua_r_newclass::lua_r_newclass,
     lua_s_newlstr::lua_s_newlstr,
     read::read,
@@ -972,15 +972,15 @@ fn chunkid_buf<'a>(buf: &'a mut [c_char; LUA_IDSIZE as usize], name: &'a [u8]) -
   }
 }
 
-/// 把错误消息字节压入 `l` 栈顶：`lua_pushlstring` 在返回前完成拷贝，
+/// 把错误消息字节压入 `l` 栈顶：`lua_pushlstring_bytes` 在返回前完成拷贝，
 /// `bytes` 只需在调用期间可读。
 ///
 /// # Safety
 ///
 /// `l` 必须指向存活的 `LuaState`（且栈有可写余量，错误路径均在受保护帧内）。
 unsafe fn push_bytes(l: *mut LuaState, bytes: &[u8]) {
-  // SAFETY: 契约保证 l 存活可承接压栈；&[u8] 的 ptr/len 构成合法可读区间
-  unsafe { lua_pushlstring(l, bytes.as_ptr().cast(), bytes.len()) };
+  // SAFETY: 契约保证 l 存活可承接压栈；bytes 为借用切片，核心界内拷入堆串不留存
+  unsafe { lua_pushlstring_bytes(&mut *l, bytes) };
 }
 
 // r7-tprod2 尾矿台账（本文件票面 1 枚：让 1）——:950 push_chunk_error 错误臂

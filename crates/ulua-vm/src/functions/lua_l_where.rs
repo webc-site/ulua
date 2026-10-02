@@ -24,7 +24,7 @@ pub(crate) unsafe fn lua_l_where(l: *mut LuaState, level: i32) {
     for _ in 0..level {
       if ci == (*l).base_ci {
         lua_rawcheckstack(l, 1);
-        lua_pushlstring_bytes(l, b"");
+        lua_pushlstring_bytes(&mut *l, b"");
         return;
       }
       ci = ci.sub(1);
@@ -43,12 +43,12 @@ pub(crate) unsafe fn lua_l_where(l: *mut LuaState, level: i32) {
       let line = currentline(&*ci);
       if line > 0 {
         let chunk = cstr_cow(chunkid);
-        lua_o_pushfstring(l, format_args!("{}:{}: ", chunk, line));
+        lua_o_pushfstring(&mut *l, format_args!("{}:{}: ", chunk, line));
         return;
       }
     }
 
     lua_rawcheckstack(l, 1);
-    lua_pushlstring_bytes(l, b"");
+    lua_pushlstring_bytes(&mut *l, b"");
   }
 }

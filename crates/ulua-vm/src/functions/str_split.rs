@@ -35,7 +35,7 @@ pub unsafe fn str_split(l: *mut LuaState) -> i32 {
       lua_createtable(l, haystack_len as i32, 0);
 
       for (idx, ch) in hay.iter().enumerate() {
-        lua_pushlstring_bytes(l, from_ref(ch));
+        lua_pushlstring_bytes(&mut *l, from_ref(ch));
         lua_rawseti(&mut *l, -2, idx as i32 + 1);
       }
 
@@ -47,13 +47,13 @@ pub unsafe fn str_split(l: *mut LuaState) -> i32 {
       lua_createtable(l, count as i32, 0);
 
       for found in memchr::memchr_iter(sep, hay) {
-        lua_pushlstring_bytes(l, &hay[span_start..found]);
+        lua_pushlstring_bytes(&mut *l, &hay[span_start..found]);
         num_matches += 1;
         lua_rawseti(&mut *l, -2, num_matches);
         span_start = found + 1;
       }
 
-      lua_pushlstring_bytes(l, &hay[span_start..]);
+      lua_pushlstring_bytes(&mut *l, &hay[span_start..]);
       num_matches += 1;
       lua_rawseti(&mut *l, -2, num_matches);
 
@@ -73,7 +73,7 @@ pub unsafe fn str_split(l: *mut LuaState) -> i32 {
             iter += offset;
             let cand = &hay[iter..iter + needle_len];
             if cand[needle_len - 1] == last_ch && cand == nee {
-              lua_pushlstring_bytes(l, &hay[span_start..iter]);
+              lua_pushlstring_bytes(&mut *l, &hay[span_start..iter]);
               num_matches += 1;
               lua_rawseti(&mut *l, -2, num_matches);
 
@@ -88,7 +88,7 @@ pub unsafe fn str_split(l: *mut LuaState) -> i32 {
         }
       }
 
-      lua_pushlstring_bytes(l, &hay[span_start..]);
+      lua_pushlstring_bytes(&mut *l, &hay[span_start..]);
       num_matches += 1;
       lua_rawseti(&mut *l, -2, num_matches);
 

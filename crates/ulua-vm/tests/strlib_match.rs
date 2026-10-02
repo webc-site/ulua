@@ -64,7 +64,7 @@ impl Str {
       (*l).get_field_bytes(LUA_GLOBALSINDEX, b"string");
       (*l).get_field_str(1, name);
       for arg in args {
-        lua_pushlstring_bytes(l, arg);
+        lua_pushlstring_bytes(&mut *l, arg);
       }
     }
   }

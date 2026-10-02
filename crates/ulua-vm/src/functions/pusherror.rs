@@ -32,7 +32,7 @@ pub(crate) unsafe fn pusherror_bytes(l: *mut LuaState, msg: &[u8]) {
       let line = currentline(&*ci);
       let chunk = cstr_cow(chunkid);
       let msg_str = String::from_utf8_lossy(msg);
-      lua_o_pushfstring(l, format_args!("{}:{}: {}", chunk, line, msg_str));
+      lua_o_pushfstring(&mut *l, format_args!("{}:{}: {}", chunk, line, msg_str));
     } else {
       (*l).push_bytes(msg);
     }

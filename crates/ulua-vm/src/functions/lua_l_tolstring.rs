@@ -42,13 +42,13 @@ pub unsafe fn lua_l_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a 
 
     match (*l).type_of(idx) {
       LuaType::Nil => {
-        lua_pushlstring_bytes(l, b"nil");
+        lua_pushlstring_bytes(&mut *l, b"nil");
       }
       LuaType::Boolean => {
         if (*l).to_boolean(idx) {
-          lua_pushlstring_bytes(l, b"true");
+          lua_pushlstring_bytes(&mut *l, b"true");
         } else {
-          lua_pushlstring_bytes(l, b"false");
+          lua_pushlstring_bytes(&mut *l, b"false");
         }
       }
       LuaType::Number => {
@@ -56,7 +56,7 @@ pub unsafe fn lua_l_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a 
         let n = lua_tonumberx(&*l, idx).unwrap_or(0.0);
         let mut s = [0u8; LUAI_MAXNUM2STR as usize];
         let len = luai_num2str_buf(&mut s, n);
-        lua_pushlstring_bytes(l, &s[..len]);
+        lua_pushlstring_bytes(&mut *l, &s[..len]);
       }
       LuaType::Vector => {
         let v = lua_tovector(&*l, idx);
@@ -70,7 +70,7 @@ pub unsafe fn lua_l_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a 
           }
           pos += luai_num2str_buf(&mut s[pos..], comp as f64);
         }
-        lua_pushlstring_bytes(l, &s[..pos]);
+        lua_pushlstring_bytes(&mut *l, &s[..pos]);
       }
       LuaType::String => {
         (*l).push_value(idx);
@@ -79,13 +79,13 @@ pub unsafe fn lua_l_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a 
         let val = lua_tointeger_64(&*l, idx);
         let mut s = [0u8; LUAI_MAXINT2STR as usize];
         let len = luai_int2str(&mut s, val);
-        lua_pushlstring_bytes(l, &s[..len]);
+        lua_pushlstring_bytes(&mut *l, &s[..len]);
       }
       _ => {
         let ptr = lua_topointer(l, idx);
         let enc = lua_encodepointer(&*l, ptr as usize);
         let name = cstr_cow(lua_l_typename(&*l, idx));
-        lua_pushfstring_l(l, format_args!("{}: 0x{:016x}", name, enc));
+        lua_pushfstring_l(&mut *l, format_args!("{}: 0x{:016x}", name, enc));
       }
     }
 

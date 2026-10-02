@@ -68,7 +68,7 @@ pub(crate) unsafe fn lua_l_pushresult(b: &mut LuaLStrbuf) {
       // `[buffer, p)` 窗可读；`l` 为存活帧
       unsafe {
         let base = b.buffer.as_ptr();
-        lua_pushlstring_bytes(l, c_slice(base, b.p.offset_from(base) as usize));
+        lua_pushlstring_bytes(&mut *l, c_slice(base, b.p.offset_from(base) as usize));
       }
     }
   }

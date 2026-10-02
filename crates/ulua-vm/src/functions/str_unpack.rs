@@ -90,20 +90,20 @@ pub(crate) unsafe fn str_unpack(l: *mut LuaState) -> i32 {
           (*l).push_number(num);
         }
         KOption::Kchar => {
-          lua_pushlstring_bytes(l, &win[p..p + size as usize]);
+          lua_pushlstring_bytes(&mut *l, &win[p..p + size as usize]);
         }
         KOption::Kstring => {
           let len = unpackint(l, &win[p..p + size as usize], h.islittle, size, 0) as usize;
           (*l).arg_check(len <= ld - p - size as usize, 2, "data string too short");
           let q = p + size as usize;
-          lua_pushlstring_bytes(l, &win[q..q + len]);
+          lua_pushlstring_bytes(&mut *l, &win[q..q + len]);
           pos += len as i32;
         }
         KOption::Kzstr => {
           // 从当前偏移单遍扫描首个 NUL 求 strlen（含终止 NUL 恒命中）
           let len = memchr(0, &win[p..]).unwrap_or(0);
           (*l).arg_check(p + len < ld, 2, "unfinished string for format 'z'");
-          lua_pushlstring_bytes(l, &win[p..p + len]);
+          lua_pushlstring_bytes(&mut *l, &win[p..p + len]);
           pos += len as i32 + 1;
         }
         KOption::Kpaddalign | KOption::Kpadding | KOption::Knop => {

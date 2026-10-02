@@ -26,7 +26,7 @@ pub unsafe fn str_sub(l: *mut LuaState) -> i32 {
 
     if start <= end {
       // 上方钳位保证 1 <= start <= end <= len，切片区间恒界内
-      lua_pushlstring_bytes(l, &s[(start - 1) as usize..end as usize]);
+      lua_pushlstring_bytes(&mut *l, &s[(start - 1) as usize..end as usize]);
     } else {
       (*l).push_bytes(b"");
     }

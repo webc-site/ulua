@@ -23,7 +23,7 @@ pub(crate) unsafe fn buffer_readstring(l: *mut LuaState) -> i32 {
 
     // buffer_at_ref 的 isoutofbounds 已保证 [offset, offset+size) 落在 buffer 数据界内
     let region = buffer_at_ref(l, buf, offset, size as usize);
-    lua_pushlstring_bytes(l, region);
+    lua_pushlstring_bytes(&mut *l, region);
 
     1
   }
