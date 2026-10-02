@@ -713,8 +713,9 @@ pub fn getuserdatadtor(l: L, tag: i32) -> LuaDestructor {
 
 /// `lua_setuserdatadtor(l, tag, dtor)`：注册 tag 全局析构。
 pub fn setuserdatadtor(l: L, tag: i32, dtor: LuaDestructor) {
-  // Safety: `l` 存活；`tag` 界内；`dtor` 遵循 Lua 析构 C 约定。
-  unsafe { lua_setuserdatadtor(l, tag, dtor) }
+  // r16-v4：callee 已引用形 safe 化，`state_mut` 判空重建独占 `&mut LuaState` 收口；
+  // `dtor` 遵循 Lua 析构 C 约定（用例桩函数自带）
+  lua_setuserdatadtor(state_mut(l), tag, dtor)
 }
 
 /// `lua_getuserdatametatable(l, tag)`：把 tag 全局元表压栈。

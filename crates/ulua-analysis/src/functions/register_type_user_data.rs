@@ -217,8 +217,10 @@ pub(crate) unsafe fn register_type_user_data(l: *mut LuaState) {
 
     // Sets up a destructor for the type userdata.
     // lua_setuserdatadtor(l, kTypeUserdataTag, deallocTypeUserData);
+    // r16-v4：callee 换 `&mut LuaState` 引用形，`vm_l` 就地重借独占引用（单实参单借用，
+    // 前面各 `(*vm_l).…` 具名方法调用均已短借即还，无并存别名）；`l` 存活由本函数契约保证
     lua_setuserdatadtor(
-      vm_l,
+      &mut *vm_l,
       K_TYPE_USERDATA_TAG,
       Some(dealloc_type_user_data_thunk),
     );
