@@ -22,6 +22,14 @@ use crate::{
 /// 上仅含恢复流程构造的续体帧（C `cont` 或 Lua 主体），`base_ccalls == n_ccalls`
 /// 由循环内 `LUAU_ASSERT!` 把守。
 pub(crate) unsafe fn resume_continue(l: *mut LuaState) {
+  // r14-p3 逐点定性（w6d 口径保留面）：循环条件与续体后判定中 `==Ok as u8` 谓词、
+  // SCHEDULED_REENTRY（0x7f）原值消费谓词两处均不可换 status() 门面——non-repr
+  // 0x7f→Ok 兜底恰改这两类谓词真值（判例见 r13-w1b resume_finish Ok 谓词保留与
+  // 本票收编判据「仅全部消费点为判别值谓词」），保留裸字段比较形；status 判别值
+  // 写面（=Ok as u8）无门面保留；ccount 族断言、ci/base_ci 帧链现读与 ci flags 帧面
+  // （HANDLE 清位、OPYIELD 读判）属帧 ABI 覆盖面外点位，保留。收编两处：续体返回
+  // 后 Break/Yield 双判别值谓词经既有 status() 门面（w1b resume_finish 真值表论证
+  // 同款）；结果窗起点地址经 top_slot(-n) 现读（本波裁决，见行前注）。
   unsafe {
     // unroll Luau/C combined stack, processing continuations
     while ((*l).status == LuaStatus::Ok as u8 || (*l).status == SCHEDULED_REENTRY as u8)
@@ -46,7 +54,11 @@ pub(crate) unsafe fn resume_continue(l: *mut LuaState) {
           let n = cont(l, 0);
 
           // continuation can break or yield again
-          if (*l).status == LuaStatus::Break as u8 || (*l).status == LuaStatus::Yield as u8 {
+          // 收编：Break/Yield 双判别值谓词经既有 status() 门面——from_repr(Break)
+          // 当且仅当字段为 6、from_repr(Yield) 当且仅当字段为 1，non-repr 兜底 Ok
+          // 亦 ≠Break/Yield，谓词逐位等价（w1b resume_finish Break 谓词真值表论证
+          // 同款）；读数位点不变，仍续体返回后现读场域
+          if (*l).status() == LuaStatus::Break || (*l).status() == LuaStatus::Yield {
             break;
           }
 
@@ -54,9 +66,13 @@ pub(crate) unsafe fn resume_continue(l: *mut LuaState) {
             continue;
           }
 
-          // 保留（恢复点后现读·同形单点）：`cont(l, 0)` 可再入执行/搬栈，结果窗起点
-          // 必须现读场域——cpp 同形 `luau_poscall(L, L->top - n)` 的单点最小读面
-          luau_poscall(l, (*l).top.offset(-(n as isize)));
+          // 收编（本波 r14-p3 裁决）：结果窗起点地址经 top_slot(-n) 边界原语——
+          // top_slot 为 inline(always) 现读场域顶，位点不变即允许同位换形；禁
+          // 预绑定/缓存（cont 可再入执行/搬栈，读数必须现读）。裁决援引：r12
+          // 「恢复点后同形单点保留」前案在此收窄为「裸字段整体搬运保留、算术
+          // 读数操作数面换形收编」，终形同 w1b resume_finish 顶槽读数收编与
+          // lua_v_call_tm 的 top_slot(-n) 负偏移判例——偏移量逐位同值
+          luau_poscall(l, (*l).top_slot(-(n as isize)));
         }
       } else {
         if ((*(*l).ci).flags & LUA_CALLINFO_OPYIELD as u32) != 0 {

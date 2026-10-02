@@ -891,7 +891,11 @@ pub(crate) unsafe fn loadsafe(
     }
 
     let cl = lua_f_new_lclosure(l, 0, envt, main);
-    setclvalue!(l, (*l).top, cl);
+    // r14-p3 收编：顶槽写入基址读数经 top_slot(0) 边界原语（off=0 即保留顶槽，
+    // 镜像 cpp `L->top` 读数形，同址同值）。红线位点：读数在 lua_f_new_lclosure
+    // （可触发 GC）之后、incr_top 抬顶之前，即派即用禁上提（本文件 r12-w9b
+    // top_slot(-1) 现读判例同款——上提会跨 GC 窗改时序），替换位点地址不变
+    setclvalue!(l, (*l).top_slot(0), cl);
     incr_top!(l);
 
     0
