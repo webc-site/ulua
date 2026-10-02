@@ -59,6 +59,9 @@ const K_LUA_NODE_SIZE_LOG2: i32 = 5;
 const K_OFFSET_OF_TKEY_TAG_NEXT: i32 = 12;
 const K_TKEY_TAG_BITS: i32 = 4;
 const K_TKEY_TAG_MASK: i32 = (1 << K_TKEY_TAG_BITS) - 1;
+/// `TKey.extra`（+8，与 `tt_next`(+12) 相邻）；`t_key` 模块私有，offset 数值冻结于
+/// `TKey` repr(C) 布局（value 8B + extra 4B + tt_next 4B）。
+const K_OFFSET_OF_TKEY_EXTRA: i32 = K_OFFSET_OF_TKEY_TAG_NEXT - 4;
 const INT_MAX: i32 = i32::MAX;
 // 结构体偏移由编译器按 Rust 布局计算, 对齐 cpp 的 offsetof(TString, len) / offsetof(Buffer, len)
 const K_TSTRING_LEN_OFFSET: i32 = offset_of!(tstring, len) as i32;
@@ -4001,6 +4004,49 @@ impl IrLoweringX64 {
       }
       IrCmd::CheckReadonly => self.lower_check_table_field(inst, index, next, true),
       IrCmd::CheckNoMetatable => self.lower_check_table_field(inst, index, next, false),
+      IrCmd::CheckNoNewindexMeta => {
+        // J4b：cpp `fastnotm(metatable, TM_NEWINDEX)`（ltm.h:52——位=1 为缺失、
+        // TmNewIndex=1）直插前提：metatable 为 NULL 或 tmcache 缺席位已置才可插；
+        // metatable 存在且未标缺失（__newindex 存在）跳 op(1)（helper 块）。
+        let tmp = self.alloc_scoped_reg(SizeX64::Qword);
+        let mut fresh = Label::default();
+        let mut fast = Label::default();
+
+        let hoist_tbl = self.reg_op(inst.op(0));
+        self.emit_mov(
+          OperandX64::reg(tmp.reg),
+          OperandX64::mem(
+            SizeX64::Qword,
+            RegisterX64::NOREG,
+            1,
+            hoist_tbl,
+            (offset_of!(LuaTable, metatable) as i32),
+          ),
+        );
+        self.build_mut().test(
+          OperandX64::reg(tmp.reg),
+          OperandX64::reg(tmp.reg),
+        );
+        self.build_mut().jcc(ConditionX64::Zero, &mut fast);
+
+        CODEGEN_ASSERT!((TMS::TmNewIndex as u32) < 8);
+        self.build_mut().test(
+          OperandX64::mem(
+            SizeX64::Byte,
+            RegisterX64::NOREG,
+            1,
+            tmp.reg,
+            (offset_of!(LuaTable, tmcache) as i32),
+          ),
+          OperandX64::imm(1_i32 << (TMS::TmNewIndex as i32)),
+        );
+        let label = self.get_target_label(inst.op(1), index, &mut fresh);
+        self.with_target_label(label, |s, l| {
+          s.build_mut().jcc(ConditionX64::Zero, l)
+        });
+        self.build_mut().set_label(&mut fast);
+        self.finalize_target_label(inst.op(1), index, &mut fresh);
+      }
       IrCmd::CheckSafeEnv => {
         self.check_safe_env(inst.op(0), index, next);
       }
@@ -4141,6 +4187,138 @@ impl IrLoweringX64 {
           OperandX64::imm((LuaType::Nil as u8) as i32),
         );
         self.jump_or_abort_on_undef_condition(ConditionX64::Equal, inst.op(1), index, next);
+      }
+      IrCmd::CheckNodeInsertable => {
+        // J4b：主位可插判定（cpp `luaH_newkey` 主位空分支前提），两查皆过才落
+        // 插入 store 序列；任一失败跳 op(2)（helper 块）。双条件共享同一 fresh。
+        let tmp = self.alloc_scoped_reg(SizeX64::Qword);
+        let mut fresh = Label::default();
+
+        // 哨兵表（t->node == dummynode）→ 不可插：插入需 rehash 换发实向量
+        let hoist_tbl = self.reg_op(inst.op(1));
+        self.emit_mov(
+          OperandX64::reg(tmp.reg),
+          OperandX64::mem(
+            SizeX64::Qword,
+            RegisterX64::NOREG,
+            1,
+            hoist_tbl,
+            (offset_of!(LuaTable, node) as i32),
+          ),
+        );
+        self.build_mut().cmp(
+          OperandX64::reg(tmp.reg),
+          OperandX64::mem(
+            SizeX64::Qword,
+            RegisterX64::NOREG,
+            1,
+            R_NATIVE_CONTEXT,
+            (offset_of!(NativeContext, dummynode) as i32),
+          ),
+        );
+        self.jump_or_abort_on_undef_no_finalize(
+          ConditionX64::Equal,
+          inst.op(2),
+          index,
+          next,
+          &mut fresh,
+        );
+
+        // 主位被占（val.tt != NIL）→ 不可插：cpp 走 freepos/碰撞链
+        let hoist_node = self.reg_op(inst.op(0));
+        self.emit_cmp(
+          OperandX64::mem(
+            SizeX64::Dword,
+            RegisterX64::NOREG,
+            1,
+            hoist_node,
+            (offset_of!(LuaNode, val) as i32) + (offset_of!(TValue, tt) as i32),
+          ),
+          OperandX64::imm((LuaType::Nil as u8) as i32),
+        );
+        self.jump_or_abort_on_undef_no_finalize(
+          ConditionX64::NotEqual,
+          inst.op(2),
+          index,
+          next,
+          &mut fresh,
+        );
+        self.finalize_target_label(inst.op(2), index, &mut fresh);
+      }
+      IrCmd::StoreNodeKey => {
+        // J4b：cpp `luaH_set` 前提的 `invalidateTMcache(t)`（ltable.h:15，
+        // t->tmcache = 0）——新键插入作废本表作为 metatable 的元方法缺席缓存。
+        let hoist_tm_tbl = self.reg_op(inst.op(2));
+        self.build_mut().mov(
+          OperandX64::mem(
+            SizeX64::Byte,
+            RegisterX64::NOREG,
+            1,
+            hoist_tm_tbl,
+            (offset_of!(LuaTable, tmcache) as i32),
+          ),
+          OperandX64::imm(0_i32),
+        );
+
+        // cpp `setnodekey` 三件套——key.value 拷自 k[aux].value（8B）、
+        // extra 清零、tt=LUA_TSTRING 且 next 位随整字归零。
+        // 红线：禁止 16B 整拷 k TValue（TKey.extra 与 TValue.tt/extra 语义不同位）。
+        let tmp = self.alloc_scoped_reg(SizeX64::Qword);
+
+        // node.key.value = k[aux].value
+        let hoist_kv = luau_constant_value(vm_const_op(inst.op(1)));
+        self.emit_mov(OperandX64::reg(tmp.reg), hoist_kv);
+        let hoist_key_value = self.reg_op(inst.op(0));
+        self.build_mut().mov(
+          OperandX64::mem(
+            SizeX64::Qword,
+            RegisterX64::NOREG,
+            1,
+            hoist_key_value,
+            (offset_of!(LuaNode, key) as i32) + (offset_of!(TValue, value) as i32),
+          ),
+          OperandX64::reg(tmp.reg),
+        );
+
+        // key.extra(+8) 清零（cpp setnodekey 的 memcpy extra——string 键 extra
+        // 无语义，常量侧恒 0）。
+        let hoist_key_extra = self.reg_op(inst.op(0));
+        self.build_mut().mov(
+          OperandX64::mem(
+            SizeX64::Dword,
+            RegisterX64::NOREG,
+            1,
+            hoist_key_extra,
+            (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_EXTRA,
+          ),
+          OperandX64::imm(0_i32),
+        );
+
+        // cpp `setnodekey` 的 `n_->key.tt = i_o->tt` 是位域写：仅置 tt 低 4 位，
+        // next 高 28 位保留——被 removeentry 逻辑删除过的链节点重插时（val 空、
+        // 链仍挂着）清零 next 即砍断哈希链，后续查找/rehash 沿链全部失真。
+        let hoist_key_tt = self.reg_op(inst.op(0));
+        self.build_mut().and_(
+          OperandX64::mem(
+            SizeX64::Dword,
+            RegisterX64::NOREG,
+            1,
+            hoist_key_tt,
+            (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_TAG_NEXT,
+          ),
+          OperandX64::imm(0xFFFFFFF0u32 as i32),
+        );
+        let hoist_key_tt_or = self.reg_op(inst.op(0));
+        self.build_mut().or_(
+          OperandX64::mem(
+            SizeX64::Dword,
+            RegisterX64::NOREG,
+            1,
+            hoist_key_tt_or,
+            (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_TAG_NEXT,
+          ),
+          OperandX64::imm(LuaType::String as i32),
+        );
       }
       IrCmd::CheckBufferLen => {
         {

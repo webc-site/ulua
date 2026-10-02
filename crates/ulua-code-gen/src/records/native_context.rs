@@ -1,4 +1,6 @@
-use core::ptr::null_mut;
+use core::ptr::{null, null_mut};
+
+use ulua_vm::records::lua_node::LuaNode;
 
 use crate::{
   records::native_fn::{
@@ -22,6 +24,10 @@ pub struct NativeContext {
   /// `gate_exit` 是生成码经 `offset_of!` 直读的跳转目标，保持裸代码地址。
   pub gate_entry: Option<GateFn>,
   pub gate_exit: *mut u8,
+
+  /// 空哈希哨兵静态地址（ulua-vm `DUMMYNODE`）：J4b `CheckNodeInsertable` 生成码
+  /// 经 `offset_of!` 直读并与 `LuaTable.node` 比较，判「哨兵表 → 插入需 rehash」。
+  pub dummynode: *const LuaNode,
 
   pub lua_v_lessthan: Option<NativeCompareFn>,
   pub lua_v_lessequal: Option<NativeCompareFn>,
@@ -113,6 +119,7 @@ impl Default for NativeContext {
     Self {
       gate_entry: None,
       gate_exit: null_mut(),
+      dummynode: null(),
       lua_v_lessthan: None,
       lua_v_lessequal: None,
       lua_v_equalval: None,

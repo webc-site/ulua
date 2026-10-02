@@ -464,6 +464,9 @@ pub fn mark_dead_stores_in_inst(
     IrCmd::CheckNoMetatable => {
       state.check_live_ins(function, ops[1], index, true);
     }
+    IrCmd::CheckNoNewindexMeta => {
+      state.check_live_ins(function, ops[1], index, true);
+    }
     IrCmd::CheckSafeEnv => {
       state.check_live_ins(function, ops[0], index, true);
     }
@@ -482,6 +485,9 @@ pub fn mark_dead_stores_in_inst(
     }
     IrCmd::CheckNodeValue => {
       state.check_live_ins(function, ops[1], index, true);
+    }
+    IrCmd::CheckNodeInsertable => {
+      state.check_live_ins(function, ops[2], index, true);
     }
     IrCmd::CheckBufferLen => {
       state.check_live_ins(function, ops[5], index, true);

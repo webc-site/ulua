@@ -1,4 +1,4 @@
-use ulua_vm::macros::luau_f_table::LUAU_F_TABLE;
+use ulua_vm::macros::{dummynode::DUMMYNODE, luau_f_table::LUAU_F_TABLE};
 
 use crate::records::{
   native_context::NativeContext,
@@ -21,6 +21,9 @@ use crate::records::{
 
 pub fn init_functions(context: &mut NativeContext) {
   context.luau_f_table = LUAU_F_TABLE;
+
+  // J4b：空哈希哨兵静态地址（`CheckNodeInsertable` 生成码直读比较）
+  context.dummynode = DUMMYNODE;
 
   context.lua_v_lessthan = Some(LUA_V_LESSTHAN);
   context.lua_v_lessequal = Some(LUA_V_LESSEQUAL);

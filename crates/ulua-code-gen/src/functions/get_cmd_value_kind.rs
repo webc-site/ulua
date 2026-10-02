@@ -138,11 +138,14 @@ pub const fn get_cmd_value_kind(cmd: IrCmd) -> IrValueKind {
     | IrCmd::CheckTruthy
     | IrCmd::CheckReadonly
     | IrCmd::CheckNoMetatable
+    | IrCmd::CheckNoNewindexMeta
     | IrCmd::CheckSafeEnv
     | IrCmd::CheckArraySize
     | IrCmd::CheckSlotMatch
     | IrCmd::CheckNodeNoNext
     | IrCmd::CheckNodeValue
+    | IrCmd::CheckNodeInsertable
+    | IrCmd::StoreNodeKey
     | IrCmd::CheckBufferLen
     | IrCmd::CheckUserdataTag
     | IrCmd::CheckCmpNum

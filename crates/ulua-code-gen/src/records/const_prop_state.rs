@@ -309,9 +309,11 @@ impl ConstPropState {
         value: inst_idx,
       });
     } else {
+      // GET_HASH_NODE_ADDR 为 J4b 内联插入的 store 目标（cpp 无此场景）；与
+      // TABLE_SETNUM/GET_CLOSURE_UPVAL_ADDR 同待遇：不做 store→load 前向。
       CODEGEN_ASSERT!(matches!(
         target_addr.cmd,
-        IrCmd::TableSetnum | IrCmd::GetClosureUpvalAddr
+        IrCmd::TableSetnum | IrCmd::GetClosureUpvalAddr | IrCmd::GetHashNodeAddr
       ));
     }
   }

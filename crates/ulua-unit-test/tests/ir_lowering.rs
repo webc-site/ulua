@@ -2414,28 +2414,28 @@ bb_bytecode_1:
   CHECK_SLOT_MATCH %9, K0 ('x'), bb_fallback_3
   %11 = LOAD_TVALUE %9, 0i
   STORE_TVALUE R2, %11
-  JUMP bb_linear_23
-bb_linear_23:
+  JUMP bb_linear_26
+bb_linear_26:
   CHECK_TAG R2, tnumber, bb_fallback_5
-  %130 = LOAD_DOUBLE R2
-  %131 = LOAD_DOUBLE R1
-  %132 = ADD_NUM %130, %131
-  STORE_DOUBLE R2, %132
-  CHECK_READONLY %8, bb_fallback_7
-  STORE_SPLIT_TVALUE %9, tnumber, %132, 0i
-  %144 = GET_SLOT_NODE_ADDR %8, 5u, K1 ('y')
-  CHECK_SLOT_MATCH %144, K1 ('y'), bb_fallback_9
-  %146 = LOAD_TVALUE %144, 0i
-  STORE_TVALUE R2, %146
-  %150 = MUL_NUM %131, %131
-  STORE_DOUBLE R3, %150
+  %163 = LOAD_DOUBLE R2
+  %164 = LOAD_DOUBLE R1
+  %165 = ADD_NUM %163, %164
+  STORE_DOUBLE R2, %165
+  CHECK_READONLY %8, bb_fallback_8
+  STORE_SPLIT_TVALUE %9, tnumber, %165, 0i
+  %177 = GET_SLOT_NODE_ADDR %8, 5u, K1 ('y')
+  CHECK_SLOT_MATCH %177, K1 ('y'), bb_fallback_10
+  %179 = LOAD_TVALUE %177, 0i
+  STORE_TVALUE R2, %179
+  %183 = MUL_NUM %164, %164
+  STORE_DOUBLE R3, %183
   STORE_TAG R3, tnumber
-  CHECK_TAG R2, tnumber, bb_fallback_11
-  %155 = LOAD_DOUBLE R2
-  %156 = ADD_NUM %155, %150
-  STORE_SPLIT_TVALUE %144, tnumber, %156, 0i
-  %185 = SUB_NUM %132, %156
-  STORE_SPLIT_TVALUE %9, tnumber, %185, 0i
+  CHECK_TAG R2, tnumber, bb_fallback_12
+  %188 = LOAD_DOUBLE R2
+  %189 = ADD_NUM %188, %183
+  STORE_SPLIT_TVALUE %177, tnumber, %189, 0i
+  %218 = SUB_NUM %165, %189
+  STORE_SPLIT_TVALUE %9, tnumber, %218, 0i
   INTERRUPT 18u
   RETURN R0, 0i
 "#;
@@ -2470,22 +2470,22 @@ bb_bytecode_1:
   %10 = LOAD_POINTER R0
   %11 = GET_SLOT_NODE_ADDR %10, 1u, K0 ('x')
   CHECK_SLOT_MATCH %11, K0 ('x'), bb_fallback_3
-  CHECK_READONLY %10, bb_fallback_3
+  CHECK_READONLY %10, bb_fallback_4
   STORE_SPLIT_TVALUE %11, tnumber, 2, 0i
-  JUMP bb_linear_9
-bb_linear_9:
+  JUMP bb_linear_10
+bb_linear_10:
   STORE_DOUBLE R2, 4
   SET_SAVEDPC 5u
   SET_TABLE R2, R0, R1
-  %50 = LOAD_POINTER R0
-  %51 = GET_SLOT_NODE_ADDR %50, 5u, K0 ('x')
-  CHECK_SLOT_MATCH %51, K0 ('x'), bb_fallback_5
-  %53 = LOAD_TVALUE %51, 0i
-  STORE_TVALUE R3, %53
-  CHECK_TAG R3, tnumber, bb_fallback_7
-  %58 = LOAD_DOUBLE R3
-  %59 = ADD_NUM %58, %58
-  STORE_DOUBLE R2, %59
+  %61 = LOAD_POINTER R0
+  %62 = GET_SLOT_NODE_ADDR %61, 5u, K0 ('x')
+  CHECK_SLOT_MATCH %62, K0 ('x'), bb_fallback_6
+  %64 = LOAD_TVALUE %62, 0i
+  STORE_TVALUE R3, %64
+  CHECK_TAG R3, tnumber, bb_fallback_8
+  %69 = LOAD_DOUBLE R3
+  %70 = ADD_NUM %69, %69
+  STORE_DOUBLE R2, %70
   INTERRUPT 8u
   RETURN R2, 1i
 "#;
@@ -2520,16 +2520,16 @@ bb_bytecode_1:
   %10 = LOAD_POINTER R0
   %11 = GET_SLOT_NODE_ADDR %10, 1u, K0 ('x')
   CHECK_SLOT_MATCH %11, K0 ('x'), bb_fallback_3
-  CHECK_READONLY %10, bb_fallback_3
+  CHECK_READONLY %10, bb_fallback_4
   STORE_SPLIT_TVALUE %11, tnumber, 2, 0i
-  JUMP bb_linear_11
-bb_linear_11:
+  JUMP bb_linear_12
+bb_linear_12:
   STORE_TAG R2, tnil
-  CHECK_ARRAY_SIZE %10, 0i, bb_fallback_5
-  CHECK_NO_METATABLE %10, bb_fallback_5
-  %62 = GET_ARR_ADDR %10, 0i
-  %63 = LOAD_TVALUE R2, 0i, tnil
-  STORE_TVALUE %62, %63, 0i
+  CHECK_ARRAY_SIZE %10, 0i, bb_fallback_6
+  CHECK_NO_METATABLE %10, bb_fallback_6
+  %73 = GET_ARR_ADDR %10, 0i
+  %74 = LOAD_TVALUE R2, 0i, tnil
+  STORE_TVALUE %73, %74, 0i
   STORE_DOUBLE R2, 4
   STORE_TAG R2, tnumber
   INTERRUPT 8u
@@ -2662,14 +2662,14 @@ bb_bytecode_1:
   %8 = LOAD_POINTER R0
   %9 = GET_SLOT_NODE_ADDR %8, 1u, K0 ('x')
   CHECK_SLOT_MATCH %9, K0 ('x'), bb_fallback_3
-  CHECK_READONLY %8, bb_fallback_3
+  CHECK_READONLY %8, bb_fallback_4
   STORE_SPLIT_TVALUE %9, tnumber, 14, 0i
-  JUMP bb_linear_15
-bb_linear_15:
+  JUMP bb_linear_18
+bb_linear_18:
   STORE_DOUBLE R1, 28
-  %82 = GET_SLOT_NODE_ADDR %8, 4u, K1 ('y')
-  CHECK_SLOT_MATCH %82, K1 ('y'), bb_fallback_5
-  STORE_SPLIT_TVALUE %82, tnumber, 28, 0i
+  %115 = GET_SLOT_NODE_ADDR %8, 4u, K1 ('y')
+  CHECK_SLOT_MATCH %115, K1 ('y'), bb_fallback_6
+  STORE_SPLIT_TVALUE %115, tnumber, 28, 0i
   STORE_SPLIT_TVALUE %9, tnumber, -14, 0i
   INTERRUPT 13u
   RETURN R0, 0i
@@ -2702,16 +2702,16 @@ bb_bytecode_1:
   CHECK_SLOT_MATCH %7, K0 ('y'), bb_fallback_3
   %9 = LOAD_TVALUE %7, 0i
   STORE_TVALUE R1, %9
-  JUMP bb_linear_11
-bb_linear_11:
-  %51 = GET_SLOT_NODE_ADDR %6, 2u, K1 ('x')
-  CHECK_SLOT_MATCH %51, K1 ('x'), bb_fallback_5
-  %53 = LOAD_TVALUE %51, 0i
-  STORE_TVALUE R2, %53
-  CHECK_READONLY %6, bb_fallback_7
-  STORE_TVALUE %51, %9, 0i
+  JUMP bb_linear_13
+bb_linear_13:
+  %73 = GET_SLOT_NODE_ADDR %6, 2u, K1 ('x')
+  CHECK_SLOT_MATCH %73, K1 ('x'), bb_fallback_5
+  %75 = LOAD_TVALUE %73, 0i
+  STORE_TVALUE R2, %75
+  CHECK_READONLY %6, bb_fallback_8
+  STORE_TVALUE %73, %9, 0i
   BARRIER_TABLE_FORWARD %6, R1, undef
-  STORE_TVALUE %7, %53, 0i
+  STORE_TVALUE %7, %75, 0i
   BARRIER_TABLE_FORWARD %6, R2, undef
   INTERRUPT 8u
   RETURN R0, 0i
@@ -2787,25 +2787,25 @@ bb_bytecode_1:
   CHECK_SLOT_MATCH %7, K0 ('y'), bb_fallback_3
   %9 = LOAD_TVALUE %7, 0i
   STORE_TVALUE R1, %9
-  JUMP bb_linear_15
-bb_linear_15:
+  JUMP bb_linear_17
+bb_linear_17:
   STORE_TVALUE R2, %9
   CHECK_TAG R2, ttable, bb_fallback_7
-  %80 = LOAD_POINTER R2
-  %81 = GET_SLOT_NODE_ADDR %80, 4u, K1 ('b')
-  CHECK_SLOT_MATCH %81, K1 ('b'), bb_fallback_7
-  %83 = LOAD_TVALUE %81, 0i
-  STORE_TVALUE R2, %83
-  %89 = GET_SLOT_NODE_ADDR %80, 6u, K2 ('a')
-  CHECK_SLOT_MATCH %89, K2 ('a'), bb_fallback_9
-  CHECK_READONLY %80, bb_fallback_9
-  STORE_TVALUE %89, %83, 0i
-  BARRIER_TABLE_FORWARD %80, R2, undef
+  %102 = LOAD_POINTER R2
+  %103 = GET_SLOT_NODE_ADDR %102, 4u, K1 ('b')
+  CHECK_SLOT_MATCH %103, K1 ('b'), bb_fallback_7
+  %105 = LOAD_TVALUE %103, 0i
+  STORE_TVALUE R2, %105
+  %111 = GET_SLOT_NODE_ADDR %102, 6u, K2 ('a')
+  CHECK_SLOT_MATCH %111, K2 ('a'), bb_fallback_9
+  CHECK_READONLY %102, bb_fallback_10
+  STORE_TVALUE %111, %105, 0i
+  BARRIER_TABLE_FORWARD %102, R2, undef
   STORE_DOUBLE R2, 3
   STORE_TAG R2, tnumber
-  %107 = GET_SLOT_NODE_ADDR %80, 11u, K3 ('c')
-  CHECK_SLOT_MATCH %107, K3 ('c'), bb_fallback_13
-  STORE_SPLIT_TVALUE %107, tnumber, 3, 0i
+  %129 = GET_SLOT_NODE_ADDR %102, 11u, K3 ('c')
+  CHECK_SLOT_MATCH %129, K3 ('c'), bb_fallback_14
+  STORE_SPLIT_TVALUE %129, tnumber, 3, 0i
   INTERRUPT 13u
   RETURN R0, 0i
 "#;
@@ -2939,18 +2939,18 @@ bb_bytecode_1:
   %6 = LOAD_POINTER R0
   %7 = GET_SLOT_NODE_ADDR %6, 0u, K0 ('x')
   CHECK_SLOT_MATCH %7, K0 ('x'), bb_fallback_3
-  CHECK_READONLY %6, bb_fallback_3
+  CHECK_READONLY %6, bb_fallback_4
   %10 = LOAD_TVALUE R1
   STORE_TVALUE %7, %10, 0i
   BARRIER_TABLE_FORWARD %6, R1, undef
-  JUMP bb_linear_9
-bb_linear_9:
-  %41 = GET_SLOT_NODE_ADDR %6, 2u, K1 ('y')
-  CHECK_SLOT_MATCH %41, K1 ('y'), bb_fallback_5
-  %44 = LOAD_TVALUE R2
-  STORE_TVALUE %41, %44, 0i
+  JUMP bb_linear_11
+bb_linear_11:
+  %63 = GET_SLOT_NODE_ADDR %6, 2u, K1 ('y')
+  CHECK_SLOT_MATCH %63, K1 ('y'), bb_fallback_6
+  %66 = LOAD_TVALUE R2
+  STORE_TVALUE %63, %66, 0i
   BARRIER_TABLE_FORWARD %6, R2, undef
-  CHECK_NODE_VALUE %7, bb_fallback_7
+  CHECK_NODE_VALUE %7, bb_fallback_9
   STORE_TVALUE R3, %10
   INTERRUPT 6u
   RETURN R3, 1i
@@ -7662,22 +7662,22 @@ bb_bytecode_1:
   %10 = LOAD_POINTER R0
   %11 = GET_SLOT_NODE_ADDR %10, 1u, K0 ('x')
   CHECK_SLOT_MATCH %11, K0 ('x'), bb_fallback_3
-  CHECK_READONLY %10, bb_fallback_3
+  CHECK_READONLY %10, bb_fallback_4
   STORE_SPLIT_TVALUE %11, tnumber, 2, 0i
-  JUMP bb_linear_9
-bb_linear_9:
+  JUMP bb_linear_10
+bb_linear_10:
   STORE_DOUBLE R2, 4
   SET_SAVEDPC 5u
   SET_TABLE R2, R0, R1
-  %50 = LOAD_POINTER R0
-  %51 = GET_SLOT_NODE_ADDR %50, 5u, K0 ('x')
-  CHECK_SLOT_MATCH %51, K0 ('x'), bb_fallback_5
-  %53 = LOAD_TVALUE %51, 0i
-  STORE_TVALUE R3, %53
-  CHECK_TAG R3, tnumber, bb_fallback_7
-  %58 = LOAD_DOUBLE R3
-  %59 = ADD_NUM %58, %58
-  STORE_DOUBLE R2, %59
+  %61 = LOAD_POINTER R0
+  %62 = GET_SLOT_NODE_ADDR %61, 5u, K0 ('x')
+  CHECK_SLOT_MATCH %62, K0 ('x'), bb_fallback_6
+  %64 = LOAD_TVALUE %62, 0i
+  STORE_TVALUE R3, %64
+  CHECK_TAG R3, tnumber, bb_fallback_8
+  %69 = LOAD_DOUBLE R3
+  %70 = ADD_NUM %69, %69
+  STORE_DOUBLE R2, %70
   INTERRUPT 8u
   RETURN R2, 1i
 "#;
