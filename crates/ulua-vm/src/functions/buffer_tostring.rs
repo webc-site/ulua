@@ -12,7 +12,7 @@ pub(crate) unsafe fn buffer_tostring(l: *mut LuaState) -> i32 {
   unsafe {
     let data = buffer_data_ref(l, 1);
 
-    lua_pushlstring_bytes(l, data);
+    lua_pushlstring_bytes(&mut *l, data);
 
     1
   }

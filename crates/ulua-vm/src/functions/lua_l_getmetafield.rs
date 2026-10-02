@@ -40,7 +40,7 @@ pub unsafe fn lua_l_getmetafield_bytes(l: *mut LuaState, obj: i32, event: &[u8])
       return 0; // no metatable
     }
 
-    lua_pushlstring_bytes(l, event);
+    lua_pushlstring_bytes(&mut *l, event);
     metafield_rawget(l)
   }
 }

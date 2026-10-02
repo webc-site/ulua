@@ -5,8 +5,6 @@
 //! capture, and a string/number replacement goes through `add_s`. A falsy or
 //! non-string result falls back to the original matched text.
 
-use core::ffi::c_char;
-
 use ulua_common::functions::c_str::cstr_cow;
 
 use crate::{
@@ -14,7 +12,7 @@ use crate::{
   functions::{
     add_s::add_s, lua_gettable::lua_gettable, lua_isstring::lua_isstring,
     lua_l_addvalue::lua_l_addvalue, lua_l_typename::lua_l_typename,
-    lua_pushlstring::lua_pushlstring, push_captures::push_captures,
+    lua_pushlstring::lua_pushlstring_bytes, push_captures::push_captures,
     push_onecapture::push_onecapture,
   },
   macros::lua_l_error::luaL_error,
@@ -55,11 +53,11 @@ pub(crate) unsafe fn add_value(
       // nil or false?
       (*l).pop(1);
       // cpp: lua_pushlstring(L, src, e - src); keep original text
-      // —— C-API 边界由源偏移切片重建指针
-      // SAFETY: src_slice 按契约（s <= e <= src.len()）返回界内切片，重建指针在
-      // keep.len() 内有效、`c_char` 对齐为 1；lua_pushlstring 仅做界内拷贝不留存
+      // —— Rust 侧直投切片 ref 核心，不再经 C-API ptr+len 形重建指针
+      // SAFETY: src_slice 按契约（s <= e <= src.len()）返回界内切片；
+      // lua_pushlstring_bytes 仅界内拷入堆串、不留存借用
       let keep = ms.src_slice(s, e - s);
-      lua_pushlstring(l, keep.as_ptr() as *const c_char, keep.len()); // keep original text
+      lua_pushlstring_bytes(&mut *l, keep); // keep original text
     } else if lua_isstring(&*l, -1) == 0 {
       let tn = cstr_cow(lua_l_typename(&*l, -1));
       luaL_error!(l, "invalid replacement value (a {})", tn);

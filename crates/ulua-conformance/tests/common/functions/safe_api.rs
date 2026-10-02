@@ -1205,8 +1205,9 @@ pub fn pushvector4(l: L, x: f32, y: f32, z: f32, w: f32) {
 
 /// `lua_pushlstring` 的切片形态（拷贝语义，净压一层）。
 pub fn pushlstring(l: L, s: &[u8]) {
-  // Safety: `l` 存活；`s` 为本帧合法切片，VM 侧整段拷入堆串。
-  unsafe { lua_pushlstring_bytes(l, s) }
+  // Safety: `l` 存活；`s` 为本帧合法切片，VM 侧整段拷入堆串；`&mut *l` 一次性
+  // 重借用即切片 ref 核心期望的接收者形。
+  unsafe { lua_pushlstring_bytes(&mut *l, s) }
 }
 
 // ---------------------------------------------------------------------------

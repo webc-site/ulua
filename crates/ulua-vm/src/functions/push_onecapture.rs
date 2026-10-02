@@ -1,7 +1,5 @@
-use core::ffi::c_char;
-
 use crate::{
-  functions::lua_pushlstring::lua_pushlstring,
+  functions::lua_pushlstring::lua_pushlstring_bytes,
   macros::{cap_position::CAP_POSITION, cap_unfinished::CAP_UNFINISHED, lua_l_error::luaL_error},
   records::match_state::MatchState,
 };
@@ -23,13 +21,13 @@ pub(crate) unsafe fn push_onecapture(
   unsafe {
     if i >= ms.level {
       if i == 0 {
-        // cpp: lua_pushlstring(ms->l, s, e - s); —— C-API 边界从源串切片重建指针。
-        // 到达此处时调用方（push_captures）已保证 s/e 非 NULL（否则 nlevels==0）
+        // cpp: lua_pushlstring(ms->l, s, e - s); —— Rust 侧直投切片 ref 核心，
+        // 不再经 C-API ptr+len 形重建指针
         if let (Some(s), Some(e)) = (s, e) {
-          // SAFETY: src_slice 按契约（s <= e <= src.len()）返回界内切片，重建指针在
-          // whole.len() 内有效、`c_char` 对齐为 1；lua_pushlstring 仅做界内拷贝不留存
+          // SAFETY: src_slice 按契约（s <= e <= src.len()）返回界内切片；
+          // lua_pushlstring_bytes 仅界内拷入堆串、不留存借用
           let whole = ms.src_slice(s, e - s);
-          lua_pushlstring(ms.l, whole.as_ptr() as *const c_char, whole.len());
+          lua_pushlstring_bytes(&mut *ms.l, whole);
         }
       } else {
         luaL_error!(ms.l, "invalid capture index");
@@ -43,11 +41,11 @@ pub(crate) unsafe fn push_onecapture(
         // —— 偏移化后 init 即指针差值
         (*ms.l).push_integer(ms.capture[i as usize].init as i32 + 1);
       } else {
-        // cpp: lua_pushlstring(ms->l, ms->capture[i].init, l); —— 同上由源偏移切片重建
-        // SAFETY: 捕获槽 init + len <= src.len() 界内（# Safety 契约），重建指针在
-        // cap.len() 内有效、`c_char` 对齐为 1；lua_pushlstring 仅做界内拷贝不留存
+        // cpp: lua_pushlstring(ms->l, ms->capture[i].init, l); —— 同上直投切片 ref 核心
+        // SAFETY: 捕获槽 init + len <= src.len() 界内（# Safety 契约）；
+        // lua_pushlstring_bytes 仅界内拷入堆串、不留存借用
         let cap = ms.src_slice(ms.capture[i as usize].init, l as usize);
-        lua_pushlstring(ms.l, cap.as_ptr() as *const c_char, cap.len());
+        lua_pushlstring_bytes(&mut *ms.l, cap);
       }
     }
   }

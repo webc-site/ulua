@@ -169,12 +169,14 @@ pub(crate) unsafe fn register_type_user_data(l: *mut LuaState) {
     (*vm_l).new_metatable_by_bytes(TYPE);
 
     // lua_pushstring(l, "type"); lua_setfield(l, -2, "__type");
-    lua_pushlstring_bytes(vm_l, TYPE);
+    // SAFETY: `vm_l` 为存活 LuaState，`&mut *` 一次性重借用即切片 ref 核心契约
+    lua_pushlstring_bytes(&mut *vm_l, TYPE);
     (*vm_l).set_field_bytes(-2, FIELD_TYPE_TAG);
 
     // Protect metatable from being changed
     // lua_pushstring(l, "The metatable is locked"); lua_setfield(l, -2, "__metatable");
-    lua_pushlstring_bytes(vm_l, METATABLE_LOCKED);
+    // SAFETY: 同上
+    lua_pushlstring_bytes(&mut *vm_l, METATABLE_LOCKED);
     (*vm_l).set_field_bytes(-2, FIELD_METATABLE);
 
     // lua_pushcfunction(l, isEqualToType, "__eq"); lua_setfield(l, -2, "__eq");

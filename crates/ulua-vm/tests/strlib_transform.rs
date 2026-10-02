@@ -53,7 +53,7 @@ impl Str {
       (*l).get_field_str(1, name);
       for arg in args {
         match *arg {
-          Arg::S(bytes) => lua_pushlstring_bytes(l, bytes),
+          Arg::S(bytes) => lua_pushlstring_bytes(&mut *l, bytes),
           Arg::N(n) => (*l).push_integer(n),
         }
       }

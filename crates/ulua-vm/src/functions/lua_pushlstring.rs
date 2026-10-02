@@ -12,31 +12,54 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// 安全字节切片版本：向栈顶推入 `s` 对应的 Lua 字符串。
+/// push-字符串族的切片 ref 核心（r12 T9 形）：全部真实逻辑落在 `&mut LuaState` +
+/// `&[u8]` 签名——GC 检查、线程屏障、`ensure_stack(1)` 扩容、`lua_s_newlstr` 按
+/// 切片全长 intern（无 NUL 依赖，长度即切片长度）后写 top 槽并 `api_incr_top`
+/// 净压一层。cpp `lua_pushlstring`（`VM/src/lapi.cpp:738`）`luaS_newlstr(L, str, len)`
+/// 的同形骨架；Rust 侧一切字节压栈都经本核心，不再折道 ptr+len 形。
 ///
 /// # Safety
-///
-/// `l` 必须指向合法且存活的 `LuaState`。
-pub unsafe fn lua_pushlstring_bytes(l: *mut LuaState, s: &[u8]) {
+/// 契约三要素：`l` 须为正在执行的 C 函数帧的存活 `LuaState`（存活由接收者引用
+/// 承载），调用点处于可 GC/可分配帧，top 槽写入合法性由块内 `ensure_stack(l, 1)`
+/// 扩容与栈不变量保证；`s` 为普通借用切片，核心只界内拷入堆上 TString、不留存
+/// 借出（返回 `()`，无跨调用悬垂面）。
+pub unsafe fn lua_pushlstring_bytes(l: &mut LuaState, s: &[u8]) {
+  // SAFETY: 契约保证 `l` 为存活调用帧；check_gc/线程屏障/扩容序与收口前逐位一致，
+  // `setsvalue!` 写入的 top 槽由 `ensure_stack(l, 1)` 保证可写
   unsafe {
     lua_c_check_gc!(l);
     lua_c_threadbarrier_lapi(l);
     ensure_stack(l, 1);
-    setsvalue!(l, (*l).top, lua_s_newlstr(&mut *l, s));
+    setsvalue!(l, l.top, lua_s_newlstr(l, s));
     api_incr_top!(l);
   }
 }
 
+/// C-ABI 镜像垫片（cpp `lua_pushlstring`，`VM/src/lapi.cpp:738` 的
+/// `(const char*, size_t)` 形）：只做一次性折形——`api_check!` 守 null 契约后把
+/// `(s, len)` 折成 `&[u8]` 交切片 ref 核心 [lua_pushlstring_bytes]，本形不再含任何
+/// 真实逻辑。
+///
+/// r12 T9 裁决保留：消费面实测——vm 内 Rust 消费方（`lua_pushstring`/`loadsafe`/
+/// `add_value`/`push_onecapture`）已全部改直投字节切片核心，本形现存消费方仅为
+/// ulua-vm 测试 `vm_contract.rs`/`strtable_intern.rs`/`vm_table_rehash.rs` 的
+/// lua.h 镜像契约验证面（以 ptr+len 裸形断言与切片形同路径 intern），属跨 FFI
+/// 边界契约的验证端，导出形保留。
+///
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
+/// `l` 须为存活 `LuaState`（折形后转授核心契约）；`s` 非空时须对 `len` 字节可读
+/// （null 违反 C 契约，由 `api_check!` 在 debug 配置拦截）；`len` 须与可读界一致，
+/// 越界即 `from_raw_parts` 契约违约（UB）；核心界内拷毕即止，`s` 无需在返回后存续。
 pub unsafe fn lua_pushlstring(l: *mut LuaState, s: *const c_char, len: usize) {
   unsafe {
     api_check!(l, !s.is_null());
+    // SAFETY: 契约保证 `s` 起 `len` 字节可读；len==0 时取空切片、不解引用指针
     let slice = if len == 0 {
       &[]
     } else {
       from_raw_parts(s.cast::<u8>(), len)
     };
-    lua_pushlstring_bytes(l, slice);
+    // SAFETY: 契约保证 `l` 为存活 LuaState，`&mut *l` 一次性重借用即核心期望的接收者形
+    lua_pushlstring_bytes(&mut *l, slice);
   }
 }

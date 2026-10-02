@@ -410,8 +410,9 @@ pub(crate) fn push_vector(state: StateView<'_>, x: f32, y: f32, z: f32) {
 /// 向栈压出字节串（`lua_pushlstring_bytes` 的收口点，拷贝语义，净压一层）。
 #[inline]
 pub(crate) fn push_bytes(state: StateView<'_>, s: &[u8]) {
-  // Safety: 族级契约;`s` 是普通 Rust 切片,VM 侧拷入堆上字符串,无存续期耦合。
-  unsafe { lua_pushlstring_bytes(state.as_mut_ptr(), s) }
+  // Safety: 族级契约;`&mut *` 重借由 `StateView` 的存活指针位给出，`s` 是普通 Rust
+  // 切片,VM 侧拷入堆上字符串,无存续期耦合。
+  unsafe { lua_pushlstring_bytes(&mut *state.as_mut_ptr(), s) }
 }
 
 /// 读 `idx` 处字符串字节（`lua_tolstring_ref` 的收口点；非 string 返回 `None`）。

@@ -43,7 +43,7 @@ pub(crate) unsafe fn lua_l_pushresult(b: *mut LuaLStrbuf) {
       let buffer = b.buffer.as_ptr();
       let len = b.p.offset_from(buffer) as usize;
       // SAFETY: buffer 为内联区基址且 b.p 落在 buffer..=end，len 字节界内可读
-      lua_pushlstring_bytes(l, from_raw_parts(buffer, len));
+      lua_pushlstring_bytes(&mut *l, from_raw_parts(buffer, len));
     }
   }
 }

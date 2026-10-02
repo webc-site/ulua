@@ -99,9 +99,9 @@ impl LuaState {
 
   #[inline(always)]
   pub fn push_bytes(&mut self, s: &[u8]) {
-    // SAFETY: 存活 LuaState 指针 + `s` 为借用切片（长度随传），契约见
-    // `lua_pushlstring_bytes`。
-    unsafe { lua_pushlstring_bytes(self.as_mut_ptr(), s) }
+    // SAFETY: `self` 为存活 `&mut LuaState`（接收者类型承载）；`s` 为借用切片，
+    // 核心界内拷入堆串不留存，契约见 `lua_pushlstring_bytes`。
+    unsafe { lua_pushlstring_bytes(self, s) }
   }
 
   #[inline(always)]

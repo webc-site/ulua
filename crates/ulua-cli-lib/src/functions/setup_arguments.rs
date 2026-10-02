@@ -20,7 +20,7 @@ pub unsafe fn setup_arguments(l: *mut LuaState, args: &[impl AsRef<str>]) {
   for arg in args {
     let s = arg.as_ref();
     // Safety: `l` 同上；`bytes` 门面以切片长度取字节，VM 当调用即拷入新串对象，
-    // 借用不跨调用持有。
-    unsafe { lua_pushlstring_bytes(l, s.as_bytes()) };
+    // 借用不跨调用持有；`&mut *l` 一次性重借用即核心期望的接收者形。
+    unsafe { lua_pushlstring_bytes(&mut *l, s.as_bytes()) };
   }
 }

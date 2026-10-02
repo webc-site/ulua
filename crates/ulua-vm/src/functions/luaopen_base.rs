@@ -51,7 +51,7 @@ pub unsafe fn luaopen_base(l: *mut LuaState) -> i32 {
     (*l).set_global_bytes(b"_G");
 
     lua_l_register_bytes(l, Some(b"_G"), &BASE_FUNCS);
-    lua_pushlstring_bytes(l, b"Luau");
+    lua_pushlstring_bytes(&mut *l, b"Luau");
     (*l).set_global_bytes(b"_VERSION");
 
     auxopen(
