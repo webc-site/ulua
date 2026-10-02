@@ -16,6 +16,7 @@ use crate::{
 /// - 已换入 GC 缓冲：`luaC_checkGC` → 游标恰抵 `end` 时 `luaS_buffinish` 就地收尾
 ///   （零拷贝），否则按 `[data, p)` 窗新建串；
 /// - 未溢出：按内联 `buffer` 的 `[buffer, p)` 窗走 push 族切片入口。
+///
 /// 结果落点均为预留结果槽 `(*l).top - 1`（与 cpp `L->top - 1` 同形）。
 ///
 /// # Safety

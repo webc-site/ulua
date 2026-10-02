@@ -19,7 +19,7 @@
 use core::{
   fmt::{self, Debug, Formatter},
   hash::{Hash, Hasher},
-  ptr::NonNull,
+  ptr::{NonNull, null_mut},
 };
 
 /// 进程内唯一存活实例的拷贝句柄（原 `*mut T` 字段的替代品）。
@@ -209,7 +209,7 @@ pub(crate) fn alias_nn_ref<T>(p: NonNull<T>) -> &'static T {
 /// `ConstraintGenerator::run`）过渡接线，`None` 折叠为 `null_mut()`，与 cpp
 /// nullptr 透传逐位等价；这些下游句柄化完成后本桥随调用点一并消亡。
 pub(crate) fn opt_handle_as_ptr<T>(h: Option<Handle<T>>) -> *mut T {
-  h.map_or_else(core::ptr::null_mut, |handle| handle.as_ptr())
+  h.map_or_else(null_mut, |handle| handle.as_ptr())
 }
 
 /// `Option<NonNull<T>>` → `Option<&'static T>` 的收口门面（[`alias_opt`] 的
