@@ -54,7 +54,9 @@ pub fn is_supported() -> bool {
 
   // cpp: #elif defined(CODEGEN_TARGET_A64) return true;
   #[cfg(all(target_arch = "aarch64", not(target_os = "windows")))]
-  { true }
+  {
+    true
+  }
 
   // cpp: #else return false;
   #[cfg(not(any(

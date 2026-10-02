@@ -4,7 +4,7 @@
 //! size, copy the used prefix, box it on the stack at `boxloc` (inserting a slot
 //! the first time it spills off the inline buffer), and repoint p/end/storage.
 
-use core::ptr::{copy_nonoverlapping, null_mut, NonNull};
+use core::ptr::{NonNull, copy_nonoverlapping, null_mut};
 
 use ulua_common::LUAU_ASSERT;
 

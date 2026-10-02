@@ -1,5 +1,7 @@
-use core::ptr::{null_mut, NonNull};
-use core::slice::from_raw_parts;
+use core::{
+  ptr::{NonNull, null_mut},
+  slice::from_raw_parts,
+};
 
 use crate::{
   functions::{

@@ -1,6 +1,6 @@
 //! Source: `VM/include/lualib.h` (lualib.h:86-98, hand-ported)
 
-use core::ptr::{null_mut, NonNull};
+use core::ptr::{NonNull, null_mut};
 
 use crate::records::{lua_state::LuaState, t_string::tstring};
 

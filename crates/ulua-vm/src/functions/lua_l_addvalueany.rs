@@ -1,6 +1,6 @@
 //! Source: `VM/src/laux.cpp:529-582` (hand-ported)
 
-use core::ptr::{null_mut, NonNull};
+use core::ptr::{NonNull, null_mut};
 
 use crate::{
   enums::lua_type::LuaType,

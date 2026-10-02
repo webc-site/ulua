@@ -1,4 +1,4 @@
-use core::ptr::{copy_nonoverlapping, null_mut, NonNull};
+use core::ptr::{NonNull, copy_nonoverlapping, null_mut};
 
 use crate::{
   functions::{extendstrbuf::extendstrbuf, lua_tolstring::lua_tolstring_ref},
