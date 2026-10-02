@@ -44,11 +44,14 @@ pub unsafe fn lua_pcallyieldable(l: *mut LuaState, nargs: i32, nresults: i32, er
     let cl = (*(*(*l).ci).func).as_closure_ptr();
     let c = addr_of!((*cl).inner.c).cast::<CClosure>();
     api_check!(l, (*c).cont.is_some());
-    api_check!(l, (nargs + 1) as isize <= (*l).top.offset_from((*l).base));
-    api_check!(
-      l,
-      errfunc >= 0 && errfunc as isize <= (*l).top.offset_from((*l).base)
-    );
+    // r14-p1 收编：两处栈帧槽距读数落既有 get_top 门面（stack.rs 既有本体
+    // `slot_distance(base, top)`）——即被替代式 `L->top - L->base` 裸槽距读数的
+    // 同址同宽镜像（cpp lapi.cpp:1252 侧 api_check 读数形，位点现读不变、不上提
+    // 不复用：两行各自现读，与原两行各自现读字段一致）。isize→i32 收敛无损：
+    // 槽距受栈深上限约束、nargs/errfunc 受 LUAI_MAXCCALLS 与 api 契约约束，均在
+    // i32 域内，谓词真值逐位恒等。
+    api_check!(l, (nargs + 1) <= (*l).get_top());
+    api_check!(l, errfunc >= 0 && errfunc <= (*l).get_top());
 
     (*(*l).ci).errfunc = errfunc;
     (*(*l).ci).flags |= LUA_CALLINFO_HANDLE as u32;
