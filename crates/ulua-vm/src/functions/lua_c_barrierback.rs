@@ -7,14 +7,20 @@ use crate::{
   records::{gc_object::GCObject, lua_state::LuaState},
 };
 
-/// # Safety
-/// `l` 须存活且 GC 处于增量阶段（`gcstate != GCSpause`）；`o` 必须是当前黑色存活对象；
-/// `gclist` 必须指向 `o` 自身的 gclist 链接字段（可写）。违反（如对灰对象调用、gclist 指向他处）
-/// 会污染 `grayagain` 链，导致活对象被提前清扫。cpp lgc.cpp:1473。
-pub unsafe fn lua_c_barrierback(l: *mut LuaState, o: *mut GCObject, gclist: *mut *mut GCObject) {
-  unsafe {
-    let g = (*l).global;
+/// `luaC_barrierback` 向后写屏障（cpp `lgc.cpp:1473` 系）。r16-v9：首参收 `&mut LuaState`
+/// （仿 v5 rawequal/v7 pusherror 形制），`l` 存活/独占由接收者引用承载，`l.global` 读数
+/// 为 safe 位；其余前提转为 safe fn 调用序契约（正确性，非内存安全；文档断言，由调用方
+/// 承载）：GC 须处于增量阶段（`gcstate != GCSpause`）；`o` 必须是当前黑色存活对象；
+/// `gclist` 必须指向 `o` 自身的 gclist 链接字段（可写）。违反（如对灰对象调用、gclist
+/// 指向他处）会污染 `grayagain` 链，导致活对象被提前清扫。cpp lgc.cpp:1473。
+pub fn lua_c_barrierback(l: &mut LuaState, o: *mut GCObject, gclist: *mut *mut GCObject) {
+  // 接收者引用保证 `l` 有效，字段现读系 safe 位。
+  let g = l.global;
 
+  // SAFETY: 接收者保证 `l`（及由其派生的 `g`）非空与对齐；`o`/`gclist` 为 GC 协议裸形
+  // （跨 crate 函数指针消费，不引用化），isblack/isdead/black2gray 裸读与 `*gclist`、
+  // grayagain 链写在 GC 阶段与对象协议界内，其成立前提系上方调用序契约。
+  unsafe {
     LUAU_ASSERT!(isblack!(o) && !isdead!(g, o));
     LUAU_ASSERT!((*g).gcstate as i32 != 0); // GCSpause 为 0
 
@@ -35,8 +41,10 @@ pub unsafe extern "C-unwind" fn lua_c_barrierback_export(
   o: *mut c_void,
   gclist: *mut *mut c_void,
 ) {
-  // SAFETY: 契约保证 `l` 存活且 `t`/`o` 相互一致（o 被 t 引用），屏障仅按协议改灰白标签并入 remark 队列，不越出对象头写界
+  // SAFETY: 契约保证 `l` 存活且 `t`/`o` 相互一致（o 被 t 引用），`&mut *l` 引用重建仅收形
+  // （非空/对齐由本壳 unsafe fn 契约承载），屏障仅按协议改灰白标签并入 remark 队列，
+  // 不越出对象头写界
   unsafe {
-    lua_c_barrierback(l, o as *mut GCObject, gclist as *mut *mut GCObject);
+    lua_c_barrierback(&mut *l, o as *mut GCObject, gclist as *mut *mut GCObject);
   }
 }

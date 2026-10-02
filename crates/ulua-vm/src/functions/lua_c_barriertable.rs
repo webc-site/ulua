@@ -13,13 +13,20 @@ use crate::{
   records::{gc_object::GCObject, lua_state::LuaState, lua_table::LuaTable},
 };
 
-/// # Safety
-/// `l` 须存活且 GC 非 GCSpause；`t` 是黑色存活表，`v` 是刚写入 `t` 的白色存活 GCObject（未 dead）。
-/// 二次传播阶段（GCSPROPAGATEAGAIN）退化为前向屏障。违反会把 gray 链挂错对象或标记已清扫内存。
-/// cpp lgc.cpp:1453。
-pub unsafe fn lua_c_barriertable(l: *mut LuaState, t: *mut LuaTable, v: *mut GCObject) {
+/// `luaC_barriert` 表写屏障（cpp `lgc.cpp:1296`）。r16-v9：首参收 `&mut LuaState`
+/// （仿 v5 rawequal/v7 pusherror 形制），`l` 存活/独占由接收者引用承载，`l.global` 读数
+/// 为 safe 位；其余前提转为 safe fn 调用序契约（正确性，非内存安全；文档断言，由调用方
+/// 承载）：GC 须非 GCSpause；`t` 是黑色存活表，`v` 是刚写入 `t` 的白色存活 GCObject
+/// （未 dead）。二次传播阶段（GCSPROPAGATEAGAIN）退化为前向屏障。违反会把 gray 链挂错
+/// 对象或标记已清扫内存。cpp lgc.cpp:1453。
+pub fn lua_c_barriertable(l: &mut LuaState, t: *mut LuaTable, v: *mut GCObject) {
+  // 接收者引用保证 `l` 有效，字段现读系 safe 位。
+  let g = l.global;
+  // SAFETY: 接收者保证 `l`（及由其派生的 `g`）非空与对齐；`t`/`v`/`o` 为 GC 协议裸形
+  // （跨 crate 函数指针消费，不引用化），obj2gco/isblack/iswhite/isdead/black2gray 裸读、
+  // `(*g).gcstate` 判读与 `(*t).gclist`、grayagain 链写在 GC 阶段与对象协议界内，
+  // 其成立前提系上方调用序契约。
   unsafe {
-    let g = (*l).global;
     let o = obj2gco!(t);
 
     // in the second propagation stage, table assignment barrier works as a forward barrier
@@ -45,8 +52,9 @@ pub unsafe extern "C-unwind" fn lua_c_barriertable_export(
   t: *mut c_void,
   v: *mut c_void,
 ) {
-  // SAFETY: 契约保证 `t` 存活且 `v` 为写入它的引用，表写屏障只触达 t 的 gch 标签与 grayagain 链
+  // SAFETY: 契约保证 `t` 存活且 `v` 为写入它的引用，`&mut *l` 引用重建仅收形（非空/对齐
+  // 由本壳 unsafe fn 契约承载），表写屏障只触达 t 的 gch 标签与 grayagain 链
   unsafe {
-    lua_c_barriertable(l, t as *mut LuaTable, v as *mut GCObject);
+    lua_c_barriertable(&mut *l, t as *mut LuaTable, v as *mut GCObject);
   }
 }
