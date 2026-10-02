@@ -11,7 +11,6 @@
 // the un-overridden methods keep the base `AstVisitor` defaults — exactly the
 // set the C++ class overrides (the `AstExpr*`/`AstStat*`/`AstType*` ones).
 use alloc::vec::Vec;
-use core::mem::swap;
 
 use ulua_ast::{
   records::{
@@ -73,19 +72,21 @@ impl AstVisitor for ArcCollector<'_> {
   }
 }
 
-pub fn toposort(stats: &mut Vec<*mut AstStat>) {
+/// 返回排序后的语句序列；cpp 的早退（不可排序时保持 `stats` 原样）在此
+/// 折为「返回原序拷贝」，末尾 `std::swap(stats, result)` 折为返回 `result`。
+pub fn toposort(stats: &[*mut AstStat]) -> Vec<*mut AstStat> {
   // if (stats.empty()) return;
   if stats.is_empty() {
-    return;
+    return Vec::new();
   }
 
   // if (!containsToposortableNode(stats)) return;
-  // (Inlined: the helper's signature does not match `Vec<*mut AstStat>`.)
+  // (Inlined: the helper's signature does not match `&[*mut AstStat]`.)
   if !stats
     .iter()
     .any(|&stat| is_toposortable_node(alias_ref(stat)))
   {
-    return;
+    return stats.to_vec();
   }
 
   // std::vector<AstStat*> result; result.reserve(stats.size());
@@ -125,11 +126,11 @@ pub fn toposort(stats: &mut Vec<*mut AstStat>) {
     collector.populate_map(nodes.iter().copied());
     for (id, &element) in elements.iter().enumerate() {
       collector.current_arc = Some(id);
-      // Safety: `element` 即入参 `stats`（本函数独占的 &mut Vec）中的
+      // Safety: `element` 即入参 `stats`（本函数只读借用的切片）中
       // arena 存活 AstStat 指针，满足 ast_stat_visit 的“null 或存活节点”
-      // 契约；RTTI class index 分发到对应 visit 覆写。独占性由 `stats` 的
-      // `&mut` 借用与 TopoSort 阶段 AST 定稿不变量共同保证；collector 只写
-      // 与其不相交的 Node 图 arena 与局部 map。
+      // 契约；RTTI class index 分发到对应 visit 覆写。独占性由
+      // TopoSort 阶段 AST 定稿不变量保证（visitor 只读 AST、不改写节点）；
+      // collector 只写与其不相交的 Node 图 arena 与局部 map。
       unsafe {
         ast_stat_visit(element, &mut collector);
       }
@@ -161,15 +162,14 @@ pub fn toposort(stats: &mut Vec<*mut AstStat>) {
     } else if !contains_function_call(alias_ref(arena[next].element)) {
       q.push_back(next);
     } else {
-      drain(&mut arena, &mut q, &mut result, Some(next));
+      result.extend(drain(&mut arena, &mut q, Some(next)));
     }
 
     nodes.pop_front();
   }
 
   // drain(Q, result, nullptr);
-  drain(&mut arena, &mut q, &mut result, None);
+  result.extend(drain(&mut arena, &mut q, None));
 
-  // std::swap(stats, result);
-  swap(stats, &mut result);
+  result
 }
