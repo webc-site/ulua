@@ -32,6 +32,9 @@ pub unsafe fn lua_d_callny(l: *mut LuaState, func: StkId, nresults: i32) {
     LUAU_ASSERT!(!isyielded(&*l));
 
     if nresults != LUA_MULTRET {
+      // 保留（恢复动作本体·同形单点）：performcall 可搬栈，top 须由 funcoffset 在
+      // 恢复点重派生后落场——单派生单场写已是 cpp `L->top = restorestack(...)+nresults`
+      // 的最小形制，无重复重读可合并（双派生合并案见 lua_d_callint）
       (*l).top = restorestack!(l, funcoffset).add(nresults as usize);
     }
 

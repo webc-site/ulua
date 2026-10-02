@@ -33,8 +33,11 @@ pub(crate) unsafe fn resolve_import_safe(l: *mut LuaState, k: *mut TValue, id: u
         setnilvalue!((*l).top.sub(1));
       }
     } else {
+      // r12-w7a2 收编（同形单点·protected 路径 else 分支）：写 nil 到保留顶槽后经
+      // raise_top 原语抬顶——setnilvalue 不触场不搬栈，与被替代的裸抬顶式同址同宽；
+      // cpp 同形 `setnilvalue(s2v(L->top++));`
       setnilvalue!((*l).top);
-      (*l).top = (*l).top.add(1);
+      (*l).raise_top(1);
     }
   }
 }

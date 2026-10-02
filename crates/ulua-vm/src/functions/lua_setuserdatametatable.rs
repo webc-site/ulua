@@ -18,6 +18,7 @@ pub unsafe fn lua_setuserdatametatable(l: *mut LuaState, tag: i32) {
     // reassignment not supported
     api_check!(l, (*(*l).global).udatamt[tag as usize].is_null());
 
+    // r12-w7a2 收编：栈顶单槽预绑定读柄（既有形制确认——本函数体仅此一读）
     let t = (*l).top.offset(-1);
     let Some(h) = (*(*t).value.gc).as_table_mut() else {
       api_check!(l, false);
@@ -25,7 +26,8 @@ pub unsafe fn lua_setuserdatametatable(l: *mut LuaState, tag: i32) {
     };
     (*(*l).global).udatamt[tag as usize] = h as *mut LuaTable;
 
-    // 弹栈：t 即上方已绑定的栈顶单槽，免二次 `(*l).top.offset(-1)` 裸重读
-    (*l).top = t;
+    // 弹栈经槽门面 lower_top：t 即上方预绑定的当前栈顶单槽（其间仅标量/裸名
+    // 注册表场写，无栈操作，现读场与窗值恒等），免二次场域重读
+    (*l).lower_top(1);
   }
 }

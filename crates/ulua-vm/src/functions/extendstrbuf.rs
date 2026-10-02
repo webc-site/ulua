@@ -30,6 +30,9 @@ pub(crate) unsafe fn extendstrbuf(
     let storage = (*b).storage.map(NonNull::as_ptr).unwrap_or(null_mut());
 
     if !storage.is_null() {
+      // 保留（票面特别裁决位·断言位点）：本 LUAU_ASSERT 为扩容前置校验，断言位点
+      // 不动是硬约束；boxloc 窗读必须先于下方 push_nil/insert 的首次 spill 移位——
+      // 若先读后挪即读到挪位前的 storage 镜像，属行为变更（cpp laux.cpp 同形两处独立现读）
       LUAU_ASSERT!(storage.cast_const() == (*(*l).top.offset(boxloc as isize)).as_string_ptr());
     }
 
@@ -54,6 +57,9 @@ pub(crate) unsafe fn extendstrbuf(
       (*l).insert(boxloc);
     }
 
+    // 保留（票面特别裁决位·恢复点尾读）：首次 spill 分支经 push_nil+insert 既可能
+    // 搬栈又改 top 场，boxloc 窗必须由恢复动作完成后的场域现读派生；收编到上方
+    // 任何预绑定即跨恢复点重排（禁），单点式已是最小形制
     setsvalue!(l, (*l).top.offset(boxloc as isize), new_storage);
 
     (*b).p = (*new_storage).data.as_mut_ptr().cast::<u8>().add(used);

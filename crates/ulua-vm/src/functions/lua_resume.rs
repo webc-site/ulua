@@ -30,6 +30,8 @@ pub unsafe fn lua_resume(l: *mut LuaState, from: *mut LuaState, nargs: i32) -> i
     let old_n_ccalls = (*l).n_ccalls as i32;
     // SAFETY: 粗粒度恢复入参契约——`resume_start` 的 `api_check!` 已核
     // `top - base >= nargs`，`top - nargs` 即首实参栈槽，满足 `resume` 的 `ud` 前置
+    // 保留（恢复点后现读·同形单点）：resume_start 可压参搬栈，ud 窗起点必须现读
+    // 场域——cpp 同形 `(void*)(L->top - nargs)` 单点最小读面，无重复重读可收编
     let status = lua_d_rawrunprotected(
       l,
       Some(resume),

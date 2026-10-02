@@ -75,6 +75,8 @@ pub(crate) unsafe fn resume_finish(l: *mut LuaState, mut status: i32, old_n_ccal
     if status != LuaStatus::Ok as i32 {
       (*l).status = status as u8;
       lua_d_seterrorobj(l, status, (*l).top);
+      // 保留（错误收尾恢复动作·同形单点）：seterrorobj 刚重定 top，本行必须现读
+      // 其结果场并落 ci 帧界——场到场拷贝无算术操作数，cpp 同形 `ci->top = L->top;`
       (*(*l).ci).top = (*l).top;
     } else if (*l).status == LuaStatus::Ok as u8 {
       expandstacklimit!(l, (*l).top);

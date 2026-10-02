@@ -54,6 +54,8 @@ pub(crate) unsafe fn resume_continue(l: *mut LuaState) {
             continue;
           }
 
+          // 保留（恢复点后现读·同形单点）：`cont(l, 0)` 可再入执行/搬栈，结果窗起点
+          // 必须现读场域——cpp 同形 `luau_poscall(L, L->top - n)` 的单点最小读面
           luau_poscall(l, (*l).top.offset(-(n as isize)));
         }
       } else {

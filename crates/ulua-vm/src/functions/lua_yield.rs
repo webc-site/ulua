@@ -19,6 +19,8 @@ pub unsafe fn lua_yield(l: *mut LuaState, nresults: i32) -> i32 {
       lua_d_throw(l, LuaStatus::ErrRun as i32);
     }
 
+    // 保留（yield 结果窗恢复点·同形单点）：上方错误路径可抛，非错误路径此处为对
+    // 场域的唯一一次现读——cpp 同形 `L->base = L->top - nresults;` 单点最小读面
     (*l).base = (*l).top.offset(-(nresults as isize));
     (*l).status = LuaStatus::Yield as u8;
     -1

@@ -55,6 +55,8 @@ pub fn lua_pcall(l: &mut LuaState, nargs: i32, nresults: i32, errfunc: i32) -> i
     );
 
     if nresults == LUA_MULTRET && l.top.offset_from((*l.ci).top) >= 0 {
+      // 保留（MULTRET 帧界传播·同形单点，与 lua_call 尾分支同族）：场到场拷贝无
+      // 算术操作数；api_update_top 形门面会新增 api_check 断言位，违行为零变更硬约束
       (*l.ci).top = l.top;
     }
 
