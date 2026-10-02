@@ -23,7 +23,11 @@ pub fn lua_checkstack(l: &mut LuaState, size: i32) -> i32 {
     api_check!(l, size >= 0);
 
     let mut res = 1;
-    if size > LUAI_MAXCSTACK || (l.top.offset_from(l.base) as i32 + size) > LUAI_MAXCSTACK {
+    // r16-b2 收编：顶-基槽距读数落既有 get_top 门面——其本体 slot_distance(base, top)
+    // 即被替代式 `top.offset_from(base) as i32` 的同址同宽镜像（谓词内现读、短路次序
+    // 不变）；isize→i32 折形在现域无截差（栈槽距受 LUAI_MAXSTACK 约束），与 i32 常量
+    // LUAI_MAXCSTACK 的加比较两侧同型、方向逐位等价
+    if size > LUAI_MAXCSTACK || (l.get_top() + size) > LUAI_MAXCSTACK {
       res = 0; // stack overflow
     } else if size > 0 {
       if stacklimitreached(&*l, size) {
