@@ -28,6 +28,14 @@ pub(crate) unsafe fn lua_d_pcall(
   ef: isize,
 ) -> i32 {
   // SAFETY: 契约保证 `l` 为存活调用帧、func/ud 满足受保护回调约定；块内 n_ccalls/ci/isactive 的保存与恢复成对进行，错误路径经 restoreci 回退
+  //
+  // r13-w1b 逐点定性（w6d 口径保留面）：n_ccalls/base_ccalls 的保存-恢复对、
+  // isactive 读与落笔、`saveci!/restoreci!` 的 ci 场域收发、收尾 `(*l).base` 回读
+  // `ci->base` 均为恢复点动作本体，LuaState 上无对应门面，原样保留；`(*(*l).global).cb`
+  // 为 global_State 链读数，非栈顶门面/原语覆盖面，保留；n_ccalls<=base_ccalls 处
+  // 系 cpp 明载的 lua_isyieldable 离线调用规避（inlined by design），不可换用
+  // is_yieldable() 门面，保留原裸判据。收编仅两处读数：错误对象置顶的 top 现读
+  // （top_slot(0)）与 debug 钩后的 Break 谓词（status() 门面）。
   unsafe {
     let old_n_ccalls: u16 = (*l).n_ccalls;
     let old_base_ccalls: u16 = (*l).base_ccalls;
@@ -41,7 +49,9 @@ pub(crate) unsafe fn lua_d_pcall(
       if ef != 0 {
         // push error object to stack top if it's not already there
         if status != LuaStatus::ErrRun as i32 {
-          lua_d_seterrorobj(l, status, (*l).top);
+          // 收编：顶槽地址读数经 top_slot(0) 边界原语（镜像 cpp `L->top` 读数形，
+          // 位点现读不变——seterrorobj 尚未执行，读的就是入参时刻的场域顶）
+          lua_d_seterrorobj(l, status, (*l).top_slot(0));
         }
 
         // if errfunc fails, we fail with "error in error handling" or "not enough memory"
@@ -78,7 +88,9 @@ pub(crate) unsafe fn lua_d_pcall(
         debugprotectederror(l);
 
         // debug hook is only allowed to break
-        if (*l).status as i32 == LuaStatus::Break as i32 {
+        // 收编：Break 谓词经既有 status() 门面（from_repr(Break) 当且仅当字段为 6，
+        // non-repr 兜底 Ok 亦 ≠Break——谓词逐位等价；读数位点与让渡面时序不变）
+        if (*l).status() == LuaStatus::Break {
           return 0;
         }
       }
