@@ -10,11 +10,15 @@ use crate::records::require_alias::RequireAlias;
 /// 现在改为「栈上节点 + 借用回调」：实现方在栈上构造节点，以 `&dyn RequireNode`
 /// 交给访问方，节点全链路零堆分配。
 ///
-/// `dyn` 在此保留是正当的：该接口由宿主注入（`FileResolver::require_suggester` 存
-/// `Arc<dyn RequireSuggester>`），实现方位于本 crate 之外（如 ulua-unit-test 的
-/// `TestRequireNode`），无法穷举成 enum。下方两个遍历方法的访问者形参同样取
+/// `dyn` 在此保留（review.md §4「类型集合运行期开放」条款，r13-w1c 逐处复核）：
+/// 该接口由宿主注入（`FileResolver::require_suggester` 存
+/// `Arc<dyn RequireSuggester>`），实现方位于本 crate 之外（rg 交叉核对：唯一实现
+/// 为 ulua-unit-test 的 `TestRequireNode`），实现集合跨 crate 运行期开放，无法
+/// enum_dispatch 穷举；trait 泛型化亦会使 `Arc<dyn RequireSuggester>` 的宿主注入
+/// 口无法定型。下方两个遍历方法的访问者形参同样取
 /// `&mut dyn FnMut(&dyn RequireNode)`：泛形参（`impl`/泛型方法）会破坏对象安全，
-/// 令 `&dyn RequireNode` 沿遍历链传递不再可行。
+/// 令 `&dyn RequireNode` 沿遍历链传递不再可行——此处 `dyn` 是对象安全的必要代价，
+/// 非热路径单态化候选。
 pub trait RequireNode {
   fn get_path_component(&self) -> String;
 
