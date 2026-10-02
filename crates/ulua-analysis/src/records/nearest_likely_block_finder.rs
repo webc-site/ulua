@@ -1,17 +1,15 @@
-use core::ptr::from_mut;
-
 use ulua_ast::records::{ast_stat_block::AstStatBlock, ast_visitor::AstVisitor};
 
-use crate::records::arena_handle::alias_ref;
+use crate::records::arena_handle::Handle;
 
 #[derive(Debug, Clone)]
 pub struct NearestLikelyBlockFinder {
-  pub stmt_block_recent_ast: *mut AstStatBlock,
-  pub found: Option<*mut AstStatBlock>,
+  pub stmt_block_recent_ast: Handle<AstStatBlock>,
+  pub found: Option<Handle<AstStatBlock>>,
 }
 
 impl NearestLikelyBlockFinder {
-  pub fn new(stmt_block_recent_ast: *mut AstStatBlock) -> Self {
+  pub fn new(stmt_block_recent_ast: Handle<AstStatBlock>) -> Self {
     Self {
       stmt_block_recent_ast,
       found: None,
@@ -25,12 +23,12 @@ impl NearestLikelyBlockFinder {
 // is considered; all other node visits fall through to the default (recurse).
 impl AstVisitor for NearestLikelyBlockFinder {
   fn visit_stat_block(&mut self, node: &mut AstStatBlock) -> bool {
-    let block = from_mut(node);
+    let block = Handle::from_mut(node);
     let block_location = node.base.base.location;
-    let recent_location = alias_ref(self.stmt_block_recent_ast).base.base.location;
+    let recent_location = self.stmt_block_recent_ast.get().base.base.location;
     if block_location.begin <= recent_location.begin {
       if let Some(found) = self.found {
-        let found_location = alias_ref(found).base.base.location;
+        let found_location = found.get().base.base.location;
         if found_location.begin < block_location.begin {
           self.found = Some(block);
         }

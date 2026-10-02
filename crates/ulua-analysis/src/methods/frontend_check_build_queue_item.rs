@@ -1,5 +1,5 @@
 use alloc::{string::String, vec::Vec};
-use core::mem::take;
+use core::{mem::take, ptr::null_mut};
 
 use ulua_ast::{enums::mode::Mode, records::ast_stat::AstStat};
 use ulua_common::{fint, macros::luau_timetrace_scope::LUAU_TIMETRACE_SCOPE};
@@ -13,12 +13,8 @@ use crate::{
     unfreeze::unfreeze,
   },
   records::{
-    arena_handle::{alias, opt_handle_as_ptr},
-    build_queue_item::BuildQueueItem,
-    frontend::Frontend,
-    module::Module,
-    module_has_cyclic_dependency::ModuleHasCyclicDependency,
-    syntax_error::SyntaxError,
+    arena_handle::alias, build_queue_item::BuildQueueItem, frontend::Frontend, module::Module,
+    module_has_cyclic_dependency::ModuleHasCyclicDependency, syntax_error::SyntaxError,
     type_error::TypeError,
   },
   type_aliases::type_error_data::TypeErrorData,
@@ -190,9 +186,13 @@ impl Frontend {
       let lint_timestamp = get_timestamp();
 
       let warnings = lint(
-        // cpp `lint(sourceModule.root, ...)`：`lint` 形参仍持 `*mut AstStat`，
-        // 经 `opt_handle_as_ptr` 桥后下转，`None` ≡ nullptr 透传。
-        opt_handle_as_ptr(item.source_module.root).cast::<AstStat>(),
+        // cpp `lint(sourceModule.root, ...)`：`lint` 形参仍持 `*mut AstStat`
+        //（lint 子系统指针身份面，不在本波范围），`Option<Handle>` 于此折叠，
+        // `None` ≡ nullptr 透传，与原桥逐位等价。
+        item
+          .source_module
+          .root
+          .map_or_else(null_mut, |h| h.cast::<AstStat>().as_ptr()),
         item.source_module.names.as_ref(),
         &environment_scope,
         module_ptr as *const Module,

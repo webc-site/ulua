@@ -12,7 +12,7 @@ use ulua_ast::{
   },
   rtti::ast_node_try_as,
 };
-use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet};
+use ulua_common::{fflag, records::dense_hash_set::DenseHashSet};
 
 use crate::{
   enums::table_state::TableState,
@@ -51,7 +51,11 @@ fn prop_from_ty(ty: TypeId) -> Property {
 ///   且 `scopes` 非空（`get_module_scope` 断言 `scopes.front()`），scope 树内
 ///   `children` 裸指针均指向仍由 `module.scopes` 中 `Arc<Scope>` 保活的节点。
 pub fn synthesize_export_return(builtin_types: Handle<BuiltinTypes>, module_ref: &mut Module) {
-  LUAU_ASSERT!(!module_ref.root.is_null());
+  // cpp `LUAU_ASSERT(module->root)` 后直取 `module->root->body`：缺席即契约违例，
+  // `root` 句柄化后于此单点收口为确定性 panic，非空由 `Handle` 类型承载。
+  let root = module_ref
+    .root
+    .expect("synthesizeExportReturn: 根块应在场（cpp LUAU_ASSERT(module->root)）");
 
   let module_scope = module_ref.get_module_scope();
   let mut props: Props = Props::new();
@@ -85,7 +89,7 @@ pub fn synthesize_export_return(builtin_types: Handle<BuiltinTypes>, module_ref:
 
   let mut exported_locals: DenseHashSet<*mut AstLocal> = DenseHashSet::default();
 
-  let body = &alias_ref(module_ref.root).body;
+  let body = &root.get().body;
   for statement in body.iter() {
     // `statement` 出自 `module.root->body`（parser 分配、lint 全程存活的 arena
     // 语句节点，Node 句柄只读视图），下转走生命周期正确的 `ast_node_try_as`，

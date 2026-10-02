@@ -37,7 +37,7 @@ pub struct FragmentAutocompleteArgs<'a, 'b> {
   pub opts: Option<FrontendOptions>,
   pub callback: StringCompletionCallback,
   pub fragment_end_position: Option<Position>,
-  pub recent_parse: *mut AstStatBlock,
+  pub recent_parse: Option<Handle<AstStatBlock>>,
   pub reporter: ReporterRef<'b>,
   pub is_in_hot_comment: bool,
 }

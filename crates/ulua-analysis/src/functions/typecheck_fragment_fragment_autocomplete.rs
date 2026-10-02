@@ -34,7 +34,7 @@ use crate::{
     constraint_solver_ctor::FragmentSolverParams,
   },
   records::{
-    arena_handle::{Handle, alias, alias_ref},
+    arena_handle::{Handle, alias},
     clone_state::CloneState,
     constraint::Constraint,
     constraint_generator::ConstraintGenerator,
@@ -70,10 +70,10 @@ use crate::{
 ///   （NonNull 自指 `builtin_types_` 存储）与 `file_resolver`
 ///   句柄均以其字段为落点，生命周期覆盖本函数；`ice_handler` 字段仅被
 ///   瞬态借用（`Handle::from_mut` / `&`）。
-/// - `root`：必须指向由本次传入的 `ast_allocator` 分配的 fragment 根
-///   `AstStatBlock`（即 `parse_fragment` 成功时的 `FragmentParseResult.root`），
-///   且在本函数执行期间不被其他所有者可变访问（allocator 所有权随本调用移交，
-///   AST 随之存活）。
+/// - `root`：`parse_fragment` 成功时的 `FragmentParseResult.root`（非空由
+///   [`Handle`] 类型编码），指向由本次传入的 `ast_allocator` 分配的 fragment
+///   根 `AstStatBlock`，且在本函数执行期间不被其他所有者可变访问（allocator
+///   所有权随本调用移交，AST 随之存活）。
 /// - `stale`：调用方保活的 `Arc<Module>`；本函数按 cpp 契约对其 arena 做
 ///   freeze/unfreeze、读取 name/human_readable_name，并可能在超时后写
 ///   `timeout`——均属 `shared_mut` 的写穿契约，要求单线程独占驱动
@@ -82,11 +82,11 @@ use crate::{
 ///   必须属于 `stale` 的作用域树并在调用期间存活。
 /// - `_cursor_pos`：与 cpp 签名对齐保留，函数体不使用。
 /// - `ast_allocator`：分配了 `root` 的 `Allocator`；所有权被移交给增量模块
-///   （`allocator` 字段注入），因此对 `root` 的裸指针解引用在其内存活。
+///   （`allocator` 字段注入），因此 `root` 句柄在其内存活。
 /// - `opts` / `reporter`：普通借用，调用期间存活即可。
 pub(crate) unsafe fn typecheck_fragment_(
   frontend: &mut Frontend,
-  root: *mut AstStatBlock,
+  root: Handle<AstStatBlock>,
   stale: &ModulePtr,
   closest_scope: &ScopePtr,
   // 与 C++ 签名对齐保留该参数，但主体未使用（C++ 同样未使用 cursorPos）
@@ -196,13 +196,13 @@ pub(crate) unsafe fn typecheck_fragment_(
   );
 
   // Create a DataFlowGraph just for the surrounding context
-  // `build` 入口已引用化（安全签名）：首层解引用收口在此处 `alias_ref`——
-  // `root` 是 `ast_allocator`（已注入增量模块）持有的 fragment AST，arena 保活
-  // 契约覆盖本次调用；def/key arena 借自存活的 `module_ptr`（本函数独占），
+  // `build` 入口已引用化（安全签名）：首层解引用收口在此处 `root.get()`——
+  // `root` 是 `ast_allocator`（已注入增量模块）持有的 fragment AST 非空句柄，
+  // arena 保活契约覆盖本次调用；def/key arena 借自存活的 `module_ptr`（本函数独占），
   // ice 侧入参为 `Option<Handle>`，其目标借自 frontend 字段。&mut 借用半径均止于
   // 本次调用，与 cpp:1198 逐参对应。
   let mut dfg = DataFlowGraphBuilder::build(
-    alias_ref(root),
+    root.get(),
     Handle::from_mut(&mut module_ptr.def_arena),
     Handle::from_mut(&mut module_ptr.key_arena),
     Some(Handle::from_mut(&mut frontend.ice_handler)),
@@ -210,17 +210,15 @@ pub(crate) unsafe fn typecheck_fragment_(
   reporter.report_waypoint(FragmentAutocompleteWaypoint::DfgBuildEnd);
 
   // requireTrace for the surrounding context. Erased on the way out (ScopedExit).
-  // Safety: `root` 指向 `ast_allocator`（已移交增量模块持有）分配的 fragment AST，
-  // 本函数独占使用；`&mut` 借用半径止于本次调用（cpp `traceRequires(..., root, ...)`
+  // `root` 指向 `ast_allocator`（已移交增量模块持有）分配的 fragment AST，
+  // 本函数独占使用；`get_mut` 借用半径止于本次调用（cpp `traceRequires(..., root, ...)`
   // :1208 对非 const `AstStatBlock*` 的直译），返回的 RequireTraceResult 为独立值。
-  let trace = unsafe {
-    trace_requires(
-      frontend.file_resolver_mut(),
-      &mut *root,
-      module_name.clone(),
-      &limits,
-    )
-  };
+  let trace = trace_requires(
+    frontend.file_resolver_mut(),
+    root.get_mut(),
+    module_name.clone(),
+    &limits,
+  );
   frontend.require_trace.insert(module_name.clone(), trace);
 
   // resolver 以 cpp `ModuleResolver*` 语义在约束生成器与求解器间共享：
@@ -234,7 +232,7 @@ pub(crate) unsafe fn typecheck_fragment_(
   let mut fresh_scope_value = Scope::scope_type_pack_id(null());
   fresh_scope_value.interior_free_types = Some(Vec::new());
   fresh_scope_value.interior_free_type_packs = Some(Vec::new());
-  fresh_scope_value.location = alias_ref(root).base.base.location;
+  fresh_scope_value.location = root.get().base.base.location;
   let fresh_child_of_nearest_scope: ScopePtr = Arc::new(fresh_scope_value);
   register_scope(&fresh_child_of_nearest_scope);
   let fresh_scope_ptr = shared_mut(&fresh_child_of_nearest_scope);
@@ -292,7 +290,7 @@ pub(crate) unsafe fn typecheck_fragment_(
 
   // incrementalModule->scopes.emplace_back(root->location, freshChildOfNearestScope);
   module_ptr.scopes.push((
-    alias_ref(root).base.base.location,
+    root.get().base.base.location,
     fresh_child_of_nearest_scope.clone(),
   ));
   cg.root_scope = Some(fresh_child_of_nearest_scope.clone());
@@ -310,7 +308,7 @@ pub(crate) unsafe fn typecheck_fragment_(
     ));
   register_scope(&local_type_function_scope);
   let lhs = shared_mut(&local_type_function_scope);
-  lhs.location = alias_ref(root).base.base.location;
+  lhs.location = root.get().base.base.location;
   // Safety: `cg.type_function_runtime` 是构造 cg 时由局部 `type_function_runtime`
   // 的 `&mut` 转成的 NonNull，该局部变量存活至函数返回且此刻无并存借用；
   // 写入其 root_scope 字段是独占访问（移交 local_type_function_scope 的所有权
@@ -320,7 +318,7 @@ pub(crate) unsafe fn typecheck_fragment_(
   reporter.report_waypoint(FragmentAutocompleteWaypoint::CloneAndSquashScopeStart);
   let (dest_arena, fragment_root, dest_scope) = (
     Handle::from_ptr(&mut module_ptr.internal_types),
-    alias(root),
+    root.get_mut(),
     alias(fresh_scope_ptr),
   );
   clone_types_from_fragment(
@@ -406,7 +404,7 @@ pub(crate) unsafe fn typecheck_fragment_(
       fresh_scope_ptr,
     )
   };
-  ast_stat_block_visit(alias(root), &mut etv);
+  ast_stat_block_visit(root.get_mut(), &mut etv);
 
   // In frontend we would forbid internal types because this is just for autocomplete,
   // we don't actually care. We also don't even need to typecheck - just synthesize types
@@ -442,11 +440,10 @@ fn empty_result() -> FragmentTypeCheckResult {
   }
 }
 
-/// 安全外观的公开入口。`recent_parse` 为裸指针入参，契约与 cpp
-/// `typecheckFragment(..., AstStatBlock* recentParse, ...)` 一致——须为 null 或指向
-/// frontend 持有的最近一次成功解析的 AST 根。薄包装把对裸指针的解引用限制在
-/// 下方私有 impl 内（`clippy::not_unsafe_ptr_arg_deref` 收口），本体逻辑见
-/// `typecheck_fragment_impl`。
+/// 安全外观的公开入口。`recent_parse` 已句柄化：契约与 cpp
+/// `typecheckFragment(..., AstStatBlock* recentParse, ...)` 一致——`None` ≡
+/// nullptr（callee 首句早退、不解引用），`Some` 为 frontend 持有的最近一次
+/// 成功解析的 AST 根（`Handle` 模块级 arena 保活契约承载存活前提）。
 pub fn typecheck_fragment(
   frontend: &mut Frontend,
   module_name: &ModuleName,
@@ -454,7 +451,7 @@ pub fn typecheck_fragment(
   opts: Option<FrontendOptions>,
   src: &str,
   fragment_end_position: Option<Position>,
-  recent_parse: *mut AstStatBlock,
+  recent_parse: Option<Handle<AstStatBlock>>,
   reporter: ReporterRef<'_>,
 ) -> (FragmentTypeCheckStatus, FragmentTypeCheckResult) {
   typecheck_fragment_impl(
@@ -478,7 +475,7 @@ fn typecheck_fragment_impl(
   opts: Option<FrontendOptions>,
   src: &str,
   fragment_end_position: Option<Position>,
-  recent_parse: *mut AstStatBlock,
+  recent_parse: Option<Handle<AstStatBlock>>,
   reporter: ReporterRef<'_>,
 ) -> (FragmentTypeCheckStatus, FragmentTypeCheckResult) {
   LUAU_TIMETRACE_SCOPE!("Luau::typecheckFragment", "FragmentAutocomplete");
@@ -504,14 +501,13 @@ fn typecheck_fragment_impl(
   // `module->names.get()` 直译）。
   let names: *mut AstNameTable =
     { Arc::as_ptr(module_ptr.names.as_ref().expect("module must have names")).cast_mut() };
-  // Safety: `root` 字段是模块类型检查前写入的 AST arena 裸句柄，随 module/
-  // frontend 存活；仅作为参数透传给 unsafe 的 parse_fragment，本行不创建引用。
+  // `Module.root` 已句柄化：直传 `Option<Handle>`（null ≡ cpp nullptr），
+  // 存活随 module/frontend 的 arena 契约。
   let stale_root = { module_ptr.root };
 
-  // Safety: 满足 `parse_fragment` 契约——`stale_root` 指向存活 AstStatBlock（如上
-  // 证成），`recent_parse` 由调用方按 cpp `typecheckFragment` 的 `recentParse`
-  // 语义提供（null 时 callee 首句即早退、不解引用），`names` 指向上述存活的
-  // AstNameTable；`src`/`cursor_pos` 为普通借用。
+  // Safety: `names` 指向上述存活的 AstNameTable（callee 内 `alias(names)` 解引用
+  // 收口）；两树根句柄存活由 `Handle` 模块级 arena 契约承载，`recent_parse`
+  // 为 `None` 时 callee 首句即早退、不解引用（对应 cpp `recentParse` nullptr）。
   let try_parse = unsafe {
     parse_fragment(
       stale_root,

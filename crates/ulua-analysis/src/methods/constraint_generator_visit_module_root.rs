@@ -27,7 +27,8 @@ use crate::{
 impl ConstraintGenerator {
   /// C++ `visitModuleRoot(AstStatBlock* block)`（ConstraintGenerator.cpp:367）。
   /// `block` 为整个 check 会话存活的模块 AST 根节点共享借用（唯一调用方
-  /// [`ConstraintGenerator::run`] 传入 `source_module.root` 经 alias_ref 收口）。
+  /// [`ConstraintGenerator::run`] 传入已句柄化的 `source_module.root`，经
+  /// `Handle::get` 收口）。
   /// 且须在约束生成开始前调用：`scopes` 为空、`root_scope` 为 null
   /// （体内 `LUAU_ASSERT!` 断言）。Scope/Module 裸句柄均以存活对象为锚，
   /// 写入经 alias 门面即时物化。

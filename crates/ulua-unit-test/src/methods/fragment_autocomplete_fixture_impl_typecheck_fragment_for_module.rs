@@ -6,7 +6,7 @@ use ulua_analysis::{
   enums::fragment_type_check_status::FragmentTypeCheckStatus,
   functions::typecheck_fragment_fragment_autocomplete::typecheck_fragment,
   records::{
-    fragment_type_check_result::FragmentTypeCheckResult,
+    arena_handle::Handle, fragment_type_check_result::FragmentTypeCheckResult,
     i_fragment_autocomplete_reporter::ReporterRef,
   },
   type_aliases::module_name_type::ModuleName,
@@ -36,7 +36,8 @@ impl FragmentAutocompleteFixtureImpl {
       Some(options),
       document,
       fragment_end_position,
-      pr.root,
+      // cpp 直传解析根（可 null）：`from_opt_ptr` 折叠可空性。
+      Handle::from_opt_ptr(pr.root),
       ReporterRef::NULL,
     )
   }

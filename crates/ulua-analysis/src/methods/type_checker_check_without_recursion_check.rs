@@ -15,7 +15,7 @@ use crate::{
     synthesize_export_return::synthesize_export_return,
   },
   records::{
-    arena_handle::{Handle, alias_ref, opt_handle_as_ptr},
+    arena_handle::{Handle, alias_ref},
     code_too_complex::CodeTooComplex,
     free_type_pack::FreeTypePack,
     module::Module,
@@ -49,9 +49,8 @@ impl TypeChecker {
       r#type: module.r#type,
       allocator: Some(module.allocator.clone()),
       names: Some(module.names.clone()),
-      // `Module.root` 仍持 `*mut`（下游句柄化在后续波次）：桥接透传，
-      // `None` ≡ cpp nullptr。
-      root: opt_handle_as_ptr(module.root),
+      // `Module.root` 已句柄化：直传 `Option<Handle>`，`None` ≡ cpp nullptr。
+      root: module.root,
       ..Default::default()
     };
 
