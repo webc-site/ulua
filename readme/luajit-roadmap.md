@@ -51,6 +51,16 @@ proto#1 pc=6：**480K 次 miss、last_tag=7（table 恒定）** = spike 剧本�
     （主位 hash+空判+3 store+屏障 ≈ 内联），oop 480K 次/轮 → **-30~40% oop JIT**；
   - 工作量：新 IrCmd ×2 + A64 lowering + NativeContext 槽 + census 读数，半天级。
 - 观测基建（P0 门控修复 + SETTABLEKS bump 对称接线 + census 探针）已就位。
+- **cpp 对照定性（2026-10-03）**：cpp `IrTranslation.cpp:100` 对 ANY 接收者的
+  CHECK_TAG miss target 同为 fallback（与我们逐位同构）——**元表实例的属性读在
+  cpp native 同样每次走 helper**（Roblox DevForum 官方承认 native codegen 对 OOP
+  无收益）。480K miss 的真因定性：**元表实例的属性读（含继承键）恒走 fallback**
+  ——非形状轮换、非插入型，是 method-JIT 对 metatable'd read 的固有形态。
+  **J4-real（超越 cpp 的新特性）**：__index 感知 IC——对带元表接收者缓存
+  (metatable ptr, __index 表 node val 地址)，guard 链 = CheckTag(table) +
+  mt cmp + 键校验，miss 落 helper。LuaJIT 以 trace 级做到；cpp 无；我们做成即
+  oop JIT 从 25.3 向 interp-LuaJIT 差距方向实质逼近，且为对 cpp 的净超越项。
+  工作量：大（guard 链 + GC 失效语义 + census 选点），需专项立项。
 - **J4b 落地后 oop 实测（CPU 时间配对）= +0.6%（零收益）**：census 的 480K miss
   计数正确但其成本占比被高估——execute_settableks 的 direct_set 路径本已精瘦
   （VmFrame 门面 + set_str 主位查找 + patch_c），内联化省下的 call 开销 ≈ 测量噪声。
