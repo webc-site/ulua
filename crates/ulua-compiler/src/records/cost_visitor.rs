@@ -25,7 +25,7 @@ use crate::{
     get_trip_count::get_trip_count,
     is_constant::{is_constant_false, is_constant_true},
   },
-  records::{constant::Constant, cost::Cost, node::Node},
+  records::{compiler::nn_alias::alias, constant::Constant, cost::Cost, node::Node},
 };
 
 /// cpp `CostModel.cpp:101-107` 的 `const DenseHashMap&` 引用成员直接以
@@ -392,11 +392,11 @@ pub(crate) fn visit_ast_stat_for(this: &mut CostVisitor<'_>, stat_for: &AstStatF
     _ => None,
   };
   let factor = trip_count.unwrap_or(3);
-  // Safety: body 句柄出自 parser 存活契约（本入口按 & 借用消费，as_ptr 桥回
-  // 裸指针重建 Option<&mut> 与 cpp 直传 node->body 同语义）；loop_item 调用内
-  // 遍历完毕即释放借用，CostVisitor 只写自身 result。
+  // 句柄经 nn_alias 门面物化可变借用：body 句柄出自 parser 存活契约（本入口按 &
+  // 借用消费，as_ptr 桥回裸址重建 Option<&mut> 与 cpp 直传 node->body 同语义）；
+  // loop_item 调用内遍历完毕即释放借用，CostVisitor 只写自身 result。
   this.loop_item(
-    Some(unsafe { &mut *stat_for.body.as_ptr() }),
+    Some(alias(stat_for.body.as_ptr())),
     Cost {
       model: 1,
       constant: 0,
