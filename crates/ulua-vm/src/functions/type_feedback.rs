@@ -282,7 +282,7 @@ pub fn tsfb_dump() -> String {
       let code_ptr = (*proto).code;
       let op_at = |pc: u32| -> u8 {
         if (pc as usize) < sc {
-          unsafe { *code_ptr.add(pc as usize) as u8 }
+          *code_ptr.add(pc as usize) as u8
         } else {
           0xff
         }
