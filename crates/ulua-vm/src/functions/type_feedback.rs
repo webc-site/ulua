@@ -206,6 +206,11 @@ fn tsfb_protos() -> &'static Mutex<Vec<usize>> {
 /// # Safety
 /// `proto` 须为存活 Proto 且其 `execdata`（若非空）为本模块布局的堆分配数据区。
 pub unsafe fn tsfb_bump(proto: *const Proto, pc_off: u32, tag: u8) {
+  // J4 spike P0：未启用观测时零成本返回——此前每次 fallback 都付 locate 扫描 +
+  // Mutex + 线性查重，正在污染 oop 类基准（恰好惩罚 fallback 多的负载）。
+  if !ENABLED.load(Ordering::Relaxed) {
+    return;
+  }
   // SAFETY: 契约保证 proto 存活；execdata/sizecode 为同址字段读，state 写落在
   // 分配的 extra 区界内（locate_tsfb 已校验表自洽）。
   unsafe {
