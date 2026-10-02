@@ -1,6 +1,6 @@
 use crate::{
   enums::lua_type::LuaType,
-  functions::{lua_getreadonly::lua_getreadonly, lua_l_getmetafield::lua_l_getmetafield},
+  functions::{lua_getreadonly::lua_getreadonly, lua_l_getmetafield::lua_l_getmetafield_bytes},
   macros::{lua_lib_fn::lua_lib_fn, tm_metatable::TM_METATABLE},
   records::lua_state::LuaState,
 };
@@ -19,7 +19,7 @@ pub unsafe fn tfreeze(l: *mut LuaState) -> i32 {
     (*l).arg_check(not_frozen, 1, "table is already frozen");
 
     (*l).arg_check(
-      lua_l_getmetafield(l, 1, TM_METATABLE.as_ptr().cast()) == 0,
+      lua_l_getmetafield_bytes(l, 1, TM_METATABLE) == 0,
       1,
       "table has a protected metatable",
     );

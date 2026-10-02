@@ -1,4 +1,3 @@
-/// NUL 结尾字节串（`*const c_char` 契约调用点 `.as_ptr().cast()`；§10 不引入 C 字符串类型）。
 use ulua_common::fflag;
 
 use crate::{
@@ -10,12 +9,14 @@ use crate::{
     buffer_readstring::buffer_readstring_arm, buffer_tostring::buffer_tostring_arm,
     buffer_writebits::buffer_writebits_arm, buffer_writefp::buffer_writefp,
     buffer_writeinteger::buffer_writeinteger, buffer_writelong::buffer_writelong_arm,
-    buffer_writestring::buffer_writestring_arm, lua_l_register::lua_l_register,
+    buffer_writestring::buffer_writestring_arm, lua_l_register::lua_l_register_bytes,
   },
   macros::lua_lib_fn::lua_lib_fn,
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
-const LIB_BUFFER: &[u8] = b"buffer\0";
+/// 模块名（bytes 键契约：`lua_l_register_bytes` 的 `libname` 直接作 `_LOADED`/全局表
+/// 键，不含尾部 `\0`；§10 不引入 C 字符串类型）。
+const LIB_BUFFER: &[u8] = b"buffer";
 
 /// 泛型函数不能声明为 `extern "C"`，为每个宽度生成具体包装（FFI 注册表需要 C ABI）。
 macro_rules! integer_wrappers {
@@ -118,7 +119,7 @@ const fn join<const N: usize>(a: &[LuaLReg], b: &[LuaLReg]) -> [LuaLReg; N] {
 static BUFFER_LIB: [LuaLReg; 28] = join::<28>(&BUFFER_BASE, &INTEGER_TAIL);
 
 /// # Safety
-/// `l` 须为存活 LuaState 且栈顶之上至少留 1 个空槽（`lua_l_register` 会 push 库表并作为返回值）；
+/// `l` 须为存活 LuaState 且栈顶之上至少留 1 个空槽（`lua_l_register_bytes` 会 push 库表并作为返回值）；
 /// 须在可分配/GC 的受保护帧内调用。
 /// cpp/VM/src/lbuflib.cpp:433 luaopen_buffer。
 pub unsafe fn luaopen_buffer(l: *mut LuaState) -> i32 {
@@ -129,7 +130,7 @@ pub unsafe fn luaopen_buffer(l: *mut LuaState) -> i32 {
       &BUFFER_BASE
     };
 
-    lua_l_register(l, LIB_BUFFER.as_ptr().cast(), buffer_lib);
+    lua_l_register_bytes(l, Some(LIB_BUFFER), buffer_lib);
     1
   }
 }
