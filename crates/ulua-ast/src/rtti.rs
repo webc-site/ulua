@@ -466,22 +466,6 @@ pub fn ast_node_try_as_mut<T: AstNodeClass>(node: &mut impl AstNodeViewMut) -> O
     unsafe { mut_cast::<AstNode, T>(base) })
 }
 
-/// `match node.class_index` 分发表臂内的独占强制下转（cpp vtable 分发
-/// `dispatch_node` 的收口点）：调用方已按 `CLASS_INDEX` 命中，免去
-/// `ast_node_try_as_mut` 的二次判型；这是全 crate 唯一保留的引用侧
-/// `unsafe` 下转入口。
-///
-/// # Safety
-/// 调用方必须验证 `node.as_ast_node_mut().class_index == T::CLASS_INDEX`，
-/// 且持有该 place 的独占借用（无重叠别名）。
-#[inline]
-pub(crate) unsafe fn ast_node_as_unchecked_mut<T: AstNodeClass>(
-  node: &mut impl AstNodeViewMut,
-) -> &mut T {
-  // Safety: 函数级 # Safety 契约即 [`mut_cast`] 所需的全部前提。
-  unsafe { mut_cast::<AstNode, T>(node.as_ast_node_mut()) }
-}
-
 /// 基类家族指针 → `*mut AstNode` 的零成本类型视图转换（safe，永不解引用）。
 ///
 /// 对一切 `*mut T` 泛型可用：任何节点指针都能直接喂进下面的边界门面，调用点
@@ -495,13 +479,6 @@ impl<T> AstNodePtr for *mut T {
   #[inline]
   fn as_ast_node(self) -> *mut AstNode {
     self.cast()
-  }
-}
-
-impl<T> AstNodePtr for *const T {
-  #[inline]
-  fn as_ast_node(self) -> *mut AstNode {
-    self.cast::<AstNode>().cast_mut()
   }
 }
 
