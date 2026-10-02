@@ -53,7 +53,7 @@ pub unsafe extern "C-unwind" fn lua_c_barriertable_export(
   v: *mut c_void,
 ) {
   // SAFETY: 契约保证 `t` 存活且 `v` 为写入它的引用，`&mut *l` 引用重建仅收形（非空/对齐
-  // 由本壳 unsafe fn 契约承载），表写屏障只触达 t 的 gch 标签与 grayagain 链
+  // 由本壳调用侧契约承载），表写屏障只触达 t 的 gch 标签与 grayagain 链
   unsafe {
     lua_c_barriertable(&mut *l, t as *mut LuaTable, v as *mut GCObject);
   }

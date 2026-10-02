@@ -48,7 +48,7 @@ pub unsafe extern "C-unwind" fn lua_c_barrierf_export(
   v: *mut c_void,
 ) {
   // SAFETY: 契约保证 `l` 存活且 `o`/`v` 相互一致（v 是新写入 o 的引用），`&mut *l` 引用重建
-  // 仅收形（非空/对齐由本壳 unsafe fn 契约承载），前向屏障仅更新二者标签与 grayagain 链，
+  // 仅收形（非空/对齐由本壳调用侧契约承载），前向屏障仅更新二者标签与 grayagain 链，
   // 不越出对象界
   unsafe {
     lua_c_barrierf(&mut *l, o as *mut GCObject, v as *mut GCObject);
