@@ -279,11 +279,20 @@ pub fn tsfb_dump() -> String {
         None => continue,
       };
       out.push_str(&format!("== proto#{i} sizecode={sc} tsfb_sites={nslots}\n"));
+      let code_ptr = (*proto).code;
+      let op_at = |pc: u32| -> u8 {
+        if (pc as usize) < sc {
+          unsafe { *code_ptr.add(pc as usize) as u8 }
+        } else {
+          0xff
+        }
+      };
       for s in 0..nslots {
         let pc = *data.add(sc + 2 + 2 * s);
         let st = *data.add(sc + 3 + 2 * s);
         out.push_str(&format!(
-          "  site pc={pc:5} hits={:6} last_tag={}\n",
+          "  site pc={pc:5} op={:3} hits={:6} last_tag={}\n",
+          op_at(pc),
           st >> 8,
           st & 0xff
         ));
