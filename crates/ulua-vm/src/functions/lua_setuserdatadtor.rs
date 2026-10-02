@@ -11,6 +11,7 @@ pub unsafe fn lua_setuserdatadtor(l: *mut LuaState, tag: i32, dtor: LuaDestructo
   api_check!(l, (tag as u32) < LUA_UTAG_LIMIT as u32);
   // SAFETY: 契约保证 `l` 的 global 存活、tag 在 udatagc 注册界内且 dtor 为可空合法函数指针，仅覆写注册槽
   unsafe {
-    (*(*l).global).udatagc[tag as usize] = dtor;
+    // r16-b3 收编：裸解引用写点改经 gs_mut 一句一借（登记 API，无重入穿插）
+    (*l).gs_mut().udatagc[tag as usize] = dtor;
   }
 }
