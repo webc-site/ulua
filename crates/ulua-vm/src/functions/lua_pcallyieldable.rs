@@ -67,7 +67,17 @@ pub unsafe fn lua_pcallyieldable(l: *mut LuaState, nargs: i32, nresults: i32, er
 
     let savedfunc = savestack!(l, ctx.func);
     let savederrfunc = if errfunc != 0 {
-      savestack!(l, (*l).base.add((errfunc - 1) as usize))
+      // r14-p1 收编：errfunc 帧槽暂存经 slot 索引域构造子（records/slot.rs:146
+      // 既有门面，as_ptr 为其宏/C ABI 边界取址面，非新增 API）——index_2_addr
+      // 正索引分支在合法域内恰为被替代式 `base.add(errfunc - 1)`，地址逐位恒等、
+      // 读数位点不变（本分支先行即原裸算式处，两语句间无场写入）。合法域论证：
+      // errfunc ∈ [1, top-base] 由上方 errfunc 契约 api_check 与本分支 errfunc != 0
+      // 前提合守——正索引分支 `off < used` 判据恒真，NILOBJECT 塌缩分支不可达，
+      // 其内建帧窗 api_check（idx ≤ ci.top − base）由 base..ci.top 帧不变量随行。
+      // 违约输入域下 index_2_addr 塌缩 NILOBJECT 而裸算式产越界指针（UB），
+      // 该分叉在契约外，非本收编覆盖面。
+      let errfunc_slot = (*l).slot(errfunc).as_ptr();
+      savestack!(l, errfunc_slot)
     } else {
       0
     };
