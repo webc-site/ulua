@@ -31,8 +31,9 @@ pub struct DataFlowGraphFixture {
   /// （`query::<T>(self.module, nths)`）。`functions::query` 的 `AstNodePtr`
   /// trait 目前只为裸指针实现（配套 `ulua_ast::rtti` 的下转），且
   /// `ulua_analysis::methods::data_flow_graph_builder::DataFlowGraphBuilder::build`
-  /// 的签名吃 `*mut AstStatBlock`——句柄化要跨 crate 同批改，否则只留半截迁移。
-  /// 现状 unsafe 不渗透：本字段唯一的解引用发生在被调方内部，本侧只转手地址。
+  /// 首参虽已引用化为 `&AstStatBlock`，本字段仍须以 `*mut` 喂 `query`——句柄化要
+  /// 跨 crate 同批改，否则只留半截迁移。
+  /// 现状本侧解引用仅 `dfg()` 内 build 入参处一次 `&*self.module`（arena 存活契约见该处注释）。
   pub module: *mut AstStatBlock,
   pub graph: Option<DataFlowGraph>,
 }

@@ -196,19 +196,17 @@ pub(crate) unsafe fn typecheck_fragment_(
   );
 
   // Create a DataFlowGraph just for the surrounding context
-  // Safety: `DataFlowGraphBuilder::build` 为 unsafe fn，其契约要求各指针指向
-  // 存活对象：`root` 是 `ast_allocator`（已注入增量模块）持有的 fragment AST，
-  // def/key arena 借自存活的 `module_ptr`（本函数独占）；ice 侧入参已是
-  // `Option<Handle>`，其目标借自 frontend 字段。&mut 借用半径均止于本次调用，
-  // 与 cpp:1198 逐参对应。
-  let mut dfg = unsafe {
-    DataFlowGraphBuilder::build(
-      root,
-      Handle::from_mut(&mut module_ptr.def_arena),
-      Handle::from_mut(&mut module_ptr.key_arena),
-      Some(Handle::from_mut(&mut frontend.ice_handler)),
-    )
-  };
+  // `build` 入口已引用化（安全签名）：首层解引用收口在此处 `alias_ref`——
+  // `root` 是 `ast_allocator`（已注入增量模块）持有的 fragment AST，arena 保活
+  // 契约覆盖本次调用；def/key arena 借自存活的 `module_ptr`（本函数独占），
+  // ice 侧入参为 `Option<Handle>`，其目标借自 frontend 字段。&mut 借用半径均止于
+  // 本次调用，与 cpp:1198 逐参对应。
+  let mut dfg = DataFlowGraphBuilder::build(
+    alias_ref(root),
+    Handle::from_mut(&mut module_ptr.def_arena),
+    Handle::from_mut(&mut module_ptr.key_arena),
+    Some(Handle::from_mut(&mut frontend.ice_handler)),
+  );
   reporter.report_waypoint(FragmentAutocompleteWaypoint::DfgBuildEnd);
 
   // requireTrace for the surrounding context. Erased on the way out (ScopedExit).

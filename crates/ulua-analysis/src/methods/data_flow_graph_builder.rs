@@ -42,14 +42,17 @@ use crate::{
 };
 
 impl DataFlowGraphBuilder {
-  /// # Safety
-  /// - `block` 须为非空、对齐且指向 arena 存活 `AstStatBlock` 的句柄，存活期覆盖整个构建过程；
-  /// - `def_arena`、`key_arena` 为 arena 句柄（Handle 编码非空，构造名即断言
-  ///   non-null），比返回的 DataFlowGraph 长寿；`handle` 为 `Option<Handle>`：
-  ///   可空性由类型编码（None = cpp 默认 `nullptr` 成员），`Some` 时其目标须
-  ///   比构建过程存活。
-  pub unsafe fn build(
-    block: *mut AstStatBlock,
+  /// cpp `DataFlowGraph DataFlowGraphBuilder::build(AstStatBlock* root, NotNull<DefArena>,
+  /// NotNull<RefinementKeyArena>, InternalErrorReporter*)` 的入口。
+  ///
+  /// `block` 已引用化：非空/对齐/存活由借用类型承载（cpp 首参 `AstStatBlock*` 的
+  /// 首层解引用收口到调用方）。`def_arena`、`key_arena` 为 arena 句柄（Handle 编码
+  /// 非空，构造名即断言 non-null），比返回的 DataFlowGraph 长寿；`handle` 为
+  /// `Option<Handle>`：可空性由类型编码（None = cpp 默认 `nullptr` 成员），`Some`
+  /// 时其目标须比构建过程存活——以上存活/单线程无别名契约见 `records::arena_handle`
+  /// 模块级文档（与其余 Handle 接线函数同为安全签名）。
+  pub fn build(
+    block: &AstStatBlock,
     def_arena: Handle<DefArena>,
     key_arena: Handle<RefinementKeyArena>,
     handle: Option<Handle<InternalErrorReporter>>,
@@ -69,8 +72,6 @@ impl DataFlowGraphBuilder {
     });
 
     let _ps = PushScope::new(&mut builder.scope_stack, module_scope);
-    let block =
-      alias_opt(block).expect("block 非空为 build() 的 Safety 契约，分析器产出了空模块块");
     let _ = builder.visit_block_without_child_scope(block);
     builder.resolve_captures();
 
