@@ -28,8 +28,8 @@ impl TypeChecker {
   ) -> ControlFlow {
     let mut sub_level: i32 = 0;
 
-    let mut sorted: Vec<*mut AstStat> = block.body.iter_nodes().map(|n| n.as_ptr()).collect();
-    toposort(&mut sorted);
+    let stats: Vec<*mut AstStat> = block.body.iter_nodes().map(|n| n.as_ptr()).collect();
+    let mut sorted = toposort(&stats);
 
     for &stat in &sorted {
       let stat_ref = alias_ref(stat);

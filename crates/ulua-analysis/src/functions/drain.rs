@@ -27,12 +27,12 @@ fn stat_of(node: &Node) -> &AstStat {
   alias_ref(node.element)
 }
 
-pub fn drain(
-  arena: &mut [Node],
-  q: &mut NodeList,
-  result: &mut Vec<*mut AstStat>,
-  target: Option<NodeId>,
-) {
+/// 返回本轮摘除并加入结果的语句序列（cpp 的 `result` 出参折为返回值），
+/// 顺序与 cpp 逐次 `result.push_back` 一致。
+pub fn drain(arena: &mut [Node], q: &mut NodeList, target: Option<NodeId>) -> Vec<*mut AstStat> {
+  // cpp 中调用方传入的 `result`：本函数只追加，故收拢为局部返回值。
+  let mut result: Vec<*mut AstStat> = Vec::new();
+
   // Connectivity of the subgraph induced by the nodes currently in `Q`. In C++
   // `elements` was redundantly rebuilt each outer iteration; it is loop-invariant.
   let elements: BTreeSet<NodeId> = q.iter().copied().collect();
@@ -60,7 +60,7 @@ pub fn drain(
     {
       prune(arena, t);
       result.push(arena[t].element);
-      return;
+      return result;
     }
 
     // First non-terminator whose (filtered) dependencies are all satisfied.
@@ -119,4 +119,6 @@ pub fn drain(
     prune(arena, t);
     result.push(arena[t].element);
   }
+
+  result
 }
