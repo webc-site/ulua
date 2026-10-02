@@ -38,12 +38,11 @@ pub static LUA_H_DUMMYNODE: DummyNodeSentinel = LUA_H_DUMMYNODE_VALUE;
 
 /// C++ `#define dummynode (&dummynode)`.
 ///
-/// r12-E1 起哨兵语义已收口进窗访问器：读侧 [`LuaTable::node_window`] 对哨兵表
-/// 恒返回本单格切片（与宏 `gnode!(t, 0)` 逐位一致），写侧 [`LuaTable::node_window_mut`]
-/// 对哨兵表返回空窗（哨兵为不可变 `static`，C 侧从不原地写哨兵）。
-///
-/// [`LuaTable::node_window`]: crate::records::lua_table::LuaTable::node_window
-/// [`LuaTable::node_window_mut`]: crate::records::lua_table::LuaTable::node_window_mut
+/// 哨兵语义收口：`node == DUMMYNODE` 是哈希段为哨兵单格的唯一判据（cpp
+/// `luaH_isdummy`），与 `lsizenode == 0` 由 `luaH_new`/`setnodevector(0)` 配对
+/// 建立；`gnode!(t, 0)` 对哨兵表恒读出本单格（键/值皆 nil）。写路径从不原地
+/// 写哨兵——`luaH_newkey` 以指针相等判据转 `rehash` 换发实向量（哨兵为不可变
+/// `static`，向其出借 `&mut` 即别名违例）。
 pub const DUMMYNODE: *const LuaNode = &LUA_H_DUMMYNODE.0;
 
 pub use DUMMYNODE as dummynode;

@@ -13,8 +13,8 @@
 //! 本类型既不引入新的别名保证，也不移除既有保证。
 //!
 //! 构造只经有契约的原语，unsafe 恰关在本模块 impl 的最小块内：
-//! - [`LuaState::slot`]：api 索引域换算（与 `index_2_addr` 同一契约与语义）；
-//! - [`FrameView::reg`]：由当前帧 `base` 派生，[`FrameView::current`] 的独占借用锚定存活期；
+//! - [`LuaState::slot`]：api 索引域换算（与 `index_2_addr` 同一契约与语义），
+//!   返回句柄锚定 `&mut LuaState` 的独占借用，存活期内该状态不得独占重入；
 //! - [`Slot::from_mut`]：局部独占可写 TValue（safe 构造子）；
 //! - [`Slot::from_ref`]：只读侧共享 TValue——此后置句柄只允许读面；
 //! - [`Slot::from_raw`]：裸指针边界重建（C ABI 导出壳、JIT 帧门面、解释器臂上的
