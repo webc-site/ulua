@@ -28,7 +28,7 @@ use crate::{
     get_type, is_prim::is_nil, shared_mut::shared_mut, simplify_union::simplify_union,
   },
   records::{
-    arena_handle::{alias, alias_ref},
+    arena_handle::{Handle, alias},
     arena_id::ArenaId,
     blocked_type::BlockedType,
     code_too_complex::CodeTooComplex,
@@ -518,11 +518,12 @@ impl ConstraintGenerator {
 }
 
 impl ConstraintGenerator {
-  /// C++ `ConstraintSet ConstraintGenerator::run(AstStatBlock* block)`：`block`
-  /// 为会话 arena 根块的裸指针入口（记录字段直传边界），本函数经 alias_ref
-  /// 收口为共享引用后全程只读。
-  pub(crate) fn run(&mut self, block: *mut AstStatBlock) -> ConstraintSet {
-    self.visit_module_root(alias_ref(block));
+  /// C++ `ConstraintSet ConstraintGenerator::run(AstStatBlock* block)`：入口形参
+  /// 已句柄化。cpp `visitModuleRoot` 无条件解引用 `block->location`
+  /// （ConstraintGenerator.cpp:376），nullptr 属契约外输入，故以非空
+  /// [`Handle`] 收货、`get` 物化共享引用后全程只读。
+  pub(crate) fn run(&mut self, block: Handle<AstStatBlock>) -> ConstraintSet {
+    self.visit_module_root(block.get());
 
     ConstraintSet {
       // `visit_module_root` 已置位 root_scope（C++ `NotNull` 语义），向下沉为

@@ -126,16 +126,17 @@ pub fn check(args: CheckArgs<'_>) -> ModulePtr {
     ice_handler.module_name = source_module.name.to_string();
   }
 
-  // `build` 入口已引用化（安全签名）：`source_module.root` 句柄化后由
-  // `expect + get` 物化只读借用——root 指向解析 arena 内活 AST（Handle 模块
-  // 契约：arena 保活、地址稳定）；def/key arena 借自存活的 module_ptr（写穿
+  // `build`/`cg.run` 入口已句柄化/引用化（安全签名）：cpp 两处均直取
+  // `sourceModule.root` 并无条件解引用（root->location），缺根属契约外输入，
+  // 故在此单点 `expect` 收口为非空句柄——root 指向解析 arena 内活 AST（Handle
+  // 模块契约：arena 保活、地址稳定）；def/key arena 借自存活的 module_ptr（写穿
   // 句柄，Arc 堆对象地址固定），Handle 借用期覆盖 build 全程，符合
   // arena_handle 模块级契约（ice 侧已为 Option<Handle>，非空/存活由类型承载）。
+  let root_block = source_module
+    .root
+    .expect("check: 解析成功后根块应在场（cpp 直取 sourceModule.root）");
   let mut dfg = DataFlowGraphBuilder::build(
-    source_module
-      .root
-      .expect("check: 解析成功后根块应在场（cpp 直取 sourceModule.root）")
-      .get(),
+    root_block.get(),
     Handle::from_mut(&mut module_ptr.def_arena),
     Handle::from_mut(&mut module_ptr.key_arena),
     Some(Handle::from_mut(&mut *ice_handler)),
@@ -234,9 +235,9 @@ pub fn check(args: CheckArgs<'_>) -> ModulePtr {
     cgraph,
   });
 
-  // cpp `cg.run(sourceModule.root)`：run 形参仍持 `*mut`，nullptr 语义经
-  // `opt_handle_as_ptr` 逐位透传（缺根由 callee 契约处置）。
-  let constraint_set = cg.run(opt_handle_as_ptr(source_module.root));
+  // cpp `cg.run(sourceModule.root)`：run 形参已收非空 `Handle`，与上方
+  // dfg build 共用同一 `expect` 收口的根块句柄（nullptr 侧同走该契约）。
+  let constraint_set = cg.run(root_block);
   // Safety: module_ptr 写穿句柄有效（Arc 堆对象地址固定）；constraint_set
   // 是 run 的返回值、cg.recursion_limit_met 是普通字段读，均在同一
   // 单线程独占期写入 module.errors，无别名可变借用并存。

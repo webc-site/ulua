@@ -205,9 +205,9 @@ pub(crate) fn alias_nn_ref<T>(p: NonNull<T>) -> &'static T {
 }
 
 /// `Option<Handle<T>>` → 裸指针桥（[`Handle::from_opt_ptr`] 的反向）：仅供仍
-/// 以 `*mut T` 收货的下游字段/形参（如 `Module.root`、
-/// `ConstraintGenerator::run`）过渡接线，`None` 折叠为 `null_mut()`，与 cpp
-/// nullptr 透传逐位等价；这些下游句柄化完成后本桥随调用点一并消亡。
+/// 以 `*mut T` 收货的下游字段（如 `Module.root`）过渡接线，`None` 折叠为
+/// `null_mut()`，与 cpp nullptr 透传逐位等价；这些下游句柄化完成后本桥随
+/// 调用点一并消亡。
 pub(crate) fn opt_handle_as_ptr<T>(h: Option<Handle<T>>) -> *mut T {
   h.map_or_else(null_mut, |handle| handle.as_ptr())
 }
