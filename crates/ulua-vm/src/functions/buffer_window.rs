@@ -4,8 +4,10 @@
 //! r11 R-C T1 窄腰 + r12 T9 读写侧提前收口：全部真实逻辑落在切片核心
 //! （[`buffer_data_ref`] / [`buffer_at_ref`] / [`buffer_read_window_ref`] 与签名安全的
 //! [`load_scalar_ref`] / [`store_scalar_ref`]）——T2–T5/T8 消费方迁移完毕后，旧裸指针
-//! 委托垫片已全部清零。窗口派生的唯一 unsafe 点在
-//! `lua_tobuffer_bytes_ref`（lua_tobuffer.rs），本模块不再出现任何数据窗裸构造。
+//! 委托垫片已全部清零。r12 T10 收编 FASTCALL 消费面：[`buffer_slot_window_ref`]
+//! 值形取窗（不抛错、`Option` 回退形）与栈索引抛错形共享同一派生链。窗口派生的唯一
+//! 数据窗裸构造点在 `lua_tobuffer.rs` 的 `buffer_bytes_from_handle`，本模块不再出现
+//! 任何数据窗裸构造。
 
 use core::{
   mem::size_of,
@@ -19,9 +21,11 @@ use crate::{
     buffer_errors::{buffer_bitcount_error, buffer_oob_error},
     buffer_swapbe::SwapBe,
     lua_l_checkbuffer::lua_l_checkbuffer_ref,
+    lua_tobuffer::lua_tobuffer_bytes_from_value,
   },
   macros::isoutofbounds::isoutofbounds,
   records::lua_state::LuaState,
+  type_aliases::t_value::TValue,
 };
 
 /// 栈窗口取 buffer 实参（切片核心）：第 `narg` 号槽 userdata 数据块的可变借用切片，
@@ -80,6 +84,21 @@ pub(crate) unsafe fn buffer_read_window_ref<'a>(l: *mut LuaState, size: usize) -
 
     buffer_at_ref(l, buf, offset, size)
   }
+}
+
+/// FASTCALL 消费面的取窗（切片核心，不抛错形）：实参槽 `TValue` 为 buffer userdata 时
+/// 返回其数据块可变借用切片，否则 `None`——cpp `luauF_*` 判据失败返回 -1 转慢路径的
+/// Rust 形，抛错序留在慢路径库函数本体（与 [`buffer_data_ref`] 的栈索引抛错形共享
+/// `lua_tobuffer.rs` 同一派生链，r12 T10 收编）。界检由调用点以 `checkoutofbounds`
+/// 谓词完成后切片定位，形同 [`buffer_at_ref`]、仅以 `None` 代抛错。
+///
+/// # Safety
+/// `tv` 指向当前快速调用帧传入的可读 TValue 槽；借出寿命 `'a` 由该槽钉住
+/// （契约三要素见 `lua_tobuffer_bytes_ref`）。
+#[inline]
+pub(crate) unsafe fn buffer_slot_window_ref<'a>(tv: *const TValue) -> Option<&'a mut [u8]> {
+  // SAFETY: 契约与 `lua_tobuffer_bytes_from_value` 逐字同（本函数为其切片核心门面）
+  unsafe { lua_tobuffer_bytes_from_value(tv) }
 }
 
 /// 定宽标量的按字节装载（切片核心，签名安全）：cpp `memcpy(&val, p, sizeof(T))` +
