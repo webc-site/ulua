@@ -64,9 +64,13 @@ pub(crate) unsafe fn dumpthread(f: *mut c_void, th: &LuaState) {
       }
     }
 
-    // 栈窗口 [stack, top)：一次 offset_from 定界（top==stack 即原
-    // `top > stack` 守卫不成立），后续槽名遍历改范围迭代取代指针游走
-    let stack_count = th.top.offset_from(th.stack).max(0) as usize;
+    // 栈窗口 [stack, top)：一次槽距定界（top==stack 即原 `top > stack` 守卫不成立），
+    // 后续槽名遍历改范围迭代取代指针游走
+    // r16-b2 收编：stack 锚槽距读数落 slot_distance 边界原语（stack.rs:53，本票升
+    // pub(crate) 解锁）——本体即被替代式 `to.offset_from(from) as i32` 的同址镜像；
+    // isize→i32 折形在现域无截差（栈窗跨度受 stacksize 约束），`.max(0)` 先行收窄、
+    // 后 `as usize`（次序与原式一致，负值经 max 归零不回绕），空/正窗逐位等价
+    let stack_count = LuaState::slot_distance(th.stack, th.top).max(0) as usize;
     if stack_count > 0 {
       c_file_write_bytes(f, b",\"stack\":[");
       dumprefs(f, th.stack, stack_count);

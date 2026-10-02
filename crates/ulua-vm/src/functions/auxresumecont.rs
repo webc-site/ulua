@@ -12,7 +12,10 @@ use crate::{
 pub unsafe fn auxresumecont(l: *mut LuaState, co: *mut LuaState) -> i32 {
   unsafe {
     if (*co).status == LuaStatus::Ok as u8 || (*co).status == LuaStatus::Yield as u8 {
-      let nres = (*co).top.offset_from((*co).base) as i32;
+      // r16-b2 收编：顶-基槽距读数落既有 get_top 门面——其本体 slot_distance(base, top)
+      // 即被替代式 `top.offset_from(base) as i32` 的同址同宽镜像（现读位点不变）；
+      // isize→i32 折形在现域无截差（协程栈槽距受 LUAI_MAXSTACK 约束、远小于 i32::MAX）
+      let nres = (*co).get_top();
       if lua_checkstack(&mut *l, nres + 1) == 0 {
         luaL_error!(l, "too many results to resume");
       }

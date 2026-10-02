@@ -50,7 +50,7 @@ impl LuaState {
   /// # Safety（契约由本方法调用方按文档保证）
   /// `from`/`to` 须指向同一次栈分配内的合法槽（lua_State 不变量）。
   #[inline(always)]
-  fn slot_distance(from: StkId, to: StkId) -> i32 {
+  pub(crate) fn slot_distance(from: StkId, to: StkId) -> i32 {
     // SAFETY: `from`/`to` 为同数组内合法槽指针（见本方法契约），offset_from 仅作
     // 槽距读数；裸字段算术为 StkId 栈布局固有边界。
     unsafe { to.offset_from(from) as i32 }

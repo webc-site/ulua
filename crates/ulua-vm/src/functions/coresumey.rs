@@ -17,7 +17,10 @@ pub(crate) unsafe fn coresumey(l: *mut LuaState) -> i32 {
     let co = lua_tothread(l, 1);
     (*l).arg_expected(co.is_some(), 1, "thread");
     let co = co.expect("arg_expected 已证 co 非空");
-    let narg = ((*l).top.offset_from((*l).base) as i32) - 1;
+    // r16-b2 收编：顶-基槽距读数落既有 get_top 门面——其本体 slot_distance(base, top)
+    // 即被替代式 `(top.offset_from(base) as i32) - 1` 的同址同宽镜像（现读位点不变、
+    // `- 1` 次序保持）；isize→i32 折形在现域无截差（栈槽距受 LUAI_MAXSTACK 约束）
+    let narg = (*l).get_top() - 1;
     let r = auxresume(l, co, narg);
 
     if r == CO_STATUS_BREAK {

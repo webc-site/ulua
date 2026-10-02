@@ -28,7 +28,11 @@ pub(crate) unsafe fn validatestack(g: *mut global_State, l: &LuaState) {
     }
 
     // 栈窗口 [stack, top) 收为只读切片迭代；checkliveness 只读槽位 tag 与引用
-    let stack_count = l.top.offset_from(l.stack).max(0) as usize;
+    // r16-b2 收编：stack 锚槽距读数落 slot_distance 边界原语（stack.rs:53，本票升
+    // pub(crate) 解锁）——本体即被替代式 `to.offset_from(from) as i32` 的同址镜像；
+    // isize→i32 折形在现域无截差（栈窗跨度受 stacksize 约束），`.max(0)` 先行收窄、
+    // 后 `as usize`（次序与原式一致，负值经 max 归零不回绕），与 dumpthread 同款判据
+    let stack_count = LuaState::slot_distance(l.stack, l.top).max(0) as usize;
     for slot in from_raw_parts(l.stack, stack_count) {
       checkliveness!(g, slot);
     }
