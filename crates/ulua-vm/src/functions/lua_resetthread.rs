@@ -18,6 +18,17 @@ use crate::{
 /// 自洽：`status != Ok` 时须已退到 `ci == base_ci`（`api_check`）；`lua_f_close` 关闭 open upvalue、
 /// `lua_d_realloc_ci`/`luaD_reallocstack` 收缩并重排栈帧，末尾对 `stack..stack+stacksize` 逐槽置 nil。cpp/VM/src/lstate.cpp:170 lua_resetthread。
 pub unsafe fn lua_resetthread(l: *mut LuaState) {
+  // SAFETY: 契约保证 `l` 为非活动协程且栈/帧场自洽，重置面仅覆写本线程自有场域与 base_ci 首帧
+  //
+  // r13-w1c 逐点定性（w6d 口径保留面·本票收编 0 点）：本体 `(*l).` 命中全部为
+  // LuaState 状态字段读写字面——isactive/status/ci/base_ci/stack/size_ci/base/
+  // n_ccalls/base_ccalls/stacksize 均无既有门面（LuaState 无 ccount/status/base
+  // 写面；status() 门面自带 non-repr→Ok 兜底，仅对 Break 谓词逐位等价，本处
+  // Ok 谓词与 `!= LuaStatus::Ok as u8` 不可换用——判例见 r13-w1b resume_finish/
+  // lua_d_pcall 同款保留）。`(*l).base = (*(*l).ci).base` 帧建立落笔与 ci 链现读
+  // 属帧 ABI 本体；CallInfo remap 三写（func/base/top）与 setnilvalue!((*ci).func)
+  // 系 w7a1 红线保留面（其行前注记在案，不得翻案）。唯一栈顶算术点
+  // `(*l).reanchor_top((*(*l).ci).base)` 系 r12-w9b 既有收编，本票不动其形制。
   unsafe {
     api_check!(l, !(*l).isactive);
     api_check!(

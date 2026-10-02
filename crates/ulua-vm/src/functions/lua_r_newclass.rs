@@ -28,6 +28,14 @@ use crate::{
 /// `(*l).base..(*l).top` 为可读参数窗口；栈尾空间由内部 luaD_checkstack 扩容保证，`lua_d_call`
 /// 可能抛错，须在受保护帧内。cpp lclass.cpp:374 `luaR_constructobject`
 pub(crate) unsafe fn lua_r_constructobject(l: *mut LuaState) -> i32 {
+  // SAFETY: 契约保证 `l` 为存活 C 闭包帧，self/func/args 压栈均落在 checkstack 后的界内槽
+  //
+  // r13-w1c 逐点定性（w6d 口径保留面）：`(*(*(*l).ci).func)` 帧现读（ci 链无门面，
+  // r13-w1b lua_v_call_tm 同款保留判例）、`(*l).activememcat` 两处（GC 分配类目字段
+  // 读数，非栈顶算术覆盖面）与参数拷贝源窗 `(*l).base`（帧窗基址裸读）均无既有
+  // 门面，保留。收编共六点：栈顶槽距读数经 get_top 门面，self 写入/args 窗基址/
+  // func 写入/self 续写/参数目的窗共五处顶槽裸读经 top_slot(0) 边界原语
+  // （抬顶落笔系 r12-w7a2 既有 advance_top，位点时序全数不变）。
   unsafe {
     let cl = (*(*(*l).ci).func).as_closure_ptr();
     let classobject = classvalue!(&(*cl).inner.c.upvals[0]);
@@ -66,29 +74,38 @@ pub(crate) unsafe fn lua_r_constructobject(l: *mut LuaState) -> i32 {
     let init_function: *const TValue =
       &c_slice(class.staticmembers, static_count)[init_offset as usize];
 
-    let numargs = (*l).top.offset_from((*l).base) as i32;
+    // r13-w1c 收编：栈顶帧槽距读数落既有 get_top 门面——其本体 `slot_distance(base, top)`
+    // 即被替代式 `(*l).top.offset_from((*l).base) as i32` 的同址同宽镜像
+    // （cpp `L->top - L->base` 读数形，位点现读不变）
+    let numargs = (*l).get_top();
 
     // Put self onto the stack to ensure that it unconditionally survives GC during execution of __init.
     // r12-w7a2 收编：本函数体「写已界内槽后裸抬顶」点位（self 槽写入 + checkstack
     // 后 func/self/args 三段压栈）统一经 advance_top 原语——setobj/setobjectvalue/
     // 切片拷贝均不移动栈、不写 top 场，原语现读场与被替代式同址同宽；
     // 扩容（checkstack）与 lua_d_call 的时序照旧先行
-    setobjectvalue!(l, (*l).top, self_obj);
+    // r13-w1c 收编：同段的写窗基址裸读 `(*l).top` 统一经 top_slot(0) 边界原语
+    // （off=0 即保留顶槽，镜像 cpp `L->top` 读数形；各点位原位替换，读数序不变）
+    setobjectvalue!(l, (*l).top_slot(0), self_obj);
     (*l).advance_top(1);
 
     luaD_checkstack!(l, 2 + numargs);
 
-    let args_base = (*l).top;
-    setobj_2_s!(l, (*l).top, init_function);
+    // 收编：args 窗基址绑定经 top_slot(0)（checkstack 扩容先行之后现读，
+    // 与被替代点位同位同值）
+    let args_base = (*l).top_slot(0);
+    setobj_2_s!(l, (*l).top_slot(0), init_function);
     (*l).advance_top(1);
 
-    setobjectvalue!(l, (*l).top, self_obj);
+    setobjectvalue!(l, (*l).top_slot(0), self_obj);
     (*l).advance_top(1);
 
     // 批量拷贝参数（TValue 为 Copy 的 POD 值，切片 copy 与 cpp 逐元素 setobj2s 语义一致；
     // base..base+numargs 与 top 之后不重叠，边界由上方 luaD_checkstack 保证）
+    // 收编：目的窗基址经 top_slot(0)；源窗基址 `(*l).base` 为帧窗裸读——base 无既有
+    // 门面/原语（r13-w1b 判例：base 落笔与读数属帧建立面，定性保留），保留
     let arg_count = numargs as usize;
-    c_slice_mut((*l).top, arg_count).copy_from_slice(c_slice((*l).base, arg_count));
+    c_slice_mut((*l).top_slot(0), arg_count).copy_from_slice(c_slice((*l).base, arg_count));
     (*l).advance_top(arg_count);
 
     lua_d_call(l, args_base, 0);
@@ -104,6 +121,13 @@ lua_lib_fn!(pub(crate) fn lua_r_constructobject, lua_r_constructobject_arm);
 /// （首参须是本类的 Object 实例，否则走抛错路径）、栈顶另有 ≥1 空闲槽承接 `lua_v_gettable` 临时值；
 /// 各抛错路径经 `luaL_error` 不返回，须在受保护帧内。cpp lclass.cpp:421 `luaR_defaultcreateobject`
 pub(crate) unsafe fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
+  // SAFETY: 契约保证 `l` 为存活 C 闭包帧、首参为本类 Object 实例、栈顶 ≥1 空闲槽
+  //
+  // r13-w1c 逐点定性（w6d 口径保留面）：`(*(*(*l).ci).func)` 帧现读（同 constructobject
+  // 保留判例）与两处 `(*l).base` 帧窗基址裸读（首参校验、gettable 实参窗）无既有
+  // 门面，保留。收编共二点：循环内临时槽读/写两侧 `(*l).top.sub(1)` 均经
+  // top_slot(-1) 边界原语（每轮 luaV_gettable 再入后现读位点不变，值恒等）；
+  // push_nil/rewind_top/get_top 三点系 r12-w7a2 与 B2-0 既有门面，本票不动其形制。
   unsafe {
     let cl = (*(*(*l).ci).func).as_closure_ptr();
     let classobject = classvalue!(&(*cl).inner.c.upvals[0]);
@@ -172,10 +196,13 @@ pub(crate) unsafe fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
       lua_v_gettable(
         l,
         // 实参窗 base..base+numargs（numargs 已于上方校验为 2）经 c_slice 界内下标
-        // 收口 `base.add(prop_slot)`；luaV_gettable 对 `t` 句柄只走读面，from_ref 合法
+        // 收口 `base.add(prop_slot)`；luaV_gettable 对 `t` 句柄只走读面，from_ref 合法。
+        // base 侧裸读为帧窗基址（无既有门面，r13-w1b 判例定性保留）
         Slot::from_ref(&c_slice((*l).base, numargs as usize)[prop_slot]),
         Slot::from_mut(&mut key),
-        Slot::from_raw((*l).top.sub(1)),
+        // r13-w1c 收编：顶下临时槽读数经 top_slot(-1) 边界原语（同位现读、值恒等；
+        // 形制同 lua_l_pushresult/lua_setlocal 既有判例）
+        Slot::from_raw((*l).top_slot(-1)),
       );
       // 实例成员窗偏移经 c_slice 收口：每轮在 luaV_gettable 再入之后重取切片，
       // 仍不持跨调用的可变借用（上方注释纪律不变），越界 UB 降 panic
@@ -183,7 +210,8 @@ pub(crate) unsafe fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
         inst_members,
         (*classobject).numberofinstancemembers as usize,
       )[idx];
-      setobj!(l, member_dst, (*l).top.sub(1));
+      // r13-w1c 收编：消费临时槽的源侧读数同上经 top_slot(-1)（再入后现读位点不变）
+      setobj!(l, member_dst, (*l).top_slot(-1));
       lua_c_barrier!(l, classinst, member_dst);
     }
 
@@ -268,6 +296,9 @@ pub(crate) fn lua_r_newblankclass(
   isopen: bool,
 ) -> *mut LuauClass {
   // SAFETY: 契约保证 `l` 存活且 name 为存活串；lua_m_newgco/luaC_init! 按类大小分配并挂入 GC 链
+  //
+  // r13-w1c 逐点定性（w6d 口径保留面）：本体唯一 `(*l).` 点位为 `(*l).activememcat`
+  // GC 分配类目字段读数，非栈顶算术/非 API 门面覆盖面，无既有门面，保留。
   unsafe {
     let classobject = lua_m_newgco(l, size_of::<LuauClass>(), (*l).activememcat) as *mut LuauClass;
     // 类型化清零先于头初始化：`Default` 即各字段的合法空值（指针 null、标量 0），
@@ -303,6 +334,10 @@ pub(crate) fn lua_r_newclass(
   envt: *mut LuaTable,
 ) -> *mut LuauClass {
   // SAFETY: 契约保证 `l` 存活、gc_threshold 处于本函数前置断言的暂停态，新类字段填充与成员注册均在分配界内
+  //
+  // r13-w1c 逐点定性（w6d 口径保留面）：本体唯一 `(*l).` 点位为 `(*l).global`
+  // global_State 链基址读数（r13-w1b resume_finish 同款保留判例），不属栈顶门面/
+  // 边界原语覆盖面，保留。
   unsafe {
     let global = (*l).global;
     LUAU_ASSERT!((*global).gc_threshold == usize::MAX);
