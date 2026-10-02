@@ -10,7 +10,7 @@ pub(crate) unsafe fn lua_l_addchar(b: &mut LuaLStrbuf, c: u8) {
   // SAFETY: 契约保证 b 的 p/end 为其缓冲界内游标；prep 扩容后 p 已重挂，单字节写入不越出可写区
   unsafe {
     if !(b.p < b.end) {
-      lua_l_prepbuffsize(b as *mut _, 1);
+      lua_l_prepbuffsize(b, 1);
     }
     *b.p = c;
     b.p = b.p.add(1);
