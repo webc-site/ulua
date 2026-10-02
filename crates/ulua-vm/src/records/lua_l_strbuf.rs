@@ -26,13 +26,15 @@ pub struct LuaLStrbuf {
   /// cpp `lualib.h:88` 里 `p` 由 `luaL_buffinit` 立即写为 `buffer` 首址，使用期恒非空，null
   /// 只在 `new`/`Default` 的「未 init 占位形态」。改 `Option<NonNull<u8>>` 会把每次压字节的
   /// `add`/`offset_from` 热路径逼成 unwrap，且 `Option` 无法参与这些地址算式（§9.4）。
-  pub p: *mut u8,
+  /// 可见性收口（r12-w6c）：capi 仅透传 `*mut LuaLStrbuf` 不读字段（见结构体 doc），
+  /// `lua_l_addchar!` 宏形全仓仅 ulua-vm 内展开消费，故无需对外暴露字段。
+  pub(crate) p: *mut u8,
   /// DELIBERATE DEVIATION（§2 判定=规则 2）：`end` 是当前缓冲区写终点（开区间界），仅作
   /// `b.end.offset_from(b.p)` 的被减数与 `b.end = b.p.wrapping_add(LUA_BUFFERSIZE)` 的赋值目标
   /// （`lua_l_buffinit.rs:14`、`extendstrbuf.rs`）。cpp `lualib.h:89` 由 init 立即赋为合法界址，
   /// 使用期非空，null 只在 `new` 占位。理由同 [`Self::p`]：相减/加界址算式无法对 `Option` 表达，
-  /// 改型会给每次余量判定加 unwrap（§9.4）。
-  pub end: *mut u8,
+  /// 改型会给每次余量判定加 unwrap（§9.4）。可见性收口同 [`Self::p`]（r12-w6c）。
+  pub(crate) end: *mut u8,
   /// Lua 状态句柄（cpp `lualib.h:90` `lua_State* L`，所有权在调用方）。§2 判定=规则 1「缺席」：
   /// 形态为 `Option<NonNull<LuaState>>`——init 前 `None`（`new()`/C 宿主零初始化均对应 cpp 里
   /// 未接线的 NULL 占位），`luaL_buffinit` 接线后为 `Some(NonNull)`，使用期非空（写点见
