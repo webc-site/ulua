@@ -533,12 +533,13 @@ local z = 3"#,
 
   // Safety: old/new.root 为夹具刚解析出的 arena 根块，存活非空；
   // block_diff_start 仅只读遍历两棵树。
-  let pos =
-    unsafe { block_diff_start(
+  let pos = unsafe {
+    block_diff_start(
       Handle::from_ptr(old.root),
       Handle::from_ptr(new.root),
       Some(Handle::from_ptr((*new.root).body.as_slice()[2].as_ptr())),
-    ) };
+    )
+  };
   assert_eq!(Some(Position { line: 0, column: 0 }), pos);
 }
 
@@ -614,12 +615,13 @@ local z = 3"#,
 
   // Safety: old/new.root 为夹具刚解析出的 arena 根块，存活非空；
   // block_diff_start 仅只读遍历两棵树。
-  let pos =
-    unsafe { block_diff_start(
+  let pos = unsafe {
+    block_diff_start(
       Handle::from_ptr(old.root),
       Handle::from_ptr(new.root),
       Some(Handle::from_ptr((*new.root).body.as_slice()[1].as_ptr())),
-    ) };
+    )
+  };
   assert_eq!(Some(Position { line: 1, column: 0 }), pos);
 }
 
@@ -648,12 +650,13 @@ local foo = 8"#,
 
   // Safety: old/new.root 为夹具刚解析出的 arena 根块，存活非空；
   // block_diff_start 仅只读遍历两棵树。
-  let pos =
-    unsafe { block_diff_start(
+  let pos = unsafe {
+    block_diff_start(
       Handle::from_ptr(old.root),
       Handle::from_ptr(new.root),
       Some(Handle::from_ptr((*new.root).body.as_slice()[3].as_ptr())),
-    ) };
+    )
+  };
   assert_eq!(Some(Position { line: 1, column: 0 }), pos);
 }
 
@@ -715,12 +718,13 @@ local foo = 8"#,
 
   // Safety: old/new.root 为夹具刚解析出的 arena 根块，存活非空；
   // block_diff_start 仅只读遍历两棵树。
-  let pos =
-    unsafe { block_diff_start(
+  let pos = unsafe {
+    block_diff_start(
       Handle::from_ptr(old.root),
       Handle::from_ptr(new.root),
       Some(Handle::from_ptr((*new.root).body.as_slice()[2].as_ptr())),
-    ) };
+    )
+  };
   assert_eq!(Some(Position { line: 2, column: 0 }), pos);
 }
 
@@ -4089,11 +4093,11 @@ local y = 5
     // 门面一步下转+判型（原 `ast_node_as + is_null` 两步）。
     // nearest_statement 为夹具 arena 存活语句指针，句柄物化后只读。
     let nearest = OptNode::from_ptr(
-    result
-      .nearest_statement
-      .expect("上断言已证 nearest_statement 在场（cpp null 断言）")
-      .as_ptr(),
-  );
+      result
+        .nearest_statement
+        .expect("上断言已证 nearest_statement 在场（cpp null 断言）")
+        .as_ptr(),
+    );
     let local = nearest
       .as_node::<AstStatLocal>()
       .expect("nearest_statement 应为 local 声明");
@@ -5922,7 +5926,11 @@ fn fragment_autocomplete_statement_in_empty_fragment_is_non_null() {
   assert_eq!(1, fragment.ancestry.len());
   assert_eq!(
     0,
-    OptNode::from_ptr(fragment.root.as_ptr()).get().unwrap().body.len()
+    OptNode::from_ptr(fragment.root.as_ptr())
+      .get()
+      .unwrap()
+      .body
+      .len()
   );
 }
 

@@ -22,25 +22,14 @@ use crate::{
     constraint_solver_ctor::SolverParams,
   },
   records::{
-    arena_handle::{Handle, opt_handle_as_ptr},
-    builtin_types::BuiltinTypes,
-    constraint_generator::ConstraintGenerator,
-    constraint_graph::ConstraintGraph,
-    constraint_solver::ConstraintSolver,
-    data_flow_graph_builder::DataFlowGraphBuilder,
-    frontend_options::FrontendOptions,
-    internal_error_reporter::InternalErrorReporter,
-    module::Module,
-    module_resolver::ModuleResolverRef,
-    normalizer::Normalizer,
-    require_cycle::RequireCycle,
-    source_module::SourceModule,
-    stats::Stats,
-    subtyping::Subtyping,
-    type_check_limits::TypeCheckLimits,
-    type_function_runtime::TypeFunctionRuntime,
-    typed_allocator::TypedAllocator,
-    unifier_shared_state::UnifierSharedState,
+    arena_handle::Handle, builtin_types::BuiltinTypes, constraint_generator::ConstraintGenerator,
+    constraint_graph::ConstraintGraph, constraint_solver::ConstraintSolver,
+    data_flow_graph_builder::DataFlowGraphBuilder, frontend_options::FrontendOptions,
+    internal_error_reporter::InternalErrorReporter, module::Module,
+    module_resolver::ModuleResolverRef, normalizer::Normalizer, require_cycle::RequireCycle,
+    source_module::SourceModule, stats::Stats, subtyping::Subtyping,
+    type_check_limits::TypeCheckLimits, type_function_runtime::TypeFunctionRuntime,
+    typed_allocator::TypedAllocator, unifier_shared_state::UnifierSharedState,
   },
   type_aliases::{
     frontend_callbacks::{JsonLogCallback, ModuleScopeCallback},
@@ -120,9 +109,8 @@ pub fn check(args: CheckArgs<'_>) -> ModulePtr {
     module_ptr.internal_types.collect_singleton_stats = options.collect_type_allocation_stats;
     module_ptr.allocator = Some(source_module.allocator.clone());
     module_ptr.names = Some(source_module.names.clone());
-    // `Module.root` 仍持 `*mut`（下游句柄化在后续波次）：经 `opt_handle_as_ptr`
-    // 桥接，`None` ≡ cpp nullptr 透传。
-    module_ptr.root = opt_handle_as_ptr(source_module.root);
+    // `Module.root` 已句柄化：`Option<Handle>` 直传，`None` ≡ cpp nullptr 透传。
+    module_ptr.root = source_module.root;
     ice_handler.module_name = source_module.name.to_string();
   }
 

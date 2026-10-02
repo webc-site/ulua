@@ -3,8 +3,7 @@ use core::ptr::from_ref;
 use ulua_analysis::{
   functions::find_ancestry_for_fragment_parse::find_ancestry_for_fragment_parse,
   records::{
-    arena_handle::Handle,
-    fragment_autocomplete_ancestry_result::FragmentAutocompleteAncestryResult,
+    arena_handle::Handle, fragment_autocomplete_ancestry_result::FragmentAutocompleteAncestryResult,
   },
 };
 use ulua_ast::records::{parse_options::ParseOptions, position::Position};

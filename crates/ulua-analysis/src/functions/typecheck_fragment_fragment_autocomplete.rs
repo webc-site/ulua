@@ -501,10 +501,9 @@ fn typecheck_fragment_impl(
   // `module->names.get()` 直译）。
   let names: *mut AstNameTable =
     { Arc::as_ptr(module_ptr.names.as_ref().expect("module must have names")).cast_mut() };
-  // Safety: `root` 字段是模块类型检查前写入的 AST arena 裸句柄，随 module/
-  // frontend 存活；`from_opt_ptr` 只折叠可空性、不创建引用，null ≡ cpp
-  // nullptr 透传给 unsafe 的 parse_fragment。
-  let stale_root = { Handle::from_opt_ptr(module_ptr.root) };
+  // `Module.root` 已句柄化：直传 `Option<Handle>`（null ≡ cpp nullptr），
+  // 存活随 module/frontend 的 arena 契约。
+  let stale_root = { module_ptr.root };
 
   // Safety: `names` 指向上述存活的 AstNameTable（callee 内 `alias(names)` 解引用
   // 收口）；两树根句柄存活由 `Handle` 模块级 arena 契约承载，`recent_parse`

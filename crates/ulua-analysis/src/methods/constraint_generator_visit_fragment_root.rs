@@ -51,7 +51,11 @@ impl ConstraintGenerator {
   /// §2：`block` 为本 fragment 的根 `AstStatBlock` 入口，已收非空 [`Handle`]
   /// （cpp `visitFragmentRoot` 直解引用 `block->location`，nullptr 属契约外），
   /// `get` 物化共享引用后全程只读。
-  pub(crate) fn visit_fragment_root(&mut self, resume_scope: &ScopePtr, block: Handle<AstStatBlock>) {
+  pub(crate) fn visit_fragment_root(
+    &mut self,
+    resume_scope: &ScopePtr,
+    block: Handle<AstStatBlock>,
+  ) {
     // We prepopulate global data in the resumeScope to avoid writing data into the old modules scopes
     let global_scope = self.global_scope.clone().unwrap();
     let block_ref = block.get();

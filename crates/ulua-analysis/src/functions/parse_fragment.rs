@@ -73,10 +73,8 @@ pub unsafe fn parse_fragment(
     most_recent_parse.get_mut(),
     *cursor_pos,
   );
-  let fragment_ancestry = find_ancestry_at_position_for_autocomplete_ast_stat_block_position(
-    root.get_mut(),
-    *cursor_pos,
-  );
+  let fragment_ancestry =
+    find_ancestry_at_position_for_autocomplete_ast_stat_block_position(root.get_mut(), *cursor_pos);
 
   let mut back = fabricated_ancestry.len();
   for fragment_node in fragment_ancestry.iter().rev() {
@@ -100,9 +98,11 @@ pub unsafe fn parse_fragment(
     nearest_statement = Some(root.cast::<AstStat>());
   }
 
-  let scope_pos = result.parent_block.map_or(Position { line: 0, column: 0 }, |h| {
-    h.get().base.base.location.begin
-  });
+  let scope_pos = result
+    .parent_block
+    .map_or(Position { line: 0, column: 0 }, |h| {
+      h.get().base.base.location.begin
+    });
 
   Some(FragmentParseResult {
     fragment_to_parse: String::from(fragment_source),

@@ -1,7 +1,7 @@
 //! Source: `Analysis/include/Luau/Module.h`
 
 use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
-use core::ptr::{null, null_mut};
+use core::ptr::null;
 
 use ulua_ast::{
   enums::mode::Mode,
@@ -16,8 +16,9 @@ use ulua_common::records::dense_hash_map::DenseHashMap;
 use crate::{
   enums::type_file_resolver::Type,
   records::{
-    def_arena::DefArena, lint_result::LintResult, refinement_key_arena::RefinementKeyArena,
-    scope::Scope, type_arena::TypeArena, type_fun::TypeFun,
+    arena_handle::Handle, def_arena::DefArena, lint_result::LintResult,
+    refinement_key_arena::RefinementKeyArena, scope::Scope, type_arena::TypeArena,
+    type_fun::TypeFun,
   },
   type_aliases::{
     collections::HashMap, error_vec::ErrorVec, module_name_type::ModuleName, name_type::Name,
@@ -38,16 +39,12 @@ pub struct Module {
 
   pub allocator: Option<Arc<Allocator>>,
   pub names: Option<Arc<AstNameTable>>,
-  /// §2(b)：cpp `Module.h:49 AstStatBlock* root = nullptr`（parser arena 根）。
-  /// 本轮保留 `*mut` 而非改 `Option<NonNull>`：该句柄的下游是整条**裸指针形态**的
-  /// 解析/分片/AST 查询子系统——写入点取自 `SourceModule.root`（同为保留的 `*mut`），
-  /// 读取点除 `check_block`/location 解引用外，还作为参数透传给 `unsafe fn
-  /// parse_fragment(stale_root: *mut AstStatBlock, ..)` 与 `cg.run(root)` 等裸形参，
-  /// 并产出 `FragmentParseResult.root`/`FragmentRegion` 等裸字段（见 records/
-  /// fragment_parse_result.rs、nearest_statement_finder.rs、find_node.rs 的同一 §2(b)
-  /// 理由）。单把本字段改 Option 会在这些边界逼出 `.as_ptr()` 倒灌，或被迫改写整个
-  /// 分片解析 API 的签名（越出本任务范围、收益仅字段形态），故整组保留并补此理由。
-  pub root: *mut AstStatBlock,
+  /// §2(b)：cpp `Module.h:49 AstStatBlock* root = nullptr`（parser arena 根）
+  /// 已完成句柄化：`None` ≡ cpp nullptr（透传自 `SourceModule.root` 的构造点），
+  /// 在场时目标由解析 arena（`allocator`/宿主）保活、地址稳定，满足
+  /// `arena_handle::Handle` 模块级契约；下游 `DenseHashMap<*const Ast*/..., ..>`
+  /// 指针键族以 `Handle::as_ptr` 取身份，判等等价。
+  pub root: Option<Handle<AstStatBlock>>,
 
   pub scopes: Vec<(Location, ScopePtr)>,
 
@@ -103,7 +100,7 @@ impl Default for Module {
 
       allocator: None,
       names: None,
-      root: null_mut(),
+      root: None,
 
       scopes: Vec::new(),
 
@@ -151,7 +148,8 @@ impl Default for Module {
   }
 }
 
-// Safety: `root: *mut AstStatBlock` 及全部 `DenseHashMap<*const Ast*/..., TypeId>`、
+// Safety: `root: Option<Handle<AstStatBlock>>` 句柄内含非空裸指针，及全部
+// `DenseHashMap<*const Ast*/..., TypeId>`、
 // `ast_scopes` 等字段持有 AST 类型/类型 arena 的裸指针，令自动 Send 失效。这些
 // 指针均借用自 `allocator: Option<Arc<Allocator>>` 与 `interface_types` /
 // `internal_types` arena，`Module` 从不解引用或释放指针键/值；只要这些被 `Arc`

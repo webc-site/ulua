@@ -19,7 +19,7 @@
 use core::{
   fmt::{self, Debug, Formatter},
   hash::{Hash, Hasher},
-  ptr::{NonNull, null_mut},
+  ptr::NonNull,
 };
 
 /// 进程内唯一存活实例的拷贝句柄（原 `*mut T` 字段的替代品）。
@@ -212,14 +212,6 @@ pub(crate) fn alias_nn<T>(p: NonNull<T>) -> &'static mut T {
 /// [`NonNull`] 句柄 → `&'static T` 的收口门面（[`alias_nn`] 的只读形态）。
 pub(crate) fn alias_nn_ref<T>(p: NonNull<T>) -> &'static T {
   alias_ref(p.as_ptr())
-}
-
-/// `Option<Handle<T>>` → 裸指针桥（[`Handle::from_opt_ptr`] 的反向）：仅供仍
-/// 以 `*mut T` 收货的下游字段（如 `Module.root`）过渡接线，`None` 折叠为
-/// `null_mut()`，与 cpp nullptr 透传逐位等价；这些下游句柄化完成后本桥随
-/// 调用点一并消亡。
-pub(crate) fn opt_handle_as_ptr<T>(h: Option<Handle<T>>) -> *mut T {
-  h.map_or_else(null_mut, |handle| handle.as_ptr())
 }
 
 /// `Option<NonNull<T>>` → `Option<&'static T>` 的收口门面（[`alias_opt`] 的

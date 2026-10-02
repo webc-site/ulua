@@ -1,4 +1,3 @@
-use core::ptr::null_mut;
 extern crate alloc;
 
 // 各用例原本逐函数重复的 `use` 语句已上提到本文件顶部（脚本按名去重、
@@ -474,10 +473,9 @@ fn frontend_check_module_references_correct_ast_root() {
     .get_source_module(&ModuleName::from("game/workspace/MyScript"))
     .expect("expected source module")
     .get();
-  // cpp `CHECK(module->root == sourceModule->root)`：`Module.root` 仍持裸
-  // 指针（下游句柄化在后续波次），源侧经 `as_ptr` 折叠比对，`None` ≡ nullptr。
-  let source_root = source.root.map(|h| h.as_ptr()).unwrap_or(null_mut());
-  assert_eq!(module.root, source_root);
+  // cpp `CHECK(module->root == sourceModule->root)`：双侧句柄化（§2(b)）后经
+  // `Handle` 地址判等直接比较，`None` ≡ cpp nullptr。
+  assert_eq!(module.root, source.root);
 }
 
 // Ported from `tests/Frontend.test.cpp`.
