@@ -638,8 +638,9 @@ pub fn setlightuserdataname(l: L, tag: c_int, name: &'static [u8]) {
 
 /// `lua_getlightuserdataname(l, tag)`：未注册得 `None`，否则为登记名原始字节。
 pub fn getlightuserdataname<'a>(l: L, tag: c_int) -> Option<&'a [u8]> {
-  // Safety: `l` 存活；`tag` 界内；返回 NULL 或登记时的 NUL 结尾静态串。
-  let p = unsafe { lua_getlightuserdataname(l, tag) };
+  // r16-v4：callee 已引用形 safe 化，`state_ref` 判空重建 `&LuaState` 收口；返回值
+  // 消费保持原样——null 判 + 登记名 NUL 结尾静态串字节窗（`tag` 界内由用例契约保证）
+  let p = lua_getlightuserdataname(state_ref(l), tag);
   if p.is_null() {
     None
   } else {
