@@ -689,8 +689,9 @@ pub fn userdatatag(l: L, idx: c_int) -> c_int {
 
 /// `lua_setuserdatatag(l, idx, tag)`。
 pub fn setuserdatatag(l: L, idx: c_int, tag: c_int) {
-  // Safety: `l` 存活；`idx` 为 userdata 槽、`tag` 界内（用例契约）。
-  unsafe { lua_setuserdatatag(l, idx, tag) }
+  // r16-v4：callee 已引用形 safe 化（写点为栈槽可达堆对象，取独占形），`state_mut`
+  // 判空重建收口；`idx` 为 userdata 槽、`tag` 界内由用例契约保证
+  lua_setuserdatatag(state_mut(l), idx, tag)
 }
 
 /// `lua_touserdatatagged(l, idx, tag)`：tag 不符得 NULL。
