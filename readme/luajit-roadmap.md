@@ -37,6 +37,19 @@ proto#1 pc=6：**480K 次 miss、last_tag=7（table 恒定）** = spike 剧本�
 - PIC-2 对插入型站点**无收益**（键缺席无缓存可命中）→ J4「2 槽 PIC」降级搁置；
 - oop 的实际杠杆 = ① `SETTABLEKS` fallback 的**插入快路**（fresh-slot 直插，
   绕过 execute_settableks 全帧路径）+ ② NEWTABLE 尺寸提示消费；
+  **J4b 实施方案（2026-10-02 核查定稿）**：
+  - NEWTABLE 提示已被消费（oop 构造器 `NEWTABLE R 4 0` → 预分配 8 哈希槽，
+    h_newtable `1<<(B-1)` cpp 同构）——插入 miss 是键缺席本质，非 rehash churn；
+  - cpp `luaH_newkey` 语义核查：主位空（非 dummy）→ 直接 setnodekey 落位，
+    **无 freepos/rehash 参与**（碰撞或 dummy 才走）——inline claim 语义有 cpp 背书；
+  - 实施件：① `CheckNodeEmpty` 新原语（val.tt==NIL 且 node≠dummy——
+    dummynode 地址需入 NativeContext）；② 落位三 store（value 拷自 k[aux] 的
+    value 字段、extra=0、tt=STRING——cpp setnodekey 将 extra 清零，
+    **不可用 StoreTvalue 16B 整拷**）；③ key 屏障（cpp `luaC_barriert(L,t,key)`，
+    key 虽在 proto 常量表仍需屏障——proto 可能先于表死亡）；
+  - 预期：插入路径 100+ 周期（全帧 helper call + VmFrame + 查找）→ ~25 周期
+    （主位 hash+空判+3 store+屏障 ≈ 内联），oop 480K 次/轮 → **-30~40% oop JIT**；
+  - 工作量：新 IrCmd ×2 + A64 lowering + NativeContext 槽 + census 读数，半天级。
 - 观测基建（P0 门控修复 + SETTABLEKS bump 对称接线 + census 探针）已就位。
 
 ### E2 CALL/RETURN 快路内联 + arity 特化（fib 2.1 / micro_call 1.5 / binarytrees 1.4）
