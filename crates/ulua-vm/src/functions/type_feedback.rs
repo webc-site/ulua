@@ -280,6 +280,10 @@ pub fn tsfb_dump() -> String {
       };
       out.push_str(&format!("== proto#{i} sizecode={sc} tsfb_sites={nslots}\n"));
       let code_ptr = (*proto).code;
+      // 闭包体内的裸指针读自有其 unsafe 块：闭包体是独立 unsafe 语境（本行
+      // `#[allow]` 只压新 nightly 对「外层块嵌套闭包 unsafe」的冗余告警，
+      // 旧 nightly 下该内层块仍是必需语义，双版本兼容）。
+      #[allow(unused_unsafe)]
       let op_at = |pc: u32| -> u8 {
         if (pc as usize) < sc {
           *code_ptr.add(pc as usize) as u8

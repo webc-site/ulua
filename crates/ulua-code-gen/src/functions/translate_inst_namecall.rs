@@ -145,6 +145,13 @@ pub fn translate_inst_namecall(build: &mut IrBuilder, code: &[Instruction], pcpo
   let fallback = build.fallback_block(pcpos as u32);
   let first_fast_path_success = build.block(IrBlockKind::Internal);
   let second_fast_path = build.block(IrBlockKind::Internal);
+  // 命中收口单前驱 join 块：`index` 值经 CheckSlotMatch（check 边）流入链走块，
+  // 而第二快路自身的 JUMP 终结点若直连多前驱块会触发线性化器
+  // `get_live_out_value_count == 0` 前置断言（collect_direct_block_jump_path）；
+  // 单前驱 join 使 try_create_linear_block 在断言前按 use_count==1 早退。
+  let second_fast_path_hit_join = build.block(IrBlockKind::Internal);
+  let index_chain_absent = build.block(IrBlockKind::Internal);
+  let index_chain_probe = build.block(IrBlockKind::Internal);
 
   let exit_or_fallback = if bc_types.a == LuauBytecodeType::LBC_TYPE_TABLE.0 as u8 {
     build.vm_exit(pcpos as u32)
@@ -190,6 +197,17 @@ pub fn translate_inst_namecall(build: &mut IrBuilder, code: &[Instruction], pcpo
 
   build.begin_block(second_fast_path);
 
+  // self（ra+1 = 接收者）先于一切探测落位：cpp `executeNAMECALL` 的全部分支
+  // （含慢路径 helper）都先写 `ra+1 = rb`，接收者在 fasttm/helper 调用前驻留
+  // 该槽是既有语义（值幂等，fallback 重写同值）。提前到分支前同时使各后继块
+  // 的 vararg 序列起点一致：ra+1 在分叉前已被本块定义，
+  // require_variadic_sequence 的起点剥离只发生在本块入口，不会在后继合并处
+  // 产生起点分叉（表现为 compute_cfg_live_in_out_reg_sets 的起点一致断言）。
+  let reg_self_early = build.vm_reg(ra.wrapping_add(1));
+  build.inst_ir_cmd_ir_op_ir_op(IrCmd::StorePointer, reg_self_early, table);
+  let reg_self_early = build.vm_reg(ra.wrapping_add(1));
+  build.store_tag(reg_self_early, LuaType::Table as u8);
+
   build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckNodeNoNext, addr_node_el, fallback);
 
   let tm_index = build.const_int(TMS::TmIndex as i32);
@@ -204,19 +222,68 @@ pub fn translate_inst_namecall(build: &mut IrBuilder, code: &[Instruction], pcpo
   let addr_index_node_el =
     build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::GetSlotNodeAddr, index, pcpos_op, aux_op);
   let aux_op = build.vm_const(aux);
-  build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CheckSlotMatch, addr_index_node_el, aux_op, fallback);
-
-  let reg_rb = build.vm_reg(rb);
-  let table2 = build.inst_ir_cmd_ir_op(IrCmd::LoadPointer, reg_rb);
-  let reg_self = build.vm_reg(ra.wrapping_add(1));
-  build.inst_ir_cmd_ir_op_ir_op(IrCmd::StorePointer, reg_self, table2);
-  let reg_self = build.vm_reg(ra.wrapping_add(1));
-  build.store_tag(reg_self, LuaType::Table as u8);
+  // C 提示槽不匹配不直接落 helper：先沿 `__index` 链走第二跳（oop 形态
+  // `a → Vec → Base`：方法在 Vec.__index = Vec 自身缺席，住在 Base）。
+  build.inst_ir_cmd_ir_op_ir_op_ir_op(
+    IrCmd::CheckSlotMatch,
+    addr_index_node_el,
+    aux_op,
+    index_chain_absent,
+  );
 
   let zero = build.const_int(0);
   let index_node_el = build.inst_ir_cmd_ir_op_ir_op(IrCmd::LoadTvalue, addr_index_node_el, zero);
   let reg_ra = build.vm_reg(ra);
   build.inst_ir_cmd_ir_op_ir_op(IrCmd::StoreTvalue, reg_ra, index_node_el);
+  build.inst_ir_cmd_ir_op(IrCmd::JUMP, second_fast_path_hit_join);
+
+  build.begin_block(second_fast_path_hit_join);
+  build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
+
+  // __index 链第二跳（cpp `luaV_gettable` MAXTAGLOOP 链式行走的内联前两级）：
+  // 此时 `index`（第一跳 `__index` 表）的 C 提示槽探测未命中。helper 全路径在
+  // `index` 内缺席时才继续沿 `index` 自己的元表 `__index` 行走——内联必须先
+  // 逐位证明这一缺席，否则同键双表（如 `new` 同在 Vec 与 Base）会错取深槽值。
+  build.begin_block(index_chain_absent);
+
+  // 缺席证明（luaH_getstr 只扫主位 + next 链）：
+  // ① 主位节点无碰撞链（有链即放弃内联，helper 裁决）；
+  // ② 主位键 ≠ k[aux]。CheckSlotMatch 的「命中」= 键等且值非 nil：主位持键且值非 nil
+  //   时不得取更深的槽（helper 会返回 index 的值）；主位持键但值 nil（`t[k]=nil`
+  //   留键）时继续，与 helper 的 `ttisnil(res)` 继续行走语义一致。
+  let hash_op = build.const_uint(hash);
+  let main_node_el = build.inst_ir_cmd_ir_op_ir_op(IrCmd::GetHashNodeAddr, index, hash_op);
+  build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckNodeNoNext, main_node_el, fallback);
+  let aux_op = build.vm_const(aux);
+  build.inst_ir_cmd_ir_op_ir_op_ir_op(
+    IrCmd::CheckSlotMatch,
+    main_node_el,
+    aux_op,
+    index_chain_probe,
+  );
+  // 主位键等且值非 nil = index 持有该键：结果必须是 index 的值 → helper 裁决。
+  build.inst_ir_cmd_ir_op(IrCmd::JUMP, fallback);
+
+  // 缺席成立：沿 `index` 自己元表的 `__index`（fasttm 链与 helper 一致，含
+  // 无元表/tmcache 缺席/非表三分支全部回退）探测 C 提示槽。
+  build.begin_block(index_chain_probe);
+  let tm_index2 = build.const_int(TMS::TmIndex as i32);
+  let next_index_ptr =
+    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::TryCallFastgettm, index, tm_index2, fallback);
+  build.load_and_check_tag(next_index_ptr, LuaType::Table as u8, fallback);
+  let next_index = build.inst_ir_cmd_ir_op(IrCmd::LoadPointer, next_index_ptr);
+
+  let pcpos_op = build.const_uint(pcpos as u32);
+  let aux_op = build.vm_const(aux);
+  let addr_next_node_el =
+    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::GetSlotNodeAddr, next_index, pcpos_op, aux_op);
+  let aux_op = build.vm_const(aux);
+  build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CheckSlotMatch, addr_next_node_el, aux_op, fallback);
+
+  let zero = build.const_int(0);
+  let next_node_el = build.inst_ir_cmd_ir_op_ir_op(IrCmd::LoadTvalue, addr_next_node_el, zero);
+  let reg_ra = build.vm_reg(ra);
+  build.inst_ir_cmd_ir_op_ir_op(IrCmd::StoreTvalue, reg_ra, next_node_el);
   build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
 
   build.begin_block(fallback);
