@@ -8,7 +8,9 @@ use core::{
 use ulua_common::fflag::LuauNativeCodeTargetCheck;
 use ulua_vm::{
   enums::{lua_type::LuaType, tms::TMS},
-  macros::{blackbit::BLACKBIT, lua_callinfo_native::LUA_CALLINFO_NATIVE, lua_multret::LUA_MULTRET},
+  macros::{
+    blackbit::BLACKBIT, lua_callinfo_native::LUA_CALLINFO_NATIVE, lua_multret::LUA_MULTRET,
+  },
   records::{
     call_info::CallInfo,
     closure::{Closure, LClosure},
@@ -3656,16 +3658,14 @@ impl IrLoweringA64 {
 
           // X1 = ra 槽地址；W5 = tag
           self.emit_vm_reg_addr(X1, inst.op(0));
-          self.build_mut().ldrb(W5, mem(X1, (offset_of!(TValue, tt) as i32)));
           self
             .build_mut()
-            .cmp_u16(W5, LuaType::Function as u16);
+            .ldrb(W5, mem(X1, (offset_of!(TValue, tt) as i32)));
+          self.build_mut().cmp_u16(W5, LuaType::Function as u16);
           self.emit_bcond(ConditionA64::NotEqual, &mut slow);
 
           // X6 = ccl = ra->value.gc；is_c 守卫
-          self
-            .build_mut()
-            .ldr(X6, mem(X1, K_TVALUE_VALUE_GC_OFFSET));
+          self.build_mut().ldr(X6, mem(X1, K_TVALUE_VALUE_GC_OFFSET));
           self
             .build_mut()
             .ldrb(W5, mem(X6, (offset_of!(Closure, is_c) as i32)));
@@ -3739,7 +3739,9 @@ impl IrLoweringA64 {
           self
             .build_mut()
             .str(X4, mem(R_STATE, (offset_of!(LuaState, ci) as i32)));
-          self.build_mut().str(X1, mem(X4, (offset_of!(CallInfo, func) as i32)));
+          self
+            .build_mut()
+            .str(X1, mem(X4, (offset_of!(CallInfo, func) as i32)));
           self
             .build_mut()
             .add_rr_u16(X7, X1, size_of::<TValue>() as u16);
