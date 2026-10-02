@@ -5,9 +5,10 @@ use core::{
   ptr,
 };
 
+use ulua_common::fflag::LuauNativeCodeTargetCheck;
 use ulua_vm::{
   enums::{lua_type::LuaType, tms::TMS},
-  macros::{blackbit::BLACKBIT, lua_multret::LUA_MULTRET},
+  macros::{blackbit::BLACKBIT, lua_callinfo_native::LUA_CALLINFO_NATIVE, lua_multret::LUA_MULTRET},
   records::{
     call_info::CallInfo,
     closure::{Closure, LClosure},
@@ -88,6 +89,9 @@ const X3: RegisterA64 = reg(KindA64::X, 3);
 const X4: RegisterA64 = reg(KindA64::X, 4);
 const X5: RegisterA64 = reg(KindA64::X, 5);
 const X6: RegisterA64 = reg(KindA64::X, 6);
+const X7: RegisterA64 = reg(KindA64::X, 7);
+const X9: RegisterA64 = reg(KindA64::X, 9);
+const X10: RegisterA64 = reg(KindA64::X, 10);
 const W0: RegisterA64 = reg(KindA64::W, 0);
 const W1: RegisterA64 = reg(KindA64::W, 1);
 const W2: RegisterA64 = reg(KindA64::W, 2);
@@ -3634,8 +3638,158 @@ impl IrLoweringA64 {
       }
       IrCmd::CALL => {
         self.spill_regs(index, &[]);
+        let nparams = self.int_op(inst.op(1));
+        let nresults = self.int_op(inst.op(2));
+
+        // native 直通快路：call_fallback 的「Lua 闭包 + 原生被调」分支在生成码内
+        // 逐位复刻（守卫任一未过 → 落下方通用路径重做，双入口对同一状态幂等）。
+        // 守卫集：函数 tag、非 C 闭包、原生目标（exectarget/execdata，随
+        // LuauNativeCodeTargetCheck 同形）、CallInfo 槽未满、栈余量严格大于新帧
+        // 需求（cpp `luaD_checkstackfornewci` 谓词 `stack_last - top <= n` 的取反，
+        // 相等仍落通用路径以保持扩容判定逐位一致）、实参数恰等（排除补 nil 与
+        // vararg 形态，MULTRET 在编译期整体跳过）。提交段与 call_fallback 的
+        // 建帧六写 + savedpc/NATIVE 收尾 + base/top 接线逐字段同序同值，随后
+        // 装载 JIT 环境寄存器并 `br exectarget`——与 continueCall 第二跳同态，
+        // 省去整段 C-ABI 调用往返。
+        if nparams != LUA_MULTRET {
+          let mut slow = Label::default();
+
+          // X1 = ra 槽地址；W5 = tag
+          self.emit_vm_reg_addr(X1, inst.op(0));
+          self.build_mut().ldrb(W5, mem(X1, (offset_of!(TValue, tt) as i32)));
+          self
+            .build_mut()
+            .cmp_u16(W5, LuaType::Function as u16);
+          self.emit_bcond(ConditionA64::NotEqual, &mut slow);
+
+          // X6 = ccl = ra->value.gc；is_c 守卫
+          self
+            .build_mut()
+            .ldr(X6, mem(X1, K_TVALUE_VALUE_GC_OFFSET));
+          self
+            .build_mut()
+            .ldrb(W5, mem(X6, (offset_of!(Closure, is_c) as i32)));
+          self.build_mut().cbnz(W5, &mut slow);
+
+          // X9 = ccl->l.p；原生目标守卫（与 call_fallback 的 has_native_target 同形）
+          self.build_mut().ldr(X9, mem(X6, K_CLOSURE_L_P_OFFSET));
+          self
+            .build_mut()
+            .ldr(X10, mem(X9, (offset_of!(Proto, exectarget) as i32)));
+          self.build_mut().cbz(X10, &mut slow);
+          if !LuauNativeCodeTargetCheck.get() {
+            self
+              .build_mut()
+              .ldr(X10, mem(X9, (offset_of!(Proto, execdata) as i32)));
+            self.build_mut().cbz(X10, &mut slow);
+            self
+              .build_mut()
+              .ldr(X10, mem(X9, (offset_of!(Proto, exectarget) as i32)));
+          }
+
+          // 实参数恰等 + 非 vararg（排除补 nil 循环与 vararg top 收敛两种形态）
+          self
+            .build_mut()
+            .ldrb(W5, mem(X9, (offset_of!(Proto, numparams) as i32)));
+          self.build_mut().cmp_u16(W5, nparams as u16);
+          self.emit_bcond(ConditionA64::NotEqual, &mut slow);
+          self
+            .build_mut()
+            .ldrb(W5, mem(X9, (offset_of!(Proto, is_vararg) as i32)));
+          self.build_mut().cbnz(W5, &mut slow);
+
+          // X2 = argtop = ra + (1+nparams)*16；CallInfo 槽未满守卫
+          self.emit_add(
+            X2,
+            X1,
+            ((1 + nparams) * (size_of::<TValue>() as i32)) as u16,
+          );
+          self
+            .build_mut()
+            .ldr(X4, mem(R_STATE, (offset_of!(LuaState, ci) as i32)));
+          self
+            .build_mut()
+            .ldr(X7, mem(R_STATE, (offset_of!(LuaState, end_ci) as i32)));
+          self.build_mut().cmp_rr(X4, X7);
+          self.emit_bcond(ConditionA64::Equal, &mut slow);
+
+          // 栈余量守卫：stack_last - argtop > stacksize*16 才走快路
+          // （`luaD_checkstackfornewci` 的有符号谓词 `stack_last - top <= n` 取反；
+          // 相等/负差交回通用路径，扩容判定逐位一致）
+          self
+            .build_mut()
+            .ldr(X4, mem(R_STATE, (offset_of!(LuaState, stack_last) as i32)));
+          self.build_mut().sub_rrr_i32(X4, X4, X2, 0);
+          self
+            .build_mut()
+            .ldrb(W5, mem(X6, (offset_of!(Closure, stacksize) as i32)));
+          self.build_mut().lsl_rr_u8(W5, W5, K_TVALUE_SIZE_LOG2 as u8);
+          self.build_mut().mov_rr(W5, W5); // W 写回零扩到 X5 同寄存器高位
+          self.build_mut().cmp_rr(X4, X5);
+          self.emit_bcond(ConditionA64::LessEqual, &mut slow);
+
+          // 提交段：L->ci 前移 + 建帧六写（同 call_fallback 建帧序）。
+          // X4 已被栈守卫复用为余量差，此处按 L->ci 重取
+          self
+            .build_mut()
+            .ldr(X4, mem(R_STATE, (offset_of!(LuaState, ci) as i32)));
+          self
+            .build_mut()
+            .add_rr_u16(X4, X4, size_of::<CallInfo>() as u16);
+          self
+            .build_mut()
+            .str(X4, mem(R_STATE, (offset_of!(LuaState, ci) as i32)));
+          self.build_mut().str(X1, mem(X4, (offset_of!(CallInfo, func) as i32)));
+          self
+            .build_mut()
+            .add_rr_u16(X7, X1, size_of::<TValue>() as u16);
+          self
+            .build_mut()
+            .str(X7, mem(X4, (offset_of!(CallInfo, base) as i32)));
+          // ci->top = argtop + stacksize*16（守卫段 lsl 已把 stacksize 折成字节数，
+          // 此处平加，不得再移位）
+          self.build_mut().add_rrr_i32(X5, X2, X5, 0);
+          self
+            .build_mut()
+            .str(X5, mem(X4, (offset_of!(CallInfo, top) as i32)));
+          // L->base/L->top 接线，R_BASE 同步取 ci->base——须在 X7 被 code 指针
+          // 复用前落位。L->top 终态 = ci->top（cpp/call_fallback 的
+          // `p->is_vararg ? argi : ci->top` 后半；vararg 形态已被守卫排除）：
+          // 置 argtop 会令 GC 漏标 callee 工作寄存器区、活对象被收
+          self
+            .build_mut()
+            .str(X7, mem(R_STATE, (offset_of!(LuaState, base) as i32)));
+          self
+            .build_mut()
+            .str(X5, mem(R_STATE, (offset_of!(LuaState, top) as i32)));
+          self.build_mut().mov_rr(R_BASE, X7);
+          self
+            .build_mut()
+            .ldr(X7, mem(X9, (offset_of!(Proto, code) as i32)));
+          self
+            .build_mut()
+            .str(X7, mem(X4, (offset_of!(CallInfo, savedpc) as i32)));
+          self.emit_mov(W5, LUA_CALLINFO_NATIVE);
+          self
+            .build_mut()
+            .str(W5, mem(X4, (offset_of!(CallInfo, flags) as i32)));
+          self.emit_mov(W5, nresults);
+          self
+            .build_mut()
+            .str(W5, mem(X4, (offset_of!(CallInfo, nresults) as i32)));
+
+          // JIT 环境寄存器装载（同 continueCall 第二跳）
+          self
+            .build_mut()
+            .ldp(R_CONSTANTS, R_CODE, mem(X9, (offset_of!(Proto, k) as i32)));
+          self.build_mut().mov_rr(R_CLOSURE, X6);
+          self.build_mut().br(X10);
+
+          self.build_mut().set_label_label(&mut slow);
+        }
+
         // argtop = if (nparams == LUA_MULTRET) { l->top } else { ra + 1 + nparams };
-        if self.int_op(inst.op(1)) == LUA_MULTRET {
+        if nparams == LUA_MULTRET {
           self
             .build_mut()
             .ldr(X2, mem(R_STATE, (offset_of!(LuaState, top) as i32)));
@@ -3643,15 +3797,14 @@ impl IrLoweringA64 {
           self.emit_add(
             X2,
             r_base(),
-            ((vm_reg_op(inst.op(0)) + 1 + self.int_op(inst.op(1))) * (size_of::<TValue>() as i32))
-              as u16,
+            ((vm_reg_op(inst.op(0)) + 1 + nparams) * (size_of::<TValue>() as i32)) as u16,
           );
         }
 
         // call_fallback(l, ra, argtop, nresults)
         self.build_mut().mov(X0, R_STATE);
         self.emit_vm_reg_addr(X1, inst.op(0));
-        self.emit_mov(W3, self.int_op(inst.op(2)));
+        self.emit_mov(W3, nresults);
         self.emit_ldr(X4, native_ctx(offset_of!(NativeContext, call_fallback)));
         self.build_mut().blr(X4);
 
