@@ -36,7 +36,7 @@ pub(crate) unsafe fn get_comp_tm(
       return null();
     }
 
-    if lua_o_rawequal_obj(tm1, tm2) != 0 {
+    if lua_o_rawequal_obj(&*tm1, &*tm2) != 0 {
       return tm1;
     }
 

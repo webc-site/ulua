@@ -32,7 +32,7 @@ pub(crate) unsafe fn call_order_tm(
     }
 
     let tm2 = lua_t_gettmbyobj(l, p2, event);
-    if lua_o_rawequal_obj(tm1, tm2) == 0 {
+    if lua_o_rawequal_obj(&*tm1, &*tm2) == 0 {
       if error {
         lua_g_ordererror(l, p1, p2, event);
       }

@@ -298,8 +298,8 @@ impl VmFrame {
   /// `lua_o_rawequal_obj(...) != 0`：两槽原始相等判定。
   #[inline]
   pub(crate) fn raw_equal(&self, a: *const TValue, b: *const TValue) -> bool {
-    // Safety: 调用点已证两槽均为存活 TValue（纯读数）。
-    unsafe { lua_o_rawequal_obj(a, b) != 0 }
+    // Safety: 调用点已证两槽均为存活 TValue（纯读数）；引用重建窗仅收形。
+    lua_o_rawequal_obj(unsafe { &*a }, unsafe { &*b }) != 0
   }
 
   /// `lua_c_barrier!`：闭包写屏障。
