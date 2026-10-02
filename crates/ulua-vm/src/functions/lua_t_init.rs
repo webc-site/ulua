@@ -1,5 +1,3 @@
-use core::ptr::addr_of_mut;
-
 use crate::{
   enums::tms::TMS,
   functions::lua_typename::TYPENAMES_STR,
@@ -43,17 +41,20 @@ const _: () = assert!(EVENTNAMES.len() == TMS::TmN as usize);
 /// 仅在 VM 初始化（尚无并发）调用。cpp/VM/src/ltm.cpp:80 luaT_init。
 pub(crate) unsafe fn lua_t_init(l: *mut LuaState) {
   unsafe {
+    // r16-b3 收编：原 `addr_of_mut!` 槽裸指针跨 `lua_s_new`（分配/可 GC）持有，
+    // 拆为 cpp `ltm.cpp` 同序形态——先 intern 得 `ts`，槽写经 gs_mut 一句一借，
+    // `luaS_fix!` 就地消费同一 `ts` 值（与原 `*slot` 读数恒等）
     // 类型名表与 `lua_typename` 共用同一常量，索引即 LUA_T*
     for (i, &name) in TYPENAMES_STR.iter().enumerate() {
-      let slot = addr_of_mut!((*(*l).global).ttname[i]);
-      *slot = lua_s_new(l, name.as_bytes());
-      luaS_fix!(*slot);
+      let ts = lua_s_new(l, name.as_bytes());
+      (*l).gs_mut().ttname[i] = ts;
+      luaS_fix!(ts);
     }
 
     for (i, &name) in EVENTNAMES.iter().enumerate() {
-      let slot = addr_of_mut!((*(*l).global).tmname[i]);
-      *slot = lua_s_new(l, name);
-      luaS_fix!(*slot);
+      let ts = lua_s_new(l, name);
+      (*l).gs_mut().tmname[i] = ts;
+      luaS_fix!(ts);
     }
   }
 }
