@@ -65,6 +65,7 @@ use std::{
 // `count-alloc` 开启时 MiMalloc 仅在计数模块内部使用（feature-off 时才是全局分配器类型）。
 #[cfg(not(feature = "count-alloc"))]
 use mimalloc::MiMalloc;
+use ulua_common::records::f_value;
 
 #[cfg(not(feature = "count-alloc"))]
 #[global_allocator]
@@ -223,9 +224,9 @@ fn main() -> Result<(), IoError> {
   // FastFlag 覆盖先于任何测量（同二进制旗标开关对照测量：A/B 两轮除旗标外
   // 逐位同参，见 --fflag）。先用 rt enable_jit 的同参烧掉 set_luau_bool_flags
   // 的启动 Once（其后 no-op），否则覆盖会被首次 enable_jit 全量重置吞掉。
-  ulua_common::records::f_value::set_luau_bool_flags(true);
+  f_value::set_luau_bool_flags(true);
   for (name, value) in &cfg.fflags {
-    if !ulua_common::records::f_value::FValue::<bool>::set_flag_by_name(name, *value) {
+    if !f_value::FValue::<bool>::set_flag_by_name(name, *value) {
       eprintln!("警告: 未知 FastFlag {name}，忽略");
     }
   }
