@@ -7,19 +7,102 @@ use ulua_common::fflag;
 use crate::{
   enums::tms::TMS,
   functions::{
-    call_tm::call_tm, lua_g_indexerror::lua_g_indexerror,
+    call_tm::call_tm, index_chain_cache::index_chain_write, lua_g_indexerror::lua_g_indexerror,
     lua_g_missingmembererror::lua_g_missingmembererror, lua_g_readonlyerror::check_writable,
-    lua_h_get::lua_h_get, lua_t_gettmbyobj::lua_t_gettmbyobj,
+    lua_h_get::lua_h_get, lua_o_rawequal_key::lua_o_rawequal_key,
+    lua_t_gettmbyobj::lua_t_gettmbyobj, mainposition::mainposition, newkey::newkey_with_mp,
+    walk_nodes::walk_nodes,
   },
   macros::{
-    fasttm::fasttm, gval_2_slot::gval2slot, lua_c_barrier::lua_c_barrier,
-    lua_c_barriert::luaC_barriert, lua_g_runerror::lua_g_runerror, lua_h_setslot::lua_h_setslot,
+    fasttm::fasttm, gkey::gval, gval_2_slot::gval2slot, invalidate_t_mcache::invalidate_tmcache,
+    lua_c_barrier::lua_c_barrier, lua_c_barriert::luaC_barriert, lua_g_runerror::lua_g_runerror,
+    lua_h_setslot::lua_h_setslot, luai_numeq::luai_numeq, luai_numisnan::luai_numisnan,
     maxtagloop::MAXTAGLOOP, objectvalue::objectvalue, setobj::setobj, setobj_2_class::setobj2class,
     setobj_2_t::setobj2t,
   },
-  records::{lua_state::LuaState, slot::Slot},
+  records::{lua_node::LuaNode, lua_state::LuaState, lua_table::LuaTable, slot::Slot},
   type_aliases::{stk_id::StkId, t_value::TValue},
 };
+
+/// 数字键 + 无元表写快支主体（[`lua_v_settable`] 入口判定通过后进入）。
+///
+/// 行为逐位同构论证（与原 `lua_h_get` 探测 + `lua_h_setslot!` 写段对照）：
+///  1. 探测谓词与 `lua_h_get` 对数字键的两分支逐位一致——整数键先 array 段判定
+///     （`luaH_getnum` 口径）、hash 段用 `is_number && numeq` 谓词；非整数键用
+///     `lua_o_rawequal_key` 谓词，均与 `lua_h_get` 现行分发相同；
+///  2. metatable 已由入口判空，`fasttm(l, null, TmNewIndex)` 恒空，原路径 `tm`
+///     必为 null、必走写段，跳过该次空查不改变任何可观察行为；
+///  3. 命中 nil 值槽 → 返回槽指针（`lua_h_setslot!` 的旧槽复用支）；完全 miss →
+///     `newkey_with_mp` 建键，传入的 `mp` 与 `newkey` 壳内重算值逐位同源（同 key
+///     同表状态 `mainposition` 结果唯一）；
+///  4. 写段（check_writable → invalidateTMcache/index_chain_write → cachedslot →
+///     setobj2t → barriert）的判定顺序与屏障时序原样保留。
+///
+/// `#[inline(never)]` 的理由：本函数若内联回 `lua_v_settable`，后者体积膨胀会连锁
+/// 改变 `lua_v_gettable → lua_h_get` 等热链的内联决策与解释器派发环布局（inherit3
+/// 复测归因 +18% 即该连锁——`lua_h_get` 丢失内联后继承链查找每跳多付一次真实
+/// call）。入口判定留在调用方，本函数只收探测与写段，`l` 为存活 `LuaState`、`h`
+/// 为存活 `LuaTable`（元表空、键为非 NaN 数字），`val` 为取值源存活槽。
+#[inline(never)]
+unsafe fn settable_num_fastpath(
+  l: *mut LuaState,
+  h: *mut LuaTable,
+  keyv: &TValue,
+  val: *const TValue,
+) -> bool {
+  // SAFETY: 契约由调用方（lua_v_settable）保证：l/h 存活且互踞有效内存，探测链
+  // 走与节点算术均落在表节点数组界内（与 lua_h_get 同一前提），写段屏障经 val
+  // 读出的值指针存活至屏障完成。
+  unsafe {
+    let n = keyv.as_number();
+    let k = n as i32;
+    let exact = luai_numeq(k as f64, n);
+    // 探测：`Ok(值槽)` 命中（含 nil 值槽），`Err(主位桶)` 完全 miss
+    let probe: Result<*mut TValue, *mut LuaNode> =
+      if exact && (k as u32).wrapping_sub(1) < (*h).sizearray as u32 {
+        Ok((*h).array.add((k - 1) as usize))
+      } else {
+        let mp = mainposition(h, keyv);
+        let hit = if exact {
+          // 整数键 hash 段：`luaH_getnum` 谓词口径
+          walk_nodes(mp, |node| {
+            if (*node).key.is_number() && luai_numeq((*node).key.as_number(), n) {
+              Some(gval!(node))
+            } else {
+              None
+            }
+          })
+        } else {
+          // 非整数数值键：`lua_h_get` hash 慢路的 rawequal 谓词口径
+          walk_nodes(mp, |node| {
+            if lua_o_rawequal_key(&(*node).key, keyv) != 0 {
+              Some(gval!(node))
+            } else {
+              None
+            }
+          })
+        };
+        hit.map_or(Err(mp), Ok)
+      };
+
+    let newval = match probe {
+      // 写段收敛为单份：Ok/Err 双份展开会加倍内联体积，重蹈布局漂移
+      Ok(oldval) => oldval,
+      Err(mp) => {
+        // 新键落位（可能 rehash），`mp` 为写前探测预算的主位桶
+        newkey_with_mp(l, h, keyv, mp)
+      }
+    };
+
+    check_writable(l, h);
+    invalidate_tmcache(&*h);
+    index_chain_write(h);
+    (*l).cachedslot = gval2slot!(h, newval);
+    setobj2t!(l, newval, val);
+    luaC_barriert!(l, h, val);
+    true
+  }
+}
 
 /// # Safety
 /// `l` 指向存活 `LuaState`；`t`/`key`/`val` 为对齐可读的槽句柄（三侧在本函数内均只读：
@@ -37,6 +120,23 @@ pub unsafe fn lua_v_settable(l: *mut LuaState, mut t: Slot<'_>, key: Slot<'_>, v
       let mut tm: *const TValue = null();
       if t.get().is_table() {
         let h = t.get().as_table_ptr();
+
+        // 数字键 + 无元表快支（本 fork 实测扩展，cpp 无对应支）：写前探测一次拿到
+        // 「值槽」或「miss 主位桶」，miss 时直传 [`newkey_with_mp`]，消除原路径
+        // `lua_h_get` 探测与 `newkey` 壳内 `mainposition` 的双重哈希定位。入口判定
+        // 留在本函数（一次 metatable 读 + tag 比较 + NaN 排除），探测与写段整体
+        // 外移到 [`settable_num_fastpath`]：本函数体积若随快支膨胀，会连锁改变
+        // `lua_v_gettable → lua_h_get` 等热链的内联决策与派发环布局（inherit3
+        // 复测归因 +18% 即该连锁，见 fastpath 函数文档）。行为逐位同构论证见彼处。
+        // NaN 键不入快支：原路径 `lua_h_newkey` 对 NaN 键抛「table index is NaN」，
+        // 快支无该校验，排除后走原路保持错误行为逐位一致（非 NaN 数字键才落快支）。
+        if (*h).metatable.is_null()
+          && key.get().is_number()
+          && !luai_numisnan(key.get().as_number())
+          && settable_num_fastpath(l, h, key.get(), val.as_const_ptr())
+        {
+          return;
+        }
 
         let oldval = lua_h_get(h, key.get());
 

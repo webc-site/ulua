@@ -71,7 +71,38 @@ unsafe fn setnodekey_direct(node: *mut LuaNode, obj: &TValue, g: *mut global_Sta
 /// `rehash`/`getfreepos`/`luaC_barriert` 均为表侧/GC 侧分配，不搬移 Lua 栈，故 `key`
 /// 源自栈槽时借用仍安全。返回值指向 t 哈希部分新落位的值槽，
 /// 其有效性随 t 直至下一次结构性写表。
+/// 壳强制保持函数边界：字符串 intern 表等高频调用方（`lua_h_setstr` 等）以恰一次
+/// call 进入，与拆分前单函数 `newkey` 形态逐位同形（patterns 复测归因：壳可内联时
+/// 调用方膨胀 + 多层 call，+2% 级回归）。
+#[inline(never)]
 pub(crate) unsafe fn newkey(l: *mut LuaState, t: *mut LuaTable, key: &TValue) -> *mut TValue {
+  // SAFETY: 契约同 [`newkey_with_mp`]；mp 由同一契约的 `mainposition` 现算，
+  // 与调用方自行预算的桶逐位同源（同 key 同表状态下 `mainposition` 结果唯一）
+  unsafe {
+    let mp = mainposition(t, key);
+    newkey_with_mp(l, t, key, mp)
+  }
+}
+
+/// [`newkey`] 的预定位变体：调用方已在写前探测中算出 `key` 的主位桶 `mp` 时直传，
+/// 免去 `newkey` 壳内的重算（同 key 同表状态下 `mainposition` 结果唯一，行为逐位
+/// 同构）。前提：自 `mp` 算出至本函数调用之间，`t` 的哈希部分未发生 rehash
+/// （`lua_v_settable` 写前探测只读表，满足）。
+///
+/// # Safety
+/// 契约与 [`newkey`] 完全一致；额外要求 `mp` 为 `mainposition(t, key)` 在当前表
+/// 状态下的返回值（或哨兵 `dummynode`）。
+///
+/// `#[inline(always)]`：主体展开回 [`newkey`] 壳内即恢复拆分前单函数形态；在
+/// [`crate::functions::lua_v_settable::settable_num_fastpath`]（自身
+/// `#[inline(never)]`，膨胀被隔离）的 miss 支里同样展开，不外溢。
+#[inline(always)]
+pub(crate) unsafe fn newkey_with_mp(
+  l: *mut LuaState,
+  t: *mut LuaTable,
+  key: &TValue,
+  mut mp: *mut LuaNode,
+) -> *mut TValue {
   // SAFETY: 契约保证 l/t 存活、key 为存活 TValue 只读借用；节点搬运的 offset/next 均落在 t->node 的 sizenode 数组内（ltable 不变式）
   unsafe {
     // 键恰为数组尾 +1：整段数组扩容即可，无需哈希槽（cpp `nvalue(key) == t->sizearray + 1`）
@@ -94,7 +125,8 @@ pub(crate) unsafe fn newkey(l: *mut LuaState, t: *mut LuaTable, key: &TValue) ->
     // r12-w6d 逐点复核定性：本文件 4 处 gnode 字样均为裁决文档口径，体内无宏调用
     // 代码点位（`mp` 经 `mainposition` 取回，源头判据见 hashint/hashnum/hashpointer
     // 各票注），next 链 offset/offset_from 改写属指针判据保留面，无收编面。
-    let mut mp = mainposition(t, key);
+    // `mp` 来自调用方预算或 [`newkey`] 壳内 `mainposition`，语义与 cpp 原位重算
+    // 逐位同源（同 key 同表状态结果唯一），不再重复计算。
     if !matches!(ValueView::from_tvalue(&*gval!(mp)), ValueView::Nil) || eq(mp, dummynode) {
       // cpp `LuaNode* n = getfreepos(t); if (n == NULL)`：`None` 即「哈希部分无空槽」，
       // 走 rehash 扩容后转 `arrayornewkey`。空槽缺席是 cpp 的正常控制流分支，不是
