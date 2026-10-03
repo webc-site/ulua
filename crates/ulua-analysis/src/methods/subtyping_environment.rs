@@ -87,14 +87,12 @@ impl SubtypingEnvironment {
 }
 
 impl SubtypingEnvironment {
-  /// # Safety
-  /// - `self.parent` 及其父链为构造期接线的 `*mut SubtypingEnvironment` 环境层级裸指针：
-  ///   可空（空则不递归），非空者指向比本环境长寿的外层作用域环境。
-  /// - `ice_reporter` 为 `Handle<InternalErrorReporter>`（对应 C++
-  ///   `getMappedTypeBounds(TypeId, InternalErrorReporter&)` 的引用形参）：非空由
-  ///   句柄类型编码，调用方须保证其指向的实例在本调用返回前存活。
-  /// - `ty` 经 `follow` 解引用，须指向类型 arena 中存活节点。
-  pub(crate) unsafe fn get_mapped_type_bounds(
+  /// 查找 `ty`（经 `follow`）在父链中对应的泛型约束边界。
+  ///
+  /// 前提由 `SubtypingEnvironment` 构造不变量保证：`self.parent` 为空，或指向
+  /// 比本环境长寿的外层作用域环境；`ice_reporter` 非空（`Handle` 类型编码）且
+  /// 在本调用返回前存活。`ty` 为类型 arena 中存活节点（与任意 `TypeId` 用法同契约）。
+  pub(crate) fn get_mapped_type_bounds(
     &mut self,
     ty: TypeId,
     ice_reporter: Handle<InternalErrorReporter>,
@@ -108,12 +106,9 @@ impl SubtypingEnvironment {
     }
 
     if !self.parent.is_null() {
-      // Safety: 上方 `!self.parent.is_null()` 已保证父环境句柄非空；它是构造期接线的
-      // 环境父链裸指针，指向比 `&mut self` 长寿的外层环境，父链严格向外指无自别名，
-      // alias() 的 &mut 满足门面契约，递归返回的 `&mut GenericBounds` 在此存活有效。
-      // 本 unsafe 块现仅覆盖对 unsafe fn 的递归调用（解引用本身已收编入门面），
-      // 契约（父链/`ice_reporter`/`ty`）与原调用一致。
-      return unsafe { alias(self.parent).get_mapped_type_bounds(ty, ice_reporter) };
+      // `self.parent` 非空由构造不变量保证；`alias()` 将其转为 `&'static mut`，
+      // 父链严格向外指且无自别名，递归返回的借用覆盖本次调用。
+      return alias(self.parent).get_mapped_type_bounds(ty, ice_reporter);
     }
 
     LUAU_ASSERT!(false);
