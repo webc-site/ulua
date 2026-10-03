@@ -41,6 +41,7 @@ use crate::{
     translate_inst_binary::{
       translate_inst_binary, translate_inst_binary_k, translate_inst_binary_rk,
     },
+    translate_inst_call_inline,
     translate_inst_capture::translate_inst_capture,
     translate_inst_cmp_proto::translate_inst_cmp_proto,
     translate_inst_concat::translate_inst_concat,
@@ -655,24 +656,38 @@ impl IrBuilder {
           let interrupt_pc = self.const_uint(i as u32);
           self.inst_ir_cmd_ir_op(IrCmd::INTERRUPT, interrupt_pc);
 
-          let savedpc = if fflag::LuauCallFeedback.get() {
-            i + get_op_length(op)
-          } else {
-            i + 1
-          };
-          let savedpc = self.const_uint(savedpc as u32);
-          self.inst_ir_cmd_ir_op(IrCmd::SetSavedpc, savedpc);
+          // JIT 用户函数 call inlining（第 1 阶段）：判据全过则直通展开被调体，
+          // 跳过常规 SetSavedpc+CALL 发射；任一判据不过走原路径，零语义面变化
+          let inlined = op == LuauOpcode::LOP_CALL
+            && fflag::LuauJitCallInline.get()
+            && translate_inst_call_inline::try_translate_call_inline(
+              self,
+              code,
+              i,
+              luau_insn_b(code[i as usize]) as u8,
+              luau_insn_c(code[i as usize]) as u8,
+            );
 
-          let ra = self.vm_reg(luau_insn_a(code[i as usize]) as u8);
-          let b = self.const_int(luau_insn_b(code[i as usize]) as i32 - 1);
-          let c = self.const_int(luau_insn_c(code[i as usize]) as i32 - 1);
-          self.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CALL, ra, b, c);
+          if !inlined {
+            let savedpc = if fflag::LuauCallFeedback.get() {
+              i + get_op_length(op)
+            } else {
+              i + 1
+            };
+            let savedpc = self.const_uint(savedpc as u32);
+            self.inst_ir_cmd_ir_op(IrCmd::SetSavedpc, savedpc);
 
-          if self.active_fastcall_fallback {
-            let ret = self.fastcall_fallback_return;
-            self.inst_ir_cmd_ir_op(IrCmd::JUMP, ret);
-            self.begin_block(ret);
-            self.active_fastcall_fallback = false;
+            let ra = self.vm_reg(luau_insn_a(code[i as usize]) as u8);
+            let b = self.const_int(luau_insn_b(code[i as usize]) as i32 - 1);
+            let c = self.const_int(luau_insn_c(code[i as usize]) as i32 - 1);
+            self.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CALL, ra, b, c);
+
+            if self.active_fastcall_fallback {
+              let ret = self.fastcall_fallback_return;
+              self.inst_ir_cmd_ir_op(IrCmd::JUMP, ret);
+              self.begin_block(ret);
+              self.active_fastcall_fallback = false;
+            }
           }
         }
         LuauOpcode::LOP_RETURN => {

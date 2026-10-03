@@ -249,6 +249,7 @@ pub mod translate_builtin_vector_min_max;
 pub mod translate_builtin_vector_normalize;
 pub mod translate_fast_call_n;
 pub mod translate_inst_binary;
+pub mod translate_inst_call_inline;
 pub mod translate_inst_capture;
 pub mod translate_inst_cmp_proto;
 pub mod translate_inst_concat;
