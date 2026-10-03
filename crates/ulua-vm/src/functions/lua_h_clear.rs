@@ -2,7 +2,7 @@ use core::ptr::addr_of_mut;
 
 use crate::{
   enums::lua_type::LuaType,
-  functions::maybesetaboundary::maybesetaboundary,
+  functions::{index_chain_cache::index_chain_write, maybesetaboundary::maybesetaboundary},
   macros::{setnilvalue::setnilvalue, sizenode::sizenode},
   records::lua_table::LuaTable,
 };
@@ -13,6 +13,9 @@ use crate::{
 /// 哨兵时跳过节点区写入。
 pub(crate) unsafe fn lua_h_clear(tt: *mut LuaTable) {
   unsafe {
+    // 清空改变全部键的存在性，失效 __index 链多点缓存（index_chain_cache 正确性契约）
+    index_chain_write(tt);
+
     // cpp ltable.cpp:1411-1436 luaH_clear：数组段切 array_window_mut 共享窗清零——
     // null 数组（sizearray 为 0）与零长均归空窗，免原「显式判空 + 手工
     // from_raw_parts_mut」两段守卫（窗形内部 c_slice_mut 已容 null 配 0 长）。

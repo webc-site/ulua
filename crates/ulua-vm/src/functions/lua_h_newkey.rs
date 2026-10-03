@@ -1,7 +1,10 @@
 use core::ptr::null;
 
 use crate::{
-  functions::{lua_g_runerror_l::lua_g_runerror_l, luai_vecisnan::luai_vecisnan, newkey::newkey},
+  functions::{
+    index_chain_cache::index_chain_write, lua_g_runerror_l::lua_g_runerror_l,
+    luai_vecisnan::luai_vecisnan, newkey::newkey,
+  },
   macros::luai_numisnan::luai_numisnan,
   records::{lua_state::LuaState, lua_table::LuaTable},
   type_aliases::t_value::TValue,
@@ -34,6 +37,9 @@ pub(crate) unsafe fn lua_h_newkey(l: *mut LuaState, t: *mut LuaTable, key: &TVal
       lua_g_runerror_l(l, null(), format_args!("table index contains NaN"));
     }
 
+    // 新键插入改变「键 → 非 nil 值」存在性（含 __index 链中间级的后插键遮蔽），
+    // 失效 __index 链多点缓存（index_chain_cache 模块的正确性契约）
+    index_chain_write(t);
     newkey(l, t, key)
   }
 }
