@@ -81,10 +81,11 @@ pub(crate) unsafe fn register_types_library(l: *mut LuaState) {
   let vm_l = l as *mut lua_state::LuaState;
 
   // luaL_register(l, "types", methods);
-  // Safety: `vm_l` 即函数级 # Safety 中存活且独占的 lua_State（非空）；
+  // Safety: `vm_l` 即函数级 # Safety 中存活且独占的 lua_State（非空）；`&mut *vm_l`
+  // 重建自本次调用帧内存活的裸句柄，借用窗止于当句；
   // `LIB_TYPES` 是静态 NUL 结尾字节串；`METHODS` 为常量数组，
   // 期间无人改写。
-  unsafe { lua_l_register_bytes(vm_l, Some(LIB_TYPES), &TYPES_METHODS) };
+  unsafe { lua_l_register_bytes(&mut *vm_l, Some(LIB_TYPES), &TYPES_METHODS) };
 
   // Set fields for type userdata
   // for (luaL_Reg* l = fields; l->name; l++) { l->func(L); lua_setfield(L, -2, l->name); }

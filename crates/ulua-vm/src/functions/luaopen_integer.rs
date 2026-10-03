@@ -27,7 +27,7 @@ pub(crate) unsafe fn luaopen_integer(l: *mut LuaState) -> i32 {
   unsafe {
     // Register the integer library functions
     // Note: int64lib is defined in lintlib.cpp; in this translation context we use the local static.
-    lua_l_register_bytes(l, Some(b"integer"), &INT64LIB);
+    lua_l_register_bytes(&mut *l, Some(b"integer"), &INT64LIB);
 
     // Push LLONG_MAX and set it as "maxsigned"
     lua_pushinteger_64(&mut *l, i64::MAX);

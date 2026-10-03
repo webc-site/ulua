@@ -187,7 +187,9 @@ pub(crate) unsafe fn register_type_user_data(l: *mut LuaState) {
     // lua_newtable(l);
     (*vm_l).new_table();
     // luaL_register(l, nullptr, typeUserdataMethods);
-    lua_l_register_bytes(vm_l, None, &TYPE_USERDATA_METHODS);
+    // SAFETY: `vm_l` 为存活 LuaState（本 fn `# Safety` 契约），`&mut *` 自本次调用帧内
+    // 存活的裸句柄重建独占引用，借用窗止于当句
+    lua_l_register_bytes(&mut *vm_l, None, &TYPE_USERDATA_METHODS);
 
     // if (FFlag::LuauUdtfTypeIsSubtypeOf)
     if fflag::LuauUdtfTypeIsSubtypeOf.get() {

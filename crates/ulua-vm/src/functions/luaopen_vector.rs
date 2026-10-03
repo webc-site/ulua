@@ -42,7 +42,7 @@ static VECTOR_FUNCS: [LuaLReg; 14] = [
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub(crate) unsafe fn luaopen_vector(l: *mut LuaState) -> i32 {
   unsafe {
-    lua_l_register_bytes(l, Some(b"vector"), &VECTOR_FUNCS);
+    lua_l_register_bytes(&mut *l, Some(b"vector"), &VECTOR_FUNCS);
 
     if LUA_VECTOR_SIZE == 4 {
       lua_pushvector_lua_state_f32_f32_f32_f32(l, 0.0, 0.0, 0.0, 0.0);

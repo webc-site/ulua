@@ -20,7 +20,7 @@ static FUNCS: [LuaLReg; 5] = [
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub unsafe fn luaopen_utf_8(l: *mut LuaState) -> i32 {
   unsafe {
-    lua_l_register_bytes(l, Some(b"utf8"), &FUNCS);
+    lua_l_register_bytes(&mut *l, Some(b"utf8"), &FUNCS);
 
     // UTF8PATT = "[\0-\x7F\xC2-\xF4][\x80-\xBF]*" — contains an embedded NUL, so a
     // byte slice (not a C string literal). 14 bytes, pushed via lua_pushlstring.

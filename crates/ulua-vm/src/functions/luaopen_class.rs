@@ -19,7 +19,7 @@ static CLASS_LIB: [LuaLReg; 2] = [
 /// 须在受保护帧内由 C 侧以合法 `LuaState*` 调入；`CLASS_LIB` 为编译期静态表。cpp `lclasslib.cpp:63`。
 pub(crate) unsafe fn luaopen_class(l: *mut LuaState) -> i32 {
   unsafe {
-    lua_l_register_bytes(l, Some(b"class"), &CLASS_LIB);
+    lua_l_register_bytes(&mut *l, Some(b"class"), &CLASS_LIB);
     1
   }
 }
