@@ -1,5 +1,5 @@
 use crate::{
-  functions::{lua_h_getstr::lua_h_getstr, newkey::newkey},
+  functions::{index_chain_cache::index_chain_write, lua_h_getstr::lua_h_getstr, newkey::newkey},
   macros::{
     invalidate_t_mcache::invalidate_tmcache, lua_o_nilobject::LUA_O_NILOBJECT, setsvalue::setsvalue,
   },
@@ -26,6 +26,11 @@ use crate::{
 /// cpp VM/src/ltable.cpp:1275
 pub unsafe fn lua_h_setstr(l: *mut LuaState, t: *mut LuaTable, key: *mut tstring) -> *mut TValue {
   unsafe {
+    // 字符串键写咽喉：活键复用槽（值将由调用层写，nil↔非 nil 改变 __index 链缓存
+    // 依赖的存在性）与新键建槽两条分支都失效链缓存（index_chain_cache 正确性契约；
+    // 本函数直调内部 `newkey`，不经 lua_h_newkey 的失效点，此处兜住）
+    index_chain_write(t);
+
     // B2-2a 任务B：getstr 折叠 Option<Slot> 后在边界还原哨兵裸形——本函数命中槽
     // 经 `p as *mut TValue` 出参传播（写侧跨界消费链），句柄化归 set 族 B2-2c 裁决
     let p = lua_h_getstr(&*t, key).map_or(LUA_O_NILOBJECT, |s| s.as_const_ptr());

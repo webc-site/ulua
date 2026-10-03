@@ -183,6 +183,7 @@ pub mod hashnum;
 pub mod hashpointer;
 pub mod hashvec;
 pub mod index_2_addr;
+pub mod index_chain_cache;
 pub mod initheader;
 pub mod install_lua_exception_panic_hook;
 pub mod int_64_add;
