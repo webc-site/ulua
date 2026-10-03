@@ -117,9 +117,11 @@ pub(crate) unsafe fn get_table_prop(l: &mut LuaState, prefix: &str, read: bool) 
 /// `read_ty` 还是 `write_ty`（含清空与「仅此一侧时整项移除/插入」分支）。
 ///
 /// # Safety
-/// 前置条件与 [`get_table_prop`] 相同（VM 回调契约、`prefix` 为诊断前缀）；
-/// 本函数还会经 `get_mutable_type_function_type_id` 取可变指针改写 props，
-/// 该写只经 VM 独占的 userdata 指针发生，单线程内无别名。
+/// `l` 必须是 Lua VM 在本次原生函数调用中传入、且在该调用全程有效的 `lua_State*`；
+/// 调用期间单线程独占 VM 栈与类型运行期数据；`tftt`/`tfst` 按 class-index 下转，
+/// `is_null()`/`is_none()` 分支内 `throw_type_error` 返回 `!` 不返回。本函数还经
+/// `get_mutable_type_function_type_id` 取可变指针改写 `props`，写只经本次调用独占
+/// 的 userdata 指针发生，无并存可变别名。
 pub(crate) unsafe fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: bool) -> i32 {
   // Safety: 同上；`(*self_ty).frozen` 与 props 的 get/get_mut/remove 都在
   // `tftt` 非空守卫之后，指向本次调用内存活的 userdata。
@@ -230,9 +232,10 @@ pub(crate) unsafe fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: boo
 /// 仅 `read_parent`/`write_parent` 字段随 `read` 切换）。
 ///
 /// # Safety
-/// `l` 的契约同 [`get_table_prop`]；`tfct` 按 class-index 下转，`is_null()`
+/// `l` 必须是 Lua VM 在本次原生函数调用中传入、且在该调用全程有效的 `lua_State*`；
+/// 调用期间单线程独占 VM 栈与类型运行期数据；`tfct` 按 class-index 下转，`is_null()`
 /// 分支内 `throw_type_error` 返回 `!` 不返回，其后 `read_parent`/`write_parent`
-/// 解引用合法，命中 Some 时为 arena 存活 TypeId。
+/// 解引用合法，命中 Some 时为 arena 存活 `TypeFunctionTypeId`。
 pub(crate) unsafe fn get_parent(l: &mut LuaState, read: bool) -> i32 {
   // Safety: `l` 同址重解释；`(*tfct)` 字段读取在非空守卫后，单线程串行。
   unsafe {
@@ -276,7 +279,8 @@ pub(crate) unsafe fn get_parent(l: &mut LuaState, read: bool) -> i32 {
 /// `getWriteIndexer` 共用骨架，仅消息前缀随 `prefix` 分叉）。
 ///
 /// # Safety
-/// `l` 的契约同 [`get_table_prop`]；`tftt`/`tfct` 按 class-index 下转，仅在
+/// `l` 必须是 Lua VM 在本次原生函数调用中传入、且在该调用全程有效的 `lua_State*`；
+/// 调用期间单线程独占 VM 栈与类型运行期数据；`tftt`/`tfct` 按 class-index 下转，仅在
 /// `!is_null()` 守卫分支解引用其 `indexer` 字段（借用存活至本次调用结束）；
 /// 末尾错误分支 `throw_type_error` 返回 `!` 不返回。
 pub(crate) unsafe fn get_indexer(l: &mut LuaState, prefix: &str) -> i32 {
@@ -320,7 +324,8 @@ pub(crate) unsafe fn get_indexer(l: &mut LuaState, prefix: &str) -> i32 {
 /// 字段随参数分叉，两者都是整包 push。
 ///
 /// # Safety
-/// `l` 的契约同 [`get_table_prop`]；`tfft` 按 class-index 下转，`is_null()`
+/// `l` 必须是 Lua VM 在本次原生函数调用中传入、且在该调用全程有效的 `lua_State*`；
+/// 调用期间单线程独占 VM 栈与类型运行期数据；`tfft` 按 class-index 下转，`is_null()`
 /// 分支内 `throw_type_error` 返回 `!` 不返回，其后 `arg_types`/`ret_types`
 /// 解引用合法，该类型函数数据存活于本次调用。
 pub(crate) unsafe fn get_function_pack(l: &mut LuaState, prefix: &str, params: bool) -> i32 {
