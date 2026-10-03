@@ -284,6 +284,10 @@ macro_rules! capi_shell_barrier_voidptr {
 /// 返回值原样转手」的同形壳按参数类型族单源生成，`/// # Safety` 逐参数契约与体内
 /// `// Safety:` 理由只在本模板书写一次。条目语法（每项以逗号结尾）：
 /// - `<名> state`：合法 `LuaState` 指针参数；
+/// - `<名> refstate`：`LuaState` 指针参数之引用重建变体——被调 vm 核心已收形为
+///   `&mut LuaState`：导出壳签名零变化（参数仍为 `*mut LuaState` 裸形，C-ABI 镜像红线），
+///   仅在既有 `unsafe { … }` 体内把该枚实参重建为 `&mut *<名>` 独占引用、透传调用，
+///   借用窗严格止于当次调用；契约行与 `// Safety:` 理由仍只在本模板单源书写；
 /// - `<名> voidptr`：`*mut c_void` C 侧不透明数据指针；
 /// - `<名> tvc` / `<名> tvm`：只读 / 可写 `TValue` 指针；
 /// - `<名> stkid`：`StkId` 栈槽指针；
@@ -294,6 +298,20 @@ macro_rules! capi_shell_barrier_voidptr {
 ///
 /// 导出符号名、壳函数名与参数顺序逐字不变；仅契约文本归一为模板单源。
 macro_rules! capi_shell {
+  // r16-v24 refstate 首参前瞻入口：参数表以 `<名> refstate` 领头时仅导言契约行换
+  // 「引用重建」措辞（同 v23 显式壳先例），其余 munching 与通用入口全同；置于通用
+  // 入口臂之前抢先匹配，导出符号名/函数名/参数顺序仍逐字不变。
+  ($m:ident, $sym:literal, $n:ident, [$p:ident refstate, $($rest:tt)*]) => {
+    capi_shell!(@go $m $n $sym, [
+      #[doc = concat!(
+        "# Safety\n",
+        "C ABI 导出壳（符号 `", $sym, "`），除把 `", stringify!($p), "` 在本帧重建为独占引用",
+        "（`&mut *", stringify!($p), "`）外，仅按声明顺序逐参数透传至 `::ulua_vm::functions::",
+        stringify!($m), "::", stringify!($n),
+        "`，零逻辑，本帧不解引用其余任何指针。调用方须保证："
+      )]
+    ], [], [], [], [], $p refstate, $($rest)*);
+  };
   ($m:ident, $sym:literal, $n:ident, [ $($params:tt)* ]) => {
     capi_shell!(@go $m $n $sym, [
       #[doc = concat!(
@@ -302,179 +320,202 @@ macro_rules! capi_shell {
         stringify!($m), "::", stringify!($n),
         "`，零逻辑，本帧不解引用任何指针。调用方须保证："
       )]
-    ], [], [], [], $($params)*);
+    ], [], [], [], [], $($params)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident state, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p),
         "`：指向由本 VM 创建的合法 `LuaState`，非空、对齐，整个调用期间存活，且与对该状态的其它访问单线程驱动（不得跨 OS 线程并发）；")]],
       [$($s)* $p: *mut ::ulua_vm::records::lua_state::LuaState,],
-      [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  // r16-v24 refstate：签名仍收裸形（C-ABI 镜像红线），仅调用点实参换为 `&mut *$p`
+  // 一次就地重建（落在终止臂既有 `unsafe { … }` 体内、借用窗止于当次调用），并以
+  // `@refstate` 旗标路由到引用重建终止臂（体内 `// Safety:` 理由单源随形）。
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
+      $p:ident refstate, $($rest:tt)*) => {
+    capi_shell!(@go $m $n $sym,
+      [$($d)* #[doc = concat!("- `", stringify!($p),
+        "`：指向由本 VM 创建的合法 `LuaState`，非空、对齐，整个调用期间存活，且与对该状态的其它访问单线程驱动（不得跨 OS 线程并发）——引用重建前提；")]],
+      [$($s)* $p: *mut ::ulua_vm::records::lua_state::LuaState,],
+      [$($c)* &mut *$p,], [$($r)*], [$($b)* @refstate], $($rest)*);
+  };
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident voidptr, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p),
         "`（`*mut c_void`）：C 侧不透明数据指针（userdata/缓冲/ud），可为 null；非 null 时对齐且调用期间存活；")]],
       [$($s)* $p: *mut ::core::ffi::c_void,],
-      [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident tvc, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p),
         "`（`*const TValue`）：指向合法、地址稳定（栈槽或被 GC 持有）的 `TValue`，调用期间只读存活；")]],
       [$($s)* $p: *const ::ulua_vm::type_aliases::t_value::TValue,],
-      [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident tvm, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p),
         "`（`*mut TValue`）：指向合法、地址稳定（栈槽或被 GC 持有）的 `TValue`，调用期间可写存活；")]],
       [$($s)* $p: *mut ::ulua_vm::type_aliases::t_value::TValue,],
-      [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident stkid, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p),
         "`（`StkId`）：合法栈槽指针（`*mut TValue` 别名），指向调用对应栈帧范围内的槽位，调用期间不迁移；")]],
       [$($s)* $p: ::ulua_vm::type_aliases::stk_id::StkId,],
-      [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident cstr, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p),
         "`（`*const c_char`）：指向 NUL 结尾的只读串缓冲（或按被调契约允许 null），对齐且在调用期间存活；")]],
       [$($s)* $p: *const ::core::ffi::c_char,],
-      [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
   // c_int 与 TMS 形参以裸名传入（调用点不写绝对路径，全路径由宏内给出），置于通用臂之前
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident val c_int, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p),
         "`：值型参数（栈索引/标量），其合法性按 Lua/C API 约定由调用方给出，无指针前提；")]],
-      [$($s)* $p: ::core::ffi::c_int,], [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($s)* $p: ::core::ffi::c_int,], [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident val TMS, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p),
         "`：值型参数（栈索引/标量），其合法性按 Lua/C API 约定由调用方给出，无指针前提；")]],
-      [$($s)* $p: ::ulua_vm::enums::tms::TMS,], [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($s)* $p: ::ulua_vm::enums::tms::TMS,], [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident val $t:ty, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p),
         "`：值型参数（栈索引/标量），其合法性按 Lua/C API 约定由调用方给出，无指针前提；")]],
-      [$($s)* $p: $t,], [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($s)* $p: $t,], [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
   // 特殊指针参数以裸名传入（全路径由宏内给出），置于通用 ptr 臂之前
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident ptr [*mut c_char] $doc:literal, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p), "`", $doc)]],
-      [$($s)* $p: *mut ::core::ffi::c_char,], [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($s)* $p: *mut ::core::ffi::c_char,], [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident ptr [*const *const c_char] $doc:literal, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p), "`", $doc)]],
-      [$($s)* $p: *const *const ::core::ffi::c_char,], [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($s)* $p: *const *const ::core::ffi::c_char,], [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident ptr [*mut *mut c_void] $doc:literal, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p), "`", $doc)]],
-      [$($s)* $p: *mut *mut ::core::ffi::c_void,], [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($s)* $p: *mut *mut ::core::ffi::c_void,], [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident ptr [*mut LuauClass] $doc:literal, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p), "`", $doc)]],
-      [$($s)* $p: *mut ::ulua_vm::records::luau_class::LuauClass,], [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($s)* $p: *mut ::ulua_vm::records::luau_class::LuauClass,], [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident ptr [*mut Closure] $doc:literal, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p), "`", $doc)]],
-      [$($s)* $p: *mut ::ulua_vm::records::closure::Closure,], [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($s)* $p: *mut ::ulua_vm::records::closure::Closure,], [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident ptr [*mut Proto] $doc:literal, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p), "`", $doc)]],
-      [$($s)* $p: *mut ::ulua_vm::records::proto::Proto,], [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($s)* $p: *mut ::ulua_vm::records::proto::Proto,], [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident ptr [*mut LuaLStrbuf] $doc:literal, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p), "`", $doc)]],
-      [$($s)* $p: *mut ::ulua_vm::records::lua_l_strbuf::LuaLStrbuf,], [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($s)* $p: *mut ::ulua_vm::records::lua_l_strbuf::LuaLStrbuf,], [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident ptr [Pfunc] $doc:literal, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p), "`", $doc)]],
-      [$($s)* $p: ::ulua_vm::type_aliases::pfunc::Pfunc,], [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($s)* $p: ::ulua_vm::type_aliases::pfunc::Pfunc,], [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       $p:ident ptr [$t:ty] $doc:literal, $($rest:tt)*) => {
     capi_shell!(@go $m $n $sym,
       [$($d)* #[doc = concat!("- `", stringify!($p), "`", $doc)]],
-      [$($s)* $p: $t,], [$($c)* $p,], [$($r)*], $($rest)*);
+      [$($s)* $p: $t,], [$($c)* $p,], [$($r)*], [$($b)*], $($rest)*);
   };
   // 返回值以裸名传入（全路径由宏内给出），置于通用 => $rt:ty 臂之前
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [], [$($b:tt)*],
       => c_int, $($rest:tt)*) => {
-    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> ::core::ffi::c_int], $($rest)*);
+    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> ::core::ffi::c_int], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [], [$($b:tt)*],
       => *const c_char, $($rest:tt)*) => {
-    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *const ::core::ffi::c_char], $($rest)*);
+    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *const ::core::ffi::c_char], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [], [$($b:tt)*],
       => *mut c_char, $($rest:tt)*) => {
-    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *mut ::core::ffi::c_char], $($rest)*);
+    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *mut ::core::ffi::c_char], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [], [$($b:tt)*],
       => *mut c_void, $($rest:tt)*) => {
-    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *mut ::core::ffi::c_void], $($rest)*);
+    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *mut ::core::ffi::c_void], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [], [$($b:tt)*],
       => *const c_void, $($rest:tt)*) => {
-    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *const ::core::ffi::c_void], $($rest)*);
+    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *const ::core::ffi::c_void], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [], [$($b:tt)*],
       => *const TValue, $($rest:tt)*) => {
-    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *const ::ulua_vm::type_aliases::t_value::TValue], $($rest)*);
+    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *const ::ulua_vm::type_aliases::t_value::TValue], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [], [$($b:tt)*],
       => *mut TValue, $($rest:tt)*) => {
-    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *mut ::ulua_vm::type_aliases::t_value::TValue], $($rest)*);
+    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *mut ::ulua_vm::type_aliases::t_value::TValue], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [], [$($b:tt)*],
       => *mut Udata, $($rest:tt)*) => {
-    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *mut ::ulua_vm::records::udata::Udata], $($rest)*);
+    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *mut ::ulua_vm::records::udata::Udata], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [], [$($b:tt)*],
       => *mut CallInfo, $($rest:tt)*) => {
-    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *mut ::ulua_vm::records::call_info::CallInfo], $($rest)*);
+    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> *mut ::ulua_vm::records::call_info::CallInfo], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [], [$($b:tt)*],
       => $rt:ty, $($rest:tt)*) => {
-    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> $rt], $($rest)*);
+    capi_shell!(@go $m $n $sym, [$($d)*], [$($s)*], [$($c)*], [-> $rt], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],
       @ret $doc:literal, $($rest:tt)*) => {
-    capi_shell!(@go $m $n $sym, [$($d)* #[doc = $doc]], [$($s)*], [$($c)*], [$($r)*], $($rest)*);
+    capi_shell!(@go $m $n $sym, [$($d)* #[doc = $doc]], [$($s)*], [$($c)*], [$($r)*], [$($b)*], $($rest)*);
   };
-  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*],) => {
+  // r16-v24 refstate 专属终止臂：`@refstate` 旗标（由 refstate 参数臂置入）命中时，
+  // 体内 `// Safety:` 理由行按引用重建语义单源给出；展开的签名/调用形态与其余透传
+  // 臂一致，仅注释措辞随形。既有壳（旗标恒空）不匹配本臂，逐字节落回下方通用终止臂。
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [@refstate],) => {
+    $($d)*
+    #[doc = "- 其余安全前置条件与被调函数的 `# Safety` 契约一致。"]
+    #[unsafe(export_name = $sym)]
+    pub unsafe extern "C-unwind" fn $n($($s)*) $($r)* {
+      // Safety: C ABI 导出壳，由 C 宿主按 Lua/C API 约定调用：各参数前提见上方契约，均由调用方保证。被调 vm 核心已前移为 `&mut LuaState` 引用形接收者，本帧把 `l` 重建为独占引用（`&mut *l`，借用窗止于当次调用），除此之外仅按声明顺序透传其余参数、不解引用其余任何指针，不跨调用持有该引用；参数合法性前提即该实现 /// # Safety 所列契约。
+      unsafe { ::ulua_vm::functions::$m::$n($($c)*) }
+    }
+  };
+  (@go $m:ident $n:ident $sym:literal, [$($d:tt)*], [$($s:tt)*], [$($c:tt)*], [$($r:tt)*], [$($b:tt)*],) => {
     $($d)*
     #[doc = "- 其余安全前置条件与被调函数的 `# Safety` 契约一致。"]
     #[unsafe(export_name = $sym)]
