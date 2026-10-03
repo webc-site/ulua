@@ -1,6 +1,6 @@
 //! vm 侧已前移为可变引用（`&mut *l`）接收者（r4 vm 索引族），无法再由 `functions/shells.rs` 中
 //! 透传裸指针的共用宏 `capi_shell_l_i_i_cint!` 直呼（宏体语义不得改，其余同形壳零行为变化），故本壳
-//! 从宏模板退役、写显式 `extern "C-unwind"` 一行调用（`lua_gettop.rs` 先例）：唯一差异
+//! 从宏模板退役、写显式 `extern "C-unwind"` 一行调用（`lua_status.rs` 先例）：唯一差异
 //! 是在本帧把 `l` 重建为可变引用（`&mut *l`）后转调。
 use core::ffi::c_int;
 

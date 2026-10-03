@@ -2,13 +2,17 @@
 //! 由 `functions/` 下各壳文件以一次宏调用实例化；`functions/mod.rs` 仅保留模块声明注册表。
 //! 每族宏的 `# Safety` 契约与 `// Safety:` 理由只在本文件书写一次，成员文件不得复述契约文本。
 
-/// 单参 `(l) -> c_int` 通用 C ABI 导出壳模板：现 55 枚同形壳单源生成（54 枚裸透传 + 1 枚
-/// `@ref` 引用重建变体），与 `lua_v_doarithimpl.rs` 的 `arith_tm_exports!` 先例同构
-/// （lua_b_* 族余 15 壳与 lua_gettop/lua_status/lua_isthreadreset/lua_singlestep/
-/// lua_c_allocationrate/lua_encodepointer/lua_g_hasnative/lua_g_onbreak/lua_l_buffinit/
-/// lua_pushinteger_64/lua_setthreaddata/lua_stackdepth/lua_a_pushvalue/lua_isyieldable
-/// 已随 vm 侧接收者前移退役为显式壳，见 `functions/lua_status.rs` 先例；其中 lua_b_inext
-/// 已由本文件 `@ref` 臂于 r16-v32 复归宏模板）。与手写逐壳的差异仅在文本层：
+/// 单参 `(l) -> c_int` 通用 C ABI 导出壳模板：现 72 枚同形壳单源生成（54 枚裸透传 +
+/// 15 枚 `@ref` 独占引用重建变体 + 3 枚 `@refshared` 只读引用重建变体），与
+/// `lua_v_doarithimpl.rs` 的 `arith_tm_exports!` 先例同构
+/// （退役为显式壳的同形成员现仅余 `lua_status.rs`（本族先例本体，刻意不翻臂以免全仓十余处
+/// 「见 `lua_status.rs` 先例」引注失效）与 `lua_stackdepth.rs`（头部点名 `capi_shell!` 族，
+/// 契约另含 `ci`/`base_ci` 帧差前提）；lua_b_* 族 15 壳与 lua_gettop/lua_isthreadreset/
+/// lua_isyieldable 已分别由 `@ref`（r16-v32 一枚、r16-v34 十四枚）与 `@refshared`（本票）臂
+/// 复归宏模板；lua_singlestep/lua_c_allocationrate/lua_encodepointer/lua_g_hasnative/
+/// lua_g_onbreak/lua_l_buffinit/lua_pushinteger_64/lua_setthreaddata/lua_a_pushvalue 本就
+/// 非本族形（返回型或参数目不同），见 `functions/lua_status.rs` 先例）。与手写逐壳的差异仅在
+/// 文本层：
 /// 透传目标在 doc 契约中以 `ulua_vm::functions::` 全路径书写；体内
 /// `// Safety:` 理由注释转通用表述。导出符号名、签名与 rustdoc 逐参数契约语义与
 /// 逐字节手写版一致。
@@ -19,6 +23,15 @@
 /// `&mut *l` 独占引用，借用窗严格止于当次调用。该形与 `capi_shell!` 的 `refstate`
 /// 参数类型臂（r16-v24）、`lua_lib_fn!` 的 `@ref` 标记位同判例。本族恰一枚参数、
 /// 恒名 `l`，故无 `capi_shell!` 那三条 refstate 硬约束之必要。
+///
+/// r16-v36 只读引用重建变体：被调 vm 核心收形为**共享** `&LuaState` 时，条目尾置
+/// `@refshared`（`capi_shell_l_cint!(m, n @refshared)`）落下方第三臂——体内发 `&*l`
+/// 而**非** `&mut *l`。二臂不可互换：给只读核心 mint 独占引用，等于把契约里不存在的写权限
+/// 交给被调面（在锚定形门面族已把窗口收成 `&mut` 借用的当下尤其为非），而 `&*l` 与核心
+/// `&LuaState` 形参逐字同形、借用窗同样止于当次调用。选臂判据只看被调核心签名的接收者形，
+/// 不看本壳导出形。
+///
+/// 相邻的 `capi_libfn_shell_l_cint!` 族不备本臂，判据见该族头注。
 macro_rules! capi_shell_l_cint {
   ($m:ident, $n:ident) => {
     #[doc = concat!(
@@ -50,6 +63,21 @@ macro_rules! capi_shell_l_cint {
       unsafe { ::ulua_vm::functions::$m::$n(&mut *l) }
     }
   };
+  ($m:ident, $n:ident @refshared) => {
+    #[doc = concat!(
+      "# Safety\n",
+      "C ABI 导出壳（符号 `ulua_", stringify!($n), "`），除把 `l` 在本帧重建为只读共享引用（`&*l`）外，仅逐参数透传至 `ulua_vm::functions::", stringify!($m), "::", stringify!($n), "(&*l)`，零逻辑，本帧不解引用其余任何指针、不 mint 独占引用。调用方须保证：\n",
+      "- `l`：指向由本 VM 创建的合法 `LuaState`，非空、对齐，整个调用期间存活，且与对该状态的其它访问单线程驱动（不得跨 OS 线程并发）——引用重建前提；\n",
+      "- 其余安全前置条件与被调函数的 `# Safety` 契约一致。"
+    )]
+    #[unsafe(export_name = concat!("ulua_", stringify!($n)))]
+    pub unsafe extern "C-unwind" fn $n(
+      l: *mut ::ulua_vm::records::lua_state::LuaState,
+    ) -> ::core::ffi::c_int {
+      // Safety: C ABI 导出壳，由 C 宿主按 Lua/C API 约定调用：l 为有效 LuaState*。被调 vm 核心已前移为 `&LuaState` 只读引用形接收者，本帧把 `l` 重建为共享引用（`&*l`，借用窗止于当次调用）——刻意不 mint `&mut`，被调契约仅要求只读访问，扩成独占引用等于交出契约里不存在的写权限；除此之外不解引用其余任何指针、不跨调用持有该引用，故不存在越窗别名/悬挂；参数合法性前提即该实现 /// # Safety 所列契约。
+      unsafe { ::ulua_vm::functions::$m::$n(&*l) }
+    }
+  };
 }
 
 /// 同上 `(l) -> c_int` 导出壳模板之库函数变体（现 55 枚：53 枚裸透传 + 2 枚 `@ref`
@@ -57,6 +85,9 @@ macro_rules! capi_shell_l_cint {
 /// 已由 `@ref` 臂于 r16-v32 复归宏模板）：唯一差异是体内
 /// `// Safety:` 理由注释按 b26 校准保留「l 由 Lua VM 按库函数/闭包约定传入」的调用来源表述。
 /// r16-v32 同备 `@ref` 引用重建变体臂，形制与措辞随上条所述。
+/// 本族刻意不备 `@refshared` 臂：唯一只读形成员即 `lua_status.rs`（本仓先例本体），翻臂会使其余
+/// 十余处「见 `lua_status.rs` 先例」引注失效；无消费者的臂既未经展开检验（未命中的宏臂不参与类型
+/// 检查），又属死文本，故不开。
 macro_rules! capi_libfn_shell_l_cint {
   ($m:ident, $n:ident) => {
     #[doc = concat!(

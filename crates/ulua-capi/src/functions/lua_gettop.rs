@@ -1,20 +1,5 @@
-//! vm 侧已前移为只读引用（`&*l`）接收者（r3 vm 门面族），无法再由 `functions/shells.rs` 中
-//! 透传裸指针的共用宏 `capi_shell_l_cint!` 直呼（宏体语义不得改，其余同形壳零行为变化），故本壳
-//! 从宏模板退役、写显式 `extern "C-unwind"` 一行调用（`lua_status.rs` 先例）：唯一差异
-//! 是在本帧把 `l` 重建为只读引用（`&*l`）后转调。
-use core::ffi::c_int;
-
-use ulua_vm::{functions::lua_gettop, records::lua_state::LuaState};
-
-/// # Safety
-/// C ABI 导出壳（符号 `ulua_lua_gettop`），除把 `l` 在本帧重建为只读引用（`&*l`）外，仅透传至
-/// `ulua_vm::functions::lua_gettop::lua_gettop`，零业务逻辑。调用方须保证：
-/// - `l`：指向由本 VM 创建的合法 `LuaState`，非空、对齐，整个调用期间存活，且与对该状态的
-///   其它访问单线程驱动（不得跨 OS 线程并发）——引用重建前提；
-/// - 其余安全前置条件与被调函数的 `# Safety` 契约一致。
-#[unsafe(export_name = "ulua_lua_gettop")]
-pub unsafe extern "C-unwind" fn lua_gettop(l: *mut LuaState) -> c_int {
-  // Safety: 契约声明 `l` 为整个调用期间存活的合法 `LuaState`；本帧引用重建
-  // 即时结束借用窗口。
-  unsafe { lua_gettop::lua_gettop(&*l) }
-}
+//! 本文件对应 `ulua_lua_gettop` 导出符号（源：ulua-vm/src/functions/lua_gettop.rs）。
+//! 导出壳为 `functions/shells.rs` 中模板宏 `capi_shell_l_cint!` 的 `@refshared` 只读引用重建
+//! 变体臂一次调用（r16-v36 地基票：本壳曾因 vm 核心前移为 `&LuaState` 只读接收者而退役为显式壳，
+//! 见 `lua_status.rs` 先例；该缺位已由 `@refshared` 臂补足，故复归宏模板单源），壳契约见宏模板。
+capi_shell_l_cint!(lua_gettop, lua_gettop @refshared);
