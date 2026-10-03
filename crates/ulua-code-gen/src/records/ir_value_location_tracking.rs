@@ -258,6 +258,7 @@ impl IrValueLocationTracking {
       | IrCmd::FINDUPVAL
       | IrCmd::CheckTag
       | IrCmd::CheckTruthy
+      | IrCmd::CheckStackRoom
       | IrCmd::AddNum
       | IrCmd::SubNum
       | IrCmd::MulNum

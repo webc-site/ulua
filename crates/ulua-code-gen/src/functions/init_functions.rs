@@ -3,7 +3,8 @@ use ulua_vm::macros::{dummynode::DUMMYNODE, luau_f_table::LUAU_F_TABLE};
 use crate::records::{
   native_context::NativeContext,
   native_fn::{
-    CALL_EPILOG_C, CALL_FALLBACK, CALL_PROLOG, EXECUTE_DUPCLOSURE, EXECUTE_FORGPREP,
+    CALL_EPILOG_C, CALL_FALLBACK, CALL_OBS_SITE_HOOK, CALL_PROLOG, EXECUTE_DUPCLOSURE,
+    EXECUTE_FORGPREP,
     EXECUTE_GETGLOBAL, EXECUTE_GETTABLEKS, EXECUTE_GETVARARGSCONST, EXECUTE_GETVARARGSMULT_RET,
     EXECUTE_NAMECALL, EXECUTE_PREPVARARGS, EXECUTE_SETGLOBAL, EXECUTE_SETLIST, EXECUTE_SETTABLEKS,
     FORG_LOOP_NODE_ITER, FORG_LOOP_NON_TABLE_FALLBACK, FORG_LOOP_TABLE_ITER,
@@ -88,6 +89,7 @@ pub fn init_functions(context: &mut NativeContext) {
   context.forg_loop_non_table_fallback = Some(FORG_LOOP_NON_TABLE_FALLBACK);
   context.forg_prep_xnext_fallback = Some(FORG_PREP_XNEXT_FALLBACK);
   context.call_prolog = Some(CALL_PROLOG);
+  context.call_obs_hook = Some(CALL_OBS_SITE_HOOK);
   context.call_epilog_c = Some(CALL_EPILOG_C);
   context.new_userdata = Some(NEW_USERDATA);
   context.get_import = Some(GET_IMPORT);

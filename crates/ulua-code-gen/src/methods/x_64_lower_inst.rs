@@ -88,7 +88,7 @@ const fn tv_slot(size: SizeX64, base: RegisterX64, ri: i32, off: i32) -> Operand
   )
 }
 use crate::functions::{
-  assembly::x_64::{byte_reg, dword_reg, qword_reg},
+  assembly::x_64::{byte_reg, dword_reg, mem, qword_reg},
   bit_utils::get_float_bits,
   call_arith_helper::call_arith_helper,
   call_barrier_object::call_barrier_object,
@@ -3963,6 +3963,35 @@ impl IrLoweringX64 {
         let hoist_223 = self.mem_reg_tag_op(inst.op(0));
         self.emit_cmp(hoist_223, OperandX64::imm((self.tag_op(inst.op(1))) as i32));
         self.jump_or_abort_on_undef_condition(ConditionX64::NotEqual, inst.op(2), index, next);
+      }
+      IrCmd::CheckStackRoom => {
+        // JIT call inlining 守卫：base + needed ≤ l->stack_last 才走内联体；
+        // 越界落 fallback（常规 CALL 的 call_prolog 自带 checkstackfornewci 扩栈）。
+        // needed 以槽数编码（含函数值槽与 callee 全部工作槽），此处换算字节。
+        let slots = self.int_op(inst.op(0));
+        let tmp = self.alloc_scoped_reg(SizeX64::Qword);
+        {
+          let build = self.build_mut();
+          build.mov(OperandX64::reg(tmp.reg), OperandX64::reg(R_BASE));
+          build.add(
+            OperandX64::reg(tmp.reg),
+            OperandX64::imm(slots * (size_of::<TValue>() as i32)),
+          );
+          build.cmp(
+            OperandX64::reg(tmp.reg),
+            mem(
+              SizeX64::Qword,
+              R_STATE,
+              (offset_of!(LuaState, stack_last) as i32),
+            ),
+          );
+        }
+        self.jump_or_abort_on_undef_condition(
+          ConditionX64::AboveEqual,
+          inst.op(1),
+          index,
+          next,
+        );
       }
       IrCmd::CheckTruthy => {
         {

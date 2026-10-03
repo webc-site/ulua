@@ -2852,6 +2852,29 @@ impl IrLoweringA64 {
           self.finalize_target_label(inst.op(2), index, &mut fresh);
         }
       }
+      IrCmd::CheckStackRoom => {
+        // JIT call inlining 守卫（x64 同款语义）：base + needed*16 ≤ l->stack_last
+        // 才走内联体；越界落 fallback（常规 CALL 自带 checkstackfornewci 扩栈）。
+        // needed 字节数可能超 add 立即数窗口，经 movz 装临时寄存器再平加。
+        {
+          let mut fresh = Label::default();
+          let fail = self.get_target_label(inst.op(1), index, &mut fresh);
+
+          let slots = self.int_op(inst.op(0));
+          let bytes = (slots * (size_of::<TValue>() as i32)) as u16;
+          self.build_mut().movz(X5, bytes, 0);
+          self.build_mut().add_rrr_i32(X5, R_BASE, X5, 0);
+          self
+            .build_mut()
+            .ldr(X6, mem(R_STATE, (offset_of!(LuaState, stack_last) as i32)));
+          self.build_mut().cmp_rr(X5, X6);
+          self.with_target_label(fail, |s, l| {
+            s.build_mut().b_cond(ConditionA64::CarrySet, l)
+          });
+
+          self.finalize_target_label(inst.op(1), index, &mut fresh);
+        }
+      }
       IrCmd::CheckTruthy => {
         {
           // 无需检查 boolean 值的常量 tag 本应已被常量折叠移除
@@ -3727,6 +3750,41 @@ impl IrLoweringA64 {
           self.build_mut().mov_rr(W5, W5); // W 写回零扩到 X5 同寄存器高位
           self.build_mut().cmp_rr(X4, X5);
           self.emit_bcond(ConditionA64::LessEqual, &mut slow);
+
+          // JIT call inlining 第 2 阶段：观测插桩（编译期 fflag 门控；观测开启时
+          // 每次快路 CALL 恰付一次 blr，预算耗尽后 NativeContext.call_obs_hook
+          // 被观测核置空，此处回落为指针读 + 分支的常态短路）。blr 现场为
+          // caller-saved，提交段依赖的 X1/X2/X5/X6/X9/X10 在调用后重取；X4 提交
+          // 段本就从 L->ci 重读、X7 提交段重算，不受影响。X10 重取顺带拿到观测
+          // 触发暖重编译后的最新 exectarget（callee 在 caller 树内时会换靶）。
+          if ulua_common::fflag::LUAU_JIT_CALL_INLINE_OBS.get() {
+            self
+              .build_mut()
+              .ldr(X5, native_ctx(offset_of!(NativeContext, call_obs_hook)));
+            let mut skip_obs = Label::default();
+            self.build_mut().cbz(X5, &mut skip_obs);
+            self.build_mut().mov_rr(X2, X1);
+            self.build_mut().mov(X0, R_STATE);
+            self.build_mut().blr(X5);
+            self.build_mut().set_label_label(&mut skip_obs);
+
+            self.emit_vm_reg_addr(X1, inst.op(0));
+            self.build_mut().ldr(X6, mem(X1, K_TVALUE_VALUE_GC_OFFSET));
+            self.build_mut().ldr(X9, mem(X6, K_CLOSURE_L_P_OFFSET));
+            self
+              .build_mut()
+              .ldr(X10, mem(X9, (offset_of!(Proto, exectarget) as i32)));
+            self.emit_add(
+              X2,
+              X1,
+              ((1 + nparams) * (size_of::<TValue>() as i32)) as u16,
+            );
+            self
+              .build_mut()
+              .ldrb(W5, mem(X6, (offset_of!(Closure, stacksize) as i32)));
+            self.build_mut().lsl_rr_u8(W5, W5, K_TVALUE_SIZE_LOG2 as u8);
+            self.build_mut().mov_rr(W5, W5); // W 写回零扩到 X5 同寄存器高位
+          }
 
           // 提交段：L->ci 前移 + 建帧六写（同 call_fallback 建帧序）。
           // X4 已被栈守卫复用为余量差，此处按 L->ci 重取

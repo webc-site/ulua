@@ -1,37 +1,53 @@
-//! JIT 用户函数 call inlining（第 1 阶段最小可证子集：直通内联）。
+//! JIT 用户函数 call inlining（第 2 阶段：静态直通 + 运行时证据门）。
 //!
-//! 判据（翻译期静态可判，任一不满足即整体放弃、走常规 CALL 发射）：
-//! 1. callee 槽寄存器在本 proto 字节码内有唯一静态定义点，定义链仅由
-//!    `NEWCLOSURE`/`DUPCLOSURE`（可经 ≤2 跳 `MOVE`）到达——callee proto
-//!    编译期可辨；`GETUPVAL`/`GETTABLEKS`/`NAMECALL` 等运行时形态一律不做。
-//! 2. callee 非变参、`numparams == 实参数`、指令数 ≤ 100、全函数仅末尾一条
-//!    `RETURN` 且返回个数 == caller 期望、无回边（禁止循环体）。
-//! 3. 体指令全部落在白名单（纯数据搬运/常量加载/数值算术/跳转）；试探翻译
-//!    产物中不含 Fallback 块、慢路命令、`VmExit`/`VmConst`/`VmUpvalue`
-//!    操作数——零慢路面，错误路径不可触达。
-//! 4. 栈深：`ra + callee.maxstacksize ≤ caller.maxstacksize`。体寄存器按
+//! 判据（翻译期可判，任一不满足即整体放弃、走常规 CALL 发射）：
+//! 1. callee 槽身份二选一：
+//!    a. 静态：callee 槽寄存器在本 proto 字节码内有唯一静态定义点，定义链仅由
+//!       `NEWCLOSURE`/`DUPCLOSURE`（可经 ≤2 跳 `MOVE`）到达——callee proto
+//!       编译期可辨，直通无守卫（第 1 阶段形态）；
+//!    b. 观测（第 2 阶段）：静态链不可辨（GETUPVAL/GETTABLEKS/NAMECALL 喂 CALL）
+//!       时，取暖重编译注入的 CALL 站点观测提示（`call_hints`，见 ulua-vm
+//!       call_obs）——运行时闭包的 proto 恒定证据替代「常量 proto 槽」判据，
+//!       发射 `JumpEqTag`+`JumpCmpProtoid`（funid 立即数，装载期全局唯一）守卫，
+//!       不恒等落常规 CALL 回退块。
+//! 2. callee 非变参、`numparams == 实参数`、指令数 ≤ 100、无回边（禁止循环体）。
+//! 3. 体白名单：纯数据搬运/常量加载/数值算术/跳转；试探翻译产物经 Fallback 块
+//!    折叠（见下）后不含慢路命令、`VmConst`/`VmUpvalue` 操作数；`VmExit` 出口
+//!    只允许折叠产出的 `call_pc` 出口。
+//! 4. 返回点：每条 `RETURN` 的个数 == caller 期望（逐 RETURN 对齐），允许多
+//!    RETURN（第 2 阶段推广，见 emit_inline 的折叠循环）。
+//! 5. 栈深：`ra + callee.maxstacksize ≤ caller.maxstacksize`。体寄存器按
 //!    `callee reg k ↔ caller reg ra+k` 直通映射，与真实帧布局逐位一致；
 //!    CALL 语义本就允许覆写 `ra+1..` 槽位，内联不扩大覆写面。
 //!
-//! 语义面：内联体零分配、零屏障、零慢路（GC barrier/safepoint 分布不变）；
-//! 体 `INTERRUPT` 的 pcpos 重写为调用点，中断后解释器自 CALL 原位重放整次
-//! 调用，与未内联路径逐值一致。
+//! 语义面（三处出口都收敛到「解释器自 CALL 原位重放整次调用」）：
+//! - 体 `INTERRUPT` 的 pcpos 重写为调用点（第 1 阶段已验证重放语义）；
+//! - Fallback 块折叠：指向 Fallback 块的 Block 操作数全部改写为
+//!   `VmExit(call_pc)`——内联体只保留快路，类型/形状不符即退出解释器，由 CALL
+//!   原位重放承接元方法等慢路（重放语义与 INTERRUPT 同款）；
+//! - 观测路径守卫失败：跳常规 CALL 回退块（SetSavedpc+CALL），与未内联发射逐位一致。
 
 use core::ptr::null_mut;
 
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
+  fflag,
   functions::{get_jump_target::get_jump_target, get_op_length::get_op_length},
   macros::luau_insn_ops::{luau_insn_a, luau_insn_b, luau_insn_d, luau_insn_op},
   records::small_vector::SmallVector,
 };
-use ulua_vm::records::{closure::Closure, proto::Proto};
+use ulua_vm::{
+  enums::lua_type::LuaType,
+  records::{closure::Closure, proto::Proto},
+};
 
 use crate::{
   enums::{ir_block_kind::IrBlockKind, ir_cmd::IrCmd, ir_op_kind::IrOpKind},
   functions::{
-    ir::is_pseudo,
-    proto_view::{child_proto, child_proto_ref, with_constant_value, with_proto},
+    ir::{add_use, is_pseudo},
+    proto_view::{
+      child_proto, child_proto_ref, constant_number, with_constant_value, with_proto,
+    },
     proto_views::code,
   },
   macros::codegen_assert::CODEGEN_ASSERT,
@@ -42,7 +58,7 @@ use crate::{
   type_aliases::ir::{Instruction, IrOps},
 };
 
-/// callee 指令数上限（第 1 阶段保守线）
+/// callee 指令数上限（保守线）
 const K_MAX_INLINE_INSNS: usize = 100;
 /// `MOVE` 定义链最大跳数
 const K_MAX_DEF_CHAIN: usize = 2;
@@ -58,6 +74,14 @@ enum RegDef {
   Move(u8),
 }
 
+/// 内联解析结果：静态 proto（直通）或观测证据（守卫）。
+enum Callee {
+  /// 编译期可辨 proto，直通无守卫。
+  Static(*mut Proto),
+  /// 观测证据：callee proto 裸址（判据用）+ funid（守卫立即数）。
+  Observed { proto: *mut Proto, funid: u32 },
+}
+
 /// 尝试把 `CALL` 站点内联展开进 caller IR；返回是否已内联（true 时调用方
 /// 跳过常规 `SetSavedpc`+`CALL` 发射）。
 pub(crate) fn try_translate_call_inline(
@@ -67,7 +91,7 @@ pub(crate) fn try_translate_call_inline(
   b_raw: u8,
   c_raw: u8,
 ) -> bool {
-  // FASTCALL fallback 区内不做（第 1 阶段保守）；multret 实参/期望返回不做
+  // FASTCALL fallback 区内不做（保守）；multret 实参/期望返回不做
   if build.active_fastcall_fallback || b_raw == 0 || c_raw == 0 {
     return false;
   }
@@ -76,35 +100,105 @@ pub(crate) fn try_translate_call_inline(
   let nresults = c_raw as i32 - 1;
   let ra = luau_insn_a(caller_code[i as usize]) as u8;
 
-  let Some(callee) = resolve_callee_proto(build, caller_code, ra, i) else {
-    return false;
+  let callee = match resolve_callee_proto(build, caller_code, ra, i) {
+    Some(proto) => Callee::Static(proto),
+    // 静态链不可辨：暖重编译注入的观测提示接棒（GETUPVAL/NAMECALL 形态）
+    None => match observed_callee(build, i) {
+      Some((proto, funid)) => Callee::Observed { proto, funid },
+      None => return false,
+    },
   };
-  if check_callee_bytecode(build, callee, nparams, nresults, ra).is_none() {
+  let callee_proto = match callee {
+    Callee::Static(proto) | Callee::Observed { proto, .. } => proto,
+  };
+  if check_callee_bytecode(
+    build,
+    callee_proto,
+    nparams,
+    nresults,
+    ra,
+    matches!(callee, Callee::Static(_)),
+  )
+  .is_none()
+  {
     return false;
   }
 
-  let Some(callee_ref) = child_proto_ref(callee) else {
-    return false;
-  };
+  let callee_ref = unsafe { &*callee_proto };
   let callee_insns = callee_ref.sizecode as usize;
 
   // 试探翻译：在独立 IrBuilder 上按既有管线构建 callee IR，任何慢路面即弃
   let hooks = build.host_hooks_ref();
   let mut trial = IrBuilder::ir_builder_ir_builder(hooks);
-  // Safety: callee 为 caller proto `p[]` 数组内存活子原型（契约同
-  // `translate_inst_new_closure`），codegen 期间 VM 持有、只读。
-  unsafe { trial.build_function_ir(callee) };
+  // Safety: callee 为 caller proto `p[]` 数组内存活子原型（静态路径契约同
+  // `translate_inst_new_closure`）或观测窗口内被 ra 槽闭包锚定的存活 proto
+  // （同步暖重编译触发，见 call_obs 模块注），codegen 期间 VM 持有、只读。
+  unsafe { trial.build_function_ir(callee_proto) };
 
-  let trial_function = trial.function;
-  if inline_ir_veto(&trial_function).is_some() {
+  let mut trial_function = trial.function;
+  // 刀 C：Fallback 块折叠——慢路出口收敛为 VmExit(call_pc)，Fallback 块就此无引用
+  fold_fallback_blocks(&mut trial_function, i);
+  if inline_ir_veto(&trial_function, i, callee_proto).is_some() {
     return false;
   }
-  emit_inline(build, &trial_function, ra, nresults, i);
+  let guard = match callee {
+    Callee::Static(_) => None,
+    Callee::Observed { funid, .. } => {
+      // CheckStackRoom 的槽界：base + (ra+1+callee.maxstack) ≤ stack_last，
+      // 恰覆盖内联体的最高寻址槽（帧映射 ra+1+k，k ≤ maxstack-1）
+      let maxstack = unsafe { (*callee_proto).maxstacksize as i32 };
+      Some((funid, ra as i32 + 1 + maxstack))
+    }
+  };
+  emit_inline(build, &trial_function, callee_proto, ra, nparams, nresults, i, guard);
   // 内联发射证据：编译期单次打印（compile-once，不进热路径）
-  eprintln!(
-    "[call-inline] hit caller_pc={i} ra={ra} nresults={nresults} callee_insns={callee_insns}"
-  );
+  match guard {
+    Some((funid, _)) => eprintln!(
+      "[call-inline] hit caller_pc={i} ra={ra} nresults={nresults} callee_insns={callee_insns} observed funid={funid}"
+    ),
+    None => eprintln!(
+      "[call-inline] hit caller_pc={i} ra={ra} nresults={nresults} callee_insns={callee_insns} static"
+    ),
+  }
   true
+}
+
+/// 观测提示查找：`call_hints` 里取本调用点 pc 的 `(callee proto 裸址, funid)`。
+/// 仅暖重编译路径有提示（首译时观测尚未发生，走常规 CALL）。
+fn observed_callee(build: &IrBuilder, call_pc: i32) -> Option<(*mut Proto, u32)> {
+  if !fflag::LUAU_JIT_CALL_INLINE_OBS.get() {
+    return None;
+  }
+  build
+    .function
+    .call_hints
+    .iter()
+    .find(|(pc, _, _)| *pc == call_pc as u32)
+    .map(|&(_, funid, proto_addr)| (proto_addr as *mut Proto, funid))
+}
+
+/// 刀 C：把 trial IR 内所有指向 Fallback 块的 Block 操作数改写为
+/// `VmExit(call_pc)`。语义：内联体只保留快路，类型/形状不符即退出解释器、由
+/// CALL 原位重放整次调用（元方法等慢路语义由重放承接，与未内联逐值一致）。
+fn fold_fallback_blocks(trial: &mut IrFunction, call_pc: i32) {
+  let fallback: Vec<u32> = trial
+    .blocks
+    .iter()
+    .enumerate()
+    .filter(|(_, b)| b.kind == IrBlockKind::Fallback)
+    .map(|(i, _)| i as u32)
+    .collect();
+  if fallback.is_empty() {
+    return;
+  }
+  let exit_op = IrOp::ir_op_ir_op_kind_u32(IrOpKind::VmExit, call_pc as u32);
+  for inst in &mut trial.instructions {
+    for op in inst.ops.as_mut_slice() {
+      if op.kind() == IrOpKind::Block && fallback.binary_search(&op.index()).is_ok() {
+        *op = exit_op;
+      }
+    }
+  }
 }
 
 /// 单定义扫描：`reg` 在整段字节码内的写点唯一且为链形态才返回定义。
@@ -122,9 +216,9 @@ fn single_def_reg(code: &[Instruction], reg: u8, exclude_pc: Option<usize>) -> O
     }
     // 命中写点：仅三种链形态可作唯一定义，其余写法直接淘汰
     let kind = match op {
-      LuauOpcode::LOP_NEWCLOSURE => RegDef::NewClosure(luau_insn_d(insn) as u32),
-      LuauOpcode::LOP_DUPCLOSURE => RegDef::DupClosure(luau_insn_d(insn) as u32),
-      LuauOpcode::LOP_MOVE => RegDef::Move(luau_insn_b(insn) as u8),
+      LuauOpcode::LopNewclosure => RegDef::NewClosure(luau_insn_d(insn) as u32),
+      LuauOpcode::LopDupclosure => RegDef::DupClosure(luau_insn_d(insn) as u32),
+      LuauOpcode::LopMove => RegDef::Move(luau_insn_b(insn) as u8),
       _ => return None,
     };
     if def.is_some() {
@@ -139,86 +233,86 @@ fn single_def_reg(code: &[Instruction], reg: u8, exclude_pc: Option<usize>) -> O
 /// 写 A 槽（判据从紧）。
 fn insn_writes_reg(op: LuauOpcode, a: u8, b: u8, reg: u8) -> bool {
   match op {
-    LuauOpcode::LOP_MOVE
-    | LuauOpcode::LOP_LOADN
-    | LuauOpcode::LOP_LOADB
-    | LuauOpcode::LOP_LOADK
-    | LuauOpcode::LOP_LOADKX
-    | LuauOpcode::LOP_ADD
-    | LuauOpcode::LOP_SUB
-    | LuauOpcode::LOP_MUL
-    | LuauOpcode::LOP_DIV
-    | LuauOpcode::LOP_IDIV
-    | LuauOpcode::LOP_MOD
-    | LuauOpcode::LOP_POW
-    | LuauOpcode::LOP_ADDK
-    | LuauOpcode::LOP_SUBK
-    | LuauOpcode::LOP_MULK
-    | LuauOpcode::LOP_DIVK
-    | LuauOpcode::LOP_IDIVK
-    | LuauOpcode::LOP_MODK
-    | LuauOpcode::LOP_POWK
-    | LuauOpcode::LOP_SUBRK
-    | LuauOpcode::LOP_DIVRK
-    | LuauOpcode::LOP_NOT
-    | LuauOpcode::LOP_MINUS
-    | LuauOpcode::LOP_LENGTH
-    | LuauOpcode::LOP_NEWTABLE
-    | LuauOpcode::LOP_DUPTABLE
-    | LuauOpcode::LOP_GETTABLE
-    | LuauOpcode::LOP_GETTABLEKS
-    | LuauOpcode::LOP_GETTABLEN
-    | LuauOpcode::LOP_GETGLOBAL
-    | LuauOpcode::LOP_GETUPVAL
-    | LuauOpcode::LOP_GETIMPORT
-    | LuauOpcode::LOP_NAMECALL
-    | LuauOpcode::LOP_NAMECALLUDATA
-    | LuauOpcode::LOP_CONCAT
-    | LuauOpcode::LOP_CALL
-    | LuauOpcode::LOP_CALLFB
-    | LuauOpcode::LOP_AND
-    | LuauOpcode::LOP_ANDK
-    | LuauOpcode::LOP_OR
-    | LuauOpcode::LOP_ORK => reg == a,
-    LuauOpcode::LOP_LOADNIL => reg >= a && reg <= a.saturating_add(b),
-    LuauOpcode::LOP_FORNPREP
-    | LuauOpcode::LOP_FORNLOOP
-    | LuauOpcode::LOP_FORGPREP
-    | LuauOpcode::LOP_FORGLOOP
-    | LuauOpcode::LOP_FORGPREP_NEXT
-    | LuauOpcode::LOP_FORGPREP_INEXT => reg >= a && reg <= a.saturating_add(2),
-    LuauOpcode::LOP_PREPVARARGS | LuauOpcode::LOP_GETVARARGS => reg >= a,
-    LuauOpcode::LOP_FASTCALL
-    | LuauOpcode::LOP_FASTCALL1
-    | LuauOpcode::LOP_FASTCALL2
-    | LuauOpcode::LOP_FASTCALL2K
-    | LuauOpcode::LOP_FASTCALL3 => reg >= a,
+    LuauOpcode::LopMove
+    | LuauOpcode::LopLoadn
+    | LuauOpcode::LopLoadb
+    | LuauOpcode::LopLoadk
+    | LuauOpcode::LopLoadkx
+    | LuauOpcode::LopAdd
+    | LuauOpcode::LopSub
+    | LuauOpcode::LopMul
+    | LuauOpcode::LopDiv
+    | LuauOpcode::LopIdiv
+    | LuauOpcode::LopMod
+    | LuauOpcode::LopPow
+    | LuauOpcode::LopAddk
+    | LuauOpcode::LopSubk
+    | LuauOpcode::LopMulk
+    | LuauOpcode::LopDivk
+    | LuauOpcode::LopIdivk
+    | LuauOpcode::LopModk
+    | LuauOpcode::LopPowk
+    | LuauOpcode::LopSubrk
+    | LuauOpcode::LopDivrk
+    | LuauOpcode::LopNot
+    | LuauOpcode::LopMinus
+    | LuauOpcode::LopLength
+    | LuauOpcode::LopNewtable
+    | LuauOpcode::LopDuptable
+    | LuauOpcode::LopGettable
+    | LuauOpcode::LopGettableks
+    | LuauOpcode::LopGettablen
+    | LuauOpcode::LopGetglobal
+    | LuauOpcode::LopGetupval
+    | LuauOpcode::LopGetimport
+    | LuauOpcode::LopNamecall
+    | LuauOpcode::LopNamecalludata
+    | LuauOpcode::LopConcat
+    | LuauOpcode::LopCall
+    | LuauOpcode::LopCallfb
+    | LuauOpcode::LopAnd
+    | LuauOpcode::LopAndk
+    | LuauOpcode::LopOr
+    | LuauOpcode::LopOrk => reg == a,
+    LuauOpcode::LopLoadnil => reg >= a && reg <= a.saturating_add(b),
+    LuauOpcode::LopFornprep
+    | LuauOpcode::LopFornloop
+    | LuauOpcode::LopForgprep
+    | LuauOpcode::LopForgloop
+    | LuauOpcode::LopForgprepNext
+    | LuauOpcode::LopForgprepInext => reg >= a && reg <= a.saturating_add(2),
+    LuauOpcode::LopPrepvarargs | LuauOpcode::LopGetvarargs => reg >= a,
+    LuauOpcode::LopFastcall
+    | LuauOpcode::LopFastcall1
+    | LuauOpcode::LopFastcall2
+    | LuauOpcode::LopFastcall2k
+    | LuauOpcode::LopFastcall3 => reg >= a,
     // 显式非写族：跳转/比较跳/表存/RETURN/杂项
-    LuauOpcode::LOP_NOP
-    | LuauOpcode::LOP_JUMP
-    | LuauOpcode::LOP_JUMPIF
-    | LuauOpcode::LOP_JUMPIFNOT
-    | LuauOpcode::LOP_JUMPIFLT
-    | LuauOpcode::LOP_JUMPIFLE
-    | LuauOpcode::LOP_JUMPIFNOTLT
-    | LuauOpcode::LOP_JUMPIFNOTLE
-    | LuauOpcode::LOP_JUMPIFEQ
-    | LuauOpcode::LOP_JUMPIFNOTEQ
-    | LuauOpcode::LOP_JUMPX
-    | LuauOpcode::LOP_JUMPXEQKNIL
-    | LuauOpcode::LOP_JUMPXEQKB
-    | LuauOpcode::LOP_JUMPXEQKN
-    | LuauOpcode::LOP_JUMPXEQKS
-    | LuauOpcode::LOP_RETURN
-    | LuauOpcode::LOP_SETTABLE
-    | LuauOpcode::LOP_SETTABLEKS
-    | LuauOpcode::LOP_SETTABLEN
-    | LuauOpcode::LOP_SETUPVAL
-    | LuauOpcode::LOP_SETGLOBAL
-    | LuauOpcode::LOP_SETLIST
-    | LuauOpcode::LOP_CLOSEUPVALS
-    | LuauOpcode::LOP_COVERAGE
-    | LuauOpcode::LOP_CAPTURE => false,
+    LuauOpcode::LopNop
+    | LuauOpcode::LopJump
+    | LuauOpcode::LopJumpif
+    | LuauOpcode::LopJumpifnot
+    | LuauOpcode::LopJumpiflt
+    | LuauOpcode::LopJumpifle
+    | LuauOpcode::LopJumpifnotlt
+    | LuauOpcode::LopJumpifnotle
+    | LuauOpcode::LopJumpifeq
+    | LuauOpcode::LopJumpifnoteq
+    | LuauOpcode::LopJumpx
+    | LuauOpcode::LopJumpxeqknil
+    | LuauOpcode::LopJumpxeqkb
+    | LuauOpcode::LopJumpxeqkn
+    | LuauOpcode::LopJumpxeqks
+    | LuauOpcode::LopReturn
+    | LuauOpcode::LopSettable
+    | LuauOpcode::LopSettableks
+    | LuauOpcode::LopSettablen
+    | LuauOpcode::LopSetupval
+    | LuauOpcode::LopSetglobal
+    | LuauOpcode::LopSetlist
+    | LuauOpcode::LopCloseupvals
+    | LuauOpcode::LopCoverage
+    | LuauOpcode::LopCapture => false,
     // 未知 opcode：保守视为写 A 槽
     _ => reg == a,
   }
@@ -275,16 +369,20 @@ fn resolve_callee_proto(
   None
 }
 
-/// callee 字节码体判据：形态受限 + 栈深合并 + 单返回点。
+/// callee 字节码体判据：形态受限 + 栈深合并 + 逐 RETURN 个数对齐。
+/// `enforce_maxstack`：静态路径（无守卫）要求映射区落在 caller 已预留栈内；
+/// 观测路径由发射守卫 CheckStackRoom 运行时承接（失败落常规 CALL 自带扩栈），
+/// 判据侧不再静态排除。
 fn check_callee_bytecode(
   build: &IrBuilder,
   callee: *mut Proto,
   nparams: i32,
   nresults: i32,
   ra: u8,
+  enforce_maxstack: bool,
 ) -> Option<()> {
   let callee_ref = child_proto_ref(callee)?;
-  // 非变参、实参数逐位对齐（缺失实参的 nil 填充语义第 1 阶段不承接）
+  // 非变参、实参数逐位对齐（缺失实参的 nil 填充语义不承接）
   if callee_ref.is_vararg != 0 || callee_ref.numparams as i32 != nparams {
     return None;
   }
@@ -296,15 +394,22 @@ fn check_callee_bytecode(
 
   // 栈深合并：映射区必须落在 caller 已预留栈内
   let caller_maxstack = with_proto(build.function.proto_view(), |p| p.maxstacksize as usize)?;
-  if ra as usize + callee_ref.maxstacksize as usize > caller_maxstack {
+  if enforce_maxstack && ra as usize + callee_ref.maxstacksize as usize > caller_maxstack {
     return None;
   }
 
-  // 体白名单 + 回边禁令 + 单返回点
-  let mut return_results: Option<i32> = None;
+  // 体白名单 + 回边禁令 + 逐 RETURN 个数对齐（允许多 RETURN 点）
   let mut return_count = 0;
-  for (pc, &insn) in body.iter().enumerate() {
+  // 迭代按指令长度步进：GETTABLEKS/NAMECALL 等 2 字指令的 aux 字不是指令，
+  // 逐字迭代会把 aux 误判 opcode（阶段 1 白名单全单字指令故未暴露）。
+  let mut pc = 0usize;
+  while pc < body.len() {
+    let insn = body[pc];
     let op = LuauOpcode::from(luau_insn_op(insn) as u8);
+    let op_len = get_op_length(op) as usize;
+    if op_len == 0 || pc + op_len > body.len() {
+      return None;
+    }
 
     // 跳转语义指令：目标必须体内部且前向（禁止循环）
     let target = get_jump_target(insn, pc as u32);
@@ -312,74 +417,87 @@ fn check_callee_bytecode(
       return None;
     }
 
-    match op {
-      LuauOpcode::LOP_NOP
-      | LuauOpcode::LOP_MOVE
-      | LuauOpcode::LOP_LOADNIL
-      | LuauOpcode::LOP_LOADB
-      | LuauOpcode::LOP_LOADN
-      | LuauOpcode::LOP_LOADK
-      | LuauOpcode::LOP_LOADKX
-      | LuauOpcode::LOP_ADD
-      | LuauOpcode::LOP_SUB
-      | LuauOpcode::LOP_MUL
-      | LuauOpcode::LOP_DIV
-      | LuauOpcode::LOP_IDIV
-      | LuauOpcode::LOP_MOD
-      | LuauOpcode::LOP_POW
-      | LuauOpcode::LOP_ADDK
-      | LuauOpcode::LOP_SUBK
-      | LuauOpcode::LOP_MULK
-      | LuauOpcode::LOP_DIVK
-      | LuauOpcode::LOP_IDIVK
-      | LuauOpcode::LOP_MODK
-      | LuauOpcode::LOP_POWK
-      | LuauOpcode::LOP_SUBRK
-      | LuauOpcode::LOP_DIVRK
-      | LuauOpcode::LOP_NOT
-      | LuauOpcode::LOP_MINUS
-      | LuauOpcode::LOP_JUMP
-      | LuauOpcode::LOP_JUMPIF
-      | LuauOpcode::LOP_JUMPIFNOT
-      | LuauOpcode::LOP_JUMPIFLT
-      | LuauOpcode::LOP_JUMPIFLE
-      | LuauOpcode::LOP_JUMPIFNOTLT
-      | LuauOpcode::LOP_JUMPIFNOTLE
-      | LuauOpcode::LOP_JUMPIFEQ
-      | LuauOpcode::LOP_JUMPIFNOTEQ
-      | LuauOpcode::LOP_JUMPX
-      | LuauOpcode::LOP_JUMPXEQKNIL
-      | LuauOpcode::LOP_JUMPXEQKB
-      | LuauOpcode::LOP_JUMPXEQKN
-      | LuauOpcode::LOP_JUMPXEQKS => {}
-      LuauOpcode::LOP_RETURN => {
-        return_count += 1;
-        if return_count > 1 || pc + 1 != body.len() {
-          return None;
-        }
-        let b = luau_insn_b(insn) as i32 - 1;
-        if b != nresults {
-          return None;
-        }
-        return_results = Some(b);
+    if op == LuauOpcode::LopReturn {
+      let b = luau_insn_b(insn) as i32 - 1;
+      if b != nresults {
+        return None;
       }
-      _ => return None,
+      return_count += 1;
+      pc += op_len;
+      continue;
     }
+    if !body_insn_allowed(op) {
+      return None;
+    }
+    pc += op_len;
   }
 
-  if return_count != 1 || return_results.is_none() {
+  if return_count == 0 {
     return None;
   }
   Some(())
 }
 
-/// 试探翻译产物否决扫描：只认纯计算/控制命令白名单；任何 Fallback 块、
-/// 慢路命令、`VmExit`/`VmConst`/`VmUpvalue` 操作数即整体放弃内联。
-fn inline_ir_veto(f: &IrFunction) -> Option<&'static str> {
+/// 体白名单字节码集（RETURN 由调用方按 nresults 单独对齐，不含在内）。
+fn body_insn_allowed(op: LuauOpcode) -> bool {
+  matches!(
+    op,
+    LuauOpcode::LopNop
+      | LuauOpcode::LopMove
+      | LuauOpcode::LopLoadnil
+      | LuauOpcode::LopLoadb
+      | LuauOpcode::LopLoadn
+      | LuauOpcode::LopLoadk
+      | LuauOpcode::LopLoadkx
+      | LuauOpcode::LopAdd
+      | LuauOpcode::LopSub
+      | LuauOpcode::LopMul
+      | LuauOpcode::LopDiv
+      | LuauOpcode::LopIdiv
+      | LuauOpcode::LopMod
+      | LuauOpcode::LopPow
+      | LuauOpcode::LopAddk
+      | LuauOpcode::LopSubk
+      | LuauOpcode::LopMulk
+      | LuauOpcode::LopDivk
+      | LuauOpcode::LopIdivk
+      | LuauOpcode::LopModk
+      | LuauOpcode::LopPowk
+      | LuauOpcode::LopSubrk
+      | LuauOpcode::LopDivrk
+      | LuauOpcode::LopNot
+      | LuauOpcode::LopMinus
+      | LuauOpcode::LopJump
+      | LuauOpcode::LopJumpif
+      | LuauOpcode::LopJumpifnot
+      | LuauOpcode::LopJumpiflt
+      | LuauOpcode::LopJumpifle
+      | LuauOpcode::LopJumpifnotlt
+      | LuauOpcode::LopJumpifnotle
+      | LuauOpcode::LopJumpifeq
+      | LuauOpcode::LopJumpifnoteq
+      | LuauOpcode::LopJumpx
+      | LuauOpcode::LopJumpxeqknil
+      | LuauOpcode::LopJumpxeqkb
+      | LuauOpcode::LopJumpxeqkn
+      | LuauOpcode::LopJumpxeqks
+      // 刀 C：表读族——快路（数组/哈希命中）保留，形状/类型不符的慢路出口已
+      // 由 Fallback 块折叠收敛为 VmExit(call_pc)（解释器自 CALL 原位重放）
+      | LuauOpcode::LopGettableks
+      | LuauOpcode::LopGettablen
+  )
+}
+
+/// 试探翻译产物否决扫描：只认纯计算/控制命令白名单；任何（非 Fallback）空块、
+/// 慢路命令、`VmConst`/`VmUpvalue` 操作数即整体放弃内联。`VmExit` 出口仅放行
+/// Fallback 折叠产出的 `call_pc` 出口——callee 原生 `VmExit(callee_pc)` 出口在
+/// 内联场景语义不成立（解释器会在 caller 帧上以 callee pc 恢复），仍然拒绝。
+fn inline_ir_veto(f: &IrFunction, call_pc: i32, callee: *mut Proto) -> Option<&'static str> {
   use IrCmd as C;
   for b in &f.blocks {
+    // Fallback 块已由 fold_fallback_blocks 清空引用，不可达，放行
     if b.kind == IrBlockKind::Fallback {
-      return Some("fallback-block");
+      continue;
     }
     if b.start == u32::MAX {
       return Some("empty-block");
@@ -440,6 +558,11 @@ fn inline_ir_veto(f: &IrFunction) -> Option<&'static str> {
     C::CheckTruthy,
     C::CheckCmpNum,
     C::CheckCmpInt,
+    // 刀 C 扩展：泛型算术（类型侧未定的参数算术只产 helper 形态）——helper 自带
+    // metamethod 保护，前置 SetSavedpc 已重写为调用点（见 emit_inline）；无独立
+    // 出口块，内联安全。
+    C::DoArith,
+    C::SetSavedpc,
     C::INTERRUPT,
     C::RETURN,
   ];
@@ -452,8 +575,22 @@ fn inline_ir_veto(f: &IrFunction) -> Option<&'static str> {
     }
     for op in inst.ops.iter() {
       match op.kind() {
-        IrOpKind::VmExit => return Some("vm-exit"),
-        IrOpKind::VmConst | IrOpKind::VmUpvalue => return Some("vm-const-or-upval"),
+        IrOpKind::VmExit => {
+          if op.index() != call_pc as u32 {
+            return Some("vm-exit");
+          }
+        }
+        IrOpKind::VmConst => {
+          // 仅 number 常量可物化（DoArithmetic 的常量操作数经重 intern 落寄存器）
+          let materializable = with_constant_value(child_proto_ref(callee), op.index(), |tv| {
+            tv.tt == ulua_vm::enums::lua_type::LuaType::Number as i32
+          })
+          .unwrap_or(false);
+          if !materializable {
+            return Some("vm-const-or-upval");
+          }
+        }
+        IrOpKind::VmUpvalue => return Some("vm-const-or-upval"),
         _ => {}
       }
     }
@@ -464,13 +601,28 @@ fn inline_ir_veto(f: &IrFunction) -> Option<&'static str> {
 /// 内联发射：把 trial IR 机械改写后追加进 caller。
 ///
 /// 改写规则：`Inst`/`Block` 索引平移；`VmReg k → VmReg(ra+k)`；`Constant`
-/// 逐值重 intern（`INTERRUPT` 的 pcpos 常量重写为调用点）；末尾 `RETURN`
-/// 替换为「返回值下移拷贝 + JUMP 后继块」。
-fn emit_inline(build: &mut IrBuilder, trial: &IrFunction, ra: u8, nresults: i32, call_pc: i32) {
-  let inst_base = build.function.instructions.len() as u32;
+/// 逐值重 intern（`INTERRUPT` 的 pcpos 常量重写为调用点）；每条 `RETURN`
+/// 替换为「返回值下移拷贝 + JUMP 后继块」（多 RETURN 点各自折叠）。
+/// `guard_funid` 非空（观测路径）时入口前置 proto 守卫：`JumpEqTag`(Function)
+/// + `JumpCmpProtoid`(funid)，失败落常规 `SetSavedpc`+`CALL` 回退块。
+fn emit_inline(
+  build: &mut IrBuilder,
+  trial: &IrFunction,
+  callee: *mut Proto,
+  ra: u8,
+  nparams: i32,
+  nresults: i32,
+  call_pc: i32,
+  guard: Option<(u32, i32)>,
+) {
+  // trial→caller 指令映射：Fallback 折叠与 RETURN 替换打破「1:1 克隆」的
+  // 指令序号对应（未发射的 Fallback 块指令在 trial 索引域留洞），Inst 操作数
+  // 平移必须查表，不能再用 inst_base+idx 的基数假设。
+  let mut inst_map: Vec<Option<u32>> = vec![None; trial.instructions.len()];
   let block_base = build.function.blocks.len() as u32;
 
-  // 1:1 克隆 trial 块，全部降为 Internal（非 caller 字节码块）
+  // 1:1 克隆 trial 块，全部降为 Internal（非 caller 字节码块）；Fallback 块
+  // 已折叠无引用，壳照克隆以保持索引对齐，内容不发射
   for _ in 0..trial.blocks.len() {
     build.function.blocks.push(IrBlock {
       kind: IrBlockKind::Internal,
@@ -486,12 +638,8 @@ fn emit_inline(build: &mut IrBuilder, trial: &IrFunction, ra: u8, nresults: i32,
     });
   }
 
-  // 终结当前块：JUMP 进体入口
-  let entry_op = IrOp::ir_op_ir_op_kind_u32(IrOpKind::Block, block_base + trial.entry_block);
-  build.inst_ir_cmd_ir_op(IrCmd::JUMP, entry_op);
-
   // 后继块：CALL 之后若无既存跳转目标块，则为残尾新建 Internal 块承接
-  let next_pc = (call_pc + get_op_length(LuauOpcode::LOP_CALL)) as u32;
+  let next_pc = (call_pc + get_op_length(LuauOpcode::LopCall)) as u32;
   CODEGEN_ASSERT!((next_pc as usize) < build.inst_index_to_block.len());
   let continuation = if build.inst_index_to_block[next_pc as usize] != u32::MAX {
     build.block_at_inst(next_pc)
@@ -499,8 +647,80 @@ fn emit_inline(build: &mut IrBuilder, trial: &IrFunction, ra: u8, nresults: i32,
     build.push_block(IrBlockKind::Internal, next_pc)
   };
 
+  let entry_op = IrOp::ir_op_ir_op_kind_u32(IrOpKind::Block, block_base + trial.entry_block);
+  match guard {
+    None => {
+      build.inst_ir_cmd_ir_op(IrCmd::JUMP, entry_op);
+      add_use(&mut build.function, entry_op);
+    }
+    Some((funid, needed_slots)) => {
+      // proto 守卫：tag==Function 且 closure->p->funid==观测值、栈余量覆盖 callee
+      // 工作槽（CheckStackRoom 失败落常规 CALL，其 call_prolog 自带扩栈），才进内联体
+      let check_blk = build.push_block(IrBlockKind::Internal, call_pc as u32);
+      let check_room = build.push_block(IrBlockKind::Internal, call_pc as u32);
+      let fallback_blk = build.push_block(IrBlockKind::Internal, call_pc as u32);
+      let ra_tag = build.vm_reg(ra);
+      let tag_load = build.inst_ir_cmd_ir_op(IrCmd::LoadTag, ra_tag);
+      let const_fn = build.const_tag(LuaType::Function as u8);
+      build.inst_ir_cmd_ir_op_ir_op_ir_op_ir_op(
+        IrCmd::JumpEqTag,
+        tag_load,
+        const_fn,
+        check_blk,
+        fallback_blk,
+      );
+      add_use(&mut build.function, tag_load);
+      add_use(&mut build.function, check_blk);
+      add_use(&mut build.function, fallback_blk);
+      build.begin_block(check_blk);
+      let ra_ptr = build.vm_reg(ra);
+      let ccl = build.inst_ir_cmd_ir_op(IrCmd::LoadPointer, ra_ptr);
+      let const_funid = build.const_uint(funid);
+      build.inst_ir_cmd_ir_op_ir_op_ir_op_ir_op(
+        IrCmd::JumpCmpProtoid,
+        ccl,
+        const_funid,
+        check_room,
+        fallback_blk,
+      );
+      add_use(&mut build.function, ccl);
+      add_use(&mut build.function, check_room);
+      add_use(&mut build.function, fallback_blk);
+      build.begin_block(check_room);
+      let needed = build.const_int(needed_slots);
+      build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckStackRoom, needed, fallback_blk);
+      add_use(&mut build.function, needed);
+      add_use(&mut build.function, fallback_blk);
+      // CheckStackRoom 通过：显式跳内联体入口（guard 非终结符，物理落穿目标
+      // 取决于块布局，不可依赖）
+      build.inst_ir_cmd_ir_op(IrCmd::JUMP, entry_op);
+      add_use(&mut build.function, entry_op);
+      // 守卫失败回退：常规 CALL 发射（语义与未内联逐位一致；__call 元方法、
+      // 参数补 nil、native/explainer 分派全部由 call_prolog/CALL lowering 承接）
+      build.begin_block(fallback_blk);
+      // savedpc 公式与 ir_builder 常规 CALL 臂一致（CALL 长 1，CALLFB 才有 aux）
+      let savedpc = if fflag::LuauCallFeedback.get() {
+        call_pc + 2
+      } else {
+        call_pc + 1
+      };
+      let savedpc_op = build.const_uint(savedpc as u32);
+      build.inst_ir_cmd_ir_op(IrCmd::SetSavedpc, savedpc_op);
+      let ra_op = build.vm_reg(ra);
+      let b_op = build.const_int(nparams);
+      let c_op = build.const_int(nresults);
+      build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CALL, ra_op, b_op, c_op);
+      for op_ref in [ra_op, b_op, c_op] {
+        add_use(&mut build.function, op_ref);
+      }
+      build.inst_ir_cmd_ir_op(IrCmd::JUMP, continuation);
+      add_use(&mut build.function, continuation);
+    }
+  }
+
   for (bi, b) in trial.blocks.iter().enumerate() {
-    if b.start == u32::MAX || b.finish == u32::MAX {
+    // Fallback 块已折叠（引用全部改写为 VmExit 出口），不可达不发射
+    if b.kind == IrBlockKind::Fallback || b.start == u32::MAX || b.finish == u32::MAX {
       continue;
     }
     let block_op = IrOp::ir_op_ir_op_kind_u32(IrOpKind::Block, block_base + bi as u32);
@@ -509,16 +729,20 @@ fn emit_inline(build: &mut IrBuilder, trial: &IrFunction, ra: u8, nresults: i32,
     for idx in b.start..=b.finish {
       let inst = &trial.instructions[idx as usize];
 
-      // 单返回点收口：返回值下移拷贝后跳后继块，替换 RETURN 终结指令
+      // RETURN 折叠：返回值下移拷贝后跳后继块（多 RETURN 点各自收口）
       if inst.cmd == IrCmd::RETURN {
         let src_a = vm_reg_index(&inst.ops[0]);
         for k in 0..nresults {
-          let src = build.vm_reg((ra as i32 + src_a + k) as u8);
+          // src：callee reg(src_a+k) 物理 = ra+1+src_a+k（帧映射见 rewrite_op）；
+          // dst：CALL 语义返回值落在 ra..ra+nresults-1（覆盖函数值槽与实参区）。
+          let src = build.vm_reg((ra as i32 + 1 + src_a + k) as u8);
           let dst = build.vm_reg((ra as i32 + k) as u8);
           let value = build.inst_ir_cmd_ir_op(IrCmd::LoadTvalue, src);
           build.inst_ir_cmd_ir_op_ir_op(IrCmd::StoreTvalue, dst, value);
         }
         build.inst_ir_cmd_ir_op(IrCmd::JUMP, continuation);
+        // 手工发射面自行记账 use（inst_ir_cmd 系列不自动维护，块 use 亦然）
+        add_use(&mut build.function, continuation);
         continue;
       }
 
@@ -528,12 +752,29 @@ fn emit_inline(build: &mut IrBuilder, trial: &IrFunction, ra: u8, nresults: i32,
           // INTERRUPT 操作数即 pcpos：重写为调用点，中断后解释器自 CALL
           // 原位重放整次调用（与其余 vmexit 出口同语义）
           build.const_uint(call_pc as u32)
+        } else if inst.cmd == IrCmd::SetSavedpc {
+          // 慢路保护点（泛型算术 helper 前置）：同 INTERRUPT 语义，pcpos 重写为
+          // 调用点下沿（常规 CALL 臂的 savedpc 公式），解释器重放从 CALL 原位续
+          build.const_uint((call_pc + 1) as u32)
+        } else if op.kind() == IrOpKind::VmConst {
+          // number 常量物化（veto 已判定可物化）：callee k[aux] 的 f64 值重
+          // intern 进 caller 常量池，操作数落 LoadDouble 指令（DoArithmetic 的
+          // 常量操作数按 Inst 寻址与 VmConst 同义）
+          let value = with_constant_value(child_proto_ref(callee), op.index(), |tv| {
+            constant_number(tv)
+          })
+          .unwrap_or_default();
+          build.const_double(value)
         } else {
-          rewrite_op(build, trial, op, ra, inst_base, block_base)
+          rewrite_op(build, trial, op, ra, &inst_map, block_base)
         };
         ops.push(rewritten);
       }
       build.inst_ir_cmd_ir_ops(inst.cmd, &ops);
+      inst_map[idx as usize] = Some(build.function.instructions.len() as u32 - 1);
+      for op_ref in ops.as_slice() {
+        add_use(&mut build.function, *op_ref);
+      }
     }
   }
 
@@ -543,27 +784,40 @@ fn emit_inline(build: &mut IrBuilder, trial: &IrFunction, ra: u8, nresults: i32,
   }
 }
 
-/// 单操作数机械改写。
+/// 单操作数机械改写。`inst_map` 为 trial→caller 指令映射（Fallback 折叠与
+/// RETURN 替换造成的非 1:1 序号，见 emit_inline）。
 fn rewrite_op(
   build: &mut IrBuilder,
   trial: &IrFunction,
   op: &IrOp,
   ra: u8,
-  inst_base: u32,
+  inst_map: &[Option<u32>],
   block_base: u32,
 ) -> IrOp {
   match op.kind() {
     IrOpKind::None | IrOpKind::Undef | IrOpKind::Condition => *op,
-    IrOpKind::Inst => IrOp::ir_op_ir_op_kind_u32(IrOpKind::Inst, inst_base + op.index()),
+    IrOpKind::Inst => {
+      let mapped = inst_map[op.index() as usize]
+        .unwrap_or_else(|| {
+          CODEGEN_ASSERT!(false, "inline rewrite: unmapped trial inst");
+          u32::MAX
+        });
+      IrOp::ir_op_ir_op_kind_u32(IrOpKind::Inst, mapped)
+    }
     IrOpKind::Block => IrOp::ir_op_ir_op_kind_u32(IrOpKind::Block, block_base + op.index()),
     IrOpKind::VmReg => {
-      let mapped = ra as i32 + vm_reg_index(op);
+      // 真实 CALL 帧布局 base = ra+1（call_prolog: ci->base = ra+1），callee reg k
+      // 物理 = base+k = ra+1+k；内联体逐位复刻该布局，参数读 ra+1..ra+nparams 与
+      // 实参槽对位（阶段 1 的 ra+k 映射在带参 callee 下读函数值槽，系错位缺陷）。
+      let mapped = ra as i32 + 1 + vm_reg_index(op);
       CODEGEN_ASSERT!(mapped <= u8::MAX as i32);
       IrOp::ir_op_ir_op_kind_u32(IrOpKind::VmReg, mapped as u32)
     }
     IrOpKind::Constant => materialize_const(build, &trial.constants, op),
+    // 刀 C：Fallback 折叠产出的出口（pcpos = 调用点），纯值操作数原样透传
+    IrOpKind::VmExit => *op,
     // 试探否决已排除；到此即编译器内部不变量被破坏
-    IrOpKind::VmConst | IrOpKind::VmUpvalue | IrOpKind::VmExit => {
+    IrOpKind::VmConst | IrOpKind::VmUpvalue => {
       CODEGEN_ASSERT!(false, "inline rewrite: vetoed op kind leaked");
       *op
     }

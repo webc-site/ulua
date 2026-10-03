@@ -69,6 +69,7 @@ use ulua_vm::{
 use crate::{
   functions::{
     call_epilog_c::call_epilog_c_export, call_fallback::call_fallback_export,
+    call_obs_hook::call_obs_site_hook,
     call_prolog::call_prolog_export, execute_dupclosure::execute_dupclosure_export,
     execute_forgprep::execute_forgprep_export, execute_getglobal::execute_getglobal_export,
     execute_gettableks::execute_gettableks_export,
@@ -215,6 +216,10 @@ pub type NativeCallPrologFn = unsafe extern "C-unwind" fn(
   nresults: i32,
 ) -> *mut Closure;
 
+/// JIT call inlining 第 2 阶段：A64 CALL 快路观测插桩入口
+/// （`call_obs_site_hook`；观测核见 ulua-vm call_obs 与 codegen call_obs_hook）。
+pub type NativeCallObsHookFn = unsafe extern "C-unwind" fn(l: *mut LuaState, ra: *const TValue);
+
 /// `callEpilogC`：C 闭包返回后的收尾（结果搬移与栈顶修正）。
 pub type NativeCallEpilogCFn = unsafe extern "C-unwind" fn(l: *mut LuaState, nresults: i32, n: i32);
 
@@ -328,6 +333,7 @@ pub const FORG_LOOP_NON_TABLE_FALLBACK: NativeForgLoopFallbackFn =
   forg_loop_non_table_fallback_export;
 pub const FORG_PREP_XNEXT_FALLBACK: NativeForgPrepXnextFn = forg_prep_xnext_fallback_export;
 pub const CALL_PROLOG: NativeCallPrologFn = call_prolog_export;
+pub const CALL_OBS_SITE_HOOK: NativeCallObsHookFn = call_obs_site_hook;
 pub const CALL_EPILOG_C: NativeCallEpilogCFn = call_epilog_c_export;
 pub const NEW_USERDATA: NativeNewUserdataFn = new_userdata_export;
 pub const GET_IMPORT: NativeGetImportFn = get_import_export;

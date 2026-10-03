@@ -1,11 +1,16 @@
 use core::ptr::null;
 
+use ulua_common::fflag;
 use ulua_vm::{
-  functions::{lua_d_grow_ci::lua_d_grow_ci, lua_v_tryfunc_tm::lua_v_tryfunc_tm},
+  functions::{
+    call_obs::call_pc_of, lua_d_grow_ci::lua_d_grow_ci, lua_v_tryfunc_tm::lua_v_tryfunc_tm,
+  },
   macros::lua_d_checkstackfornewci::lua_d_checkstackfornewci,
   records::{call_info::CallInfo, closure::Closure, lua_state::LuaState, slot::Slot},
   type_aliases::{stk_id::StkId, t_value::TValue},
 };
+
+use crate::functions::call_obs_hook::call_obs_record_maybe_recompile;
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
@@ -29,6 +34,31 @@ pub unsafe fn call_prolog(
 
   // Safety: 依契约; 守卫后 ra 必为存活可调用闭包。
   let ccl = unsafe { (*ra).as_closure_ptr() };
+
+  // JIT call inlining 第 2 阶段：CALL 站点观测（x64 形态）。观测+触发集中在
+  // call_obs_record_maybe_recompile（A64 快路插桩共用同一核）；此刻 `(*l).ci`
+  // 仍是 caller 帧且字段完好，savedpc 已由 CALL 翻译先行的 SetSavedpc 落下，
+  // 触发窗口在 checkstackfornewci 之后（栈定形、旧栈指针不再被消费）。
+  if fflag::LUAU_JIT_CALL_INLINE_OBS.get() {
+    // Safety: 契约同上——l 存活、ci 指向活动帧、savedpc 为 CALL 发射前
+    // SetSavedpc 落下的合法指令指针。
+    unsafe {
+      let ci = (*l).ci;
+      let savedpc = (*ci).savedpc;
+      if !savedpc.is_null() {
+        let func = (*ci).func;
+        if (*func).is_function() {
+          let fcl = (*func).as_closure_ptr();
+          if (*fcl).is_c == 0 {
+            let caller_proto = (*fcl).inner.l.p;
+            if let Some(call_pc) = call_pc_of(caller_proto, savedpc) {
+              call_obs_record_maybe_recompile(l, caller_proto, call_pc, ra);
+            }
+          }
+        }
+      }
+    }
+  }
 
   // Safety: 依契约; ci 数组内界, func/base/top 赋值为界内 StkId 算术, base/top 回写活 state。
   unsafe {

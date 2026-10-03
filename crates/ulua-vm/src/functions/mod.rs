@@ -787,6 +787,7 @@ pub mod traverseclass;
 pub mod traverseclosure;
 pub mod traverseobject;
 pub mod traverseproto;
+pub mod call_obs;
 pub mod traversestack;
 pub mod traversetable;
 pub mod tremove;

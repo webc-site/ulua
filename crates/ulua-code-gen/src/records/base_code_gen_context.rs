@@ -79,6 +79,13 @@ pub struct BaseCodeGenContext {
   // None == nullptr）。
   pub userdata_remapper: Option<UserdataRemapperCallback>,
   pub context: NativeContext,
+  /// JIT call inlining 第 2 阶段：暖重编译重绑定时从 proto 名下转移出来的旧
+  /// native module（逐 proto 一项，module 可重复）。proto 侧关闭回调只会归还
+  /// 当前 execdata 所属的新 module，旧 module 的引用计数若不在此接手即成死账，
+  /// code_allocator（第一字段，先 drop）的 live_allocations 归零断言必炸。
+  /// [`Drop`] 实现在该断言前归还——此刻 VM 已关闭、无在途 native 帧，页权限
+  /// 回收安全。
+  pub warm_recompile_retires: Vec<*mut NativeModule>,
 }
 
 /// cpp CodeGenContext.cpp:171-174 `~BaseCodeGenContext`：上下文析构时必须归还
@@ -87,6 +94,15 @@ pub struct BaseCodeGenContext {
 /// deallocate 对空 allocationStart 为空操作，故 gate 未分配时同样安全。
 impl Drop for BaseCodeGenContext {
   fn drop(&mut self) {
+    // 暖重编译转移的旧 module 引用先归还（release 归零即 deallocate），再进
+    // 字段 drop——code_allocator 是第一字段，其 Drop 里的 live_allocations 归零
+    // 断言要求此处账已清平。
+    for &old in self.warm_recompile_retires.iter() {
+      // Safety: 登记点（bind_native_protos 的重绑定分支）契约保证指针指向
+      // 计数托管的存活 NativeModule；release 只递减原子引用计数。
+      unsafe { (*old).release() };
+    }
+    self.warm_recompile_retires.clear();
     self.code_allocator.deallocate(self.gate_allocation_data);
   }
 }
@@ -134,6 +150,7 @@ impl BaseCodeGenContext {
       userdata_remapping_context: null_mut(),
       userdata_remapper: None,
       context,
+      warm_recompile_retires: Vec::new(),
     }
   }
 
@@ -165,9 +182,11 @@ impl BaseCodeGenContext {
   fn bind_protos_to_module(
     native_module: &NativeModule,
     module_protos: &[*mut Proto],
+    rebind_retire: bool,
+    retires: &mut Vec<*mut NativeModule>,
   ) -> ModuleBindResult {
     let mut native_protos = native_module.native_protos.to_vec();
-    let protos_bound = bind_native_protos(module_protos, &mut native_protos, false);
+    let protos_bound = bind_native_protos(module_protos, &mut native_protos, rebind_retire, retires);
     native_module.native_module_add_refs(protos_bound as usize);
 
     ModuleBindResult {
@@ -184,6 +203,9 @@ impl BaseCodeGenContext {
   /// 手工打补丁绑定的旧路径不复存在）。
   ///
   /// `data`/`code` 以切片表达长度界内性（原 `*const u8` + 长度对随切片化删除）。
+  /// `rebind_retire`（同步暖重编译专用）：重绑定的 proto 名下旧 execdata 属旧
+  /// module，其引用逐 proto 转移进 `warm_recompile_retires`（关闭链统一归还，
+  /// 见字段注）。
   pub fn bind_module(
     &mut self,
     module_id: &Option<ModuleId>,
@@ -191,6 +213,7 @@ impl BaseCodeGenContext {
     native_protos: Vec<NativeProtoExecDataPtr>,
     data: &[u8],
     code: &[u8],
+    rebind_retire: bool,
   ) -> ModuleBindResult {
     let module_ref = match (self.kind, module_id) {
       (CodeGenContextKind::Shared, Some(module_id)) => {
@@ -212,7 +235,12 @@ impl BaseCodeGenContext {
       };
     };
 
-    Self::bind_protos_to_module(native_module, module_protos)
+    Self::bind_protos_to_module(
+      native_module,
+      module_protos,
+      rebind_retire,
+      &mut self.warm_recompile_retires,
+    )
   }
 
   /// cpp `SharedCodeGenContext::tryBindExistingModule`（命中已登记模块则重绑）与
@@ -231,7 +259,12 @@ impl BaseCodeGenContext {
     let native_module_ref = self.shared_allocator.try_get_native_module(module_id);
     let native_module = native_module_ref.as_ref_option()?;
 
-    Some(Self::bind_protos_to_module(native_module, module_protos))
+    Some(Self::bind_protos_to_module(
+      native_module,
+      module_protos,
+      false,
+      &mut self.warm_recompile_retires,
+    ))
   }
 
   pub fn init_header_functions(&mut self) -> bool {

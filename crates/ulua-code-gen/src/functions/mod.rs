@@ -23,6 +23,7 @@ pub mod call_epilog_c;
 pub mod call_fallback;
 pub mod call_get_table;
 pub mod call_length_helper;
+pub mod call_obs_hook;
 pub mod call_prolog;
 pub mod call_set_table;
 pub mod call_step_gc;

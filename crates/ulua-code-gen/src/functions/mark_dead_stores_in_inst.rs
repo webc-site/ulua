@@ -458,6 +458,11 @@ pub fn mark_dead_stores_in_inst(
       // 本指令 lowering 有两条到 exit 的跳转，导致无法生成 exit sync 记录
       state.check_live_ins(function, ops[2], index, false);
     }
+    IrCmd::CheckStackRoom => {
+      // 栈余量守卫：失败跳 fallback 块（常规 CALL 回退），fallback 的活跃值入参
+      // 同 guard 跳块语义
+      state.check_live_ins(function, ops[1], index, true);
+    }
     IrCmd::CheckReadonly => {
       state.check_live_ins(function, ops[1], index, true);
     }

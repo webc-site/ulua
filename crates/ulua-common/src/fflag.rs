@@ -29,6 +29,9 @@ luau_flag_module! {
   LUAU_FASTFLAGVARIABLE!(DEBUG_CODEGEN_CHAOS_A64, DebugCodegenChaosA64);
   // crates/ulua-code-gen translate_inst_call_inline（本仓 JIT 用户函数 call inlining 刀）
   LUAU_FASTFLAGVARIABLE!(LUAU_JIT_CALL_INLINE, LuauJitCallInline);
+  // JIT call inlining 第 2 阶段：CALL 站点 proto 观测 + 暖重编译 + proto 守卫
+  // （ulua-vm call_obs / call_prolog，ulua-code-gen translate_inst_call_inline）
+  LUAU_FASTFLAGVARIABLE!(LUAU_JIT_CALL_INLINE_OBS, LuauJitCallInlineObs);
   // CodeGen/src/CodeGen.cpp
   LUAU_FASTFLAGVARIABLE!(DEBUG_CODEGEN_OPT_SIZE, DebugCodegenOptSize);
   // CodeGen/src/OptimizeConstProp.cpp

@@ -5,7 +5,8 @@ use ulua_vm::records::lua_node::LuaNode;
 use crate::{
   records::native_fn::{
     GateFn, NativeArithFn, NativeCBarrierbackFn, NativeCBarrierfFn, NativeCBarriertableFn,
-    NativeCStepFn, NativeCallEpilogCFn, NativeCallFallbackFn, NativeCallPrologFn, NativeCompareFn,
+    NativeCStepFn, NativeCallEpilogCFn, NativeCallFallbackFn, NativeCallObsHookFn, NativeCallPrologFn,
+  NativeCompareFn,
     NativeConcatFn, NativeDolenFn, NativeExecuteGetvarargsConstFn,
     NativeExecuteGetvarargsMultRetFn, NativeExecuteOpcodeFn, NativeFCloseFn, NativeFFindupvalFn,
     NativeFNewLclosureFn, NativeForgLoopFallbackFn, NativeForgLoopIterFn, NativeForgPrepXnextFn,
@@ -89,6 +90,7 @@ pub struct NativeContext {
   pub forg_loop_non_table_fallback: Option<NativeForgLoopFallbackFn>,
   pub forg_prep_xnext_fallback: Option<NativeForgPrepXnextFn>,
   pub call_prolog: Option<NativeCallPrologFn>,
+  pub call_obs_hook: Option<NativeCallObsHookFn>,
   pub call_epilog_c: Option<NativeCallEpilogCFn>,
   pub new_userdata: Option<NativeNewUserdataFn>,
   pub get_import: Option<NativeGetImportFn>,
@@ -174,6 +176,7 @@ impl Default for NativeContext {
       forg_loop_non_table_fallback: None,
       forg_prep_xnext_fallback: None,
       call_prolog: None,
+      call_obs_hook: None,
       call_epilog_c: None,
       new_userdata: None,
       get_import: None,

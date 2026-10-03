@@ -232,6 +232,9 @@ pub fn replace_ir_function_ir_inst_operand(
 
 pub fn add_use(function: &mut IrFunction, op: IrOp) {
   if op.kind() == IrOpKind::Inst {
+    if op.index() as usize >= function.instructions.len() {
+      eprintln!("[add-use-dbg] OOB inst idx={} len={}", op.index(), function.instructions.len());
+    }
     function.instructions[op.index() as usize].use_count += 1;
   } else if op.kind() == IrOpKind::Block {
     function.blocks[op.index() as usize].use_count += 1;

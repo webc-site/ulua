@@ -138,6 +138,7 @@ pub enum IrCmd {
   SetUpvalue,
   CheckTag,
   CheckTruthy,
+  CheckStackRoom,
   CheckReadonly,
   CheckNoMetatable,
   CheckNoNewindexMeta,

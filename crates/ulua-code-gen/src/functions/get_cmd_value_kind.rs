@@ -135,6 +135,7 @@ pub const fn get_cmd_value_kind(cmd: IrCmd) -> IrValueKind {
     IrCmd::GetUpvalue => IrValueKind::Tvalue,
     IrCmd::SetUpvalue
     | IrCmd::CheckTag
+    | IrCmd::CheckStackRoom
     | IrCmd::CheckTruthy
     | IrCmd::CheckReadonly
     | IrCmd::CheckNoMetatable

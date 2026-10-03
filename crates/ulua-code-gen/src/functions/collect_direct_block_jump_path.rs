@@ -20,6 +20,11 @@ fn include_block_in_linear_path(function: &IrFunction, block: &IrBlock) -> bool 
   function.instructions[block.start as usize..=block.finish as usize]
     .iter()
     .all(|inst| inst.cmd != IrCmd::CALL)
+    // call inlining 的栈余量守卫带条件出边（fallback 常规 CALL 回退），且其
+    // live_out 携带守卫后的活跃值——不是无条件直通块，不并线性克隆
+    && function.instructions[block.start as usize..=block.finish as usize]
+      .iter()
+      .all(|inst| inst.cmd != IrCmd::CheckStackRoom)
 }
 
 /// 起始块以索引传入，链上所有块沿索引推进，无需裸指针前置条件。
