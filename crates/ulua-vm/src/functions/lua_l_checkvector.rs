@@ -10,8 +10,8 @@ use crate::{
 /// cpp laux.cpp:266 `luaL_checkvector`
 pub fn lua_l_checkvector(l: &mut LuaState, narg: i32) -> *const f32 {
   // 消费形：指针由 `lua_tovector` 的 C 镜像边界单点带出，此处仅做 null 判据透传；
-  // 调用侧统一经 `vector_shared::vector_components` 收成分量窗口，签名保持 laux
-  // C 镜像（cpp laux.cpp:266）不动。
+  // 调用侧统一经 `vector_shared::check_vector`/`opt_vector` 门面收成 `[f32; 4]` 值窗，
+  // 签名保持 laux C 镜像（cpp laux.cpp:266）不动。
   let v = lua_tovector(l, narg);
   if v.is_null() {
     // SAFETY: 契约保证 `l` 为存活调用帧（`&mut` 接收者承载存活）；非 vector 时
