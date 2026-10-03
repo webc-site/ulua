@@ -623,8 +623,11 @@ pub(crate) unsafe fn loadsafe(
 
             // cpp lvmload.cpp:619：class 的 `new`/`__init` C 闭包须绑到当前
             // 加载环境 `envt`（非 `L->gt`），故随 `luaR_newclass` 一并传入。
+            // SAFETY(r16-v27 收形桥接): `lua_r_newclass` 首参已收 `&mut LuaState`，本处一次
+            // `&mut *l` 就地重建（借用窗止于当句，实参全为本地量、同句无对 `l` 的现读）；
+            // 其余前提由本函数契约与 `luau_load` 的 ScopedSetGcThreshold 冻结承载
             let lco = lua_r_newclass(
-              l,
+              &mut *l,
               classname_ts,
               members_to_offset,
               offset_to_member,
