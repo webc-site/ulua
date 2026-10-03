@@ -14,7 +14,10 @@
 //!   `&mut LuaState` 接收者的引用形（r3 vm 门面族），臂内一行 `&mut *l` 重建引用
 //!   后转调；`@ref` 标记即此形，契约单源不变；
 //! - `lua_cont_fn!(pub(crate) fn x_cont, x_cont_arm);` — 续延臂 `(l, status) -> i32`，
-//!   与 `LuaContinuation` 契约同形（pcall/co 族 B4 批备妥，本票先行落地）。
+//!   与 `LuaContinuation` 契约同形（pcall/co 族 B4 批备妥，本票先行落地）；
+//! - `lua_cont_fn!(pub(crate) fn x_cont @ref, x_cont_arm);` — 同上续延臂，核心已收形为
+//!   `&mut LuaState` 引用形（r16-v32 补位；pcallcont/xpcallcont 即此形），臂内一行
+//!   `&mut *l` 重建引用后转调，`status` 仍按裸 `i32` 透传。
 //!
 //! 不变量：核心绝不被 `_arm` 之外的方式存进任何 extern fn-ptr 槽位；panic 穿 Rust 核心帧
 //! 后由 `_arm` 的 `extern "C-unwind"` 帧原样上传，与改造前满血 extern 体重合，行为零变。
@@ -66,6 +69,22 @@ macro_rules! lua_cont_fn {
       status: i32,
     ) -> i32 {
       unsafe { $core(l, status) }
+    }
+  };
+  ($vis:vis fn $core:ident @ref, $arm:ident) => {
+    /// `extern "C-unwind"` 续延臂：一行转发本文件 Rust 核心（`&mut LuaState` 引用形），
+    /// 签名与契约由 `lua_cont_fn!` 单源。
+    ///
+    /// # Safety
+    ///
+    /// `l`/`status` 须满足核心的全部前提（`LuaContinuation` 调用约定：resume 结束后受保护
+    /// 帧内存活 `LuaState` 与协程终态码）；解引用/抛错/GC 义务见核心自身 `# Safety` 文档
+    /// （契约单源）。本帧把裸指针重建为独占引用（`&mut *l`），重建窗口即本次调用。
+    $vis unsafe extern "C-unwind" fn $arm(
+      l: *mut $crate::records::lua_state::LuaState,
+      status: i32,
+    ) -> i32 {
+      unsafe { $core(&mut *l, status) }
     }
   };
 }

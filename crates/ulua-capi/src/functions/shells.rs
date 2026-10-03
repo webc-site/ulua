@@ -2,15 +2,23 @@
 //! 由 `functions/` 下各壳文件以一次宏调用实例化；`functions/mod.rs` 仅保留模块声明注册表。
 //! 每族宏的 `# Safety` 契约与 `// Safety:` 理由只在本文件书写一次，成员文件不得复述契约文本。
 
-/// 单参 `(l) -> c_int` 通用 C ABI 导出壳模板：54 个同形透传壳单源生成，与
-/// `lua_v_doarithimpl.rs` 的 `arith_tm_exports!` 先例同构（lua_b_* 族 16 壳与
-/// lua_gettop/lua_status/lua_isthreadreset/lua_singlestep/lua_c_allocationrate/
-/// lua_encodepointer/lua_g_hasnative/lua_g_onbreak/lua_l_buffinit/
+/// 单参 `(l) -> c_int` 通用 C ABI 导出壳模板：现 55 枚同形壳单源生成（54 枚裸透传 + 1 枚
+/// `@ref` 引用重建变体），与 `lua_v_doarithimpl.rs` 的 `arith_tm_exports!` 先例同构
+/// （lua_b_* 族余 15 壳与 lua_gettop/lua_status/lua_isthreadreset/lua_singlestep/
+/// lua_c_allocationrate/lua_encodepointer/lua_g_hasnative/lua_g_onbreak/lua_l_buffinit/
 /// lua_pushinteger_64/lua_setthreaddata/lua_stackdepth/lua_a_pushvalue/lua_isyieldable
-/// 已随 vm 侧接收者前移退役为显式壳，见 `functions/lua_status.rs` 先例）。与手写逐壳的差异仅在
-/// 文本层：透传目标在 doc 契约中以 `ulua_vm::functions::` 全路径书写；体内
+/// 已随 vm 侧接收者前移退役为显式壳，见 `functions/lua_status.rs` 先例；其中 lua_b_inext
+/// 已由本文件 `@ref` 臂于 r16-v32 复归宏模板）。与手写逐壳的差异仅在文本层：
+/// 透传目标在 doc 契约中以 `ulua_vm::functions::` 全路径书写；体内
 /// `// Safety:` 理由注释转通用表述。导出符号名、签名与 rustdoc 逐参数契约语义与
 /// 逐字节手写版一致。
+///
+/// r16-v32 引用重建变体：被调 vm 核心已收形为 `&mut LuaState` 时，条目尾置 `@ref`
+/// （`capi_shell_l_cint!(m, n @ref)`）即落下方第二臂——**导出签名逐字不变**（参数仍为
+/// `*mut LuaState` 裸形，C-ABI 镜像红线），仅在既有 `unsafe { … }` 体内把该实参重建为
+/// `&mut *l` 独占引用，借用窗严格止于当次调用。该形与 `capi_shell!` 的 `refstate`
+/// 参数类型臂（r16-v24）、`lua_lib_fn!` 的 `@ref` 标记位同判例。本族恰一枚参数、
+/// 恒名 `l`，故无 `capi_shell!` 那三条 refstate 硬约束之必要。
 macro_rules! capi_shell_l_cint {
   ($m:ident, $n:ident) => {
     #[doc = concat!(
@@ -27,11 +35,28 @@ macro_rules! capi_shell_l_cint {
       unsafe { ::ulua_vm::functions::$m::$n(l) }
     }
   };
+  ($m:ident, $n:ident @ref) => {
+    #[doc = concat!(
+      "# Safety\n",
+      "C ABI 导出壳（符号 `ulua_", stringify!($n), "`），除把 `l` 在本帧重建为独占引用（`&mut *l`）外，仅逐参数透传至 `ulua_vm::functions::", stringify!($m), "::", stringify!($n), "(&mut *l)`，零逻辑，本帧不解引用其余任何指针。调用方须保证：\n",
+      "- `l`：指向由本 VM 创建的合法 `LuaState`，非空、对齐，整个调用期间存活，且与对该状态的其它访问单线程驱动（不得跨 OS 线程并发）——引用重建前提；\n",
+      "- 其余安全前置条件与被调函数的 `# Safety` 契约一致。"
+    )]
+    #[unsafe(export_name = concat!("ulua_", stringify!($n)))]
+    pub unsafe extern "C-unwind" fn $n(
+      l: *mut ::ulua_vm::records::lua_state::LuaState,
+    ) -> ::core::ffi::c_int {
+      // Safety: C ABI 导出壳，由 C 宿主按 Lua/C API 约定调用：l 为有效 LuaState*。被调 vm 核心已前移为 `&mut LuaState` 引用形接收者，本帧把 `l` 重建为独占引用（`&mut *l`，借用窗止于当次调用），除此之外不解引用其余任何指针、不跨调用持有该引用，故不存在越窗别名/悬挂；参数合法性前提即该实现 /// # Safety 所列契约。
+      unsafe { ::ulua_vm::functions::$m::$n(&mut *l) }
+    }
+  };
 }
 
-/// 同上 `(l) -> c_int` 导出壳模板之库函数变体（现 53 枚，vector_angle/vector_clamp 两壳
-/// 已随 vm 侧核心收形退役为显式壳，见 `functions/lua_status.rs` 先例）：唯一差异是体内
+/// 同上 `(l) -> c_int` 导出壳模板之库函数变体（现 55 枚：53 枚裸透传 + 2 枚 `@ref`
+/// 引用重建变体；vector_angle/vector_clamp 两壳曾随 vm 侧核心收形退役为显式壳，
+/// 已由 `@ref` 臂于 r16-v32 复归宏模板）：唯一差异是体内
 /// `// Safety:` 理由注释按 b26 校准保留「l 由 Lua VM 按库函数/闭包约定传入」的调用来源表述。
+/// r16-v32 同备 `@ref` 引用重建变体臂，形制与措辞随上条所述。
 macro_rules! capi_libfn_shell_l_cint {
   ($m:ident, $n:ident) => {
     #[doc = concat!(
@@ -46,6 +71,21 @@ macro_rules! capi_libfn_shell_l_cint {
     ) -> ::core::ffi::c_int {
       // Safety: C ABI 导出壳：唯一参数 l 是 Lua VM 按库函数/闭包约定传入的当前运行 LuaState*，其栈顶与可接受索引由调用方按 Lua/C API 约定布置。本壳不解引用任何指针、不在本帧重建引用，仅原样转调 ulua-vm 同名实现，故不存在别名/悬挂窗口；参数合法性前提即该实现 /// # Safety 所列契约。
       unsafe { ::ulua_vm::functions::$m::$n(l) }
+    }
+  };
+  ($m:ident, $n:ident @ref) => {
+    #[doc = concat!(
+      "# Safety\n",
+      "C ABI 导出壳（符号 `ulua_", stringify!($n), "`），除把 `l` 在本帧重建为独占引用（`&mut *l`）外，仅逐参数透传至 `ulua_vm::functions::", stringify!($m), "::", stringify!($n), "(&mut *l)`，零逻辑，本帧不解引用其余任何指针。调用方须保证：\n",
+      "- `l`：指向由本 VM 创建的合法 `LuaState`，非空、对齐，整个调用期间存活，且与对该状态的其它访问单线程驱动（不得跨 OS 线程并发）——引用重建前提；\n",
+      "- 其余安全前置条件与被调函数的 `# Safety` 契约一致。"
+    )]
+    #[unsafe(export_name = concat!("ulua_", stringify!($n)))]
+    pub unsafe extern "C-unwind" fn $n(
+      l: *mut ::ulua_vm::records::lua_state::LuaState,
+    ) -> ::core::ffi::c_int {
+      // Safety: C ABI 导出壳：唯一参数 l 是 Lua VM 按库函数/闭包约定传入的当前运行 LuaState*，其栈顶与可接受索引由调用方按 Lua/C API 约定布置。被调 vm 核心已前移为 `&mut LuaState` 引用形接收者，本帧把 `l` 重建为独占引用（`&mut *l`，借用窗止于当次调用），除此之外不解引用其余任何指针、不跨调用持有该引用，故不存在越窗别名/悬挂；参数合法性前提即该实现 /// # Safety 所列契约。
+      unsafe { ::ulua_vm::functions::$m::$n(&mut *l) }
     }
   };
 }
