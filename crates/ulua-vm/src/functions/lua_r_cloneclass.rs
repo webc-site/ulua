@@ -25,13 +25,20 @@ use crate::{
 /// `l` 须存活且处于受保护帧（分配失败经 `l` 抛 ErrMem）；`classobject` 为
 /// 存活且成员数组成员按 numberof* 分配完整的类。新类为白色对象，克隆写入
 /// 无需写屏障（cpp lclass.cpp:129 同断言）。
+///
+/// r16-v22 保留外层 `*mut LuaState` 形：本函数外层消费方含出范围文件
+/// （`luau_execute.rs`——并发会话正在改的性能热区），改签名即撞车；本票仅调整文件内对
+/// 已改形核心（`lua_r_newblankclass`/`lua_r_setupconstructor`）的转调形：一次 `&mut *l`
+/// 就地重建引用（借用窗仅在当句内），并按「拆语句」判例把 `getcurrenv` 现读与 `setupconstructor`
+/// 转调分列两句，避免同句内 `&mut *l` 独占借用与 `getcurrenv(l)` 的裸读点交叠。外层收形列入
+/// 未尽事项，交主控另票排入。
 pub(crate) unsafe fn lua_r_cloneclass(
   l: *mut LuaState,
   classobject: *mut LuauClass,
 ) -> *mut LuauClass {
   // SAFETY: 前置契约保证 l/类对象存活，克隆构造与 lua_h_clone 均在受保护帧内
   unsafe {
-    let newclass = lua_r_newblankclass(l, (*classobject).name, (*classobject).isopen);
+    let newclass = lua_r_newblankclass(&mut *l, (*classobject).name, (*classobject).isopen);
 
     // newclass was just allocated, so it is white and none of the writes below
     // need a write barrier.（cpp lclass.cpp:129 同款断言）
@@ -73,7 +80,13 @@ pub(crate) unsafe fn lua_r_cloneclass(
       (*newclass).instancemetatable = lua_h_clone(l, (*classobject).instancemetatable);
     }
 
-    lua_r_setupconstructor(l, newclass, getcurrenv(l));
+    // r16-v22 拆语句：`setupconstructor` 收形后其首个实参位需 `&mut *l`（借用窗仅在当句内），
+    // 若与 `getcurrenv(l)`（体内对 `(*l).ci`/`(*l).gt`/闭包 env 的裸读）同句求值，`&mut` 独占
+    // 与 `getcurrenv` 的解引用会交叠（Stacked Borrows UB 风险）。按仓内「拆语句、原位现读、
+    // 句间无字段写」判例分列两句：先现读环境，再转调构造器注册；`(*newclass)` 侧字段写与
+    // `lua_c_barrier` 义务均已在上一段完成，两句间无 `l` 场写字段，时序不变。
+    let env = getcurrenv(l);
+    lua_r_setupconstructor(&mut *l, newclass, env);
 
     newclass
   }
