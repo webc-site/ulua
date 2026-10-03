@@ -8,7 +8,7 @@ use crate::{
   records::{lua_state::LuaState, match_state::MatchState},
 };
 
-/// cpp `lstrlib.cpp str_find_aux`（lstrlib.cpp:663）：`string.find`/`string.match` 共用体。
+/// cpp `lstrlib.cpp str_find_aux`（lstrlib.cpp:665）：`string.find`/`string.match` 共用体。
 ///
 /// # Safety
 /// `l` 必须是正在执行的 string 库 C 函数帧的存活 `LuaState`：栈槽 #1/#2 为源串/

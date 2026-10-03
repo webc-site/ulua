@@ -1,4 +1,4 @@
-//! Source: `VM/src/lstrlib.cpp:47`
+//! Source: `VM/src/lstrlib.cpp:49`
 //!
 //! `string.reverse` — copy the argument bytes into a fresh buffer back-to-front.
 

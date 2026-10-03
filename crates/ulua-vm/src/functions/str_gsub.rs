@@ -1,4 +1,4 @@
-//! Source: `VM/src/lstrlib.cpp:831`
+//! Source: `VM/src/lstrlib.cpp:833`
 //!
 //! `string.gsub` — global substitution. Repeatedly match the pattern against the
 //! source (up to `max_s` times), append each replacement via `add_value` and the
@@ -26,7 +26,7 @@ use crate::{
 /// 源串/pattern 两个窗口须跨整段匹配循环存活（cpp 的 `MatchState` s/p 游标同形），循环内又
 /// 须反复经 `l` 取参/压栈，p28 锚定形与 `&mut` 接收者不可共存 ⇒ 按 r16-v29 桥接判例在入口
 /// 一次就地转手裸句柄（借用窗止于本次调用），屏障按 r16-v21 判例保留。
-/// cpp lstrlib.cpp:831 `str_gsub`。
+/// cpp lstrlib.cpp:833 `str_gsub`。
 pub(crate) unsafe fn str_gsub(l: &mut LuaState) -> i32 {
   // SAFETY: `l` 由 `&mut` 保证有效且独占，转手后的 `lp` 即同一存活帧；串窗口借用自栈槽串体
   // （Luau 字符串不可变且不被移动），栈增长/参数读取不使其悬垂

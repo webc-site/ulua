@@ -5,7 +5,7 @@ use crate::{
   records::{header::Header, lua_state::LuaState},
 };
 
-/// packsize 布局核算切片核（真实逻辑）：cpp `str_packsize`（lstrlib.cpp:1490）的
+/// packsize 布局核算切片核（真实逻辑）：cpp `str_packsize`（lstrlib.cpp:1584）的
 /// 选项循环、`variable-length format`/`format result too large` 抛出点与
 /// totalsize 累加序逐点对齐 oracle；`fmt_bytes` 为 1 号格式串 payload 切片，
 /// 游标读窗入约见 `getnum.rs`（串尾经 `at` 归一为 NUL，无裸窗）。

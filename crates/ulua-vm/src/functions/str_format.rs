@@ -1,4 +1,4 @@
-//! Source: `VM/src/lstrlib.cpp:966`
+//! Source: `VM/src/lstrlib.cpp:968`
 //!
 //! `string.format` — walk the format string, copying literals and dispatching
 //! each `%` spec to the matching argument: `%c/d/i/o/u/x/X/e/E/f/g/G` (and
@@ -31,7 +31,7 @@ use crate::{
   records::{lua_l_strbuf::LuaLStrbuf, lua_state::LuaState},
 };
 
-/// cpp lstrlib.cpp:1052：无精度限定的长字符串（>=100 字节）直接拼接，
+/// cpp lstrlib.cpp:1054：无精度限定的长字符串（>=100 字节）直接拼接，
 /// 跳过宽度/精度格式化路径。
 const DIRECT_APPEND_MIN_LEN: usize = 100;
 

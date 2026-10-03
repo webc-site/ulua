@@ -3,7 +3,7 @@ use crate::{
   records::match_state::MatchState,
 };
 
-/// cpp `lstrlib.cpp:198 check_capture`：解析捕获序号字符并校验对应槽已闭合。
+/// cpp `lstrlib.cpp:200 check_capture`：解析捕获序号字符并校验对应槽已闭合。
 ///
 /// `ms` 由 `prepstate` 建立（`capture[..ms.level]` 界内可访问、`ms.l` 为处于可抛错
 /// 受保护帧的存活 `lua_State`），偏移/序号判定全走切片与整数值，故签名安全；

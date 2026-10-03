@@ -1,6 +1,6 @@
 use core::ptr::copy_nonoverlapping;
 
-/// 端序感知拷贝：与 cpp/VM/src/lstrlib.cpp:1392 一致。
+/// 端序感知拷贝：与 cpp/VM/src/lstrlib.cpp:1471 一致。
 /// 同本机端序 → 等价 memcpy（`ptr::copy_nonoverlapping`）；异端序 → 逆序逐字节
 /// 拷贝（`dst[j] = src[len-1-j]`）。
 ///

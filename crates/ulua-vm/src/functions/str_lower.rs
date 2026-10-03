@@ -1,4 +1,4 @@
-//! Source: `VM/src/lstrlib.cpp:66`
+//! Source: `VM/src/lstrlib.cpp:61`
 //!
 //! `string.lower` — lowercase each byte of the argument into a fresh buffer.
 

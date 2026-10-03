@@ -1,4 +1,4 @@
-//! Source: `VM/src/lstrlib.cpp:1407`
+//! Source: `VM/src/lstrlib.cpp:1486`
 
 use core::{
   ffi::{c_double, c_float},
@@ -22,7 +22,7 @@ use crate::{
 // review.md §7：本项无 crate 外消费，由 pub 收窄为 pub(crate)。
 pub(crate) const LUAL_PACKPADBYTE: u8 = 0x00;
 
-/// pack 落盘切片核（真实逻辑）：cpp `str_pack`（lstrlib.cpp:1407）的选项循环、
+/// pack 落盘切片核（真实逻辑）：cpp `str_pack`（lstrlib.cpp:1486）的选项循环、
 /// 对齐填充、溢出校验、错误抛出点与写入次序逐点对齐 oracle；`islittle`/截断/
 /// 求值序零变更。
 ///
@@ -158,7 +158,7 @@ unsafe fn str_pack_ref(l: &mut LuaState, fmt_bytes: &[u8]) -> i32 {
 /// 实参（非串经 `check_bytes` 抛 "string expected"），其余义务单源 [`str_pack_ref`]。
 /// 格式串窗口须与同句的核心调用（该核亦经 `&mut l` 压栈/报错）共存，p28 锚定形与 `&mut`
 /// 接收者不可共存 ⇒ 按 r16-v29 桥接判例在块内一次就地转手裸句柄，借用窗止于本块。
-/// cpp `lstrlib.cpp:1407`。
+/// cpp `lstrlib.cpp:1486`。
 pub(crate) fn str_pack(l: &mut LuaState) -> i32 {
   // SAFETY: `l` 由 `&mut` 保证有效且独占，转手后的 `lp` 即同一存活帧；payload 切片借用自
   // 栈槽 #1 串体（不可变、不搬移），本次调用内有效

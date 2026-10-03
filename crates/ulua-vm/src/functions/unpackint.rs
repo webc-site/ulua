@@ -8,7 +8,7 @@ use crate::{
 /// `bytes` 长度须为本次读取的 `size` 字节（`str_unpack` 已用 `luaL_argcheck` 校验数据串
 /// 剩余量，DEBUG 下 `debug_assert` 兜底；失配 Rust 下退化为 panic 而非 UB）。`l` 仅作
 /// 报错用：高位字节与符号扩展不符时抛 "N-byte integer does not fit into Lua Integer"、
-/// 不返回。cpp lstrlib.cpp:1532 `unpackint`。
+/// 不返回。cpp lstrlib.cpp:1611 `unpackint`。
 pub(crate) unsafe fn unpackint(
   l: *mut LuaState,
   bytes: &[u8],
