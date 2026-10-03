@@ -183,20 +183,18 @@ impl TypeChecker {
     // null 哨兵恢复为 Option::None（模块外归一化上报路径语义不变）。
     self.normalizer.arena = None;
 
-    // Safety: 三处接线来源分明——module_mut 是仍被 self.current_module 持有的
+    // 说明: 三处接线来源分明——module_mut 是仍被 self.current_module 持有的
     // Arc 写穿句柄（函数未结束，take 在最后一行）；ice 经 self.ice_handler 句柄
     // get_mut 物化（对象由 Frontend 持有、寿命覆盖本调用，句柄期无并存别名）；
-    // builtin_types 同前。clone_public_interface 的 # Safety 由此满足，且 ice 与
-    // Module 内存不相交；freeze 对两个 TypeArena 的可变借用由句柄字段地址派生，
-    // 在调用处结束——此刻 normalizer.arena 已置 null，无任何并发借用。
-    unsafe {
-      let module_mut = shared_mut(self.expect_current_module());
-      let ice = self.ice_handler.get_mut();
-      (*module_mut).clone_public_interface(self.builtin_types, ice, SolverMode::Old);
+    // builtin_types 同前。ice 与 Module 内存不相交；freeze 对两个 TypeArena 的
+    // 可变借用由句柄字段地址派生，在调用处结束——此刻 normalizer.arena 已置
+    // null，无任何并发借用。
+    let module_mut = shared_mut(self.expect_current_module());
+    let ice = self.ice_handler.get_mut();
+    (*module_mut).clone_public_interface(self.builtin_types, ice, SolverMode::Old);
 
-      freeze(&mut module_mut.internal_types);
-      freeze(&mut module_mut.interface_types);
-    }
+    freeze(&mut module_mut.internal_types);
+    freeze(&mut module_mut.interface_types);
 
     // Clear unifier cache since it's keyed off internal types that get deallocated
     self.unifier_state.cached_unify.clear();

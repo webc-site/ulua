@@ -18,7 +18,7 @@ use crate::{
 };
 
 impl Module {
-  /// # Safety
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作）
   /// - `builtin_types` 为 Handle（NonNull 编码非空），指向分析期全局唯一且
   ///   在本次调用内存活不变的 `BuiltinTypes`（对应 C++ `NotNull<BuiltinTypes>`）。
   /// - `_ice` 指向存活的 `InternalErrorReporter`，覆盖本次调用（C++ 引用形参；
@@ -31,7 +31,7 @@ impl Module {
   ///
   /// `void Module::clonePublicInterface(NotNull<BuiltinTypes> builtinTypes, InternalErrorReporter& ice, SolverMode mode)`.
   /// Reference: `Module.cpp:299-348`.
-  pub(crate) unsafe fn clone_public_interface(
+  pub(crate) fn clone_public_interface(
     &mut self,
     builtin_types: Handle<BuiltinTypes>,
     _ice: &mut InternalErrorReporter,

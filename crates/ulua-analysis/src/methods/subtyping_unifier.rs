@@ -68,7 +68,7 @@ impl SubtypingUnifier {
     let mut upper_bounds: UpperBounds = UpperBounds::new(null());
     for cv in assumed_constraints {
       let (unified, dispatched) =
-        unsafe { self.dispatch_one_constraint(constraint, &cv, &mut upper_bounds) };
+        self.dispatch_one_constraint(constraint, &cv, &mut upper_bounds);
       unifier_res &= unified;
       if !dispatched {
         outstanding_constraints.push(cv);
@@ -85,9 +85,11 @@ impl SubtypingUnifier {
 // Source: `Analysis/src/SubtypingUnifier.cpp:83-183` — `SubtypingUnifier::dispatchOneConstraint`.
 
 impl SubtypingUnifier {
-  /// # Safety
-  /// 调用方须保证满足 C++ 原实现的调用契约。
-  pub(crate) unsafe fn dispatch_one_constraint(
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作）：
+  /// - `constraint` 须指向本约束求解期内存活的 `Constraint`（仅读其 `location`）；
+  /// - `self` 的 arena/builtin_types 句柄由构造期接线，指向会话内存活实例；
+  /// - `emplace_type_pack` 就地覆写 arena 节点，要求单线程独占驱动、无并存可变别名。
+  pub(crate) fn dispatch_one_constraint(
     &self,
     constraint: *const Constraint,
     cv: &ConstraintV,
