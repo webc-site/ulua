@@ -1,4 +1,4 @@
-use core::{ffi::c_char, fmt::Arguments};
+use core::fmt::Arguments;
 
 use crate::{
   functions::{lua_error::lua_error, lua_l_where::lua_l_where, lua_pushvfstring::lua_pushvfstring},
@@ -6,20 +6,24 @@ use crate::{
 };
 
 /// # Safety
-/// 调用方须保证：`l` 为存活调用帧且栈顶至少留有 2 个空闲槽（lWhere 的 level 值与 pushfstring 结果供
-/// `lua_concat` 合并）；须在能捕获抛错的受保护帧内调用（末尾 `lua_error` 不返回）；`args` 的格式化参数
-/// 须与占位符一致（`lua_pushvfstring` 按约定消费，错配即 UB）。
+/// 调用方须保证：`l` 为存活调用帧且栈顶至少留有 2 个空闲槽（`lua_l_where` 的 level 值与
+/// `lua_pushvfstring` 结果供 `lua_concat` 合并）；须在能捕获抛错的受保护帧内调用（末尾
+/// `lua_error` 不返回）；`args` 由 `format_args!` 现场构造，占位符与实参在构造处即静态匹配，
+/// 且不得有逃逸出本次调用的借用。
 ///
 /// 末尾 `lua_error` 必然抛出（longjmp 等价物），故本函数不返回。
 ///
-/// `_fmt` 仅为镜像 cpp `laux.cpp:88` `luaL_error` 的公开签名（外部 crate 以
-/// `c"..."` 实参调用）；实际格式化由 `args`（`format_args!` 产物）完成。
-pub unsafe fn lua_l_error_l(l: *mut LuaState, _fmt: *const c_char, args: Arguments<'_>) -> ! {
-  // SAFETY: fmt 与可变参按 `%s/%d/%f` 约定严格匹配（错配即 UB），块内经 lua_o_pushvfstring_ref 格式化后经 `l` 抛出、不返回
+/// cpp `laux.cpp:88` `luaL_error(L, fmt, ...)` 的 `fmt` 形参在此端口无对应物：格式化完全由
+/// `args` 承担，故 Rust 侧不再收该参数（DELIBERATE DEVIATION：cpp 保留 `const char*` 只为
+/// 其 varargs 协议，照抄会诱导调用方书写 `c"..."` 字面量并误以为参与格式化）。
+pub unsafe fn lua_l_error_l(l: *mut LuaState, args: Arguments<'_>) -> ! {
+  // SAFETY: `l` 由本函数入口 `# Safety` 契约保证为存活、可抛错的受保护帧且留有 2 空槽，
+  // 该前提原样透传给 `lua_l_where`/`lua_pushvfstring`/`lua_error`。
   unsafe {
-    lua_l_where(&mut *l, 1);
-    lua_pushvfstring(&mut *l, args);
-    (*l).concat(2);
-    lua_error(&mut *l)
+    let l = &mut *l;
+    lua_l_where(l, 1);
+    lua_pushvfstring(l, args);
+    l.concat(2);
+    lua_error(l)
   }
 }
