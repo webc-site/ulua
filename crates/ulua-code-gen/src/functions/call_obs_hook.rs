@@ -22,8 +22,6 @@ use crate::functions::{
   get_code_gen_context::get_code_gen_context, luau_codegen_compile::luau_codegen_warm_recompile,
 };
 
-/// 观测预算单点在 ulua-vm call_obs（CALL_OBS_BUDGET）：扣减发生在观测核入口，
-/// 这里只读判定耗尽并置空 NativeContext 钩槽。
 /// A64 CALL 快路插桩入口（NativeContext.call_obs_hook 槽指向本函数）。
 /// 快路守卫段已验函数 tag 与非 C 闭包，此处仅做 caller 帧形态防御。
 ///

@@ -21,10 +21,7 @@
 //! （站点被内联后 native CALL 不再经过 call_prolog），扫描开销自消，故不引入
 //! 进程级表与额外失效协议。
 
-use core::{
-  slice::from_raw_parts,
-  sync::atomic::{AtomicU32, Ordering},
-};
+use core::sync::atomic::{AtomicU32, Ordering};
 
 use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_insn_ops::luau_insn_op};
 
@@ -148,12 +145,6 @@ pub unsafe fn call_pc_of(proto: *const Proto, savedpc: *const Instruction) -> Op
 /// 布局的堆分配数据区；`call_pc` 须为 caller 字节码界内的 CALL/CALLFB 指令下标。
 pub unsafe fn call_obs_record_at(caller: *mut Proto, call_pc: u32, ccl: *mut Closure) -> bool {
   unsafe {
-    if CALL_OBS_BUDGET
-      .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1))
-      .is_err()
-    {
-      return false;
-    }
     if (*ccl).is_c != 0 {
       return false;
     }
@@ -179,6 +170,13 @@ pub unsafe fn call_obs_record_at(caller: *mut Proto, call_pc: u32, ccl: *mut Clo
       }
     }
     if lo == ncalls || *base.add(K_SLOT_WORDS * lo) != call_pc {
+      return false;
+    }
+    // 预算扣减在站点命中之后：定位失败的 CALL（无表 caller 等）不烧预算
+    if CALL_OBS_BUDGET
+      .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1))
+      .is_err()
+    {
       return false;
     }
 
@@ -258,45 +256,4 @@ pub unsafe fn call_obs_hints_for(proto: *const Proto) -> Vec<(u32, u32, usize)> 
     }
     out
   }
-}
-
-/// 诊断读数：各 proto 各 CALL 站点的 pc/hits/funid 概览（luau-run 读数用）。
-///
-/// # Safety
-/// 契约同 [`call_obs_hints_for`]。
-pub unsafe fn call_obs_dump(protos: &[usize]) -> String {
-  let mut out = String::new();
-  for (i, &p) in protos.iter().enumerate() {
-    let proto = p as *const Proto;
-    unsafe {
-      let d = (*proto).execdata;
-      if d.is_null() {
-        continue;
-      }
-      let sc = (*proto).sizecode as usize;
-      let data = d as *const u32;
-      let (cobs0, ncalls) = match locate_cobs(data, sc) {
-        Some(x) => x,
-        None => continue,
-      };
-      out.push_str(&format!("== proto#{i} sizecode={sc} cobs_sites={ncalls}\n"));
-      let code = from_raw_parts((*proto).code, sc);
-      let slots = from_raw_parts(data.add(cobs0 + 2), ncalls * K_SLOT_WORDS);
-      for s in 0..ncalls {
-        let w = &slots[s * K_SLOT_WORDS..s * K_SLOT_WORDS + K_SLOT_WORDS];
-        let op = code
-          .get(w[0] as usize)
-          .copied()
-          .map_or(0xff, |insn| insn as u8);
-        out.push_str(&format!(
-          "  site pc={:5} op={op:3} hits={:6} funid={:5} state_flags={:x}\n",
-          w[0],
-          w[1] >> 8,
-          w[2],
-          w[1] & 0xff
-        ));
-      }
-    }
-  }
-  out
 }
