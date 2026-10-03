@@ -61,3 +61,25 @@ A+B 主导（20/22），D 缺席 ⇒ 判「保留」。r16-v24（capi_shell! 增
 - **rt 侧维持 v26 屏障形**：StateView 为 Copy 手柄、无真实借用可锚，本案不通用。
 - 后续新窗口门面优先锚定形；(ptr,len) 裸量快照形 soundness 等价但每点 +1 窄 unsafe
   块，能在 ≤3 行内换长度快照/二次派窗者不必上裸快照。
+
+## 五、并入 dev 复验（r16-v33，主控）
+
+探针基线 `3bc30e00` 上的 D=0 结论**只在当时成立**：与 dev@ace7e6a1（含 r16-v29 的
+`lua_b_*` 首参收形）合并后，暴露 1 处**语义冲突**（文本零冲突，`git merge` 自动并入）。
+
+- 冲突点：`crates/ulua-vm/src/functions/lua_b_tonumber.rs`。v29 把该核心降为安全 `fn`
+  且首参成真实 `&mut LuaState` 后，p28 锚定形的 `l.check_bytes(1)` 出参与紧随其后的
+  `l.arg_check(..)` 两个 `&mut` 借用重叠 → **E0499**。探针当年看不到此错，正因为
+  该点位当时还是裸 `*mut LuaState`——即本文件 §二「裸 `&mut *l` 重叠 rustc 不查」的镜像
+  后果：收形把 rustc 原本盲视的窗口重叠**变成编译错误**。
+- 消解：按本判据 A 类**二次派窗**（非 (ptr,len) 裸快照，零新增 unsafe）——首次
+  `l.check_bytes(1).len()` 仅作 cpp `luaL_checkstring` 的先位抛错件（"string expected"
+  必先于 "base out of range"，可观察序逐位不变），借用止于取长；`arg_check` 落定后二次
+  派窗直达解析。长度快照同时充当 `memchr` 无 NUL 时的 `unwrap_or` 全长，与旧
+  `bytes.len()` 同值。
+- 复验门禁（合并态，全在 worktree 只读跑）：clippy `-D warnings -W
+  clippy::absolute_paths` RC=0、`cargo +nightly fmt --check` RC=0、`./test.sh`
+  **6575 单测 + 111 conformance 全绿**（探针侧无 test.sh 权限，此为本判据首次全量实证）。
+- 推论入档：**锚定形与「首参收形」互为放大**——收形越广，锚定形的借用冲突越早暴露；
+  后续 vm 门面锚定票应与同族收形票同批复验，不可各自在旧基线上声称零冲突。
+

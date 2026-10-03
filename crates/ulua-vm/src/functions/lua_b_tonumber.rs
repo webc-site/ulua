@@ -24,8 +24,15 @@ pub(crate) fn lua_b_tonumber(l: &mut LuaState) -> i32 {
     }
     l.check_any(1); // error if we don't have any argument
   } else {
-    let bytes = l.check_bytes(1);
+    // r16-v33 锚定形×收形交汇点（p28 A 类「二次派窗」判例）：`check_bytes` 出参锚定
+    // `&mut l` 借用，`arg_check` 亦经 `&mut l`，二者不可重叠。首次派窗只取景校验——
+    // 兼作 cpp `luaL_checkstring` 的先位抛错（"string expected" 必先于
+    // "base out of range"，可观察序逐位不变），借用止于取长；随后校验落定再二次派窗
+    // 直达解析（同槽同值，观测等价）。
+    let len = l.check_bytes(1).len();
     l.arg_check((2..=36).contains(&base), 2, "base out of range");
+
+    let bytes = l.check_bytes(1);
 
     // cpp `strtoull(s1, &s2, base)` 按 NUL 结尾读取：内嵌 `\0` 即串终点（`endptr`
     // 落于其上、`*s2 == '\0'` 判成功），故取首 NUL 前的前缀切片作为解析域。切片
@@ -33,7 +40,7 @@ pub(crate) fn lua_b_tonumber(l: &mut LuaState) -> i32 {
     // 与 endptr 语义逐位对应。
     // memchr 与 `iter().position(|&c| c == 0)` 逐位等价：同为首 NUL 下标，
     // 无 NUL 时 `unwrap_or` 收口为全长；memchr 走 SIMD（形态同 lua_l_traceback）。
-    let s = &bytes[..memchr::memchr(0, bytes).unwrap_or(bytes.len())];
+    let s = &bytes[..memchr::memchr(0, bytes).unwrap_or(len)];
 
     let (n, consumed) = parse_c_ull(s, base as u32);
     if consumed != 0 {
