@@ -8,18 +8,17 @@ use crate::{
   type_aliases::b_uint::BUint,
 };
 
-/// # Safety
+/// extract 核心：取 1 号无符号数、经 `fieldargs` 校验字段后截段压回。
 ///
-/// `l` 必须指向本次 binary32 C 函数调用的存活 `LuaState`：所需实参按 API 索引约定位于栈上可读（越界或非数值由 check*/argerror 报错），栈顶预留结果空间。
-pub(crate) unsafe fn b_extract(l: *mut LuaState) -> i32 {
-  // SAFETY: 契约保证 `l` 为存活调用帧且实参 1..=3 可读，字段位区间经 argcheck 在 [0,64) 界内
-  unsafe {
-    let r: BUint = lua_l_checkunsigned(&mut *l, 1);
-    let (f, w) = fieldargs(l, 2);
-    let r = (r >> f) & mask(w);
-    lua_pushunsigned(&mut *l, r);
-    1
-  }
+/// 调用序契约（正确性，非内存安全）：以 Lua 库函数约定被调——实参 1..=3 按 API 索引
+/// 约定可读（越界或非数值由 check*/argerror 报错回退），字段位区间经校验落在 [0,32]
+/// 界内，栈顶预留结果空间；mask 为纯标量位算。
+pub(crate) fn b_extract(l: &mut LuaState) -> i32 {
+  let r: BUint = lua_l_checkunsigned(l, 1);
+  let (f, w) = fieldargs(l, 2);
+  let r = (r >> f) & mask(w);
+  lua_pushunsigned(l, r);
+  1
 }
 
-lua_lib_fn!(pub(crate) fn b_extract, b_extract_arm);
+lua_lib_fn!(pub(crate) fn b_extract @ref, b_extract_arm);

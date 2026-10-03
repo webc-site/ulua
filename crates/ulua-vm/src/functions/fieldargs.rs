@@ -7,24 +7,21 @@ use crate::{
 ///
 /// cpp 用 `int* width` 出参 + 返回 `f`，Rust 版折叠为元组返回。
 ///
-/// # Safety
-///
-/// `l` 必须指向有效、活跃的 `LuaState`。
-pub(crate) unsafe fn fieldargs(l: *mut LuaState, farg: i32) -> (i32, i32) {
-  // SAFETY: 契约保证 `l` 为存活调用帧、farg 索引可读；checklstring 返回的串数据与长度在本调用期间有效
-  unsafe {
-    let f = (*l).check_integer(farg);
-    let w = lua_l_optinteger(&mut *l, farg + 1, 1);
+/// 调用序契约（正确性，非内存安全）：以 Lua 库函数约定被调——`l` 为存活调用帧，
+/// farg 与 farg+1 索引可读（越界或非数值由 check*/argerror 报错回退）。
+pub(crate) fn fieldargs(l: &mut LuaState, farg: i32) -> (i32, i32) {
+  let f = l.check_integer(farg);
+  let w = lua_l_optinteger(l, farg + 1, 1);
 
-    (*l).arg_check(0 <= f, farg, "field cannot be negative");
-    (*l).arg_check(0 < w, farg + 1, "width must be positive");
+  l.arg_check(0 <= f, farg, "field cannot be negative");
+  l.arg_check(0 < w, farg + 1, "width must be positive");
 
-    // Widen the add: `f`/`w` are user-supplied and (with f>=0, w>0) `f + w`
-    // overflows `int` for huge f (UB in C++; panic with overflow-checks).
-    if f as i64 + w as i64 > 32 {
-      luaL_error!(l, "trying to access non-existent bits");
-    }
-
-    (f, w)
+  // Widen the add: `f`/`w` are user-supplied and (with f>=0, w>0) `f + w`
+  // overflows `int` for huge f (UB in C++; panic with overflow-checks).
+  if f as i64 + w as i64 > 32 {
+    // SAFETY: `l` 为借用形式的存活调用帧（&mut 保证有效且独占），as_mut_ptr 由该借用重取裸指针，luaL_error 抛错不返回。
+    unsafe { luaL_error!(l.as_mut_ptr(), "trying to access non-existent bits") };
   }
+
+  (f, w)
 }
