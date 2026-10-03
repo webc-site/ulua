@@ -5,10 +5,10 @@ use crate::{
   type_aliases::b_uint::BUint,
 };
 
-/// # Safety
-///
-/// `l` 必须指向本次 binary32 C 函数调用的存活 `LuaState`：所需实参按 API 索引约定位于栈上可读（越界或非数值由 check*/argerror 报错），栈顶预留结果空间。
-pub(crate) unsafe fn b_shift(l: *mut LuaState, mut r: BUint, i: i32) -> i32 {
+/// 调用序契约（正确性，非内存安全——`l` 的存活前提已由 `&mut` 接收者类型承载）：
+/// 调用方须保证本次 binary32 C 函数调用所需实参按 API 索引约定位于栈上可读
+/// （越界或非数值由 check*/argerror 报错路径抛出）、栈顶预留结果空间。
+pub(crate) fn b_shift(l: &mut LuaState, mut r: BUint, i: i32) -> i32 {
   // Mirrors VM/src/lbitlib.cpp:b_shift
   if i < 0 {
     // Magnitude of the (right) shift. `i.unsigned_abs()` is defined for
@@ -30,10 +30,7 @@ pub(crate) unsafe fn b_shift(l: *mut LuaState, mut r: BUint, i: i32) -> i32 {
     r = trim(r);
   }
 
-  // SAFETY: 契约保证 `l` 为存活调用帧；本帧把裸指针重建为独占引用后即结束借用窗口
-  // （`lua_pushunsigned` 自身签名安全，仅要求 `&mut LuaState`）
-  unsafe {
-    lua_pushunsigned(&mut *l, r);
-  }
+  // `lua_pushunsigned` 签名安全、只收 `&mut LuaState`：引用形下本函数体内零裸指针触点
+  lua_pushunsigned(l, r);
   1
 }

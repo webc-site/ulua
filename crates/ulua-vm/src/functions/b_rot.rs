@@ -5,24 +5,21 @@ use crate::{
   type_aliases::b_uint::BUint,
 };
 
-/// # Safety
-///
-/// `l` 必须指向本次 binary32 C 函数调用的存活 `LuaState`：所需实参按 API 索引约定位于栈上可读（越界或非数值由 check*/argerror 报错），栈顶预留结果空间。
-pub(crate) unsafe fn b_rot(l: *mut LuaState, mut i: i32) -> i32 {
-  // SAFETY: 契约保证 `l` 为存活调用帧且实参 2 可读，旋转量归一后纯数值运算无指针访问
-  unsafe {
-    let mut r: BUint = lua_l_checkunsigned(&mut *l, 1);
+/// 调用序契约（正确性，非内存安全——`l` 的存活前提已由 `&mut` 接收者类型承载）：
+/// 调用方须保证本次 binary32 C 函数调用所需实参按 API 索引约定位于栈上可读
+/// （越界或非数值由 check*/argerror 报错路径抛出）、栈顶预留结果空间。
+pub(crate) fn b_rot(l: &mut LuaState, mut i: i32) -> i32 {
+  let mut r: BUint = lua_l_checkunsigned(l, 1);
 
-    // i = i % NBITS (avoid undefined shift when i == 0)
-    i &= NBITS - 1;
+  // i = i % NBITS (avoid undefined shift when i == 0)
+  i &= NBITS - 1;
 
-    r = trim(r);
-    if i != 0 {
-      let i_u = i as u32;
-      r = (r << i_u) | (r >> (NBITS as u32 - i_u));
-    }
-
-    lua_pushunsigned(&mut *l, trim(r));
-    1
+  r = trim(r);
+  if i != 0 {
+    let i_u = i as u32;
+    r = (r << i_u) | (r >> (NBITS as u32 - i_u));
   }
+
+  lua_pushunsigned(l, trim(r));
+  1
 }
