@@ -22,7 +22,7 @@ pub(crate) fn evaluate_type_alias_call(l: &mut LuaState) -> i32 {
 
     // TypeFunctionRuntime* runtime = getTypeFunctionRuntime(l);
     // TypeFunctionRuntimeBuilderState* runtimeBuilder = runtime->runtimeBuilder;
-    let runtime = get_type_function_runtime(&mut *l);
+    let runtime = get_type_function_runtime(l);
     // runtime->runtimeBuilder 由 ScopedAssign 在本次调用窗口内布为非空，重建可变借用后
     // builder state 就以普通 `&mut` 在函数体内流转（serde 入口不再收裸指针）。
     let runtime_builder = &mut *(*runtime).runtime_builder;
@@ -46,7 +46,7 @@ pub(crate) fn evaluate_type_alias_call(l: &mut LuaState) -> i32 {
     // lua 栈参数从 1 起，arg_index 即上游的 i + 1
     for arg_index in 1..=argument_count {
       // TypeFunctionTypeId tfty = getTypeUserData(l, i + 1);
-      let tfty: TypeFunctionTypeId = get_type_user_data(&mut *l, arg_index);
+      let tfty: TypeFunctionTypeId = get_type_user_data(l, arg_index);
       // TypeId ty = deserialize(tfty, runtimeBuilder);
       let ty = deserialize_type_function_type_id_type_function_runtime_builder_state(
         tfty,
@@ -255,7 +255,7 @@ pub(crate) fn evaluate_type_alias_call(l: &mut LuaState) -> i32 {
 
     // allocTypeUserData(l, serializedTy->type, /* frozen */ true);
     let type_variant = (*serialized_ty).type_variant.clone();
-    alloc_type_user_data(&mut *l, type_variant, true);
+    alloc_type_user_data(l, type_variant, true);
 
     // return 1;
     1

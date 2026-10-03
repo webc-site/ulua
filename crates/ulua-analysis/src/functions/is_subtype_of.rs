@@ -5,8 +5,7 @@ use ulua_vm::macros::lua_l_error::luaL_error;
 use crate::{functions::{deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state, get_type_function_runtime::get_type_function_runtime, get_type_user_data::get_type_user_data}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn is_subtype_of(l: &mut LuaState) -> i32 {
-  // Safety: `l` 由 Lua VM 按类型函数运行时约定传入并全程存活，`l as *mut lua_state::LuaState` 为
-  // 同址重解释。`get_type_function_runtime(&mut *l)` 返回该 L 建栈时接线、非空且比本次调用长寿的 runtime，
+  // Safety: `l` 由 Lua VM 按类型函数运行时约定传入并全程存活（经 `c_thunk!` 蹦床重建为独占 `&mut`）。`get_type_function_runtime(l)` 返回该 L 建栈时接线、非空且比本次调用长寿的 runtime，
   // 其 `runtime_builder` 是构造期布线的非空指针，`&mut *` 重建 builder 的可变借用，两次
   // deserialize 在其上写 errors；此后才经 `ctx.get()` 物化 `Handle<TypeFunctionContext>` 的共享借用，
   // 与 deserialize 的可写窗口串行不交叠。`ctx.subtyping`/`ctx.scope` 为构造期接线的 NonNull，非空且
@@ -22,10 +21,10 @@ pub(crate) fn is_subtype_of(l: &mut LuaState) -> i32 {
       );
     }
 
-    let self_ty = get_type_user_data(&mut *l, 1);
-    let arg = get_type_user_data(&mut *l, 2);
+    let self_ty = get_type_user_data(l, 1);
+    let arg = get_type_user_data(l, 2);
 
-    let runtime = get_type_function_runtime(&mut *l);
+    let runtime = get_type_function_runtime(l);
     let runtime_builder = &mut *(*runtime).runtime_builder;
 
     let sub_ty = deserialize_type_function_type_id_type_function_runtime_builder_state(

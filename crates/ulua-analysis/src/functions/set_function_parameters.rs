@@ -10,7 +10,7 @@ pub(crate) fn set_function_parameters(l: &mut LuaState) -> i32 {
   unsafe {
     lua_check_args!(l, 1..=3, "type.setparameters: expected 1-3, but got {}");
 
-    let self_ty = get_type_user_data(&mut *l, 1);
+    let self_ty = get_type_user_data(l, 1);
     let tfft = get_mutable_type_function_type_id::<TypeFunctionFunctionType>(self_ty);
     lua_check_tag!(
       l,
@@ -21,7 +21,7 @@ pub(crate) fn set_function_parameters(l: &mut LuaState) -> i32 {
 
     lua_check_not_frozen!(l, self_ty, "type.setparameters");
 
-    (*tfft).arg_types = get_type_pack_runtime(&mut *l, 2, 3);
+    (*tfft).arg_types = get_type_pack_runtime(l, 2, 3);
 
     0
   }

@@ -13,7 +13,7 @@ pub(crate) fn set_table_prop(l: &mut LuaState) -> i32 {
       "type.setproperty: expected 2-3 arguments, but got {}"
     );
 
-    let self_ty = get_type_user_data(&mut *l, 1);
+    let self_ty = get_type_user_data(l, 1);
     let tftt = get_mutable_type_function_type_id::<TypeFunctionTableType>(self_ty);
     lua_check_tag!(
       l,
@@ -24,7 +24,7 @@ pub(crate) fn set_table_prop(l: &mut LuaState) -> i32 {
 
     lua_check_not_frozen!(l, self_ty, "type.setproperty");
 
-    let key = get_type_user_data(&mut *l, 2);
+    let key = get_type_user_data(l, 2);
     let tfst = get_type_function_type_id::<TypeFunctionSingletonType>(key);
     lua_check_tag!(
       l,
@@ -52,7 +52,7 @@ pub(crate) fn set_table_prop(l: &mut LuaState) -> i32 {
       return 0;
     }
 
-    let value = get_type_user_data(&mut *l, 3);
+    let value = get_type_user_data(l, 3);
     (*tftt).props.insert(
       key_name,
       TypeFunctionProperty {

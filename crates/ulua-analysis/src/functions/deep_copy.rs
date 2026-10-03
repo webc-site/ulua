@@ -8,20 +8,20 @@ pub(crate) fn deep_copy(l: &mut LuaState) -> i32 {
   unsafe {
     lua_check_args!(l, != 1, "types.copy: expected 1 arguments, but got {}");
 
-    let arg = get_type_user_data(&mut *l, 1);
+    let arg = get_type_user_data(l, 1);
     // runtime 由注册阶段挂在本线程 userdatum 上，deepCopy 只在已接线的类型函数环境里被
     // 调用，故恒非空；`Handle::from_ptr` 把该契约从「解引用即 UB」收为「违例即确定性 panic」。
-    let runtime = Handle::from_ptr(get_type_function_runtime(&mut *l));
+    let runtime = Handle::from_ptr(get_type_function_runtime(l));
     let copy = deep_clone(runtime, arg);
 
     if fflag::LuauTypeFunctionRobustness.get() && copy.is_null() {
       throw_type_error(
-        &mut *l,
+        l,
         format_args!("types.copy: complexity limit reached during type copy"),
       );
     }
 
-    alloc_type_user_data(&mut *l, (*copy).type_variant.clone(), false);
+    alloc_type_user_data(l, (*copy).type_variant.clone(), false);
     1
   }
 }

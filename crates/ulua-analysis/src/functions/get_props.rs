@@ -16,23 +16,23 @@ pub(crate) fn get_props(l: &mut LuaState) -> i32 {
   unsafe {
     lua_check_args!(l, != 1, "type.properties: expected 1 arguments, but got {}");
 
-    let self_ty = get_type_user_data(&mut *l, 1);
+    let self_ty = get_type_user_data(l, 1);
 
     let tftt = get_type_function_type_id::<TypeFunctionTableType>(self_ty);
     if !tftt.is_null() {
-      push_props(&mut *l, &(*tftt).props);
+      push_props(l, &(*tftt).props);
       return 1;
     }
 
     let tfct = get_type_function_type_id::<TypeFunctionExternType>(self_ty);
     if !tfct.is_null() {
-      push_props(&mut *l, &(*tfct).props);
+      push_props(l, &(*tfct).props);
       return 1;
     }
 
-    let tag = get_tag(&mut *l, self_ty);
+    let tag = get_tag(l, self_ty);
     throw_type_error(
-      &mut *l,
+      l,
       format_args!(
         "type.properties: expected self to be either a table or class, but got {} instead",
         tag
@@ -60,7 +60,7 @@ unsafe fn push_props(
 
     for (name, prop) in props {
       alloc_type_user_data(
-        &mut *l,
+        l,
         TypeFunctionTypeVariant::Singleton(TypeFunctionSingletonType {
           variant: TypeFunctionSingletonVariant::V1(TypeFunctionStringSingleton {
             value: name.clone(),
@@ -80,16 +80,16 @@ unsafe fn push_props(
       lua_createtable(l.as_mut_ptr(), 0, size);
 
       if let Some(read_ty) = prop.read_ty {
-        alloc_type_user_data(&mut *l, (*read_ty).type_variant.clone(), false);
+        alloc_type_user_data(l, (*read_ty).type_variant.clone(), false);
         l.set_field_bytes(-2, FIELD_READ);
       }
 
       if let Some(write_ty) = prop.write_ty {
-        alloc_type_user_data(&mut *l, (*write_ty).type_variant.clone(), false);
+        alloc_type_user_data(l, (*write_ty).type_variant.clone(), false);
         l.set_field_bytes(-2, FIELD_WRITE);
       }
 
-      lua_settable(&mut *l, -3);
+      lua_settable(l, -3);
     }
   }
 }

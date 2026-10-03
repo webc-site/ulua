@@ -11,15 +11,15 @@ pub(crate) fn create_negation(l: &mut LuaState) -> i32 {
   unsafe {
     lua_check_args!(l, != 1, "types.negationof: expected 1 argument, but got {}");
 
-    let arg = get_type_user_data(&mut *l, 1);
+    let arg = get_type_user_data(l, 1);
 
     let table_type_ptr = get_type_function_type_id::<TypeFunctionTableType>(arg);
     let function_type_ptr = get_type_function_type_id::<TypeFunctionFunctionType>(arg);
 
     if !table_type_ptr.is_null() || !function_type_ptr.is_null() {
-      let tag = get_tag(&mut *l, arg);
+      let tag = get_tag(l, arg);
       throw_type_error(
-        &mut *l,
+        l,
         format_args!(
           "types.negationof: cannot perform negation on `{}` type",
           tag
@@ -28,7 +28,7 @@ pub(crate) fn create_negation(l: &mut LuaState) -> i32 {
     }
 
     let negation = TypeFunctionNegationType { type_id: arg };
-    alloc_type_user_data(&mut *l, TypeFunctionTypeVariant::Negation(negation), false);
+    alloc_type_user_data(l, TypeFunctionTypeVariant::Negation(negation), false);
 
     1
   }

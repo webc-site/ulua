@@ -7,7 +7,7 @@ use ulua_vm::records::lua_state::LuaState;
 const K_TYPE_USERDATA_TAG: i32 = 42;
 
 pub fn get_type_user_data(l: &mut LuaState, idx: i32) -> TypeFunctionTypeId {
-  // Safety: `l` 由 Lua VM 运行时约定传入并全程存活，`l as *mut lua_state::LuaState` 为同址重解释。
+  // Safety: `l` 由 Lua VM 运行时约定传入并全程存活（经 `c_thunk!` 蹦床重建为独占 `&mut`）。
   // `lua_touserdatatagged` 在 tag 匹配时返回 VM 为该 userdata 持有的数据指针、否则返回 null；
   // `*typ` 仅在 `!typ.is_null()` 守卫后读取，指向 VM 分配且在本次调用内存活的 TypeFunctionTypeId。
   // 不匹配时以 `lua_l_typeerror_l`（返回 `!`）抛类型错误、不返回。单线程串行，无并发别名。

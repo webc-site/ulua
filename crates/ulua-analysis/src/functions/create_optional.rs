@@ -12,10 +12,10 @@ pub(crate) fn create_optional(l: &mut LuaState) -> i32 {
   // Handle::from_ptr 收敛为 panic），allocate_type_function_type 返回其 arena 稳定指针，
   // nil_id 仅作裸指针入集合不被解引用。
   unsafe {
-    let runtime = Handle::from_ptr(get_type_function_runtime(&mut *l));
+    let runtime = Handle::from_ptr(get_type_function_runtime(l));
     lua_check_args!(l, != 1, "types.optional: expected 1 argument, but got {}");
 
-    let argument: TypeFunctionTypeId = get_type_user_data(&mut *l, 1);
+    let argument: TypeFunctionTypeId = get_type_user_data(l, 1);
 
     let mut components: Vec<TypeFunctionTypeId> = Vec::new();
 
@@ -34,7 +34,7 @@ pub(crate) fn create_optional(l: &mut LuaState) -> i32 {
 
     let union_type = TypeFunctionUnionType { components };
     let union_variant = TypeFunctionTypeVariant::Union(union_type);
-    alloc_type_user_data(&mut *l, union_variant, false);
+    alloc_type_user_data(l, union_variant, false);
 
     1
   }

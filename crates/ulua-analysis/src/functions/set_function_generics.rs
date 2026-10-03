@@ -8,7 +8,7 @@ use crate::{functions::{get_generics::get_generics, get_mutable_type_function_ru
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn set_function_generics(l: &mut LuaState) -> i32 {
   unsafe {
-    let self_ty = get_type_user_data(&mut *l, 1);
+    let self_ty = get_type_user_data(l, 1);
     let tfft = get_mutable_type_function_type_id::<TypeFunctionFunctionType>(self_ty);
 
     lua_check_tag!(
@@ -26,7 +26,7 @@ pub(crate) fn set_function_generics(l: &mut LuaState) -> i32 {
       lua_check_args!(l, > 3, "type.setgenerics: expected 3 arguments, but got {}");
     }
 
-    let (generic_types, generic_packs) = get_generics(&mut *l, 2, "types.setgenerics");
+    let (generic_types, generic_packs) = get_generics(l, 2, "types.setgenerics");
 
     (*tfft).generics = generic_types;
     (*tfft).generic_packs = generic_packs;

@@ -16,7 +16,7 @@ pub(crate) fn create_generic(l: &mut LuaState) -> i32 {
 
     if name.is_empty() {
       throw_type_error(
-        &mut *l,
+        l,
         format_args!("types.generic: generic name cannot be empty"),
       );
     }
@@ -28,7 +28,7 @@ pub(crate) fn create_generic(l: &mut LuaState) -> i32 {
     };
 
     alloc_type_user_data(
-      &mut *l,
+      l,
       TypeFunctionTypeVariant::Generic(generic_type),
       false,
     );

@@ -14,14 +14,13 @@ pub(crate) unsafe fn get_generics(
   idx: i32,
   fname: &str,
 ) -> (Vec<TypeFunctionTypeId>, Vec<TypeFunctionTypePackId>) {
-  // Safety: `l` 由 Lua VM 按类型函数运行时约定传入并全程存活，`l as *mut lua_state::LuaState`
-  // 为同一地址的重解释。`get_type_user_data`/`get_type_function_type_id::<TypeFunctionGenericType>`
+  // Safety: `l` 由 Lua VM 按类型函数运行时约定传入并全程存活（经入口以独占 `&mut` 借入）。`get_type_user_data`/`get_type_function_type_id::<TypeFunctionGenericType>`
   // 的下转按 class-index 判定，`gty` 仅在 `!is_null()` 守卫后才解引用读取 is_pack/is_named/name；
   // 类型函数数据存活于本次调用。错误分支 `throw_type_error` 返回 `!` 不返回，`lua_l_typeerror_l`
   // 之后不再解引用任何指针。单线程串行遍历，push/gettable/pop 栈操作平衡、无并发别名。
   unsafe {
     // 注册期写入主线程 thread data 的非空 runtime（null 由 Handle::from_ptr 收敛为 panic）。
-    let runtime = Handle::from_ptr(get_type_function_runtime(&mut *l));
+    let runtime = Handle::from_ptr(get_type_function_runtime(l));
 
     let mut types: Vec<TypeFunctionTypeId> = Vec::new();
     let mut packs: Vec<TypeFunctionTypePackId> = Vec::new();
@@ -32,7 +31,7 @@ pub(crate) unsafe fn get_generics(
       let mut i: i32 = 1;
       while i <= l.obj_len(-1) as i32 {
         l.push_integer(i);
-        lua_gettable(&mut *l, -2);
+        lua_gettable(l, -2);
 
         if l.is_nil(-1) {
           l.pop(1);
@@ -40,7 +39,7 @@ pub(crate) unsafe fn get_generics(
         }
 
         // TypeFunctionTypeId ty = getTypeUserData(l, -1);
-        let ty = get_type_user_data(&mut *l, -1);
+        let ty = get_type_user_data(l, -1);
 
         // if (auto gty = get<TypeFunctionGenericType>(ty))
         let gty = get_type_function_type_id::<TypeFunctionGenericType>(ty);
@@ -56,7 +55,7 @@ pub(crate) unsafe fn get_generics(
           } else {
             if !packs.is_empty() {
               throw_type_error(
-                &mut *l,
+                l,
                 format_args!("{}: generic type cannot follow a generic pack", fname),
               );
             }
@@ -65,7 +64,7 @@ pub(crate) unsafe fn get_generics(
           }
         } else {
           throw_type_error(
-            &mut *l,
+            l,
             format_args!("{}: table member was not a generic type", fname),
           );
         }

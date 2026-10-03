@@ -8,7 +8,7 @@ pub(crate) fn set_table_metatable(l: &mut LuaState) -> i32 {
   unsafe {
     lua_check_args!(l, != 2, "type.setmetatable: expected 2 arguments, but got {}");
 
-    let self_ty = get_type_user_data(&mut *l, 1);
+    let self_ty = get_type_user_data(l, 1);
 
     let tftt = get_mutable_type_function_type_id::<TypeFunctionTableType>(self_ty);
     lua_check_tag!(
@@ -20,16 +20,16 @@ pub(crate) fn set_table_metatable(l: &mut LuaState) -> i32 {
 
     lua_check_not_frozen!(l, self_ty, "type.setmetatable");
 
-    let arg = get_type_user_data(&mut *l, 2);
+    let arg = get_type_user_data(l, 2);
     if get_type_function_type_id::<TypeFunctionTableType>(arg).is_null() {
       let tag_ty = if fflag::LuauTypeFunctionRobustness.get() {
         arg
       } else {
         self_ty
       };
-      let tag = get_tag(&mut *l, tag_ty);
+      let tag = get_tag(l, tag_ty);
       throw_type_error(
-        &mut *l,
+        l,
         format_args!(
           "type.setmetatable: expected the argument to be a table, but got {} instead",
           tag

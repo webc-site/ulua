@@ -39,7 +39,7 @@ pub(crate) unsafe fn alloc_type_user_data(
     let ptr = lua_newuserdatatagged(lp, size_of::<TypeFunctionTypeId>(), K_TYPE_USERDATA_TAG)
       as *mut TypeFunctionTypeId;
 
-    let runtime = Handle::from_ptr(get_type_function_runtime(&mut *l));
+    let runtime = Handle::from_ptr(get_type_function_runtime(l));
     let type_id = allocate_type_function_type(runtime, type_variant);
     *ptr = type_id;
 

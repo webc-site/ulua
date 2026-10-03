@@ -7,14 +7,13 @@ use ulua_vm::functions::{lua_createtable::lua_createtable, lua_rawseti::lua_raws
 use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_type_function_runtime::{get_type_function_type_id, get_type_function_type_pack_id}, get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, macros::lua_check_tag, records::{type_function_function_type::TypeFunctionFunctionType, type_function_generic_type::TypeFunctionGenericType, type_function_generic_type_pack::TypeFunctionGenericTypePack}, type_aliases::{type_function_type_variant::TypeFunctionTypeVariant}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn get_function_generics(l: &mut LuaState) -> i32 {
-  // Safety: `l` 由 Lua VM 按类型函数运行时约定传入并全程存活；`l as *mut lua_state::LuaState`
-  // 是同一状态的重解释。`self_ty` 由 `get_type_user_data` 取得，`get_type_function_type_id::<
+  // Safety: `l` 由 Lua VM 按类型函数运行时约定传入并全程存活（经 `c_thunk!` 蹦床重建为独占 `&mut`）。`self_ty` 由 `get_type_user_data` 取得，`get_type_function_type_id::<
   // TypeFunctionFunctionType>` 按 RTTI class-index 下转；`tfft.is_null()` 分支内 `throw_type_error`
   // 返回 `!`（抛 Lua 错误不返回），故后续 `(*tfft).generics`/`(*el)`(arena 存活 TypeId) 解引用
   // 合法。generic_packs 元素按构造均为 TypeFunctionGenericTypePack，其 class-index 下转 gty 非空。
   // 单线程串行执行，无并发别名。
   unsafe {
-    let self_ty = get_type_user_data(&mut *l, 1);
+    let self_ty = get_type_user_data(l, 1);
 
     let tfft = get_type_function_type_id::<TypeFunctionFunctionType>(self_ty);
     lua_check_tag!(
@@ -33,8 +32,8 @@ pub(crate) fn get_function_generics(l: &mut LuaState) -> i32 {
     let mut pos: i32 = 1;
 
     for el in &(*tfft).generics {
-      alloc_type_user_data(&mut *l, (*(*el)).type_variant.clone(), false);
-      lua_rawseti(&mut *l, -2, pos);
+      alloc_type_user_data(l, (*(*el)).type_variant.clone(), false);
+      lua_rawseti(l, -2, pos);
       pos += 1;
     }
 
@@ -42,7 +41,7 @@ pub(crate) fn get_function_generics(l: &mut LuaState) -> i32 {
       let gty = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(*el);
       LUAU_ASSERT!(!gty.is_null());
       alloc_type_user_data(
-        &mut *l,
+        l,
         TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
           is_named: (*gty).is_named,
           is_pack: true,
@@ -50,7 +49,7 @@ pub(crate) fn get_function_generics(l: &mut LuaState) -> i32 {
         }),
         false,
       );
-      lua_rawseti(&mut *l, -2, pos);
+      lua_rawseti(l, -2, pos);
       pos += 1;
     }
 

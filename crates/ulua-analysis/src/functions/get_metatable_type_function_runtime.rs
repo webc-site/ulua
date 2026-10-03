@@ -3,7 +3,7 @@
 use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_tag::get_tag, get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, macros::lua_check_args, records::{type_function_extern_type::TypeFunctionExternType, type_function_table_type::TypeFunctionTableType}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn get_metatable(l: &mut LuaState) -> i32 {
-  // Safety: `l` 由 Lua VM 运行时约定传入并全程存活，`l as *mut lua_state::LuaState` 为同址重解释。
+  // Safety: `l` 由 Lua VM 运行时约定传入并全程存活（经 `c_thunk!` 蹦床重建为独占 `&mut`）。
   // `tfmt`/`tfct` 按 class-index 下转，仅在 `!is_null()` 守卫后解引用；`(*..).metatable` 为
   // Option<TypeId>，`if let Some(metatable)` 命中后 `(*metatable)` 指向 arena 存活 TypeVar
   // （bump 分配、地址不移动），读取其 type_variant 合法。末尾 `throw_type_error` 分支返回 `!` 不返回。
@@ -11,12 +11,12 @@ pub(crate) fn get_metatable(l: &mut LuaState) -> i32 {
   unsafe {
     lua_check_args!(l, != 1, "type.metatable: expected 1 arguments, but got {}");
 
-    let self_ty = get_type_user_data(&mut *l, 1);
+    let self_ty = get_type_user_data(l, 1);
 
     let tfmt = get_type_function_type_id::<TypeFunctionTableType>(self_ty);
     if !tfmt.is_null() {
       if let Some(metatable) = (*tfmt).metatable {
-        alloc_type_user_data(&mut *l, (*metatable).type_variant.clone(), false);
+        alloc_type_user_data(l, (*metatable).type_variant.clone(), false);
       } else {
         l.push_nil();
       }
@@ -26,16 +26,16 @@ pub(crate) fn get_metatable(l: &mut LuaState) -> i32 {
     let tfct = get_type_function_type_id::<TypeFunctionExternType>(self_ty);
     if !tfct.is_null() {
       if let Some(metatable) = (*tfct).metatable {
-        alloc_type_user_data(&mut *l, (*metatable).type_variant.clone(), false);
+        alloc_type_user_data(l, (*metatable).type_variant.clone(), false);
       } else {
         l.push_nil();
       }
       return 1;
     }
 
-    let tag = get_tag(&mut *l, self_ty);
+    let tag = get_tag(l, self_ty);
     throw_type_error(
-      &mut *l,
+      l,
       format_args!(
         "type.metatable: expected self to be a table or class, but got {} instead",
         tag

@@ -267,7 +267,7 @@ pub fn user_defined_type_function(
     // SAFETY: VM 边界——`l_vm` 为本帧独占存活线程（popper 已记其父）；仅取节点
     // 地址值作身份键，被调方按契约不解引用。
     unsafe { l_vm.push_lightuserdata(curr_ptr.cast()) };
-    lua_gettable(&mut *l_vm, LUA_REGISTRYINDEX);
+    lua_gettable(l_vm, LUA_REGISTRYINDEX);
 
     // if (!lua_isfunction(l, -1))
     if !l_vm.is_function(-1) {
@@ -280,7 +280,7 @@ pub fn user_defined_type_function(
     // Build up the environment of the current function, where some might not be visible
     // lua_getfenv(l, -1);
     // lua_setreadonly(l, -1, false);
-    lua_getfenv(&mut *l_vm, -1);
+    lua_getfenv(l_vm, -1);
     l_vm.set_readonly(-1, false);
 
     // for (auto& [name, definition] : typeFunction->userFuncData.environmentFunction)
@@ -298,7 +298,7 @@ pub fn user_defined_type_function(
         // lua_gettable(l, LUA_REGISTRYINDEX);
         // SAFETY: 同上——身份键按地址值透传。
         unsafe { l_vm.push_lightuserdata(def_ptr.cast()) };
-        lua_gettable(&mut *l_vm, LUA_REGISTRYINDEX);
+        lua_gettable(l_vm, LUA_REGISTRYINDEX);
 
         // if (!lua_isfunction(l, -1)) break;
         if !l_vm.is_function(-1) {
@@ -354,7 +354,7 @@ pub fn user_defined_type_function(
               let variant = serialized_ty.as_type().type_variant.clone();
               // SAFETY: VM 边界——`l` 为本帧独占存活线程；被调函数 `# Safety`
               // 契约（见 alloc_type_user_data.rs）的会话前提此刻逐项成立。
-              unsafe { alloc_type_user_data(&mut *l_vm, variant, true) };
+              unsafe { alloc_type_user_data(l_vm, variant, true) };
               // lua_setfield(l, -2, name.c_str());
               l_vm.set_field_str(-2, name);
             }
@@ -373,7 +373,7 @@ pub fn user_defined_type_function(
             if errors_empty {
               let variant = serialized_ty.as_type().type_variant.clone();
               // SAFETY: VM 边界——同上。
-              unsafe { alloc_type_user_data(&mut *l_vm, variant, true) };
+              unsafe { alloc_type_user_data(l_vm, variant, true) };
               l_vm.set_field_str(-2, name);
             }
           }
@@ -407,7 +407,7 @@ pub fn user_defined_type_function(
   // lua_gettable(l, LUA_REGISTRYINDEX);
   // SAFETY: 同上——身份键按地址值透传。
   unsafe { l_vm.push_lightuserdata(definition_ptr.cast()) };
-  lua_gettable(&mut *l_vm, LUA_REGISTRYINDEX);
+  lua_gettable(l_vm, LUA_REGISTRYINDEX);
 
   // if (!lua_isfunction(l, -1))
   if !l_vm.is_function(-1) {
@@ -454,7 +454,7 @@ pub fn user_defined_type_function(
     // allocTypeUserData(l, serializedTy->type);
     let variant = serialized_ty.as_type().type_variant.clone();
     // SAFETY: VM 边界——同上（本帧独占存活线程）。
-    unsafe { alloc_type_user_data(&mut *l_vm, variant, false) };
+    unsafe { alloc_type_user_data(l_vm, variant, false) };
   }
 
   // Set up an interrupt handler for type functions to respect type checking limits and LSP cancellation requests.
@@ -473,20 +473,20 @@ pub fn user_defined_type_function(
   if fflag::LuauTypeFunctionStructuredErrors.get() {
     // if (auto error = checkResultForError(l, name.value, lua_pcall(...)))
     //     return {..., to_string(*error), ctx->typeFunctionRuntime->messages};
-    if let Some(error) = check_result_for_error(&mut *l_vm, &name_str, pcall_result) {
+    if let Some(error) = check_result_for_error(l_vm, &name_str, pcall_result) {
       return erroneous_with(to_string(&error), runtime.messages.clone());
     }
   } else {
     // if (auto error = checkResultForError_DEPRECATED(l, name.value, lua_pcall(...)))
     //     return {..., std::move(error), ctx->typeFunctionRuntime->messages};
-    if let Some(error) = check_result_for_error_deprecated(&mut *l_vm, &name_str, pcall_result) {
+    if let Some(error) = check_result_for_error_deprecated(l_vm, &name_str, pcall_result) {
       return erroneous_with(error, runtime.messages.clone());
     }
   }
 
   // If the return value is not a type userdata, return with error message
   // if (!isTypeUserData(l, 1))
-  if !is_type_user_data(&mut *l_vm, 1) {
+  if !is_type_user_data(l_vm, 1) {
     return erroneous_with(
       format(format_args!(
         "'{}' type function: returned a non-type value",
@@ -497,7 +497,7 @@ pub fn user_defined_type_function(
   }
 
   // TypeFunctionTypeId retTypeFunctionTypeId = getTypeUserData(l, 1);
-  let ret_type_function_type_id: TypeFunctionTypeId = get_type_user_data(&mut *l_vm, 1);
+  let ret_type_function_type_id: TypeFunctionTypeId = get_type_user_data(l_vm, 1);
 
   // structured / deprecated 两条错误通道只在「读哪份错误列表」上不同，反序列化流程一致。
   let structured_errors = fflag::LuauTypeFunctionStructuredErrors.get();
@@ -587,5 +587,5 @@ unsafe extern "C-unwind" fn evaluate_type_alias_call_thunk(l: *mut lua_state::Lu
   // 本次闭包调用帧上给出，非空且指向本次调用独占的存活线程，故可重建为 `&mut`，
   // 借用窗严格止于 `evaluate_type_alias_call` 返回。该函数只读 upvalue 1 里的
   // `TypeFun*` 轻用户数据，其有效性由注册处 `lua_pushlightuserdata` 写入的活指针保证。
-  unsafe { evaluate_type_alias_call(&mut *l) }
+  unsafe { evaluate_type_alias_call(l) }
 }

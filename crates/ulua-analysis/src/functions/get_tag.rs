@@ -12,7 +12,7 @@ pub(crate) fn get_tag(l: &mut LuaState, ty: TypeFunctionTypeId) -> &'static str 
   // Safety: `ty` 是类型函数 arena 中的 TypeFunctionTypeId（bump 分配、块地址不移动），
   // `get_type_function_type_id::<T>(ty)` 按 class-index 下转、未命中返回 null。`as_ref()`
   // 只在 `Some(..)` 内读取 `r#type`，其余分支仅以 `is_null()` 判空不解引用，故无对空/错类型
-  // 指针的解引用。`l as *mut lua_state::LuaState` 为同址重解释；末尾 `LUAU_ASSERT!(false)` 后
+  // 指针的解引用。`l` 由入口以独占 `&mut` 借入；末尾 `LUAU_ASSERT!(false)` 后
   // `throw_type_error(..)` 返回 `!` 兜底、块不会无值落空。单线程只读，无别名冲突。
   unsafe {
     if let Some(primitive) = get_type_function_type_id::<TypeFunctionPrimitiveType>(ty).as_ref() {
@@ -67,7 +67,7 @@ pub(crate) fn get_tag(l: &mut LuaState, ty: TypeFunctionTypeId) -> &'static str 
     }
 
     LUAU_ASSERT!(false);
-    throw_type_error(&mut *l,
+    throw_type_error(l,
       format_args!("VM encountered unexpected type variant when determining tag"),
     );
   }

@@ -6,5 +6,5 @@ use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn write_table_prop(l: &mut LuaState) -> i32 {
   // Safety: 前置条件即本函数 # Safety 段的 VM 回调契约，转交共享实现；
   // `read = false` 选择读取 prop 的 `write_ty`。
-  unsafe { get_table_prop(&mut *l, "type.writeproperty", false) }
+  unsafe { get_table_prop(l, "type.writeproperty", false) }
 }

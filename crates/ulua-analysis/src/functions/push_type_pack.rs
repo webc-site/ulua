@@ -28,15 +28,15 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
       if !(*tftp).head.is_empty() {
         lua_createtable(l.as_mut_ptr(), (*tftp).head.len() as i32, 0);
         for (idx, el) in (*tftp).head.iter().enumerate() {
-          alloc_type_user_data(&mut *l, (**el).type_variant.clone(), false);
-          lua_rawseti(&mut *l, -2, (idx + 1) as i32);
+          alloc_type_user_data(l, (**el).type_variant.clone(), false);
+          lua_rawseti(l, -2, (idx + 1) as i32);
         }
 
         l.set_field_bytes(-2, FIELD_HEAD);
       }
 
       if let Some(tail) = (*tftp).tail {
-        push_type_pack_tail(&mut *l, tail);
+        push_type_pack_tail(l, tail);
         l.set_field_bytes(-2, FIELD_TAIL);
       }
     } else {
@@ -44,7 +44,7 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
       if !tfvp.is_null() {
         lua_createtable(l.as_mut_ptr(), 0, 1);
 
-        alloc_type_user_data(&mut *l, (*(*tfvp).type_id).type_variant.clone(), false);
+        alloc_type_user_data(l, (*(*tfvp).type_id).type_variant.clone(), false);
         l.set_field_bytes(-2, FIELD_TAIL);
       } else {
         let tfgp = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tp);
@@ -52,7 +52,7 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
           lua_createtable(l.as_mut_ptr(), 0, 1);
 
           alloc_type_user_data(
-            &mut *l,
+            l,
             TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
               is_named: (*tfgp).is_named,
               is_pack: true,
@@ -62,7 +62,7 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
           );
           l.set_field_bytes(-2, FIELD_TAIL);
         } else {
-          throw_type_error(&mut *l, format_args!("unsupported type pack type"));
+          throw_type_error(l, format_args!("unsupported type pack type"));
         }
       }
     }
@@ -88,14 +88,14 @@ unsafe fn push_type_pack_tail(
   unsafe {
     let tfvp = get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tail);
     if !tfvp.is_null() {
-      alloc_type_user_data(&mut *l, (*(*tfvp).type_id).type_variant.clone(), false);
+      alloc_type_user_data(l, (*(*tfvp).type_id).type_variant.clone(), false);
       return;
     }
 
     let tfgp = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tail);
     if !tfgp.is_null() {
       alloc_type_user_data(
-        &mut *l,
+        l,
         TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
           is_named: (*tfgp).is_named,
           is_pack: true,
@@ -106,6 +106,6 @@ unsafe fn push_type_pack_tail(
       return;
     }
 
-    throw_type_error(&mut *l, format_args!("unsupported type pack type"));
+    throw_type_error(l, format_args!("unsupported type pack type"));
   }
 }

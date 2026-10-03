@@ -22,7 +22,7 @@ pub(crate) fn print(l: &mut LuaState) -> i32 {
       l.pop(1);
     }
 
-    let ctx = get_type_function_runtime(&mut *l);
+    let ctx = get_type_function_runtime(l);
     (*ctx).messages.push(result);
 
     0

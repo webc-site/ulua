@@ -303,7 +303,7 @@ impl TypeFunctionRuntime {
     // luaL_sandboxthread(l);
     // SAFETY: VM 边界——`l_vm` 为上一行新建线程，此刻仅 popper 记录其父、无
     // 其它别名（原块内时序逐字一致）。
-    unsafe { lua_l_sandboxthread(&mut *l_vm) };
+    unsafe { lua_l_sandboxthread(l_vm) };
 
     // Do not allow global writes to that environment
     // lua_pushvalue(l, LUA_GLOBALSINDEX); lua_setreadonly(l, -1, true); lua_pop(l, 1);
@@ -350,7 +350,7 @@ impl TypeFunctionRuntime {
     let g = alias(global_vm);
     unsafe { g.push_lightuserdata(from_mut(&mut *function).cast()) };
     // SAFETY: VM 边界——同帧新建线程与主线程间搬运 1 槽，单线程串行。
-    unsafe { lua_xmove(&mut *l_vm, &mut *global_vm, 1) };
+    unsafe { lua_xmove(l_vm, &mut *global_vm, 1) };
     lua_settable(&mut *g, LUA_REGISTRYINDEX);
 
     popper.luau_temp_thread_popper();

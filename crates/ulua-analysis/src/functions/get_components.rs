@@ -6,7 +6,7 @@ use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_tag::get
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn get_components(l: &mut LuaState) -> i32 {
   // Safety: `l` 由 Lua VM 按类型函数运行时的 C 调用约定传入，非空且在整个调用内存活；
-  // `l as *mut lua_state::LuaState` 是同一 VM 状态的重解释（同一地址）。`get_type_user_data`
+  // `l` 由 `c_thunk!` 蹦床重建为独占 `&mut`。`get_type_user_data`
   // 返回的类型函数指针经 `is_null` 判定后才解引用：`get_type_function_type_id` 按 RTTI
   // class-index 下转，命中即类型正确，故 `(*tfut).components`/`(*tfit).components` 及其中
   // `*component`(arena 存活 TypeId、地址不移动) 读取 `type_variant` 合法；未命中分支的
@@ -14,7 +14,7 @@ pub(crate) fn get_components(l: &mut LuaState) -> i32 {
   unsafe {
     lua_check_args!(l, != 1, "type.components: expected 1 argument, but got {}");
 
-    let self_ty = get_type_user_data(&mut *l, 1);
+    let self_ty = get_type_user_data(l, 1);
 
     let tfut = get_type_function_type_id::<TypeFunctionUnionType>(self_ty);
     if !tfut.is_null() {
@@ -22,8 +22,8 @@ pub(crate) fn get_components(l: &mut LuaState) -> i32 {
 
       lua_createtable(l.as_mut_ptr(), components.len() as i32, 0);
       for (i, &component) in components.iter().enumerate() {
-        alloc_type_user_data(&mut *l, (*component).type_variant.clone(), false);
-        lua_rawseti(&mut *l, -2, i as i32 + 1);
+        alloc_type_user_data(l, (*component).type_variant.clone(), false);
+        lua_rawseti(l, -2, i as i32 + 1);
       }
 
       return 1;
@@ -35,16 +35,16 @@ pub(crate) fn get_components(l: &mut LuaState) -> i32 {
 
       lua_createtable(l.as_mut_ptr(), components.len() as i32, 0);
       for (i, &component) in components.iter().enumerate() {
-        alloc_type_user_data(&mut *l, (*component).type_variant.clone(), false);
-        lua_rawseti(&mut *l, -2, i as i32 + 1);
+        alloc_type_user_data(l, (*component).type_variant.clone(), false);
+        lua_rawseti(l, -2, i as i32 + 1);
       }
 
       return 1;
     }
 
-    let tag = get_tag(&mut *l, self_ty);
+    let tag = get_tag(l, self_ty);
     throw_type_error(
-      &mut *l,
+      l,
       format_args!("type.components: cannot call components of `{}` type", tag),
     );
   }

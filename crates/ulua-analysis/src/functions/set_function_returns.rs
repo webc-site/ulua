@@ -14,7 +14,7 @@ pub(crate) fn set_function_returns(l: &mut LuaState) -> i32 {
       "type.setreturns: expected 1-3 arguments, but got {}"
     );
 
-    let self_ty = get_type_user_data(&mut *l, 1);
+    let self_ty = get_type_user_data(l, 1);
     let tfft = get_mutable_type_function_type_id::<TypeFunctionFunctionType>(self_ty);
     lua_check_tag!(
       l,
@@ -25,7 +25,7 @@ pub(crate) fn set_function_returns(l: &mut LuaState) -> i32 {
 
     lua_check_not_frozen!(l, self_ty, "type.setreturns");
 
-    (*tfft).ret_types = get_type_pack_runtime(&mut *l, 2, 3);
+    (*tfft).ret_types = get_type_pack_runtime(l, 2, 3);
 
     0
   }

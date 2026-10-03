@@ -21,7 +21,7 @@ pub(crate) fn create_table(l: &mut LuaState) -> i32 {
     if l.is_table(1) {
       l.push_nil();
       while l.next(1) {
-        let key = get_type_user_data(&mut *l, -2);
+        let key = get_type_user_data(l, -2);
 
         let tfst = get_type_function_type_id::<TypeFunctionSingletonType>(key);
         lua_check_tag!(
@@ -45,21 +45,21 @@ pub(crate) fn create_table(l: &mut LuaState) -> i32 {
           l.get_field_bytes(-1, FIELD_READ);
           let mut read_ty: Option<TypeFunctionTypeId> = None;
           if !l.is_nil(-1) {
-            read_ty = Some(get_type_user_data(&mut *l, -1));
+            read_ty = Some(get_type_user_data(l, -1));
           }
           l.pop(1);
 
           l.get_field_bytes(-1, FIELD_WRITE);
           let mut write_ty: Option<TypeFunctionTypeId> = None;
           if !l.is_nil(-1) {
-            write_ty = Some(get_type_user_data(&mut *l, -1));
+            write_ty = Some(get_type_user_data(l, -1));
           }
           l.pop(1);
 
           let key_name = &tfsst.value;
           props.insert(key_name.clone(), TypeFunctionProperty { read_ty, write_ty });
         } else {
-          let value = get_type_user_data(&mut *l, -1);
+          let value = get_type_user_data(l, -1);
           let key_name = &tfsst.value;
           props.insert(
             key_name.clone(),
@@ -79,11 +79,11 @@ pub(crate) fn create_table(l: &mut LuaState) -> i32 {
     let mut indexer: Option<TypeFunctionTableIndexer> = None;
     if l.is_table(2) {
       l.get_field_bytes(2, FIELD_INDEX);
-      let key_type = get_type_user_data(&mut *l, -1);
+      let key_type = get_type_user_data(l, -1);
       l.pop(1);
 
       l.get_field_bytes(2, FIELD_READ_RESULT);
-      let value_type = get_type_user_data(&mut *l, -1);
+      let value_type = get_type_user_data(l, -1);
       l.pop(1);
 
       indexer = Some(TypeFunctionTableIndexer::new(key_type, value_type));
@@ -91,7 +91,7 @@ pub(crate) fn create_table(l: &mut LuaState) -> i32 {
       lua_l_typeerror_l(l.as_mut_ptr(), 2, "table");
     }
 
-    let metatable = optional_type_user_data(&mut *l, 3);
+    let metatable = optional_type_user_data(l, 3);
     if let Some(mt) = metatable {
       let mt_table = get_type_function_type_id::<TypeFunctionTableType>(mt);
       lua_check_tag!(
@@ -103,7 +103,7 @@ pub(crate) fn create_table(l: &mut LuaState) -> i32 {
     }
 
     alloc_type_user_data(
-      &mut *l,
+      l,
       TypeFunctionTypeVariant::Table(TypeFunctionTableType {
         props,
         indexer,

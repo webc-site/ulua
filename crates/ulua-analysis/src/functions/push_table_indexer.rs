@@ -15,9 +15,9 @@ pub(crate) unsafe fn push_table_indexer(
       None => l.push_nil(),
       Some(indexer) => {
         l.create_table(0, 2);
-        alloc_type_user_data(&mut *l, (*indexer.key_type).type_variant.clone(), false);
+        alloc_type_user_data(l, (*indexer.key_type).type_variant.clone(), false);
         l.set_field_bytes(-2, FIELD_INDEX);
-        alloc_type_user_data(&mut *l, (*indexer.value_type).type_variant.clone(), false);
+        alloc_type_user_data(l, (*indexer.value_type).type_variant.clone(), false);
         l.set_field_bytes(-2, FIELD_RESULT);
       }
     }

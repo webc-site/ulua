@@ -10,7 +10,7 @@ pub(crate) fn unsupported_function(l: &mut LuaState) -> i32 {
   // Safety: `l` 的有效性由本函数前置条件给出；消息为无占位符的静态串，
   // throw_type_error 必然抛出不返回，故本函数体以 `!` 收尾。
   unsafe {
-    throw_type_error(&mut *l,
+    throw_type_error(l,
       format_args!("{UNSUPPORTED_MSG}"),
     )
   }

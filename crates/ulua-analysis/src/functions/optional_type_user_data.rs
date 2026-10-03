@@ -6,6 +6,6 @@ pub fn optional_type_user_data(l: &mut LuaState, idx: i32) -> Option<TypeFunctio
   if l.is_none_or_nil(idx) {
     None
   } else {
-    Some(get_type_user_data(&mut *l, idx))
+    Some(get_type_user_data(l, idx))
   }
 }

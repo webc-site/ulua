@@ -16,7 +16,7 @@ pub(crate) fn create_singleton(l: &mut LuaState) -> i32 {
     // 有效 lua_State 的入参契约。
     unsafe {
       alloc_type_user_data(
-        &mut *l,
+        l,
         TypeFunctionTypeVariant::Singleton(TypeFunctionSingletonType {
           variant: TypeFunctionSingletonVariant::V0(TypeFunctionBooleanSingleton { value }),
         }),
@@ -35,7 +35,7 @@ pub(crate) fn create_singleton(l: &mut LuaState) -> i32 {
     // `l` 上压入 userdata。
     unsafe {
       alloc_type_user_data(
-        &mut *l,
+        l,
         TypeFunctionTypeVariant::Singleton(TypeFunctionSingletonType {
           variant: TypeFunctionSingletonVariant::V1(TypeFunctionStringSingleton {
             value,
@@ -53,7 +53,7 @@ pub(crate) fn create_singleton(l: &mut LuaState) -> i32 {
     // `alloc_type_user_data` 在此状态上压入 NilType userdata。
     unsafe {
       alloc_type_user_data(
-        &mut *l,
+        l,
         TypeFunctionTypeVariant::Primitive(TypeFunctionPrimitiveType::new(Type::NilType)),
         false,
       )
@@ -71,7 +71,7 @@ pub(crate) fn create_singleton(l: &mut LuaState) -> i32 {
     // `format_args!` 安全转发）；`throw_type_error` 返回 `!`，此分支不再落到函数末尾。
     unsafe {
       throw_type_error(
-        &mut *l,
+        l,
         format_args!(
           "types.singleton: can't create a singleton from a {}",
           type_name
@@ -88,7 +88,7 @@ pub(crate) fn create_singleton(l: &mut LuaState) -> i32 {
     // `throw_type_error` 发散返回 `!`。
     unsafe {
       throw_type_error(
-        &mut *l,
+        l,
         format_args!(
           "types.singleton: can't create singleton from `{}` type",
           type_name
