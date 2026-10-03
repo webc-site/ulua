@@ -23,11 +23,17 @@ use crate::{
   type_aliases::t_value::TValue,
 };
 
-/// # Safety
-/// 仅作为 C 闭包入口经 luau_precall 调用：`(*l).ci` 须为该闭包的存活帧且闭包 upval[0] 为类值、
+/// 仅作为 C 闭包入口经 luau_precall 调用（调用序契约，正确性而非内存安全——`l` 的存活与独占由
+/// `&mut LuaState` 承载）：`(*l).ci` 须为该闭包的存活帧且闭包 upval[0] 为类值、
 /// `(*l).base..(*l).top` 为可读参数窗口；栈尾空间由内部 luaD_checkstack 扩容保证，`lua_d_call`
 /// 可能抛错，须在受保护帧内。cpp lclass.cpp:374 `luaR_constructobject`
-pub(crate) unsafe fn lua_r_constructobject(l: *mut LuaState) -> i32 {
+///
+/// r16-v22 收形：首参转 `&mut LuaState`——`l` 的存活与独占由类型承载。体内保留的裸解引用点
+/// 全部落在 `(*(*(*l).ci).func)` 帧现读（ci 链无门面，r13-w1b lua_v_call_tm 同款保留判例）、
+/// `(*l).activememcat`（GC 分配类目字段读数）与参数拷贝源窗 `(*l).base`（帧窗基址裸读）三处
+/// r13-w1c 逐点定性保留面，故本体仍由一个 `unsafe { … }` 块整体覆盖——块界与既有保留面严格对齐，
+/// 未新增也未收窄任何授权窗。
+pub(crate) fn lua_r_constructobject(l: &mut LuaState) -> i32 {
   // SAFETY: 契约保证 `l` 为存活 C 闭包帧，self/func/args 压栈均落在 checkstack 后的界内槽
   //
   // r13-w1c 逐点定性（w6d 口径保留面）：`(*(*(*l).ci).func)` 帧现读（ci 链无门面，
@@ -36,28 +42,34 @@ pub(crate) unsafe fn lua_r_constructobject(l: *mut LuaState) -> i32 {
   // 门面，保留。收编共六点：栈顶槽距读数经 get_top 门面，self 写入/args 窗基址/
   // func 写入/self 续写/参数目的窗共五处顶槽裸读经 top_slot(0) 边界原语
   // （抬顶落笔系 r12-w7a2 既有 advance_top，位点时序全数不变）。
+  //
+  // r16-v22 收形：形参转 `&mut LuaState`，收形后对仍收裸形的核心（`lua_m_newgco`/`lua_d_call`）
+  // 转调采用一次 `&mut *l` 就地重建（借用窗仅在当句内），未跨调用持有；`lua_s_newlstr` 已收形，
+  // 直接透传 `l`。`(*l).activememcat`/`(*l).base` 帧窗读点通过 `&mut` 的隐式 deref 保持原位语义，
+  // 时序与位点均无变化。
   unsafe {
-    let cl = (*(*(*l).ci).func).as_closure_ptr();
+    let cl = (*(*l.ci).func).as_closure_ptr();
     let classobject = classvalue!(&(*cl).inner.c.upvals[0]);
 
-    let self_obj = lua_m_newgco(l, size_of::<LuauObject>(), (*l).activememcat) as *mut LuauObject;
+    let self_obj =
+      lua_m_newgco(l.as_mut_ptr(), size_of::<LuauObject>(), l.activememcat) as *mut LuauObject;
     // 类型化清零初始化：LuauObject 为 repr(C) POD 记录，`Default` 即各字段的合法
     // 空值（指针 null、标量 0）；`ptr::write` 落在刚按 LuauObject 大小分配的存活
     // 内存上，替代原先按字节 `write_bytes` 的无类型清零
     ptr::write(self_obj, LuauObject::default());
-    luaC_init!(l, self_obj, LuaType::Object as i32);
+    luaC_init!(l.as_mut_ptr(), self_obj, LuaType::Object as i32);
 
     let class = &*classobject;
     let obj = &mut *self_obj;
     obj.lclass = classobject;
-    obj.members = luaM_newarray!(l, class.numberofinstancemembers, TValue, (*l).activememcat);
+    obj.members = luaM_newarray!(l, class.numberofinstancemembers, TValue, l.activememcat);
     obj.numberofmembers = class.numberofinstancemembers;
 
     for member in c_slice_mut(obj.members, class.numberofinstancemembers as usize) {
       setnilvalue!(member);
     }
 
-    let init_key = lua_s_newlstr(&mut *l, b"__init");
+    let init_key = lua_s_newlstr(l, b"__init");
     // B2-2a 任务B：getstr 折叠 Option<Slot> 后在边界还原哨兵裸形——下方契约断言
     // 与 `as_number` 读链保持原形（miss 兜底读 nil 哨兵行为逐位一致）
     let init_index =
@@ -105,22 +117,27 @@ pub(crate) unsafe fn lua_r_constructobject(l: *mut LuaState) -> i32 {
     // 收编：目的窗基址经 top_slot(0)；源窗基址 `(*l).base` 为帧窗裸读——base 无既有
     // 门面/原语（r13-w1b 判例：base 落笔与读数属帧建立面，定性保留），保留
     let arg_count = numargs as usize;
-    c_slice_mut((*l).top_slot(0), arg_count).copy_from_slice(c_slice((*l).base, arg_count));
+    c_slice_mut((*l).top_slot(0), arg_count).copy_from_slice(c_slice(l.base, arg_count));
     (*l).advance_top(arg_count);
 
-    lua_d_call(l, args_base, 0);
+    lua_d_call(l.as_mut_ptr(), args_base, 0);
 
     1
   }
 }
 
-lua_lib_fn!(pub(crate) fn lua_r_constructobject, lua_r_constructobject_arm);
+lua_lib_fn!(pub(crate) fn lua_r_constructobject @ref, lua_r_constructobject_arm);
 
-/// # Safety
-/// 同经 C 闭包调用约定：`(*l).ci`.func 为该闭包且 upval[0] 为类值、`(*l).base..base+2` 可读
+/// 同经 C 闭包调用约定（调用序契约，正确性而非内存安全——`l` 的存活与独占由 `&mut LuaState`
+/// 承载）：`(*l).ci`.func 为该闭包且 upval[0] 为类值、`(*l).base..base+2` 可读
 /// （首参须是本类的 Object 实例，否则走抛错路径）、栈顶另有 ≥1 空闲槽承接 `lua_v_gettable` 临时值；
 /// 各抛错路径经 `luaL_error` 不返回，须在受保护帧内。cpp lclass.cpp:421 `luaR_defaultcreateobject`
-pub(crate) unsafe fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
+///
+/// r16-v22 收形：首参转 `&mut LuaState`——`l` 的存活与独占由类型承载。体内保留的裸解引用点
+/// 全部落在 `(*(*(*l).ci).func)` 帧现读（同 constructobject 保留判例）与两处 `(*l).base` 帧窗
+/// 基址裸读（首参校验、gettable 实参窗）——r13-w1c 已逐点定性保留面，故本体仍由一个
+/// `unsafe { … }` 块整体覆盖，块界与既有保留面对齐。
+pub(crate) fn lua_r_defaultcreateobject(l: &mut LuaState) -> i32 {
   // SAFETY: 契约保证 `l` 为存活 C 闭包帧、首参为本类 Object 实例、栈顶 ≥1 空闲槽
   //
   // r13-w1c 逐点定性（w6d 口径保留面）：`(*(*(*l).ci).func)` 帧现读（同 constructobject
@@ -129,7 +146,7 @@ pub(crate) unsafe fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
   // top_slot(-1) 边界原语（每轮 luaV_gettable 再入后现读位点不变，值恒等）；
   // push_nil/rewind_top/get_top 三点系 r12-w7a2 与 B2-0 既有门面，本票不动其形制。
   unsafe {
-    let cl = (*(*(*l).ci).func).as_closure_ptr();
+    let cl = (*(*l.ci).func).as_closure_ptr();
     let classobject = classvalue!(&(*cl).inner.c.upvals[0]);
     let class_name = getstr((*classobject).name);
 
@@ -153,7 +170,7 @@ pub(crate) unsafe fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
 
     // `ttisobject! + objectvalue!` 链收敛为 ValueView::Object 臂：tag 判定与 payload
     // 提取同臂完成，非 Object 首参走原抛错路径（`luaL_error` 不返回作 let-else 臂）
-    let ValueView::Object(classinst) = ValueView::from_tvalue(&*(*l).base) else {
+    let ValueView::Object(classinst) = ValueView::from_tvalue(&*l.base) else {
       luaL_error!(
         l,
         "{}.__init must be called with an instance of the class as its first argument",
@@ -194,11 +211,11 @@ pub(crate) unsafe fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
       let mut key = TValue::default();
       setsvalue!(l, &mut key, member_name);
       lua_v_gettable(
-        l,
+        l.as_mut_ptr(),
         // 实参窗 base..base+numargs（numargs 已于上方校验为 2）经 c_slice 界内下标
         // 收口 `base.add(prop_slot)`；luaV_gettable 对 `t` 句柄只走读面，from_ref 合法。
         // base 侧裸读为帧窗基址（无既有门面，r13-w1b 判例定性保留）
-        Slot::from_ref(&c_slice((*l).base, numargs as usize)[prop_slot]),
+        Slot::from_ref(&c_slice(l.base, numargs as usize)[prop_slot]),
         Slot::from_mut(&mut key),
         // r13-w1c 收编：顶下临时槽读数经 top_slot(-1) 边界原语（同位现读、值恒等；
         // 形制同 lua_l_pushresult/lua_setlocal 既有判例）
@@ -223,21 +240,29 @@ pub(crate) unsafe fn lua_r_defaultcreateobject(l: *mut LuaState) -> i32 {
   }
 }
 
-lua_lib_fn!(pub(crate) fn lua_r_defaultcreateobject, lua_r_defaultcreateobject_arm);
+lua_lib_fn!(pub(crate) fn lua_r_defaultcreateobject @ref, lua_r_defaultcreateobject_arm);
 
-/// # Safety（内部 unsafe 块契约，签名安全：调用方全部在 crate 内，无需 unsafe 上下文）
-/// 调用方须保证：`l` 存活且处于受保护帧（建闭包/新串可触发 GC 与抛错）；`classobject` 为
-/// staticmembers 与 memberstooffset 均已初始化的存活类（若 `new`/`__init` 已注册，其偏移须落在
-/// 静态成员区间内）；`env` 为存活环境表。cpp lclass.cpp:42 `luaR_setupconstructor`
+/// 建 constructor/default_ctor 闭包并挂回类的内部例程（cpp lclass.cpp:42 `luaR_setupconstructor`）。
+///
+/// 调用序契约（正确性，非内存安全——`l` 的存活与独占已由 `&mut LuaState` 承载）：调用方须保证
+/// `l` 处于受保护帧（建闭包/新串可触发 GC 与抛错）；`classobject` 为 staticmembers 与
+/// memberstooffset 均已初始化的存活类（若 `new`/`__init` 已注册，其偏移须落在静态成员区间内）；
+/// `env` 为存活环境表。
+///
+/// r16-v22 收形：首参转 `&mut LuaState`——存活与独占由类型承载；体内仍存的两处 `(*classobject)`
+/// 类对象字段读、`(*constructor)`/`(*default_ctor)` 闭包字段写、以及 `(*memberstooffset)`
+/// 哈希表读为 GC 头/类静态区/闭包 upval 面的裸解引用，无既有门面，保留——`unsafe { … }` 块
+/// 边界与 r13-w1c 判例的保留面对齐；`lua_s_newlstr` 收 `&mut` 直接透传 `l`，
+/// `lua_f_new_cclosure` 仍收裸形，一处一次 `l.as_mut_ptr()` 就地重建（借用窗仅在当句内）。
 pub(crate) fn lua_r_setupconstructor(
-  l: *mut LuaState,
+  l: &mut LuaState,
   classobject: *mut LuauClass,
   env: *mut LuaTable,
 ) {
   // SAFETY: 契约保证 `l`/`classobject`/`env` 存活，构造器闭包与 new 名串注册仅触及类静态区与 env 表的合法槽位
   unsafe {
-    let new_key = lua_s_newlstr(&mut *l, b"new");
-    let constructor = lua_f_new_cclosure(l, 1, env);
+    let new_key = lua_s_newlstr(l, b"new");
+    let constructor = lua_f_new_cclosure(l.as_mut_ptr(), 1, env);
     let ctor_c = &mut (*constructor).inner.c;
     ctor_c.f = Some(lua_r_constructobject_arm);
     ctor_c.debugname = cstr(b"luaR_constructobject\0");
@@ -266,14 +291,14 @@ pub(crate) fn lua_r_setupconstructor(
       lua_c_barrier!(l, classobject, dest);
     }
 
-    let default_ctor = lua_f_new_cclosure(l, 1, env);
+    let default_ctor = lua_f_new_cclosure(l.as_mut_ptr(), 1, env);
     let default_ctor_c = &mut (*default_ctor).inner.c;
     default_ctor_c.f = Some(lua_r_defaultcreateobject_arm);
     default_ctor_c.debugname = cstr(b"luaR_defaultcreateobject\0");
     setclassvalue!(l, &mut default_ctor_c.upvals[0], classobject);
     default_ctor_c.cont = None;
 
-    let init_key = lua_s_newlstr(&mut *l, b"__init");
+    let init_key = lua_s_newlstr(l, b"__init");
     // 同上：`__init` 偏移读链原生 Option<Slot> 收口，None 臂承接 miss
     if let Some(init_index) = lua_h_getstr(&*(*classobject).memberstooffset, init_key)
       && let ValueView::Number(init_offset) = ValueView::from_tvalue(init_index.get())
@@ -286,12 +311,17 @@ pub(crate) fn lua_r_setupconstructor(
   }
 }
 
-/// # Safety（内部 unsafe 块契约，签名安全：调用方全部在 crate 内，无需 unsafe 上下文）
-/// 调用方须保证：`l` 存活（lua_m_newgco OOM 时经 `l` 抛 ErrMem，需受保护帧）、`name` 为存活 TString；
-/// 返回值各成员数组字段为 null，必须经 lua_r_newclass/inheritclass 填充后才可交付使用。
-/// cpp lclass.cpp:18 `luaR_newblankclass`
+/// 分配一个尚未填充成员数组的空类对象（cpp lclass.cpp:18 `luaR_newblankclass`）。
+///
+/// 调用序契约（正确性，非内存安全——`l` 的存活与独占已由 `&mut LuaState` 承载）：调用方须保证
+/// `l` 处于受保护帧（lua_m_newgco OOM 时经 `l` 抛 ErrMem）；`name` 为存活 TString；返回值
+/// 各成员数组字段为 null，必须经 lua_r_newclass/inheritclass 填充后才可交付使用。
+///
+/// r16-v22 收形：首参转 `&mut LuaState`——存活与独占由类型承载；体内 r13-w1c 唯一保留面
+/// `(*l).activememcat`（GC 分配类目字段读数）现经 `&mut` 的隐式 deref 保持原位；
+/// `lua_m_newgco`/`luaC_init!` 仍收裸形，一次 `l.as_mut_ptr()` 就地重建（借用窗仅在当句内）。
 pub(crate) fn lua_r_newblankclass(
-  l: *mut LuaState,
+  l: &mut LuaState,
   name: *mut tstring,
   isopen: bool,
 ) -> *mut LuauClass {
@@ -300,7 +330,8 @@ pub(crate) fn lua_r_newblankclass(
   // r13-w1c 逐点定性（w6d 口径保留面）：本体唯一 `(*l).` 点位为 `(*l).activememcat`
   // GC 分配类目字段读数，非栈顶算术/非 API 门面覆盖面，无既有门面，保留。
   unsafe {
-    let classobject = lua_m_newgco(l, size_of::<LuauClass>(), (*l).activememcat) as *mut LuauClass;
+    let classobject =
+      lua_m_newgco(l.as_mut_ptr(), size_of::<LuauClass>(), l.activememcat) as *mut LuauClass;
     // 类型化清零先于头初始化：`Default` 即各字段的合法空值（指针 null、标量 0），
     // `luaC_init!` 随后只覆写 tt/marked/memcat 三字段的头，最终态与原逐字段写一致
     ptr::write(
@@ -311,7 +342,7 @@ pub(crate) fn lua_r_newblankclass(
         ..Default::default()
       },
     );
-    luaC_init!(l, classobject, LuaType::Class as i32);
+    luaC_init!(l.as_mut_ptr(), classobject, LuaType::Class as i32);
     classobject
   }
 }
@@ -324,6 +355,12 @@ pub(crate) fn lua_r_newblankclass(
 ///
 /// `envt` 是 `new`/`__init` 两个 C 闭包的环境表，对应 cpp `lclass.h:17-25` 的第 7 个
 /// 形参：`luau_load` 带非当前环境时必须绑到该环境，而不是 `L->gt`。
+///
+/// r16-v22 保留外层 `*mut LuaState` 形：本函数外层消费方含出范围文件
+/// （`lua_pushunsigned.rs`/`loadsafe.rs`/`lua_pcallyieldable.rs`/`luau_execute.rs`——
+/// 尤其 `luau_execute.rs` 是并发会话正在改的性能热区），改签名即撞车；本票仅收本文件内
+/// 已改形的核心，转调处一次 `&mut *l` 就地重建引用（借用窗仅在当句内）。外层收形列入未尽事项，
+/// 交主控另票排入。
 pub(crate) fn lua_r_newclass(
   l: *mut LuaState,
   name: *mut tstring,
@@ -342,7 +379,7 @@ pub(crate) fn lua_r_newclass(
     let global = (*l).global;
     LUAU_ASSERT!((*global).gc_threshold == usize::MAX);
 
-    let classobject = lua_r_newblankclass(l, name, false);
+    let classobject = lua_r_newblankclass(&mut *l, name, false);
     let co = &mut *classobject;
 
     co.staticmembers = luaM_newarray!(l, numberofstaticmembers, TValue, co.memcat);
@@ -357,7 +394,7 @@ pub(crate) fn lua_r_newclass(
     co.numberofinstancemembers = numberofinstancemembers;
     co.numberofallmembers = numberofinstancemembers + numberofstaticmembers;
 
-    lua_r_setupconstructor(l, classobject, envt);
+    lua_r_setupconstructor(&mut *l, classobject, envt);
 
     classobject
   }
