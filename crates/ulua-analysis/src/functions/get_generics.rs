@@ -32,7 +32,7 @@ pub(crate) unsafe fn get_generics(
       let mut i: i32 = 1;
       while i <= l.obj_len(-1) as i32 {
         l.push_integer(i);
-        lua_gettable(l.as_mut_ptr(), -2);
+        lua_gettable(&mut *l, -2);
 
         if l.is_nil(-1) {
           l.pop(1);
@@ -56,7 +56,7 @@ pub(crate) unsafe fn get_generics(
           } else {
             if !packs.is_empty() {
               throw_type_error(
-                l.as_mut_ptr(),
+                &mut *l,
                 format_args!("{}: generic type cannot follow a generic pack", fname),
               );
             }
@@ -65,7 +65,7 @@ pub(crate) unsafe fn get_generics(
           }
         } else {
           throw_type_error(
-            l.as_mut_ptr(),
+            &mut *l,
             format_args!("{}: table member was not a generic type", fname),
           );
         }

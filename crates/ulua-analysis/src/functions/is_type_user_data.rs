@@ -11,7 +11,7 @@ pub fn is_type_user_data(l: &mut LuaState, idx: i32) -> bool {
   // null，二者均按 VM 约定以 `l`+`idx` 索引栈；此处仅比较返回整数、对指针做 `is_null()` 判定，
   // 不解引用任何指针。单线程串行，无别名冲突。
   unsafe {
-    if lua_isuserdata(l.as_mut_ptr(), idx) == 0 {
+    if lua_isuserdata(&*l, idx) == 0 {
       return false;
     }
 

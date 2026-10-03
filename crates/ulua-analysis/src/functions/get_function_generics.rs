@@ -1,5 +1,6 @@
 
 
+use crate::functions::get_tag::get_tag;
 /// 对应 C++ 原生 `static int getFunctionGenerics(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1464`）。
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 use ulua_vm::{functions::{lua_createtable::lua_createtable, lua_rawseti::lua_rawseti}, records::lua_state};
@@ -33,7 +34,7 @@ pub(crate) fn get_function_generics(l: &mut LuaState) -> i32 {
 
     for el in &(*tfft).generics {
       alloc_type_user_data(&mut *l, (*(*el)).type_variant.clone(), false);
-      lua_rawseti(l.as_mut_ptr(), -2, pos);
+      lua_rawseti(&mut *l, -2, pos);
       pos += 1;
     }
 
@@ -49,7 +50,7 @@ pub(crate) fn get_function_generics(l: &mut LuaState) -> i32 {
         }),
         false,
       );
-      lua_rawseti(l.as_mut_ptr(), -2, pos);
+      lua_rawseti(&mut *l, -2, pos);
       pos += 1;
     }
 

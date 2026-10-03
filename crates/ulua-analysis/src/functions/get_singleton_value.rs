@@ -45,11 +45,12 @@ pub(crate) fn get_singleton_value(l: &mut LuaState) -> i32 {
       return 1;
     }
 
+    let tag = get_tag(&mut *l, self_ty);
     throw_type_error(
-      l.as_mut_ptr(),
+      &mut *l,
       format_args!(
         "type.value: can't call `value` method on `{}` type",
-        get_tag(&mut *l, self_ty)
+        tag
       ),
     );
   }

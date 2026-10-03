@@ -11,5 +11,5 @@
 use crate::{records::arena_handle::alias};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) unsafe fn push_string(l: &mut LuaState, s: &str) {
-  alias(l.as_mut_ptr()).push_bytes(s.as_bytes())
+  l.push_bytes(s.as_bytes())
 }

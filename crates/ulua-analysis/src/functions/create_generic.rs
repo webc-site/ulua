@@ -9,12 +9,14 @@ pub(crate) fn create_generic(l: &mut LuaState) -> i32 {
   // throw_type_error（内部收口格式串）终止；alloc_type_user_data 仅要求活状态，转发
   // 自同一约定。
   unsafe {
-    let name = l.check_str(1);
+    // cpp `const char* name = luaL_checkstring(L, 1)` 后紧接 `luaL_optboolean`：先把名字
+    // 落成拥有值（alloc_type_user_data 组装 variant 时同样拷贝），借用窗不跨过后续栈操作。
+    let name = l.check_str(1).to_owned();
     let is_pack = l.opt_boolean(2, false);
 
     if name.is_empty() {
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!("types.generic: generic name cannot be empty"),
       );
     }
@@ -22,7 +24,7 @@ pub(crate) fn create_generic(l: &mut LuaState) -> i32 {
     let generic_type = TypeFunctionGenericType {
       is_named: true,
       is_pack,
-      name: name.to_owned(),
+      name,
     };
 
     alloc_type_user_data(

@@ -23,7 +23,7 @@ pub(crate) fn get_components(l: &mut LuaState) -> i32 {
       lua_createtable(l.as_mut_ptr(), components.len() as i32, 0);
       for (i, &component) in components.iter().enumerate() {
         alloc_type_user_data(&mut *l, (*component).type_variant.clone(), false);
-        lua_rawseti(l.as_mut_ptr(), -2, i as i32 + 1);
+        lua_rawseti(&mut *l, -2, i as i32 + 1);
       }
 
       return 1;
@@ -36,7 +36,7 @@ pub(crate) fn get_components(l: &mut LuaState) -> i32 {
       lua_createtable(l.as_mut_ptr(), components.len() as i32, 0);
       for (i, &component) in components.iter().enumerate() {
         alloc_type_user_data(&mut *l, (*component).type_variant.clone(), false);
-        lua_rawseti(l.as_mut_ptr(), -2, i as i32 + 1);
+        lua_rawseti(&mut *l, -2, i as i32 + 1);
       }
 
       return 1;
@@ -44,7 +44,7 @@ pub(crate) fn get_components(l: &mut LuaState) -> i32 {
 
     let tag = get_tag(&mut *l, self_ty);
     throw_type_error(
-      l.as_mut_ptr(),
+      &mut *l,
       format_args!("type.components: cannot call components of `{}` type", tag),
     );
   }

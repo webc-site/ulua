@@ -9,7 +9,7 @@
 
 use core::{ffi::c_void, ptr::null};
 use ulua_common::fflag;
-use ulua_vm::{functions::{lua_l_register::lua_l_register_bytes, lua_pushlstring::lua_pushlstring_bytes, lua_setuserdatadtor::lua_setuserdatadtor}, records::{lua_l_reg::LuaLReg, lua_state}};
+use ulua_vm::{functions::{lua_l_register::lua_l_register_bytes, lua_setuserdatadtor::lua_setuserdatadtor}, records::{lua_l_reg::LuaLReg, lua_state}};
 use crate::{functions::{check_tag::check_tag, dealloc_type_user_data::dealloc_type_user_data, get_components::get_components, get_function_generics::get_function_generics, get_function_parameters::get_function_parameters, get_function_returns::get_function_returns, get_generic_is_pack::get_generic_is_pack, get_generic_name::get_generic_name, get_indexer::get_indexer, get_metatable_type_function_runtime::get_metatable, get_negated_value::get_negated_value, get_props::get_props, get_read_indexer::get_read_indexer, get_read_parent::get_read_parent, get_singleton_value::get_singleton_value, get_write_indexer::get_write_indexer, get_write_parent::get_write_parent, is_equal_to_type::is_equal_to_type, is_subtype_of::is_subtype_of, lua_names::{FIELD_EQ, FIELD_INDEX_CLOSURE, FIELD_METATABLE, FIELD_TYPE_TAG, METATABLE_LOCKED, METHOD_IS_SUBTYPE_OF, TYPE}, read_table_prop::read_table_prop, set_function_generics::set_function_generics, set_function_parameters::set_function_parameters, set_function_returns::set_function_returns, set_read_table_prop::set_read_table_prop, set_table_indexer::set_table_indexer, set_table_metatable::set_table_metatable, set_table_prop::set_table_prop, set_table_read_indexer::set_table_read_indexer, set_table_write_indexer::set_table_write_indexer, set_write_table_prop::set_write_table_prop, type_userdata_index::type_userdata_index, write_table_prop::write_table_prop}, macros::c_thunk};
 use ulua_vm::records::lua_state::LuaState;
 const K_TYPE_USERDATA_TAG: i32 = 42;
@@ -54,7 +54,9 @@ unsafe extern "C-unwind" fn dealloc_type_user_data_thunk(
   l: *mut lua_state::LuaState,
   data: *mut c_void,
 ) {
-  dealloc_type_user_data(&mut *l, data);
+  // Safety: FFI 边界——VM 只在 userdata 存活且本次析构独占该 state 时回调本 thunk，
+  // 故可重建为独占借用；借用窗止于 `dealloc_type_user_data` 返回。
+  unsafe { dealloc_type_user_data(&mut *l, data) };
 }
 
 /// `luaL_Reg typeUserdataMethods[]`：type userdata 的方法表。
@@ -101,17 +103,15 @@ static TYPE_USERDATA_METHODS: [LuaLReg; 28] = [
   LuaLReg::new(b"ispack", get_generic_is_pack_thunk),
 ];
 
-/// # Safety
-///
-/// `l` 必须指向当前存活、可执行 Lua C API 的 `LuaState`（对应 C++
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型
+/// 承载）：`l` 是当前存活、可执行 Lua C API 的 `LuaState`（对应 C++
 /// `registerTypeUserData(LuaState* l)` 的入参契约：VM 已构造完毕且栈可
 /// push/setfield），调用期间不得有其它线程或借用并发改写该 VM 的全局状态；
 /// 本函数只在 VM 初始化的单线程阶段调用一次。
-pub(crate) unsafe fn register_type_user_data(l: &mut LuaState) {
-  // Safety: 块内所有解引用都发生在 ulua-vm 的 `lua_l_*`/`lua_*` unsafe fn 中，其
-  // 前置条件即上面 `l` 的存活契约；`l.as_mut_ptr()` 是 `l` 的地址透传拷贝（本 crate 的
-  // `LuaState` 为不透明结构体，cast 不改变指针值）。方法表是 `static` 常量数组，
-  // 名字字节串与 thunk 函数指针
+pub(crate) fn register_type_user_data(l: &mut LuaState) {
+  // Safety: 块内不安全操作都落在 ulua-vm 的 `lua_l_*`/`lua_*` `unsafe fn` 与被调
+  // 方法内部，其前置条件即 `l` 的存活独占契约（由 `&mut` 接收者承载）。方法表是
+  // `static` 常量数组，名字字节串与 thunk 函数指针
   // 均为 'static，VM 注册表留存它们无悬垂。注册的 thunk 只在 VM 回调时运行，
   // 届时 VM 保证自身 `l` 参数有效（见 `c_thunk!` 展开内证成）。
   unsafe {
@@ -121,14 +121,12 @@ pub(crate) unsafe fn register_type_user_data(l: &mut LuaState) {
     l.new_metatable_by_bytes(TYPE);
 
     // lua_pushstring(l, "type"); lua_setfield(l, -2, "__type");
-    // SAFETY: `l.as_mut_ptr()` 为存活 LuaState，`&mut *` 一次性重借用即切片 ref 核心契约
-    lua_pushlstring_bytes(l.as_mut_ptr(), TYPE);
+    l.push_bytes(TYPE);
     l.set_field_bytes(-2, FIELD_TYPE_TAG);
 
     // Protect metatable from being changed
     // lua_pushstring(l, "The metatable is locked"); lua_setfield(l, -2, "__metatable");
-    // SAFETY: 同上
-    lua_pushlstring_bytes(l.as_mut_ptr(), METATABLE_LOCKED);
+    l.push_bytes(METATABLE_LOCKED);
     l.set_field_bytes(-2, FIELD_METATABLE);
 
     // lua_pushcfunction(l, isEqualToType, "__eq"); lua_setfield(l, -2, "__eq");
@@ -139,9 +137,8 @@ pub(crate) unsafe fn register_type_user_data(l: &mut LuaState) {
     // lua_newtable(l);
     l.new_table();
     // luaL_register(l, nullptr, typeUserdataMethods);
-    // SAFETY: `l.as_mut_ptr()` 为存活 LuaState（本 fn `# Safety` 契约），`&mut *` 自本次调用帧内
-    // 存活的裸句柄重建独占引用，借用窗止于当句
-    lua_l_register_bytes(l.as_mut_ptr(), None, &TYPE_USERDATA_METHODS);
+    // Safety: `lua_l_register_bytes` 要求存活独占 state，由 `&mut` 接收者承载；借用窗止于当句。
+    lua_l_register_bytes(l, None, &TYPE_USERDATA_METHODS);
 
     // if (FFlag::LuauUdtfTypeIsSubtypeOf)
     if fflag::LuauUdtfTypeIsSubtypeOf.get() {
@@ -171,12 +168,8 @@ pub(crate) unsafe fn register_type_user_data(l: &mut LuaState) {
 
     // Sets up a destructor for the type userdata.
     // lua_setuserdatadtor(l, kTypeUserdataTag, deallocTypeUserData);
-    // r16-v4：callee 换 `&mut LuaState` 引用形，`l.as_mut_ptr()` 就地重借独占引用（单实参单借用，
-    // 前面各 `l.…` 具名方法调用均已短借即还，无并存别名）；`l` 存活由本函数契约保证
-    lua_setuserdatadtor(
-      l.as_mut_ptr(),
-      K_TYPE_USERDATA_TAG,
-      Some(dealloc_type_user_data_thunk),
-    );
+    // 登记 dtor：`lua_setuserdatadtor` 收 `&mut`（safe），前面各 `l.…` 具名方法调用
+    // 均为短借即还，此处无并存别名；`l` 存活由本函数 `&mut` 接收者承载。
+    lua_setuserdatadtor(l, K_TYPE_USERDATA_TAG, Some(dealloc_type_user_data_thunk));
   }
 }

@@ -27,11 +27,12 @@ pub(crate) fn set_table_metatable(l: &mut LuaState) -> i32 {
       } else {
         self_ty
       };
+      let tag = get_tag(&mut *l, tag_ty);
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!(
           "type.setmetatable: expected the argument to be a table, but got {} instead",
-          get_tag(&mut *l, tag_ty)
+          tag
         ),
       );
     }

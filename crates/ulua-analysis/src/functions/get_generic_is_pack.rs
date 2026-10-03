@@ -1,5 +1,6 @@
 
 
+use crate::functions::get_tag::get_tag;
 /// 对应 C++ 原生 `static int getGenericIsPack(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1555`）。
 use ulua_vm::records::lua_state;
 use crate::{functions::{get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, macros::lua_check_tag, records::type_function_generic_type::TypeFunctionGenericType};

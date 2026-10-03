@@ -29,14 +29,14 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
         lua_createtable(l.as_mut_ptr(), (*tftp).head.len() as i32, 0);
         for (idx, el) in (*tftp).head.iter().enumerate() {
           alloc_type_user_data(&mut *l, (**el).type_variant.clone(), false);
-          lua_rawseti(l.as_mut_ptr(), -2, (idx + 1) as i32);
+          lua_rawseti(&mut *l, -2, (idx + 1) as i32);
         }
 
         l.set_field_bytes(-2, FIELD_HEAD);
       }
 
       if let Some(tail) = (*tftp).tail {
-        push_type_pack_tail(&mut *l, l.as_mut_ptr(), tail);
+        push_type_pack_tail(&mut *l, tail);
         l.set_field_bytes(-2, FIELD_TAIL);
       }
     } else {
@@ -62,7 +62,7 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
           );
           l.set_field_bytes(-2, FIELD_TAIL);
         } else {
-          throw_type_error(l.as_mut_ptr(), format_args!("unsupported type pack type"));
+          throw_type_error(&mut *l, format_args!("unsupported type pack type"));
         }
       }
     }
@@ -70,7 +70,8 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
 }
 
 /// # Safety
-/// `l` 与 `l.as_mut_ptr()` 须为同一有效 Lua 状态（`l.as_mut_ptr()` 是 `l` 的重解释）。`tail` 须为
+/// `l` 须为存活且本次调用独占的 `LuaState`（由 `&mut` 接收者承载，写栈经 C-API）。
+/// `tail` 须为
 /// 非空且指向存活类型函数 pack 节点的 `TypeFunctionTypePackId`，且其变体属于
 /// 被识别的 variadic/generic pack——本函数在 null 检查后以 `(*tfvp).type_id` /
 /// `(*tfgp).…` 解引用它，并经 `alloc_type_user_data` 与 Lua C-API（FFI）写栈。
@@ -78,8 +79,8 @@ unsafe fn push_type_pack_tail(
   l: &mut LuaState,
   tail: TypeFunctionTypePackId,
 ) {
-  // Safety: 依函数头 # Safety——l/l.as_mut_ptr() 为同一存活 lua_State（重解释、对齐由
-  // 构造保证），tail 为运行时 arena 中存活 pack 节点；get_type_function_type_pack_id
+  // Safety: 依函数头 # Safety——`l` 为本次调用独占的存活 lua_State，
+  // tail 为运行时 arena 中存活 pack 节点；get_type_function_type_pack_id
   // 按 class index 分派，判空命中后 `(*tfvp)`/`(*tfgp)` 类型正确、基址重合，
   // `(*(*tfvp).type_id)` 的 type_id 已由 deep 序列化回填（与 C++ pushTypePack
   // 尾部同一解引用）；alloc_type_user_data/throw_type_error 按 Lua C-API 栈约定
@@ -105,6 +106,6 @@ unsafe fn push_type_pack_tail(
       return;
     }
 
-    throw_type_error(l.as_mut_ptr(), format_args!("unsupported type pack type"));
+    throw_type_error(&mut *l, format_args!("unsupported type pack type"));
   }
 }

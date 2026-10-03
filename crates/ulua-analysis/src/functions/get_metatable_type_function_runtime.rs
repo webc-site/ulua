@@ -35,11 +35,12 @@ pub(crate) fn get_metatable(l: &mut LuaState) -> i32 {
       return 1;
     }
 
+    let tag = get_tag(&mut *l, self_ty);
     throw_type_error(
-      l.as_mut_ptr(),
+      &mut *l,
       format_args!(
         "type.metatable: expected self to be a table or class, but got {} instead",
-        get_tag(&mut *l, self_ty)
+        tag
       ),
     );
   }

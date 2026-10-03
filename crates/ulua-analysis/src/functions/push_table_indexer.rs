@@ -2,7 +2,8 @@
 //! 完全一致的「把 indexer 推成 {index, result} 表（或 nil）」逻辑抽此一处。
 
 /// # Safety
-/// 调用方须保证 `l`、`l.as_mut_ptr()` 裸指针有效，满足 C++ 原实现的调用契约。
+/// 调用方须保证 `l` 为存活且本次调用独占的 `LuaState`（由 `&mut` 接收者承载），
+/// 满足 C++ 原实现的调用契约。
 use crate::{functions::{alloc_type_user_data::alloc_type_user_data, lua_names::{FIELD_INDEX, FIELD_RESULT}}, records::type_function_table_indexer::TypeFunctionTableIndexer};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) unsafe fn push_table_indexer(

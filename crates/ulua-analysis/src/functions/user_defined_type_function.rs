@@ -22,7 +22,6 @@ use ulua_ast::records::ast_name::AstName;
 use ulua_common::{fflag, functions::{c_str::with_c_str, format::format, get_clock::get_clock}, macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet};
 use ulua_vm::{functions::{lua_callbacks::lua_callbacks, lua_getfenv::lua_getfenv, lua_gettable::lua_gettable, lua_getthreaddata::lua_getthreaddata, lua_mainthread::lua_mainthread, lua_newthread::lua_newthread}, macros::lua_registryindex::LUA_REGISTRYINDEX, records::lua_state};
 use crate::{enums::reduction::Reduction, functions::{alloc_type_user_data::alloc_type_user_data, check_result_for_error::check_result_for_error, check_result_for_error_deprecated::check_result_for_error_deprecated, deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state, evaluate_type_alias_call::evaluate_type_alias_call, follow_type::follow, get_mutable_type::get_mutable, get_type_user_data::get_type_user_data, is_pending::is_pending, is_type_user_data::is_type_user_data, reset_type_function_state::reset_type_function_state, serialize_type_function_runtime_builder::serialize_type_id_type_function_runtime_builder_state, to_string_type_function_error::to_string}, records::{arena_handle::{alias, alias_nn, alias_ref}, extern_type::ExternType, find_user_type_function_blockers::FindUserTypeFunctionBlockers, freeze_type_function_types::FreezeTypeFunctionTypes, generic_type_visitor::{GenericTypeVisitor, GenericTypeVisitorTrait}, luau_temp_thread_popper::LuauTempThreadPopper, scoped_assign::ScopedAssign, time_limit_error::TimeLimitError, type_function_context::TypeFunctionContext, type_function_instance_type::TypeFunctionInstanceType, type_function_reduction_result::TypeFunctionReductionResult, type_function_runtime::TypeFunctionRuntime, type_function_runtime_builder_state::TypeFunctionRuntimeBuilderState, user_cancel_error::UserCancelError, visit_key::VisitKey}, type_aliases::{type_function_type_id::{AsTypeFunctionType, TypeFunctionTypeId}, type_id::TypeId, type_pack_id::TypePackId}};
-use ulua_vm::records::lua_state::LuaState;
 impl GenericTypeVisitorTrait for FindUserTypeFunctionBlockers<'_> {
   type Seen = DenseHashSet<VisitKey>;
 
@@ -229,10 +228,9 @@ pub fn user_defined_type_function(
   // SAFETY: VM 边界——`global` 为 runtime 懒建并已判非空的主线程存活 state，单
   // 线程串行驱动；新线程由其拥有、活至 popper 弹出（与原 cpp 时序逐字一致）。
   let l_thread = unsafe { lua_newthread(global.cast::<lua_state::LuaState>()) };
-  // 对 VM 的栈操作一律经 `l_vm` 引用走安全方法/安全入口；`l` 仅作 opaque
-  // `lua_State` 地址值喂给以裸句柄为形参的同族函数（身份句柄，本文件不解引用）。
+  // 对 VM 的栈操作一律经 `l_vm` 这一独占借用走安全方法/安全入口；需要裸句柄的
+  // C-ABI 入口（如 `lua_callbacks`）直接取同一地址的 `l_thread`。
   let l_vm = alias(l_thread);
-  let l = l_thread.cast::<LuaState>();
   let mut popper = LuauTempThreadPopper::new(global);
 
   // std::unique_ptr<TypeFunctionRuntimeBuilderState> runtimeBuilder = std::make_unique<...>(ctx);
@@ -356,7 +354,7 @@ pub fn user_defined_type_function(
               let variant = serialized_ty.as_type().type_variant.clone();
               // SAFETY: VM 边界——`l` 为本帧独占存活线程；被调函数 `# Safety`
               // 契约（见 alloc_type_user_data.rs）的会话前提此刻逐项成立。
-              unsafe { alloc_type_user_data(&mut *l, variant, true) };
+              unsafe { alloc_type_user_data(&mut *l_vm, variant, true) };
               // lua_setfield(l, -2, name.c_str());
               l_vm.set_field_str(-2, name);
             }
@@ -375,7 +373,7 @@ pub fn user_defined_type_function(
             if errors_empty {
               let variant = serialized_ty.as_type().type_variant.clone();
               // SAFETY: VM 边界——同上。
-              unsafe { alloc_type_user_data(&mut *l, variant, true) };
+              unsafe { alloc_type_user_data(&mut *l_vm, variant, true) };
               l_vm.set_field_str(-2, name);
             }
           }
@@ -421,7 +419,7 @@ pub fn user_defined_type_function(
 
   // resetTypeFunctionState(l);
   // SAFETY: VM 边界——`l` 为本帧独占存活线程；契约见 reset_type_function_state.rs。
-  unsafe { reset_type_function_state(&mut *l) };
+  unsafe { reset_type_function_state(&mut *l_vm) };
 
   // Push serialized arguments onto the stack
   // for (auto typeParam : typeParams)
@@ -457,7 +455,7 @@ pub fn user_defined_type_function(
     // allocTypeUserData(l, serializedTy->type);
     let variant = serialized_ty.as_type().type_variant.clone();
     // SAFETY: VM 边界——同上（本帧独占存活线程）。
-    unsafe { alloc_type_user_data(&mut *l, variant, false) };
+    unsafe { alloc_type_user_data(&mut *l_vm, variant, false) };
   }
 
   // Set up an interrupt handler for type functions to respect type checking limits and LSP cancellation requests.
@@ -476,20 +474,20 @@ pub fn user_defined_type_function(
   if fflag::LuauTypeFunctionStructuredErrors.get() {
     // if (auto error = checkResultForError(l, name.value, lua_pcall(...)))
     //     return {..., to_string(*error), ctx->typeFunctionRuntime->messages};
-    if let Some(error) = check_result_for_error(&mut *l, &name_str, pcall_result) {
+    if let Some(error) = check_result_for_error(&mut *l_vm, &name_str, pcall_result) {
       return erroneous_with(to_string(&error), runtime.messages.clone());
     }
   } else {
     // if (auto error = checkResultForError_DEPRECATED(l, name.value, lua_pcall(...)))
     //     return {..., std::move(error), ctx->typeFunctionRuntime->messages};
-    if let Some(error) = check_result_for_error_deprecated(&mut *l, &name_str, pcall_result) {
+    if let Some(error) = check_result_for_error_deprecated(&mut *l_vm, &name_str, pcall_result) {
       return erroneous_with(error, runtime.messages.clone());
     }
   }
 
   // If the return value is not a type userdata, return with error message
   // if (!isTypeUserData(l, 1))
-  if !is_type_user_data(&mut *l, 1) {
+  if !is_type_user_data(&mut *l_vm, 1) {
     return erroneous_with(
       format(format_args!(
         "'{}' type function: returned a non-type value",
@@ -500,7 +498,7 @@ pub fn user_defined_type_function(
   }
 
   // TypeFunctionTypeId retTypeFunctionTypeId = getTypeUserData(l, 1);
-  let ret_type_function_type_id: TypeFunctionTypeId = get_type_user_data(&mut *l, 1);
+  let ret_type_function_type_id: TypeFunctionTypeId = get_type_user_data(&mut *l_vm, 1);
 
   // structured / deprecated 两条错误通道只在「读哪份错误列表」上不同，反序列化流程一致。
   let structured_errors = fflag::LuauTypeFunctionStructuredErrors.get();
@@ -586,10 +584,9 @@ fn unevaluable_result(ctx: &TypeFunctionContext) -> TypeFunctionReductionResult 
 /// 本函数经 `push_c_closure` 注册为该 VM 的 Lua 闭包；Lua 调用约定保证被调用
 /// 时 `l` 为当前运行线程的非空存活 `lua_State*`。
 unsafe extern "C-unwind" fn evaluate_type_alias_call_thunk(l: *mut lua_state::LuaState) -> i32 {
-  // Safety: `crate::type_aliases::lua_state::LuaState` 是不透明结构体，`l.cast()`
-  // 是同一对象指针的视图转换（不改变地址/对齐），与被调函数
-  // `evaluate_type_alias_call` 期望的形参类型完全一致；该函数自行校验 upvalue 1
-  // 里的 `TypeFun*` 轻用户数据，其有效性由注册处 `lua_pushlightuserdata` 写入的
-  // 活指针保证。
-  unsafe { evaluate_type_alias_call(l.cast()) }
+  // Safety: 本蹦床是 C-ABI 边界，形参形状由 `lua_CFunction` 约定固定；`l` 由 VM 在
+  // 本次闭包调用帧上给出，非空且指向本次调用独占的存活线程，故可重建为 `&mut`，
+  // 借用窗严格止于 `evaluate_type_alias_call` 返回。该函数只读 upvalue 1 里的
+  // `TypeFun*` 轻用户数据，其有效性由注册处 `lua_pushlightuserdata` 写入的活指针保证。
+  unsafe { evaluate_type_alias_call(&mut *l) }
 }

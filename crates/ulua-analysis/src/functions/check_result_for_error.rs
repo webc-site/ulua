@@ -22,7 +22,7 @@ pub fn check_result_for_error(
       ),
     ), // LuaYield, LuaBreak
     _ => {
-      if alias_ref(l.as_ptr()).get_top() == 0 {
+      if l.get_top() == 0 {
         Some(
           TypeFunctionError::type_function_error_location_type_function_error_data(
             Location::new(Default::default(), Default::default()),
@@ -35,7 +35,7 @@ pub fn check_result_for_error(
       } else
       // Safety: l 为存活 lua_State；进入本分支前已确认栈深 != 0，-1 索引落在有效栈槽
       // 内，lua_isstring 只读取该槽位。
-      if unsafe { lua_isstring(l.as_mut_ptr(), -1) } != 0 {
+      if unsafe { lua_isstring(&*l, -1) } != 0 {
         let err_str = alias(l.as_mut_ptr())
           .to_str(-1)
           .unwrap_or_default();
@@ -52,7 +52,7 @@ pub fn check_result_for_error(
         let err_type = if fflag::LuauUdtfFixTypeNameTypo.get() {
           // Safety: l 存活且栈非空（上一分支保证），-1 落在有效栈槽；luaL_typename
           // 只读该槽 TValue 并以判空/nilobject 兜底，永不误读空槽。
-          unsafe { lua_l_typename(l.as_mut_ptr(), -1) }
+          unsafe { lua_l_typename(&*l, -1) }
         } else {
           // `lua_typename` 为安全函数：实参 -1 是 LUA_TNONE 常量（与 C++ 上游同值传参），
           // 该取值命中 "no value" 静态表项，不触碰 l 所指状态。

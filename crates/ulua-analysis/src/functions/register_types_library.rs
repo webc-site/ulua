@@ -2,7 +2,7 @@
 //! (Analysis/src/TypeFunctionRuntime.cpp:1876-1914).
 
 use ulua_vm::{functions::lua_l_register::lua_l_register_bytes, records::{lua_l_reg::LuaLReg}};
-use crate::{functions::{create_any::create_any, create_boolean::create_boolean, create_buffer::create_buffer, create_function::create_function, create_generic::create_generic, create_intersection::create_intersection, create_negation::create_negation, create_never::create_never, create_number::create_number, create_optional::create_optional, create_singleton::create_singleton, create_string::create_string, create_table::create_table, create_thread::create_thread, create_union::create_union, create_unknown::create_unknown, deep_copy::deep_copy, lua_names::LIB_TYPES}, macros::c_thunk, records::arena_handle::alias};
+use crate::{functions::{create_any::create_any, create_boolean::create_boolean, create_buffer::create_buffer, create_function::create_function, create_generic::create_generic, create_intersection::create_intersection, create_negation::create_negation, create_never::create_never, create_number::create_number, create_optional::create_optional, create_singleton::create_singleton, create_string::create_string, create_table::create_table, create_thread::create_thread, create_union::create_union, create_unknown::create_unknown, deep_copy::deep_copy, lua_names::LIB_TYPES}, macros::c_thunk};
 use ulua_vm::records::lua_state::LuaState;
 c_thunk!(create_unknown_thunk, create_unknown, @ref);
 c_thunk!(create_never_thunk, create_never, @ref);
@@ -23,8 +23,9 @@ c_thunk!(create_function_thunk, create_function, @ref);
 c_thunk!(deep_copy_thunk, deep_copy, @ref);
 c_thunk!(create_generic_thunk, create_generic, @ref);
 
-/// 类型库字段构造函数指针（VM C 函数形状）。
-type TypeLibCfunction = unsafe extern "C-unwind" fn(l: &mut LuaState) -> i32;
+/// 类型库字段构造函数指针（VM C 函数形状：与 `lua_CFunction` 逐字同形，
+/// 蹦床内部才把裸句柄重建为 `&mut`）。
+type TypeLibCfunction = unsafe extern "C-unwind" fn(l: *mut LuaState) -> i32;
 
 /// `types` 库的「常量字段」表：调用即向栈压入对应 primitive 类型 userdata。
 /// cpp 用 `luaL_Reg fields[]` 承载同一数据，这里直接是「NUL 结尾名字 + thunk」
@@ -54,33 +55,29 @@ const TYPES_METHODS: [LuaLReg; 9] = [
   LuaLReg::new(b"generic", create_generic_thunk),
 ];
 
-/// # Safety
-/// `l` 必须指向存活的 lua_State，且在调用期间被本线程独占使用：本 crate 唯一
-/// 调用点是 `TypeFunctionRuntime::prepare_state`，传入刚由 `lua_newstate` 创建、
-/// 已 `set_type_function_environment` 与 `register_type_user_data` 初始化的
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载）：
+/// 本 crate 唯一调用点是 `TypeFunctionRuntime::prepare_state`，传入刚由 `lua_newstate`
+/// 创建、已 `set_type_function_environment` 与 `register_type_user_data` 初始化的
 /// state；函数会向其栈推入/弹出类型 userdata 与 "types" 库表，故要求栈有可用
 /// 余量且 state 未被其他持有者并发访问（runtime 为单线程构造路径）。
-pub(crate) unsafe fn register_types_library(l: &mut LuaState) {
-
+pub(crate) fn register_types_library(l: &mut LuaState) {
   // luaL_register(l, "types", methods);
-  // Safety: `l.as_mut_ptr()` 即函数级 # Safety 中存活且独占的 lua_State（非空）；`l.as_mut_ptr()`
-  // 重建自本次调用帧内存活的裸句柄，借用窗止于当句；
-  // `LIB_TYPES` 是静态 NUL 结尾字节串；`METHODS` 为常量数组，
-  // 期间无人改写。
-  unsafe { lua_l_register_bytes(l.as_mut_ptr(), Some(LIB_TYPES), &TYPES_METHODS) };
+  // Safety: `l` 为本次调用独占的存活 state（`&mut` 接收者承载）；`LIB_TYPES` 是静态
+  // NUL 结尾字节串；`TYPES_METHODS` 为常量数组，期间无人改写。
+  unsafe { lua_l_register_bytes(l, Some(LIB_TYPES), &TYPES_METHODS) };
 
   // Set fields for type userdata
   // for (luaL_Reg* l = fields; l->name; l++) { l->func(L); lua_setfield(L, -2, l->name); }
   for (name, func) in TYPES_FIELDS {
-    // Safety: thunk 要求存活且独占的 state，与调用点 `prepare_state` 对 `l` 的
-    // 承诺一致；`name` 是静态 NUL 结尾字节串，thunk 已把该字段的类型 userdata 压入
-    // 栈顶，"types" 表随后位于 -2。
+    // Safety: `func` 是 `c_thunk!` 生成的 C-ABI 蹦床，要求本次调用独占的存活
+    // `lua_State` 裸句柄，与调用点 `prepare_state` 对 `l` 的承诺一致；`name` 是静态
+    // NUL 结尾字节串，thunk 已把该字段的类型 userdata 压入栈顶，"types" 表随后位于 -2。
     unsafe {
       func(l.as_mut_ptr());
-      l.set_field_bytes(-2, name);
     }
+    l.set_field_bytes(-2, name);
   }
 
   // lua_pop(l, 1);
-  alias(l.as_mut_ptr()).pop(1);
+  l.pop(1);
 }

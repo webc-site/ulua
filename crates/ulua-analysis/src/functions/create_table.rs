@@ -1,5 +1,6 @@
 
 
+use crate::functions::get_tag::get_tag;
 /// 对应 C++ 原生 `static int createTable(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:796`）。
 use alloc::{collections::BTreeMap, string::String};
 use ulua_vm::{functions::lua_l_typeerror_l::lua_l_typeerror_l};

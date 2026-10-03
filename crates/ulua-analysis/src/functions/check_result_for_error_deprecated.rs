@@ -17,7 +17,7 @@ pub fn check_result_for_error_deprecated(
       type_function_name
     ))), // LuaYield, LuaBreak
     _ => {
-      if alias(l.as_mut_ptr()).get_top() == 0 {
+      if l.get_top() == 0 {
         Some(format(format_args!(
           "'{}' type function errored unexpectedly",
           type_function_name
@@ -25,7 +25,7 @@ pub fn check_result_for_error_deprecated(
       } else if unsafe {
         // Safety: 同上，`l` 存活；gettop != 0 保证 -1 为合法栈索引，
         // lua_isstring 只做 lua_type 分类读取。
-        lua_isstring(l.as_mut_ptr(), -1) != 0
+        lua_isstring(&*l, -1) != 0
       } {
         let err_str = alias(l.as_mut_ptr())
           .to_str(-1)

@@ -19,7 +19,7 @@ pub(crate) fn create_negation(l: &mut LuaState) -> i32 {
     if !table_type_ptr.is_null() || !function_type_ptr.is_null() {
       let tag = get_tag(&mut *l, arg);
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!(
           "types.negationof: cannot perform negation on `{}` type",
           tag

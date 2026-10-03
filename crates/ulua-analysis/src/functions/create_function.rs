@@ -1,5 +1,6 @@
 
 
+use crate::functions::throw_type_error::throw_type_error;
 /// 对应 C++ 原生 `static int createFunction(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1308`）。
 use alloc::vec::Vec;
 use ulua_vm::{functions::{lua_gettable::lua_gettable, lua_l_typeerror_l::lua_l_typeerror_l}, records::lua_state};
@@ -101,7 +102,7 @@ pub(crate) unsafe fn get_type_pack_runtime(
 
       for i in 1..=l.obj_len(-1) as i32 {
         l.push_integer(i);
-        lua_gettable(l.as_mut_ptr(), -2);
+        lua_gettable(&mut *l, -2);
 
         if l.is_nil(-1) {
           l.pop(1);

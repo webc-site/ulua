@@ -16,7 +16,7 @@ pub(crate) fn deep_copy(l: &mut LuaState) -> i32 {
 
     if fflag::LuauTypeFunctionRobustness.get() && copy.is_null() {
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!("types.copy: complexity limit reached during type copy"),
       );
     }

@@ -18,11 +18,12 @@ pub(crate) fn get_negated_value(l: &mut LuaState) -> i32 {
     if !tfnt.is_null() {
       alloc_type_user_data(&mut *l, (*(*tfnt).type_id).type_variant.clone(), false);
     } else {
+      let tag = get_tag(&mut *l, self_ty);
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!(
           "type.inner: cannot call inner method on non-negation type: `{}` type",
-          get_tag(&mut *l, self_ty)
+          tag
         ),
       );
     }

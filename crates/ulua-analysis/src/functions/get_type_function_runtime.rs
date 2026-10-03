@@ -19,7 +19,7 @@ pub(crate) unsafe fn get_type_function_runtime(l: &mut LuaState) -> *mut TypeFun
   // 状态，仅做指针取回与重解释，
   // 与注册路径 `runtime as *mut ()` 互逆，故返回值即当初存入的合法句柄。
   unsafe {
-    let main_thread = lua_mainthread(l.as_ptr());
+    let main_thread = lua_mainthread(&*l);
     let data = lua_getthreaddata(&*main_thread);
     data as *mut TypeFunctionRuntime
   }

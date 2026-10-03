@@ -20,37 +20,38 @@ pub(crate) fn get_props(l: &mut LuaState) -> i32 {
 
     let tftt = get_type_function_type_id::<TypeFunctionTableType>(self_ty);
     if !tftt.is_null() {
-      push_props(&mut *l, l.as_mut_ptr(), &(*tftt).props);
+      push_props(&mut *l, &(*tftt).props);
       return 1;
     }
 
     let tfct = get_type_function_type_id::<TypeFunctionExternType>(self_ty);
     if !tfct.is_null() {
-      push_props(&mut *l, l.as_mut_ptr(), &(*tfct).props);
+      push_props(&mut *l, &(*tfct).props);
       return 1;
     }
 
+    let tag = get_tag(&mut *l, self_ty);
     throw_type_error(
-      l.as_mut_ptr(),
+      &mut *l,
       format_args!(
         "type.properties: expected self to be either a table or class, but got {} instead",
-        get_tag(&mut *l, self_ty)
+        tag
       ),
     );
   }
 }
 
 /// # Safety
-/// `l` 与 `l.as_mut_ptr()` 须为同一有效 Lua 状态（`l.as_mut_ptr()` 是 `l` 重解释为
-/// `*mut lua_state::LuaState`）。`props` 内每个 `TypeFunctionProperty` 的
+/// `l` 须为存活且本次调用独占的 `LuaState`（由 `&mut` 接收者承载，写栈经 C-API）。
+/// `props` 内每个 `TypeFunctionProperty` 的
 /// `read_ty`/`write_ty`（`TypeId = *const Type`）须指向存活的类型 arena 节点，
 /// 因本函数以 `(*read_ty).type_variant` 解引用它们；随后经 Lua C-API（FFI）写栈。
 unsafe fn push_props(
   l: &mut LuaState,
   props: &BTreeMap<String, TypeFunctionProperty>,
 ) {
-  // Safety: `l` 与 `l.as_mut_ptr()` 由调用方 `get_props` 保证是同一有效存活的 `*mut LuaState`
-  // （见其 C-函数契约）；`lua_createtable`/`lua_setfield`/`lua_settable` 仅向该状态栈写入，
+  // Safety: `l` 由调用方 `get_props` 保证为同一有效存活 state（见其 C-函数契约）；
+  // `lua_createtable`/`lua_setfield`/`lua_settable` 仅向该状态栈写入，
   // `alloc_type_user_data` 亦以此为参。`props` 内 `read_ty`/`write_ty`（`TypeId = *const Type`）
   // 是在 `is_some()` 守卫后经 `.clone()` 读取的存活 arena 类型句柄，`(*read_ty).type_variant`
   // 只读、指向 arena 中该类型节点；单线程遍历 `props` 时对这些 arena 节点无并存可变借用。
@@ -88,7 +89,7 @@ unsafe fn push_props(
         l.set_field_bytes(-2, FIELD_WRITE);
       }
 
-      lua_settable(l.as_mut_ptr(), -3);
+      lua_settable(&mut *l, -3);
     }
   }
 }

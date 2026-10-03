@@ -24,7 +24,7 @@ pub(crate) unsafe fn get_table_prop(l: &mut LuaState, prefix: &str, read: bool) 
     let argument_count = l.get_top();
     if argument_count != 2 {
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!("{prefix}: expected 2 arguments, but got {argument_count}"),
       );
     }
@@ -32,11 +32,12 @@ pub(crate) unsafe fn get_table_prop(l: &mut LuaState, prefix: &str, read: bool) 
     let self_ty = get_type_user_data(&mut *l, 1);
     let tftt = get_type_function_type_id::<TypeFunctionTableType>(self_ty);
     if tftt.is_null() {
+      let tag = get_tag(&mut *l, self_ty);
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!(
           "{prefix}: expected self to be either a table, but got {} instead",
-          get_tag(&mut *l, self_ty)
+          tag
         ),
       );
     }
@@ -44,22 +45,24 @@ pub(crate) unsafe fn get_table_prop(l: &mut LuaState, prefix: &str, read: bool) 
     let key = get_type_user_data(&mut *l, 2);
     let tfst = get_type_function_type_id::<TypeFunctionSingletonType>(key);
     if tfst.is_null() {
+      let tag = get_tag(&mut *l, key);
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!(
           "{prefix}: expected to be given a singleton type, but got {} instead",
-          get_tag(&mut *l, key)
+          tag
         ),
       );
     }
 
     let tfsst = (*tfst).variant.get_if_1();
     if tfsst.is_none() {
+      let tag = get_tag(&mut *l, key);
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!(
           "{prefix}: expected to be given a string singleton type, but got {} instead",
-          get_tag(&mut *l, key)
+          tag
         ),
       );
     }
@@ -109,7 +112,7 @@ pub(crate) unsafe fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: boo
     let argument_count = l.get_top();
     if !(2..=3).contains(&argument_count) {
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!("{prefix}: expected 2-3 arguments, but got {argument_count}"),
       );
     }
@@ -117,18 +120,19 @@ pub(crate) unsafe fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: boo
     let self_ty = get_type_user_data(&mut *l, 1);
     let tftt = get_mutable_type_function_type_id::<TypeFunctionTableType>(self_ty);
     if tftt.is_null() {
+      let tag = get_tag(&mut *l, self_ty);
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!(
           "{prefix}: expected self to be a table, but got {} instead",
-          get_tag(&mut *l, self_ty)
+          tag
         ),
       );
     }
 
     if fflag::LuauTypeFunctionSupportsFrozen.get() && (*self_ty).frozen {
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!(
           "{prefix}: cannot be called to mutate a frozen type, use `types.copy` to make a copy"
         ),
@@ -138,22 +142,24 @@ pub(crate) unsafe fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: boo
     let key = get_type_user_data(&mut *l, 2);
     let tfst = get_type_function_type_id::<TypeFunctionSingletonType>(key);
     if tfst.is_null() {
+      let tag = get_tag(&mut *l, key);
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!(
           "{prefix}: expected to be given a singleton type, but got {} instead",
-          get_tag(&mut *l, key)
+          tag
         ),
       );
     }
 
     let tfsst = (*tfst).variant.get_if_1();
     if tfsst.is_none() {
+      let tag = get_tag(&mut *l, key);
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!(
           "{prefix}: expected to be given a string singleton type, but got {} instead",
-          get_tag(&mut *l, key)
+          tag
         ),
       );
     }
@@ -218,7 +224,7 @@ pub(crate) unsafe fn get_parent(l: &mut LuaState, read: bool) -> i32 {
     let argument_count = l.get_top();
     if argument_count != 1 {
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!("type.parent: expected 1 arguments, but got {argument_count}"),
       );
     }
@@ -226,11 +232,12 @@ pub(crate) unsafe fn get_parent(l: &mut LuaState, read: bool) -> i32 {
     let self_ty = get_type_user_data(&mut *l, 1);
     let tfct = get_type_function_type_id::<TypeFunctionExternType>(self_ty);
     if tfct.is_null() {
+      let tag = get_tag(&mut *l, self_ty);
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!(
           "type.parent: expected self to be a class, but got {} instead",
-          get_tag(&mut *l, self_ty)
+          tag
         ),
       );
     }
@@ -263,7 +270,7 @@ pub(crate) unsafe fn get_indexer(l: &mut LuaState, prefix: &str) -> i32 {
     let argument_count = l.get_top();
     if argument_count != 1 {
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!("{prefix}: expected 1 arguments, but got {argument_count}"),
       );
     }
@@ -272,21 +279,22 @@ pub(crate) unsafe fn get_indexer(l: &mut LuaState, prefix: &str) -> i32 {
 
     let tftt = get_type_function_type_id::<TypeFunctionTableType>(self_ty);
     if !tftt.is_null() {
-      push_table_indexer(&mut *l, l.as_mut_ptr(), &(*tftt).indexer);
+      push_table_indexer(&mut *l, &(*tftt).indexer);
       return 1;
     }
 
     let tfct = get_type_function_type_id::<TypeFunctionExternType>(self_ty);
     if !tfct.is_null() {
-      push_table_indexer(&mut *l, l.as_mut_ptr(), &(*tfct).indexer);
+      push_table_indexer(&mut *l, &(*tfct).indexer);
       return 1;
     }
 
+    let tag = get_tag(&mut *l, self_ty);
     throw_type_error(
-      l.as_mut_ptr(),
+      &mut *l,
       format_args!(
         "{prefix}: expected self to be either a table or class, but got {} instead",
-        get_tag(&mut *l, self_ty)
+        tag
       ),
     );
   }
@@ -306,7 +314,7 @@ pub(crate) unsafe fn get_function_pack(l: &mut LuaState, prefix: &str, params: b
     let argument_count = l.get_top();
     if argument_count != 1 {
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!("{prefix}: expected 1 arguments, but got {argument_count}"),
       );
     }
@@ -314,11 +322,12 @@ pub(crate) unsafe fn get_function_pack(l: &mut LuaState, prefix: &str, params: b
     let self_ty = get_type_user_data(&mut *l, 1);
     let tfft = get_type_function_type_id::<TypeFunctionFunctionType>(self_ty);
     if tfft.is_null() {
+      let tag = get_tag(&mut *l, self_ty);
       throw_type_error(
-        l.as_mut_ptr(),
+        &mut *l,
         format_args!(
           "{prefix}: expected self to be a function, but got {} instead",
-          get_tag(&mut *l, self_ty)
+          tag
         ),
       );
     }
