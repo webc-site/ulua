@@ -7,14 +7,14 @@ use crate::{
   records::{gc_object::GCObject, lua_state::LuaState},
 };
 
-/// `luaC_barrierback` 向后写屏障（cpp `lgc.cpp:1473` 系）。r16-v9b：首参仍收 `&mut LuaState`
+/// `luaC_barrierback` 向后写屏障（cpp `lgc.cpp:1493` 系）。r16-v9b：首参仍收 `&mut LuaState`
 /// （仿 v5 rawequal/v7 pusherror 形制），`l` 非空/对齐与存活/独占由接收者引用承载，
 /// `l.global` 读数为 safe 位；GC 阶段与对象协议前提归 Safety 节承载（unsafe fn 语义）。
 ///
 /// # Safety
 /// GC 须处于增量阶段（`gcstate != GCSpause`）；`o` 必须是当前黑色存活对象；`gclist`
 /// 必须指向 `o` 自身的 gclist 链接字段（可写）。违反（如对灰对象调用、gclist 指向他处）
-/// 会污染 `grayagain` 链，导致活对象被提前清扫。cpp lgc.cpp:1473。
+/// 会污染 `grayagain` 链，导致活对象被提前清扫。cpp lgc.cpp:1493。
 pub unsafe fn lua_c_barrierback(l: &mut LuaState, o: *mut GCObject, gclist: *mut *mut GCObject) {
   // 接收者引用保证 `l` 有效，字段现读系 safe 位。
   let g = l.global;
@@ -37,7 +37,7 @@ pub unsafe fn lua_c_barrierback(l: &mut LuaState, o: *mut GCObject, gclist: *mut
 /// # Safety
 /// C ABI 导出壳：`o`/`gclist` 必须分别是由 `luaC_barrierback` 协议擦除为 `c_void` 的真实
 /// `GCObject*` 与其 gclist 字段地址，`l` 及 GC 阶段满足内层 `lua_c_barrierback` 契约。
-/// 传入任意指针会在还原类型后按错误布局改写 GC 头。cpp lgc.cpp:1473。
+/// 传入任意指针会在还原类型后按错误布局改写 GC 头。cpp lgc.cpp:1493。
 pub unsafe extern "C-unwind" fn lua_c_barrierback_export(
   l: *mut LuaState,
   o: *mut c_void,

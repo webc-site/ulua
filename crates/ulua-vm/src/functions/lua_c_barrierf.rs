@@ -1,4 +1,4 @@
-//! Source: `VM/src/lgc.cpp` (lgc.cpp:1284-1294, hand-ported)
+//! Source: `VM/src/lgc.cpp` (lgc.cpp:1461-1471, hand-ported)
 
 use core::ffi::c_void;
 
@@ -13,14 +13,14 @@ use crate::{
   records::{gc_object::GCObject, lua_state::LuaState},
 };
 
-/// `luaC_barrierf` 前向写屏障（cpp `lgc.cpp:1284`）。r16-v9b：首参仍收 `&mut LuaState`
+/// `luaC_barrierf` 前向写屏障（cpp `lgc.cpp:1461`）。r16-v9b：首参仍收 `&mut LuaState`
 /// （仿 v5 rawequal/v7 pusherror 形制），`l` 非空/对齐与存活/独占由接收者引用承载，
 /// `l.global` 读数为 safe 位；GC 阶段与对象协议前提归 Safety 节承载（unsafe fn 语义）。
 ///
 /// # Safety
 /// 本函数须在 GC 处于非 GCSpause 的增量阶段调用，`o` 为黑色存活对象、`v` 为刚被 `o`
 /// 引用的白色存活对象（二者均未 dead）。违反（如 v 已是黑对象或对 dead 对象调用）会
-/// 重复标记/改写已清扫对象，cpp lgc.cpp:1441。
+/// 重复标记/改写已清扫对象，cpp lgc.cpp:1461。
 pub unsafe fn lua_c_barrierf(l: &mut LuaState, o: *mut GCObject, v: *mut GCObject) {
   // 接收者引用保证 `l` 有效，字段现读系 safe 位。
   let g = l.global;
@@ -43,7 +43,7 @@ pub unsafe fn lua_c_barrierf(l: &mut LuaState, o: *mut GCObject, v: *mut GCObjec
 
 /// # Safety
 /// C ABI 导出壳：`o`/`v` 必须是写屏障协议中擦除为 `c_void` 的真实 `GCObject*`（v 刚被 o 引用），
-/// 且 `l`/GC 阶段满足内层 `lua_c_barrierf` 契约；否则还原类型后按错误布局标记对象。cpp lgc.cpp:1441。
+/// 且 `l`/GC 阶段满足内层 `lua_c_barrierf` 契约；否则还原类型后按错误布局标记对象。cpp lgc.cpp:1461。
 pub unsafe extern "C-unwind" fn lua_c_barrierf_export(
   l: *mut LuaState,
   o: *mut c_void,
