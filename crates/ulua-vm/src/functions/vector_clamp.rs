@@ -14,19 +14,11 @@ use crate::{
 
 /// `vector.clamp`：把索引 1 向量逐分量夹到索引 2/3 两向量给出的 min/max 区间内。
 ///
-/// # Safety
-/// `l` 须为存活 `LuaState` 且处于受保护帧：本帧把该裸指针重建为独占引用（借用窗覆盖整个函数体），
-/// 其后按 Lua 库函数约定——索引 1/2/3 须为 vector（否则 `check_vector` 经 `tag_error` 抛错发散），
-/// min/max 的 x/y/z 三分量关系逐个 `arg_check`（不满足即抛错回退），结果槽由 `vector_push` 内部
-/// 扩栈，可触发 GC。
-///
-/// 签名保留裸指针形是 C ABI 透传壳 `ulua_vector_clamp`（ulua-capi，本票范围外）直呼本核心所致，
-/// 与 `@ref` 族的差异仅在首参；壳侧改走 `_arm` 后即可与前移后的同族齐形。
-pub unsafe fn vector_clamp(l: *mut LuaState) -> i32 {
-  // SAFETY: 契约保证 `l` 为本次受保护帧内存活且无别名的 `LuaState`；此处仅做 C 臂
-  // `l: *mut LuaState → &mut` 的边界转换，分量读窗与压栈皆走 safe 门面。
-  let l = unsafe { &mut *l };
-
+/// 调用序契约（正确性，非内存安全）：`l` 存活与独占由 `&mut LuaState` 承载；按 Lua 库函数
+/// 约定——索引 1/2/3 须为 vector（否则 `check_vector` 经 `tag_error` 抛错发散），min/max 的
+/// x/y/z 三分量关系逐个 `arg_check`（不满足即抛错回退），结果槽由 `vector_push` 内部扩栈，
+/// 可触发 GC；裸指针边界的内存契约见 `lua_lib_fn!` 单源生成的 `vector_clamp_arm` `# Safety`。
+pub fn vector_clamp(l: &mut LuaState) -> i32 {
   let v = check_vector(l, 1);
   let min = check_vector(l, 2);
   let max = check_vector(l, 3);
@@ -53,4 +45,4 @@ pub unsafe fn vector_clamp(l: *mut LuaState) -> i32 {
   1
 }
 
-lua_lib_fn!(pub fn vector_clamp, vector_clamp_arm);
+lua_lib_fn!(pub fn vector_clamp @ref, vector_clamp_arm);
