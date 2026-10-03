@@ -16,13 +16,16 @@ use crate::{
 /// GC/屏障，须在受保护帧内调用。
 pub(crate) fn lua_xpush(from: &LuaState, to: &mut LuaState, idx: i32) {
   // SAFETY: `from`/`to` 存活（引用形保证）；index_2_addr 已对任意 idx 硬化；
-  // read_ptr 只读转发（from 仅被读）契约成立；ensure_stack_impl/setobj_2_s 的
+  // read_ptr 只读转发（from 仅被读）契约成立；ensure_stack_impl 的 error_l 可变
+  // 借用只在溢出抛错路径上被触碰，该路径经 lua_error 发散不返回，与本帧其后的
+  // from 只读转发窗口不重叠；ensure_stack_impl/setobj_2_s 的
   // 指针前提由调用序契约与 VM 栈不变式成立。
   unsafe {
     api_check!(from.read_ptr(), from.global == to.global);
     lua_c_threadbarrier_lapi(to.as_mut_ptr());
-    // cpp `ensure_stack_impl(to, from, 1)`
-    ensure_stack_impl(to.as_mut_ptr(), from.read_ptr(), 1);
+    // cpp `ensure_stack_impl(to, from, 1)`：`to` 直传独占借用；`from` 只在溢出
+    // 抛错路径上被写，该路径 `lua_error` 立即不再返回，故与 `from` 的本帧只读借用不共存。
+    ensure_stack_impl(to, &mut *from.read_ptr(), 1);
     let o = index_2_addr(&*from.read_ptr(), idx);
     setobj_2_s!(to.as_mut_ptr(), to.top, o);
     api_incr_top!(to.as_mut_ptr());

@@ -24,7 +24,7 @@ pub(crate) fn lua_getmetatable(l: &mut LuaState, objindex: i32) -> i32 {
   unsafe {
     let lp = l.as_mut_ptr();
     lua_c_threadbarrier_lapi(lp);
-    ensure_stack(lp, 1);
+    ensure_stack(l, 1);
 
     let obj: StkId = index_2_addr(&*lp, objindex);
 

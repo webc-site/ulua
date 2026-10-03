@@ -15,7 +15,7 @@ use crate::{
 pub unsafe fn lua_a_pushclass(l: *mut LuaState, lco: *mut LuauClass) {
   unsafe {
     // cpp `ensure_stack(L, 1)` 在 api_check 之前
-    ensure_stack(l, 1);
+    ensure_stack(&mut *l, 1);
     api_check!(l, !lco.is_null());
 
     let i_o = (*l).top;

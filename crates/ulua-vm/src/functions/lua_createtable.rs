@@ -18,7 +18,7 @@ pub unsafe fn lua_createtable(l: *mut LuaState, narray: i32, nrec: i32) {
     api_check!(l, narray >= 0 && nrec >= 0);
     lua_c_check_gc!(l);
     lua_c_threadbarrier_lapi(l);
-    ensure_stack(l, 1);
+    ensure_stack(&mut *l, 1);
     sethvalue!(l, (*l).top, lua_h_new(l, narray, nrec));
     api_incr_top!(l);
   }

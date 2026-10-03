@@ -22,7 +22,7 @@ pub unsafe fn lua_pushvector_lua_state_f32_f32_f32_f32(
   // 下第 4 分量无槽位、连求值都不做，`macros/setvvalue.rs` 文件头的越界防御 rationale 原样
   // 适用）；`api_incr_top!` 前提（top < ci->top）随扩容成立。
   unsafe {
-    ensure_stack(l, 1);
+    ensure_stack(&mut *l, 1);
     Slot::from_raw((*l).top).as_mut().set_vvalue(x, y, z, || w);
     api_incr_top!(l);
   }
@@ -38,7 +38,7 @@ pub unsafe fn lua_pushvector_lua_state_f32_f32_f32(l: *mut LuaState, x: f32, y: 
   // `0.0`、且仍按方法契约只在 4-lane 编译期门内求值（3-lane 构建下 lane3 不写、常量亦
   // 不落盘）；`api_incr_top!` 前提随扩容成立。
   unsafe {
-    ensure_stack(l, 1);
+    ensure_stack(&mut *l, 1);
     Slot::from_raw((*l).top)
       .as_mut()
       .set_vvalue(x, y, z, || 0.0f32);

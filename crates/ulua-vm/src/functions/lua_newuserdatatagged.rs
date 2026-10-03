@@ -46,7 +46,7 @@ pub(crate) unsafe fn new_udata_impl(
     );
     lua_c_check_gc!(l);
     lua_c_threadbarrier_lapi(l);
-    ensure_stack(l, 1);
+    ensure_stack(&mut *l, 1);
 
     let u = lua_u_newudata(l, sz, tag);
 

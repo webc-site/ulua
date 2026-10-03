@@ -250,9 +250,9 @@ impl LuaState {
 
   #[inline(always)]
   pub(crate) fn ensure_stack_space(&mut self, extra: usize) {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 的有效指针；其余前提（合法索引/栈界）
-    // 与被转发的 `pub unsafe fn` 的 `# Safety` 文档一致，由本方法调用方按文档保证。
-    unsafe { ensure_stack(self.as_mut_ptr(), extra as i32) }
+    // SAFETY: `self` 是存活已初始化 `LuaState` 的独占借用，借用期内无其它别名；
+    // 其余前提与被转发的 `unsafe fn` 的 `# Safety` 文档一致，由本方法调用方按文档保证。
+    unsafe { ensure_stack(self, extra as i32) }
   }
 
   /// 压入一个 `tag = 0` 的 full userdata，返回其 payload 指针。
