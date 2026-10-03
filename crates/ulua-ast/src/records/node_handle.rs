@@ -61,6 +61,12 @@ impl<T> Node<T> {
   }
 
   /// 由存活引用建槽(safe:引用即非空 + 存活证明)。
+  ///
+  /// 注意本形态**不**供给独占性:它记下的地址来自一个共享引用,因此
+  /// `Node::from_ref(r).get_mut()` 得到的 `&mut T` 并非由类型系统证明独占,
+  /// 只有当 `r` 本身出自调用方独占持有的 arena 槽位时才成立(即依赖模块头的
+  /// 「dispatch 单线程独占 arena」纪律)。需要类型系统级的独占证明时用
+  /// [`Node::from_mut`]。
   #[inline]
   pub fn from_ref(r: &T) -> Self {
     Self {
@@ -83,11 +89,15 @@ impl<T> Node<T> {
     unsafe { self.ptr.as_ref() }
   }
 
-  /// 写穿视图(cpp `visit(AstVisitor*)` 非 const 语义的 Rust 形态):独占性由
-  /// `&mut self` 继承——持有父节点 `&mut` 即持有本槽位的独占证明。
+  /// 写穿视图(cpp `visit(AstVisitor*)` 非 const 语义的 Rust 形态)。
+  ///
+  /// 独占前提:句柄本身须出自独占来源——[`Node::from_mut`]、[`Nodes`] 的槽位
+  /// (`&mut self` 沿链传递)、或 arena 分配返回的裸指针。由 [`Node::from_ref`]
+  /// 建的句柄不满足该前提,其 `get_mut` 退化为依赖模块头的单线程 arena 独占纪律。
   #[inline]
   pub fn get_mut(&mut self) -> &mut T {
     // Safety: `&mut self` 保证本句柄所在 place 独占;目标节点同受 arena 存活契约保护。
+    // 独占链的起点由句柄构造方式界定,见方法文档。
     unsafe { self.ptr.as_mut() }
   }
 
