@@ -236,7 +236,8 @@ macro_rules! impl_visitable {
 /// 保留的两个门面专供尚未迁移的下游（ulua-compiler/ulua-analysis/
 /// ulua-unit-test），其解引用实为对 [`crate::records::node_handle`] 同一 arena
 /// 契约的转调，下游句柄化完成后即退役。
-/// `# Safety` 契约集中在 [`ast_expr_visit`] 文档，`ast_stat_visit` 以「契约同」引用之。
+/// 每个门面的 `# Safety` 段落由调用点各自书写（clippy `missing_safety_doc` 要求
+/// `unsafe fn` 自身文档含该段落，跨文档「契约同」引用不满足）。
 macro_rules! impl_ast_ptr_visit {
   (
     $(
@@ -269,7 +270,11 @@ impl_ast_ptr_visit! {
   /// 的非 const 语义写穿节点，本门面据此向 `dispatch_node` 交出 `&mut AstNode`）。
   pub fn ast_expr_visit(expr: *mut AstExpr);
 
-  /// `stat->visit(visitor)` for a base `*mut AstStat`。契约同 [`ast_expr_visit`]。
+  /// `stat->visit(visitor)` for a base `*mut AstStat`。
+  ///
+  /// # Safety
+  /// 契约同 [`ast_expr_visit`]：`stat` 须为 null 或指向以 `AstStat` 为前缀字段的
+  /// 存活节点，且调用方独占该节点所在 arena。
   pub fn ast_stat_visit(stat: *mut AstStat);
 }
 

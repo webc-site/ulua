@@ -25,3 +25,4 @@ pub mod to_utf_8;
 pub mod unescape;
 pub mod visit_type_list;
 pub mod visit_type_or_pack_array;
+pub mod visit_vars_annotations;
