@@ -1,21 +1,9 @@
 //! 本文件对应 `ulua_lua_settop` 导出符号（源：ulua-vm/src/functions/lua_settop.rs）。
-//! vm 侧已前移为可变引用（`&mut LuaState`）接收者，无法再由 `functions/shells.rs` 中
-//! 透传裸指针的共用宏 `capi_shell_l_int!` 直呼（宏体语义不得改，其余同形壳零行为
-//! 变化），故本壳从宏模板退役、写显式 `extern "C-unwind"` 一行调用（`lua_lessthan`
-//! 先例）：唯一差异是在本帧把 `l` 重建为可变引用（`&mut *l`）后转调。
-use core::ffi::c_int;
-
-use ulua_vm::{functions::lua_settop, records::lua_state::LuaState};
-
-/// # Safety
-/// C ABI 导出壳（符号 `ulua_lua_settop`），除把 `l` 在本帧重建为可变引用（`&mut *l`）外，
-/// 仅透传至 `ulua_vm::functions::lua_settop::lua_settop(l, idx)`，零业务逻辑。调用方须保证：
-/// - `l`：指向由本 VM 创建的合法 `LuaState`，非空、对齐，整个调用期间存活，且与对该
-///   状态的其它访问单线程驱动（不得跨 OS 线程并发）——引用重建前提；
-/// - 其余安全前置条件与被调方文档所列调用序契约一致（`idx` 界内、栈数组可写界）。
-#[unsafe(export_name = "ulua_lua_settop")]
-pub unsafe extern "C-unwind" fn lua_settop(l: *mut LuaState, idx: c_int) {
-  // Safety: 契约声明 `l` 为整个调用期间存活的合法 `LuaState`；本帧引用重建
-  // 即时结束借用窗口。
-  unsafe { lua_settop::lua_settop(&mut *l, idx) }
-}
+//! 导出壳为 `functions/shells.rs` 中模板宏 `capi_shell!` 的 `l refstate` 独占引用重建参数形
+//! 一次调用（r16-v39：本壳曾因 vm 核心前移为 `&mut LuaState` 接收者而退役为显式壳，见
+//! `lua_status.rs` 先例；该缺位已由 `refstate` 参数类型臂补足，故复归宏模板单源）。被调核心
+//! 的 `idx` 界内与栈数组可写界等调用序契约由该核心自身文档承载，壳契约见宏模板。
+capi_shell!(lua_settop, "ulua_lua_settop", lua_settop, [
+  l refstate,
+  idx val c_int,
+]);
