@@ -33,12 +33,19 @@ impl TypeChecker2 {
   /// once the `TypeChecker2` lives at a stable address. 新调用点一律走
   /// [`TypeChecker2::new_boxed`]，本裸构造仅作为其内部步骤保留。
   ///
-  /// 前置条件（调用方须满足，对应 cpp NotNull 语境）：
-  /// - `unifier_state` 非空、对齐且比返回的检查器长寿；
-  /// - `module` 非空且为 Arc 写穿句柄，取 `&mut (*module).internal_types` 时须无并存别名；
-  /// - `type_function_runtime` 非空且比检查器长寿；`logger` 允许 null；
-  /// - 返回值的两条自指针未布线，须立即 `wire_self_pointers` 或改走 `new_boxed`。
-  pub(crate) fn new(
+  /// # Safety
+  /// 逐参数（对应 cpp 构造签名的 NotNull 语境，`Analysis/src/TypeChecker2.cpp:307`）：
+  /// - `unifier_state` 非空、对齐且比返回的检查器长寿——本函数立即读其 `ice_handler`，
+  ///   句柄还存入 `normalizer`/`_subtyping` 供整次 check 解引用；
+  /// - `module` 非空且为 Arc 写穿句柄（C++ `NotNull<Module&>`），函数取
+  ///   `&mut (*module).internal_types` 物化为 arena 句柄，要求此刻无其它借用别名；
+  /// - `type_function_runtime` 非空且比检查器长寿（经 `alias_ref` 解引用构造
+  ///   `_subtyping`，并另存为句柄延后使用）；
+  /// - `logger` 允许 null（C++ `DcrLogger*` 可空，以 `Option` 句柄承载）；
+  /// - `limits`/`source_module` 为受检引用，非空与存活由类型承载，无额外契约。
+  ///
+  /// 返回值的两条自指针未布线，须立即 `wire_self_pointers` 或改走 `new_boxed`。
+  pub(crate) unsafe fn new(
     builtin_types: Handle<BuiltinTypes>,
     type_function_runtime: *mut TypeFunctionRuntime,
     unifier_state: *mut UnifierSharedState,
@@ -48,10 +55,11 @@ impl TypeChecker2 {
     module: *mut Module,
   ) -> Self {
     // ice(unifierState->iceHandler)
-    // `unifier_state` 由调用方（new_boxed）从 `&mut` 派生，非空由构造担保。
+    // Safety: `unifier_state` 由入口 `# Safety` 契约保证非空、对齐且比检查器长寿。
     let ice = alias_ref(unifier_state).ice_handler;
 
     // &module->internalTypes
+    // Safety: `module` 由入口 `# Safety` 契约保证非空、写穿可用且此刻无并存别名。
     let arena = Handle::from_mut(&mut alias(module).internal_types);
 
     // normalizer{&module->internalTypes, builtinTypes, unifierState, SolverMode::New, /* cacheInhabitance */ true}
@@ -102,9 +110,11 @@ impl TypeChecker2 {
   /// 无中间态可误用；除 `module`（Arc 写穿句柄，登记为独立挂账）外入参全部
   /// 收窄为安全引用/Option 引用。
   ///
-  /// 前置条件：`module` 须为非空、地址稳定的 Arc 写穿句柄，比返回的检查器长寿且
-  /// 单线程独占；其余基础设施实参为受检引用，无额外契约。
-  pub(crate) fn new_boxed(
+  /// # Safety
+  /// `module` 须为非空、地址稳定的 Arc 写穿句柄，比返回的检查器长寿且在本
+  /// 检查器存活期内单线程独占（C++ `Module&` 引用形参契约，透传给 `new` 的
+  /// 解引用）；其余基础设施实参为受检引用，无额外契约。
+  pub(crate) unsafe fn new_boxed(
     builtin_types: Handle<BuiltinTypes>,
     type_function_runtime: &mut TypeFunctionRuntime,
     unifier_state: &mut UnifierSharedState,
@@ -118,15 +128,23 @@ impl TypeChecker2 {
     let type_function_runtime = NonNull::from(type_function_runtime).as_ptr();
     let unifier_state = NonNull::from(unifier_state).as_ptr();
     let logger = logger.map_or(null_mut(), |l| NonNull::from(l).as_ptr());
-    let mut checker = Box::new(TypeChecker2::new(
-      builtin_types,
-      type_function_runtime,
-      unifier_state,
-      limits,
-      logger,
-      source_module,
-      module,
-    ));
+    let mut checker = Box::new(
+      // Safety: `unifier_state`/`type_function_runtime`/`logger` 由本函数从受检 `&mut`
+      // 实参派生，非空、对齐且在调用期内存活；`module` 满足 `new` 的契约（由本函数
+      // `# Safety` 原样透传）；`Box::new` 把返回值落入堆槽即钉死地址，栈临时量携带的
+      // 未布线态从未被解引用。
+      unsafe {
+        TypeChecker2::new(
+          builtin_types,
+          type_function_runtime,
+          unifier_state,
+          limits,
+          logger,
+          source_module,
+          module,
+        )
+      },
+    );
     // checker 已由 `Box` 落在最终稳定地址且此后不再移动；布线产生的自指针
     // （`_subtyping.normalizer`、`subtyping`）恒指堆内地址。
     checker.wire_self_pointers();
