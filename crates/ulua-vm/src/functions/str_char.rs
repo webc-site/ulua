@@ -12,15 +12,15 @@ use crate::{
 /// cpp VM/src/lstrlib.cpp:152
 ///
 /// # Safety
-/// `unsafe fn` 屏障按 r16-v21 判例保留：目标区仍由 `lua_l_buffinitsize`（裸形被调，经
-/// `l.as_mut_ptr()` 一次就地转手，借用窗止于当句）返回的 `ptr` 经 `slice::from_raw_parts_mut`
-/// 成窗，逐槽写入受该切片边界约束。
+/// `unsafe fn` 屏障按 r16-v21 判例保留：目标区仍由 `lua_l_buffinitsize`（引用形被调，经
+/// `&mut *l` 再借，借用窗止于当句）返回的裸 `ptr` 经 `slice::from_raw_parts_mut` 成窗，
+/// 逐槽写入受该切片边界约束。
 pub unsafe fn str_char(l: &mut LuaState) -> i32 {
   unsafe {
     let n = l.get_top(); // number of arguments
 
     let mut b = LuaLStrbuf::new();
-    let ptr = lua_l_buffinitsize(l.as_mut_ptr(), &mut b as *mut LuaLStrbuf, n as usize);
+    let ptr = lua_l_buffinitsize(&mut *l, &mut b, n as usize);
 
     // 输出切片 zip 参数序号：写入受切片边界约束，消除手写 offset 算术
     // （切片源于裸 `ptr`，不借 `l`，故循环内的 `&mut l` 取参不与任何窗口冲突）

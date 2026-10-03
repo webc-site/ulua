@@ -15,6 +15,8 @@ use crate::{
 /// # Safety
 ///
 /// `l` 必须指向本次 strlib 调用的存活 `LuaState`，所需实参按索引可读且栈顶有结果余量。
+/// 本骨架首参仍为裸形（收形另票处置），体内对下游引用形被调（`lua_l_checklstring_ref`、
+/// `lua_l_buffinitsize`）各自以 `&mut *l` 就地重建引用交棒，借用窗止于当句。
 pub(crate) unsafe fn str_transform1(
   l: *mut LuaState,
   transform: impl FnOnce(&mut [u8], &[u8]),
@@ -25,7 +27,7 @@ pub(crate) unsafe fn str_transform1(
     let len = src.len();
 
     let mut b = LuaLStrbuf::new();
-    let ptr = lua_l_buffinitsize(l, &mut b, len);
+    let ptr = lua_l_buffinitsize(&mut *l, &mut b, len);
 
     // src 指向 1 号实参串体内数据（GC 串不因栈搬移移动），dst 为等长新缓冲
     let dst = slice::from_raw_parts_mut(ptr, len);
