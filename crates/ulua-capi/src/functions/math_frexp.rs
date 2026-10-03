@@ -1,3 +1,3 @@
 //! 本文件对应 `ulua_math_frexp` 导出符号（源：ulua-vm/src/functions/math_frexp.rs）。
 //! 导出壳为 `functions/shells.rs` 中模板宏 `capi_libfn_shell_l_cint!` 的一次调用，壳契约见宏模板。
-capi_libfn_shell_l_cint!(math_frexp, math_frexp);
+capi_libfn_shell_l_cint!(math_frexp, math_frexp @ref);
