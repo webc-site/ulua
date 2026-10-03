@@ -1,8 +1,6 @@
 use crate::{
   functions::{get_mutable_type, get_mutable_type_pack},
-  records::{
-    arena_handle::Handle, pending_type::PendingType, pending_type_pack::PendingTypePack,
-  },
+  records::{arena_handle::Handle, pending_type::PendingType, pending_type_pack::PendingTypePack},
   type_aliases::{type_pack_variant::TypePackVariantMember, type_variant::TypeVariantMember},
 };
 

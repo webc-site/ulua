@@ -21,7 +21,7 @@ use crate::{
   },
   methods::txn_log_get_mutable::TxnLogGetMutable,
   records::{
-    arena_handle::{alias_nn_opt, alias_ref, Handle},
+    arena_handle::{Handle, alias_nn_opt, alias_ref},
     pending_slot::PendingSlot,
     pending_type::PendingType,
     pending_type_pack::PendingTypePack,

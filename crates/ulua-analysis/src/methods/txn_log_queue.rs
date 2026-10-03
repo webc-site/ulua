@@ -1,6 +1,6 @@
 use crate::{
   records::{
-    arena_handle::{alias_ref, Handle},
+    arena_handle::{Handle, alias_ref},
     arena_id::ArenaId,
     pending_slot::PendingSlot,
     pending_type::PendingType,
