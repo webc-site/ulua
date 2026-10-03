@@ -27,7 +27,7 @@ fn as_number(t: &TValue) -> Option<f64> {
 }
 
 /// 向量 payload 的分量窗口：把视图带出的 `LUA_VECTOR_SIZE` 分量切片拷成定长 4 槽
-/// 数组（r12 R-D 切片形，与 `vector_shared::vector_components` 同一窗口论证）。
+/// 数组（r12 R-D 切片形，与 `vector_shared::check_vector`/`opt_vector` 门面的同一窗口论证）。
 /// 3 分量构建下第 4 位恒 `+0.0` 且**不触碰**槽内存（栈上一个 vector 只占
 /// `LUA_VECTOR_SIZE` 个分量位，`get(3)` 落 None 补常量，与收口前不读 `.add(3)` 等值）。
 #[inline]
