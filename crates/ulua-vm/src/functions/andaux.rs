@@ -4,9 +4,7 @@ use crate::{
 
 /// AND 折叠（cpp lbitlib.cpp andaux: `unsigned r = ~0u`）：全一同元并入 [`bitfold`]。
 ///
-/// # Safety
-/// 同 [`bitfold`]。
-pub(crate) unsafe fn andaux(l: *mut LuaState) -> BUint {
-  // SAFETY: 契约同 bitfold——`l` 为存活调用帧，实参按索引可读
-  unsafe { bitfold(l, !0, |a, b| a & b) }
+/// 调用序契约（正确性，非内存安全）：同 [`bitfold`]——以 binary32 C 函数约定被调。
+pub(crate) fn andaux(l: &mut LuaState) -> BUint {
+  bitfold(l, !0, |a, b| a & b)
 }
