@@ -1,70 +1,15 @@
 //! `type_function_runtime` 方法汇总：原先按 cpp 符号逐方法拆分的同前缀小文件合并至此，行为逐字保留。
 
-use alloc::{
-  string::{String, ToString},
-  vec::Vec,
-};
-use core::{
-  ptr::{from_mut, null_mut},
-  slice::from_ref,
-};
+use alloc::{string::{String, ToString}, vec::Vec};
+use core::{ptr::{from_mut, null_mut}, slice::from_ref};
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
-
-use ulua_ast::{
-  records::{
-    allocator::Allocator,
-    ast_array::AstArray,
-    ast_expr::AstExpr,
-    ast_name::AstName,
-    ast_name_table::AstNameTable,
-    ast_stat::AstStat,
-    ast_stat_block::AstStatBlock,
-    ast_stat_return::AstStatReturn,
-    ast_stat_type_function::AstStatTypeFunction,
-    location::Location,
-    node_handle::{Node, Nodes},
-    parse_result::ParseResult,
-  },
-  type_aliases::cst_node_map::CstNodeMap,
-};
+use ulua_ast::{records::{allocator::Allocator, ast_array::AstArray, ast_expr::AstExpr, ast_name::AstName, ast_name_table::AstNameTable, ast_stat::AstStat, ast_stat_block::AstStatBlock, ast_stat_return::AstStatReturn, ast_stat_type_function::AstStatTypeFunction, location::Location, node_handle::{Node, Nodes}, parse_result::ParseResult}, type_aliases::cst_node_map::CstNodeMap};
 use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
 use ulua_common::{functions::format::format, records::dense_hash_set::DenseHashSet};
-use ulua_compiler::{
-  functions::compile_or_throw_compiler::compile_or_throw_bytecode_builder_parse_result_ast_name_table_compile_options,
-  records::{compile_error::CompileError, compile_options::CompileOptions},
-};
-use ulua_vm::{
-  functions::{
-    lua_close::lua_close, lua_gettable::lua_gettable, lua_l_sandbox::lua_l_sandbox,
-    lua_l_sandboxthread::lua_l_sandboxthread, lua_newstate::lua_newstate,
-    lua_newthread::lua_newthread, lua_settable::lua_settable, lua_setthreaddata::lua_setthreaddata,
-    lua_xmove::lua_xmove, luau_load::luau_load,
-  },
-  macros::{lua_globalsindex::LUA_GLOBALSINDEX, lua_registryindex::LUA_REGISTRYINDEX},
-  records::lua_state,
-};
-
-use crate::{
-  functions::{
-    check_result_for_error::check_result_for_error,
-    check_result_for_error_deprecated::check_result_for_error_deprecated,
-    register_type_user_data::register_type_user_data,
-    register_types_library::register_types_library,
-    set_type_function_environment::set_type_function_environment,
-    type_function_alloc::type_function_alloc,
-  },
-  records::{
-    arena_handle::alias, failed_to_compile::FailedToCompile,
-    internal_error_reporter::InternalErrorReporter, luau_temp_thread_popper::LuauTempThreadPopper,
-    type_check_limits::TypeCheckLimits, type_function_error::TypeFunctionError,
-    type_function_missing::TypeFunctionMissing, type_function_runtime::TypeFunctionRuntime,
-    typed_allocator::TypedAllocator,
-  },
-  type_aliases::{
-    lua_state::LuaState, scope_ptr_type::ScopePtr, type_function_error_data::TypeFunctionErrorData,
-  },
-};
-
+use ulua_compiler::{functions::compile_or_throw_compiler::compile_or_throw_bytecode_builder_parse_result_ast_name_table_compile_options, records::{compile_error::CompileError, compile_options::CompileOptions}};
+use ulua_vm::{functions::{lua_close::lua_close, lua_gettable::lua_gettable, lua_l_sandbox::lua_l_sandbox, lua_l_sandboxthread::lua_l_sandboxthread, lua_newstate::lua_newstate, lua_newthread::lua_newthread, lua_settable::lua_settable, lua_setthreaddata::lua_setthreaddata, lua_xmove::lua_xmove, luau_load::luau_load}, macros::{lua_globalsindex::LUA_GLOBALSINDEX, lua_registryindex::LUA_REGISTRYINDEX}, records::lua_state};
+use crate::{functions::{check_result_for_error::check_result_for_error, check_result_for_error_deprecated::check_result_for_error_deprecated, register_type_user_data::register_type_user_data, register_types_library::register_types_library, set_type_function_environment::set_type_function_environment, type_function_alloc::type_function_alloc}, records::{arena_handle::alias, failed_to_compile::FailedToCompile, internal_error_reporter::InternalErrorReporter, luau_temp_thread_popper::LuauTempThreadPopper, type_check_limits::TypeCheckLimits, type_function_error::TypeFunctionError, type_function_missing::TypeFunctionMissing, type_function_runtime::TypeFunctionRuntime, typed_allocator::TypedAllocator}, type_aliases::{scope_ptr_type::ScopePtr, type_function_error_data::TypeFunctionErrorData}};
+use ulua_vm::records::lua_state::LuaState;
 impl TypeFunctionRuntime {
   pub fn new(ice: &InternalErrorReporter, limits: &TypeCheckLimits, root_scope: ScopePtr) -> Self {
     // 注：`state`（懒建 Lua VM 句柄对）与 `runtime_builder`（`*mut
@@ -132,12 +77,12 @@ impl TypeFunctionRuntime {
     lua_setthreaddata(vm_l, from_mut(self).cast());
 
     // setTypeFunctionEnvironment(l); registerTypeUserData(l); registerTypesLibrary(l);
-    // SAFETY: VM 边界——`l` 是本帧刚建 state；三入口各自的 Safety 契约见其函数
+    // SAFETY: VM 边界——`vm_l` 是本帧刚建 state；三入口各自的 Safety 契约见其函数
     // 文档（如 register_types_library.rs 的调用点论证），此处逐一满足。
     unsafe {
-      set_type_function_environment(l);
-      register_type_user_data(l);
-      register_types_library(l);
+      set_type_function_environment(&mut *vm_l);
+      register_type_user_data(&mut *vm_l);
+      register_types_library(&mut *vm_l);
     }
 
     // luaL_sandbox(l); luaL_sandboxthread(l);
@@ -171,7 +116,7 @@ impl RegisterErr for TypeFunctionError {
       TypeFunctionErrorData::V4(TypeFunctionMissing::new(name)),
     )
   }
-  fn check_result(l: *mut LuaState, name: &str, lua_result: i32) -> Option<Self> {
+  fn check_result(l: &mut LuaState, name: &str, lua_result: i32) -> Option<Self> {
     check_result_for_error(l, name, lua_result)
   }
 }
@@ -208,7 +153,7 @@ impl RegisterErr for String {
       name
     ))
   }
-  fn check_result(l: *mut LuaState, name: &str, lua_result: i32) -> Option<Self> {
+  fn check_result(l: &mut LuaState, name: &str, lua_result: i32) -> Option<Self> {
     check_result_for_error_deprecated(l, name, lua_result)
   }
 }
@@ -234,7 +179,7 @@ pub(super) trait RegisterErr: Sized {
   /// `TypeFunctionMissing{name}` / 对应的格式化字符串。
   fn missing(name: String) -> Self;
   /// checkResultForError / checkResultForError_DEPRECATED 的统一入口。
-  fn check_result(l: *mut LuaState, name: &str, lua_result: i32) -> Option<Self>;
+  fn check_result(l: &mut LuaState, name: &str, lua_result: i32) -> Option<Self>;
 }
 impl TypeFunctionRuntime {
   /// 共享核心：编译、沙箱执行并把用户类型函数登记进注册表。
@@ -351,14 +296,13 @@ impl TypeFunctionRuntime {
     // SAFETY: VM 边界——`global_vm` 存活主线程（同上方调用窗口前提），
     // 新线程由其拥有、活至 popper 弹出。
     let l_vm = unsafe { lua_newthread(global_vm) };
-    let l = l_vm.cast::<LuaState>();
     // luau_temp_thread_popper popper(global);
     let mut popper = LuauTempThreadPopper::new(global);
 
     // Create individual environment for the type function
     // luaL_sandboxthread(l);
-    // SAFETY: VM 边界——`l_vm` 为上一行新建线程，此刻仅 popper 记录其父、无
-    // 其它别名（原块内时序逐字一致）。
+    // Safety: `l_vm` 是上一行 `lua_newthread` 新建的存活线程，此刻仅 popper 记录其父、
+    // 无其它别名，重建独占借用的窗口止于本次调用返回。
     unsafe { lua_l_sandboxthread(&mut *l_vm) };
 
     // Do not allow global writes to that environment
@@ -377,7 +321,7 @@ impl TypeFunctionRuntime {
     // Rust 侧直传 `&str`
     // SAFETY: VM 边界——`l_vm` 独占存活线程（同上）。
     let load_result = unsafe { luau_load(l_vm, &name_str, &bytecode, 0) };
-    if let Some(error) = E::check_result(l, &name_str, load_result) {
+    if let Some(error) = E::check_result(alias(l_vm), &name_str, load_result) {
       popper.luau_temp_thread_popper();
       return Some(error);
     }
@@ -387,7 +331,7 @@ impl TypeFunctionRuntime {
     // cpp `lua_resume(l, nullptr, 0)` 的 from=null 即「主线程恢复」契约形态，
     // 由 `resume_main` 单点收口，此处无需再传 null 哨兵。
     let resume_result = alias(l_vm).resume_main(0);
-    if let Some(error) = E::check_result(l, &name_str, resume_result) {
+    if let Some(error) = E::check_result(alias(l_vm), &name_str, resume_result) {
       popper.luau_temp_thread_popper();
       return Some(error);
     }
@@ -405,7 +349,8 @@ impl TypeFunctionRuntime {
     // 的地址值作注册表键（上方同一契约），被调方不解引用该值。
     let g = alias(global_vm);
     unsafe { g.push_lightuserdata(from_mut(&mut *function).cast()) };
-    // SAFETY: VM 边界——同帧新建线程与主线程间搬运 1 槽，单线程串行。
+    // Safety: `l_vm`（本帧新建线程）与 `global_vm`（存活主线程）均为本帧独占，
+    // 单线程串行搬运 1 槽，借用窗止于本次调用返回。
     unsafe { lua_xmove(&mut *l_vm, &mut *global_vm, 1) };
     lua_settable(&mut *g, LUA_REGISTRYINDEX);
 

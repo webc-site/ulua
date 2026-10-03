@@ -4,11 +4,14 @@
 //! C++ 侧 `createUnion`/`createIntersection` 逐行同形：逐参展平同类嵌套变体、
 //! 跳过中性元类型、空集退化为对偶类型、单元素直接压栈、否则聚合成变体。只有
 //! 展平类型、中性元类型与结果 variant 不同。[`create_nary_variant!`] 保留全部
-//! 对外路径、函数名、签名与守卫语义不变，`# Safety` 契约文本单点维护在宏内，
+//! 对外路径、函数名、签名与守卫语义不变，调用序契约文本单点维护在宏内，
 //! 调用点只剩「cpp 出处 + 类型/variant 名」。
 
-/// 生成一枚「展平 n 元同类变体、跳过中性元类型并聚合压栈」的
-/// `pub unsafe fn` 入口。
+/// 生成一枚「展平 n 元同类变体、跳过中性元类型并聚合压栈」的 `pub fn` 入口。
+/// r19 起首参收形为 vm 侧独占 `&mut LuaState`，内存安全前提由该接收者类型承载，
+/// 故不再是 `unsafe fn`；余下裸操作收口在宏体内单一 `unsafe {}` 块。宏体一律
+/// 书写全限定路径：`macro_rules!` 展开点的标识符在**调用点**解析，本文件的 `use`
+/// 对展开不可见。
 ///
 /// 用法：
 /// ```ignore
@@ -33,22 +36,21 @@ macro_rules! create_nary_variant {
   ) => {
     $(#[$attr])*
     ///
-    /// # Safety
-    /// `l` 必须是 Lua VM 在本次原生函数调用中传入、且在该调用全程有效的 `lua_State*`：VM 已把
-    /// 实参压入栈顶，本函数只借用不持有该地址、返回前不跨调用保存；调用期间单线程独占 VM 栈与
+    /// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载）：
+    /// `l` 须是 Lua VM 在本次原生函数调用中传入、且在该调用全程有效的状态：VM 已把实参
+    /// 压入栈顶，本函数只借用不持有该地址、返回前不跨调用保存；调用期间单线程独占 VM 栈与
     /// 类型运行期数据。
-    pub(crate) unsafe fn $name(
-      l: *mut crate::type_aliases::lua_state::LuaState,
+    pub(crate) fn $name(
+      l: &mut ulua_vm::records::lua_state::LuaState,
     ) -> i32 {
       // Safety: l 为 VM 调注册闭包传入的存活 lua_State；get_type_user_data 对非 type 实参先抛
       // 错、返回的 TypeFunctionTypeId 指向 type_arena 存活节点（bump 块、地址不移动）；
       // get_type_function_type_id 按 variant tag 判别、未命中返回 null，判空/as_ref 命中后才
       // 读 components 且只读，写入对象是本地 Vec；push_type/alloc_type_user_data 前置同族
-      // 闭包约定满足，后者 r16-v45 起收 `&mut`，故在两处调用点就地以 `&mut *l` 重建独占借用
-      // （同一存活帧、借用窗止于该语句，与同块内 `vm_l` 裸形及 `component` arena 句柄互不别名）。
+      // 闭包约定满足，二者均收 `&mut`，故在各调用点以 `l` 重借独占借用
+      // （同一存活帧、借用窗止于该语句，与 `component` arena 句柄互不别名）。
       unsafe {
-        let vm_l = l as *mut ulua_vm::records::lua_state::LuaState;
-        let arg_size = (*vm_l).get_top();
+        let arg_size = l.get_top();
         let mut components: ::alloc::vec::Vec<
           crate::type_aliases::type_function_type_id::TypeFunctionTypeId,
         > = ::alloc::vec::Vec::with_capacity(arg_size as usize);
@@ -76,7 +78,7 @@ macro_rules! create_nary_variant {
 
         if components.is_empty() {
           crate::functions::alloc_type_user_data::alloc_type_user_data(
-            &mut *l,
+            l,
             crate::type_aliases::type_function_type_variant::TypeFunctionTypeVariant::$neutral_variant(
               $neutral::default(),
             ),
@@ -86,7 +88,7 @@ macro_rules! create_nary_variant {
           crate::functions::push_type::push_type(l, components[0]);
         } else {
           crate::functions::alloc_type_user_data::alloc_type_user_data(
-            &mut *l,
+            l,
             crate::type_aliases::type_function_type_variant::TypeFunctionTypeVariant::$result_variant(
               $flat { components },
             ),
