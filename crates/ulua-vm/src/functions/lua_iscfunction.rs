@@ -8,9 +8,9 @@ use crate::{
 /// `LUA_O_NILOBJECT` 哨兵 → `iscfunction!` 判假 → 0，与 cpp 越界正索引行为
 /// 逐位一致。不写栈、不分配、不抛错；伪索引读最多物化 `global.pseudotemp`。
 pub(crate) fn lua_iscfunction(l: &LuaState, idx: i32) -> i32 {
-  // SAFETY: `l` 存活（引用形保证）；index_2_addr 已对任意 idx 硬化，`read_ptr`
-  // 只读转发契约成立（本函数不写 `l`）。
-  let o: StkId = unsafe { index_2_addr(&*l.read_ptr(), idx) };
+  // r19-w2：`index_2_addr` 本就收 `&LuaState`，原 `&*l.read_ptr()` 是把同一只读借用
+  // 绕成裸指针再解回来，其 `unsafe` 块仅为该解引用而存在，往返消去后本句全 safe。
+  let o: StkId = index_2_addr(l, idx);
   // SAFETY:o 指向栈上有效 TValue 或只读哨兵。
   if unsafe { iscfunction!(o) } { 1 } else { 0 }
 }

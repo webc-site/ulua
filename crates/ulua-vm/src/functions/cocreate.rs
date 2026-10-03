@@ -15,7 +15,7 @@ pub unsafe fn cocreate(l: *mut LuaState) -> i32 {
     (*l).check_type(1, LuaType::Function);
 
     let nl = lua_newthread(l);
-    lua_xpush(&*l, &mut *nl, 1);
+    lua_xpush(&mut *l, &mut *nl, 1);
 
     1
   }

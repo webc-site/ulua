@@ -197,9 +197,11 @@ impl LuaState {
   /// 取 `idx` 槽协程指针；非 thread 返回 `None`（可空以 `Option` 表达，不设 null 哨兵，§2）。
   #[inline(always)]
   pub(crate) fn to_thread(&self, idx: i32) -> Option<*mut LuaState> {
-    // SAFETY: `self.read_ptr()` 供只读转发（见 `LuaState::read_ptr` 契约），引用重建
-    // 窗止于本调用语句；被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_tothread(&mut *self.read_ptr(), idx) }
+    // r19-w2：`lua_tothread` 首参已收窄为 `&LuaState`（本体只读），本方法直传 `&self`
+    // 即可。原写法 `lua_tothread(&mut *self.read_ptr(), idx)` 从共享引用变造独占借用，
+    // 违 `read_ptr` 的「仅传给不写穿方」契约，且与本方法之后对 `self` 的只读使用并存
+    // ——真别名违例，非仅风格问题。
+    lua_tothread(self, idx)
   }
 
   #[inline(always)]

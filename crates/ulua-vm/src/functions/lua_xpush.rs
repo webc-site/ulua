@@ -1,4 +1,4 @@
-//! Source: `VM/src/lapi.cpp:206-212` (hand-ported)
+//! Source: `VM/src/lapi.cpp:224-231` (hand-ported)
 
 use crate::{
   functions::{
@@ -9,24 +9,23 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// `lua_xpush` 核心（cpp `VM/src/lapi.cpp:224`）。调用序契约（正确性，非内存安
-/// 全）：`from`/`to` 为同属一个 `global` 的两个存活线程（debug 断言；引用形天然
-/// 排除 `from`/`to` 同一对象——cpp 亦无该用法）；`idx` 为 `from` 的合法（伪）索
-/// 引；`ensure_stack_impl(to,from,1)` 扩 `to` 栈、`setobj2s` 写入并可能触发
+/// `lua_xpush` 核心。调用序契约（正确性，非内存安全）：`from`/`to` 为同属一个
+/// `global` 的两个存活线程（debug 断言；引用形天然排除 `from`/`to` 同一对象——cpp
+/// 亦无该用法）；`idx` 为 `from` 的合法（伪）索引；`ensure_stack_impl(to,from,1)`
+/// 扩 `to` 栈、扩不出来时在 `from` 上抛 "stack overflow"，故 `from` 必须是独占借用
+/// （cpp `VM/include/lua.h:152` 的 `from` 本就非 const）；`setobj2s` 写入并可能触发
 /// GC/屏障，须在受保护帧内调用。
-pub(crate) fn lua_xpush(from: &LuaState, to: &mut LuaState, idx: i32) {
-  // SAFETY: `from`/`to` 存活（引用形保证）；index_2_addr 已对任意 idx 硬化；
-  // read_ptr 只读转发（from 仅被读）契约成立；ensure_stack_impl 的 error_l 可变
-  // 借用只在溢出抛错路径上被触碰，该路径经 lua_error 发散不返回，与本帧其后的
-  // from 只读转发窗口不重叠；ensure_stack_impl/setobj_2_s 的
-  // 指针前提由调用序契约与 VM 栈不变式成立。
+pub(crate) fn lua_xpush(from: &mut LuaState, to: &mut LuaState, idx: i32) {
+  // SAFETY: `from`/`to` 为两个不同存活线程的独占借用（引用形保证）；
+  // `ensure_stack_impl` 只写 `to`，扩不出来时才在 `error_l`（=`from`）上抛错且随即
+  // 发散；`index_2_addr` 形参为 `&LuaState`，此处由独占借用再借出只读窗；
+  // `setobj_2_s`/`api_incr_top` 的指针前提由调用序契约与 VM 栈不变式成立。
   unsafe {
-    api_check!(from.read_ptr(), from.global == to.global);
+    api_check!(from, from.global == to.global);
     lua_c_threadbarrier_lapi(to.as_mut_ptr());
-    // cpp `ensure_stack_impl(to, from, 1)`：`to` 直传独占借用；`from` 只在溢出
-    // 抛错路径上被写，该路径 `lua_error` 立即不再返回，故与 `from` 的本帧只读借用不共存。
-    ensure_stack_impl(to, &mut *from.read_ptr(), 1);
-    let o = index_2_addr(&*from.read_ptr(), idx);
+    // cpp `ensure_stack_impl(to, from, 1)`
+    ensure_stack_impl(to, from, 1);
+    let o = index_2_addr(from, idx);
     setobj_2_s!(to.as_mut_ptr(), to.top, o);
     api_incr_top!(to.as_mut_ptr());
   }

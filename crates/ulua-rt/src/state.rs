@@ -771,11 +771,12 @@ pub(crate) fn reset_co(mut co: StateView<'_>) {
 
 /// 读 `idx` 处 thread 值的协程 `LuaState`（`lua_tothread` 收口点；非 thread / 空归一 `None`）。
 #[inline]
-pub(crate) fn thread_at(mut state: StateView<'_>, idx: i32) -> Option<NonNull<LuaState>> {
-  // r16-v8：`lua_tothread` 已收口引用形 safe 签名，`&mut state` 经 DerefMut 协变
-  // 仅覆盖本调用语句（同 `push_own_thread` 形制）；只读该槽、不动栈深；返回
-  // state 与该 thread 对象同生命周期（对象被注册表引用钉住 ⇒ 缓存指针随句柄存活）。
-  lua_tothread(&mut state, idx).and_then(NonNull::new)
+pub(crate) fn thread_at(state: StateView<'_>, idx: i32) -> Option<NonNull<LuaState>> {
+  // r19-w2：`lua_tothread` 首参已收窄为 `&LuaState`（本体只读一个槽），故此处经
+  // Deref 只读协变即可，原 `&mut state` 与该形参的 `mut` 同为过度授权；只读该槽、
+  // 不动栈深；返回 state 与该 thread 对象同生命周期（对象被注册表引用钉住 ⇒ 缓存指
+  // 针随句柄存活）。
+  lua_tothread(&state, idx).and_then(NonNull::new)
 }
 
 /// 新建协程并把其线程值净压 `state` 栈顶，返回协程 state（分配失败归一 `None`）。

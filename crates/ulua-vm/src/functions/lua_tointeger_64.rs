@@ -11,9 +11,8 @@ use crate::{
 /// 与 cpp 越界正索引行为逐位一致；不抛错/不分配；伪索引读最多物化
 /// `global.pseudotemp`。cpp/VM/src/lapi.cpp:480 lua_tointeger64。
 pub(crate) fn lua_tointeger_64(l: &LuaState, idx: i32) -> i64 {
-  // SAFETY: `l` 存活（引用形保证）；index_2_addr 已对任意 idx 硬化（越界返回
-  // 哨兵，无栈外指针算术），`read_ptr` 只读转发契约成立（本函数不写 `l`）。
-  let o = unsafe { index_2_addr(&*l.read_ptr(), idx) };
+  // r19-w2：`index_2_addr` 本就收 `&LuaState`，原 `&*l.read_ptr()` 往返消去后本句全 safe。
+  let o = index_2_addr(l, idx);
   // SAFETY:o 指向栈上有效 TValue 或只读哨兵；哨兵 tt=LUA_TNIL 使 is_integer
   // 判假走 else 臂，不解引用 union 整数视图。
   if unsafe { (*o).is_integer() } {
