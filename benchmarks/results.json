@@ -1,0 +1,434 @@
+{
+  "timestamp": "2026-10-03T23:54:48.464076079Z",
+  "platform": "Pure Rust In-Memory (No Process Overhead)",
+  "environment": {
+    "os": "Ubuntu 24.04",
+    "arch": "aarch64",
+    "cpu": "Neoverse-N2",
+    "cores": 4,
+    "ram_gb": 16,
+    "summary": "Ubuntu 24.04 (aarch64) · Neoverse-N2 (4核) · 16GB 内存"
+  },
+  "runs": 3,
+  "benchmarks": [
+    {
+      "id": "binarytrees",
+      "name": "binarytrees",
+      "unit": "ms"
+    },
+    {
+      "id": "coroutines",
+      "name": "coroutines",
+      "unit": "ms"
+    },
+    {
+      "id": "fannkuch",
+      "name": "fannkuch",
+      "unit": "ms"
+    },
+    {
+      "id": "fasta",
+      "name": "fasta",
+      "unit": "ms"
+    },
+    {
+      "id": "fib",
+      "name": "fib",
+      "unit": "ms"
+    },
+    {
+      "id": "inherit3",
+      "name": "inherit3",
+      "unit": "ms"
+    },
+    {
+      "id": "life",
+      "name": "life",
+      "unit": "ms"
+    },
+    {
+      "id": "mandel",
+      "name": "mandel",
+      "unit": "ms"
+    },
+    {
+      "id": "matmul",
+      "name": "matmul",
+      "unit": "ms"
+    },
+    {
+      "id": "micro_arith",
+      "name": "micro_arith",
+      "unit": "ms"
+    },
+    {
+      "id": "micro_arraywrite",
+      "name": "micro_arraywrite",
+      "unit": "ms"
+    },
+    {
+      "id": "micro_call",
+      "name": "micro_call",
+      "unit": "ms"
+    },
+    {
+      "id": "micro_gettable",
+      "name": "micro_gettable",
+      "unit": "ms"
+    },
+    {
+      "id": "micro_tablegrow",
+      "name": "micro_tablegrow",
+      "unit": "ms"
+    },
+    {
+      "id": "microbig_gettable",
+      "name": "microbig_gettable",
+      "unit": "ms"
+    },
+    {
+      "id": "microbig_tablegrow",
+      "name": "microbig_tablegrow",
+      "unit": "ms"
+    },
+    {
+      "id": "nbody",
+      "name": "nbody",
+      "unit": "ms"
+    },
+    {
+      "id": "nsieve",
+      "name": "nsieve",
+      "unit": "ms"
+    },
+    {
+      "id": "oop",
+      "name": "oop",
+      "unit": "ms"
+    },
+    {
+      "id": "patterns",
+      "name": "patterns",
+      "unit": "ms"
+    },
+    {
+      "id": "queens",
+      "name": "queens",
+      "unit": "ms"
+    },
+    {
+      "id": "spectralnorm",
+      "name": "spectralnorm",
+      "unit": "ms"
+    },
+    {
+      "id": "strings",
+      "name": "strings",
+      "unit": "ms"
+    },
+    {
+      "id": "tablesort",
+      "name": "tablesort",
+      "unit": "ms"
+    }
+  ],
+  "engines": [
+    {
+      "id": "ulua",
+      "key": "ulua",
+      "label": "ulua",
+      "lang": "Luau (纯 Rust)",
+      "mode": "interp",
+      "color": "#0969da",
+      "is_ulua": true,
+      "is_reference": false
+    },
+    {
+      "id": "ulua_jit",
+      "key": "ulua-jit",
+      "label": "ulua (JIT)",
+      "lang": "Luau (纯 Rust)",
+      "mode": "jit",
+      "color": "#0284c7",
+      "is_ulua": true,
+      "is_reference": false
+    },
+    {
+      "id": "mlua_luau",
+      "key": "mlua/luau",
+      "label": "mlua/luau",
+      "lang": "Luau (C++)",
+      "mode": "interp",
+      "color": "#1f883d",
+      "is_ulua": false,
+      "is_reference": false
+    },
+    {
+      "id": "mlua_luau_jit",
+      "key": "mlua/luau-jit",
+      "label": "mlua/luau (JIT)",
+      "lang": "Luau (C++)",
+      "mode": "jit",
+      "color": "#d97706",
+      "is_ulua": false,
+      "is_reference": false
+    },
+    {
+      "id": "mlua_luajit_interp",
+      "key": "mlua/luajit-interp",
+      "label": "LuaJIT (解释)",
+      "lang": "LuaJIT 2.1",
+      "mode": "interp",
+      "color": "#6366f1",
+      "is_ulua": false,
+      "is_reference": true
+    },
+    {
+      "id": "mlua_luajit",
+      "key": "mlua/luajit",
+      "label": "LuaJIT (JIT)",
+      "lang": "LuaJIT 2.1",
+      "mode": "jit",
+      "color": "#8250df",
+      "is_ulua": false,
+      "is_reference": true
+    },
+    {
+      "id": "mlua_lua54",
+      "key": "mlua/lua5.4",
+      "label": "Lua 5.4",
+      "lang": "Lua 5.4",
+      "mode": "interp",
+      "color": "#64748b",
+      "is_ulua": false,
+      "is_reference": true
+    }
+  ],
+  "data": {
+    "binarytrees": {
+      "mlua/lua5.4": 144.8,
+      "mlua/luajit": 73.2,
+      "mlua/luajit-interp": 108.0,
+      "mlua/luau": 171.4,
+      "mlua/luau-jit": 125.7,
+      "ulua": 134.8,
+      "ulua-jit": 108.3
+    },
+    "coroutines": {
+      "mlua/lua5.4": 134.4,
+      "mlua/luajit": 41.1,
+      "mlua/luajit-interp": 49.1,
+      "mlua/luau": 170.5,
+      "mlua/luau-jit": 170.5,
+      "ulua": 99.9,
+      "ulua-jit": 82.8
+    },
+    "fannkuch": {
+      "mlua/lua5.4": 21.5,
+      "mlua/luajit": 3.8,
+      "mlua/luajit-interp": 20.7,
+      "mlua/luau": 31.4,
+      "mlua/luau-jit": 10.3,
+      "ulua": 30.0,
+      "ulua-jit": 10.2
+    },
+    "fasta": {
+      "mlua/lua5.4": 147.6,
+      "mlua/luajit": 18.7,
+      "mlua/luajit-interp": 77.7,
+      "mlua/luau": 205.0,
+      "mlua/luau-jit": 205.0,
+      "ulua": 111.3,
+      "ulua-jit": 61.1
+    },
+    "fib": {
+      "mlua/lua5.4": 83.0,
+      "mlua/luajit": 12.4,
+      "mlua/luajit-interp": 61.5,
+      "mlua/luau": 107.0,
+      "mlua/luau-jit": 58.4,
+      "ulua": 92.3,
+      "ulua-jit": 53.3
+    },
+    "inherit3": {
+      "mlua/lua5.4": 40.8,
+      "mlua/luajit": 0.4,
+      "mlua/luajit-interp": 35.0,
+      "mlua/luau": 61.7,
+      "mlua/luau-jit": 58.8,
+      "ulua": 38.3,
+      "ulua-jit": 31.2
+    },
+    "life": {
+      "mlua/lua5.4": 32.6,
+      "mlua/luajit": 19.5,
+      "mlua/luajit-interp": 51.5,
+      "mlua/luau": 47.3,
+      "mlua/luau-jit": 20.5,
+      "ulua": 37.3,
+      "ulua-jit": 19.7
+    },
+    "mandel": {
+      "mlua/lua5.4": 66.7,
+      "mlua/luajit": 10.5,
+      "mlua/luajit-interp": 74.4,
+      "mlua/luau": 89.6,
+      "mlua/luau-jit": 16.4,
+      "ulua": 82.2,
+      "ulua-jit": 16.1
+    },
+    "matmul": {
+      "mlua/lua5.4": 36.8,
+      "mlua/luajit": 5.0,
+      "mlua/luajit-interp": 31.4,
+      "mlua/luau": 60.8,
+      "mlua/luau-jit": 21.2,
+      "ulua": 40.1,
+      "ulua-jit": 20.4
+    },
+    "micro_arith": {
+      "mlua/lua5.4": 35.7,
+      "mlua/luajit": 10.7,
+      "mlua/luajit-interp": 66.2,
+      "mlua/luau": 44.0,
+      "mlua/luau-jit": 9.4,
+      "ulua": 38.3,
+      "ulua-jit": 9.3
+    },
+    "micro_arraywrite": {
+      "mlua/lua5.4": 0.8,
+      "mlua/luajit": 0.1,
+      "mlua/luajit-interp": 0.9,
+      "mlua/luau": 1.4,
+      "mlua/luau-jit": 0.6,
+      "ulua": 1.1,
+      "ulua-jit": 0.5
+    },
+    "micro_call": {
+      "mlua/lua5.4": 44.2,
+      "mlua/luajit": 4.6,
+      "mlua/luajit-interp": 38.5,
+      "mlua/luau": 59.7,
+      "mlua/luau-jit": 35.0,
+      "ulua": 52.1,
+      "ulua-jit": 32.0
+    },
+    "micro_gettable": {
+      "mlua/lua5.4": 5.1,
+      "mlua/luajit": 1.7,
+      "mlua/luajit-interp": 9.2,
+      "mlua/luau": 7.6,
+      "mlua/luau-jit": 3.8,
+      "ulua": 5.6,
+      "ulua-jit": 3.7
+    },
+    "micro_tablegrow": {
+      "mlua/lua5.4": 3.8,
+      "mlua/luajit": 1.7,
+      "mlua/luajit-interp": 4.0,
+      "mlua/luau": 4.6,
+      "mlua/luau-jit": 2.8,
+      "ulua": 4.8,
+      "ulua-jit": 2.4
+    },
+    "microbig_gettable": {
+      "mlua/lua5.4": 33.5,
+      "mlua/luajit": 9.8,
+      "mlua/luajit-interp": 60.6,
+      "mlua/luau": 49.0,
+      "mlua/luau-jit": 22.8,
+      "ulua": 36.4,
+      "ulua-jit": 22.7
+    },
+    "microbig_tablegrow": {
+      "mlua/lua5.4": 291.7,
+      "mlua/luajit": 117.2,
+      "mlua/luajit-interp": 215.8,
+      "mlua/luau": 321.6,
+      "mlua/luau-jit": 200.4,
+      "ulua": 264.5,
+      "ulua-jit": 174.0
+    },
+    "nbody": {
+      "mlua/lua5.4": 87.2,
+      "mlua/luajit": 9.3,
+      "mlua/luajit-interp": 67.9,
+      "mlua/luau": 124.6,
+      "mlua/luau-jit": 123.3,
+      "ulua": 98.7,
+      "ulua-jit": 46.4
+    },
+    "nsieve": {
+      "mlua/lua5.4": 27.3,
+      "mlua/luajit": 11.9,
+      "mlua/luajit-interp": 17.5,
+      "mlua/luau": 68.8,
+      "mlua/luau-jit": 55.6,
+      "ulua": 58.0,
+      "ulua-jit": 45.1
+    },
+    "oop": {
+      "mlua/lua5.4": 46.6,
+      "mlua/luajit": 1.6,
+      "mlua/luajit-interp": 30.3,
+      "mlua/luau": 61.6,
+      "mlua/luau-jit": 56.1,
+      "ulua": 39.1,
+      "ulua-jit": 31.0
+    },
+    "patterns": {
+      "mlua/lua5.4": 35.2,
+      "mlua/luajit": 18.4,
+      "mlua/luajit-interp": 19.0,
+      "mlua/luau": 39.0,
+      "mlua/luau-jit": 39.1,
+      "ulua": 31.6,
+      "ulua-jit": 31.1
+    },
+    "queens": {
+      "mlua/lua5.4": 23.7,
+      "mlua/luajit": 5.6,
+      "mlua/luajit-interp": 24.8,
+      "mlua/luau": 34.4,
+      "mlua/luau-jit": 12.0,
+      "ulua": 29.8,
+      "ulua-jit": 11.3
+    },
+    "spectralnorm": {
+      "mlua/lua5.4": 63.9,
+      "mlua/luajit": 3.6,
+      "mlua/luajit-interp": 80.8,
+      "mlua/luau": 90.1,
+      "mlua/luau-jit": 34.4,
+      "ulua": 71.1,
+      "ulua-jit": 29.2
+    },
+    "strings": {
+      "mlua/lua5.4": 61.0,
+      "mlua/luajit": 35.6,
+      "mlua/luajit-interp": 49.2,
+      "mlua/luau": 61.4,
+      "mlua/luau-jit": 60.4,
+      "ulua": 45.3,
+      "ulua-jit": 42.1
+    },
+    "tablesort": {
+      "mlua/lua5.4": 154.9,
+      "mlua/luajit": 128.0,
+      "mlua/luajit-interp": 137.0,
+      "mlua/luau": 73.2,
+      "mlua/luau-jit": 63.4,
+      "ulua": 63.4,
+      "ulua-jit": 58.2
+    }
+  },
+  "geomean_vs_ulua": {
+    "mlua/lua5.4": 0.97,
+    "mlua/luajit": 0.2,
+    "mlua/luajit-interp": 0.88,
+    "mlua/luau": 1.28,
+    "mlua/luau-jit": 0.73,
+    "ulua": 1.0,
+    "ulua-jit": 0.56
+  }
+}
