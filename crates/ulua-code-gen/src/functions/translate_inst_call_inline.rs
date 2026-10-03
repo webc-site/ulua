@@ -44,7 +44,7 @@
 //! 发射前经 `proto_k_intern_string` 物化进 caller 常量表（复用既有同指针项或
 //! 追加新槽），`VmConst` 下标重写到 caller 表——失败即整体放弃内联。
 
-use core::ptr::null_mut;
+use core::ptr::{from_ref, null_mut};
 
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
@@ -151,7 +151,7 @@ pub(crate) fn try_translate_call_inline(
   // （同步暖重编译触发，见 call_obs 模块注），codegen 期间 VM 持有、只读。
   unsafe { trial.build_function_ir(callee_proto) };
 
-  let mut trial_function = trial.function;
+  let trial_function = trial.function;
   if inline_ir_veto(&trial_function, callee_proto).is_some() {
     return false;
   }
@@ -169,17 +169,18 @@ pub(crate) fn try_translate_call_inline(
       Some((funid, ra as i32 + 1 + maxstack))
     }
   };
-  emit_inline(
-    build,
-    &mut trial_function,
-    callee_proto,
+  // 把调用点固化的只读描述符收进发射计划：参数聚合消除 `too_many_arguments`，
+  // 字段全为 `Copy`/共享引用（零堆分配），发射逻辑与散列参数版逐位一致
+  let plan = InlinePlan {
+    callee: callee_proto,
     ra,
     nparams,
     nresults,
-    i,
+    call_pc: i,
     guard,
-    &string_map,
-  );
+    string_map: &string_map,
+  };
+  emit_inline(build, &trial_function, &plan);
   // 内联发射证据：编译期单次打印（compile-once，不进热路径）
   match guard {
     Some((funid, _)) => eprintln!(
@@ -231,7 +232,7 @@ fn relocate_string_consts(
   }
   let l = build.function.l.map(|h| h.as_ptr())?;
   let caller = build.function.proto_view()?;
-  let caller_ptr = core::ptr::from_ref(caller).cast_mut();
+  let caller_ptr = from_ref(caller).cast_mut();
   let callee_ref = child_proto_ref(callee)?;
 
   let mut map: Vec<(u32, u32)> = Vec::new();
@@ -701,6 +702,26 @@ fn inline_ir_veto(f: &IrFunction, callee: *mut Proto) -> Option<&'static str> {
   None
 }
 
+/// 内联发射的调用点描述符：把 `emit_inline` 需要的 CALL 站点固化输入聚成只读
+/// 计划（§7：内部结构体直接曝光字段；参数聚合消除 `too_many_arguments`）。字段
+/// 全为 `Copy`/共享引用，无堆分配，与逐位等价的散列参数版共享同一发射逻辑。
+struct InlinePlan<'a> {
+  /// callee 原型裸址（常量重定位 / `GETTABLEKS` 哈希读取用）
+  callee: *mut Proto,
+  /// CALL 目标寄存器基址 `ra`
+  ra: u8,
+  /// 实参个数（`b_raw - 1`）
+  nparams: i32,
+  /// 期望返回个数（`c_raw - 1`）
+  nresults: i32,
+  /// CALL 指令 pc
+  call_pc: i32,
+  /// 观测路径守卫（`funid`，需要的栈槽）；静态路径为 `None`
+  guard: Option<(u32, i32)>,
+  /// callee 字符串常量 → caller 常量表下标映射
+  string_map: &'a [(u32, u32)],
+}
+
 /// 内联发射：把 trial IR 机械改写后追加进 caller。
 ///
 /// 改写规则：`Inst`/`Block` 索引平移；`VmReg k → VmReg(ra+k)`；`Constant`
@@ -710,20 +731,20 @@ fn inline_ir_veto(f: &IrFunction, callee: *mut Proto) -> Option<&'static str> {
 /// 提示槽寻址依赖 R_CODE，内联后错位，见模块注）；每条 `RETURN` 替换为「返回
 /// 值下移拷贝 + JUMP 后继块」（多 RETURN 点各自折叠）；`VmExit` 出口统一重写
 /// 为 `call_pc`。
-/// `guard_funid` 非空（观测路径）时入口前置 proto 守卫：`JumpEqTag`(Function)
+/// `plan.guard` 非空（观测路径）时入口前置 proto 守卫：`JumpEqTag`(Function)
 /// + `JumpCmpProtoid`(funid)，失败落常规 `SetSavedpc`+`CALL` 回退块。
-#[allow(clippy::too_many_arguments)]
-fn emit_inline(
-  build: &mut IrBuilder,
-  trial: &mut IrFunction,
-  callee: *mut Proto,
-  ra: u8,
-  nparams: i32,
-  nresults: i32,
-  call_pc: i32,
-  guard: Option<(u32, i32)>,
-  string_map: &[(u32, u32)],
-) {
+fn emit_inline(build: &mut IrBuilder, trial: &IrFunction, plan: &InlinePlan) {
+  // 计划字段就地解构回同名局部——发射体逐位不变，仅把散列参数改为结构体聚合
+  let InlinePlan {
+    callee,
+    ra,
+    nparams,
+    nresults,
+    call_pc,
+    guard,
+    string_map,
+  } = *plan;
+
   // 慢路出口块：句柄先建（fold 与守卫失败臂都以它为改写/跳转目标），内容在
   // guard 分发后统一发射。出口语义 = 常规 CALL 重放（SetSavedpc+CALL+JUMP 后继，
   // 与未内联发射逐位一致）——不用裸 `VmExit`：该形态缺 ExitSync 值同步（VM 存活
