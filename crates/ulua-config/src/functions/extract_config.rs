@@ -59,7 +59,7 @@ fn new_sandbox() -> Option<StateGuard> {
   // 刚创建的有效 VM 状态，可安全开库与沙箱化
   unsafe {
     lua_l_openlibs(&mut *state.as_ptr());
-    lua_l_sandbox(state.as_ptr());
+    lua_l_sandbox(&mut *state.as_ptr());
   }
 
   Some(guard)

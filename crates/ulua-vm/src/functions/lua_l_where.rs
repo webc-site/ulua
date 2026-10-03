@@ -11,18 +11,20 @@ use crate::{
 };
 
 /// # Safety
-/// `l` 须为存活 `LuaState`：`level` 沿 `(*l).ci..(*l).base_ci` 帧链上跳（遇 base_ci 提前压空串返回），
-/// 落点 `ci` 若 `isLua!` 则 `get_lua_proto` 非空、其 `(*proto).source` 存活（读 `len` 且 `getstr` 覆盖串体，写入
-/// `chunkbuf[LUA_IDSIZE]`）；`currentline(ci)` 复用同帧。每处 `lua_pushlstring`/`lua_o_pushfstring` 前先
-/// `lua_rawcheckstack(l,1)` 保证 `(*l).top` 后留 ≥1 槽；可触发 GC。
+/// `l` 的存活与独占已由 `&mut LuaState` 承载（r16-v43 收形）；体内沿 `l.ci..l.base_ci` 帧链的
+/// 裸指针游走（`ci.sub(1)`、`isLua!`、`(*proto).source` 读、`currentline(&*ci)`）与 `lua_o_chunkid`
+/// 缓冲裸窗仍属真实裸操作，屏障按 r16-v21 判例保留。其余前提：`level` 沿 `l.ci..l.base_ci` 帧链上跳
+/// （遇 base_ci 提前压空串返回），落点 `ci` 若 `isLua!` 则 `get_lua_proto` 非空、其 `(*proto).source`
+/// 存活（读 `len` 且 `getstr` 覆盖串体，写入 `chunkbuf[LUA_IDSIZE]`）；`currentline(ci)` 复用同帧。
+/// 每处 `lua_pushlstring`/`lua_o_pushfstring` 前先 `lua_rawcheckstack(l,1)` 保证 `top` 后留 ≥1 槽；可触发 GC。
 /// cpp VM/src/laux.cpp:72
-pub(crate) unsafe fn lua_l_where(l: *mut LuaState, level: i32) {
+pub(crate) unsafe fn lua_l_where(l: &mut LuaState, level: i32) {
   unsafe {
-    let mut ci = (*l).ci;
+    let mut ci = l.ci;
     // 保留计数重复：level 是沿调用信息链上跳的帧数，每轮先与 base_ci 边界比较再 ci.sub(1)
     // 取上一层指针，循环变量不参与取数，跳动本身没有可切片化的数组
     for _ in 0..level {
-      if ci == (*l).base_ci {
+      if ci == l.base_ci {
         lua_rawcheckstack(&mut *l, 1);
         lua_pushlstring_bytes(&mut *l, b"");
         return;

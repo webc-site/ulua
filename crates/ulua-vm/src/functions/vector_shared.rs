@@ -59,10 +59,10 @@ pub(crate) fn check_vector(l: &mut LuaState, narg: i32) -> [f32; 4] {
 /// review §2「可空指针 → `Option`」），否则按 [check_vector] 同形取窗（非 vector 抛错发散）。
 #[inline]
 pub(crate) fn opt_vector(l: &mut LuaState, narg: i32) -> Option<[f32; 4]> {
-  // SAFETY: `l.as_mut_ptr()` 由 `&mut` 借用重取的存活帧裸参（`LuaState::as_mut_ptr` 口径）；
-  // `def` 传 `null()` 即 cpp `luaL_optvector(L, n, NULL)` 形——缺参/nil 原样返回该 null，
-  // 本门面据此短路、不构造窗口，故 null 从不流入 [vector_components]。
-  let v = unsafe { lua_l_optvector(l.as_mut_ptr(), narg, null()) };
+  // `def` 传 `null()` 即 cpp `luaL_optvector(L, n, NULL)` 形——缺参/nil 原样返回该
+  // null，本门面据此短路、不构造窗口，故 null 从不流入 [vector_components]
+  // （被调已随 r16-v43 收形为引用形，本句借用窗止于当句）。
+  let v = lua_l_optvector(&mut *l, narg, null());
   if v.is_null() {
     None
   } else {

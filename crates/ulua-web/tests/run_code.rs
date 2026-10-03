@@ -26,7 +26,7 @@ fn sandboxed_state() -> LuaStateGuard {
   // Safety: 上一行已保证 guard.0 是刚创建、未别处持有的有效状态。
   unsafe {
     lua_l_openlibs(&mut *guard.0);
-    lua_l_sandbox(guard.0);
+    lua_l_sandbox(&mut *guard.0);
   }
   guard
 }

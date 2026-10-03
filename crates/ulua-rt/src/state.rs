@@ -506,7 +506,7 @@ fn open_std_libs(mut state: StateView<'_>) {
 fn push_traceback(state: StateView<'_>, msg: Option<&str>, level: i32) {
   // Safety: 族级契约;两个 state 实参同属一个存活 VM(自回溯),`msg` 是普通
   // Rust `Option<&str>`,调用当场拷成内部字符串、不跨帧存续借用。
-  unsafe { lua_l_traceback(state.as_mut_ptr(), state.as_mut_ptr(), msg, level) }
+  unsafe { lua_l_traceback(&mut *state.as_mut_ptr(), state.as_mut_ptr(), msg, level) }
 }
 
 /// 读 `idx` 处值的 metatable-aware `tostring` 结果字节（`lua_l_tolstring_ref` 的
@@ -802,7 +802,7 @@ pub(crate) fn push_own_thread(mut state: StateView<'_>) -> i32 {
 pub(crate) fn sandbox_main(state: StateView<'_>) {
   // Safety: 族级契约;`lua_l_sandbox` 内部压弹的临时值全自平衡,不跨入任何
   // Rust 借用指针。
-  unsafe { lua_l_sandbox(state.as_mut_ptr()) }
+  unsafe { lua_l_sandbox(&mut *state.as_mut_ptr()) }
 }
 
 /// 对 `state` 的 `LUA_GLOBALSINDEX` 安装代理全局表，使全局写入留在本线程

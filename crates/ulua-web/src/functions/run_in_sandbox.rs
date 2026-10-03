@@ -3,7 +3,6 @@
 //! 唯一差别是「沙箱冻结全局表之前要不要装捕获版 `print`」——故收进一个带钩子的
 //! 泛型函数，而不是两份逐行复制。
 
-use core::ptr::from_mut;
 use std::string::String;
 
 use ulua_vm::{
@@ -50,8 +49,8 @@ pub(crate) fn run_in_sandbox(source: &str, before_sandbox: impl FnOnce(&mut LuaS
   }
 
   // Safety: `l` 已由上方判空保证是本函数独占的活跃状态机，且直到本函数返回才由
-  // `global_state` 守卫 `lua_close`；借用建立于判空之后，本帧只经 `from_mut` 就地
-  // 派生指针交 VM c-API，不与其它存活别名交错。钩子只在该 c 串安装窗口内借用状态，
+  // `global_state` 守卫 `lua_close`；借用建立于判空之后，本帧只经就地重借用派生
+  // 接收形交 VM c-API，不与其它存活别名交错。钩子只在该 c 串安装窗口内借用状态，
   // 不跨调用持有（安装的全局由状态自身拥有）。
   // 调用序与 cpp `executeScript` 一致：openlibs →（安装钩子）→ sandbox →
   // sandboxthread，三者正是 [`run_code`] 的全部前置条件。
@@ -61,7 +60,7 @@ pub(crate) fn run_in_sandbox(source: &str, before_sandbox: impl FnOnce(&mut LuaS
   // Safety: `state` 同上契约；sandbox 只原地冻结全局表、sandboxthread 只替换
   // 当前线程为沙箱代理线程，均不悬垂传入指针。
   unsafe {
-    lua_l_sandbox(from_mut(state));
+    lua_l_sandbox(&mut *state);
     lua_l_sandboxthread(state);
   }
 

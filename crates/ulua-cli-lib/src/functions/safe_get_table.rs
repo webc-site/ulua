@@ -52,9 +52,9 @@ pub unsafe fn safe_get_table(l: *mut LuaState, table_index: i32) {
     }
 
     l.pop(1); // 弹出 nil 结果，栈回到不变式形态（表在 -1、键在 -2）
-    // Safety: `lua_l_getmetafield_bytes` 为 ulua-vm unsafe 导出；`-1` 是被搜索的表，
-    // 命中则压入 `__index` 字段值（切片全长即键，见 `META_INDEX_FIELD` 注）。
-    if unsafe { lua_l_getmetafield_bytes(l, -1, META_INDEX_FIELD) } == 0 {
+    // `-1` 是被搜索的表，命中则压入 `__index` 字段值（切片全长即键，见
+    // `META_INDEX_FIELD` 注；被调已随 r16-v43 收形为引用形）。
+    if lua_l_getmetafield_bytes(&mut *l, -1, META_INDEX_FIELD) == 0 {
       // getmetafield 返 0 时未压栈；补 nil 作为查找结果后退出。
       l.push_nil();
       break;
