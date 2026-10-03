@@ -1,4 +1,4 @@
-//! Source: `VM/src/linit.cpp:42-60` (hand-ported)
+//! Source: `VM/src/linit.cpp:43-64` (hand-ported)
 
 use core::ptr::null;
 
@@ -42,11 +42,11 @@ const LUALIBS_BASE_LEN: usize = 11;
 /// `LUA_PUSHCFUNCTION`+`lua_pushlstring(name)`+`lua_call(1,0)`，故 `(*l).top` 须逐轮留 ≥2 槽；各 luaopen_* 会再入 Lua、
 /// 分配、注册全局表并可抛错/GC。空名 `b""` 表示注册到全局自身。仅初始化期单次调用，不应在受限/只读 env 上重复执行。
 /// `(*l).push_c_function` 的裸 debugname 形参与库装载再入属体内 unsafe，不再外包给调用方。
-/// cpp VM/src/linit.cpp:42
+/// cpp VM/src/linit.cpp:43
 pub fn lua_l_openlibs(l: &mut LuaState) {
   unsafe {
     // 编译期常量表 + 运行时切片定界取代原双运行时数组：条目均为实函数，
-    // 无需 cpp linit.cpp:52 `lib->func` 的 None 哨兵收尾
+    // 无需 cpp linit.cpp:51 `lib->func` 的 None 哨兵收尾
     let len = if fflag::LuauIntegerLibrary.get() {
       LUALIBS.len()
     } else {

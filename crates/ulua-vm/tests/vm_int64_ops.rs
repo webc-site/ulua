@@ -36,7 +36,7 @@ use ulua_vm::{
 };
 
 /// `LuauIntegerLibrary` 的线程局部覆盖守卫：`luaL_openlibs` 仅在该旗标为
-/// true 时装载 integer 库（对照 cpp/VM/src/linit.cpp:44-47）。
+/// true 时装载 integer 库（对照 cpp/VM/src/linit.cpp:46-49）。
 struct IntegerLibFlag;
 
 impl IntegerLibFlag {

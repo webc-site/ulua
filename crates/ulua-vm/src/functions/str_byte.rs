@@ -35,7 +35,7 @@ pub fn str_byte(l: &mut LuaState) -> i32 {
   }
 
   let n = pose - posi + 1;
-  // oracle 同位死守卫（lstrlib.cpp:137 `if (n <= 0)`）：posi/pose 已钳位后
+  // oracle 同位死守卫（lstrlib.cpp:144 `if (posi + n <= pose) // overflow?`）：posi/pose 已钳位后
   // 恒假——忠实保留，防 sync-cpp 时漂移
   if posi + n <= pose {
     // overflow?

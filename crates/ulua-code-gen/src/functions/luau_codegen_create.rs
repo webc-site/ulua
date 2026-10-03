@@ -18,7 +18,7 @@ use crate::{
 /// # Safety
 /// `l` 必须是有效且存活的 `LuaState` 指针（对齐 C API 调用契约）。
 pub unsafe fn luau_codegen_create(l: *mut LuaState) {
-  // 激活 safeenv（cpp linit.cpp:105 在 openlibs 里做，本仓库刻意挪到 JIT 启用点）：
+  // 激活 safeenv（cpp linit.cpp:110 在 luaL_sandbox 里做，本仓库刻意挪到 JIT 启用点）：
   // safeenv=0 时生成码的 implicit CHECK_SAFE_ENV guard 会把一切带全局读取的模块
   // 逐调用弹回解释器（实测 nbody 74ms→17ms、fasta -50% 的根因即此）。纯解释路径
   // （不开 JIT）保持 safeenv=0 的既有已测行为；解释器 import 缓存与 userdata 全局
