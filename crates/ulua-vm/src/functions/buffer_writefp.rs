@@ -8,9 +8,7 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// # Safety
-///
-/// `l` 必须是正在执行的 buffer 库 C 函数帧的存活 `LuaState`：栈槽 #1 为 buffer
+/// 调用序契约（正确性，非内存安全）：`l` 存活与独占由 `&mut LuaState` 承载；栈槽 #1 为 buffer
 /// userdata（[`buffer_data_ref`] 取其数据块借用），#2 为写入偏移，#3 为有限数值
 /// （inf/nan 由 `lua_l_checknumber` 报错挡下，取参不跑元方法，先行窗口借用无再入
 /// 重叠）；偏移越界经 [`buffer_at_ref`] 抛错、不返回，`size_of::<T>()` 字节写入界由
@@ -18,27 +16,20 @@ use crate::{
 /// （buffer_swapbe.rs，f32/f64 经 `to_bits`/`from_bits` 按整型位宽翻转，cpp 大端
 /// 三件套 `static_cast<StorageType>` 重排的逐位等价形）承载。cpp lbuflib.cpp:174
 /// `buffer_writefp`。
-pub(crate) unsafe fn buffer_writefp<T>(l: *mut LuaState) -> i32
+pub(crate) fn buffer_writefp<T>(l: &mut LuaState) -> i32
 where
   T: BufferFloat,
 {
-  // SAFETY: 契约保证 #1 为 buffer、界校验后 `size_of::<T>()` 字节可写（越界即抛错不返回）；
-  // 校验/取参/抛错序与旧形逐位不变（先 check 后写）
-  unsafe {
-    // r16-v17：`buffer_data_ref`/`buffer_at_ref` 已收形为 `&mut LuaState`，本泛型核心的
-    // C-ABI 臂落在 luaopen_buffer.rs 的 `fp_wrappers!`（协议红线，本票不触碰），故形参
-    // 暂保留裸 `*mut LuaState`，仅在转调窗口核心处 `&mut *l` 重建引用。
-    let buf = buffer_data_ref(&mut *l, 1);
-    let offset = (*l).check_integer(2);
-    let value = (*l).check_number(3);
+  let buf = buffer_data_ref(l, 1);
+  let offset = l.check_integer(2);
+  let value = l.check_number(3);
 
-    let dst = buffer_at_ref(&mut *l, buf, offset, size_of::<T>());
-    let val: T = T::from_f64(value);
+  let dst = buffer_at_ref(l, buf, offset, size_of::<T>());
+  let val: T = T::from_f64(value);
 
-    store_scalar_ref(dst, val);
+  store_scalar_ref(dst, val);
 
-    0
-  }
+  0
 }
 
 // review.md §7：本项无 crate 外消费，由 pub 收窄为 pub(crate)。

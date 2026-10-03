@@ -25,9 +25,10 @@ macro_rules! integer_wrappers {
       /// # Safety
       /// `l` 须为存活 LuaState 且已处于本 C 函数的受保护调用帧：栈上按 buffer 库约定备好参数
       /// （1 号 buffer、2 号偏移等，`$fn::<$ty>` 会经 checkbuffer/checkinteger 读取并按需抛错/触发 GC）。
+      /// 本帧把裸指针重建为独占引用（`&mut *l`），重建窗口即本次调用。
       /// cpp/VM/src/lbuflib.cpp:67 buffer_readinteger、:88 buffer_writeinteger。
       unsafe extern "C-unwind" fn $name(l: *mut LuaState) -> i32 {
-        unsafe { $fn::<$ty>(l) }
+        unsafe { $fn::<$ty>(&mut *l) }
       }
     )+
   };
@@ -55,9 +56,10 @@ macro_rules! fp_wrappers {
       /// `l` 须为存活 LuaState 且处于本 C 函数的受保护调用帧，栈上备好 buffer 库约定参数
       /// （`$fn::<$ty>` 读取 buffer/偏移并按需抛错/GC，`$ty` 为编译期选定并经
       /// `SwapBe` 位宽对固化的浮点宽度）。
+      /// 本帧把裸指针重建为独占引用（`&mut *l`），重建窗口即本次调用。
       /// cpp/VM/src/lbuflib.cpp:147 buffer_readfp、:174 buffer_writefp。
       unsafe extern "C-unwind" fn $name(l: *mut LuaState) -> i32 {
-        unsafe { $fn::<$ty>(l) }
+        unsafe { $fn::<$ty>(&mut *l) }
       }
     )+
   };
