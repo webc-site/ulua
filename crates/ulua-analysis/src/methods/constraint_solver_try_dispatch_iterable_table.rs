@@ -77,12 +77,12 @@ impl ConstraintSolver {
         // 由入口 `&Constraint` 借用指针化，正指向本次派发的 Iterable 约束；首变量
         // `*ty` 是该约束名下的迭代变量（BlockedType 以本约束为 owner），满足
         // can_mutate 前置，对应 cpp `bind(constraint, *it, keyTy)`。
-        unsafe { self.bind_not_null_constraint_type_id_type_id(constraint_key, *ty, key_ty) };
+        self.bind_not_null_constraint_type_id_type_id(constraint_key, *ty, key_ty);
       }
       if let Some(ty) = it.next() {
         // Safety: 第二迭代变量（value 位）的 bind，与上一处同一存活约束键；
         // `value_ty` 是刚在本分支 fresh 进 arena 的节点，三个 TypeId 均驻留 arena。
-        unsafe { self.bind_not_null_constraint_type_id_type_id(constraint_key, *ty, value_ty) };
+        self.bind_not_null_constraint_type_id_type_id(constraint_key, *ty, value_ty);
       }
 
       return true;
@@ -151,9 +151,7 @@ impl ConstraintSolver {
           // Safety: 与 cpp 逐字对应的 unify+bind 成对调用：`constraint_key` 指向
           // 仍在派发中的存活约束（借用期内非空稳定），`*variable` 以其为 owner
           // 可原地 writeback；`unify` 的借用已随调用结束，bind 不与之重叠。
-          unsafe {
-            self.bind_not_null_constraint_type_id_type_id(constraint_key, *variable, *expected)
-          };
+          self.bind_not_null_constraint_type_id_type_id(constraint_key, *variable, *expected);
         }
       } else {
         self.unpack_iterable_variables(constraint, c, self.builtin_types_ref().error_type);
@@ -272,7 +270,7 @@ impl ConstraintSolver {
       // 持续存活（非空、稳定）；每个 `var_ty` 是该 Iterable 约束名下的迭代变量
       // （cpp unpack lambda 以 get<BlockedType>(varTy) 断言过 owner 归属），
       // 故 bind 的 BlockedType writeback 前置成立，兜底类型 `ty` 为内建 Copy 句柄。
-      unsafe { self.bind_not_null_constraint_type_id_type_id(constraint, *var_ty, ty) };
+      self.bind_not_null_constraint_type_id_type_id(constraint, *var_ty, ty);
     }
   }
 }

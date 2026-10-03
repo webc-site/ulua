@@ -31,7 +31,7 @@ pub(crate) fn flatten(tp: TypePackId, log: &TxnLog) -> (Vec<TypeId>, Option<Type
   // `tp` 经上一行 `log.follow_type_pack_id(tp)` 收敛后指向 type arena 中存活的
   // TypePackVar（bump 分配、地址不移动）。被调 unsafe fn 的前置条件（有效 log 指针
   // + 存活 tp）均满足，且本语句内无并发可变借用。
-  unsafe { it.type_pack_iterator_type_pack_id_txn_log(tp, log as *const TxnLog) };
+  it.type_pack_iterator_type_pack_id_txn_log(tp, log as *const TxnLog);
 
   while it != end_type_pack_id(tp) {
     flattened.push(*it.current());

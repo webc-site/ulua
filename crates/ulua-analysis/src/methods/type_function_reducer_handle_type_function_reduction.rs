@@ -82,31 +82,25 @@ impl TypeFunctionReducer {
             // get_state_type_id 已按其可解引用），且已确认为
             // TypeFunctionInstanceType 变体；ctx 存活（函数头论证）——满足
             // set_state 的 C++ setState(TypeId,…) 契约。
-            unsafe {
-              self.set_state_type_id_type_function_instance_state(
-                subject,
-                TypeFunctionInstanceState::Stuck,
-              )
-            };
+            self.set_state_type_id_type_function_instance_state(
+              subject,
+              TypeFunctionInstanceState::Stuck,
+            );
           } else if reduction.reduction_status == Reduction::Irreducible {
             // Safety: 同 Stuck 分支——subject 有效性刚由 get_state_type_id
             // 验证，状态迁移 Irreducible→Solved 与 C++ 分支一一对应。
-            unsafe {
-              self.set_state_type_id_type_function_instance_state(
-                subject,
-                TypeFunctionInstanceState::Solved,
-              )
-            };
+            self.set_state_type_id_type_function_instance_state(
+              subject,
+              TypeFunctionInstanceState::Solved,
+            );
           } else if reduction.reduction_status == Reduction::MaybeOk {
             // We cannot make progress because something is unsolved, but we're also forcing.
             // Safety: 同上——subject 为刚验证的存活实例句柄，MaybeOk+force
             // 走 Stuck 与 C++ 语义一致。
-            unsafe {
-              self.set_state_type_id_type_function_instance_state(
-                subject,
-                TypeFunctionInstanceState::Stuck,
-              )
-            };
+            self.set_state_type_id_type_function_instance_state(
+              subject,
+              TypeFunctionInstanceState::Stuck,
+            );
           } else {
             alias_ref(self.ctx.get().ice.as_ptr())
               .ice_string("Unexpected TypeFunctionInstanceState");

@@ -18,11 +18,11 @@ use crate::{
   },
 };
 
-/// # Safety
+/// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
 /// 调用方须保证满足 C++ 原实现的调用契约：`names` 指向宿主保活的
 /// `AstNameTable`（cpp `module->names.get()` 同形，下游按 `AstNameTable&`
 /// 使用），两棵解析树根句柄指向各自 arena 内存活 AST。
-pub unsafe fn parse_fragment(
+pub fn parse_fragment(
   stale: Option<Handle<AstStatBlock>>,
   most_recent_parse: Option<Handle<AstStatBlock>>,
   names: *mut AstNameTable,

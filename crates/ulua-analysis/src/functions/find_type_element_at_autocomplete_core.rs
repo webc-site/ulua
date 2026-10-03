@@ -64,11 +64,11 @@ pub(crate) fn find_type_element_at_ast_type_list_type_pack_id_position(
   None
 }
 
-/// # Safety
+/// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
 /// 直译 cpp `findTypeElementAt`（autocomplete）：`ast_type_pack` 可为 null；非空时必须
 /// 指向分析会话 arena 内存活、RTTI 有效的 `AstTypePack`。`tp` 为与之对应的存活 `TypePackId`，
 /// `position` 为查询光标位置；本 pass 单线程、AST arena 只读。
-pub(crate) unsafe fn find_type_element_at_ast_type_pack_type_pack_id_position(
+pub(crate) fn find_type_element_at_ast_type_pack_type_pack_id_position(
   ast_type_pack: *mut AstTypePack,
   tp: TypePackId,
   position: Position,
@@ -128,9 +128,7 @@ pub(crate) fn find_type_element_at_ast_type_type_id_position(
     let return_types = type_function.return_types.as_ptr();
     let ret_types_tp = ftv.ret_types;
 
-    if let Some(element) = unsafe {
-      find_type_element_at_ast_type_pack_type_pack_id_position(return_types, ret_types_tp, position)
-    } {
+    if let Some(element) = find_type_element_at_ast_type_pack_type_pack_id_position(return_types, ret_types_tp, position) {
       return Some(element);
     }
   }

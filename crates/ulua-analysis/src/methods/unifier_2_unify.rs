@@ -744,23 +744,19 @@ impl Unifier2 {
       // FreeTypePack，`as_mutable_type_pack` 返回该节点的可变裸指针；
       // emplace 将变体覆写为 Bound（C++ `ttv->emplace<BoundTypePack>` 同形），
       // 此刻栈上无对该节点的存活引用（类型读取都是句柄瞬时解引用）。
-      unsafe {
-        emplace_type_pack(
-          as_mutable_type_pack(target),
-          TypePackVariant::Bound(error_pack),
-        )
-      };
+      emplace_type_pack(
+        as_mutable_type_pack(target),
+        TypePackVariant::Bound(error_pack),
+      );
       return UnifyResult::OccursCheckFailed;
     }
 
     // Safety: 同上——target 仍是已断言存活的 free pack 节点，此处覆写为
     // Bound(bound_to)，写入窗口内无其他存活借用。
-    unsafe {
-      emplace_type_pack(
-        as_mutable_type_pack(target),
-        TypePackVariant::Bound(bound_to),
-      )
-    };
+    emplace_type_pack(
+      as_mutable_type_pack(target),
+      TypePackVariant::Bound(bound_to),
+    );
     UnifyResult::Ok
   }
 

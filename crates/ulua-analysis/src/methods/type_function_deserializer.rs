@@ -28,11 +28,11 @@ use crate::{
 };
 
 impl TypeFunctionDeserializer {
-  /// # Safety
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
   /// 调用方须保证 `f` 非空、对齐，指向类型函数反序列化期间由 arena/持有者保活、地址稳定的
   /// `TypeFunctionFunctionType`；本函数只读取其 `generics`/`generic_packs` 的长度以弹出登记。
   /// cpp `Analysis/src/TypeFunctionRuntimeBuilder.cpp:703`。单线程。
-  pub(crate) unsafe fn close_function_scope(&mut self, f: *mut TypeFunctionFunctionType) {
+  pub(crate) fn close_function_scope(&mut self, f: *mut TypeFunctionFunctionType) {
     let generics_len = alias_ref(f).generics.len();
     if generics_len > 0 {
       let generics_start = self.generic_types.len() - generics_len;
@@ -147,7 +147,7 @@ impl TypeFunctionDeserializer {
         && self.queue.len() == scope.old_queue_size
         && !self.has_errors()
       {
-        unsafe { self.close_function_scope(scope.function) };
+        self.close_function_scope(scope.function);
         self.function_scopes.pop();
       }
     }

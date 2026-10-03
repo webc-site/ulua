@@ -37,12 +37,10 @@ impl TypeFunctionReducer {
           self.result.irreducible_types.insert(subject);
 
           if self.get_state_type_id(subject) == TypeFunctionInstanceState::Unsolved {
-            unsafe {
-              self.set_state_type_id_type_function_instance_state(
-                subject,
-                TypeFunctionInstanceState::Solved,
-              )
-            };
+            self.set_state_type_id_type_function_instance_state(
+              subject,
+              TypeFunctionInstanceState::Solved,
+            );
           }
 
           return;

@@ -23,12 +23,10 @@ impl TypeFunctionReducer {
         // Safety: set_state_* 为 unsafe fn，其前置「ty 为存活 TypeId」由 subject
         // （本 reducer 正在归约的 arena 节点句柄，bump 分配地址稳定）满足；
         // 函数内部经 ctx 的 NonNull 字段比对 owning_arena 后短借 map，无并存别名。
-        unsafe {
-          self.set_state_type_id_type_function_instance_state(
-            subject,
-            TypeFunctionInstanceState::Stuck,
-          )
-        };
+        self.set_state_type_id_type_function_instance_state(
+          subject,
+          TypeFunctionInstanceState::Stuck,
+        );
 
         return false;
       }
@@ -41,12 +39,10 @@ impl TypeFunctionReducer {
         if skip == SkipTestResult::Generic {
           // Safety: 同 Stuck 分支——subject 为本归约期存活 arena 句柄，
           // set_state_* 内部借用窗口随返回结束。
-          unsafe {
-            self.set_state_type_id_type_function_instance_state(
-              subject,
-              TypeFunctionInstanceState::Solved,
-            )
-          };
+          self.set_state_type_id_type_function_instance_state(
+            subject,
+            TypeFunctionInstanceState::Solved,
+          );
         }
 
         return false;

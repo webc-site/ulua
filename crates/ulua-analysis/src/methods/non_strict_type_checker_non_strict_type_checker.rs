@@ -82,9 +82,9 @@ impl<'a> NonStrictTypeChecker<'a> {
       limits,
       module,
     ));
-    // Safety: checker 已由 `Box` 落在最终稳定地址且此后不再移动（Box 只移动
+    // 说明：checker 已由 `Box` 落在最终稳定地址且此后不再移动（Box 只移动
     // 句柄），接线的 `subtyping.normalizer` 自指针恒指堆内地址。
-    unsafe { checker.wire_self_pointers() };
+    checker.wire_self_pointers();
     checker
   }
 
@@ -93,9 +93,10 @@ impl<'a> NonStrictTypeChecker<'a> {
   ///
   /// 新调用点一律走 [`NonStrictTypeChecker::new_boxed`]，免手写本调用。
   ///
-  /// # Safety
-  /// The checker must not be moved after this call.
-  pub(crate) unsafe fn wire_self_pointers(&mut self) {
+  /// 前置契约：The checker must not be moved after this call.（函数体只经
+  /// `Handle::from_mut` 由引用构造句柄，无 unsafe 操作，故该契约是文档约定而非
+  /// 语言强制。）
+  pub(crate) fn wire_self_pointers(&mut self) {
     self.subtyping.normalizer = Some(Handle::from_mut(&mut self.normalizer));
   }
 }

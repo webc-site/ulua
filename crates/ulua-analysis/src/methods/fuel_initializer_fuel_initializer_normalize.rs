@@ -3,10 +3,10 @@ use crate::records::{
 };
 
 impl FuelInitializer {
-  /// # Safety
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
   /// `normalizer` 须指向调用期间存活的 `Normalizer`（C++ `FuelInitializer(NotNull<Normalizer*>)`
   /// 契约）。
-  pub(crate) unsafe fn fuel_initializer_not_null_normalizer(
+  pub(crate) fn fuel_initializer_not_null_normalizer(
     &mut self,
     normalizer: *mut Normalizer,
   ) {

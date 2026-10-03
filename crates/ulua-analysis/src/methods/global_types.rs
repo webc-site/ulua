@@ -40,7 +40,7 @@ use crate::{
 impl GlobalTypes {
   /// 由 `builtin_types` 句柄取共享引用。
   ///
-  /// # Safety
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
   /// `builtin_types` 须满足 C++ `NotNull<BuiltinTypes>` 接线契约：非空、对齐，
   /// 指向比本 `GlobalTypes` 长寿的单例（`Frontend` 自持字段或其宿主 Box，
   /// 由 `GlobalTypes::new` 入参 / `Frontend::wire_self_pointers` 落位后布线）。
@@ -48,7 +48,7 @@ impl GlobalTypes {
   /// `unsafe { ptr.as_ref() }` 的借用检查行为完全同构；单线程序列化驱动
   ///（lib.rs 不变量 1）下借用期内无并存可变别名（BuiltinTypes 单例字段
   /// 构造后只读，arena 改写一律经 `arena_handle` 契约）。
-  pub(crate) unsafe fn builtin_types_of<'a>(
+  pub(crate) fn builtin_types_of<'a>(
     builtin_types: NonNull<BuiltinTypes>,
   ) -> &'a BuiltinTypes {
     alias_ref(builtin_types.as_ptr())
@@ -61,7 +61,7 @@ impl GlobalTypes {
     // Some）接线、`Frontend::wire_self_pointers` 落位后重布线为存活单例地址。
     // `None` 仅理论不可达（入参 `&mut` 恒非空），仍显式 panic 拦为契约违例，
     // 满足 `builtin_types_of` 的非空前提后才入 unsafe 解引用。
-    unsafe { Self::builtin_types_of(self.builtins_handle()) }
+    Self::builtin_types_of(self.builtins_handle())
   }
 
   /// 供 `builtin_types_ref` 复用的取址 helper：`None`（未接线，理论不可达——
@@ -139,7 +139,7 @@ impl GlobalTypes {
       // 按 C++ `NotNull<BuiltinTypes>` 契约由构造方保证非空且指向比本次
       // GlobalTypes 构建长寿的单例；此处只读常量 TypeId 快照（均为既有 arena
       // 节点指针的拷贝）。
-      let builtins = unsafe { Self::builtin_types_of(builtin_types) };
+      let builtins = Self::builtin_types_of(builtin_types);
       (
         builtins.any_type,
         builtins.nil_type,

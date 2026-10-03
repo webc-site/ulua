@@ -10,7 +10,7 @@ use crate::{
 };
 
 impl DataFlowGraphBuilder {
-  /// # Safety
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
   /// `result` 须指向 `DataFlowGraphBuilder` 在本次建图期间持有的存活 `DfgScope`：非空、对齐，地址
   /// 随 bump 分配稳定不移动；本函数从 a/b 读取、写入 result，调用方单线程独占，函数返回后指针仍由 builder 持有。
   /// 对应 C++ `void DataFlowGraphBuilder::joinProps(DfgScope* result, const DfgScope&, const DfgScope&)` (`cpp/Analysis/src/DataFlowGraph.cpp:254`)。
@@ -29,7 +29,7 @@ impl DataFlowGraphBuilder {
   /// The observable result is identical to the C++ (`lookup_def_id_string` is only
   /// consulted when the in-progress entry has no value for the key, so a deferred
   /// write-back cannot change its answer).
-  pub(crate) unsafe fn join_props(&mut self, result: *mut DfgScope, a: &DfgScope, b: &DfgScope) {
+  pub(crate) fn join_props(&mut self, result: *mut DfgScope, a: &DfgScope, b: &DfgScope) {
     let def_arena = self.def_arena;
 
     // Owned snapshots so no borrow of `a`/`b`/`result` props is held across the

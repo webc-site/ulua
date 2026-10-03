@@ -26,7 +26,7 @@ impl Normalizer {
       // Safety: 实参 `self as *mut Normalizer` 来自当前 &mut 借用本身——非空、对齐，
       // 且调用帧（含闭包）比 fi 及其 Drop 中的 clear_fuel 长寿，满足该方法
       // # Safety 契约（直译 C++ `FuelInitializer fi{NotNull{this}}`）。
-      unsafe { fi.fuel_initializer_not_null_normalizer(self as *mut Normalizer) };
+      fi.fuel_initializer_not_null_normalizer(self as *mut Normalizer);
       let _fi = fi;
 
       self.is_inhabited_normalized_type_set_type_id(norm, &mut seen)
@@ -125,7 +125,7 @@ impl Normalizer {
       // Safety: 同 is_inhabited_normalized_type——`self as *mut Normalizer` 即当前
       // &mut 借用自身，非空、对齐，闭包帧比 fi 的 Drop（clear_fuel）长寿，
       // 满足 fuel_initializer_not_null_normalizer 的存活契约。
-      unsafe { fi.fuel_initializer_not_null_normalizer(self as *mut Normalizer) };
+      fi.fuel_initializer_not_null_normalizer(self as *mut Normalizer);
       let _fi = fi;
 
       let result = self.is_inhabited_type_id_set_type_id(ty, &mut seen);

@@ -337,25 +337,23 @@ pub fn check(args: CheckArgs<'_>) -> ModulePtr {
     }
   }
 
-  // Safety: module_ptr 写穿独占期同前；`errors[0]` 索引由 len()==1 守卫
+  // 说明: module_ptr 写穿独占期同前；`errors[0]` 索引由 len()==1 守卫
   // 不会越界；unfreeze/freeze 依次取得 interface_types/internal_types 的
   // &mut，借用互斥且 arena 在 module 返回前保持存活。
-  unsafe {
-    if module_ptr.errors.len() == 1
-      && !fflag::DebugLuauAlwaysShowConstraintSolvingIncomplete.get()
-      && matches!(
-        &(&module_ptr.errors)[0].data,
-        TypeErrorData::ConstraintSolvingIncompleteError(_)
-      )
-    {
-      module_ptr.errors.clear();
-    }
-
-    unfreeze(&mut module_ptr.interface_types);
-    (*module_ptr).clone_public_interface(builtin_types, ice_handler, SolverMode::New);
-    freeze(&mut module_ptr.internal_types);
-    freeze(&mut module_ptr.interface_types);
+  if module_ptr.errors.len() == 1
+    && !fflag::DebugLuauAlwaysShowConstraintSolvingIncomplete.get()
+    && matches!(
+      &(&module_ptr.errors)[0].data,
+      TypeErrorData::ConstraintSolvingIncompleteError(_)
+    )
+  {
+    module_ptr.errors.clear();
   }
+
+  unfreeze(&mut module_ptr.interface_types);
+  (*module_ptr).clone_public_interface(builtin_types, ice_handler, SolverMode::New);
+  freeze(&mut module_ptr.internal_types);
+  freeze(&mut module_ptr.interface_types);
 
   module
 }

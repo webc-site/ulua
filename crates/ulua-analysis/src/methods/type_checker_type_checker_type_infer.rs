@@ -24,7 +24,7 @@ impl TypeChecker {
   /// 指向已失效的旧槽位，故这里把对象定址在 Box 的堆槽里，再绑定指针：`Box` 不允许
   /// 把值搬出去，指针在整个生命周期内保持有效。
   ///
-  /// # Safety
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
   /// 本构造函数把以下三个裸引用与 `ModuleResolverRef` 分派句柄原样存入返回的
   /// `Box<TypeChecker>`（对象自始
   /// 定址于 Box 堆槽、永不 move），各参数须满足：
@@ -40,7 +40,7 @@ impl TypeChecker {
   /// * `ice_handler`：指向存活 `InternalErrorReporter` 的 `Handle`（非空由句柄
   ///   类型编码；C++ `InternalErrorReporter&` 成员的裸指针化），须比 checker 及其
   ///   内嵌 `unifier_state` 长寿。
-  pub(crate) unsafe fn new(
+  pub(crate) fn new(
     global_scope: &ScopePtr,
     resolver: ModuleResolverRef,
     builtin_types: Handle<BuiltinTypes>,

@@ -260,7 +260,7 @@ impl Unifier {
         // 表类型，或被 substitute 结果替换）；queue_type_id 将其克隆进
         // log.type_var_changes 的 Box<PendingType>（Box 地址稳定），返回的项
         // 指针在本次 log commit/rollback 前持续有效，C++ `queueType(...)` 同形。
-        let pending_sub = unsafe { self.log.queue_type_id(active_sub_ty) };
+        let pending_sub = self.log.queue_type_id(active_sub_ty);
         // Safety: pending_sub 为上一行 queue_type_id 返回的非空指针；active_sub_ty
         // 按契约是表类型，克隆项变体即 TableType（原 LUAU_ASSERT 钉住，同 C++），
         // 故 `Some` 必命中，其内指针即有效变体字段。
@@ -331,7 +331,7 @@ impl Unifier {
         // Safety: `super_ty` 按 fn 契约是表类型句柄；queue_type_id 克隆进
         // log.type_var_changes 的 Box<PendingType>，返回指针在 log 提交/回滚前
         // 有效（C++ `queueType(superTy)` 同形）。
-        let pending_super = unsafe { self.log.queue_type_id(super_ty) };
+        let pending_super = self.log.queue_type_id(super_ty);
         // Safety: pending_super 非空源自上一行；本分支 table_state(super_table)
         // ==Unsealed 已确证该项变体为 TableType，`Some` 必命中，字段指针有效，
         // props_insert 继承同一非空前提。
@@ -346,7 +346,7 @@ impl Unifier {
       } else if table_state(super_table) == TableState::Free {
         // Safety: 与 Unsealed 分支同理——super_ty 为契约内表类型句柄，
         // queue_type_id 返回 log 内 Box<PendingType> 的稳定指针。
-        let pending_super = unsafe { self.log.queue_type_id(super_ty) };
+        let pending_super = self.log.queue_type_id(super_ty);
         // Safety: pending_super 非空（上一行），且进入本分支的前提
         // table_state(super_table)==Free 由同一 pending 表项读出，变体为
         // TableType，`Some` 必命中，字段指针有效。

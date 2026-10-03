@@ -64,7 +64,7 @@ use crate::{
   },
 };
 
-/// # Safety
+/// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
 /// 对应 cpp `typecheckFragment_`（`FragmentAutocomplete.cpp:1146`）。逐参数契约：
 /// - `frontend`：调用期间存活的独占借用；函数内派生的 `builtin_types`
 ///   （NonNull 自指 `builtin_types_` 存储）与 `file_resolver`
@@ -84,7 +84,7 @@ use crate::{
 /// - `ast_allocator`：分配了 `root` 的 `Allocator`；所有权被移交给增量模块
 ///   （`allocator` 字段注入），因此 `root` 句柄在其内存活。
 /// - `opts` / `reporter`：普通借用，调用期间存活即可。
-pub(crate) unsafe fn typecheck_fragment_(
+pub(crate) fn typecheck_fragment_(
   frontend: &mut Frontend,
   root: Handle<AstStatBlock>,
   stale: &ModulePtr,
@@ -508,16 +508,14 @@ fn typecheck_fragment_impl(
   // Safety: `names` 指向上述存活的 AstNameTable（callee 内 `alias(names)` 解引用
   // 收口）；两树根句柄存活由 `Handle` 模块级 arena 契约承载，`recent_parse`
   // 为 `None` 时 callee 首句即早退、不解引用（对应 cpp `recentParse` nullptr）。
-  let try_parse = unsafe {
-    parse_fragment(
-      stale_root,
-      recent_parse,
-      names,
-      src,
-      cursor_pos,
-      fragment_end_position,
-    )
-  };
+  let try_parse = parse_fragment(
+    stale_root,
+    recent_parse,
+    names,
+    src,
+    cursor_pos,
+    fragment_end_position,
+  );
 
   let parse_result = match try_parse {
     Some(pr) => pr,
@@ -549,18 +547,16 @@ fn typecheck_fragment_impl(
   // 函数末尾），`closest_scope` 由 `find_closest_scope(&module, ..)` 取自同一
   // 模块 scope 树；`frontend`/`&frontend_options`/`reporter` 均为调用帧内存活
   // 借用（cpp:1357-1359 直译）。
-  let mut result = unsafe {
-    typecheck_fragment_(
-      frontend,
-      root,
-      &module,
-      &closest_scope,
-      cursor_pos,
-      alloc,
-      &frontend_options,
-      reporter,
-    )
-  };
+  let mut result = typecheck_fragment_(
+    frontend,
+    root,
+    &module,
+    &closest_scope,
+    cursor_pos,
+    alloc,
+    &frontend_options,
+    reporter,
+  );
   result.ancestry = ancestry;
   reporter.report_fragment_string(&fragment_to_parse);
 

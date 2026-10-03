@@ -64,12 +64,12 @@ impl TypePackIterator {
   pub(crate) fn type_pack_iterator_type_pack_id(&mut self, _type_pack: TypePackId) {
     // Safety: 唯一传入的裸指针是 `TxnLog::empty()`——进程级非空单例（永不释放、
     // 构造后只读），故被调方 `(*log)` 解引用与 follow/get 读取的前置条件成立。
-    unsafe { self.type_pack_iterator_type_pack_id_txn_log(_type_pack, TxnLog::empty()) };
+    self.type_pack_iterator_type_pack_id_txn_log(_type_pack, TxnLog::empty());
   }
 
-  /// # Safety
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
   /// 调用方须保证满足 C++ 原实现的调用契约。
-  pub(crate) unsafe fn type_pack_iterator_type_pack_id_txn_log(
+  pub(crate) fn type_pack_iterator_type_pack_id_txn_log(
     &mut self,
     type_pack: TypePackId,
     log: *const TxnLog,

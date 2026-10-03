@@ -68,7 +68,7 @@ impl SubtypingUnifier {
     let mut upper_bounds: UpperBounds = UpperBounds::new(null());
     for cv in assumed_constraints {
       let (unified, dispatched) =
-        unsafe { self.dispatch_one_constraint(constraint, &cv, &mut upper_bounds) };
+        self.dispatch_one_constraint(constraint, &cv, &mut upper_bounds);
       unifier_res &= unified;
       if !dispatched {
         outstanding_constraints.push(cv);
@@ -85,9 +85,11 @@ impl SubtypingUnifier {
 // Source: `Analysis/src/SubtypingUnifier.cpp:83-183` — `SubtypingUnifier::dispatchOneConstraint`.
 
 impl SubtypingUnifier {
-  /// # Safety
-  /// 调用方须保证满足 C++ 原实现的调用契约。
-  pub(crate) unsafe fn dispatch_one_constraint(
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作）：
+  /// - `constraint` 须指向本约束求解期内存活的 `Constraint`（仅读其 `location`）；
+  /// - `self` 的 arena/builtin_types 句柄由构造期接线，指向会话内存活实例；
+  /// - `emplace_type_pack` 就地覆写 arena 节点，要求单线程独占驱动、无并存可变别名。
+  pub(crate) fn dispatch_one_constraint(
     &self,
     constraint: *const Constraint,
     cv: &ConstraintV,
@@ -164,23 +166,19 @@ impl SubtypingUnifier {
           // 求解期存活），emplace 就地覆写其 Variant 即 C++
           // `emplaceTypePack(asMutable(subTp), BoundTypePack{errorPack})`，
           // 单线程下该短借用无并存的其它可变句柄。
-          unsafe {
-            emplace_type_pack(
-              as_mutable_type_pack(sub_tp),
-              TypePackVariant::Bound(error_pack),
-            )
-          };
+          emplace_type_pack(
+            as_mutable_type_pack(sub_tp),
+            TypePackVariant::Bound(error_pack),
+          );
           return (UnifyResult::OccursCheckFailed, true);
         }
         // Safety: 与 error 分支同一不变量——sub_tp 经 follow 证非空、arena
         // 驻留节点就地写 Bound(super_tp)（C++ `emplaceTypePack(asMutable(subTp),
         // BoundTypePack{superTp})`），写入的句柄皆为 arena 驻留 TypePackId。
-        unsafe {
-          emplace_type_pack(
-            as_mutable_type_pack(sub_tp),
-            TypePackVariant::Bound(super_tp),
-          )
-        };
+        emplace_type_pack(
+          as_mutable_type_pack(sub_tp),
+          TypePackVariant::Bound(super_tp),
+        );
         return (UnifyResult::Ok, true);
       }
 
@@ -189,23 +187,19 @@ impl SubtypingUnifier {
           // Safety: 对称分支——super_tp 同为 follow 归一后的非空 arena 驻留
           // pack 指针，emplace 就地写 Bound(error_pack) 无并存可变借用
           // （同 sub 侧 error 分支的证成）。
-          unsafe {
-            emplace_type_pack(
-              as_mutable_type_pack(super_tp),
-              TypePackVariant::Bound(error_pack),
-            )
-          };
+          emplace_type_pack(
+            as_mutable_type_pack(super_tp),
+            TypePackVariant::Bound(error_pack),
+          );
           return (UnifyResult::OccursCheckFailed, true);
         }
 
         // Safety: 同 sub 侧成功分支——arena 驻留非空 pack 节点的就地
         // emplaceTypePack(asMutable(superTp), BoundTypePack{subTp}) 直译。
-        unsafe {
-          emplace_type_pack(
-            as_mutable_type_pack(super_tp),
-            TypePackVariant::Bound(sub_tp),
-          )
-        };
+        emplace_type_pack(
+          as_mutable_type_pack(super_tp),
+          TypePackVariant::Bound(sub_tp),
+        );
         return (UnifyResult::Ok, true);
       }
     } else {

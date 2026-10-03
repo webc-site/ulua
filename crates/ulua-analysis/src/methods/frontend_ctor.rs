@@ -19,11 +19,11 @@ impl Frontend {
   /// Owned constructor for `Frontend::Frontend(SolverMode, FileResolver*,
   /// ConfigResolver*, FrontendOptions)`（`cpp/Analysis/src/Frontend.cpp:461`）。
   ///
-  /// # Safety
-  /// 与 [`Frontend::wire_self_pointers`] 同契约：`file_resolver` 须比返回的
+  /// 前置契约：与 [`Frontend::wire_self_pointers`] 同契约：`file_resolver` 须比返回的
   /// `Frontend` 长寿（字段按 C++ 语义以裸句柄别名共享），`config_resolver`
   /// 允许空（同 C++ nullptr 语义），且 `Frontend` 落位后不得移动，直至
-  /// `wire_self_pointers` 完成自引用布线。
+  /// `wire_self_pointers` 完成自引用布线。函数体只由引用经 `NonNull::from`/`NonNull::new`
+  /// 记录裸地址，无 unsafe 操作，故上述契约是文档约定而非语言强制。
   ///
   /// The C++ member-init list wires several self-referential pointers:
   /// `builtinTypes(NotNull{&builtinTypes_})`, `moduleResolver(this)`,
@@ -37,7 +37,7 @@ impl Frontend {
   /// itself is sound; `GlobalTypes::new` runs its arena mutations through the
   /// temporary `&builtinTypes_` pointer (valid for the duration of this call),
   /// and only the cached `builtin_types` back-pointer is re-pointed afterward.
-  pub(crate) unsafe fn frontend_solver_mode_file_resolver_config_resolver_frontend_options<
+  pub(crate) fn frontend_solver_mode_file_resolver_config_resolver_frontend_options<
     F: FileResolver + 'static,
   >(
     mode: SolverMode,
@@ -115,22 +115,20 @@ impl Frontend {
     // （允许从不查询 getConfig）由 `None` 显式承载。
     let config_resolver = config_resolver.map_or(null_mut(), |c| NonNull::from(c).as_ptr());
     let mut frontend = Box::new(
-      // Safety: 透传 unsafe 构造器契约——`file_resolver` 引用比返回的 Box
+      // 说明：透传构造器契约——`file_resolver` 引用比返回的 Box
       // 长寿（由调用方借用期保证），`config_resolver` 为存活指针或 null
       //（C++ nullptr 语义，上方 `Option` 直译）；`Box::new` 把返回值按 move
       // 落入堆槽后即钉死地址，栈临时量携带的占位/旧地址自指针从未被解引用。
-      unsafe {
-        Frontend::frontend_solver_mode_file_resolver_config_resolver_frontend_options(
-          mode,
-          file_resolver,
-          config_resolver,
-          options,
-        )
-      },
+      Frontend::frontend_solver_mode_file_resolver_config_resolver_frontend_options(
+        mode,
+        file_resolver,
+        config_resolver,
+        options,
+      ),
     );
-    // Safety: `Frontend` 已经 `Box` 落在最终稳定地址且此后不再移动（Box 只
+    // 说明：`Frontend` 已经 `Box` 落在最终稳定地址且此后不再移动（Box 只
     // 移动句柄），满足 `wire_self_pointers` 的「落位后不得移动」契约。
-    unsafe { frontend.wire_self_pointers() };
+    frontend.wire_self_pointers();
     frontend
   }
 
@@ -142,15 +140,13 @@ impl Frontend {
   /// Must be called once the `Frontend` is at its final address and before any
   /// use of `builtin_types`, `globals.builtin_types`, or the module resolvers.
   ///
-  /// # Safety
-  /// The `Frontend` must not be moved after this call, or the wired pointers
-  /// dangle.
+  /// 前置契约：The `Frontend` must not be moved after this call, or the wired
+  /// pointers dangle.
   ///
-  /// 函数体本身免 unsafe：所有指针均由引用经 `NonNull::from` 安全构造
-  /// （原 `new_unchecked` 转铸与整体 `unsafe` 块已移除），`unsafe fn` 仅
-  /// 承载「落位后不得移动」的调用方契约。优先改用 [`Frontend::new_boxed`]
-  /// 以免手写本调用。
-  pub(crate) unsafe fn wire_self_pointers(&mut self) {
+  /// 函数体所有指针均由引用经 `NonNull::from` 安全构造（原 `new_unchecked`
+  /// 转铸与整体 `unsafe` 块已移除），无 unsafe 操作，故上述契约是文档约定
+  /// 而非语言强制。优先改用 [`Frontend::new_boxed`] 以免手写本调用。
+  pub(crate) fn wire_self_pointers(&mut self) {
     let builtins = NonNull::from(&mut self.builtin_types_);
     self.builtin_types = Some(builtins);
     self.globals.builtin_types = Some(builtins);

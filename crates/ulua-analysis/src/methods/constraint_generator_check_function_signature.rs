@@ -369,22 +369,18 @@ impl ConstraintGenerator {
       // FreeTypePack（C++:4516 断言 get<FreeTypePack>），as_mutable_type_pack
       // 仅 const_cast 门面，emplace 一次成 Bound 无并发借用；annotated_ret_type 为
       // 存活 TypeId（C++:4517）。
-      unsafe {
-        emplace_type_pack(
-          as_mutable_type_pack(return_type),
-          TypePackVariant::Bound(annotated_ret_type),
-        )
-      };
+      emplace_type_pack(
+        as_mutable_type_pack(return_type),
+        TypePackVariant::Bound(annotated_ret_type),
+      );
     } else if let Some(expected_function) = expected_function {
       // 对照 C++:4432-4434 `else if (expectedFunction) emplaceTypePack<BoundTypePack>(...)`：
       // return_type 仍为独占可写 FreeTypePack，ret_types 从 expected_function
       // arena 节点读出、驻留有效（C++:4521）。
-      unsafe {
-        emplace_type_pack(
-          as_mutable_type_pack(return_type),
-          TypePackVariant::Bound(expected_function.ret_types),
-        )
-      };
+      emplace_type_pack(
+        as_mutable_type_pack(return_type),
+        TypePackVariant::Bound(expected_function.ret_types),
+      );
     }
 
     let mut actual_function = function_type::FunctionType::function_type_new(
