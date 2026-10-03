@@ -18,8 +18,14 @@
 //!
 //! 取舍（相对「进程级哈希表」）：观测数据挂 execdata 随 proto 生命周期走，
 //! 读侧无锁无哈希；代价是定位需前向扫描——但观测只发生在内联生效前的热身期
-//! （站点被内联后 native CALL 不再经过 call_prolog），扫描开销自消，故不引入
+//! （站点定案即触发暖重编译，暖产物零插桩、零观测），扫描开销自消，故不引入
 //! 进程级表与额外失效协议。
+//!
+//! 预算模型（两支）：观测税的止损按架构分治——A64 有发射端，暖产物零插桩 +
+//! 站点定案（恒定满阈或多态）即触发暖重编译，结构性终止每个 proto 的观测税，
+//! 不烧进程级预算；x64 无发射端（观测内嵌必经的 call_prolog），靠观测预算
+//! （[`K_CALL_OBS_BUDGET`]）烧穿后三面关闸止损。两架构共享重编译触发预算
+//! （[`K_CALL_OBS_RECOMPILE_BUDGET`]）兜底编译风暴。
 
 use core::sync::atomic::{AtomicU32, Ordering};
 
@@ -39,10 +45,17 @@ const K_FLAG_SEALED: u32 = 2;
 /// spectralnorm 单轮 Av→eval_a 调用约 700 次，须在单轮内触发。
 pub const K_TRIGGER_HITS: u32 = 200;
 
-/// 观测总预算（进程级，跨 context 共享）：每次观测扣一，耗尽后 context 初始化
-/// 不再装钩、发射端不再生成插桩（A64 快路）、x64 观测序言早退——三面同判据
-/// 关闸，兜底「永不内联站点」（递归体）的持续观测税。
+/// 观测总预算（进程级，跨 context 共享）：x64 路径专用燃料。x64 无发射端插桩
+/// 概念（观测内嵌于每次 native CALL 必经的 call_prolog），靠「每次观测扣一、
+/// 耗尽后三面关闸」（context 初始化不装钩、x64 序言早退+摘钩）为永不内联站点
+/// （递归体、多态站）的持续观测税止损。A64 路径的止损改由「暖产物零插桩 +
+/// 站点定案即触发暖重编译」结构性承接，不再烧本预算（否则 fib 烧穿后殃及同
+/// 进程后编译的一切 proto——官方 runner 单进程多用例的口径下正是本 bug）。
 pub const K_CALL_OBS_BUDGET: u32 = 50_000;
+/// 重编译触发总预算（进程级，两架构共享）：每次「站点定案（恒定满阈或多态）
+/// →触发暖重编译」扣一，耗尽后站点仍 sealed 但不再触发编译。兜底「海量站点
+/// 各触发一次」的编译风暴；正常负载每 proto 至多一次暖重编译，远触不到帽。
+pub const K_CALL_OBS_RECOMPILE_BUDGET: u32 = 1024;
 /// state hits 字段饱和上限（触发即 sealed，常态到不了）。
 const K_HITS_CAP: u32 = 0xff_ffff;
 
@@ -50,6 +63,7 @@ const K_HITS_CAP: u32 = 0xff_ffff;
 const K_SLOT_WORDS: usize = 5;
 
 static CALL_OBS_BUDGET: AtomicU32 = AtomicU32::new(K_CALL_OBS_BUDGET);
+static CALL_OBS_RECOMPILE_BUDGET: AtomicU32 = AtomicU32::new(K_CALL_OBS_RECOMPILE_BUDGET);
 
 /// 观测预算全局耗尽判定（context 初始化期决定是否装钩，读一次原子量）。
 pub fn call_obs_budget_exhausted() -> bool {
@@ -138,13 +152,24 @@ pub unsafe fn call_pc_of(proto: *const Proto, savedpc: *const Instruction) -> Op
 }
 
 /// call_prolog/native 快路观测入口：记录 `(caller proto, call pc)` 站点的实际
-/// callee 身份，proto 恒定满 [`K_TRIGGER_HITS`] 时返回 true（调用方据此触发该
-/// caller 的暖重编译）。execdata 缺失/无 COBS 表/pc 不匹配一律静默返回 false。
+/// callee 身份，站点定案（proto 恒定满 [`K_TRIGGER_HITS`]，或多态）时返回 true
+/// （调用方据此触发该 caller 的暖重编译——恒定站点交出内联证据，多态站点借
+/// 暖重编译换得零插桩产物、终止观测税）。execdata 缺失/无 COBS 表/pc 不匹配
+/// 一律静默返回 false。
+///
+/// `burn_obs_budget`：x64 路径传 true（每次站点命中扣观测预算，烧穿即三面
+/// 关闸——x64 唯一的止损机制）；A64 路径传 false（其止损是结构性的：定案即
+/// 暖重编译、暖产物零插桩，烧预算只会殃及同进程后编译的无关 proto）。
 ///
 /// # Safety
 /// `caller`/`ccl` 须为存活 Proto/Closure 且 caller 的 `execdata`（若非空）为本模块
 /// 布局的堆分配数据区；`call_pc` 须为 caller 字节码界内的 CALL/CALLFB 指令下标。
-pub unsafe fn call_obs_record_at(caller: *mut Proto, call_pc: u32, ccl: *mut Closure) -> bool {
+pub unsafe fn call_obs_record_at(
+  caller: *mut Proto,
+  call_pc: u32,
+  ccl: *mut Closure,
+  burn_obs_budget: bool,
+) -> bool {
   unsafe {
     if (*ccl).is_c != 0 {
       return false;
@@ -173,13 +198,13 @@ pub unsafe fn call_obs_record_at(caller: *mut Proto, call_pc: u32, ccl: *mut Clo
     if lo == ncalls || *base.add(K_SLOT_WORDS * lo) != call_pc {
       return false;
     }
-    // 预算扣减在站点命中之后：定位失败的 CALL（无表 caller 等）不烧预算。
-    // 扣减又刻意先于 sealed/poly 短路：已封站点（含暖重编译后未获内联的永不
-    // 内联站点）的持续扣减正是其快速烧尽预算、触发三面关闸的机制——若移到
-    // 短路之后，此类站点将在 hook 存续期内永久付 blr 观测税。
-    if CALL_OBS_BUDGET
-      .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1))
-      .is_err()
+    // x64 观测税：扣减在站点命中之后（定位失败的 CALL 不烧预算），又刻意先于
+    // sealed/poly 短路——已定案站点的持续扣减正是其快速烧穿观测预算、触发
+    // x64 三面关闸的机制（A64 传 false 完全跳过）。
+    if burn_obs_budget
+      && CALL_OBS_BUDGET
+        .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1))
+        .is_err()
     {
       return false;
     }
@@ -193,10 +218,7 @@ pub unsafe fn call_obs_record_at(caller: *mut Proto, call_pc: u32, ccl: *mut Clo
     let hits = st >> 8;
     let flags = st & 0xff;
 
-    if flags & K_FLAG_SEALED != 0 {
-      return false;
-    }
-    if flags & K_FLAG_POLY != 0 {
+    if flags & (K_FLAG_SEALED | K_FLAG_POLY) != 0 {
       return false;
     }
 
@@ -210,19 +232,23 @@ pub unsafe fn call_obs_record_at(caller: *mut Proto, call_pc: u32, ccl: *mut Clo
       *state_ptr = (1 << 8) | flags;
       return false;
     }
-    if *funid_ptr != funid {
-      // proto 漂移：poly 定案，sealed 短路后续观测
-      *state_ptr = (hits << 8) | K_FLAG_POLY | K_FLAG_SEALED;
-      return false;
-    }
-    let new_hits = (hits + 1).min(K_HITS_CAP);
-    if new_hits < K_TRIGGER_HITS {
+    // 定案：poly（proto 漂移）或恒定满阈值，都置 sealed 终止观测，并按剩余
+    // 重编译预算决定是否触发暖重编译（预算尽仍 sealed——止损优先，触发豁免）。
+    let poly = *funid_ptr != funid;
+    let new_hits = if poly { hits } else { (hits + 1).min(K_HITS_CAP) };
+    if !poly && new_hits < K_TRIGGER_HITS {
       *state_ptr = (new_hits << 8) | flags;
       return false;
     }
-    // 满阈值：sealed 防重触发，交上层同步暖重编译
-    *state_ptr = (new_hits << 8) | flags | K_FLAG_SEALED;
-    true
+    let trigger = CALL_OBS_RECOMPILE_BUDGET
+      .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1))
+      .is_ok();
+    *state_ptr = if poly {
+      (new_hits << 8) | flags | K_FLAG_POLY | K_FLAG_SEALED
+    } else {
+      (new_hits << 8) | flags | K_FLAG_SEALED
+    };
+    trigger
   }
 }
 

@@ -46,12 +46,42 @@ pub unsafe extern "C-unwind" fn call_obs_site_hook(l: *mut LuaState, ra: *const 
     }
     let caller = (*fcl).inner.l.p;
     if let Some(call_pc) = call_pc_of(caller, savedpc) {
-      call_obs_record_maybe_recompile(l, caller, call_pc, ra);
+      call_obs_record_and_maybe_recompile(l, caller, call_pc, ra);
     }
   }
 }
 
-/// x64 call_prolog 观测入口：caller/savedpc 已由调用点解出，直落观测核。
+/// A64 观测入口：不烧观测预算（A64 的止损是结构性的——站点定案即暖重编译、
+/// 暖产物零插桩，烧进程级预算只会殃及同进程后编译的无关 proto），直接落观测
+/// 核，站点定案即同步暖重编译。
+///
+/// # Safety
+/// 契约同 [`call_obs_site_hook`]；`caller`/`call_pc` 须与 `l->ci` 帧一致。
+pub unsafe fn call_obs_record_and_maybe_recompile(
+  l: *mut LuaState,
+  caller: *mut Proto,
+  call_pc: u32,
+  ra: *const TValue,
+) {
+  if !fflag::LUAU_JIT_CALL_INLINE_OBS.get() {
+    return;
+  }
+  // Safety: 契约见模块注——调用点为 caller 帧；ra 为守卫过的函数值栈槽。
+  unsafe {
+    let ccl = (*ra).as_closure_ptr();
+    if (*ccl).is_c != 0 {
+      return;
+    }
+    if call_obs_record_at(caller, call_pc, ccl, false) {
+      trigger_warm_recompile(l);
+    }
+  }
+}
+
+/// x64 call_prolog 观测入口：caller/savedpc 已由调用点解出。观测预算是 x64 唯一
+/// 的止损机制（无发射端插桩概念，观测内嵌每次 native CALL 必经的序言）：每次
+/// 站点命中扣一，烧穿即把生成码可见的 hook 槽置空（ecb.context 稳定），后续快
+/// 路回落一次指针读 + 分支的常态短路（新 context 在 init 期即不装钩）。
 ///
 /// # Safety
 /// 契约同 [`call_obs_site_hook`]；`caller`/`call_pc` 须与 `l->ci` 帧一致。
@@ -78,7 +108,7 @@ pub unsafe fn call_obs_record_maybe_recompile(
     if (*ccl).is_c != 0 {
       return;
     }
-    if call_obs_record_at(caller, call_pc, ccl) {
+    if call_obs_record_at(caller, call_pc, ccl, true) {
       trigger_warm_recompile(l);
     }
   }

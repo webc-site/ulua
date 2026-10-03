@@ -61,6 +61,12 @@ pub struct AssemblyBuilderA64 {
   pub(crate) features: u32,
   pub(crate) pending_labels: Vec<Patch>,
   pub(crate) overflowed: bool,
+  /// CALL 快路观测插桩的发射开关：仅新鲜编译（首译）为 true。暖重编译产物的
+  /// COBS 表已全 sealed，观测再无信息增量，插桩只会让永不内联站点（递归体、
+  /// 已定案站）在产物存续期内白付 blr+扫描税——暖产物零插桩是 A64 观测税的
+  /// 结构性止损。执行路径的构造点（compile_internal）按 `!force_recompile` 落值；
+  /// 文本/反汇编路径（get_assembly 等）保持默认 true 以还原既有输出外观。
+  pub call_obs_emit: bool,
 }
 
 impl Deref for AssemblyBuilderA64 {
@@ -199,6 +205,7 @@ impl AssemblyBuilderA64 {
       features,
       pending_labels: Vec::new(),
       overflowed: false,
+      call_obs_emit: true,
     }
   }
 
