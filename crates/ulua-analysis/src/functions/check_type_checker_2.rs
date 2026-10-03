@@ -35,17 +35,15 @@ pub fn check(
 
   // SAFETY: module_nn 由上方判空取得，地址稳定且比本次检查长寿（本函数契约原样
   // 透传给 new_boxed），其余实参为受检引用。
-  let mut type_checker = unsafe {
-    TypeChecker2::new_boxed(
-      builtin_types,
-      type_function_runtime,
-      unifier_state,
-      limits,
-      logger,
-      source_module,
-      module_nn.as_ptr(),
-    )
-  };
+  let mut type_checker = TypeChecker2::new_boxed(
+    builtin_types,
+    type_function_runtime,
+    unifier_state,
+    limits,
+    logger,
+    source_module,
+    module_nn.as_ptr(),
+  );
 
   // typeChecker.visit(sourceModule.root);
   // 句柄化根块：cpp 直传非空 root，缺席即契约违例（确定性 panic 而非 UB）。
