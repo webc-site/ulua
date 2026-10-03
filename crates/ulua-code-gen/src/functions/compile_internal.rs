@@ -178,12 +178,10 @@ pub unsafe fn compile_internal(
   #[cfg(target_arch = "aarch64")]
   let mut build = {
     let cpu_features = get_cpu_features_a_64();
-    // 复用构造函数，避免逐字段字面量初始化
-    let mut build = AssemblyBuilderA64::new(false, cpu_features);
-    // 观测插桩仅新鲜编译发射：暖重编译产物零插桩（A64 观测税的结构性止损，
-    // 见 AssemblyBuilderA64::call_obs_emit 注）。
-    build.call_obs_emit = !options.force_recompile;
-    build
+    // 复用构造函数，避免逐字段字面量初始化。
+    // 原型 B（站点自配额）：暖产物保持插桩（call_obs_emit 默认 true），止损由
+    // 「每站点独立配额 + dead 帽」承担，不做暖产物零插桩。
+    AssemblyBuilderA64::new(false, cpu_features)
   };
 
   #[cfg(not(target_arch = "aarch64"))]

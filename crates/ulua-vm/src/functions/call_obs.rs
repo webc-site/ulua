@@ -41,6 +41,8 @@ const COBS_MAGIC: u32 = 0x434F_4253;
 /// state 的 flags 位。
 const K_FLAG_POLY: u32 = 1;
 const K_FLAG_SEALED: u32 = 2;
+/// 站点自配额耗尽（原型 B： quota-dead，观测与提示双排除）。
+const K_FLAG_DEAD: u32 = 4;
 /// proto 恒定计数达到该值即触发暖重编译。取值下界由最短热身负载约束：
 /// spectralnorm 单轮 Av→eval_a 调用约 700 次，须在单轮内触发。
 pub const K_TRIGGER_HITS: u32 = 200;
@@ -56,6 +58,12 @@ pub const K_CALL_OBS_BUDGET: u32 = 50_000;
 /// →触发暖重编译」扣一，耗尽后站点仍 sealed 但不再触发编译。兜底「海量站点
 /// 各触发一次」的编译风暴；正常负载每 proto 至多一次暖重编译，远触不到帽。
 pub const K_CALL_OBS_RECOMPILE_BUDGET: u32 = 1024;
+/// 原型 B（站点自配额）：每站点独立观测预算——含 sealed 后的持续命中，耗尽即
+/// 置 dead（观测与提示双排除）。
+pub const K_SITE_OBS_QUOTA: u32 = 512;
+/// 原型 B 全局帽：quota-dead 站点总数达到该值后，发射端不再为新编译生成插桩
+/// （防失控总量；进程内 dead 站点数是单调量）。
+pub const K_MAX_DEAD_SITES: u32 = 4096;
 /// state hits 字段饱和上限（触发即 sealed，常态到不了）。
 const K_HITS_CAP: u32 = 0xff_ffff;
 
@@ -64,10 +72,16 @@ const K_SLOT_WORDS: usize = 5;
 
 static CALL_OBS_BUDGET: AtomicU32 = AtomicU32::new(K_CALL_OBS_BUDGET);
 static CALL_OBS_RECOMPILE_BUDGET: AtomicU32 = AtomicU32::new(K_CALL_OBS_RECOMPILE_BUDGET);
+static DEAD_SITES: AtomicU32 = AtomicU32::new(0);
 
 /// 观测预算全局耗尽判定（context 初始化期决定是否装钩，读一次原子量）。
 pub fn call_obs_budget_exhausted() -> bool {
   CALL_OBS_BUDGET.load(Ordering::Relaxed) == 0
+}
+
+/// 原型 B：quota-dead 站点总量触帽判定（发射端防失控闸）。
+pub fn call_obs_site_quota_exhausted() -> bool {
+  DEAD_SITES.load(Ordering::Relaxed) >= K_MAX_DEAD_SITES
 }
 
 /// 在 execdata extra 区定位 COBS 表。前向扫描：遇 TSFB 表按其自描述跳过，
@@ -218,7 +232,9 @@ pub unsafe fn call_obs_record_at(
     let hits = st >> 8;
     let flags = st & 0xff;
 
-    if flags & (K_FLAG_SEALED | K_FLAG_POLY) != 0 {
+    // 原型 B：quota-dead / poly / 已触发 sealed 的站点只付观测税（烧配额），
+    // 不再产出信息。
+    if flags & K_FLAG_DEAD != 0 {
       return false;
     }
 
@@ -230,6 +246,18 @@ pub unsafe fn call_obs_record_at(
       *proto_ptr = plo;
       *proto_ptr.add(1) = phi;
       *state_ptr = (1 << 8) | flags;
+      return false;
+    }
+    // 原型 B：sealed 站点（含暖重编译后未获内联的永不内联站点）继续计次，
+    // 烧完自身配额即 dead——「每站点独立 N 次观测预算」。
+    if flags & K_FLAG_SEALED != 0 {
+      let new_hits = (hits + 1).min(K_HITS_CAP);
+      if new_hits >= K_SITE_OBS_QUOTA {
+        *state_ptr = (new_hits << 8) | flags | K_FLAG_DEAD;
+        DEAD_SITES.fetch_add(1, Ordering::Relaxed);
+      } else {
+        *state_ptr = (new_hits << 8) | flags;
+      }
       return false;
     }
     // 定案：poly（proto 漂移）或恒定满阈值，都置 sealed 终止观测，并按剩余
@@ -276,8 +304,8 @@ pub unsafe fn call_obs_hints_for(proto: *const Proto) -> Vec<(u32, u32, usize)> 
       let slot = base.add(K_SLOT_WORDS * s);
       let (pc, st) = (*slot, *slot.add(1));
       // sealed 位只表示「已触发过暖重编译」（防重复触发），满阈值的 sealed 槽
-      // 恰是本轮编译要消费的有效证据；仅 poly（多态定案）才排除。
-      if st >> 8 < K_TRIGGER_HITS || st & K_FLAG_POLY != 0 {
+      // 恰是本轮编译要消费的有效证据；poly（多态定案）与 dead（配额耗尽）排除。
+      if st >> 8 < K_TRIGGER_HITS || st & (K_FLAG_POLY | K_FLAG_DEAD) != 0 {
         continue;
       }
       let funid = *slot.add(2);
