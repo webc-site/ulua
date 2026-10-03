@@ -2,7 +2,7 @@
 //! 由 `functions/` 下各壳文件以一次宏调用实例化；`functions/mod.rs` 仅保留模块声明注册表。
 //! 每族宏的 `# Safety` 契约与 `// Safety:` 理由只在本文件书写一次，成员文件不得复述契约文本。
 
-/// 单参 `(l) -> c_int` 通用 C ABI 导出壳模板：55 个同形透传壳单源生成，与
+/// 单参 `(l) -> c_int` 通用 C ABI 导出壳模板：54 个同形透传壳单源生成，与
 /// `lua_v_doarithimpl.rs` 的 `arith_tm_exports!` 先例同构（lua_b_* 族 16 壳与
 /// lua_gettop/lua_status/lua_isthreadreset/lua_singlestep/lua_c_allocationrate/
 /// lua_encodepointer/lua_g_hasnative/lua_g_onbreak/lua_l_buffinit/

@@ -5,8 +5,8 @@
 //! `&mut LuaState`：裸指针只在 [vector_components] 一处收成 `[f32; 4]` 值窗、C-ABI 压栈镜像只在
 //! [vector_push] 一处重取裸参，两处的 `unsafe` 皆有契约（review §2）。map1/minmax 核心与 vector
 //! 库各消费方因此全程只见 `&mut LuaState` + `[f32; 4]`：本族的 `LuaState` 裸指针形只余
-//! `lua_lib_arm!`/`lua_lib_fn!` 生成的 `extern "C-unwind"` 边界臂，以及 ulua-capi 透传壳直呼的
-//! `vector_angle`/`vector_clamp` 两个 `pub unsafe fn`（壳侧改走 `_arm` 后即可随族前移）。
+//! `lua_lib_arm!`/`lua_lib_fn!` 生成的 `extern "C-unwind"` 边界臂。`vector_angle`/`vector_clamp`
+//! 两核已随 ulua-capi 透传壳退役为显式壳而一并前移，本族 `unsafe fn` 因此归零。
 
 use core::{ptr::null, slice::from_raw_parts};
 
