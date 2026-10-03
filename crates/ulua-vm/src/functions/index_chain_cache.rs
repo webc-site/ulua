@@ -21,7 +21,11 @@
 //! 4. 缓存本体 thread_local（每线程独立，与 VM 线程模型对齐，无锁）；跨 state 指针
 //!    空间由守卫恒等隔离，互踩仅损失命中率。2 路组相联根除两热站点同组互踢振荡。
 
-use core::cell::{Cell, UnsafeCell};
+use core::{
+  cell::{Cell, UnsafeCell},
+  mem::MaybeUninit,
+  ptr::null_mut,
+};
 
 use crate::{
   enums::tms::TMS,
@@ -69,11 +73,11 @@ struct ChainSlot {
 
 impl ChainSlot {
   const EMPTY_SLOT: Self = Self {
-    mt0: core::ptr::null_mut(),
-    key: core::ptr::null_mut(),
-    t0: core::ptr::null_mut(),
+    mt0: null_mut(),
+    key: null_mut(),
+    t0: null_mut(),
     drift: 0,
-    chain: [core::ptr::null_mut(); INDEX_CHAIN_MAX],
+    chain: [null_mut(); INDEX_CHAIN_MAX],
     depth: 0,
     epoch: 0,
   };
@@ -106,8 +110,7 @@ thread_local! {
 #[inline(always)]
 fn chain_set_index(mt0: *const LuaTable, key: *const tstring) -> usize {
   // u64 中转乘法：32 位目标（wasm32 usize）下 64 位常数不溢出，高位混淆保持
-  let h = (((mt0 as usize >> 3) ^ (key as usize >> 3)) as u64)
-    .wrapping_mul(0x9E37_79B9_7F4A_7C15);
+  let h = (((mt0 as usize >> 3) ^ (key as usize >> 3)) as u64).wrapping_mul(0x9E37_79B9_7F4A_7C15);
   ((h >> (u64::BITS - INDEX_CHAIN_MASK.count_ones())) as usize) & INDEX_CHAIN_MASK
 }
 
@@ -163,7 +166,11 @@ pub(crate) unsafe fn index_chain_probe(
       if !hit0 && !hit1 {
         return false;
       }
-      let s = if hit0 { &mut slots[set] } else { &mut slots[set + 1] };
+      let s = if hit0 {
+        &mut slots[set]
+      } else {
+        &mut slots[set + 1]
+      };
       let depth = s.depth as usize;
       if depth == 0 {
         return false;
@@ -242,7 +249,7 @@ pub(crate) unsafe fn index_chain_fill(
   t0: *mut LuaTable,
   mt0: *mut LuaTable,
   key: *mut tstring,
-  chain: &[core::mem::MaybeUninit<*mut LuaTable>],
+  chain: &[MaybeUninit<*mut LuaTable>],
   chain_len: usize,
 ) {
   debug_assert!(chain_len > 0 && chain_len <= INDEX_CHAIN_MAX);
@@ -258,7 +265,9 @@ pub(crate) unsafe fn index_chain_fill(
     if s.drift >= 2 {
       if s.t0 == t0 {
         s.drift = 0;
-        cache.negative.set(cache.negative.get() & !(1u64 << (set / INDEX_CHAIN_WAYS)));
+        cache
+          .negative
+          .set(cache.negative.get() & !(1u64 << (set / INDEX_CHAIN_WAYS)));
       } else {
         return;
       }
@@ -268,7 +277,9 @@ pub(crate) unsafe fn index_chain_fill(
         s.depth = 0;
         s.epoch = 0;
         s.t0 = t0;
-        cache.negative.set(cache.negative.get() | (1u64 << (set / INDEX_CHAIN_WAYS)));
+        cache
+          .negative
+          .set(cache.negative.get() | (1u64 << (set / INDEX_CHAIN_WAYS)));
         return;
       }
     } else {

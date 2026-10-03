@@ -1,17 +1,18 @@
 //! Source: `VM/src/lvmutils.cpp:102-180` (hand-ported)
 
-use core::mem::MaybeUninit;
-use core::ptr::null_mut;
+use core::{mem::MaybeUninit, ptr::null_mut};
 
 use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT};
 
 use crate::{
   enums::tms::TMS,
   functions::{
-    call_t_mres::call_t_mres, index_chain_cache::INDEX_CHAIN_MAX,
-    index_chain_cache::index_chain_fill, index_chain_cache::index_chain_probe,
-    lua_g_indexerror::lua_g_indexerror, lua_g_missingmembererror::lua_g_missingmembererror,
-    lua_h_get::lua_h_get, lua_t_gettmbyobj::lua_t_gettmbyobj,
+    call_t_mres::call_t_mres,
+    index_chain_cache::{INDEX_CHAIN_MAX, index_chain_fill, index_chain_probe},
+    lua_g_indexerror::lua_g_indexerror,
+    lua_g_missingmembererror::lua_g_missingmembererror,
+    lua_h_get::lua_h_get,
+    lua_t_gettmbyobj::lua_t_gettmbyobj,
   },
   macros::{
     classvalue::classvalue, fasttm::fasttm, gval_2_slot::gval2slot, lua_g_runerror::lua_g_runerror,
