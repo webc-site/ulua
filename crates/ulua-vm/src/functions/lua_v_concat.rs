@@ -1,4 +1,4 @@
-//! Source: `VM/src/lvmutils.cpp:399-461` (hand-ported)
+//! Source: `VM/src/lvmutils.cpp:500-561` (hand-ported)
 
 use core::{
   ffi::c_char,

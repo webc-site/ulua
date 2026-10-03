@@ -1,4 +1,4 @@
-//! Source: `VM/src/lvmutils.cpp:182-240` (hand-ported)
+//! Source: `VM/src/lvmutils.cpp:292-350` (hand-ported)
 
 use core::ptr::null;
 

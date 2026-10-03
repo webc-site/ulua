@@ -1,4 +1,4 @@
-//! Source: `VM/src/lvmutils.cpp:102-180` (hand-ported)
+//! Source: `VM/src/lvmutils.cpp:196-290` (hand-ported)
 
 use core::{mem::MaybeUninit, ptr::null_mut};
 

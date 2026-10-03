@@ -1,4 +1,4 @@
-//! Source: `VM/src/ldo.cpp` (ldo.cpp:162-165, hand-ported; C++-exceptions build flavor,
+//! Source: `VM/src/ldo.cpp` (ldo.cpp:161-164, hand-ported; C++-exceptions build flavor,
 //! matching the catch_unwind-based lua_d_rawrunprotected)
 
 use std::panic::panic_any;
