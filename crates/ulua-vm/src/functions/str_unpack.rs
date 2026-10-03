@@ -127,20 +127,25 @@ unsafe fn str_unpack_ref(l: &mut LuaState, fmt_bytes: &[u8], data: &[u8]) -> i32
   }
 }
 
-/// C-ABI 镜像垫片（一行委托 [`str_unpack_ref`]）：本面消费点仅 `lua_lib_fn!`
+/// 核心转发垫片（一行委托 [`str_unpack_ref`]）：本面消费点仅 `lua_lib_fn!`
 /// 生成的注册臂 `str_unpack_arm`（luaopen_string.rs:8 导入、:34 STRLIB
 /// "unpack" 注册），全仓实测无其余消费面 ⇒ 保一行形（r12-w5s `byteoffset`
 /// 垫片先例）。#1/#2 串实参在入参位取 payload 切片：`check_bytes` 实参求值序
 /// #1→#2 与旧形（先格式串游标、后数据串检出）一致，非串抛出点不变。
 ///
-/// # Safety
-/// `l` 须为可抛错受保护帧内存活的 `LuaState`：栈槽 #1/#2 为串实参（非串经
-/// `check_bytes` 抛 "string expected"），其余义务单源 [`str_unpack_ref`]；
-/// `&mut *l` 的引用重建窗口即本次调用。cpp lstrlib.cpp:1640 `str_unpack`。
-pub(crate) unsafe fn str_unpack(l: *mut LuaState) -> i32 {
-  // SAFETY: 契约保证 `l` 存活独占驱动；payload 切片借用自栈槽 #1/#2 串体
-  // （不可变、不搬移），本次调用内有效
-  unsafe { str_unpack_ref(&mut *l, (*l).check_bytes(1), (*l).check_bytes(2)) }
+/// 调用序契约（正确性，非内存安全——`l` 的存活前提已由 `&mut` 接收者类型承载，r16-v38 收形后
+/// 本面唯一点名转手、无裸操作，降为安全 `fn`）：`l` 须处于可抛错受保护帧，栈槽 #1/#2 为串
+/// 实参（非串经 `check_bytes` 抛 "string expected"），其余义务单源 [`str_unpack_ref`]。
+/// 两个 payload 窗口须与同句的核心调用（该核亦经 `&mut l` 压栈/报错）共存，p28 锚定形与
+/// `&mut` 接收者不可共存 ⇒ 按 r16-v29 桥接判例在块内一次就地转手裸句柄，借用窗止于本块。
+/// cpp lstrlib.cpp:1640 `str_unpack`。
+pub(crate) fn str_unpack(l: &mut LuaState) -> i32 {
+  // SAFETY: `l` 由 `&mut` 保证有效且独占，转手后的 `lp` 即同一存活帧；payload 切片借用自
+  // 栈槽 #1/#2 串体（不可变、不搬移），本次调用内有效
+  unsafe {
+    let lp = l.as_mut_ptr();
+    str_unpack_ref(&mut *lp, (*lp).check_bytes(1), (*lp).check_bytes(2))
+  }
 }
 
-lua_lib_fn!(pub(crate) fn str_unpack, str_unpack_arm);
+lua_lib_fn!(pub(crate) fn str_unpack @ref, str_unpack_arm);
