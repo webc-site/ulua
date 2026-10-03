@@ -1,11 +1,13 @@
 use crate::{
-  records::{ast_expr_error::AstExprError, ast_visitor::AstVisitor},
-  visit::{AstNodeRefMut, AstVisitable, ast_expr_visit},
+  records::{ast_expr_error::AstExprError, ast_visitor::AstVisitor, node_handle::OptNode},
+  visit::{AstNodeRefMut, AstVisitable, ast_expr_visit_ref},
 };
 
 impl_visitable!(AstExprError, ExprError, |this, visitor| {
+  // expressions 元素为 arena 存活节点或 null（句柄边界折叠跳过），调用点无 unsafe。
   for &expression in this.expressions.iter() {
-    // Safety: ast_expr_visit 接收 arena 中存活节点的裸指针。
-    unsafe { ast_expr_visit(expression, visitor) };
+    if let Some(expr) = OptNode::from_ptr(expression).get_mut() {
+      ast_expr_visit_ref(expr, visitor);
+    }
   }
 });

@@ -98,7 +98,7 @@ use crate::{
     position::{EMPTY_POSITIONS, Position},
     writer::Writer,
   },
-  rtti::{CstNodeClass, cst_node_as_ref},
+  rtti::{CstNodeClass, cst_node_try_as},
   type_aliases::{ast_argument_name::AstArgumentName, cst_node_map::CstNodeMap},
 };
 
@@ -195,12 +195,15 @@ const KWD_EXPORT: &str = "export";
 const KWD_DO: &str = "do";
 
 impl<'a, W: Writer> Printer<'a, W> {
-  /// 查 ast→cst 映射并下转为 `T`。unsafe 收口于此：映射值指向 arena 中存活的
-  /// CST 节点，`cst_node_as` 经 class_index 命中后 repr(C) 布局保证下转有效。
+  /// 查 ast→cst 映射并下转为 `T`。全程 safe：映射值指向 arena 中存活的 CST
+  /// 节点，判空解引用收口在 [`slot_opt`]（optional_node 的 'static 常驻契约），
+  /// 下转走 safe 引用门面 [`cst_node_try_as`]（class_index 命中后 repr(C) 布局
+  /// 保证下转有效）。
   ///
-  /// 生命周期取自入参借用 `'b`（不再借用 Printer 的 writer 生命周期 `'a`）：
-  /// AST 与 CST 同处一个 arena，故「被查询的 AST 节点在 `'b` 内存活」即蕴含
-  /// 其映射到的 CST 节点在 `'b` 内存活。键只按地址比较，从不解引用写回。
+  /// 生命周期取自入参借用 `'b`（`slot_opt` 的 `'static` 读数经协变收窄到 `'b`，
+  /// 不再借用 Printer 的 writer 生命周期 `'a`）：AST 与 CST 同处一个 arena，
+  /// 故「被查询的 AST 节点在 `'b` 内存活」即蕴含其映射到的 CST 节点在 `'b` 内
+  /// 存活。键只按地址比较，从不解引用写回。
   pub(crate) fn lookup_cst_node<'b, T: CstNodeClass>(
     &self,
     ast_node: &'b AstNode,
@@ -208,8 +211,7 @@ impl<'a, W: Writer> Printer<'a, W> {
     // cpp 侧键型为 `AstNode*`；这里仅把地址重新拼回该形态用于查表。
     let key = from_ref(ast_node).cast_mut();
     let cst_node = *self.cst_node_map.find(&key)?;
-    // Safety: 同函数级注释；CST 节点与 `ast_node` 同 arena，存活期覆盖 `'b`。
-    unsafe { cst_node_as_ref::<T>(cst_node) }
+    slot_opt(cst_node).and_then(cst_node_try_as::<T>)
   }
 
   pub fn new(writer: &'a mut W, cst_node_map: &'a CstNodeMap) -> Self {

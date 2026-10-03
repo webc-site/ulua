@@ -1,19 +1,20 @@
 use crate::{
-  records::{ast_type_pack_explicit::AstTypePackExplicit, ast_visitor::AstVisitor},
-  visit::{AstNodeRefMut, AstVisitable, ast_type_pack_visit, ast_type_visit},
+  records::{
+    ast_type_pack_explicit::AstTypePackExplicit, ast_visitor::AstVisitor, node_handle::OptNode,
+  },
+  visit::{AstNodeRefMut, AstVisitable, ast_type_pack_visit_ref, ast_type_visit_ref},
 };
 
 impl_visitable!(AstTypePackExplicit, TypePackExplicit, |this, visitor| {
+  // type_list.types 元素是 parser 写入 arena 的类型槽，tail_type 可空：
+  // null 折叠与解引用统一经 `OptNode` 句柄边界（等价旧 dispatch 短路）。
   for &type_ptr in this.type_list.types.iter() {
-    // Safety: type_list.types 元素是 parser 写入 arena 的类型槽（null 由 dispatch 短路）；存活节点随 self 的 arena 在列。
-    unsafe {
-      ast_type_visit(type_ptr, visitor);
+    if let Some(ty) = OptNode::from_ptr(type_ptr).get_mut() {
+      ast_type_visit_ref(ty, visitor);
     }
   }
 
-  // Safety: tail_type 为 arena 存活 AstTypePack 节点或 null；dispatch 对 null 内部短路
-  // （等价旧守卫），单线程独占遍历满足写穿前提。
-  unsafe {
-    ast_type_pack_visit(this.type_list.tail_type, visitor);
+  if let Some(pack) = OptNode::from_ptr(this.type_list.tail_type).get_mut() {
+    ast_type_pack_visit_ref(pack, visitor);
   }
 });

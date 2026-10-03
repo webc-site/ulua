@@ -1,21 +1,21 @@
 use crate::{
-  records::{ast_stat_type_alias::AstStatTypeAlias, ast_visitor::AstVisitor},
-  visit::{AstNodeRefMut, AstVisitable, ast_node_visit, ast_type_visit_ref},
+  records::{ast_stat_type_alias::AstStatTypeAlias, ast_visitor::AstVisitor, node_handle::OptNode},
+  visit::{AstNodeRefMut, AstVisitable, ast_type_visit_ref},
 };
 
 impl_visitable!(AstStatTypeAlias, StatTypeAlias, |this, visitor| {
+  // generics/generic_packs 元素是 parser 写入的存活 arena 节点（非空、地址稳定）；
+  // 静态类型已知，经 `OptNode` 句柄边界解引用后直接走 `AstVisitable::visit`
+  // （cpp 虚分发的同一目标），调用点无 unsafe。
   for &el in this.generics.iter() {
-    // Safety: `generics` 元素是 parser 写入的存活 arena `AstType` 指针（非空、地址稳定），
-    // `.cast()` 借 repr(C) 基址重合改节点类型位；`ast_node_visit` 只读遍历，无 `&mut` 别名。
-    unsafe {
-      ast_node_visit(el.cast(), visitor);
+    if let Some(generic) = OptNode::from_ptr(el).get_mut() {
+      generic.visit(visitor);
     }
   }
 
   for &el in this.generic_packs.iter() {
-    // Safety: 同上，`generic_packs` 元素为 parser 保证的存活 arena 类型指针，cast 后只读遍历。
-    unsafe {
-      ast_node_visit(el.cast(), visitor);
+    if let Some(pack) = OptNode::from_ptr(el).get_mut() {
+      pack.visit(visitor);
     }
   }
 

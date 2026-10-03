@@ -1,37 +1,9 @@
-use core::{mem::size_of, ptr::copy_nonoverlapping};
-
 use crate::records::{
-  ast_array::AstArray, node_handle::Nodes, parser::Parser, temp_vector::TempVector,
+  ast_array::{AstArray, AstArrayBuilder},
+  node_handle::Nodes,
+  parser::Parser,
+  temp_vector::TempVector,
 };
-
-impl Parser {
-  pub(crate) fn copy_t_usize<T: Clone>(&mut self, data: *const T, size: usize) -> AstArray<T> {
-    // 空区间即 cpp `AstArray{}`：恒 `{null, 0}` 形态（`AstArray::EMPTY` 单源）。源指针为
-    // null 而 size>0 不是合法入参（`as_slice` 会用 null 造非空切片），故一并折叠成 EMPTY，
-    // 不再产出「null 配非零 size」这种自相矛盾的数组。
-    if size == 0 || data.is_null() {
-      return AstArray::EMPTY;
-    }
-
-    // arena 解引用收口在 `Parser::arena`，本函数只剩拷贝这一个裸操作。
-    // Safety: `self.arena()` 由 Parser 构造期从活的 `&mut Allocator` 接线，
-    // allocate 返回恒非空（失败 handle_alloc_error 中止）且 8 对齐、容量
-    // size_of::<T>()*size 精确（本函数实例化 T 均为指针/Position 等 align≤8 的
-    // POD 元素）；入口已挡 size==0 与空源指针，data/size 按 cpp Parser::copy
-    // 契约 size>0 时源可读；新鲜目标与源必不重叠，位拷贝与逐元素 clone+write
-    // 等价（此处 T 均为指针/POD 数组元素，无自引用不变式）；arena 块永不移动，
-    // result.data 存活。
-    let storage = self.arena().allocate(size_of::<T>() * size).cast::<T>();
-    unsafe {
-      copy_nonoverlapping(data, storage, size);
-    }
-
-    AstArray {
-      data: storage,
-      size,
-    }
-  }
-}
 
 impl Parser {
   pub fn copy_temp_vector_t<'a, T: Clone>(&mut self, data: &TempVector<'a, T>) -> AstArray<T> {
@@ -44,10 +16,23 @@ impl Parser {
 }
 
 impl Parser {
+  /// cpp `copy(const T* value, size_t size)` 的切片形态内核：定长拷贝 arena 数组
+  /// 的唯一构造点（原 `copy_t_usize` 的「指针 + 计数」入参已随唯一调用链折叠为
+  /// `&[T]`，指针与长度不再可漂移）。
+  ///
+  /// 空切片即 cpp `AstArray{}`：恒 `{null, 0}` 形态（[`AstArray::EMPTY`] 单源），
+  /// 不为零长区间向 arena 申请槽块。槽位申请与写入收口在 [`AstArrayBuilder`]
+  /// 契约边界（容量恒等于元素数，逐槽 clone+write 与旧 `copy_nonoverlapping`
+  /// 位拷贝等价——本内核实例化 T 均为指针/Position/POD 元素），本调用点无 unsafe。
   pub fn copy_initializer_list_t<T: Clone>(&mut self, data: &[T]) -> AstArray<T> {
-    // 空切片的 `as_ptr()` 是齐址悬挂指针（非 null），但 `copy_t_usize` 先按 size==0 早退
-    // 并直接回 `AstArray::EMPTY`，从不解引用，故无需在此再造一个 null 分支。
-    self.copy_t_usize(data.as_ptr(), data.len())
+    if data.is_empty() {
+      return AstArray::EMPTY;
+    }
+    let mut slots = AstArrayBuilder::new(self.arena(), data.len());
+    for value in data {
+      slots.push(value.clone());
+    }
+    slots.finish()
   }
 }
 

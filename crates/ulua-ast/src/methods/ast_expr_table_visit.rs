@@ -1,20 +1,19 @@
 use crate::{
-  records::{ast_expr_table::AstExprTable, ast_visitor::AstVisitor},
-  visit::{AstNodeRefMut, AstVisitable, ast_expr_visit},
+  records::{ast_expr_table::AstExprTable, ast_visitor::AstVisitor, node_handle::OptNode},
+  visit::{AstNodeRefMut, AstVisitable, ast_expr_visit_ref},
 };
 
 impl_visitable!(AstExprTable, ExprTable, |this, visitor| {
+  // item.key 仅 Record 形态非空（其它 kind 为 null，句柄边界折叠跳过，
+  // 等价 cpp `if (item.key)` 守卫）；item.value 是表构造必填槽位，parser 总以
+  // arena 节点填充。存活与独占前提见 node_handle 模块契约，调用点无 unsafe。
   for item in this.items.iter() {
-    // Safety: item.key 为 arena 分配的键表达式节点或 null（Record 才有键，其它 kind 为
-    // null）；ast_expr_visit 对 null 内部短路（等价旧守卫），与 self 同 arena 存活、
-    // 地址不移动，遍历期单线程独占写穿。
-    unsafe {
-      ast_expr_visit(item.key, visitor);
+    if let Some(key) = OptNode::from_ptr(item.key).get_mut() {
+      ast_expr_visit_ref(key, visitor);
     }
 
-    // Safety: item.value 是表构造必填槽位，parser 总以 arena 节点填充（null 也被 dispatch 短路）；存活与独占前提同上。
-    unsafe {
-      ast_expr_visit(item.value, visitor);
+    if let Some(value) = OptNode::from_ptr(item.value).get_mut() {
+      ast_expr_visit_ref(value, visitor);
     }
   }
 });

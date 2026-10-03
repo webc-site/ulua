@@ -6,13 +6,11 @@
 //! if that returns `true`, recurses into its children with `child->visit(v)` —
 //! a *virtual* call dispatched on the child's dynamic type.
 //!
-//! Rust has no vtable here (nodes are thin `*mut AstExpr` etc. in the arena), so
-//! the per-node override becomes `impl AstVisitable for X`, and the virtual
-//! recursion becomes a `class_index` match in the `*_visit` dispatch functions
-//! below — the central analog of the C++ vtable. A node's `visit` body calls
-//! `crate::visit::ast_expr_visit(self.child, v)` for each child pointer (and
-//! loops over `AstArray` children), never `child.visit(v)` directly, because the
-//! static type of `self.child` is only the base.
+//! Rust 侧节点存储于 arena，子槽为 [`crate::records::node_handle`] 句柄或
+//! parser 期的裸指针槽，故 per-node override 落成 `impl AstVisitable for X`，
+//! 虚递归落成下方 `dispatch_node` 的 `class_index` match——C++ vtable 的中央
+//! analog。节点的 `visit` 体内对每个子槽调用 `crate::visit::ast_*_visit_ref`
+//! （引用门面，全链路 safe），解引用统一经句柄边界完成。
 //!
 //! 分发链路（类型安全化骨架）：`dispatch_node` 按 `CLASS_INDEX` 命中后构造
 //! [`AstNodeRefMut`]（每变体持 `&mut` 具体类型），交给
@@ -53,8 +51,9 @@ use crate::{
     ast_type_reference::AstTypeReference, ast_type_singleton_bool::AstTypeSingletonBool,
     ast_type_singleton_string::AstTypeSingletonString, ast_type_table::AstTypeTable,
     ast_type_typeof::AstTypeTypeof, ast_type_union::AstTypeUnion, ast_visitor::AstVisitor,
+    node_handle::OptNode,
   },
-  rtti::{AstNodeClass, AstNodePtr, AstNodeViewMut},
+  rtti::{AstNodeClass, AstNodeViewMut},
 };
 
 /// C++ `AstX::visit(AstVisitor*)` override. Implemented once per concrete node
@@ -230,9 +229,14 @@ macro_rules! impl_visitable {
 
 /// 基类家族 `*mut AstX` 裸指针门面的共享骨架（cpp `X*->visit(visitor)` 的 RTTI
 /// 分发形态）：null 早退 + 一次 repr(C) 基址改写后转交 `dispatch_node`。
-/// `ast_expr_visit`/`ast_stat_visit`/`ast_type_visit`/`ast_type_pack_visit` 四个门面
-/// 此前逐字复制同一段 body 与 `// Safety` 注释，此处收口为单源；各门面的具名
-/// `# Safety` 契约经文档属性原样挂到被生成的函数上，签名与可见性逐字保持。
+///
+/// 仅存 `ast_expr_visit`/`ast_stat_visit` 两门面：`ast_type_visit`/
+/// `ast_type_pack_visit` 的 crate 内消费点已全部迁至引用形态
+/// （`OptNode`/`Node` 句柄解引用 + `*_visit_ref`），无外部消费方，随本波退役。
+/// 保留的两个门面专供尚未迁移的下游（ulua-compiler/ulua-analysis/
+/// ulua-unit-test），其解引用实为对 [`crate::records::node_handle`] 同一 arena
+/// 契约的转调，下游句柄化完成后即退役。
+/// `# Safety` 契约集中在 [`ast_expr_visit`] 文档，`ast_stat_visit` 以「契约同」引用之。
 macro_rules! impl_ast_ptr_visit {
   (
     $(
@@ -243,11 +247,10 @@ macro_rules! impl_ast_ptr_visit {
     $(
       $(#[$attr])*
       $vis unsafe fn $name<V: AstVisitor + ?Sized>($ptr: *mut $base, visitor: &mut V) {
-        // Safety: `$ptr.as_ast_node()` 借 repr(C) 基址重合把基类指针零偏移改写为
-        // `*mut AstNode`（保留 null）；`as_mut` 对 null 返回 None（等价旧 `dispatch_node`
-        // 的 null 早退），非空时本函数文档的 `# Safety` 契约（null 或存活 repr(C) 节点、
-        // 调用方独占其 arena）即 `&mut AstNode` 所需的存活 + 独占证明，原样交给 `dispatch_node`。
-        if let Some(node) = unsafe { $ptr.as_ast_node().as_mut() } {
+        // Safety: 句柄边界 `OptNode::from_ptr(..).get_mut()` 即「null 折叠 + 非空即
+        // 存活独占」的解引用收口点（契约见 node_handle 模块头）；null 折叠为 None，
+        // 与旧 `dispatch_node` 的 null 早退等价。
+        if let Some(node) = OptNode::from_ptr($ptr).get_mut().map(AstNodeViewMut::as_ast_node_mut) {
           dispatch_node(node, visitor);
         }
       }
@@ -257,7 +260,7 @@ macro_rules! impl_ast_ptr_visit {
 
 impl_ast_ptr_visit! {
   /// `expr->visit(visitor)` where `expr` is a base `*mut AstExpr` — dispatch to the
-  /// concrete override by RTTI class index.
+  /// concrete override by RTTI class index. 仅由尚未句柄化的下游消费。
   ///
   /// # Safety
   /// `expr` 须为 null 或指向以 `AstExpr` 为前缀字段的存活节点。
@@ -266,32 +269,8 @@ impl_ast_ptr_visit! {
   /// 的非 const 语义写穿节点，本门面据此向 `dispatch_node` 交出 `&mut AstNode`）。
   pub fn ast_expr_visit(expr: *mut AstExpr);
 
-  /// `stat->visit(visitor)` for a base `*mut AstStat`.
-  ///
-  /// # Safety
-  /// `stat` 须为 null 或指向以 `AstStat` 为前缀字段的存活节点。
-  ///
-  /// 另需：调用方独占该节点所在 arena（visitor 按 cpp `visit(AstVisitor*)`
-  /// 的非 const 语义写穿节点，本门面据此向 `dispatch_node` 交出 `&mut AstNode`）。
+  /// `stat->visit(visitor)` for a base `*mut AstStat`。契约同 [`ast_expr_visit`]。
   pub fn ast_stat_visit(stat: *mut AstStat);
-
-  /// `ty->visit(visitor)` for a base `*mut AstType`.
-  ///
-  /// # Safety
-  /// `ty` 须为 null 或指向以 `AstType` 为前缀字段的存活节点。
-  ///
-  /// 另需：调用方独占该节点所在 arena（visitor 按 cpp `visit(AstVisitor*)`
-  /// 的非 const 语义写穿节点，本门面据此向 `dispatch_node` 交出 `&mut AstNode`）。
-  pub fn ast_type_visit(ty: *mut AstType);
-
-  /// `pack->visit(visitor)` for a base `*mut AstTypePack`.
-  ///
-  /// # Safety
-  /// `pack` 须为 null 或指向以 `AstTypePack` 为前缀字段的存活节点。
-  ///
-  /// 另需：调用方独占该节点所在 arena（visitor 按 cpp `visit(AstVisitor*)`
-  /// 的非 const 语义写穿节点，本门面据此向 `dispatch_node` 交出 `&mut AstNode`）。
-  pub(crate) fn ast_type_pack_visit(pack: *mut AstTypePack);
 }
 
 /// 基类家族 `&mut AstX` 引用门面的共享骨架（records 句柄引用化 §2 的下游入口）：
@@ -331,7 +310,7 @@ impl_ast_ref_visit! {
   pub(crate) fn ast_type_pack_visit_ref(pack: &mut AstTypePack);
 }
 
-/// `node->visit(visitor)` for any base `*mut AstNode`.
+/// `node->visit(visitor)` for any base `*mut AstNode`. 仅由尚未句柄化的下游消费。
 ///
 /// # Safety
 /// `node` 须为 null 或指向存活的 AST 节点。
@@ -339,9 +318,9 @@ impl_ast_ref_visit! {
 /// 另需：调用方独占该节点所在 arena（visitor 按 cpp `visit(AstVisitor*)`
 /// 的非 const 语义写穿节点，本门面据此向 `dispatch_node` 交出 `&mut AstNode`）。
 pub unsafe fn ast_node_visit<V: AstVisitor + ?Sized>(node: *mut AstNode, visitor: &mut V) {
-  // Safety: `node` 已是基类指针，无需改写；`as_mut` 对 null 返回 None（等价旧 `dispatch_node` 的 null 早退），
-  // 非空时本函数契约（node 为 null 或存活 AST 节点、调用方独占其 arena）即 `&mut AstNode` 所需的存活 + 独占证明。
-  if let Some(node) = unsafe { node.as_mut() } {
+  // Safety: 句柄边界 `OptNode::from_ptr(..).get_mut()` 承接本契约——null 折叠为
+  // None（等价旧 null 早退），非空即存活且可独占。
+  if let Some(node) = OptNode::from_ptr(node).get_mut() {
     dispatch_node(node, visitor);
   }
 }

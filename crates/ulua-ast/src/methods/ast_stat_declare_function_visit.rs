@@ -8,7 +8,7 @@ impl_visitable!(
   AstStatDeclareFunction,
   StatDeclareFunction,
   |this, visitor| {
-    visit_type_list(visitor, &this.params);
+    visit_type_list(visitor, &mut this.params);
 
     // ret_types 槽已句柄化（declare 文法对缺省返回类型现场补建显式空 pack，恒非空）：
     // get_mut 交出独占子节点引用，引用门面递归。

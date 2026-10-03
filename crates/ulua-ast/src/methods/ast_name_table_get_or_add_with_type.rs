@@ -5,11 +5,11 @@
 //! 可漂移，与只读门面 [`AstNameTable::get_with_type`] 完全对称（同一字节切片
 //! 读法/写法两形态），被调侧因此不再是 `unsafe fn`。
 
-use core::slice::from_raw_parts_mut;
-
 use crate::{
   enums::type_lexer::Type,
-  records::{ast_name::AstName, ast_name_table::AstNameTable, entry::Entry},
+  records::{
+    ast_array::AstArrayBuilder, ast_name::AstName, ast_name_table::AstNameTable, entry::Entry,
+  },
 };
 
 impl AstNameTable {
@@ -41,19 +41,19 @@ impl AstNameTable {
 
     // 新条目持有的是借用切片，源缓冲比本表长寿并不成立：把同样的字节拷进
     // arena 独占缓冲并补 NUL（cpp `strdup` 形态），哈希值随内容不变。
+    // 「向 arena 未初始化槽写入」收口在 [`AstArrayBuilder`] 契约边界（`new` 申请
+    // length+1 槽、`push_slice`/`push` 逐段写入并界检，尾槽落 NUL），本调用点
+    // 只剩 NonNull 宿主槽位的单点解引用（`records/ast_name_table.rs` 字段契约）。
     // Safety: `allocator` 由 `new`/`rebind_allocator` 从活的 `&mut Allocator`
-    // 接线、比本表长寿（NonNull 证非空）；`allocate(length + 1)` 返回一段长
-    // 度≥length+1、起始对齐且地址稳定（bump arena 不移动已分配块）的区域，
-    // 故 `from_raw_parts_mut` 的区间可写；`copy_from_slice` 两侧长度相等且不
-    // 重叠（源为调用方切片、目标为 arena 新块）；末尾 NUL 落在第 length+1 字节。
-    let name_data = unsafe { allocator.as_mut().allocate(length + 1) };
-    unsafe {
-      let buffer = from_raw_parts_mut(name_data, length + 1);
-      buffer[..length].copy_from_slice(name);
-      buffer[length] = 0;
-    }
+    // 接线、比本表长寿（NonNull 证非空）；造 `&mut` 期间无其它别名指向同一
+    // arena。所得 `dup.data` 即 `allocate(length + 1)` 的同一块基址，旧
+    // 「裸切片 + copy_from_slice + 尾 NUL」三步与 builder 逐位等价。
+    let mut slots = AstArrayBuilder::new(unsafe { allocator.as_mut() }, length + 1);
+    slots.push_slice(name);
+    slots.push(0);
+    let dup = slots.finish();
 
-    entry.value = AstName::from_raw_parts(name_data.cast_const(), length as u32);
+    entry.value = AstName::from_raw_parts(dup.as_ptr(), length as u32);
     entry.r#type = if first == b'@' {
       Type::ATTRIBUTE
     } else {

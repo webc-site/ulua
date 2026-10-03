@@ -1,4 +1,4 @@
-use ulua_common::{functions::c_slice::c_slice, macros::luau_assert::LUAU_ASSERT};
+use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   enums::{brace_type::BraceType::InterpolatedString, type_lexer::Type},
@@ -36,10 +36,10 @@ impl Parser {
 
       end_location = current_lexeme.location;
 
-      let length = current_lexeme.get_length() as usize;
-      // Safety: INTERP 族词素负载为字符串指针，data/length 由词法器成对写入，
-      // 指向源缓冲内合法字节；空段退化为空切片。
-      let bytes = unsafe { c_slice(current_lexeme.data.as_ptr(), length) };
+      // INTERP 族四变体均在 `Lexeme::data_bytes` 的负载变体族内（上方 assert
+      // 记录该不变量）：data/length 成对区间与 null 判空收口在该门面，
+      // 空段/null 负载折叠为空切片（与旧 `c_slice` 逐位等价）。
+      let bytes = current_lexeme.data_bytes().unwrap_or_default();
 
       if self.options.store_cst_data {
         let source_string = self.copy_bytes(bytes);
@@ -103,7 +103,6 @@ impl Parser {
           if self.lexer.current().r#type == Type::BROKEN_STRING {
             self.next_lexeme();
           }
-          // Safety: build_interp_string 收口节点与 CST 构造
           let node = self.build_interp_string(
             start_location.begin,
             self.lexer.previous_location().end,

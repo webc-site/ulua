@@ -24,7 +24,9 @@
 //!   `Node::try_as` / `OptNode::is`；早先返回假 `'static` 借用的
 //!   `ast_node_try_as_ptr`/`ast_node_is_ptr` 门面已随消费点清零而退役。
 //!   指针 → 借用的判空解引用再收口到 [`place_ref_at`] /
-//!   [`place_mut_at`] 两枚私有原语（CST 侧门面共用），AST/CST 全部边界不再各自
+//!   [`place_mut_at`] 两枚私有原语（前者供 AST 指针身份门面、后者供 CST 独占
+//!   下转门面；CST 只读下转无裸指针入口，消费点一律经 safe
+//!   `optional_node::slot_opt` + [`cst_node_try_as`] 组合），AST/CST 全部边界不再各自
 //!   重复 `is_null` 守卫与 `&mut *node` 舞步，内部同样只转调安全门面。
 //!
 //! class index 是类型名的编译期哈希（FNV-1a），没有运行期共享可变计数器 /
@@ -630,7 +632,8 @@ pub fn cst_node_try_as<T: CstNodeClass>(node: &CstNode) -> Option<&T> {
     unsafe { ref_cast::<CstNode, T>(node) })
 }
 
-/// CST 下转的裸指针边界（crate 内 parser/printer 的 ast→cst 映射消费），null
+/// CST 下转的裸指针边界（crate 内 parser 的 ast→cst 映射独占改写消费；printer
+/// 只读侧已改走 safe [`slot_opt`] + [`cst_node_try_as`] 组合），null
 /// 折叠为 `None`。
 ///
 /// 生命周期 `'b` 由调用方传入的对同 arena AST 节点的借用供给：AST 与 CST 同步
@@ -647,14 +650,4 @@ pub(crate) unsafe fn cst_node_as<'b, T: CstNodeClass>(node: *mut CstNode) -> Opt
   (base.class_index == T::CLASS_INDEX).then(||
     // Safety: class_index 命中 ⇒ 动态类型为 T，repr(C) 基址重合，独占性继承。
     unsafe { mut_cast::<CstNode, T>(base) })
-}
-
-/// [`cst_node_as`] 的只读形态。
-///
-/// # Safety
-/// 同 [`cst_node_as`]，但 `'b` 由共享借用供给，无独占要求。
-#[inline]
-pub(crate) unsafe fn cst_node_as_ref<'b, T: CstNodeClass>(node: *mut CstNode) -> Option<&'b T> {
-  // Safety: 契约保证非空即存活节点，转调 safe 引用门面。
-  place_ref_at(node).and_then(|node| cst_node_try_as::<T>(node))
 }
