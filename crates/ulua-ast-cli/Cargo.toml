@@ -3,7 +3,7 @@ name = "ulua-ast-cli"
 description = "Luau AST dump CLI (Rust)."
 keywords = [ "luau", "lua", "ast", "parser", "cli" ]
 categories = [ "command-line-utilities", "development-tools" ]
-version = "0.1.5"
+version = "0.1.6"
 
 [package.edition]
 workspace = true
@@ -26,17 +26,17 @@ path = "src/main.rs"
 
 [dependencies.ulua-analysis]
 path = "../ulua-analysis"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-ast]
 path = "../ulua-ast"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-cli-lib]
 path = "../ulua-cli-lib"
-version = "0.1.5"
+version = "0.1.6"
 
 [dev-dependencies.ulua-cli-lib]
 path = "../ulua-cli-lib"
 features = [ "test-utils" ]
-version = "0.1.5"
+version = "0.1.6"

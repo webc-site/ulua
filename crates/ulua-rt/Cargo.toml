@@ -1,6 +1,6 @@
 [package]
 name = "ulua-rt"
-version = "0.1.5"
+version = "0.1.6"
 description = "Safe, ergonomic, mlua-style API for ulua (pure-Rust Luau)."
 keywords = [ "luau", "lua", "mlua", "scripting", "embedding" ]
 categories = [ "api-bindings", "development-tools::ffi", "game-development" ]
@@ -27,11 +27,11 @@ jit = [ "dep:ulua-code-gen" ]
 
 [dependencies.ulua-common]
 path = "../ulua-common"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-code-gen]
 path = "../ulua-code-gen"
-version = "0.1.5"
+version = "0.1.6"
 optional = true
 
 [dependencies.ulua-rt-derive]
@@ -41,28 +41,28 @@ optional = true
 
 [dependencies.ulua-compiler]
 path = "../ulua-compiler"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-vm]
 path = "../ulua-vm"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-ast]
 path = "../ulua-ast"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-bytecode]
 path = "../ulua-bytecode"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-analysis]
 path = "../ulua-analysis"
-version = "0.1.5"
+version = "0.1.6"
 optional = true
 
 [dependencies.ulua-config]
 path = "../ulua-config"
-version = "0.1.5"
+version = "0.1.6"
 optional = true
 
 [dependencies.serde]

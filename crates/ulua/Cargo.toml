@@ -1,6 +1,6 @@
 [package]
 name = "ulua"
-version = "0.1.5"
+version = "0.1.6"
 
 [package.edition]
 workspace = true
@@ -34,48 +34,48 @@ required-features = [ "cli" ]
 
 [dependencies.ulua-common]
 path = "../ulua-common"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-ast]
 path = "../ulua-ast"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-bytecode]
 path = "../ulua-bytecode"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-compiler]
 path = "../ulua-compiler"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-vm]
 path = "../ulua-vm"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-analysis]
 path = "../ulua-analysis"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-config]
 path = "../ulua-config"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-require]
 path = "../ulua-require"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-rt]
 path = "../ulua-rt"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-checked-macros]
 path = "../ulua-checked-macros"
-version = "0.1.5"
+version = "0.1.6"
 optional = true
 
 [dependencies.ulua-repl-cli]
 path = "../ulua-repl-cli"
-version = "0.1.5"
+version = "0.1.6"
 optional = true
 
 [features]

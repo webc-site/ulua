@@ -1,6 +1,6 @@
 [package]
 name = "ulua-compiler"
-version = "0.1.5"
+version = "0.1.6"
 description = "Luau source-to-bytecode compiler (Rust)."
 keywords = [ "luau", "lua", "compiler", "bytecode" ]
 categories = [ "compilers" ]
@@ -32,12 +32,12 @@ workspace = true
 
 [dependencies.ulua-ast]
 path = "../ulua-ast"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-bytecode]
 path = "../ulua-bytecode"
-version = "0.1.5"
+version = "0.1.6"
 
 [dependencies.ulua-common]
 path = "../ulua-common"
-version = "0.1.5"
+version = "0.1.6"
