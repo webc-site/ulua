@@ -27,6 +27,8 @@ use crate::macros::fast_flags::luau_flag_module;
 luau_flag_module! {
   // CodeGen/src/IrRegAllocA64.cpp
   LUAU_FASTFLAGVARIABLE!(DEBUG_CODEGEN_CHAOS_A64, DebugCodegenChaosA64);
+  // crates/ulua-code-gen translate_inst_call_inline（本仓 JIT 用户函数 call inlining 刀）
+  LUAU_FASTFLAGVARIABLE!(LUAU_JIT_CALL_INLINE, LuauJitCallInline);
   // CodeGen/src/CodeGen.cpp
   LUAU_FASTFLAGVARIABLE!(DEBUG_CODEGEN_OPT_SIZE, DebugCodegenOptSize);
   // CodeGen/src/OptimizeConstProp.cpp
