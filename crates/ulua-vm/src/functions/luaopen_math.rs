@@ -72,7 +72,8 @@ pub unsafe fn luaopen_math(l: *mut LuaState) -> i32 {
   // access/table/error/thread 与 slot.rs 的 api 索引域构造子，全部方法清点），
   // 无 global 侧既有方法，按 r13-w1b 判例原样保留；不新造 getglobal/read_global
   // 类方法（不在派单面，免生造名）。lua_encodepointer（引用形取参、指针身份种子
-  // 读数，cpp 同形）与 lua_l_register_bytes（裸指针取参）为自由函数调用点，
+  // 读数，cpp 同形）与 lua_l_register_bytes（r16-v49 收形后引用形取参，指针面只剩
+  // `lr` 的 C 函数指针与 `lua_s_new` 裸形转手）为自由函数调用点，
   // 非裸解引用收编面，保留。r16-b3 续：gs_mut 门面落地后本点解锁——seed 先算
   // （:78 现序保持）再经 `gs_mut().rngstate` 一句一借落笔，借用不跨调用。
   unsafe {
@@ -80,7 +81,7 @@ pub unsafe fn luaopen_math(l: *mut LuaState) -> i32 {
     seed ^= 0;
     pcg_32_seed(&mut (*l).gs_mut().rngstate, seed);
 
-    lua_l_register_bytes(l, Some(b"math"), &MATH_FUNCS);
+    lua_l_register_bytes(&mut *l, Some(b"math"), &MATH_FUNCS);
 
     (*l).push_number(LUAU_PI);
     (*l).set_field_bytes(-2, b"pi");

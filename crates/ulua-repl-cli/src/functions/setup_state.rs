@@ -52,7 +52,9 @@ pub unsafe fn setup_state(l: *mut LuaState) {
   ];
 
   l.push_value(LUA_GLOBALSINDEX);
-  // Safety: `lua_l_register_bytes` 为 unsafe 导出；funcs 是本地数组，
+  // Safety: `lua_l_register_bytes` 仍为 unsafe fn（`lr` 裸 C 函数指针与 `lua_s_new`
+  // 裸形转手的屏障），但 `l` 侧已收成引用形，本处传 `l` 是一次性隐式重借用、借用窗止于当句；
+  // funcs 是本地数组，
   // lua_l_register_bytes 在调用窗口内读取其 name/func 字段（切片与 Some(fn) 指针均静态存活）。
   // bytes 核心形以 `None` 原生表达「注册到当前栈顶」（cpp luaL_register(L, NULL, l) 的
   // NULL 名参语义），无旧 c_char 形的 FFI 折算需求（该保留 null 论证随改道消亡，r16-v10）。

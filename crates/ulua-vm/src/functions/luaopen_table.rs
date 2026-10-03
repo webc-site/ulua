@@ -38,7 +38,7 @@ static TAB_FUNCS: [LuaLReg; 17] = [
 /// cpp/VM/src/ltablib.cpp:694 luaopen_table。
 pub unsafe fn luaopen_table(l: *mut LuaState) -> i32 {
   unsafe {
-    lua_l_register_bytes(l, Some(b"table"), &TAB_FUNCS);
+    lua_l_register_bytes(&mut *l, Some(b"table"), &TAB_FUNCS);
 
     (*l).push_c_function(Some(tunpack_arm), cstr(b"unpack\0"));
     (*l).set_global_bytes(b"unpack");

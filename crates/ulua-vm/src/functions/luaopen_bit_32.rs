@@ -34,7 +34,7 @@ static BITLIB: [LuaLReg; 15] = [
 /// `BITLIB` 为编译期静态表，每项 `name` 为静态字节切片。cpp/VM/src/lbitlib.cpp:241 luaopen_bit32。
 pub unsafe fn luaopen_bit32(l: *mut LuaState) -> i32 {
   unsafe {
-    lua_l_register_bytes(l, Some(b"bit32"), &BITLIB);
+    lua_l_register_bytes(&mut *l, Some(b"bit32"), &BITLIB);
 
     1
   }

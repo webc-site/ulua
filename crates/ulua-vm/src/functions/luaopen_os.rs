@@ -20,7 +20,7 @@ static SYSLIB: [LuaLReg; 4] = [
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
 pub(crate) unsafe fn luaopen_os(l: *mut LuaState) -> i32 {
   unsafe {
-    lua_l_register_bytes(l, Some(b"os"), &SYSLIB);
+    lua_l_register_bytes(&mut *l, Some(b"os"), &SYSLIB);
     1
   }
 }

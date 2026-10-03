@@ -132,7 +132,7 @@ pub unsafe fn luaopen_buffer(l: *mut LuaState) -> i32 {
       &BUFFER_BASE
     };
 
-    lua_l_register_bytes(l, Some(LIB_BUFFER), buffer_lib);
+    lua_l_register_bytes(&mut *l, Some(LIB_BUFFER), buffer_lib);
     1
   }
 }
