@@ -8,7 +8,7 @@
 //! （`read_file`），字符串入参 `&[u8]`、出边界即转 owned `Cow<str>`，无 C 串管道
 //! （review.md §2/§3/§10）。
 
-use core::{fmt::Arguments, ptr::null};
+use core::fmt::Arguments;
 
 use ulua_ast::records::parse_options::ParseOptions;
 use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
@@ -66,10 +66,8 @@ unsafe fn spawn_module_thread(l: &mut LuaState) -> *mut LuaState {
 /// `l` 为活跃且受保护的调用状态、栈上预留 ≥2 空槽（`lua_l_error_l` 的契约前置）；
 /// `msg` 为纯 Rust 格式化串，在被调窗口内消费、无逃逸借用。
 pub(crate) unsafe fn throw(l: *mut LuaState, msg: Arguments<'_>) -> ! {
-  // FFI: c-API 要求 NULL —— `lua_l_error_l` 的 fmt 空指针是「已用 format_args!
-  // 组装」的协议形态，本 crate 仅此一处经手，luaL_error! 宏的展开点随之消失。
-  // Safety: 前置条件即本 fn 契约。
-  unsafe { lua_l_error_l(l, null(), msg) }
+  // Safety: 前置条件即本 fn 契约（`l` 活跃受保护、栈留 ≥2 空槽），原样透传给 `lua_l_error_l`。
+  unsafe { lua_l_error_l(l, msg) }
 }
 
 /// FFI 边界（ulua-vm / ulua-require c-API）：`luau_load` 成功后、运行前的模块
