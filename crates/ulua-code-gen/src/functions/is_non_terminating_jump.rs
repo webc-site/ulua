@@ -9,6 +9,7 @@ pub const fn is_non_terminating_jump(cmd: IrCmd) -> bool {
       | IrCmd::CheckFastcallRes
       | IrCmd::CheckTag
       | IrCmd::CheckTruthy
+      | IrCmd::CheckStackRoom
       | IrCmd::CheckReadonly
       | IrCmd::CheckNoMetatable
       | IrCmd::CheckNoNewindexMeta

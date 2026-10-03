@@ -306,6 +306,7 @@ pub unsafe fn compile_internal(
     native_protos,
     &build.data,
     build.code_bytes(),
+    options.force_recompile,
   );
 
   with_compilation_stats(stats, |stats| {

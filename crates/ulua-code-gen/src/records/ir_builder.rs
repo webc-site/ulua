@@ -560,6 +560,12 @@ impl IrBuilder {
     self.function.type_hints = hints;
   }
 
+  /// JIT call inlining 第 2 阶段：设置 CALL 站点观测提示（暖重编译入口在
+  /// build_function_ir 前调用；消费点 try_translate_call_inline）。
+  pub fn set_call_hints(&mut self, hints: Vec<(u32, u32, usize)>) {
+    self.function.call_hints = hints;
+  }
+
   pub fn ir_builder_ir_builder(host_hooks: &HostIrHooks) -> Self {
     Self {
       host_hooks: host_hooks as *const HostIrHooks,

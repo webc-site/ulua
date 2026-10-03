@@ -49,6 +49,12 @@ pub struct IrFunction {
   /// （仅细化 ANY → 观测 tag，语义 = cpp typed-site 的 exit-guard 形态）。
   pub type_hints: Vec<(u32, u8, u8)>,
 
+  /// JIT call inlining 第 2 阶段：CALL 站点观测提示 `(pc, funid, callee proto 裸址)`
+  /// ——暖重编译时从上一版 execdata 的 COBS 侧表读出（见 ulua-vm call_obs），
+  /// try_translate_call_inline 以观测证据替代「常量 proto 槽」静态判据，funid
+  /// 作发射守卫的立即数。
+  pub call_hints: Vec<(u32, u32, usize)>,
+
   pub value_restore_ops: Vec<ValueRestoreLocation>,
   pub valid_restore_op_blocks: Vec<u32>,
   pub store_location_hints: DenseHashMap<u32, StoreLocationHint>,
@@ -122,6 +128,7 @@ impl Default for IrFunction {
       end_location: 0,
       extra_native_data: Vec::new(),
       type_hints: Vec::new(),
+      call_hints: Vec::new(),
       value_restore_ops: Vec::new(),
       valid_restore_op_blocks: Vec::new(),
       // kInvalidInstIdx 是 ~0u32

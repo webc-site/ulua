@@ -745,6 +745,23 @@ impl ConstPropState {
       IrCmd::TableSetnum => {
         debug_assert!(self.array_value_cache.is_empty());
       }
+      IrCmd::GetHashNodeAddr => {
+        // SETTABLEKS 哈希节点写（Fallback 折叠后进入可发射域）：节点写入使任意
+        // 已知 hash 值与 slot 非空判定失效——GetHashNodeAddr 的操作数是 hash 而
+        // 非 key 指针，无法定点匹配，保守全清（对齐 cpp 对未知写目标的失效面）。
+        let mut cache = take(&mut self.hash_value_cache);
+        let keys: Vec<u32> = cache.iter().map(|(&pointer_idx, _)| pointer_idx).collect();
+        for pointer_idx in keys {
+          *cache.get_or_insert(pointer_idx) = K_INVALID_INST_IDX;
+        }
+        self.hash_value_cache = cache;
+
+        let mut cache = take(&mut self.check_slot_match_cache);
+        for el in &mut cache {
+          el.known_to_not_be_nil = false;
+        }
+        self.check_slot_match_cache = cache;
+      }
       _ => {
         debug_assert!(target_addr.cmd == IrCmd::GetClosureUpvalAddr);
       }

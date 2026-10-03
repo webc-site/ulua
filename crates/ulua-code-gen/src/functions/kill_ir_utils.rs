@@ -51,7 +51,11 @@ pub fn kill_ir_function_ir_block_at(function: &mut IrFunction, index: usize) {
   function.blocks[index].kind = IrBlockKind::Dead;
 
   let (start, finish) = (function.blocks[index].start, function.blocks[index].finish);
-  kill_ir_function_u32_u32(function, start, finish);
+  // 空块（call inlining 的不可达克隆壳：start/finish 均为 !0）无指令可杀，
+  // 直接落 Dead，不进区间 kill（!0 区间对指令数组必然越界）。
+  if start != u32::MAX {
+    kill_ir_function_u32_u32(function, start, finish);
+  }
 
   let block = &mut function.blocks[index];
   block.start = !0u32;

@@ -145,7 +145,8 @@ pub fn record_tvs(
 //   execdata[sizecode+3 + 2*i]         state = hits<<8 | last_tag
 // ---------------------------------------------------------------------------
 
-const TSFB_MAGIC: u32 = 0x5453_4642;
+/// TSFB 魔数（'TSFB'）；COBS 侧表（call_obs）定位时需按它跳过本表。
+pub const TSFB_MAGIC: u32 = 0x5453_4642;
 
 /// 在 extra 区（自 data[sizecode] 起）定位 TSFB 表：前向扫描 MAGIC，
 /// 校验 nslots 与 pc 升序自洽。返回（表头字下标，nslots）。
