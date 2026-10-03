@@ -57,9 +57,14 @@ impl LuaString {
     // `LuaString` 只从真实字符串构造，上面那道类型闸门保证指针指向的必是注册表
     // 钉住的原对象。
     let bytes = if is_string {
-      // 闸门命中即 -1 处为 TString，`bytes_at`（safe 门面）走纯字符串分支——只
+      // 闸门命中即 -1 处为 TString，`bytes_at`（unsafe 门面）走纯字符串分支——只
       // 以切片带出内容字节，不转换、不压栈（数字转换分支不可达），故栈深不变。
-      bytes_at(state, -1).unwrap_or_default()
+      // Safety: 窗口实例化为 `&self` 生命周期，属 `bytes_at` 存续期契约的形态
+      // 2——串体是注册表槽钉住的 GC 对象（本句柄的 `XRc<LuaRef>` 链在 `&self`
+      // 存续期内持续钉住它，Luau GC 不回收可达对象、也不搬移对象），TString
+      // 不可变，故借用指向对象本体而非栈槽，紧随的弹出该层不使其失效（见本方
+      // 法文档）。
+      unsafe { bytes_at(state, -1) }.unwrap_or_default()
     } else {
       &[]
     };

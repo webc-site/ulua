@@ -411,11 +411,28 @@ pub(crate) fn push_bytes(state: StateView<'_>, s: &[u8]) {
 
 /// 读 `idx` 处字符串字节（`lua_tolstring_ref` 的收口点；非 string 返回 `None`）。
 ///
-/// 存续期契约：返回切片的借用锚定 `state`，到下一次分配 / GC step 前有效——
-/// 各调用点在其间完成拷贝或消费（`string.rs::as_bytes` 拷贝进 `Vec`/`Cow`）。
+/// 存续期契约升格为 `# Safety` 屏障（r16-v26 判例）：`'a` 只出现在返回位、不锚
+/// `state`——锚定路线在 rt 句柄面不成立：`StateView<'a>` 的 `PhantomData<&'a mut
+/// LuaState>` 排他语义只是驱动契约、非编译器背书（构造点 [`Lua::state`]/
+/// [`LuaRef::state`]/`Thread::co_state` 全取自 `&self`），持有窗口期间照样能经
+/// 另一枚视图驱动分配/GC 踩碎切片。故此处不伪装可验证的借用，恢复 `unsafe fn`
+/// 屏障，把窗口前提显式交给调用方：
+///
+/// # Safety
+/// 调用方须保证返回切片指向的字节在 `'a` 实例化期间持续可读且不被改写。合法
+/// 形态二选一：
+/// 1. 在返回后、下一次 VM 重入点（分配 / GC step / 栈读写）之前当场完成拷贝或
+///    消费——现有调用点均在此间把切片拷入 `Vec`/`Cow`/`String`；
+/// 2. 该槽值是存活注册表引用钉住的 TString，且 `'a` 不超过该引用的存续期
+///    （Luau GC 不搬移对象、串不可变，`as_bytes` 形，见 `string.rs`）。
+///
+/// 存活 state 与合法 `idx` 的前提见本函数收口的 `lua_tolstring_ref` 自身
+/// `# Safety`。
 #[inline]
-pub(crate) fn bytes_at<'a>(state: StateView<'_>, idx: i32) -> Option<&'a [u8]> {
-  // Safety: 族级契约;只读该槽字符串体,不写不抛。
+pub(crate) unsafe fn bytes_at<'a>(state: StateView<'_>, idx: i32) -> Option<&'a [u8]> {
+  // Safety: `state` 指针位存活由句柄锚定、由 [`StateView`] 驱动契约承载；`idx`
+  // 合法性与本门面的窗口前提由本函数 `# Safety` 交给调用方。只读该槽字符串体，
+  // 不写不抛。
   unsafe { lua_tolstring_ref(state.as_ptr().cast_mut(), idx) }
 }
 
@@ -495,11 +512,18 @@ fn push_traceback(state: StateView<'_>, msg: Option<&str>, level: i32) {
 /// 读 `idx` 处值的 metatable-aware `tostring` 结果字节（`lua_l_tolstring_ref` 的
 /// 收口点；转换成功时结果串已净压一层，非字符串载荷等 VM 约定失败返回 `None`）。
 ///
-/// 存续期契约：同 [`bytes_at`]——返回切片锚定 `state`，调用点在其间完成拷贝。
+/// # Safety
+/// 存续期窗口契约同 [`bytes_at`]（r16-v26 判例），另加一层转换重入前提：转换
+/// 可在 VM 内回跑 `__tostring`（可分配、可触发 GC）并压入结果串，返回切片指向
+/// 栈顶结果串内部——调用方须保证 `'a` 期间其不被回收且不被改写；现有调用点均
+/// 在返回后、无其间 VM 调用的紧邻表达式里当场 lossy 拷成 owned `String`（形态
+/// 1）。存活 state、合法 `idx` 与转换发散（`'__tostring' must return a string`
+/// 经错误展开逃逸帧，返回即成功）见收口的 `lua_l_tolstring_ref` 自身 `# Safety`。
 #[inline]
-fn tolstring_at<'a>(state: StateView<'_>, idx: i32) -> Option<&'a [u8]> {
-  // Safety: 族级契约;`idx` 是有效栈索引,转换在 VM 内完成(可触发 `__tostring`
-  // 并压入结果串)。
+unsafe fn tolstring_at<'a>(state: StateView<'_>, idx: i32) -> Option<&'a [u8]> {
+  // Safety: `state` 指针位存活由句柄锚定（[`StateView`] 驱动契约）；`idx` 合法
+  // 性与窗口前提由本函数 `# Safety` 交给调用方；转换在 VM 内完成（可触发
+  // `__tostring` 并压入结果串）。
   unsafe { lua_l_tolstring_ref(state.as_mut_ptr(), idx) }
 }
 
@@ -1745,10 +1769,12 @@ impl Lua {
     // 预留值一层 + `luaL_tolstring` 结果一层（`lua_pop(state, 2)` 收口）。
     ensure_stack(state, 2)?;
     self.push_value(value)?;
-    // `tolstring_at` 是带契约的 safe 门面（`lua_l_tolstring_ref` 收口点）：上一行
+    // Safety: `tolstring_at`（`lua_l_tolstring_ref` 收口的 unsafe 门面）：上一行
     // `push_value` 成功即栈顶有值，-1 是有效索引；对有效索引恒转换并按
-    // `__tostring` 语义压结果串、以切片带出全字节（长度即切片长，内嵌 NUL 不截断）。
-    let out = tolstring_at(state, -1)
+    // `__tostring` 语义压结果串、以切片带出全字节（长度即切片长，内嵌 NUL 不截
+    // 断）。返回切片在紧随的 `.map` 表达式内当场被 `from_utf8_lossy` 拷成
+    // owned `String`，其间无任何 VM 调用，满足其 `# Safety` 窗口形态 1。
+    let out = unsafe { tolstring_at(state, -1) }
       .map(|s| String::from_utf8_lossy(s).into_owned())
       .unwrap_or_default();
     // `pop_stack` 精确弹回值 + luaL_tolstring 结果两层（luaL_tolstring 会把结果串压栈）。
@@ -1781,9 +1807,10 @@ impl Lua {
       };
     }
     // Otherwise, fall back to the flat string error path.
-    // `bytes_at`（safe 门面族）：`state` 存活（&self 的 XRc 链）；-1 仍是有效索引
-    // （上一分支未弹栈）；以切片带出栈顶串的全部字节。
-    let msg = bytes_at(state, -1)
+    // Safety: `bytes_at`（unsafe 门面族）：`state` 存活（&self 的 XRc 链）；-1 仍是
+    // 有效索引（上一分支未弹栈）；切片带出的栈顶串字节在紧随的 `.map` 表达式内
+    // 当场拷成 owned `String`，其间无 VM 调用，窗口契约形态 1 成立。
+    let msg = unsafe { bytes_at(state, -1) }
       .map(|s| String::from_utf8_lossy(s).into_owned())
       // `None`（非字符串错误对象，旧 null 指针）退化为 [`NON_STRING_ERROR_MSG`]。
       .unwrap_or_else(|| NON_STRING_ERROR_MSG.to_string());
