@@ -8,29 +8,20 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// # Safety
-///
-/// `l` 必须是正在执行的 buffer 库 C 函数帧的存活 `LuaState`：栈槽 #1 为 buffer
+/// 调用序契约（正确性，非内存安全）：`l` 存活与独占由 `&mut LuaState` 承载；栈槽 #1 为 buffer
 /// userdata、#2 为读取偏移（[`buffer_read_window_ref`] 做 `size_of::<T>()` 字节界校验，
 /// 越界即抛错不返回）。结果数值压栈需栈顶余量。浮点取窗塌缩为
 /// [`load_scalar_ref`] 单点：端序由 `SwapBe`（buffer_swapbe.rs，f32/f64 经
 /// `to_bits`/`from_bits` 按整型位宽翻转，cpp 大端三件套 `static_cast<StorageType>`
 /// 重排的逐位等价形）承载。cpp lbuflib.cpp:147 `buffer_readfp`。
-pub(crate) unsafe fn buffer_readfp<T>(l: *mut LuaState) -> i32
+pub(crate) fn buffer_readfp<T>(l: &mut LuaState) -> i32
 where
   T: BufferReadableFloat,
 {
-  // SAFETY: 窗口已挡下越界偏移（失败即抛错不返回），界内浮点字节数可读；
-  // 抛错序与旧形逐位不变（先窗口校验、后压栈）
-  unsafe {
-    // r16-v17：`buffer_read_window_ref` 已收形为 `&mut LuaState`，本泛型核心的 C-ABI
-    // 臂落在 luaopen_buffer.rs 的 `fp_wrappers!`（协议红线，本票不触碰），故形参暂保留
-    // 裸 `*mut LuaState`，仅在转调窗口核心处一次 `&mut *l` 重建引用。
-    let val = load_scalar_ref::<T>(buffer_read_window_ref(&mut *l, size_of::<T>()));
+  let val = load_scalar_ref::<T>(buffer_read_window_ref(l, size_of::<T>()));
 
-    (*l).push_number(val.to_f64());
-    1
-  }
+  l.push_number(val.to_f64());
+  1
 }
 
 // review.md §7：本项无 crate 外消费，由 pub 收窄为 pub(crate)。
