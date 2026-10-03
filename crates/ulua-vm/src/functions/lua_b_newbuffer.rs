@@ -8,15 +8,17 @@ use crate::{
 };
 
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn lua_b_newbuffer(l: *mut LuaState, s: usize) -> *mut Buffer {
+/// `l` 的存活与独占已由 `&mut LuaState` 承载（r16-v29 收形）；体内 `lua_m_toobig`/`lua_m_newgco`/
+/// `luaC_init!` 仍收裸形，转手各经一次 `l.as_mut_ptr()` 就地重建（借用窗止于当句），`l.activememcat`
+/// 场域读数与返回的 `b` 裸指针存活前提均由调用方给出，屏障按 r16-v21 判例保留。
+pub(crate) unsafe fn lua_b_newbuffer(l: &mut LuaState, s: usize) -> *mut Buffer {
   unsafe {
     if s > MAX_BUFFER_SIZE as usize {
-      lua_m_toobig(l);
+      lua_m_toobig(l.as_mut_ptr());
     }
 
-    let b = lua_m_newgco(l, sizebuffer(s), (*l).activememcat) as *mut Buffer;
-    luaC_init!(l, b, LuaType::Buffer as i32);
+    let b = lua_m_newgco(l.as_mut_ptr(), sizebuffer(s), l.activememcat) as *mut Buffer;
+    luaC_init!(l.as_mut_ptr(), b, LuaType::Buffer as i32);
     (*b).len = s as u32;
     write_bytes((*b).data.as_mut_ptr(), 0, (*b).len as usize);
     b

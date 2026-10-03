@@ -41,7 +41,7 @@ pub(crate) unsafe fn freeobj(l: *mut LuaState, o: *mut GCObject, page: *mut lua_
       }
       LuaType::String => lua_s_free(l, try_as_string_ptr(o).unwrap().cast(), page),
       LuaType::UserData => lua_u_freeudata(l, try_as_udata_ptr(o).unwrap(), page),
-      LuaType::Buffer => lua_b_freebuffer(l, try_as_buffer_ptr(o).unwrap().cast(), page),
+      LuaType::Buffer => lua_b_freebuffer(&mut *l, try_as_buffer_ptr(o).unwrap().cast(), page),
       LuaType::Class => lua_r_freeclass(l, try_as_class_ptr(o).unwrap(), page),
       LuaType::Object => lua_r_freeobject(l, try_as_object_ptr(o).unwrap(), page),
       _ => LUAU_ASSERT!(false),

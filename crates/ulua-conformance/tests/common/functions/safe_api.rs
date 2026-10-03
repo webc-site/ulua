@@ -1102,8 +1102,9 @@ pub fn getinfo(l: L, level: c_int, what: &'static [u8], ar: &mut LuaDebug) -> c_
 
 /// `lua_getlocal`：取 `level` 帧第 `n` 个局部变量名字（并压值入栈）；越界得 NULL。
 pub fn getlocal(l: L, level: c_int, n: c_int) -> *const c_char {
-  // Safety: `l` 存活、`level`/`n` 由用例按 getinfo 结果限定。
-  unsafe { lua_getlocal(l, level, n) }
+  // Safety: `l` 存活、`level`/`n` 由用例按 getinfo 结果限定；`&mut *l` 一次性重借用
+  // 即核心期望的接收者形，本帧不再解引用该指针。
+  unsafe { lua_getlocal(&mut *l, level, n) }
 }
 
 /// `lua_getupvalue`：取 `funcindex` 闭包第 `n` 个上值名字（并压值入栈）；越界得 NULL。

@@ -5,13 +5,14 @@ use crate::{
 };
 
 /// # Safety
-/// `l` 须为存活 `LuaState`（`lua_m_freegco` 经其 `global` 记账并回调 `frealloc`）；`b` 须为待释放的
-/// 存活 `LuauBuffer`，读其 `len/memcat`；`page` 为持有该 buffer 的 `lua_Page`，须与分配时一致。
+/// `l` 的存活与独占已由 `&mut LuaState` 承载（r16-v29 收形），但仍经 `l.as_mut_ptr()` 一次就地重建
+/// 转手给仍收裸形的 `lua_m_freegco`（其经 global 记账并回调 `frealloc`），屏障按 r16-v21 判例保留；
+/// `b` 须为待释放的存活 `LuauBuffer`，读其 `len/memcat`；`page` 为持有该 buffer 的 `lua_Page`，须与分配时一致。
 /// cpp `lbuffer.cpp:26`。
-pub(crate) unsafe fn lua_b_freebuffer(l: *mut LuaState, b: *mut Buffer, page: *mut lua_Page) {
+pub(crate) unsafe fn lua_b_freebuffer(l: &mut LuaState, b: *mut Buffer, page: *mut lua_Page) {
   unsafe {
     lua_m_freegco(
-      l,
+      l.as_mut_ptr(),
       obj2gco!(b),
       sizebuffer((*b).len as usize),
       (*b).memcat,
