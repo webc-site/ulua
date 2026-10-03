@@ -40,7 +40,8 @@ const K_FLAG_SEALED: u32 = 2;
 pub const K_TRIGGER_HITS: u32 = 200;
 
 /// 观测总预算（进程级，跨 context 共享）：每次观测扣一，耗尽后 context 初始化
-/// 不再装钩——兜底「永不内联站点」（递归体）的持续观测税。
+/// 不再装钩、发射端不再生成插桩（A64 快路）、x64 观测序言早退——三面同判据
+/// 关闸，兜底「永不内联站点」（递归体）的持续观测税。
 pub const K_CALL_OBS_BUDGET: u32 = 50_000;
 /// state hits 字段饱和上限（触发即 sealed，常态到不了）。
 const K_HITS_CAP: u32 = 0xff_ffff;
@@ -172,7 +173,10 @@ pub unsafe fn call_obs_record_at(caller: *mut Proto, call_pc: u32, ccl: *mut Clo
     if lo == ncalls || *base.add(K_SLOT_WORDS * lo) != call_pc {
       return false;
     }
-    // 预算扣减在站点命中之后：定位失败的 CALL（无表 caller 等）不烧预算
+    // 预算扣减在站点命中之后：定位失败的 CALL（无表 caller 等）不烧预算。
+    // 扣减又刻意先于 sealed/poly 短路：已封站点（含暖重编译后未获内联的永不
+    // 内联站点）的持续扣减正是其快速烧尽预算、触发三面关闸的机制——若移到
+    // 短路之后，此类站点将在 hook 存续期内永久付 blr 观测税。
     if CALL_OBS_BUDGET
       .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1))
       .is_err()

@@ -3,7 +3,9 @@ use core::ptr::null;
 use ulua_common::fflag;
 use ulua_vm::{
   functions::{
-    call_obs::call_pc_of, lua_d_grow_ci::lua_d_grow_ci, lua_v_tryfunc_tm::lua_v_tryfunc_tm,
+    call_obs::{call_obs_budget_exhausted, call_pc_of},
+    lua_d_grow_ci::lua_d_grow_ci,
+    lua_v_tryfunc_tm::lua_v_tryfunc_tm,
   },
   macros::lua_d_checkstackfornewci::lua_d_checkstackfornewci,
   records::{call_info::CallInfo, closure::Closure, lua_state::LuaState, slot::Slot},
@@ -39,7 +41,10 @@ pub unsafe fn call_prolog(
   // call_obs_record_maybe_recompile（A64 快路插桩共用同一核）；此刻 `(*l).ci`
   // 仍是 caller 帧且字段完好，savedpc 已由 CALL 翻译先行的 SetSavedpc 落下，
   // 触发窗口在 checkstackfornewci 之后（栈定形、旧栈指针不再被消费）。
-  if fflag::LUAU_JIT_CALL_INLINE_OBS.get() {
+  // 预算耗尽早退置于帧分析之前：本序言在 x64 是每次 native CALL 的必经路，
+  // 观测期结束后 savedpc 反推（call_pc_of）与闭包解形就是纯死税，一次原子
+  // 读即可免掉（A64 侧发射端同判据直接不再生成插桩）。
+  if fflag::LUAU_JIT_CALL_INLINE_OBS.get() && !call_obs_budget_exhausted() {
     // Safety: 契约同上——l 存活、ci 指向活动帧、savedpc 为 CALL 发射前
     // SetSavedpc 落下的合法指令指针。
     unsafe {

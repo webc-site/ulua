@@ -8,6 +8,7 @@ use core::{
 use ulua_common::fflag::{LUAU_JIT_CALL_INLINE_OBS, LuauNativeCodeTargetCheck};
 use ulua_vm::{
   enums::{lua_type::LuaType, tms::TMS},
+  functions::call_obs::call_obs_budget_exhausted,
   macros::{
     blackbit::BLACKBIT, lua_callinfo_native::LUA_CALLINFO_NATIVE, lua_multret::LUA_MULTRET,
   },
@@ -3751,13 +3752,16 @@ impl IrLoweringA64 {
           self.build_mut().cmp_rr(X4, X5);
           self.emit_bcond(ConditionA64::LessEqual, &mut slow);
 
-          // JIT call inlining 第 2 阶段：观测插桩（编译期 fflag 门控；观测开启时
-          // 每次快路 CALL 恰付一次 blr，预算耗尽后 NativeContext.call_obs_hook
-          // 被观测核置空，此处回落为指针读 + 分支的常态短路）。blr 现场为
+          // JIT call inlining 第 2 阶段：观测插桩（编译期 fflag + 预算双门控）。
+          // 预算是进程级单调量，耗尽即观测期永久结束（init 不装钩、已编译产物经
+          // 观测核自摘钩）；此时再发射插桩，「hook 槽指针读 + 分支」就是永不
+          // 内联站点（递归体等）每次热 CALL 都要白付的死税，故预算已尽的编译
+          // 直接跳过整段，生成码零税。观测开启时每次快路 CALL 恰付一次 blr，
+          // 预算耗尽后存量代码回落为指针读 + 分支的常态短路。blr 现场为
           // caller-saved，提交段依赖的 X1/X2/X5/X6/X9/X10 在调用后重取；X4 提交
           // 段本就从 L->ci 重读、X7 提交段重算，不受影响。X10 重取顺带拿到观测
           // 触发暖重编译后的最新 exectarget（callee 在 caller 树内时会换靶）。
-          if LUAU_JIT_CALL_INLINE_OBS.get() {
+          if LUAU_JIT_CALL_INLINE_OBS.get() && !call_obs_budget_exhausted() {
             // hook 指针装 X11：X11 是本快路序列与提交段的空闲 scratch；禁用 X5
             // （守卫段算好的 stacksize 字节数落在 X5，短路路径跳过重取会带坏
             // 提交段的 ci->top 计算）。
