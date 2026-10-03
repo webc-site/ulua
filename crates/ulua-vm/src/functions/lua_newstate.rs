@@ -126,6 +126,17 @@ pub unsafe fn lua_newstate(f: LuaAlloc, ud: *mut c_void) -> *mut LuaState {
   g.gcstats = Default::default(); // GCStats()
   g.lastprotoid = 1;
 
+  // r16-v12 根修：LG 块经宿主分配器取得、逐字段初始化，cpp lstate.cpp:255-257 在
+  // 此处 `g->gcmetrics = GCMetrics();`（全零），本移植此前漏写该字段——
+  // luai_gcmetrics 点亮时 gcmetrics 残留堆上垃圾位，record_gc_state_step 的
+  // usize 累加（assistwork += work 等）在 debug 偶发「attempt to add with
+  // overflow」红点。GCMetrics 派生 Default，各字段零值与 cpp 成员默认初始化
+  // （lstate.h:145-155 全 = 0）逐位同值。
+  #[cfg(feature = "luai_gcmetrics")]
+  {
+    g.gcmetrics = Default::default(); // GCMetrics()
+  }
+
   // SAFETY: `lua_d_rawrunprotected` 契约——`l` 的 base_ci/ci 已由 preinit_state
   // 置备，`f_luaopen` 为在其保护帧内执行的初始化回调（可抛 ErrMem）
   if unsafe { lua_d_rawrunprotected(l, Some(f_luaopen), null_mut()) } != 0 {
@@ -138,4 +149,141 @@ pub unsafe fn lua_newstate(f: LuaAlloc, ud: *mut c_void) -> *mut LuaState {
 
   ulua_common::LUAU_ASSERT!(g.gc_threshold != 0);
   l
+}
+
+// r16-v12 定向回归（d1 形制：夹具+边界+值域门）：钉住「LG 经宿主分配器取得后
+// gcmetrics 字段必须显式零初始化」这一操作数域。夹具确定性地把一块预先涂满
+// 0xFF 脏位的等大小分配块交予 `lua_newstate` 作 LG 块，令「漏初始化」暴露为
+// 可见脏值而非碰运气的零页；边界臂断言开态即全零；驱动臂跑一整轮 assist GC
+// 步进，断言工作量累加器停留在堆字节值域（debug 下脏基值会先在
+// `record_gc_state_step` 的 usize `+=` 处 add-with-overflow 爆出）。
+// 选址注记：被测面为 `lua_newstate` 体内字段初始化序，`gcmetrics`/`GCMetrics`
+// 字段为 pub(crate)/crate 内可见，且本用例不走公开脚本面（无 conformance
+// 可达路径需要），随 getheaptrigger.rs 先例置本文件尾块。
+#[cfg(all(test, feature = "luai_gcmetrics"))]
+mod tests {
+  use core::{
+    ffi::c_void,
+    mem::size_of,
+    ptr::{null_mut, write_bytes},
+  };
+
+  use crate::{
+    functions::{
+      l_alloc::l_alloc, lua_c_step::lua_c_step, lua_close::lua_close, lua_newstate::lua_newstate,
+    },
+    macros::gc_spause::GCSPAUSE,
+    records::{gc_cycle_metrics::GCCycleMetrics, lg::LG},
+  };
+
+  /// 夹具状态：一块已涂脏的 LG 等大小分配块 + 一次性交割旗标。
+  struct DirtyLgFixture {
+    buf: *mut u8,
+    nsize: usize,
+    handed: bool,
+  }
+
+  /// 首次「null→size_of::<LG>()」纯分配请求交割脏块，其余请求原样转发 `l_alloc`。
+  ///
+  /// # Safety
+  /// `ud` 必须是存活的 `DirtyLgFixture` 盒子指针（lua_Alloc 契约允许宿主任意
+  /// 透传，本测试独占构造）；块生命周期随测试内的 VM 交接。
+  unsafe extern "C-unwind" fn handout_alloc(
+    ud: *mut c_void,
+    ptr: *mut u8,
+    osize: usize,
+    nsize: usize,
+  ) -> *mut u8 {
+    // SAFETY: `ud` 由本测试夹具保证指向存活的 `DirtyLgFixture`
+    let fixture = unsafe { &mut *(ud.cast::<DirtyLgFixture>()) };
+    if ptr.is_null() && osize == 0 && nsize == fixture.nsize && !fixture.handed {
+      fixture.handed = true;
+      return fixture.buf;
+    }
+    // SAFETY: 其余请求按 lua_Alloc 契约原样转发 `l_alloc`（其契约接受同一 ud/块谱系）
+    unsafe { l_alloc(ud, ptr, osize, nsize) }
+  }
+
+  /// 造一块涂满 0xFF 的等大小分配块并包成夹具（buf 所有权随交割转给 VM，
+  /// 测试尾由 `lua_close` 经同一分配器归还）。
+  fn dirty_fixture() -> Box<DirtyLgFixture> {
+    let nsize = size_of::<LG>();
+    // SAFETY: `l_alloc` 契约——null ptr + osize 0 + nsize 为纯分配请求
+    let buf = unsafe { l_alloc(null_mut(), null_mut(), 0, nsize) };
+    assert!(!buf.is_null(), "夹具块分配失败");
+    // SAFETY: `buf` 为刚分配的 `nsize` 字节可读块，全字节初涂合法
+    unsafe { write_bytes(buf, 0xFF, nsize) };
+    Box::new(DirtyLgFixture {
+      buf,
+      nsize,
+      handed: false,
+    })
+  }
+
+  /// 边界臂：脏块开态后 `gcmetrics` 必须逐字段全零（对齐 cpp lstate.cpp:256
+  /// `g->gcmetrics = GCMetrics();`）。修复前本臂读到 0xFF 基脏值。
+  #[test]
+  fn fresh_state_zeroes_gcmetrics_on_dirty_lg_block() {
+    let mut fixture = dirty_fixture();
+    let ud: *mut c_void = (&raw mut *fixture).cast::<c_void>();
+    // SAFETY: `handout_alloc` 满足 lua_Alloc 契约（见其 Safety 注），`ud` 存活至本测试尾
+    let l = unsafe { lua_newstate(Some(handout_alloc), ud) };
+    assert!(!l.is_null(), "带毒夹具下状态创建必须成功");
+    // 夹具必须真被交割——否则操作数域未被污染，本用例失去钉子意义。
+    assert!(fixture.handed, "LG 分配请求未经夹具交割");
+    // SAFETY: `l` 为刚创建的存活状态，`global` 指向其 LG 内同块 `global_State`
+    let gm = unsafe { &(*(*l).global).gcmetrics };
+    assert_eq!(gm.completedcycles, 0);
+    assert!(gm.stepexplicittimeacc == 0.0 && gm.stepassisttimeacc == 0.0);
+    assert_eq!(gm.currcycle, GCCycleMetrics::default());
+    assert_eq!(gm.lastcycle, GCCycleMetrics::default());
+    // SAFETY: `l` 为本测试独占持有且尚未关闭的主线程状态
+    unsafe { lua_close(l) };
+  }
+
+  /// 驱动臂：在脏块开态上跑一整轮 assist GC 步进至回到 GCSpause，累加器
+  /// （含首发爆点 `assistwork`）必须停留在堆字节值域——修复前 debug 直接
+  /// add-with-overflow panic，release 则脏基值越出本值域被本臂捕获。
+  #[test]
+  fn full_assist_gc_cycle_keeps_work_accumulators_in_heap_domain() {
+    let mut fixture = dirty_fixture();
+    let ud: *mut c_void = (&raw mut *fixture).cast::<c_void>();
+    // SAFETY: 同 `fresh_state_zeroes_gcmetrics_on_dirty_lg_block`
+    let l = unsafe { lua_newstate(Some(handout_alloc), ud) };
+    assert!(!l.is_null());
+    assert!(fixture.handed);
+    let mut steps = 0usize;
+    loop {
+      // SAFETY: `l` 存活；置 debt=0 满足 `lua_c_step` 的 totalbytes≥gc_threshold
+      // 前提（对齐 VM 内分配点驱动形态）。
+      unsafe {
+        let g = (*l).global;
+        (*g).gc_threshold = (*g).totalbytes;
+        lua_c_step(l, true);
+      }
+      steps += 1;
+      assert!(steps < 1_000_000, "GC 周期未推进，防挂起护栏");
+      // SAFETY: `l`/`global` 存活，本行仅读 gcstate
+      if unsafe { (*(*l).global).gcstate as i32 } == GCSPAUSE {
+        break;
+      }
+    }
+    // SAFETY: `l` 存活，只读取 gcmetrics 快照做值域断言
+    let gm = unsafe { &(*(*l).global).gcmetrics };
+    assert!(gm.completedcycles >= 1);
+    // 周期归档在 lastcycle：全 assist 驱动下 assistwork 覆盖 mark/sweep/atomic
+    // 全部工作量，故 assistwork>0 且 ≥ markwork+sweepwork。
+    assert!(gm.lastcycle.assistwork > 0);
+    assert!(gm.lastcycle.assistwork >= gm.lastcycle.markwork + gm.lastcycle.sweepwork);
+    // 值域门：单 VM 堆 ≪ 2^48 字节；脏基值（0xFF 谱系 ≈ 2^64）必越此界。
+    let ceiling = 1usize << 48;
+    assert!(gm.lastcycle.markwork < ceiling);
+    assert!(gm.lastcycle.sweepwork < ceiling);
+    assert!(gm.lastcycle.assistwork < ceiling);
+    assert_eq!(gm.lastcycle.explicitwork, 0); // 全程 assist，显式面零累加
+    assert_eq!(gm.currcycle, GCCycleMetrics::default()); // 新周期已复位
+    assert!(gm.stepassisttimeacc.is_finite());
+    // SAFETY: `l` 为本测试独占持有且尚未关闭的主线程状态
+    unsafe { lua_close(l) };
+  }
 }
