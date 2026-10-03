@@ -9,13 +9,12 @@
 /// 刻意不翻臂以免十余处「见 `lua_status.rs` 先例」引注失效）；lua_b_* 族 15 壳、int64 库族
 /// 8 壳与 lua_gettop/lua_isthreadreset/lua_isyieldable 已分别由 `@ref`（r16-v32 一枚、
 /// r16-v34 十四枚、r16-v35 八枚）与 `@refshared`（r16-v36 三枚）臂复归宏模板；
-/// lua_singlestep/lua_pushinteger_64/lua_setthreaddata 等曾点名者已随 r16-v37/v39 由
-/// `capi_shell!` 的 `refstate`（独占重建）与 `refshared`（只读重建）参数类型臂复归单源
-/// （连同 lua_c_allocationrate/lua_encodepointer/lua_g_hasnative/lua_g_onbreak/lua_settop/
-/// lua_equal/lua_lessthan/lua_rawequal/lua_l_findtable/lua_l_optlstring/lua_l_checkoption/
-/// lua_g_pusherror/pusherror/lua_setlightuserdataname 共 20 枚，r16-v39 实测）；本族形外者
-/// 现仅余 `lua_l_buffinit`（`&mut *l` + `&mut *b` 双重建）与 `lua_a_pushvalue`
-/// （`&mut *l` + 只读 `&*o` 双重建）仍为显式壳，见 `functions/lua_status.rs` 先例。
+/// lua_singlestep/lua_pushinteger_64/lua_setthreaddata 等曾点名者本就非本族形（返回型或
+/// 参数目不同）：其中 17 枚已随 r16-v37（4 枚）/r16-v39（13 枚）由 `capi_shell!` 的
+/// `refstate`（独占重建）与 `refshared`（只读重建）参数类型臂复归单源，另有 4 枚随
+/// r16-v37 由 `capi_shell_l_int!` 的 `@refshared` 臂复归（见该族头注）；capi 侧显式壳现存
+/// 实测 13 枚，双引用重建形（`lua_l_buffinit` 的 `&mut *l` + `&mut *b`、`lua_a_pushvalue`
+/// 的 `&mut *l` + 只读 `&*o`）尚无对应参数臂，余者见 `functions/lua_status.rs` 先例。
 /// 与手写逐壳的差异仅在文本层：
 /// 透传目标在 doc 契约中以 `ulua_vm::functions::` 全路径书写；体内
 /// `// Safety:` 理由注释转通用表述。导出符号名、签名与 rustdoc 逐参数契约语义与
@@ -26,7 +25,7 @@
 /// `*mut LuaState` 裸形，C-ABI 镜像红线），仅在既有 `unsafe { … }` 体内把该实参重建为
 /// `&mut *l` 独占引用，借用窗严格止于当次调用。该形与 `capi_shell!` 的 `refstate`
 /// 参数类型臂（r16-v24）、`lua_lib_fn!` 的 `@ref` 标记位同判例。本族恰一枚参数、
-/// 恒名 `l`，故无 `capi_shell!` 那三条 refstate 硬约束之必要。
+/// 恒名 `l`，故无 `capi_shell!` 那三条引用重建使用约束之必要（详见该族头注）。
 ///
 /// r16-v36 只读引用重建变体：被调 vm 核心收形为**共享** `&LuaState` 时，条目尾置
 /// `@refshared`（`capi_shell_l_cint!(m, n @refshared)`）落下方第三臂——体内发 `&*l`
@@ -397,7 +396,11 @@ macro_rules! capi_shell_barrier_voidptr {
 /// - `<名> refshared`：同上之**只读**重建变体（r16-v37）——被调核心收形为共享 `&LuaState`
 ///   时体发 `&*<名>` 而非 `&mut *<名>`。二旗标不可互换：给只读核心 mint 独占引用等于把
 ///   契约里不存在的写权限交给被调面；选旗标只看被调核心签名的接收者形，不看本壳导出形。
-///   与 `refstate` 同守三条硬约束（须为首参、须名为 `l`、一壳至多一枚，详见下方 refstate 注）；
+///   与 `refstate` 同守三条使用约束，约束皆为臂形事实而非机械检验：条目须居参数表首位
+///   （仅「首参前瞻入口」臂为二旗标改写导言措辞，非首位时通用入口仍宣称「本帧不解引用任何
+///   指针」而 `@go` 参数臂照旧重建，契约即失真）；参数名须为 `l`（引用重建终结臂的体内
+///   `// Safety:` 理由散文硬编码 `l`）；一壳至多一枚（第二枚无人拦，而同帧两枚 `&mut *`
+///   本身即别名违例）。
 /// - `<名> voidptr`：`*mut c_void` C 侧不透明数据指针；
 /// - `<名> tvc` / `<名> tvm`：只读 / 可写 `TValue` 指针；
 /// - `<名> stkid`：`StkId` 栈槽指针；
