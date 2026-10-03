@@ -59,6 +59,12 @@ proto#1 pc=6：**480K 次 miss、last_tag=7（table 恒定）** = spike 剧本�
   **J4-real（超越 cpp 的新特性）**：__index 感知 IC——对带元表接收者缓存
   (metatable ptr, __index 表 node val 地址)，guard 链 = CheckTag(table) +
   mt cmp + 键校验，miss 落 helper。
+  **J4b freepos 扩展探针终审（2026-10-03，诊断前置模式）**：480K miss 定性为
+  **表满 rehash 形态**——Vec.new 的 `self.z = z` 插入 2 槽模板表（DUPTABLE 提示），
+  每插必 rehash（2→4），48 万次无一幸免；主位空直插（J4b 已落地）前置条件永不满足。
+  链写快路四原语实装验证：语义正确（acc 逐位一致、链走通）但 oop 纹丝不动 →
+  按退出条款还原。可行方向需主控裁断：DUPTABLE 模板增槽（2→4）改 pairs() 迭代序，
+  属 E1 判例的语义分叉红线。
   **opcode 已实测定案（TSFB opcode 读数）**：480K miss 站点 op=20 = **NAMECALL**
   ——`a:dot(b)` 方法派发在 __index 链实例上每次落 helper（我们的第二快路
   fastgettm(TM_INDEX)→类表槽查在该形态未命中，cpp 同构同症）。J4-real 的
