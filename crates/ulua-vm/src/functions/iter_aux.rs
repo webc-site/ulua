@@ -10,18 +10,21 @@ use crate::{
 };
 
 /// # Safety
-/// `l` 须为存活 `LuaState`：栈 index 1 为字符串（`luaL_checklstring` 返回覆盖 `[0,len]` 含终止
-/// NUL 的数据指针），index 2 为上一步游标整数；解码越界或非法 UTF-8 经 `luaL_error` 抛错，
-/// 须在受保护帧内调用。cpp `lutf8lib.cpp:240`。
-pub unsafe fn iter_aux(l: *mut LuaState) -> i32 {
+/// `l` 的存活/独占前提已由 `&mut` 接收者类型承载（r16-v41 收形），屏障仍保留是因为体内有一处
+/// 真实裸操作：`lua_l_checklstring` 返回覆盖 `[0,len]`（含 NUL 终止符）的 `*const c_char`，随后
+/// `from_raw_parts` 依该契约把裸指针重建成 `bytes` 目标窗（第 `len` 处恒为 NUL，tstring 布局保证），
+/// 窗内解码/续字节判定均在有界读内完成。另：栈 index 1 须为字符串（`lua_l_checklstring` 非串即抛错
+/// 发散）、index 2 为上一步游标整数；解码越界或非法 UTF-8 经 `luaL_error` 抛错，须在可抛错的受保护帧内调用。
+/// cpp `lutf8lib.cpp:240`。
+pub unsafe fn iter_aux(l: &mut LuaState) -> i32 {
   unsafe {
     let mut len: usize = 0;
-    let s = lua_l_checklstring(&mut *l, 1, &mut len);
+    let s = lua_l_checklstring(l, 1, &mut len);
     // Lua 字符串恒有 NUL 终止（utf_8_decode 的入约模型）：切片覆盖到含终止符，
     // 之后所有解码/续字节判定均在有界读内完成
     // SAFETY: s 指向 len 字节的 Lua 串数据，第 len 处恒为 NUL 终止符（tstring 布局保证）
     let bytes = from_raw_parts(s as *const u8, len + 1);
-    let mut n = (*l).to_integer(2).unwrap_or(0) - 1;
+    let mut n = l.to_integer(2).unwrap_or(0) - 1;
 
     if n < 0 {
       n = 0;
@@ -41,13 +44,13 @@ pub unsafe fn iter_aux(l: *mut LuaState) -> i32 {
       // 与原 `||` 短路同序）
       let code = match code {
         Some(code) if !is_cont_byte(bytes[n as usize + step]) => code,
-        _ => luaL_error!(l, "invalid UTF-8 code"),
+        _ => luaL_error!(l.as_mut_ptr(), "invalid UTF-8 code"),
       };
-      (*l).push_integer(n + 1);
-      (*l).push_integer(code as i32);
+      l.push_integer(n + 1);
+      l.push_integer(code as i32);
       2
     }
   }
 }
 
-lua_lib_fn!(pub fn iter_aux, iter_aux_arm);
+lua_lib_fn!(pub fn iter_aux @ref, iter_aux_arm);

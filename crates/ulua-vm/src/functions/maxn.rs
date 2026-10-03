@@ -5,14 +5,19 @@ use crate::{
 };
 
 /// # Safety
-/// `l` 必须指向本次 strlib 调用的存活 `LuaState`，所需实参按索引可读且栈顶有结果余量。
-pub(crate) unsafe fn maxn(l: *mut LuaState) -> i32 {
+/// `l` 的存活/独占前提已由 `&mut` 接收者类型承载（r16-v41 收形）；屏障仍保留是因为体内有真实
+/// 裸操作：`(*l.base)` 解引用栈基址 `StkId` 取 index 1 槽、再经 `as_table_ptr` 得表对象裸指针 `t`，
+/// 随后 `(*t).array_window()`/`(*t).node_window()` 依该裸句柄读取数组段/哈希段窗口（cpp 按 `sizenode`
+/// 走查同形），这些 `*mut Table`/`StkId` 解引用均非安全门面可达。余下取参前提：`l` 须处于 `maxn`
+/// 调用的受保护帧，1..=n 实参栈槽可读，数值探测与比较不越过帧栈界，`push_number` 需 `top` 后留结果余量。
+/// cpp `ltablib.cpp:53`。
+pub(crate) unsafe fn maxn(l: &mut LuaState) -> i32 {
   let mut max: f64 = 0.0;
-  // SAFETY: 契约保证 `l` 为存活调用帧、1..=n 实参栈槽可读，数值探测与比较不越过帧栈界
+  // SAFETY: 上方 `&mut l` 保证存活帧，`l.base`/`t` 裸解引用只读 1..=n 实参栈槽与表对象，不越过帧栈界
   unsafe {
-    (*l).check_type(1, LuaType::Table);
+    l.check_type(1, LuaType::Table);
 
-    let t = (*(*l).base).as_table_ptr();
+    let t = (*l.base).as_table_ptr();
 
     // 数组尾部：最后一个非 nil 元素决定 max，rposition 从后往前提前终止；
     // 走 array_window 共享窗（窗长 max(sizearray,0)，null 数组归空窗，免手工 c_slice）
@@ -39,9 +44,9 @@ pub(crate) unsafe fn maxn(l: *mut LuaState) -> i32 {
       }
     }
 
-    (*l).push_number(max);
+    l.push_number(max);
   }
   1
 }
 
-lua_lib_fn!(pub(crate) fn maxn, maxn_arm);
+lua_lib_fn!(pub(crate) fn maxn @ref, maxn_arm);
