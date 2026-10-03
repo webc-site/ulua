@@ -256,16 +256,17 @@ impl Unifier {
         // 对 super_table.props 的写入（写入只发生在 sub 侧/queue 之后），get 必命中。
         let prop_clone = props_get_clone(super_table, &name)
           .expect("上方不变量注：name 取自 super 键快照且其间无 props 写入");
-        // Safety: `active_sub_ty` 是存活 arena 句柄（初值 sub_ty 按 fn 契约为
+        // `active_sub_ty` 是存活 arena 句柄（初值 sub_ty 按 fn 契约为
         // 表类型，或被 substitute 结果替换）；queue_type_id 将其克隆进
-        // log.type_var_changes 的 Box<PendingType>（Box 地址稳定），返回的项
-        // 指针在本次 log commit/rollback 前持续有效，C++ `queueType(...)` 同形。
+        // log.type_var_changes 的 Box<PendingType>（Box 地址稳定），返回的
+        // Handle 指向该堆对象，在本次 log commit/rollback 前持续有效，
+        // C++ `queueType(...)` 同形。
         let pending_sub = self.log.queue_type_id(active_sub_ty);
-        // Safety: pending_sub 为上一行 queue_type_id 返回的非空指针；active_sub_ty
-        // 按契约是表类型，克隆项变体即 TableType（原 LUAU_ASSERT 钉住，同 C++），
-        // 故 `Some` 必命中，其内指针即有效变体字段。
+        // pending_sub 为上一行 queue_type_id 返回的非空句柄（非空由 Handle 类型
+        // 编码）；active_sub_ty 按契约是表类型，克隆项变体即 TableType（原
+        // LUAU_ASSERT 钉住，同 C++），故 `Some` 必命中，其内借用即有效变体字段。
         let ttv = Some(NonNull::from(
-          unsafe { get_mutable_pending_type::<TableType>(pending_sub) }
+          get_mutable_pending_type::<TableType>(pending_sub)
             .expect("LUAU_ASSERT 钉住：pending 变体必为 TableType"),
         ));
         props_insert(ttv, name.clone(), prop_clone);
@@ -328,15 +329,15 @@ impl Unifier {
         let deep = self.unifier_deeply_optional(clone.type_deprecated(), &mut HashMap::new());
         clone.set_type(deep);
 
-        // Safety: `super_ty` 按 fn 契约是表类型句柄；queue_type_id 克隆进
-        // log.type_var_changes 的 Box<PendingType>，返回指针在 log 提交/回滚前
-        // 有效（C++ `queueType(superTy)` 同形）。
+        // `super_ty` 按 fn 契约是表类型句柄；queue_type_id 克隆进
+        // log.type_var_changes 的 Box<PendingType>，返回 Handle 指向该堆对象、
+        // 在 log 提交/回滚前有效（C++ `queueType(superTy)` 同形）。
         let pending_super = self.log.queue_type_id(super_ty);
-        // Safety: pending_super 非空源自上一行；本分支 table_state(super_table)
-        // ==Unsealed 已确证该项变体为 TableType，`Some` 必命中，字段指针有效，
+        // pending_super 非空由上一行 Handle 类型编码；本分支 table_state(super_table)
+        // ==Unsealed 已确证该项变体为 TableType，`Some` 必命中，字段借用有效，
         // props_insert 继承同一非空前提。
         let pending_super_ttv = Some(NonNull::from(
-          unsafe { get_mutable_pending_type::<TableType>(pending_super) }
+          get_mutable_pending_type::<TableType>(pending_super)
             .expect("Unsealed 分支已确证 pending 变体为 TableType"),
         ));
         props_insert(pending_super_ttv, name.clone(), clone);
@@ -344,14 +345,14 @@ impl Unifier {
       } else if self.variance == Variance::Covariant {
         // nothing
       } else if table_state(super_table) == TableState::Free {
-        // Safety: 与 Unsealed 分支同理——super_ty 为契约内表类型句柄，
-        // queue_type_id 返回 log 内 Box<PendingType> 的稳定指针。
+        // 与 Unsealed 分支同理——super_ty 为契约内表类型句柄，
+        // queue_type_id 返回 log 内 Box<PendingType> 的稳定句柄。
         let pending_super = self.log.queue_type_id(super_ty);
-        // Safety: pending_super 非空（上一行），且进入本分支的前提
+        // pending_super 非空由 Handle 类型编码（上一行），且进入本分支的前提
         // table_state(super_table)==Free 由同一 pending 表项读出，变体为
-        // TableType，`Some` 必命中，字段指针有效。
+        // TableType，`Some` 必命中，字段借用有效。
         let pending_super_ttv = Some(NonNull::from(
-          unsafe { get_mutable_pending_type::<TableType>(pending_super) }
+          get_mutable_pending_type::<TableType>(pending_super)
             .expect("Free 分支已确证 pending 变体为 TableType"),
         ));
         props_insert(pending_super_ttv, name.clone(), prop.clone());

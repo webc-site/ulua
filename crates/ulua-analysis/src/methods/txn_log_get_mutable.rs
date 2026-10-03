@@ -5,7 +5,7 @@ use crate::{
     get_mutable_txn_log::{get_mutable_pending_type, get_mutable_pending_type_pack},
     get_mutable_type, get_mutable_type_pack,
   },
-  records::txn_log::TxnLog,
+  records::{arena_handle::Handle, txn_log::TxnLog},
   type_aliases::{
     type_id::TypeId, type_pack_id::TypePackId, type_pack_variant::TypePackVariantMember,
     type_variant::TypeVariantMember,
@@ -34,17 +34,17 @@ impl<T: TypeVariantMember + 'static> TxnLogGetMutable<TypeId> for T {
   unsafe fn get_mutable_from_log(log: &TxnLog, ty: TypeId) -> Option<NonNull<Self>> {
     // Safety: `log` 为调用方持有的存活 `&TxnLog`，`ty` 是类型 arena 的存活 TypeId
     // 句柄（C++ `getMutableFromLog` 同前提）。`log.pending_type_id(ty)` 仅在存在
-    // 待定节点时返回非空 arena 指针，`!is_null()` 守卫后才交给 `get_mutable_pending_type`
-    // 解引用；该函数命中返回 `Some(&'static mut T)`（未命中 `None`，原 null 哨兵），
-    // 经 `NonNull::from` 折叠为 `Option<NonNull<T>>`（null/非空判据不变）。
-    unsafe {
-      let pending_ty = log.pending_type_id(ty);
-      if !pending_ty.is_null() {
-        return get_mutable_pending_type::<T>(pending_ty).map(NonNull::from);
-      }
-
-      get_mutable_type::get_mutable::<T>(ty).map(NonNull::from)
+    // 待定节点时返回非空 arena 指针，`Handle::from_opt_ptr` 把 null 哨兵折叠为
+    // `None`、非空折叠为句柄后才交给 `get_mutable_pending_type`（该函数收
+    // `Handle<PendingType>`，前提由 Handle 非空类型编码）；命中返回
+    // `Some(&'static mut T)`（未命中 `None`，原 null 哨兵），经 `NonNull::from`
+    // 折叠为 `Option<NonNull<T>>`（null/非空判据不变）。
+    let pending_ty = log.pending_type_id(ty);
+    if let Some(pending_ty) = Handle::from_opt_ptr(pending_ty) {
+      return get_mutable_pending_type::<T>(pending_ty).map(NonNull::from);
     }
+
+    get_mutable_type::get_mutable::<T>(ty).map(NonNull::from)
   }
 }
 
@@ -56,16 +56,16 @@ impl<T: TypePackVariantMember + 'static> TxnLogGetMutable<TypePackId> for T {
   /// 调用方不得在借用存活期内对同一节点再取可变引用。
   unsafe fn get_mutable_from_log(log: &TxnLog, tp: TypePackId) -> Option<NonNull<Self>> {
     // Safety: 逐条满足上方 fn 级契约——`log` 存活、`tp` 是类型 pack arena 的活句柄；
-    // `pending_type_pack_id` 非空守卫后才解引用，`get_mutable_type_pack` 给出单一
-    // 存活节点的独占可变借用，两条路径至多产生一个句柄，无并存别名。
-    unsafe {
-      let pending_tp = log.pending_type_pack_id(tp);
-      if !pending_tp.is_null() {
-        return get_mutable_pending_type_pack::<T>(pending_tp).map(NonNull::from);
-      }
-
-      get_mutable_type_pack::get_mutable::<T>(tp).map(NonNull::from)
+    // `pending_type_pack_id` 的 null 哨兵经 `Handle::from_opt_ptr` 折叠为
+    // `Option<Handle<_>>` 判定后才交给 `get_mutable_pending_type_pack`（Handle
+    // 非空由类型编码），`get_mutable_type_pack` 给出单一存活节点的独占可变借用，
+    // 两条路径至多产生一个句柄，无并存别名。
+    let pending_tp = log.pending_type_pack_id(tp);
+    if let Some(pending_tp) = Handle::from_opt_ptr(pending_tp) {
+      return get_mutable_pending_type_pack::<T>(pending_tp).map(NonNull::from);
     }
+
+    get_mutable_type_pack::get_mutable::<T>(tp).map(NonNull::from)
   }
 }
 

@@ -68,17 +68,18 @@ impl WeirdIter {
 
   pub fn weird_iter_push_type(&mut self, ty: TypeId) {
     LUAU_ASSERT!(self.pack.is_some());
-    // Safety: self.log 由 Unifier::try_unify 以 `&mut self.log as *mut _` 取得（Unifier
+    // self.log 由 Unifier::try_unify 以 `&mut self.log as *mut _` 取得（Unifier
     // 拥有的 TxnLog 字段），非空且对齐，WeirdIter 生命周期嵌套于该可变借用之内；
-    // queue_type_pack_id 只经 &mut 重建一次借用，单线程串行遍历此刻无其它存活别名。
-    let pending_pack = unsafe { (*self.log).queue_type_pack_id(self.pack_id) };
-    // Safety: pending_pack 恒为 log.type_pack_changes 中 Box<PendingTypePack> 堆节点
-    // （Box 地址稳定，log 比本迭代器长寿），满足 get_mutable_pending_type_pack 的
-    // pending 非空/存活契约；内部按 RTTI 判别 pendingType 变体，未命中返回 None
-    // （原 null 哨兵）。Some 分支内 pending 为该 Box 内活着 TypePack 变体的独占
+    // alias 门面按模块契约借出该字段，queue_type_pack_id 只经 &mut 重建一次借用，
+    // 单线程串行遍历此刻无其它存活别名。
+    let pending_pack = alias(self.log).queue_type_pack_id(self.pack_id);
+    // pending_pack 恒指向 log.type_pack_changes 中 Box<PendingTypePack> 堆节点
+    // （Box 地址稳定，log 比本迭代器长寿），Handle 类型编码其非空；
+    // get_mutable_pending_type_pack 内部按 RTTI 判别 pendingType 变体，未命中返回
+    // None（原 null 哨兵）。Some 分支内 pending 为该 Box 内活着 TypePack 变体的独占
     // 可变借用（Box 不移动，地址稳定）；写 head 仅此一处，单线程串行、无第二别名，
     // 折叠 `NonNull::from` 后存回 self.pack 与原「直接存返回指针」逐位同构。
-    let pending = unsafe { get_mutable_pending_type_pack::<TypePack>(pending_pack) };
+    let pending = get_mutable_pending_type_pack::<TypePack>(pending_pack);
     if let Some(pending) = pending {
       pending.head.push(ty);
       self.pack = Some(NonNull::from(pending));
