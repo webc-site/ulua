@@ -301,9 +301,9 @@ impl TypeFunctionRuntime {
 
     // Create individual environment for the type function
     // luaL_sandboxthread(l);
-    // SAFETY: VM 边界——`l_vm` 为上一行新建线程，此刻仅 popper 记录其父、无
-    // 其它别名（原块内时序逐字一致）。
-    unsafe { lua_l_sandboxthread(l_vm) };
+    // Safety: `l_vm` 是上一行 `lua_newthread` 新建的存活线程，此刻仅 popper 记录其父、
+    // 无其它别名，重建独占借用的窗口止于本次调用返回。
+    unsafe { lua_l_sandboxthread(&mut *l_vm) };
 
     // Do not allow global writes to that environment
     // lua_pushvalue(l, LUA_GLOBALSINDEX); lua_setreadonly(l, -1, true); lua_pop(l, 1);
@@ -349,8 +349,9 @@ impl TypeFunctionRuntime {
     // 的地址值作注册表键（上方同一契约），被调方不解引用该值。
     let g = alias(global_vm);
     unsafe { g.push_lightuserdata(from_mut(&mut *function).cast()) };
-    // SAFETY: VM 边界——同帧新建线程与主线程间搬运 1 槽，单线程串行。
-    unsafe { lua_xmove(l_vm, &mut *global_vm, 1) };
+    // Safety: `l_vm`（本帧新建线程）与 `global_vm`（存活主线程）均为本帧独占，
+    // 单线程串行搬运 1 槽，借用窗止于本次调用返回。
+    unsafe { lua_xmove(&mut *l_vm, &mut *global_vm, 1) };
     lua_settable(&mut *g, LUA_REGISTRYINDEX);
 
     popper.luau_temp_thread_popper();

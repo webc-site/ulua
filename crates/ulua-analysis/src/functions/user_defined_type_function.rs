@@ -587,5 +587,5 @@ unsafe extern "C-unwind" fn evaluate_type_alias_call_thunk(l: *mut lua_state::Lu
   // 本次闭包调用帧上给出，非空且指向本次调用独占的存活线程，故可重建为 `&mut`，
   // 借用窗严格止于 `evaluate_type_alias_call` 返回。该函数只读 upvalue 1 里的
   // `TypeFun*` 轻用户数据，其有效性由注册处 `lua_pushlightuserdata` 写入的活指针保证。
-  unsafe { evaluate_type_alias_call(l) }
+  unsafe { evaluate_type_alias_call(&mut *l) }
 }

@@ -56,7 +56,7 @@ unsafe extern "C-unwind" fn dealloc_type_user_data_thunk(
 ) {
   // Safety: FFI 边界——VM 只在 userdata 存活且本次析构独占该 state 时回调本 thunk，
   // 故可重建为独占借用；借用窗止于 `dealloc_type_user_data` 返回。
-  unsafe { dealloc_type_user_data(l, data) };
+  unsafe { dealloc_type_user_data(&mut *l, data) };
 }
 
 /// `luaL_Reg typeUserdataMethods[]`：type userdata 的方法表。
