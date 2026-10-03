@@ -9,14 +9,11 @@
 //! `l->ci->func` 可解，call pc 由 savedpc 反推（CALL 翻译的 SetSavedpc 先行于
 //! 生成码），触发暖重编译的临时栈槽压入协议（见 trigger）在两侧同构。
 
-use core::{
-  ptr::copy_nonoverlapping,
-  sync::atomic::{AtomicU32, Ordering},
-};
+use core::ptr::copy_nonoverlapping;
 
 use ulua_common::fflag;
 use ulua_vm::{
-  functions::call_obs::{call_obs_record_at, call_pc_of},
+  functions::call_obs::{call_obs_budget_exhausted, call_obs_record_at, call_pc_of},
   records::{lua_state::LuaState, proto::Proto},
   type_aliases::t_value::TValue,
 };
@@ -25,14 +22,8 @@ use crate::functions::{
   get_code_gen_context::get_code_gen_context, luau_codegen_compile::luau_codegen_warm_recompile,
 };
 
-/// 观测预算：每次观测恰扣一次的总次数上限。观测是热身期手段（站点恒定满阈值
-/// 即 sealed、内联兑现后该站点 CALL 不再经过观测点），预算兜底「永不内联的
-/// 站点」（如递归体）不无限付 blr——耗尽后置空 NativeContext.call_obs_hook，
-/// 生成码侧回落为一次指针读 + 分支的常态成本。
-const K_CALL_OBS_BUDGET: u32 = 1_000_000;
-
-static CALL_OBS_BUDGET: AtomicU32 = AtomicU32::new(K_CALL_OBS_BUDGET);
-
+/// 观测预算单点在 ulua-vm call_obs（CALL_OBS_BUDGET）：扣减发生在观测核入口，
+/// 这里只读判定耗尽并置空 NativeContext 钩槽。
 /// A64 CALL 快路插桩入口（NativeContext.call_obs_hook 槽指向本函数）。
 /// 快路守卫段已验函数 tag 与非 C 闭包，此处仅做 caller 帧形态防御。
 ///
@@ -75,16 +66,11 @@ pub unsafe fn call_obs_record_maybe_recompile(
   if !fflag::LUAU_JIT_CALL_INLINE_OBS.get() {
     return;
   }
-  // 预算：fetch_sub 到负即观测期结束；尽瞬间的这一次顺手把生成码可见的 hook
-  // 槽置空（ecb.context 稳定），后续快路回落一次指针读 + 分支的常态短路。
-  if CALL_OBS_BUDGET
-    .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1))
-    .is_err()
-  {
-    if CALL_OBS_BUDGET.load(Ordering::Relaxed) == 0 {
-      if let Some(ctx) = unsafe { get_code_gen_context(l) } {
-        ctx.context.call_obs_hook = None;
-      }
+  // 预算尽即观测期结束：把生成码可见的 hook 槽置空（ecb.context 稳定），后续
+  // 快路回落一次指针读 + 分支的常态短路（新 context 在 init 期即不装钩）。
+  if call_obs_budget_exhausted() {
+    if let Some(ctx) = unsafe { get_code_gen_context(l) } {
+      ctx.context.call_obs_hook = None;
     }
     return;
   }

@@ -21,12 +21,12 @@
 //! （站点被内联后 native CALL 不再经过 call_prolog），扫描开销自消，故不引入
 //! 进程级表与额外失效协议。
 
-use core::slice::from_raw_parts;
-
-use ulua_common::{
-  enums::luau_opcode::LuauOpcode,
-  macros::luau_insn_ops::luau_insn_op,
+use core::{
+  slice::from_raw_parts,
+  sync::atomic::{AtomicU32, Ordering},
 };
+
+use ulua_common::{enums::luau_opcode::LuauOpcode, macros::luau_insn_ops::luau_insn_op};
 
 use crate::{
   records::{closure::Closure, proto::Proto},
@@ -41,11 +41,22 @@ const K_FLAG_SEALED: u32 = 2;
 /// proto 恒定计数达到该值即触发暖重编译。取值下界由最短热身负载约束：
 /// spectralnorm 单轮 Av→eval_a 调用约 700 次，须在单轮内触发。
 pub const K_TRIGGER_HITS: u32 = 200;
+
+/// 观测总预算（进程级，跨 context 共享）：每次观测扣一，耗尽后 context 初始化
+/// 不再装钩——兜底「永不内联站点」（递归体）的持续观测税。
+pub const K_CALL_OBS_BUDGET: u32 = 50_000;
 /// state hits 字段饱和上限（触发即 sealed，常态到不了）。
 const K_HITS_CAP: u32 = 0xff_ffff;
 
 /// 每 CALL 站点槽宽（pc, state, funid, proto_lo, proto_hi）。
 const K_SLOT_WORDS: usize = 5;
+
+static CALL_OBS_BUDGET: AtomicU32 = AtomicU32::new(K_CALL_OBS_BUDGET);
+
+/// 观测预算全局耗尽判定（context 初始化期决定是否装钩，读一次原子量）。
+pub fn call_obs_budget_exhausted() -> bool {
+  CALL_OBS_BUDGET.load(Ordering::Relaxed) == 0
+}
 
 /// 在 execdata extra 区定位 COBS 表。前向扫描：遇 TSFB 表按其自描述跳过，
 /// 命中 COBS_MAGIC 且槽宽自洽即认定。返回（表头字下标，ncalls）。
@@ -60,7 +71,7 @@ unsafe fn locate_cobs(data: *const u32, sc: usize) -> Option<(usize, usize)> {
       if w == COBS_MAGIC {
         let ncalls = *data.add(sc + i + 1) as usize;
         // 自洽：槽宽 × ncalls + 头 + 尾字不超过扫描窗
-        if ncalls > 0 && i + 2 + ncalls * K_SLOT_WORDS + 1 <= sc + 4096 {
+        if ncalls > 0 && i + 2 + ncalls * K_SLOT_WORDS < sc + 4096 {
           return Some((sc + i, ncalls));
         }
       } else if w == super::type_feedback::TSFB_MAGIC {
@@ -137,6 +148,12 @@ pub unsafe fn call_pc_of(proto: *const Proto, savedpc: *const Instruction) -> Op
 /// 布局的堆分配数据区；`call_pc` 须为 caller 字节码界内的 CALL/CALLFB 指令下标。
 pub unsafe fn call_obs_record_at(caller: *mut Proto, call_pc: u32, ccl: *mut Closure) -> bool {
   unsafe {
+    if CALL_OBS_BUDGET
+      .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1))
+      .is_err()
+    {
+      return false;
+    }
     if (*ccl).is_c != 0 {
       return false;
     }

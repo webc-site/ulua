@@ -1,12 +1,7 @@
 use core::ptr::null_mut;
 
 use ulua_common::fint::CodegenHeuristicsInstructionLimit;
-use ulua_vm::{
-  functions::{
-    call_obs::call_obs_hints_for, type_feedback::tsfb_hints_for,
-  },
-  records::proto::Proto,
-};
+use ulua_vm::{functions::call_obs::call_obs_hints_for, records::proto::Proto};
 
 use crate::{
   enums::{
@@ -75,11 +70,11 @@ pub unsafe fn create_native_function_x_64(
   // 保证的「proto 存活 + build/helpers/total 活借用」为共同前提，逐处就地标注。
   let mut ir = IrBuilder::ir_builder_ir_builder(&options.hooks);
 
-  // J1 Phase 2b：暖重编译时从上一版 execdata 的 TSFB 侧表读取观测类型提示
-  // （GETTABLEKS 站点：pc → (B 寄存器, 观测 tag)），注入分析器做 ANY 细化；
-  // 并读 CALL 站点观测提示供 call inlining 发射端替代静态判据。
+  // JIT call inlining 第 2 阶段：暖重编译时从上一版 execdata 的 COBS 侧表读取
+  // CALL 站点观测提示，供发射端以运行时证据替代静态判据。TSFB 类型提示
+  // （J1 Phase 2b，GETTABLEKS tag 细化）暂不注入：该通道无运行验证且其特化
+  // 面本票发射端不消费（GETTABLEKS 内联受 VmConst 重定位限制未开通）。
   if options.force_recompile && !unsafe { (*proto).execdata.is_null() } {
-    ir.set_type_hints(unsafe { tsfb_hints_for(proto) });
     ir.set_call_hints(unsafe { call_obs_hints_for(proto) });
   }
   // Safety: proto 为待编译的活 X64 L 函数 Proto（调用方 CodeGen 保证），IR 构建期只读。
@@ -129,7 +124,7 @@ pub unsafe fn create_native_function_a_64(
   // （GETTABLEKS 站点：pc → (B 寄存器, 观测 tag)），注入分析器做 ANY 细化；
   // 并读 CALL 站点观测提示供 call inlining 发射端替代静态判据。
   if options.force_recompile && !unsafe { (*proto).execdata.is_null() } {
-    ir.set_type_hints(unsafe { tsfb_hints_for(proto) });
+    // ir.set_type_hints(unsafe { tsfb_hints_for(proto) });
     ir.set_call_hints(unsafe { call_obs_hints_for(proto) });
   }
   // Safety: proto 为待编译的活 A64 L 函数 Proto（调用方 CodeGen 保证），IR 构建期只读。

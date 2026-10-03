@@ -69,10 +69,9 @@ use ulua_vm::{
 use crate::{
   functions::{
     call_epilog_c::call_epilog_c_export, call_fallback::call_fallback_export,
-    call_obs_hook::call_obs_site_hook,
-    call_prolog::call_prolog_export, execute_dupclosure::execute_dupclosure_export,
-    execute_forgprep::execute_forgprep_export, execute_getglobal::execute_getglobal_export,
-    execute_gettableks::execute_gettableks_export,
+    call_obs_hook::call_obs_site_hook, call_prolog::call_prolog_export,
+    execute_dupclosure::execute_dupclosure_export, execute_forgprep::execute_forgprep_export,
+    execute_getglobal::execute_getglobal_export, execute_gettableks::execute_gettableks_export,
     execute_getvarargs_const::execute_getvarargsconst,
     execute_getvarargs_mult_ret::execute_getvarargsmult_ret,
     execute_namecall::execute_namecall_export, execute_prepvarargs::execute_prepvarargs_export,

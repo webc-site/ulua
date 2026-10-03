@@ -3986,12 +3986,7 @@ impl IrLoweringX64 {
             ),
           );
         }
-        self.jump_or_abort_on_undef_condition(
-          ConditionX64::AboveEqual,
-          inst.op(1),
-          index,
-          next,
-        );
+        self.jump_or_abort_on_undef_condition(ConditionX64::AboveEqual, inst.op(1), index, next);
       }
       IrCmd::CheckTruthy => {
         {

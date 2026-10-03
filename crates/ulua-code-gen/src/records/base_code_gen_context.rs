@@ -186,7 +186,8 @@ impl BaseCodeGenContext {
     retires: &mut Vec<*mut NativeModule>,
   ) -> ModuleBindResult {
     let mut native_protos = native_module.native_protos.to_vec();
-    let protos_bound = bind_native_protos(module_protos, &mut native_protos, rebind_retire, retires);
+    let protos_bound =
+      bind_native_protos(module_protos, &mut native_protos, rebind_retire, retires);
     native_module.native_module_add_refs(protos_bound as usize);
 
     ModuleBindResult {

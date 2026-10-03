@@ -5,15 +5,14 @@ use ulua_vm::records::lua_node::LuaNode;
 use crate::{
   records::native_fn::{
     GateFn, NativeArithFn, NativeCBarrierbackFn, NativeCBarrierfFn, NativeCBarriertableFn,
-    NativeCStepFn, NativeCallEpilogCFn, NativeCallFallbackFn, NativeCallObsHookFn, NativeCallPrologFn,
-  NativeCompareFn,
-    NativeConcatFn, NativeDolenFn, NativeExecuteGetvarargsConstFn,
-    NativeExecuteGetvarargsMultRetFn, NativeExecuteOpcodeFn, NativeFCloseFn, NativeFFindupvalFn,
-    NativeFNewLclosureFn, NativeForgLoopFallbackFn, NativeForgLoopIterFn, NativeForgPrepXnextFn,
-    NativeGetImportFn, NativeHCloneFn, NativeHGetnFn, NativeHNewFn, NativeHResizearrayFn,
-    NativeHSetnumFn, NativeMathBinaryFn, NativeMathFrexpFn, NativeMathLdexpFn, NativeMathModfFn,
-    NativeMathUnaryFn, NativeNewUserdataFn, NativeTGettmFn, NativeTObjtypenamestrFn,
-    NativeTableAccessFn,
+    NativeCStepFn, NativeCallEpilogCFn, NativeCallFallbackFn, NativeCallObsHookFn,
+    NativeCallPrologFn, NativeCompareFn, NativeConcatFn, NativeDolenFn,
+    NativeExecuteGetvarargsConstFn, NativeExecuteGetvarargsMultRetFn, NativeExecuteOpcodeFn,
+    NativeFCloseFn, NativeFFindupvalFn, NativeFNewLclosureFn, NativeForgLoopFallbackFn,
+    NativeForgLoopIterFn, NativeForgPrepXnextFn, NativeGetImportFn, NativeHCloneFn, NativeHGetnFn,
+    NativeHNewFn, NativeHResizearrayFn, NativeHSetnumFn, NativeMathBinaryFn, NativeMathFrexpFn,
+    NativeMathLdexpFn, NativeMathModfFn, NativeMathUnaryFn, NativeNewUserdataFn, NativeTGettmFn,
+    NativeTObjtypenamestrFn, NativeTableAccessFn,
   },
   type_aliases::api::LuauFastFunction,
 };

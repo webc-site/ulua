@@ -1,26 +1,28 @@
 //! JIT 用户函数 call inlining（第 2 阶段：静态直通 + 运行时证据门）。
 //!
 //! 判据（翻译期可判，任一不满足即整体放弃、走常规 CALL 发射）：
-//! 1. callee 槽身份二选一：
-//!    a. 静态：callee 槽寄存器在本 proto 字节码内有唯一静态定义点，定义链仅由
-//!       `NEWCLOSURE`/`DUPCLOSURE`（可经 ≤2 跳 `MOVE`）到达——callee proto
-//!       编译期可辨，直通无守卫（第 1 阶段形态）；
-//!    b. 观测（第 2 阶段）：静态链不可辨（GETUPVAL/GETTABLEKS/NAMECALL 喂 CALL）
-//!       时，取暖重编译注入的 CALL 站点观测提示（`call_hints`，见 ulua-vm
-//!       call_obs）——运行时闭包的 proto 恒定证据替代「常量 proto 槽」判据，
-//!       发射 `JumpEqTag`+`JumpCmpProtoid`（funid 立即数，装载期全局唯一）守卫，
-//!       不恒等落常规 CALL 回退块。
-//! 2. callee 非变参、`numparams == 实参数`、指令数 ≤ 100、无回边（禁止循环体）。
-//! 3. 体白名单：纯数据搬运/常量加载/数值算术/跳转；试探翻译产物经 Fallback 块
-//!    折叠（见下）后不含慢路命令、`VmConst`/`VmUpvalue` 操作数；`VmExit` 出口
-//!    只允许折叠产出的 `call_pc` 出口。
-//! 4. 返回点：每条 `RETURN` 的个数 == caller 期望（逐 RETURN 对齐），允许多
-//!    RETURN（第 2 阶段推广，见 emit_inline 的折叠循环）。
-//! 5. 栈深：`ra + callee.maxstacksize ≤ caller.maxstacksize`。体寄存器按
-//!    `callee reg k ↔ caller reg ra+k` 直通映射，与真实帧布局逐位一致；
-//!    CALL 语义本就允许覆写 `ra+1..` 槽位，内联不扩大覆写面。
+//!
+//! - callee 槽身份二选一。静态：callee 槽寄存器在本 proto 字节码内有唯一静态
+//!   定义点，定义链仅由 `NEWCLOSURE`/`DUPCLOSURE`（可经 ≤2 跳 `MOVE`）到达——
+//!   callee proto 编译期可辨，直通无守卫（第 1 阶段形态）。观测（第 2 阶段）：
+//!   静态链不可辨（GETUPVAL/GETTABLEKS/NAMECALL 喂 CALL）时，取暖重编译注入的
+//!   CALL 站点观测提示（`call_hints`，见 ulua-vm call_obs）——运行时闭包的
+//!   proto 恒定证据替代「常量 proto 槽」判据，发射 `JumpEqTag` + `JumpCmpProtoid`
+//!   （funid 立即数，装载期全局唯一）+ `CheckStackRoom`（栈余量运行时守卫），
+//!   任一不满足落常规 CALL 回退块。
+//! - callee 非变参、`numparams == 实参数`、指令数 ≤ 100、无回边（禁止循环体）。
+//! - 体白名单：纯数据搬运/常量加载/数值算术/跳转；试探翻译产物经 Fallback 块
+//!   折叠（见下）后不含慢路命令、不可物化的 `VmConst`/`VmUpvalue` 操作数；
+//!   `VmExit` 出口只允许折叠产出的 `call_pc` 出口。
+//! - 返回点：每条 `RETURN` 的个数 == caller 期望（逐 RETURN 对齐），允许多
+//!   RETURN（第 2 阶段推广，见 emit_inline 的折叠循环）。
+//! - 栈深：静态路径要求 `ra + callee.maxstacksize ≤ caller.maxstacksize`（映射区
+//!   落在 caller 已预留栈内）；观测路径由 `CheckStackRoom` 运行时承接。体寄存器
+//!   按 `callee reg k ↔ caller reg ra+1+k` 直通映射，与真实帧布局（base = ra+1）
+//!   逐位一致；CALL 语义本就允许覆写 `ra+1..` 槽位，内联不扩大覆写面。
 //!
 //! 语义面（三处出口都收敛到「解释器自 CALL 原位重放整次调用」）：
+//!
 //! - 体 `INTERRUPT` 的 pcpos 重写为调用点（第 1 阶段已验证重放语义）；
 //! - Fallback 块折叠：指向 Fallback 块的 Block 操作数全部改写为
 //!   `VmExit(call_pc)`——内联体只保留快路，类型/形状不符即退出解释器，由 CALL
@@ -45,9 +47,7 @@ use crate::{
   enums::{ir_block_kind::IrBlockKind, ir_cmd::IrCmd, ir_op_kind::IrOpKind},
   functions::{
     ir::{add_use, is_pseudo},
-    proto_view::{
-      child_proto, child_proto_ref, constant_number, with_constant_value, with_proto,
-    },
+    proto_view::{child_proto, child_proto_ref, constant_number, with_constant_value, with_proto},
     proto_views::code,
   },
   macros::codegen_assert::CODEGEN_ASSERT,
@@ -150,7 +150,16 @@ pub(crate) fn try_translate_call_inline(
       Some((funid, ra as i32 + 1 + maxstack))
     }
   };
-  emit_inline(build, &trial_function, callee_proto, ra, nparams, nresults, i, guard);
+  emit_inline(
+    build,
+    &trial_function,
+    callee_proto,
+    ra,
+    nparams,
+    nresults,
+    i,
+    guard,
+  );
   // 内联发射证据：编译期单次打印（compile-once，不进热路径）
   match guard {
     Some((funid, _)) => eprintln!(
@@ -173,7 +182,7 @@ fn observed_callee(build: &IrBuilder, call_pc: i32) -> Option<(*mut Proto, u32)>
     .function
     .call_hints
     .iter()
-    .find(|(pc, _, _)| *pc == call_pc as u32)
+    .find(|(pc, ..)| *pc == call_pc as u32)
     .map(|&(_, funid, proto_addr)| (proto_addr as *mut Proto, funid))
 }
 
@@ -583,7 +592,7 @@ fn inline_ir_veto(f: &IrFunction, call_pc: i32, callee: *mut Proto) -> Option<&'
         IrOpKind::VmConst => {
           // 仅 number 常量可物化（DoArithmetic 的常量操作数经重 intern 落寄存器）
           let materializable = with_constant_value(child_proto_ref(callee), op.index(), |tv| {
-            tv.tt == ulua_vm::enums::lua_type::LuaType::Number as i32
+            tv.tt == LuaType::Number as i32
           })
           .unwrap_or(false);
           if !materializable {
@@ -797,11 +806,10 @@ fn rewrite_op(
   match op.kind() {
     IrOpKind::None | IrOpKind::Undef | IrOpKind::Condition => *op,
     IrOpKind::Inst => {
-      let mapped = inst_map[op.index() as usize]
-        .unwrap_or_else(|| {
-          CODEGEN_ASSERT!(false, "inline rewrite: unmapped trial inst");
-          u32::MAX
-        });
+      let mapped = inst_map[op.index() as usize].unwrap_or_else(|| {
+        CODEGEN_ASSERT!(false, "inline rewrite: unmapped trial inst");
+        u32::MAX
+      });
       IrOp::ir_op_ir_op_kind_u32(IrOpKind::Inst, mapped)
     }
     IrOpKind::Block => IrOp::ir_op_ir_op_kind_u32(IrOpKind::Block, block_base + op.index()),

@@ -17,6 +17,8 @@
 
 #![cfg(feature = "jit")]
 
+use std::fs::read_to_string;
+
 use ulua_rt::{Lua, Result};
 
 /// 同一负载跑 JIT/解释器两次，逐位对照。
@@ -118,4 +120,46 @@ fn jit_call_inline_guard_fail_falls_back() -> Result<()> {
 #[test]
 fn jit_call_inline_guard_pass_same_proto() -> Result<()> {
   assert_pair(GUARD_PASS_REBIND)
+}
+
+/// 构造器 + setmetatable 形态（oop 骨架）：new 调用站点观测触发暖重编译，
+/// 后续 new 的表构造/setmetatable 链必须逐值一致。
+const CTOR_META: &str = r#"
+local Base = {}
+Base.__index = Base
+function Base.new(x, y)
+  return setmetatable({ x = x, y = y }, Base)
+end
+local acc = 0
+for i = 1, 5000 do
+  local o = Base.new(i, i + 1)
+  acc = acc + o.x + o.y
+end
+return acc
+"#;
+
+#[test]
+fn jit_call_inline_ctor_metatable() -> Result<()> {
+  assert_pair(CTOR_META)
+}
+
+/// runner 的 oop.lua 全量负载（多级继承 + NAMECALL 热环）同源对照。
+#[test]
+fn jit_call_inline_oop_full() -> Result<()> {
+  let manifest = env!("CARGO_MANIFEST_DIR");
+  let src =
+    read_to_string(format!("{manifest}/../../benchmarks/cases/oop.lua")).expect("oop.lua 可读");
+  let jit = {
+    let lua = Lua::new();
+    lua.enable_jit(true)?;
+    let v: i64 = lua.load(&src).eval()?;
+    v
+  };
+  let interp = {
+    let lua = Lua::new();
+    let v: i64 = lua.load(&src).eval()?;
+    v
+  };
+  assert_eq!(jit, interp, "oop 全量负载 JIT 与解释器不一致");
+  Ok(())
 }

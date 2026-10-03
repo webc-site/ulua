@@ -66,5 +66,7 @@ pub fn bind_native_protos(
 
 use crate::{
   macros::codegen_assert::CODEGEN_ASSERT,
-  type_aliases::native_proto_exec_data_ptr::{NativeProtoExecDataHeaderExt, NativeProtoExecDataPtr},
+  type_aliases::native_proto_exec_data_ptr::{
+    NativeProtoExecDataHeaderExt, NativeProtoExecDataPtr,
+  },
 };

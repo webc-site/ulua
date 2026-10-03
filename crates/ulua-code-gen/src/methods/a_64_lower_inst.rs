@@ -5,7 +5,7 @@ use core::{
   ptr,
 };
 
-use ulua_common::fflag::LuauNativeCodeTargetCheck;
+use ulua_common::fflag::{LUAU_JIT_CALL_INLINE_OBS, LuauNativeCodeTargetCheck};
 use ulua_vm::{
   enums::{lua_type::LuaType, tms::TMS},
   macros::{
@@ -94,6 +94,8 @@ const X6: RegisterA64 = reg(KindA64::X, 6);
 const X7: RegisterA64 = reg(KindA64::X, 7);
 const X9: RegisterA64 = reg(KindA64::X, 9);
 const X10: RegisterA64 = reg(KindA64::X, 10);
+/// call inlining 观测插桩的 hook 槽 scratch（快路序列与提交段均不占用）。
+const X11: RegisterA64 = reg(KindA64::X, 11);
 const W0: RegisterA64 = reg(KindA64::W, 0);
 const W1: RegisterA64 = reg(KindA64::W, 1);
 const W2: RegisterA64 = reg(KindA64::W, 2);
@@ -2868,9 +2870,7 @@ impl IrLoweringA64 {
             .build_mut()
             .ldr(X6, mem(R_STATE, (offset_of!(LuaState, stack_last) as i32)));
           self.build_mut().cmp_rr(X5, X6);
-          self.with_target_label(fail, |s, l| {
-            s.build_mut().b_cond(ConditionA64::CarrySet, l)
-          });
+          self.with_target_label(fail, |s, l| s.build_mut().b_cond(ConditionA64::CarrySet, l));
 
           self.finalize_target_label(inst.op(1), index, &mut fresh);
         }
@@ -3757,17 +3757,20 @@ impl IrLoweringA64 {
           // caller-saved，提交段依赖的 X1/X2/X5/X6/X9/X10 在调用后重取；X4 提交
           // 段本就从 L->ci 重读、X7 提交段重算，不受影响。X10 重取顺带拿到观测
           // 触发暖重编译后的最新 exectarget（callee 在 caller 树内时会换靶）。
-          if ulua_common::fflag::LUAU_JIT_CALL_INLINE_OBS.get() {
+          if LUAU_JIT_CALL_INLINE_OBS.get() {
+            // hook 指针装 X11：X11 是本快路序列与提交段的空闲 scratch；禁用 X5
+            // （守卫段算好的 stacksize 字节数落在 X5，短路路径跳过重取会带坏
+            // 提交段的 ci->top 计算）。
             self
               .build_mut()
-              .ldr(X5, native_ctx(offset_of!(NativeContext, call_obs_hook)));
+              .ldr(X11, native_ctx(offset_of!(NativeContext, call_obs_hook)));
             let mut skip_obs = Label::default();
-            self.build_mut().cbz(X5, &mut skip_obs);
+            self.build_mut().cbz(X11, &mut skip_obs);
             self.build_mut().mov_rr(X2, X1);
             self.build_mut().mov(X0, R_STATE);
-            self.build_mut().blr(X5);
-            self.build_mut().set_label_label(&mut skip_obs);
-
+            self.build_mut().blr(X11);
+            // blr 现场为 caller-saved：仅在实际执行观测的路径重取（预算耗尽后
+            // hook 置空，跳过 blr 的常态路径不付这 6 条）。
             self.emit_vm_reg_addr(X1, inst.op(0));
             self.build_mut().ldr(X6, mem(X1, K_TVALUE_VALUE_GC_OFFSET));
             self.build_mut().ldr(X9, mem(X6, K_CLOSURE_L_P_OFFSET));
@@ -3784,6 +3787,7 @@ impl IrLoweringA64 {
               .ldrb(W5, mem(X6, (offset_of!(Closure, stacksize) as i32)));
             self.build_mut().lsl_rr_u8(W5, W5, K_TVALUE_SIZE_LOG2 as u8);
             self.build_mut().mov_rr(W5, W5); // W 写回零扩到 X5 同寄存器高位
+            self.build_mut().set_label_label(&mut skip_obs);
           }
 
           // 提交段：L->ci 前移 + 建帧六写（同 call_fallback 建帧序）。
