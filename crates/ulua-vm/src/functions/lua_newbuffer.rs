@@ -41,7 +41,7 @@ pub fn lua_newbuffer_push_ref(l: &mut LuaState, sz: usize) {
     lua_c_check_gc!(l.as_mut_ptr());
     lua_c_threadbarrier_lapi(l.as_mut_ptr());
     l.ensure_stack_space(1);
-    let b = lua_b_newbuffer(l.as_mut_ptr(), sz);
+    let b = lua_b_newbuffer(l, sz);
     setbufvalue!(l.as_mut_ptr(), (*l.as_mut_ptr()).top, b);
     api_incr_top!(l.as_mut_ptr());
   }
