@@ -7,20 +7,12 @@ use crate::{
 /// `vector.angle`：两向量夹角（弧度，`atan2(|a×b|, a·b)`），可选第 3 实参为旋转轴，
 /// 叉积与该轴点积为负时取反角。
 ///
-/// # Safety
-/// `l` 须为存活 `LuaState` 且处于受保护帧：本帧把该裸指针重建为独占引用（借用窗覆盖整个
-/// 函数体），其后按 Lua 库函数约定——索引 1、2 须为 vector（否则 `check_vector` 经
-/// `tag_error` 抛错发散），索引 3 可选 vector（缺参/nil 记为无轴，给出但非 vector 同样抛错
-/// 发散）；只取 x/y/z 三个分量（w 不参与，与 cpp 的 3 分量读窗等值）。`push_number` 自身扩栈，
-/// 可触发 GC。
-///
-/// 签名保留裸指针形是 C ABI 透传壳 `ulua_vector_angle`（ulua-capi，本票范围外）直呼本核心
-/// 所致，与 `@ref` 族的差异仅在首参；壳侧改走 `_arm` 后即可与前移后的同族齐形。
-pub unsafe fn vector_angle(l: *mut LuaState) -> i32 {
-  // SAFETY: 契约保证 `l` 为本次受保护帧内存活且无别名的 `LuaState`；此处仅做 C 臂
-  // `l: *mut LuaState → &mut` 的边界转换，分量读窗与压栈皆走 safe 门面。
-  let l = unsafe { &mut *l };
-
+/// 调用序契约（正确性，非内存安全）：`l` 存活与独占由 `&mut LuaState` 承载；按 Lua 库函数
+/// 约定——索引 1、2 须为 vector（否则 `check_vector` 经 `tag_error` 抛错发散），索引 3 可选
+/// vector（缺参/nil 记为无轴，给出但非 vector 同样抛错发散）；只取 x/y/z 三个分量（w 不参与，
+/// 与 cpp 的 3 分量读窗等值）。`push_number` 自身扩栈，可触发 GC；裸指针边界的内存契约见
+/// `lua_lib_fn!` 单源生成的 `vector_angle_arm` `# Safety`。
+pub fn vector_angle(l: &mut LuaState) -> i32 {
   let a = check_vector(l, 1);
   // cpp: luaL_checkvector(L, 2) —— b 是必需参数：换成 opt_vector 会漏检缺参（折成 `None`
   // 后无值可算），落不进 cpp 侧「缺参/非 vector 即抛 Lua 错误」的语义
@@ -47,4 +39,4 @@ pub unsafe fn vector_angle(l: *mut LuaState) -> i32 {
   1
 }
 
-lua_lib_fn!(pub fn vector_angle, vector_angle_arm);
+lua_lib_fn!(pub fn vector_angle @ref, vector_angle_arm);

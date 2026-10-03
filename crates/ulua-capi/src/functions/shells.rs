@@ -29,8 +29,9 @@ macro_rules! capi_shell_l_cint {
   };
 }
 
-/// 同上 `(l) -> c_int` 导出壳模板之库函数变体（现 55 枚）：唯一差异是体内 `// Safety:`
-/// 理由注释按 b26 校准保留「l 由 Lua VM 按库函数/闭包约定传入」的调用来源表述。
+/// 同上 `(l) -> c_int` 导出壳模板之库函数变体（现 53 枚，vector_angle/vector_clamp 两壳
+/// 已随 vm 侧核心收形退役为显式壳，见 `functions/lua_status.rs` 先例）：唯一差异是体内
+/// `// Safety:` 理由注释按 b26 校准保留「l 由 Lua VM 按库函数/闭包约定传入」的调用来源表述。
 macro_rules! capi_libfn_shell_l_cint {
   ($m:ident, $n:ident) => {
     #[doc = concat!(
