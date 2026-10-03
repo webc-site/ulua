@@ -80,9 +80,10 @@ macro_rules! capi_shell_l_cint {
   };
 }
 
-/// 同上 `(l) -> c_int` 导出壳模板之库函数变体（现 55 枚：53 枚裸透传 + 2 枚 `@ref`
+/// 同上 `(l) -> c_int` 导出壳模板之库函数变体（现 55 枚：48 枚裸透传 + 7 枚 `@ref`
 /// 引用重建变体；vector_angle/vector_clamp 两壳曾随 vm 侧核心收形退役为显式壳，
-/// 已由 `@ref` 臂于 r16-v32 复归宏模板）：唯一差异是体内
+/// 已由 `@ref` 臂于 r16-v32 复归宏模板，str_byte/str_char/str_len/str_split/str_sub
+/// 五枚随 r16-v38 str_* 族首参收形同臂复归）：唯一差异是体内
 /// `// Safety:` 理由注释按 b26 校准保留「l 由 Lua VM 按库函数/闭包约定传入」的调用来源表述。
 /// r16-v32 同备 `@ref` 引用重建变体臂，形制与措辞随上条所述。
 /// 本族刻意不备 `@refshared` 臂：唯一只读形成员即 `lua_status.rs`（本仓先例本体），翻臂会使其余
