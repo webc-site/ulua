@@ -3,7 +3,7 @@ use crate::{
   records::{lua_state::LuaState, match_state::MatchState},
 };
 
-/// cpp `lstrlib.cpp prepstate`（lstrlib.cpp:648）：登记本次匹配的源串/pattern 与深度。
+/// cpp `lstrlib.cpp prepstate`（lstrlib.cpp:650）：登记本次匹配的源串/pattern 与深度。
 /// 游标协议为偏移制：`ms.src`/`ms.pat` 为实参串 payload 的借用切片，串尾哨兵由
 /// `src.len()`/`pat.len()` 表达（原 `src_end`/`p_end` 指针域已消灭）。
 ///

@@ -1,4 +1,4 @@
-//! Source: `VM/src/lstrlib.cpp:884`
+//! Source: `VM/src/lstrlib.cpp:886`
 //!
 //! Helper for `string.format("%q", s)` — append `s` to the buffer as a quoted,
 //! escapable string literal: wrap in `"`, backslash-escape `"`/`\`/newline,
@@ -17,7 +17,7 @@ use crate::{
   records::lua_l_strbuf::LuaLStrbuf,
 };
 
-/// 引号化转义拼接（切片核心，真实逻辑）：cpp `addquoted`（lstrlib.cpp:884）的
+/// 引号化转义拼接（切片核心，真实逻辑）：cpp `addquoted`（lstrlib.cpp:886）的
 /// `luaL_prepbuffsize(b, l + 2)` 预扩 + `"` 包裹 + 逐字节 switch 转义循环同形——
 /// `"`/`\`/`\n` 前置反斜杠、`\r` 写 `"\\r"`、`\0` 写 `"\\000"`，其余原样透传，
 /// 拼接顺序与输出字节与 oracle 逐点一致。

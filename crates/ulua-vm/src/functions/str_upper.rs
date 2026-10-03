@@ -1,4 +1,4 @@
-//! Source: `VM/src/lstrlib.cpp:71`
+//! Source: `VM/src/lstrlib.cpp:73`
 //!
 //! `string.upper` — uppercase each byte of the argument into a fresh buffer.
 

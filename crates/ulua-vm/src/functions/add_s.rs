@@ -8,7 +8,7 @@ use crate::{
   records::{lua_l_strbuf::LuaLStrbuf, match_state::MatchState},
 };
 
-/// cpp `lstrlib.cpp add_s`（lstrlib.cpp:765）：按替换串模板把 `%m` 捕获展开进累加器。
+/// cpp `lstrlib.cpp add_s`（lstrlib.cpp:767）：按替换串模板把 `%m` 捕获展开进累加器。
 /// `s`/`e` 为整窗匹配的源偏移对（`%0` 用），偏移==cpp 指针同界。
 ///
 /// # Safety

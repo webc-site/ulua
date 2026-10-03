@@ -1,4 +1,4 @@
-//! Source: `VM/src/lstrlib.cpp:83`
+//! Source: `VM/src/lstrlib.cpp:85`
 //!
 //! `string.rep` — repeat the argument `n` times into a single buffer, doubling
 //! the already-written prefix each step so the fill is O(result) with log(n)

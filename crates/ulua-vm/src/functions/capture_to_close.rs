@@ -3,7 +3,7 @@ use crate::{
   records::match_state::MatchState,
 };
 
-/// cpp `lstrlib.cpp capture_to_close`（lstrlib.cpp:206）：自顶层向下找最近未闭合捕获。
+/// cpp `lstrlib.cpp capture_to_close`（lstrlib.cpp:208）：自顶层向下找最近未闭合捕获。
 ///
 /// 前置条件：`ms.capture[..ms.level]` 界内可访问；无未闭合捕获时经 `luaL_error`
 /// 抛 "invalid pattern capture" 并 unwind、不返回，故调用方须携带 `prepstate` 建立的

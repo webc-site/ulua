@@ -23,7 +23,7 @@ const fn is_special(b: u8) -> bool {
   b < 0x80 && (SPECIAL_MASK >> b as u32) & 1 != 0
 }
 
-/// cpp `VM/src/lstrlib.cpp:636`：`strpbrk`（扫描止于 NUL）× `strlen`（NUL 分段）
+/// cpp `VM/src/lstrlib.cpp:638`：`strpbrk`（扫描止于 NUL）× `strlen`（NUL 分段）
 /// 的逐段探测，任一段含特殊字符即返回 0——`split` 按 NUL 分段后短路 `any`
 /// 一趟等价；空 pattern 与结尾 NUL 产出的空段同 cpp 的 do-while 一样不误报。
 ///

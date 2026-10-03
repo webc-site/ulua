@@ -9,7 +9,7 @@ use crate::{
 /// 调用序契约（正确性，非内存安全——`l` 的存活前提已由 `&mut` 接收者类型承载）：`l` 须处于
 /// 可抛错受保护帧，`get_top` 取实参数 n；对索引 1..=n `check_integer`+`arg_check` 校验落在
 /// 0..=255（越界抛错回退）；`pushresultsize` 提交 n 字节需 `top` 后 ≥1 空槽；分配可触发 GC。
-/// cpp VM/src/lstrlib.cpp:150
+/// cpp VM/src/lstrlib.cpp:152
 ///
 /// # Safety
 /// `unsafe fn` 屏障按 r16-v21 判例保留：目标区仍由 `lua_l_buffinitsize`（裸形被调，经

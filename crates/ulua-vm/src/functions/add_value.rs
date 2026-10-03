@@ -1,4 +1,4 @@
-//! Source: `VM/src/lstrlib.cpp:796`
+//! Source: `VM/src/lstrlib.cpp:798`
 //!
 //! `string.gsub` replacement dispatch for one match: a function replacement is
 //! called with the captures, a table replacement is indexed by the first

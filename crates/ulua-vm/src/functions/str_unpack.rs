@@ -16,7 +16,7 @@ use crate::{
   records::{ftypes::Ftypes, header::Header, lua_state::LuaState},
 };
 
-/// unpack 读窗切片核（真实逻辑）：cpp `str_unpack`（lstrlib.cpp:1640）的取参序
+/// unpack 读窗切片核（真实逻辑）：cpp `str_unpack`（lstrlib.cpp:1641）的取参序
 /// （#1 格式串 → #2 数据串 → #3 初位缺省）、`data string too short`/
 /// `initial position out of string`/`unfinished string for format 'z'` 抛出点、
 /// 字节序解码与逐项压栈序逐点对齐 oracle。
@@ -105,7 +105,7 @@ unsafe fn str_unpack_ref(l: &mut LuaState, fmt_bytes: &[u8], data: &[u8]) -> i32
           pos += len as i32;
         }
         KOption::Kzstr => {
-          // 从当前偏移单遍扫描首个 NUL 求 strlen（cpp lstrlib.cpp:1702
+          // 从当前偏移单遍扫描首个 NUL 求 strlen（cpp lstrlib.cpp:1705
           // `strlen(data + pos)`）：payload 脱靶 ⟺ cpp 扫至串尾终止 NUL，len 取
           // 尾距 `ld - p`（越界 `get` 归一，入约见文件头），后续尾界判定两端
           // 同失败、同抛出
@@ -138,7 +138,7 @@ unsafe fn str_unpack_ref(l: &mut LuaState, fmt_bytes: &[u8], data: &[u8]) -> i32
 /// 实参（非串经 `check_bytes` 抛 "string expected"），其余义务单源 [`str_unpack_ref`]。
 /// 两个 payload 窗口须与同句的核心调用（该核亦经 `&mut l` 压栈/报错）共存，p28 锚定形与
 /// `&mut` 接收者不可共存 ⇒ 按 r16-v29 桥接判例在块内一次就地转手裸句柄，借用窗止于本块。
-/// cpp lstrlib.cpp:1640 `str_unpack`。
+/// cpp lstrlib.cpp:1641 `str_unpack`。
 pub(crate) fn str_unpack(l: &mut LuaState) -> i32 {
   // SAFETY: `l` 由 `&mut` 保证有效且独占，转手后的 `lp` 即同一存活帧；payload 切片借用自
   // 栈槽 #1/#2 串体（不可变、不搬移），本次调用内有效

@@ -4,7 +4,7 @@ use crate::{
   records::match_state::MatchState,
 };
 
-/// cpp `lstrlib.cpp singlematch`（lstrlib.cpp:317）：源游标 `s` 偏移处的单字符
+/// cpp `lstrlib.cpp singlematch`（lstrlib.cpp:319）：源游标 `s` 偏移处的单字符
 /// 是否匹配模式类 `[p, ep)`（`ep` 为 `classend` 结果，右开）。返回 bool 取代原
 /// i32 0/1。
 ///
