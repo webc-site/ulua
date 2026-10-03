@@ -25,11 +25,14 @@ where
   // SAFETY: 契约保证 #1 为 buffer、界校验后 `size_of::<T>()` 字节可写（越界即抛错不返回）；
   // 校验/取参/抛错序与旧形逐位不变（先 check 后写）
   unsafe {
-    let buf = buffer_data_ref(l, 1);
+    // r16-v17：`buffer_data_ref`/`buffer_at_ref` 已收形为 `&mut LuaState`，本泛型核心的
+    // C-ABI 臂落在 luaopen_buffer.rs 的 `fp_wrappers!`（协议红线，本票不触碰），故形参
+    // 暂保留裸 `*mut LuaState`，仅在转调窗口核心处 `&mut *l` 重建引用。
+    let buf = buffer_data_ref(&mut *l, 1);
     let offset = (*l).check_integer(2);
     let value = (*l).check_number(3);
 
-    let dst = buffer_at_ref(l, buf, offset, size_of::<T>());
+    let dst = buffer_at_ref(&mut *l, buf, offset, size_of::<T>());
     let val: T = T::from_f64(value);
 
     store_scalar_ref(dst, val);

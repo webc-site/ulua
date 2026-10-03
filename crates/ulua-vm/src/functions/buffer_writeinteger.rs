@@ -22,13 +22,16 @@ where
   // SAFETY: 契约保证 #1 为 buffer、#2 为界内偏移（越界即抛错不返回），界内
   // size_of::<T>() 字节可写；#3 取参不执行 Lua 代码，借用跨取参存活合规
   unsafe {
-    let buf = buffer_data_ref(l, 1);
+    // r16-v17：`buffer_data_ref`/`buffer_at_ref` 已收形为 `&mut LuaState`，本泛型核心的
+    // C-ABI 臂落在 luaopen_buffer.rs 的 `integer_wrappers!`（协议红线，本票不触碰），故
+    // 形参暂保留裸 `*mut LuaState`，仅在转调窗口核心处 `&mut *l` 重建引用。
+    let buf = buffer_data_ref(&mut *l, 1);
     let offset = (*l).check_integer(2);
     let value = lua_l_checkunsigned(&mut *l, 3);
 
     // cpp `T val = T(value)`：数值截断，端序无关
     store_scalar_ref(
-      buffer_at_ref(l, buf, offset, size_of::<T>()),
+      buffer_at_ref(&mut *l, buf, offset, size_of::<T>()),
       T::from_u32_trunc(value),
     );
 

@@ -1,13 +1,17 @@
 //! buffer 库的共享访问窗口：cpp `lbuflib.cpp` 里 `luaL_checkbuffer` → 偏移 →
 //! `checkRead`/`checkWrite` → 按字节 memcpy 的同形骨架。
 //!
-//! r11 R-C T1 窄腰 + r12 T9 读写侧提前收口：全部真实逻辑落在切片核心
-//! （[`buffer_data_ref`] / [`buffer_at_ref`] / [`buffer_read_window_ref`] 与签名安全的
-//! [`load_scalar_ref`] / [`store_scalar_ref`]）——T2–T5/T8 消费方迁移完毕后，旧裸指针
-//! 委托垫片已全部清零。r12 T10 收编 FASTCALL 消费面：[`buffer_slot_window_ref`]
-//! 值形取窗（不抛错、`Option` 回退形）与栈索引抛错形共享同一派生链。窗口派生的唯一
-//! 数据窗裸构造点在 `lua_tobuffer.rs` 的 `buffer_bytes_from_handle`，本模块不再出现
-//! 任何数据窗裸构造。
+//! r11 R-C T1 窄腰 + r12 T9 读写侧提前收口：全部真实逻辑落在切片核心——
+//! [`buffer_data_ref`] / [`buffer_at_ref`] / [`buffer_read_window_ref`] /
+//! [`buffer_bit_bounds`] 与签名安全的 [`load_scalar_ref`] / [`store_scalar_ref`]。
+//! r16-v17 收形：栈窗口诸核心的首参由裸 `*mut LuaState` 前移 `&mut LuaState`，纯垫片级
+//! `unsafe fn` 随之消解为安全签名，`unsafe` 退回真实边界（[`load_scalar_ref`] /
+//! [`store_scalar_ref`] 的 `read/write_unaligned`、FASTCALL 值形 [`buffer_slot_window_ref`]
+//! 的 `*const TValue` 取窗，以及 `lua_tobuffer.rs` 数据窗裸构造）。T2–T5/T8 消费方迁移
+//! 完毕后，旧裸指针委托垫片已全部清零。r12 T10 收编 FASTCALL 消费面：
+//! [`buffer_slot_window_ref`] 值形取窗（不抛错、`Option` 回退形）与栈索引抛错形共享同一
+//! 派生链。窗口派生的唯一数据窗裸构造点在 `lua_tobuffer.rs` 的 `buffer_bytes_from_handle`，
+//! 本模块不再出现任何数据窗裸构造。
 
 use core::{
   mem::size_of,
@@ -32,14 +36,15 @@ use crate::{
 /// 数据界即切片界——旧 `(*mut u8, usize)` 元组的出参收口形态（review.md §3）。
 /// 非 buffer 实参经 `lua_l_checkbuffer_ref` 抛 "buffer expected"、不返回。cpp laux.cpp:150。
 ///
-/// # Safety
-/// `l` 须为正在执行的 buffer 库 C 函数帧的存活 `LuaState`，`narg` 为其合法栈索引；
-/// 借出寿命 `'a` 由栈槽引用钉住（契约三要素见 `lua_tobuffer_bytes_ref`）。
+/// r16-v17 收形后为纯转发垫片：安全签名的 [`lua_l_checkbuffer_ref`] 已承接全部取窗与
+/// typeerror 逻辑，本函数仅改换 `l` 形并直传，`unsafe` 无从存续。
+///
+/// 调用序契约（正确性，非内存安全）：`l` 须为正在执行的 buffer 库 C 函数帧的存活
+/// `LuaState`（有效与独占由 `&mut` 承载），`narg` 为其合法栈索引；借出寿命 `'a` 由栈槽
+/// 引用钉住（契约三要素见 `lua_tobuffer_bytes_ref`）。
 #[inline]
-pub(crate) unsafe fn buffer_data_ref<'a>(l: *mut LuaState, narg: i32) -> &'a mut [u8] {
-  // SAFETY: 契约与 `lua_l_checkbuffer_ref` 同（存活帧 + 合法栈索引），`&mut *l` 一次性
-  // 重借用即其期望的接收者形
-  unsafe { lua_l_checkbuffer_ref(&mut *l, narg) }
+pub(crate) fn buffer_data_ref<'a>(l: &mut LuaState, narg: i32) -> &'a mut [u8] {
+  lua_l_checkbuffer_ref(l, narg)
 }
 
 /// 界校验并定位（切片核心）：`[offset, offset + size)` 完整落在数据界内时返回子切片，
@@ -48,20 +53,20 @@ pub(crate) unsafe fn buffer_data_ref<'a>(l: *mut LuaState, narg: i32) -> &'a mut
 /// 负偏移按 cpp 一致方式回绕成大 `u32`，必然命中越界分支；校验通过后切片索引必然
 /// 在界内——契约违约（绕过校验）暴露为 panic 级索引，是相对旧形 UB 级 `add` 的严格改善面。
 ///
-/// # Safety
-/// `buf` 的数据界自洽（通常取自 [`buffer_data_ref`]）；抛错路径要求 `l` 处于可捕获
-/// 错误的受保护帧。
+/// r16-v17 收形后为 safe fn：界校验为纯算术，抛错经安全签名的 [`buffer_oob_error`]，
+/// 切片定位靠运行时索引（越界 panic 而非 UB），全程无内存不安全面。
+///
+/// 调用序契约（正确性，非内存安全）：`buf` 的数据界自洽（通常取自 [`buffer_data_ref`]）；
+/// 抛错路径要求 `l` 处于可捕获错误的受保护帧。返回寿命 `'b` 由 `buf` 钉住。
 #[inline]
-pub(crate) unsafe fn buffer_at_ref(
-  l: *mut LuaState,
-  buf: &mut [u8],
+pub(crate) fn buffer_at_ref<'b>(
+  l: &mut LuaState,
+  buf: &'b mut [u8],
   offset: i32,
   size: usize,
-) -> &mut [u8] {
-  // 纯界校验（安全 const 算术）留在 unsafe 外；仅抛错调用收进窄块。
+) -> &'b mut [u8] {
   if isoutofbounds(offset, buf.len(), size) {
-    // SAFETY: 契约保证 `l` 为存活调用帧，buffer_oob_error 抛错不返回
-    unsafe { buffer_oob_error(l) };
+    buffer_oob_error(l);
   }
 
   &mut buf[offset as u32 as usize..][..size]
@@ -73,17 +78,18 @@ pub(crate) unsafe fn buffer_at_ref(
 /// 仅适用于「先取 #1 buffer、再取 #2 偏移、随即界校验」的读取形（cpp `buffer_read*`）；
 /// 写入形需在偏移与校验之间取第 3 号实参，故仍分两步调用。
 ///
-/// # Safety
-/// `l` 为存活 C 函数帧，索引 1 为 buffer、索引 2 为偏移（契约同 [`buffer_data_ref`]
-/// 与 [`buffer_at_ref`]）。
+/// r16-v17 收形后为 safe fn：取窗、取偏移、界校验三步均落到安全签名核心；`buf` 借出
+/// 寿命 `'a` 与 `l` 的重借用解耦（见 [`buffer_data_ref`] 契约），故 `l.check_integer(2)`
+/// 可在窗借出后照常进行。
+///
+/// 调用序契约（正确性，非内存安全）：`l` 为存活 C 函数帧，索引 1 为 buffer、索引 2 为
+/// 偏移（契约同 [`buffer_data_ref`] 与 [`buffer_at_ref`]）。
 #[inline]
-pub(crate) unsafe fn buffer_read_window_ref<'a>(l: *mut LuaState, size: usize) -> &'a mut [u8] {
-  unsafe {
-    let buf = buffer_data_ref(l, 1);
-    let offset = (*l).check_integer(2);
+pub(crate) fn buffer_read_window_ref<'a>(l: &mut LuaState, size: usize) -> &'a mut [u8] {
+  let buf = buffer_data_ref(l, 1);
+  let offset = l.check_integer(2);
 
-    buffer_at_ref(l, buf, offset, size)
-  }
+  buffer_at_ref(l, buf, offset, size)
 }
 
 /// FASTCALL 消费面的取窗（切片核心，不抛错形）：实参槽 `TValue` 为 buffer userdata 时
@@ -175,28 +181,27 @@ const _: () = assert!(
 /// 消费方（簇 C：`buffer_readbits`/`buffer_writebits`）已迁移到切片形——`len` 取自
 /// [`buffer_data_ref`] 切片的 `buf.len()`；签名保持裸 `usize`（纯界校验参数，无借用）。
 ///
-/// # Safety
-/// `l` 为存活帧，`len` 为同一 buffer 经 [`buffer_data_ref`] 取得的数据界长度（即
-/// `buf.len()`），与后续用返回区间索引该切片时自洽。
+/// r16-v17 收形后为 safe fn：三段纯校验/算术 + 安全签名的 [`buffer_oob_error`] /
+/// [`buffer_bitcount_error`] 抛错，全程无内存不安全面。
+///
+/// 调用序契约（正确性，非内存安全）：`l` 为存活帧且处于可捕获抛错的受保护帧，`len` 为
+/// 同一 buffer 经 [`buffer_data_ref`] 取得的数据界长度（即 `buf.len()`），与后续用返回
+/// 区间索引该切片时自洽。
 #[inline]
-pub(crate) unsafe fn buffer_bit_bounds(
-  l: *mut LuaState,
+pub(crate) fn buffer_bit_bounds(
+  l: &mut LuaState,
   len: usize,
   bitoffset: i64,
   bitcount: i32,
 ) -> (usize, usize) {
-  // 纯校验/算术留在 unsafe 外；各抛错调用收进窄块。
   if bitoffset < 0 {
-    // SAFETY: `l` 为存活调用帧，buffer_oob_error 抛错不返回
-    unsafe { buffer_oob_error(l) };
+    buffer_oob_error(l);
   }
   if (bitcount as u32) > MAX_BITCOUNT {
-    // SAFETY: 同上，buffer_bitcount_error 抛错不返回
-    unsafe { buffer_bitcount_error(l) };
+    buffer_bitcount_error(l);
   }
   if bitoffset as u64 + bitcount as u64 > len as u64 * BITS_PER_BYTE as u64 {
-    // SAFETY: 同上
-    unsafe { buffer_oob_error(l) };
+    buffer_oob_error(l);
   }
 
   // 校验通过：区间必落在数据界内且 ≤ 8 字节

@@ -4,18 +4,16 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// # Safety
-///
-/// `l` 必须指向本次 buffer 库调用的存活 `LuaState`，索引/长度实参按约定可读，栈顶有压入结果的余量。
-pub(crate) unsafe fn buffer_tostring(l: *mut LuaState) -> i32 {
-  // SAFETY: 契约保证 `l` 存活且 buffer 数据界自洽（切片长度即数据界），压回的串取 buffer 全长拷贝
-  unsafe {
-    let data = buffer_data_ref(l, 1);
+/// 调用序契约（正确性，非内存安全）：`l` 存活与独占由 `&mut LuaState` 承载，实参 1
+/// 为已检查 buffer userdata；buffer 全长拷回的串压栈需栈顶余量。
+pub(crate) fn buffer_tostring(l: &mut LuaState) -> i32 {
+  let data = buffer_data_ref(l, 1);
 
-    lua_pushlstring_bytes(&mut *l, data);
+  // SAFETY: `l` 为借用重建的存活 C 函数帧、处于可 GC/可分配帧，`data` 为界内 buffer
+  // 切片借用；核心只界内拷入堆上 TString、不留存借出（契约见 lua_pushlstring_bytes）。
+  unsafe { lua_pushlstring_bytes(l, data) };
 
-    1
-  }
+  1
 }
 
-lua_lib_fn!(pub(crate) fn buffer_tostring, buffer_tostring_arm);
+lua_lib_fn!(pub(crate) fn buffer_tostring @ref, buffer_tostring_arm);

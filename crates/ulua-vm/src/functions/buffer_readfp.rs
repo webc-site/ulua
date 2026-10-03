@@ -23,7 +23,10 @@ where
   // SAFETY: 窗口已挡下越界偏移（失败即抛错不返回），界内浮点字节数可读；
   // 抛错序与旧形逐位不变（先窗口校验、后压栈）
   unsafe {
-    let val = load_scalar_ref::<T>(buffer_read_window_ref(l, size_of::<T>()));
+    // r16-v17：`buffer_read_window_ref` 已收形为 `&mut LuaState`，本泛型核心的 C-ABI
+    // 臂落在 luaopen_buffer.rs 的 `fp_wrappers!`（协议红线，本票不触碰），故形参暂保留
+    // 裸 `*mut LuaState`，仅在转调窗口核心处一次 `&mut *l` 重建引用。
+    let val = load_scalar_ref::<T>(buffer_read_window_ref(&mut *l, size_of::<T>()));
 
     (*l).push_number(val.to_f64());
     1

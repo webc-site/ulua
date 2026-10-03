@@ -19,7 +19,10 @@ where
 {
   // SAFETY: 契约保证窗口内偏移已界校验，装载只触达 size_of::<T>() 个可读字节
   unsafe {
-    let val = load_scalar_ref::<T>(buffer_read_window_ref(l, size_of::<T>()));
+    // r16-v17：`buffer_read_window_ref` 已收形为 `&mut LuaState`，本泛型核心的 C-ABI
+    // 臂落在 luaopen_buffer.rs 的 `integer_wrappers!`（协议红线，本票不触碰），故形参
+    // 暂保留裸 `*mut LuaState`，仅在转调窗口核心处一次 `&mut *l` 重建引用。
+    let val = load_scalar_ref::<T>(buffer_read_window_ref(&mut *l, size_of::<T>()));
 
     (*l).push_number(val.into());
     1
