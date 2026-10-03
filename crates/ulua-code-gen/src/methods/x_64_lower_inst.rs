@@ -4107,6 +4107,9 @@ impl IrLoweringX64 {
         {
           // 未绑定哨兵: location = !0 (对齐 cpp `Label fresh;`), 由 place_label 走 fixup
           let mut abort = Label::default(); // Used when guard aborts execution
+          // VmExit 目标（内联体折叠出口）的落位 label：走 exit handler 通用机制
+          // （CheckTag 的 jump_or_abort 同款），Block 目标不消费此 label
+          let mut fresh_mismatch = Label::default();
           let mismatch_op = if inst.cmd == IrCmd::JumpSlotMatch {
             inst.op(3)
           } else {
@@ -4117,7 +4120,7 @@ impl IrLoweringX64 {
           let mismatch = if mismatch_op.kind() == IrOpKind::Undef {
             ptr::from_mut(&mut abort)
           } else {
-            self.op_label_ptr(mismatch_op)
+            self.get_target_label(mismatch_op, index, &mut fresh_mismatch)
           };
 
           let tmp = self.alloc_scoped_reg(SizeX64::Qword);
@@ -4173,6 +4176,11 @@ impl IrLoweringX64 {
             self.build_mut().set_label(&mut abort);
             self.build_mut().ud_2();
             self.build_mut().set_label(&mut skip);
+          }
+          // VmExit 目标落位：登记 exit handler 并落 fresh label（CheckTag 收尾同款；
+          // Block 目标的 label 由块遍历落位，不经此处）
+          if mismatch_op.kind() == IrOpKind::VmExit {
+            self.finalize_target_label(mismatch_op, index, &mut fresh_mismatch);
           }
         }
       }

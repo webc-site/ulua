@@ -38,6 +38,7 @@ pub(crate) mod luau_object;
 pub(crate) mod match_state;
 pub mod proto;
 pub(crate) mod resolve_import;
+pub mod retired_k_array;
 pub(crate) mod scoped_set_gc_threshold;
 pub(crate) mod size_class_config;
 pub mod slot;

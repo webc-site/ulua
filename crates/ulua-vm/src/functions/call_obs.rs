@@ -244,15 +244,33 @@ pub unsafe fn call_obs_record_at(
       *state_ptr = (new_hits << 8) | flags;
       return false;
     }
-    let trigger = CALL_OBS_RECOMPILE_BUDGET
-      .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1))
-      .is_ok();
     *state_ptr = if poly {
       (new_hits << 8) | flags | K_FLAG_POLY | K_FLAG_SEALED
     } else {
       (new_hits << 8) | flags | K_FLAG_SEALED
     };
-    trigger
+    // 触发聚合（NAMECALL 阶段观测面扩展）：已有定案站（sealed）时，若还存在
+    // 「半热」（hits ≥ K_TRIGGER_HITS/2）的未定案站点，则同批热 CALL 站点尚未
+    // 全部定案，推迟触发——首个定案站点即触发会让暖产物（零插桩）饿死同 caller
+    // 其余热站点（OOP/继承负载的多方法调用站只有第一站拿到内联；同批站点观测
+    // 节奏差为常数级，半阈值容忍频率差 ≥2:1）。低频站点（如仅执行一次的构造器
+    // 调用，hits 个位数）不阻塞；观测记录/定案判定语义不变，仅聚合触发时机。
+    let mut has_sealed = false;
+    let mut half_hot_pending = false;
+    for s in 0..ncalls {
+      let st = *base.add(K_SLOT_WORDS * s + 1);
+      if st & K_FLAG_SEALED != 0 {
+        has_sealed = true;
+      } else if st >> 8 >= K_TRIGGER_HITS / 2 {
+        half_hot_pending = true;
+      }
+    }
+    if has_sealed && half_hot_pending {
+      return false;
+    }
+    CALL_OBS_RECOMPILE_BUDGET
+      .try_update(Ordering::Relaxed, Ordering::Relaxed, |v| v.checked_sub(1))
+      .is_ok()
   }
 }
 

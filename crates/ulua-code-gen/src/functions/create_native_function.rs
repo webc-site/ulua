@@ -1,7 +1,10 @@
 use core::ptr::null_mut;
 
 use ulua_common::fint::CodegenHeuristicsInstructionLimit;
-use ulua_vm::{functions::call_obs::call_obs_hints_for, records::proto::Proto};
+use ulua_vm::{
+  functions::call_obs::call_obs_hints_for,
+  records::{lua_state::LuaState, proto::Proto},
+};
 
 use crate::{
   enums::{
@@ -56,6 +59,7 @@ fn compilation_assembly_options(options: &CompilationOptions) -> AssemblyOptions
 
 /// 编译单个 proto 为 X64 原生函数：成功返回执行数据句柄，失败返回编译结果错误
 /// （出参改返回值）。`total_ir_inst_count` 为跨 proto 累计的指令配额（in/out 累加器）。
+/// `l` 为编译会话宿主态（NAMECALL 阶段字符串常量 intern 的 VM 记账分配入口）。
 ///
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
@@ -65,10 +69,14 @@ pub unsafe fn create_native_function_x_64(
   proto: *mut Proto,
   total_ir_inst_count: &mut u32,
   options: &CompilationOptions,
+  l: *mut LuaState,
 ) -> Result<NativeProtoExecDataPtr, CodeGenCompilationResult> {
   // 本函数的 unsafe 只在三个被调边界（IR 构建/降级/execdata 生成），均以上层 CodeGen
   // 保证的「proto 存活 + build/helpers/total 活借用」为共同前提，逐处就地标注。
   let mut ir = IrBuilder::ir_builder_ir_builder(&options.hooks);
+  // NAMECALL 阶段：观测路径内联发射把 callee 字符串常量 intern 进 caller 常量表，
+  // 分配须走 VM 记账（编译会话身份字段，见 IrFunction::l 注）。
+  ir.set_lua_state(l);
 
   // JIT call inlining 第 2 阶段：暖重编译时从上一版 execdata 的 COBS 侧表读取
   // CALL 站点观测提示，供发射端以运行时证据替代静态判据。TSFB 类型提示
@@ -116,9 +124,12 @@ pub unsafe fn create_native_function_a_64(
   proto: *mut Proto,
   total_ir_inst_count: &mut u32,
   options: &CompilationOptions,
+  l: *mut LuaState,
 ) -> Result<NativeProtoExecDataPtr, CodeGenCompilationResult> {
   // 与 x_64 分支同构：unsafe 只在三个被调边界，共用「proto 存活 + 活借用」前提。
   let mut ir = IrBuilder::ir_builder_ir_builder(&options.hooks);
+  // NAMECALL 阶段：同 X64 分支——字符串常量 intern 的 VM 记账分配入口。
+  ir.set_lua_state(l);
 
   // J1 Phase 2b：暖重编译时从上一版 execdata 的 TSFB 侧表读取观测类型提示
   // （GETTABLEKS 站点：pc → (B 寄存器, 观测 tag)），注入分析器做 ANY 细化；

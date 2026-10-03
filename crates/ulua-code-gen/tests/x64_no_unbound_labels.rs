@@ -78,8 +78,14 @@ fn test_x64_codegen_no_unbound_labels_across_all_benchmarks() {
       let mut total_inst = 0u32;
 
       for (i, &proto) in all_protos.iter().enumerate() {
-        let res =
-          create_native_function_x_64(&mut build, &mut helpers, proto, &mut total_inst, &options);
+        let res = create_native_function_x_64(
+          &mut build,
+          &mut helpers,
+          proto,
+          &mut total_inst,
+          &options,
+          l,
+        );
         assert!(
           res.is_ok(),
           "compile proto {} failed for {}: {:?}",

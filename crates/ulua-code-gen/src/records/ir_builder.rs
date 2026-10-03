@@ -13,7 +13,7 @@ use ulua_common::{
 };
 use ulua_vm::{
   enums::{lua_type::LuaType, tms::TMS},
-  records::proto::Proto,
+  records::{lua_state::LuaState, proto::Proto},
 };
 
 use crate::{
@@ -564,6 +564,12 @@ impl IrBuilder {
   /// build_function_ir 前调用；消费点 try_translate_call_inline）。
   pub fn set_call_hints(&mut self, hints: Vec<(u32, u32, usize)>) {
     self.function.call_hints = hints;
+  }
+
+  /// NAMECALL 阶段：接线编译会话宿主 `LuaState`（字符串常量 intern 的 VM 记账
+  /// 分配入口），消费点 try_translate_call_inline → proto_k_intern_string。
+  pub fn set_lua_state(&mut self, l: *mut LuaState) {
+    self.function.l = NonNull::new(l);
   }
 
   pub fn ir_builder_ir_builder(host_hooks: &HostIrHooks) -> Self {

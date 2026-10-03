@@ -218,6 +218,7 @@ pub unsafe fn compile_internal(
             proto,
             &mut total_ir_inst_count,
             options,
+            l,
           )
         }
       }
@@ -232,6 +233,7 @@ pub unsafe fn compile_internal(
             proto,
             &mut total_ir_inst_count,
             options,
+            l,
           )
         }
       }

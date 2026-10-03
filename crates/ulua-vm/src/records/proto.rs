@@ -3,7 +3,7 @@ use core::ffi::c_void;
 use crate::{
   records::{
     feedback_vector_slot::FeedbackVectorSlot, g_cheader::GCheader, gc_object::GCObject,
-    loc_var::LocVar, t_string::tstring,
+    loc_var::LocVar, retired_k_array::RetiredKArray, t_string::tstring,
   },
   type_aliases::{instruction::Instruction, t_value::TValue},
 };
@@ -67,4 +67,8 @@ pub struct Proto {
   pub funid: u32,
   /// cpp: `Proto::cost`（`cpp/VM/src/lobject.h:414`）
   pub cost: u64,
+  /// JIT call inlining（NAMECALL 阶段）：`k` 表扩容的退役旧块链（见
+  /// `RetiredKArray`）。放在结构尾部——前段字段是发射器 ABI 契约（禁插删），
+  /// 本字段仅 VM 侧读写、`Proto::default()` 清零即合法空值。
+  pub k_retired: *mut RetiredKArray,
 }

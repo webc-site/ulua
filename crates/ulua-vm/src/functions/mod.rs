@@ -700,6 +700,7 @@ pub mod printspecial;
 pub mod printunsignedrev;
 pub mod propagateall;
 pub mod propagatemark;
+pub mod proto_k_intern_string;
 pub mod pseudo_2_addr;
 pub mod push_captures;
 pub mod push_onecapture;

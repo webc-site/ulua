@@ -9,7 +9,8 @@
 //! 3. 多 RETURN callee（刀 B：各 RETURN 点折叠到同一后继）；
 //! 4. 守卫失败/通过（刀 A 语义命门）：热身同站点后换闭包——同 proto 新闭包
 //!    （funid 守卫通过，内联体直接服务新闭包）、跨 proto 新闭包（守卫失败落
-//!    常规 CALL）。
+//!    常规 CALL）；NAMECALL 阶段加表读方法体与换方法表（`__index` 函数慢路
+//!    解析出新方法闭包，CALL 守卫失败落常规 CALL）。
 //!
 //! 观测触发依赖 fflag `LuauJitCallInlineObs`/`LuauJitCallInline`（rt 的
 //! `set_luau_bool_flags(true)` 点亮 Luau* 前缀）与负载内 ≥200 次恒定调用；
@@ -162,4 +163,86 @@ fn jit_call_inline_oop_full() -> Result<()> {
   };
   assert_eq!(jit, interp, "oop 全量负载 JIT 与解释器不一致");
   Ok(())
+}
+
+/// NAMECALL 虚调用内联：GETTABLEKS 方法体 + 多站热环（inherit3/oop 主形态）。
+const NAMECALL_TABLEKS: &str = r#"
+local t = {}
+t.__index = t
+function t:get()
+  return self.x + 1
+end
+function t:dot(other)
+  return self.x * other.x + self.y * other.y
+end
+local o = setmetatable({ x = 1, y = 2 }, t)
+local b = setmetatable({ x = 3, y = 4 }, t)
+local a = 0
+for i = 1, 5000 do
+  a = a + o:get() + o:dot(b)
+end
+return a
+"#;
+
+/// 守卫失败（NAMECALL 形态）：热身 t:get 后把实例换到另一套方法表（跨 proto
+/// 新方法闭包）——proto 守卫失败必须落常规 NAMECALL+CALL 路径，逐值一致。
+const NAMECALL_GUARD_FAIL_RETABLE: &str = r#"
+local t = {}
+t.__index = t
+function t:get()
+  return self.x + 1
+end
+local u = { __index = function(_, k)
+  if k == "get" then
+    return function(self)
+      return self.x + 100
+    end
+  end
+  return nil
+end }
+local a = 0
+local o = setmetatable({ x = 1 }, t)
+for i = 1, 5000 do
+  a = a + o:get()
+end
+o = setmetatable({ x = 2 }, u)
+for i = 1, 5000 do
+  a = a + o:get()
+end
+return a
+"#;
+
+/// 守卫通过（NAMECALL 形态）：热身后换同方法表的新实例（同 proto 新闭包，
+/// funid 恒等）——内联体直接服务新闭包。
+const NAMECALL_GUARD_PASS_REBIND: &str = r#"
+local t = {}
+t.__index = t
+function t:get()
+  return self.x + 1
+end
+local a = 0
+local o = setmetatable({ x = 1 }, t)
+for i = 1, 5000 do
+  a = a + o:get()
+end
+o = setmetatable({ x = 7 }, t)
+for i = 1, 5000 do
+  a = a + o:get()
+end
+return a
+"#;
+
+#[test]
+fn jit_call_inline_namecall_tableks() -> Result<()> {
+  assert_pair(NAMECALL_TABLEKS)
+}
+
+#[test]
+fn jit_call_inline_namecall_guard_fail_retable() -> Result<()> {
+  assert_pair(NAMECALL_GUARD_FAIL_RETABLE)
+}
+
+#[test]
+fn jit_call_inline_namecall_guard_pass_rebind() -> Result<()> {
+  assert_pair(NAMECALL_GUARD_PASS_REBIND)
 }

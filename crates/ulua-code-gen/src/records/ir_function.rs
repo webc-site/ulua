@@ -7,7 +7,7 @@ use core::{
 use ulua_common::records::{
   dense_hash_map::DenseHashMap, dense_hash_table::DenseDefault, small_vector::SmallVector,
 };
-use ulua_vm::records::proto::Proto;
+use ulua_vm::records::{lua_state::LuaState, proto::Proto};
 
 use crate::{
   enums::{ir::IrValueKind, ir_op_kind::IrOpKind},
@@ -54,6 +54,12 @@ pub struct IrFunction {
   /// try_translate_call_inline 以观测证据替代「常量 proto 槽」静态判据，funid
   /// 作发射守卫的立即数。
   pub call_hints: Vec<(u32, u32, usize)>,
+
+  /// NAMECALL 阶段：编译会话宿主 `LuaState` 句柄（arena 身份字段，同 `proto` 取舍
+  /// ——由 VM 在整次编译会话内持有，本结构只是消费者）。观测路径内联发射把 callee
+  /// 字符串常量 intern 进 caller 常量表（proto_k_intern_string）时用于 VM 记账分配；
+  /// 缺席态 `None` = 纯 IR 工具链路径（dump/单测），该发射面本就不可达。
+  pub l: Option<NonNull<LuaState>>,
 
   pub value_restore_ops: Vec<ValueRestoreLocation>,
   pub valid_restore_op_blocks: Vec<u32>,
@@ -129,6 +135,7 @@ impl Default for IrFunction {
       extra_native_data: Vec::new(),
       type_hints: Vec::new(),
       call_hints: Vec::new(),
+      l: None,
       value_restore_ops: Vec::new(),
       valid_restore_op_blocks: Vec::new(),
       // kInvalidInstIdx 是 ~0u32

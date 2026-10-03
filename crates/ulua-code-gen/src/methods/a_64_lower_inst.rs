@@ -3017,6 +3017,9 @@ impl IrLoweringA64 {
       IrCmd::JumpSlotMatch | IrCmd::CheckSlotMatch => {
         {
           let mut abort = Label::default(); // used when guard aborts execution
+          // VmExit 目标（内联体折叠出口）的落位 label：走 exit handler 通用机制
+          // （CheckTag 收尾同款），Block 目标不消费此 label
+          let mut fresh_mismatch = Label::default();
           let mismatch_op = if inst.cmd == IrCmd::JumpSlotMatch {
             inst.op(3)
           } else {
@@ -3025,7 +3028,7 @@ impl IrLoweringA64 {
           let mismatch = if mismatch_op.kind() == IrOpKind::Undef {
             ptr::from_mut(&mut abort)
           } else {
-            ptr::from_mut(self.label_op(mismatch_op))
+            self.get_target_label(mismatch_op, index, &mut fresh_mismatch)
           };
 
           let temp1 = self.regs.alloc_temp(KindA64::X);
@@ -3076,6 +3079,11 @@ impl IrLoweringA64 {
             self.jump_or_fallthrough_op(inst.op(2), next);
           } else if abort.id != 0 {
             emit_abort(self.build_mut(), &mut abort);
+          }
+          // VmExit 目标落位：登记 exit handler 并落 fresh label（CheckTag 收尾同款；
+          // Block 目标的 label 由块遍历落位，不经此处）
+          if mismatch_op.kind() == IrOpKind::VmExit {
+            self.finalize_target_label(mismatch_op, index, &mut fresh_mismatch);
           }
         }
       }

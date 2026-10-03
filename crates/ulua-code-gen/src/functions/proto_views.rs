@@ -102,6 +102,14 @@ pub(crate) fn string_constant(proto: &Proto, index: usize) -> &[u8] {
   unsafe { from_raw_parts(getstr(ts).cast::<u8>(), (*ts).len as usize) }
 }
 
+/// 常量表第 `index` 项的 TString 可变句柄；项越界或非常量字符串时 `None`。
+///
+/// NAMECALL 阶段：观测路径内联把 callee 字符串常量 intern 进 caller 常量表
+/// （proto_k_intern_string）时取 GC 载荷指针用；存活前提同 [`string_constant`]。
+pub(crate) fn string_constant_gc(proto: &Proto, index: usize) -> Option<*mut tstring> {
+  string_constant_ts(proto, index).map(|ts| ts.cast_mut())
+}
+
 /// 常量表第 `index` 项的字符串哈希（cpp `tsvalue(&proto->k[aux])->hash`）。
 ///
 /// `hash` 在 ulua-vm 侧是 `pub(crate)`，故经 [`ts_hash`] 的 `#[repr(C)]` 布局镜像读取。
@@ -118,7 +126,7 @@ pub(crate) fn string_constant_hash(proto: &Proto, index: usize) -> u32 {
 /// 常量表第 `index` 项的 TString 地址；项越界时 `None`。
 ///
 /// 契约：`index` 指向的常量项为 GC 字符串常量（`as_string` 内置 tt 断言复核）。
-fn string_constant_ts(proto: &Proto, index: usize) -> Option<*const tstring> {
+pub(crate) fn string_constant_ts(proto: &Proto, index: usize) -> Option<*const tstring> {
   let constant = constants(proto).get(index)?;
   // Safety: 依本函数契约——`value.gc` 命中联合体存活变体（tt 为 String，as_string 断言复核），
   // `(*gc).ts` 是该存活 GCObject 的 tstring 变体域。

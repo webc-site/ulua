@@ -4,10 +4,39 @@ use crate::{
   functions::{lua_m_free::lua_m_free, lua_m_freegco::lua_m_freegco},
   records::{
     feedback_vector_slot::FeedbackVectorSlot, gc_object::GCObject, loc_var::LocVar,
-    lua_page::lua_Page, lua_state::LuaState, proto::Proto, t_string::tstring,
+    lua_page::lua_Page, lua_state::LuaState, proto::Proto, retired_k_array::RetiredKArray,
+    t_string::tstring,
   },
   type_aliases::{instruction::Instruction, t_value::TValue},
 };
+
+/// 释放 JIT call inlining 的 `k` 表退役旧块链（见 `RetiredKArray`）：proto 死亡
+/// 即无闭包可引用，绝无在途帧持旧 `R_CONSTANTS`，此处统一回收安全。
+///
+/// # Safety
+/// `f` 的 `k_retired` 链须为本模块 `proto_k_intern_string` 挂载的自洽链表
+/// （节点与 `ptr` 均为同 `memcat` 的 `luaM` 分配），且无并发访问。
+unsafe fn free_retired_k_arrays(l: *mut LuaState, head: *mut RetiredKArray) {
+  unsafe {
+    let mut node = head;
+    while !node.is_null() {
+      let next = (*node).next;
+      lua_m_free(
+        l,
+        (*node).ptr as *mut u8,
+        (*node).size * size_of::<TValue>(),
+        (*node).memcat,
+      );
+      lua_m_free(
+        l,
+        node as *mut u8,
+        size_of::<RetiredKArray>(),
+        (*node).memcat,
+      );
+      node = next;
+    }
+  }
+}
 
 /// # Safety
 /// `l` 须为存活 `LuaState`；`f` 须指向一个即将销毁、字段自洽的 `Proto`：其 `code/p/k/locvars/upvalues` 及可空
@@ -18,6 +47,7 @@ pub(crate) unsafe fn lua_f_freeproto(l: *mut LuaState, f: *mut Proto, page: *mut
   unsafe {
     // cpp lfunc.cpp:29 luaF_freeproto：各字段读取集中在 free 前，绑定引用消除重复解引用
     let p = &*f;
+    free_retired_k_arrays(l, p.k_retired);
     lua_m_free(
       l,
       p.code as *mut u8,
