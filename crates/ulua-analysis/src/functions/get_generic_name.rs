@@ -1,8 +1,14 @@
-
-
-use crate::functions::get_tag::get_tag;
-use crate::{functions::{get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, push_string::push_string, throw_type_error::throw_type_error}, macros::lua_check_tag, records::type_function_generic_type::TypeFunctionGenericType};
 use ulua_vm::records::lua_state::LuaState;
+
+use crate::{
+  functions::{
+    get_tag::get_tag, get_type_function_runtime::get_type_function_type_id,
+    get_type_user_data::get_type_user_data, push_string::push_string,
+    throw_type_error::throw_type_error,
+  },
+  macros::lua_check_tag,
+  records::type_function_generic_type::TypeFunctionGenericType,
+};
 pub(crate) fn get_generic_name(l: &mut LuaState) -> i32 {
   // Safety: `l` 由 Lua VM 按类型函数运行时约定传入并全程存活（经 `c_thunk!` 蹦床重建为独占 `&mut`）。`get_type_function_type_id::<TypeFunctionGenericType>` 按 class-index 下转，
   // 其 `is_null()` 分支内 `throw_type_error` 返回 `!`（抛错不返回），故其后 `(*tfgt).is_named`/

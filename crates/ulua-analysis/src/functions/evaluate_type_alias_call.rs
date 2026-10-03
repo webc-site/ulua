@@ -9,11 +9,34 @@
 
 /// 对应 C++ 原生 `static int evaluateTypeAliasCall(lua_State* L)`（`cpp/Analysis/src/UserDefinedTypeFunction.cpp:99`）。
 use alloc::vec::Vec;
+
 use ulua_ast::records::location::Location;
 use ulua_common::{fflag, records::dense_hash_map::DenseHashMap};
-use ulua_vm::{macros::lua_upvalueindex::lua_upvalueindex, records::lua_state};
-use crate::{functions::{alloc_type_user_data::alloc_type_user_data, deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state, follow_type::follow, get_type_function_runtime::get_type_function_runtime, get_type_user_data::get_type_user_data, reduce_type_functions_type_function::reduce_type_functions, saturate_arguments::saturate_arguments, serialize_type_function_runtime_builder::serialize_type_id_type_function_runtime_builder_state, to_string_error::to_string_type_error, to_string_type_function_error::to_string}, records::{apply_type_function::ApplyTypeFunction, arena_handle::Handle, freeze_type_function_types::FreezeTypeFunctionTypes, substitution::Substitution, txn_log::TxnLog, type_fun::TypeFun}, type_aliases::{type_function_type_id::TypeFunctionTypeId, type_id::TypeId, type_pack_id::TypePackId}};
-use ulua_vm::records::lua_state::LuaState;
+use ulua_vm::{
+  macros::lua_upvalueindex::lua_upvalueindex,
+  records::{lua_state, lua_state::LuaState},
+};
+
+use crate::{
+  functions::{
+    alloc_type_user_data::alloc_type_user_data,
+    deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state,
+    follow_type::follow, get_type_function_runtime::get_type_function_runtime,
+    get_type_user_data::get_type_user_data,
+    reduce_type_functions_type_function::reduce_type_functions,
+    saturate_arguments::saturate_arguments,
+    serialize_type_function_runtime_builder::serialize_type_id_type_function_runtime_builder_state,
+    to_string_error::to_string_type_error, to_string_type_function_error::to_string,
+  },
+  records::{
+    apply_type_function::ApplyTypeFunction, arena_handle::Handle,
+    freeze_type_function_types::FreezeTypeFunctionTypes, substitution::Substitution,
+    txn_log::TxnLog, type_fun::TypeFun,
+  },
+  type_aliases::{
+    type_function_type_id::TypeFunctionTypeId, type_id::TypeId, type_pack_id::TypePackId,
+  },
+};
 pub(crate) fn evaluate_type_alias_call(l: &mut LuaState) -> i32 {
   unsafe {
     // TypeFun* tf = static_cast<TypeFun*>(lua_tolightuserdata(l, lua_upvalueindex(1)));

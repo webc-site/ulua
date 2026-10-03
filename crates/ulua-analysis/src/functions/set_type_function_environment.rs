@@ -9,9 +9,24 @@
 // shape (`unsafe fn(*mut vm::lua_State) -> i32`).
 
 use core::ptr::null;
-use ulua_vm::{functions::{luaopen_base::luaopen_base, luaopen_bit_32::luaopen_bit32, luaopen_buffer::luaopen_buffer, luaopen_math::luaopen_math, luaopen_string::luaopen_string, luaopen_table::luaopen_table, luaopen_utf_8::luaopen_utf_8}, records::lua_state};
-use crate::{functions::{lua_names::{GLOBAL_GCINFO, GLOBAL_GETFENV, GLOBAL_NEWPROXY, GLOBAL_PCALL, GLOBAL_PRINT, GLOBAL_SETFENV, GLOBAL_XPCALL}, print::print, unsupported_function::unsupported_function}};
-use ulua_vm::records::lua_state::LuaState;
+
+use ulua_vm::{
+  functions::{
+    luaopen_base::luaopen_base, luaopen_bit_32::luaopen_bit32, luaopen_buffer::luaopen_buffer,
+    luaopen_math::luaopen_math, luaopen_string::luaopen_string, luaopen_table::luaopen_table,
+    luaopen_utf_8::luaopen_utf_8,
+  },
+  records::{lua_state, lua_state::LuaState},
+};
+
+use crate::functions::{
+  lua_names::{
+    GLOBAL_GCINFO, GLOBAL_GETFENV, GLOBAL_NEWPROXY, GLOBAL_PCALL, GLOBAL_PRINT, GLOBAL_SETFENV,
+    GLOBAL_XPCALL,
+  },
+  print::print,
+  unsupported_function::unsupported_function,
+};
 unsafe extern "C-unwind" fn unsupported_function_thunk(l: *mut lua_state::LuaState) -> i32 {
   unsafe { unsupported_function(&mut *l) }
 }
@@ -27,7 +42,6 @@ unsafe extern "C-unwind" fn print_thunk(l: *mut lua_state::LuaState) -> i32 {
 /// 对应 C++ `void setTypeFunctionEnvironment(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:2094`）。
 pub(crate) unsafe fn set_type_function_environment(l: &mut LuaState) {
   unsafe {
-
     // Register math library
     luaopen_math(l.as_mut_ptr());
     l.pop(1);

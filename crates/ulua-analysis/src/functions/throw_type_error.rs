@@ -7,6 +7,7 @@
 
 /// `luaL_error` 的 C 格式串形参：NUL 结尾静态字节串，内容被 VM 忽略。
 use core::fmt::Arguments;
+
 use ulua_vm::{functions::lua_l_error_l::lua_l_error_l, records::lua_state::LuaState};
 const IGNORED_FORMAT: &[u8] = b"%s\0";
 

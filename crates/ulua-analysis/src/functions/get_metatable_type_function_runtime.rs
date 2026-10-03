@@ -1,7 +1,17 @@
-
-
-use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_tag::get_tag, get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, macros::lua_check_args, records::{type_function_extern_type::TypeFunctionExternType, type_function_table_type::TypeFunctionTableType}};
 use ulua_vm::records::lua_state::LuaState;
+
+use crate::{
+  functions::{
+    alloc_type_user_data::alloc_type_user_data, get_tag::get_tag,
+    get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data,
+    throw_type_error::throw_type_error,
+  },
+  macros::lua_check_args,
+  records::{
+    type_function_extern_type::TypeFunctionExternType,
+    type_function_table_type::TypeFunctionTableType,
+  },
+};
 pub(crate) fn get_metatable(l: &mut LuaState) -> i32 {
   // Safety: `l` 由 Lua VM 运行时约定传入并全程存活（经 `c_thunk!` 蹦床重建为独占 `&mut`）。
   // `tfmt`/`tfct` 按 class-index 下转，仅在 `!is_null()` 守卫后解引用；`(*..).metatable` 为

@@ -48,9 +48,7 @@ impl GlobalTypes {
   /// `unsafe { ptr.as_ref() }` 的借用检查行为完全同构；单线程序列化驱动
   ///（lib.rs 不变量 1）下借用期内无并存可变别名（BuiltinTypes 单例字段
   /// 构造后只读，arena 改写一律经 `arena_handle` 契约）。
-  pub(crate) fn builtin_types_of<'a>(
-    builtin_types: NonNull<BuiltinTypes>,
-  ) -> &'a BuiltinTypes {
+  pub(crate) fn builtin_types_of<'a>(builtin_types: NonNull<BuiltinTypes>) -> &'a BuiltinTypes {
     alias_ref(builtin_types.as_ptr())
   }
 

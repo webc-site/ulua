@@ -61,9 +61,10 @@ pub fn reduce_functions_internal(
   }
 
   // TypeReductionReentrancyGuard 的 Drop 负责复位（cpp 析构语义），unwind 安全。
-  let _guard = TypeReductionReentrancyGuard::type_reduction_reentrancy_guard_not_null_unifier_shared_state(
-    shared_state,
-  );
+  let _guard =
+    TypeReductionReentrancyGuard::type_reduction_reentrancy_guard_not_null_unifier_shared_state(
+      shared_state,
+    );
 
   let max_steps = dfint::LuauTypeFamilyGraphReductionMaximumSteps.get();
 

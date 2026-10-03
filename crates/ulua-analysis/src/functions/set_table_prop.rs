@@ -1,10 +1,21 @@
-
+use ulua_common::fflag;
+use ulua_vm::records::lua_state::LuaState;
 
 use crate::functions::get_tag::get_tag;
-use ulua_common::fflag;
 /// 对应 C++ 原生 `static int setTableProp(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:876`）。
-use crate::{functions::{get_mutable_type_function_runtime::get_mutable_type_function_type_id, get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, macros::{lua_check_args, lua_check_not_frozen, lua_check_tag}, records::{type_function_property::TypeFunctionProperty, type_function_singleton_type::TypeFunctionSingletonType, type_function_table_type::TypeFunctionTableType}};
-use ulua_vm::records::lua_state::LuaState;
+use crate::{
+  functions::{
+    get_mutable_type_function_runtime::get_mutable_type_function_type_id,
+    get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data,
+    throw_type_error::throw_type_error,
+  },
+  macros::{lua_check_args, lua_check_not_frozen, lua_check_tag},
+  records::{
+    type_function_property::TypeFunctionProperty,
+    type_function_singleton_type::TypeFunctionSingletonType,
+    type_function_table_type::TypeFunctionTableType,
+  },
+};
 pub(crate) fn set_table_prop(l: &mut LuaState) -> i32 {
   unsafe {
     lua_check_args!(

@@ -1,10 +1,17 @@
-
-
 use ulua_ast::records::location::Location;
-use ulua_common::{fflag, functions::{c_str::cstr_cow, format::format}, records::variant::Variant5};
-use ulua_vm::{functions::{lua_isstring::lua_isstring, lua_l_typename::lua_l_typename, lua_typename::lua_typename}};
+use ulua_common::{
+  fflag,
+  functions::{c_str::cstr_cow, format::format},
+  records::variant::Variant5,
+};
+use ulua_vm::{
+  functions::{
+    lua_isstring::lua_isstring, lua_l_typename::lua_l_typename, lua_typename::lua_typename,
+  },
+  records::lua_state::LuaState,
+};
+
 use crate::records::{runtime_error::RuntimeError, type_function_error::TypeFunctionError};
-use ulua_vm::records::lua_state::LuaState;
 pub fn check_result_for_error(
   l: &mut LuaState,
   type_function_name: &str,

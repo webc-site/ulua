@@ -1,8 +1,11 @@
-
+use ulua_vm::records::lua_state::LuaState;
 
 /// 对应 C++ 原生 `static int createGeneric(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:572`）。
-use crate::{functions::{alloc_type_user_data::alloc_type_user_data, throw_type_error::throw_type_error}, records::type_function_generic_type::TypeFunctionGenericType, type_aliases::{type_function_type_variant::TypeFunctionTypeVariant}};
-use ulua_vm::records::lua_state::LuaState;
+use crate::{
+  functions::{alloc_type_user_data::alloc_type_user_data, throw_type_error::throw_type_error},
+  records::type_function_generic_type::TypeFunctionGenericType,
+  type_aliases::type_function_type_variant::TypeFunctionTypeVariant,
+};
 pub(crate) fn create_generic(l: &mut LuaState) -> i32 {
   // Safety: l 是 Lua VM 调注册闭包时传入的存活 lua_State；luaL_checkstring 非字符串即抛错，
   // 成功返回 NUL 结尾、GC 在本次调用内保活的字符串，cstr_cow 读取合法；空名分支经
@@ -27,11 +30,7 @@ pub(crate) fn create_generic(l: &mut LuaState) -> i32 {
       name,
     };
 
-    alloc_type_user_data(
-      l,
-      TypeFunctionTypeVariant::Generic(generic_type),
-      false,
-    );
+    alloc_type_user_data(l, TypeFunctionTypeVariant::Generic(generic_type), false);
 
     1
   }

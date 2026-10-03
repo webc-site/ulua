@@ -1,9 +1,11 @@
-
-
 /// 对应 C++ 原生 `static int isSubtypeOf(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1835`）。
 use ulua_vm::macros::lua_l_error::luaL_error;
-use crate::{functions::{deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state, get_type_function_runtime::get_type_function_runtime, get_type_user_data::get_type_user_data}};
 use ulua_vm::records::lua_state::LuaState;
+
+use crate::functions::{
+  deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state,
+  get_type_function_runtime::get_type_function_runtime, get_type_user_data::get_type_user_data,
+};
 pub(crate) fn is_subtype_of(l: &mut LuaState) -> i32 {
   // Safety: `l` 由 Lua VM 按类型函数运行时约定传入并全程存活（经 `c_thunk!` 蹦床重建为独占 `&mut`）。`get_type_function_runtime(l)` 返回该 L 建栈时接线、非空且比本次调用长寿的 runtime，
   // 其 `runtime_builder` 是构造期布线的非空指针，`&mut *` 重建 builder 的可变借用，两次

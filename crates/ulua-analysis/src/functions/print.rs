@@ -1,10 +1,9 @@
-
-
 /// 对应 C++ 原生 `static int print(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:2069`）。
 use alloc::string::String;
-use ulua_vm::{functions::lua_l_tolstring::lua_l_tolstring_ref};
-use crate::{functions::get_type_function_runtime::get_type_function_runtime};
-use ulua_vm::records::lua_state::LuaState;
+
+use ulua_vm::{functions::lua_l_tolstring::lua_l_tolstring_ref, records::lua_state::LuaState};
+
+use crate::functions::get_type_function_runtime::get_type_function_runtime;
 pub(crate) fn print(l: &mut LuaState) -> i32 {
   unsafe {
     let mut result = String::new();

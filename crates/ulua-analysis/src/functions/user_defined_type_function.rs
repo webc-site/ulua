@@ -17,11 +17,60 @@
 // (see `methods/find_user_type_function_blockers_visit_user_defined_type_function*`);
 // this trait impl just forwards to them.
 
-use alloc::{boxed::Box, string::{String}, vec::Vec};
+use alloc::{boxed::Box, string::String, vec::Vec};
+
 use ulua_ast::records::ast_name::AstName;
-use ulua_common::{fflag, functions::{c_str::with_c_str, format::format, get_clock::get_clock}, macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet};
-use ulua_vm::{functions::{lua_callbacks::lua_callbacks, lua_getfenv::lua_getfenv, lua_gettable::lua_gettable, lua_getthreaddata::lua_getthreaddata, lua_mainthread::lua_mainthread, lua_newthread::lua_newthread}, macros::lua_registryindex::LUA_REGISTRYINDEX, records::lua_state};
-use crate::{enums::reduction::Reduction, functions::{alloc_type_user_data::alloc_type_user_data, check_result_for_error::check_result_for_error, check_result_for_error_deprecated::check_result_for_error_deprecated, deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state, evaluate_type_alias_call::evaluate_type_alias_call, follow_type::follow, get_mutable_type::get_mutable, get_type_user_data::get_type_user_data, is_pending::is_pending, is_type_user_data::is_type_user_data, reset_type_function_state::reset_type_function_state, serialize_type_function_runtime_builder::serialize_type_id_type_function_runtime_builder_state, to_string_type_function_error::to_string}, records::{arena_handle::{alias, alias_nn, alias_ref}, extern_type::ExternType, find_user_type_function_blockers::FindUserTypeFunctionBlockers, freeze_type_function_types::FreezeTypeFunctionTypes, generic_type_visitor::{GenericTypeVisitor, GenericTypeVisitorTrait}, luau_temp_thread_popper::LuauTempThreadPopper, scoped_assign::ScopedAssign, time_limit_error::TimeLimitError, type_function_context::TypeFunctionContext, type_function_instance_type::TypeFunctionInstanceType, type_function_reduction_result::TypeFunctionReductionResult, type_function_runtime::TypeFunctionRuntime, type_function_runtime_builder_state::TypeFunctionRuntimeBuilderState, user_cancel_error::UserCancelError, visit_key::VisitKey}, type_aliases::{type_function_type_id::{AsTypeFunctionType, TypeFunctionTypeId}, type_id::TypeId, type_pack_id::TypePackId}};
+use ulua_common::{
+  fflag,
+  functions::{c_str::with_c_str, format::format, get_clock::get_clock},
+  macros::luau_assert::LUAU_ASSERT,
+  records::dense_hash_set::DenseHashSet,
+};
+use ulua_vm::{
+  functions::{
+    lua_callbacks::lua_callbacks, lua_getfenv::lua_getfenv, lua_gettable::lua_gettable,
+    lua_getthreaddata::lua_getthreaddata, lua_mainthread::lua_mainthread,
+    lua_newthread::lua_newthread,
+  },
+  macros::lua_registryindex::LUA_REGISTRYINDEX,
+  records::lua_state,
+};
+
+use crate::{
+  enums::reduction::Reduction,
+  functions::{
+    alloc_type_user_data::alloc_type_user_data, check_result_for_error::check_result_for_error,
+    check_result_for_error_deprecated::check_result_for_error_deprecated,
+    deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state,
+    evaluate_type_alias_call::evaluate_type_alias_call, follow_type::follow,
+    get_mutable_type::get_mutable, get_type_user_data::get_type_user_data, is_pending::is_pending,
+    is_type_user_data::is_type_user_data, reset_type_function_state::reset_type_function_state,
+    serialize_type_function_runtime_builder::serialize_type_id_type_function_runtime_builder_state,
+    to_string_type_function_error::to_string,
+  },
+  records::{
+    arena_handle::{alias, alias_nn, alias_ref},
+    extern_type::ExternType,
+    find_user_type_function_blockers::FindUserTypeFunctionBlockers,
+    freeze_type_function_types::FreezeTypeFunctionTypes,
+    generic_type_visitor::{GenericTypeVisitor, GenericTypeVisitorTrait},
+    luau_temp_thread_popper::LuauTempThreadPopper,
+    scoped_assign::ScopedAssign,
+    time_limit_error::TimeLimitError,
+    type_function_context::TypeFunctionContext,
+    type_function_instance_type::TypeFunctionInstanceType,
+    type_function_reduction_result::TypeFunctionReductionResult,
+    type_function_runtime::TypeFunctionRuntime,
+    type_function_runtime_builder_state::TypeFunctionRuntimeBuilderState,
+    user_cancel_error::UserCancelError,
+    visit_key::VisitKey,
+  },
+  type_aliases::{
+    type_function_type_id::{AsTypeFunctionType, TypeFunctionTypeId},
+    type_id::TypeId,
+    type_pack_id::TypePackId,
+  },
+};
 impl GenericTypeVisitorTrait for FindUserTypeFunctionBlockers<'_> {
   type Seen = DenseHashSet<VisitKey>;
 

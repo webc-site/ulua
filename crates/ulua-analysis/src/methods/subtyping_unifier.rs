@@ -67,8 +67,7 @@ impl SubtypingUnifier {
       Vec::with_capacity(assumed_constraints.len());
     let mut upper_bounds: UpperBounds = UpperBounds::new(null());
     for cv in assumed_constraints {
-      let (unified, dispatched) =
-        self.dispatch_one_constraint(constraint, &cv, &mut upper_bounds);
+      let (unified, dispatched) = self.dispatch_one_constraint(constraint, &cv, &mut upper_bounds);
       unifier_res &= unified;
       if !dispatched {
         outstanding_constraints.push(cv);

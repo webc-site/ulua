@@ -1,9 +1,23 @@
 //! Faithful port of `void registerTypesLibrary(lua_State* l)`
 //! (Analysis/src/TypeFunctionRuntime.cpp:1876-1914).
 
-use ulua_vm::{functions::lua_l_register::lua_l_register_bytes, records::{lua_l_reg::LuaLReg}};
-use crate::{functions::{create_any::create_any, create_boolean::create_boolean, create_buffer::create_buffer, create_function::create_function, create_generic::create_generic, create_intersection::create_intersection, create_negation::create_negation, create_never::create_never, create_number::create_number, create_optional::create_optional, create_singleton::create_singleton, create_string::create_string, create_table::create_table, create_thread::create_thread, create_union::create_union, create_unknown::create_unknown, deep_copy::deep_copy, lua_names::LIB_TYPES}, macros::c_thunk};
-use ulua_vm::records::lua_state::LuaState;
+use ulua_vm::{
+  functions::lua_l_register::lua_l_register_bytes,
+  records::{lua_l_reg::LuaLReg, lua_state::LuaState},
+};
+
+use crate::{
+  functions::{
+    create_any::create_any, create_boolean::create_boolean, create_buffer::create_buffer,
+    create_function::create_function, create_generic::create_generic,
+    create_intersection::create_intersection, create_negation::create_negation,
+    create_never::create_never, create_number::create_number, create_optional::create_optional,
+    create_singleton::create_singleton, create_string::create_string, create_table::create_table,
+    create_thread::create_thread, create_union::create_union, create_unknown::create_unknown,
+    deep_copy::deep_copy, lua_names::LIB_TYPES,
+  },
+  macros::c_thunk,
+};
 c_thunk!(create_unknown_thunk, create_unknown, @ref);
 c_thunk!(create_never_thunk, create_never, @ref);
 c_thunk!(create_any_thunk, create_any, @ref);

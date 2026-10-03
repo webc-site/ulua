@@ -1,12 +1,28 @@
-
-
 /// # Safety
 /// `l` 必须是当前调用栈有效、且已挂载 `TypeFunctionRuntime` 的 `lua_State*`；本函数向该栈
 /// 压入若干值（不弹出），调用方须按 C++ 原约定管理栈，且调用期间单线程独占 VM 栈。对应 C++
 /// `void pushTypePack(lua_State* L, TypeFunctionTypePackId tp)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1254`）。
-use ulua_vm::{functions::{lua_createtable::lua_createtable, lua_rawseti::lua_rawseti}};
-use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_type_function_runtime::get_type_function_type_pack_id, lua_names::{FIELD_HEAD, FIELD_TAIL}, throw_type_error::throw_type_error}, records::{type_function_generic_type::TypeFunctionGenericType, type_function_generic_type_pack::TypeFunctionGenericTypePack, type_function_type_pack::TypeFunctionTypePack, type_function_variadic_type_pack::TypeFunctionVariadicTypePack}, type_aliases::{type_function_type_pack_id::TypeFunctionTypePackId, type_function_type_variant::TypeFunctionTypeVariant}};
+use ulua_vm::functions::{lua_createtable::lua_createtable, lua_rawseti::lua_rawseti};
 use ulua_vm::records::lua_state::LuaState;
+
+use crate::{
+  functions::{
+    alloc_type_user_data::alloc_type_user_data,
+    get_type_function_runtime::get_type_function_type_pack_id,
+    lua_names::{FIELD_HEAD, FIELD_TAIL},
+    throw_type_error::throw_type_error,
+  },
+  records::{
+    type_function_generic_type::TypeFunctionGenericType,
+    type_function_generic_type_pack::TypeFunctionGenericTypePack,
+    type_function_type_pack::TypeFunctionTypePack,
+    type_function_variadic_type_pack::TypeFunctionVariadicTypePack,
+  },
+  type_aliases::{
+    type_function_type_pack_id::TypeFunctionTypePackId,
+    type_function_type_variant::TypeFunctionTypeVariant,
+  },
+};
 pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId) {
   // Safety: 前置条件逐项——(1) `l` 按本函数契约是宿主 lua 虚拟机创建的存活
   // lua_State（crate 的 LuaState 是不透明镜像类型），`l as *mut LuaState` 为
@@ -20,7 +36,6 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
   // 使用：createtable 压入 1 表，字段经 setfield(rawseti) 弹出，键名是 lua_names 的静态 NUL 结尾
   // NUL 结尾字面量；整块单线程串行执行，无别名。
   unsafe {
-
     let tftp = get_type_function_type_pack_id::<TypeFunctionTypePack>(tp);
     if !tftp.is_null() {
       lua_createtable(l.as_mut_ptr(), 0, 2);
@@ -75,10 +90,7 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
 /// 非空且指向存活类型函数 pack 节点的 `TypeFunctionTypePackId`，且其变体属于
 /// 被识别的 variadic/generic pack——本函数在 null 检查后以 `(*tfvp).type_id` /
 /// `(*tfgp).…` 解引用它，并经 `alloc_type_user_data` 与 Lua C-API（FFI）写栈。
-unsafe fn push_type_pack_tail(
-  l: &mut LuaState,
-  tail: TypeFunctionTypePackId,
-) {
+unsafe fn push_type_pack_tail(l: &mut LuaState, tail: TypeFunctionTypePackId) {
   // Safety: 依函数头 # Safety——`l` 为本次调用独占的存活 lua_State，
   // tail 为运行时 arena 中存活 pack 节点；get_type_function_type_pack_id
   // 按 class index 分派，判空命中后 `(*tfvp)`/`(*tfgp)` 类型正确、基址重合，

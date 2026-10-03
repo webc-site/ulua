@@ -1,9 +1,19 @@
-
-
 /// 对应 C++ 原生 `static int getComponents(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:717`）。
 use ulua_vm::functions::{lua_createtable::lua_createtable, lua_rawseti::lua_rawseti};
-use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_tag::get_tag, get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, macros::lua_check_args, records::{type_function_intersection_type::TypeFunctionIntersectionType, type_function_union_type::TypeFunctionUnionType}};
 use ulua_vm::records::lua_state::LuaState;
+
+use crate::{
+  functions::{
+    alloc_type_user_data::alloc_type_user_data, get_tag::get_tag,
+    get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data,
+    throw_type_error::throw_type_error,
+  },
+  macros::lua_check_args,
+  records::{
+    type_function_intersection_type::TypeFunctionIntersectionType,
+    type_function_union_type::TypeFunctionUnionType,
+  },
+};
 pub(crate) fn get_components(l: &mut LuaState) -> i32 {
   // Safety: `l` 由 Lua VM 按类型函数运行时的 C 调用约定传入，非空且在整个调用内存活；
   // `l` 由 `c_thunk!` 蹦床重建为独占 `&mut`。`get_type_user_data`

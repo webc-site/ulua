@@ -1,11 +1,26 @@
-
-
-use crate::functions::get_tag::get_tag;
 /// 对应 C++ 原生 `static int getFunctionGenerics(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1464`）。
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
-use ulua_vm::functions::{lua_createtable::lua_createtable, lua_rawseti::lua_rawseti};
-use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_type_function_runtime::{get_type_function_type_id, get_type_function_type_pack_id}, get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, macros::lua_check_tag, records::{type_function_function_type::TypeFunctionFunctionType, type_function_generic_type::TypeFunctionGenericType, type_function_generic_type_pack::TypeFunctionGenericTypePack}, type_aliases::{type_function_type_variant::TypeFunctionTypeVariant}};
-use ulua_vm::records::lua_state::LuaState;
+use ulua_vm::{
+  functions::{lua_createtable::lua_createtable, lua_rawseti::lua_rawseti},
+  records::lua_state::LuaState,
+};
+
+use crate::{
+  functions::{
+    alloc_type_user_data::alloc_type_user_data,
+    get_tag::get_tag,
+    get_type_function_runtime::{get_type_function_type_id, get_type_function_type_pack_id},
+    get_type_user_data::get_type_user_data,
+    throw_type_error::throw_type_error,
+  },
+  macros::lua_check_tag,
+  records::{
+    type_function_function_type::TypeFunctionFunctionType,
+    type_function_generic_type::TypeFunctionGenericType,
+    type_function_generic_type_pack::TypeFunctionGenericTypePack,
+  },
+  type_aliases::type_function_type_variant::TypeFunctionTypeVariant,
+};
 pub(crate) fn get_function_generics(l: &mut LuaState) -> i32 {
   // Safety: `l` 由 Lua VM 按类型函数运行时约定传入并全程存活（经 `c_thunk!` 蹦床重建为独占 `&mut`）。`self_ty` 由 `get_type_user_data` 取得，`get_type_function_type_id::<
   // TypeFunctionFunctionType>` 按 RTTI class-index 下转；`tfft.is_null()` 分支内 `throw_type_error`

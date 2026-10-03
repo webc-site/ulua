@@ -1,15 +1,67 @@
 //! `type_function_runtime` 方法汇总：原先按 cpp 符号逐方法拆分的同前缀小文件合并至此，行为逐字保留。
 
-use alloc::{string::{String, ToString}, vec::Vec};
-use core::{ptr::{from_mut, null_mut}, slice::from_ref};
+use alloc::{
+  string::{String, ToString},
+  vec::Vec,
+};
+use core::{
+  ptr::{from_mut, null_mut},
+  slice::from_ref,
+};
 use std::panic::{AssertUnwindSafe, catch_unwind, resume_unwind};
-use ulua_ast::{records::{allocator::Allocator, ast_array::AstArray, ast_expr::AstExpr, ast_name::AstName, ast_name_table::AstNameTable, ast_stat::AstStat, ast_stat_block::AstStatBlock, ast_stat_return::AstStatReturn, ast_stat_type_function::AstStatTypeFunction, location::Location, node_handle::{Node, Nodes}, parse_result::ParseResult}, type_aliases::cst_node_map::CstNodeMap};
+
+use ulua_ast::{
+  records::{
+    allocator::Allocator,
+    ast_array::AstArray,
+    ast_expr::AstExpr,
+    ast_name::AstName,
+    ast_name_table::AstNameTable,
+    ast_stat::AstStat,
+    ast_stat_block::AstStatBlock,
+    ast_stat_return::AstStatReturn,
+    ast_stat_type_function::AstStatTypeFunction,
+    location::Location,
+    node_handle::{Node, Nodes},
+    parse_result::ParseResult,
+  },
+  type_aliases::cst_node_map::CstNodeMap,
+};
 use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
 use ulua_common::{functions::format::format, records::dense_hash_set::DenseHashSet};
-use ulua_compiler::{functions::compile_or_throw_compiler::compile_or_throw_bytecode_builder_parse_result_ast_name_table_compile_options, records::{compile_error::CompileError, compile_options::CompileOptions}};
-use ulua_vm::{functions::{lua_close::lua_close, lua_gettable::lua_gettable, lua_l_sandbox::lua_l_sandbox, lua_l_sandboxthread::lua_l_sandboxthread, lua_newstate::lua_newstate, lua_newthread::lua_newthread, lua_settable::lua_settable, lua_setthreaddata::lua_setthreaddata, lua_xmove::lua_xmove, luau_load::luau_load}, macros::{lua_globalsindex::LUA_GLOBALSINDEX, lua_registryindex::LUA_REGISTRYINDEX}, records::lua_state};
-use crate::{functions::{check_result_for_error::check_result_for_error, check_result_for_error_deprecated::check_result_for_error_deprecated, register_type_user_data::register_type_user_data, register_types_library::register_types_library, set_type_function_environment::set_type_function_environment, type_function_alloc::type_function_alloc}, records::{arena_handle::alias, failed_to_compile::FailedToCompile, internal_error_reporter::InternalErrorReporter, luau_temp_thread_popper::LuauTempThreadPopper, type_check_limits::TypeCheckLimits, type_function_error::TypeFunctionError, type_function_missing::TypeFunctionMissing, type_function_runtime::TypeFunctionRuntime, typed_allocator::TypedAllocator}, type_aliases::{scope_ptr_type::ScopePtr, type_function_error_data::TypeFunctionErrorData}};
-use ulua_vm::records::lua_state::LuaState;
+use ulua_compiler::{
+  functions::compile_or_throw_compiler::compile_or_throw_bytecode_builder_parse_result_ast_name_table_compile_options,
+  records::{compile_error::CompileError, compile_options::CompileOptions},
+};
+use ulua_vm::{
+  functions::{
+    lua_close::lua_close, lua_gettable::lua_gettable, lua_l_sandbox::lua_l_sandbox,
+    lua_l_sandboxthread::lua_l_sandboxthread, lua_newstate::lua_newstate,
+    lua_newthread::lua_newthread, lua_settable::lua_settable, lua_setthreaddata::lua_setthreaddata,
+    lua_xmove::lua_xmove, luau_load::luau_load,
+  },
+  macros::{lua_globalsindex::LUA_GLOBALSINDEX, lua_registryindex::LUA_REGISTRYINDEX},
+  records::{lua_state, lua_state::LuaState},
+};
+
+use crate::{
+  functions::{
+    check_result_for_error::check_result_for_error,
+    check_result_for_error_deprecated::check_result_for_error_deprecated,
+    register_type_user_data::register_type_user_data,
+    register_types_library::register_types_library,
+    set_type_function_environment::set_type_function_environment,
+    type_function_alloc::type_function_alloc,
+  },
+  records::{
+    arena_handle::alias, failed_to_compile::FailedToCompile,
+    internal_error_reporter::InternalErrorReporter, luau_temp_thread_popper::LuauTempThreadPopper,
+    type_check_limits::TypeCheckLimits, type_function_error::TypeFunctionError,
+    type_function_missing::TypeFunctionMissing, type_function_runtime::TypeFunctionRuntime,
+    typed_allocator::TypedAllocator,
+  },
+  type_aliases::{scope_ptr_type::ScopePtr, type_function_error_data::TypeFunctionErrorData},
+};
 impl TypeFunctionRuntime {
   pub fn new(ice: &InternalErrorReporter, limits: &TypeCheckLimits, root_scope: ScopePtr) -> Self {
     // 注：`state`（懒建 Lua VM 句柄对）与 `runtime_builder`（`*mut

@@ -1,9 +1,10 @@
-
-
 use alloc::string::String;
+
 use ulua_common::functions::{c_str::cstr_cow, format::format};
-use ulua_vm::{functions::{lua_isstring::lua_isstring, lua_typename::lua_typename}};
-use ulua_vm::records::lua_state::LuaState;
+use ulua_vm::{
+  functions::{lua_isstring::lua_isstring, lua_typename::lua_typename},
+  records::lua_state::LuaState,
+};
 pub fn check_result_for_error_deprecated(
   l: &mut LuaState,
   type_function_name: &str,

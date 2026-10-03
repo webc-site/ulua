@@ -8,10 +8,54 @@
 // `kTypeUserdataTag` (Analysis/src/TypeFunctionRuntime.cpp:250).
 
 use core::{ffi::c_void, ptr::null};
+
 use ulua_common::fflag;
-use ulua_vm::{functions::{lua_l_register::lua_l_register_bytes, lua_setuserdatadtor::lua_setuserdatadtor}, records::{lua_l_reg::LuaLReg, lua_state}};
-use crate::{functions::{check_tag::check_tag, dealloc_type_user_data::dealloc_type_user_data, get_components::get_components, get_function_generics::get_function_generics, get_function_parameters::get_function_parameters, get_function_returns::get_function_returns, get_generic_is_pack::get_generic_is_pack, get_generic_name::get_generic_name, get_indexer::get_indexer, get_metatable_type_function_runtime::get_metatable, get_negated_value::get_negated_value, get_props::get_props, get_read_indexer::get_read_indexer, get_read_parent::get_read_parent, get_singleton_value::get_singleton_value, get_write_indexer::get_write_indexer, get_write_parent::get_write_parent, is_equal_to_type::is_equal_to_type, is_subtype_of::is_subtype_of, lua_names::{FIELD_EQ, FIELD_INDEX_CLOSURE, FIELD_METATABLE, FIELD_TYPE_TAG, METATABLE_LOCKED, METHOD_IS_SUBTYPE_OF, TYPE}, read_table_prop::read_table_prop, set_function_generics::set_function_generics, set_function_parameters::set_function_parameters, set_function_returns::set_function_returns, set_read_table_prop::set_read_table_prop, set_table_indexer::set_table_indexer, set_table_metatable::set_table_metatable, set_table_prop::set_table_prop, set_table_read_indexer::set_table_read_indexer, set_table_write_indexer::set_table_write_indexer, set_write_table_prop::set_write_table_prop, type_userdata_index::type_userdata_index, write_table_prop::write_table_prop}, macros::c_thunk};
-use ulua_vm::records::lua_state::LuaState;
+use ulua_vm::{
+  functions::{lua_l_register::lua_l_register_bytes, lua_setuserdatadtor::lua_setuserdatadtor},
+  records::{lua_l_reg::LuaLReg, lua_state, lua_state::LuaState},
+};
+
+use crate::{
+  functions::{
+    check_tag::check_tag,
+    dealloc_type_user_data::dealloc_type_user_data,
+    get_components::get_components,
+    get_function_generics::get_function_generics,
+    get_function_parameters::get_function_parameters,
+    get_function_returns::get_function_returns,
+    get_generic_is_pack::get_generic_is_pack,
+    get_generic_name::get_generic_name,
+    get_indexer::get_indexer,
+    get_metatable_type_function_runtime::get_metatable,
+    get_negated_value::get_negated_value,
+    get_props::get_props,
+    get_read_indexer::get_read_indexer,
+    get_read_parent::get_read_parent,
+    get_singleton_value::get_singleton_value,
+    get_write_indexer::get_write_indexer,
+    get_write_parent::get_write_parent,
+    is_equal_to_type::is_equal_to_type,
+    is_subtype_of::is_subtype_of,
+    lua_names::{
+      FIELD_EQ, FIELD_INDEX_CLOSURE, FIELD_METATABLE, FIELD_TYPE_TAG, METATABLE_LOCKED,
+      METHOD_IS_SUBTYPE_OF, TYPE,
+    },
+    read_table_prop::read_table_prop,
+    set_function_generics::set_function_generics,
+    set_function_parameters::set_function_parameters,
+    set_function_returns::set_function_returns,
+    set_read_table_prop::set_read_table_prop,
+    set_table_indexer::set_table_indexer,
+    set_table_metatable::set_table_metatable,
+    set_table_prop::set_table_prop,
+    set_table_read_indexer::set_table_read_indexer,
+    set_table_write_indexer::set_table_write_indexer,
+    set_write_table_prop::set_write_table_prop,
+    type_userdata_index::type_userdata_index,
+    write_table_prop::write_table_prop,
+  },
+  macros::c_thunk,
+};
 const K_TYPE_USERDATA_TAG: i32 = 42;
 
 c_thunk!(check_tag_thunk, check_tag, @ref);
@@ -115,7 +159,6 @@ pub(crate) fn register_type_user_data(l: &mut LuaState) {
   // 均为 'static，VM 注册表留存它们无悬垂。注册的 thunk 只在 VM 回调时运行，
   // 届时 VM 保证自身 `l` 参数有效（见 `c_thunk!` 展开内证成）。
   unsafe {
-
     // Create and register metatable for type userdata
     // luaL_newmetatable(l, "type");
     l.new_metatable_by_bytes(TYPE);

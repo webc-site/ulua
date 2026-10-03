@@ -128,7 +128,9 @@ pub(crate) fn find_type_element_at_ast_type_type_id_position(
     let return_types = type_function.return_types.as_ptr();
     let ret_types_tp = ftv.ret_types;
 
-    if let Some(element) = find_type_element_at_ast_type_pack_type_pack_id_position(return_types, ret_types_tp, position) {
+    if let Some(element) =
+      find_type_element_at_ast_type_pack_type_pack_id_position(return_types, ret_types_tp, position)
+    {
       return Some(element);
     }
   }

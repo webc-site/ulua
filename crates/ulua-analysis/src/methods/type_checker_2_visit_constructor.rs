@@ -103,8 +103,7 @@ impl TypeChecker2 {
     // fn，契约同注释）。Rust 局部变量按声明逆序析构，`finder` 后声明先析构，
     // 其裸指针在 `uninitialized_fields` 失效之前即不再被使用，与 C++ 中二者
     // 同生死的裸指针共享语义一致。
-    let mut finder =
-      FindUninitializedAccesses::new(self_local, fields_ptr, method_names);
+    let mut finder = FindUninitializedAccesses::new(self_local, fields_ptr, method_names);
 
     for stmt in function.body.body.iter_nodes() {
       let stmt_ref = stmt.get();

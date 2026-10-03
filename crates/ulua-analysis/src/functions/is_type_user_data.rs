@@ -1,7 +1,7 @@
-
-
-use ulua_vm::functions::{lua_isuserdata::lua_isuserdata, lua_touserdatatagged::lua_touserdatatagged};
-use ulua_vm::records::lua_state::LuaState;
+use ulua_vm::{
+  functions::{lua_isuserdata::lua_isuserdata, lua_touserdatatagged::lua_touserdatatagged},
+  records::lua_state::LuaState,
+};
 pub fn is_type_user_data(l: &mut LuaState, idx: i32) -> bool {
   // kTypeUserdataTag is a constant used for Luau Type Function userdata.
   const K_TYPE_USERDATA_TAG: i32 = 42;

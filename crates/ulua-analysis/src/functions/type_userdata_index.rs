@@ -1,9 +1,10 @@
-
-
 /// 对应 C++ 原生 `static int typeUserdataIndex(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1962`）。
-use ulua_vm::{macros::lua_upvalueindex::lua_upvalueindex};
-use crate::{functions::{get_tag::get_tag, get_type_user_data::get_type_user_data, push_string::push_string}};
+use ulua_vm::macros::lua_upvalueindex::lua_upvalueindex;
 use ulua_vm::records::lua_state::LuaState;
+
+use crate::functions::{
+  get_tag::get_tag, get_type_user_data::get_type_user_data, push_string::push_string,
+};
 pub(crate) fn type_userdata_index(l: &mut LuaState) -> i32 {
   let self_ty = get_type_user_data(l, 1);
   // 先落地拥有值：`check_bytes` 契约要求持窗期间不再动 state，而下方两条分支都要

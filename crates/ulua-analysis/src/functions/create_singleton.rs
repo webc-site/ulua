@@ -1,14 +1,27 @@
-
-
 /// 类型函数 `types.singleton`：按索引 1 实参的运行时种类压入对应 singleton userdata。
 /// `l` 的存活与本次调用独占前提已由 `&mut LuaState` 接收者类型承载；本函数经
 /// `create_singleton_thunk` 在 C-ABI 边界由 VM 调起，函数体只在读栈与写栈之间切换。
 use ulua_common::{fflag, functions::c_str::cstr_cow};
-use ulua_vm::functions::{lua_l_typename::lua_l_typename, lua_typename::lua_typename};
-use crate::{enums::type_type_function_runtime::Type, functions::{alloc_type_user_data::alloc_type_user_data, throw_type_error::throw_type_error}, records::{type_function_boolean_singleton::TypeFunctionBooleanSingleton, type_function_primitive_type::TypeFunctionPrimitiveType, type_function_singleton_type::TypeFunctionSingletonType, type_function_string_singleton::TypeFunctionStringSingleton}, type_aliases::{type_function_singleton_variant::TypeFunctionSingletonVariant, type_function_type_variant::TypeFunctionTypeVariant}};
-use ulua_vm::records::lua_state::LuaState;
-pub(crate) fn create_singleton(l: &mut LuaState) -> i32 {
+use ulua_vm::{
+  functions::{lua_l_typename::lua_l_typename, lua_typename::lua_typename},
+  records::lua_state::LuaState,
+};
 
+use crate::{
+  enums::type_type_function_runtime::Type,
+  functions::{alloc_type_user_data::alloc_type_user_data, throw_type_error::throw_type_error},
+  records::{
+    type_function_boolean_singleton::TypeFunctionBooleanSingleton,
+    type_function_primitive_type::TypeFunctionPrimitiveType,
+    type_function_singleton_type::TypeFunctionSingletonType,
+    type_function_string_singleton::TypeFunctionStringSingleton,
+  },
+  type_aliases::{
+    type_function_singleton_variant::TypeFunctionSingletonVariant,
+    type_function_type_variant::TypeFunctionTypeVariant,
+  },
+};
+pub(crate) fn create_singleton(l: &mut LuaState) -> i32 {
   if l.is_boolean(1) {
     let value = l.check_boolean(1);
     // Safety: `l` 为存活 lua_State 且索引 1 实参在位（刚判定为布尔）；
@@ -37,9 +50,7 @@ pub(crate) fn create_singleton(l: &mut LuaState) -> i32 {
       alloc_type_user_data(
         l,
         TypeFunctionTypeVariant::Singleton(TypeFunctionSingletonType {
-          variant: TypeFunctionSingletonVariant::V1(TypeFunctionStringSingleton {
-            value,
-          }),
+          variant: TypeFunctionSingletonVariant::V1(TypeFunctionStringSingleton { value }),
         }),
         false,
       )

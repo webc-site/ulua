@@ -1,9 +1,20 @@
-
-
 use core::mem::size_of;
-use ulua_vm::{functions::{lua_l_checkstack::lua_l_checkstack, lua_newuserdatatagged::lua_newuserdatatagged}};
-use crate::{functions::{allocate_type_function_type::allocate_type_function_type, get_type_function_runtime::get_type_function_runtime, lua_names::TYPE}, records::{arena_handle::Handle, type_function_type::TypeFunctionType}, type_aliases::{type_function_type_id::TypeFunctionTypeId, type_function_type_variant::TypeFunctionTypeVariant}};
-use ulua_vm::records::lua_state::LuaState;
+
+use ulua_vm::{
+  functions::{lua_l_checkstack::lua_l_checkstack, lua_newuserdatatagged::lua_newuserdatatagged},
+  records::lua_state::LuaState,
+};
+
+use crate::{
+  functions::{
+    allocate_type_function_type::allocate_type_function_type,
+    get_type_function_runtime::get_type_function_runtime, lua_names::TYPE,
+  },
+  records::{arena_handle::Handle, type_function_type::TypeFunctionType},
+  type_aliases::{
+    type_function_type_id::TypeFunctionTypeId, type_function_type_variant::TypeFunctionTypeVariant,
+  },
+};
 const K_TYPE_USERDATA_TAG: i32 = 42;
 
 /// 对应 C++ `allocTypeUserData`（TypeFunctionRuntime.cpp:383-391）：压入承载

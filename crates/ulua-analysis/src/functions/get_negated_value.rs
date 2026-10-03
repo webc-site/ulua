@@ -1,7 +1,15 @@
-
-
-use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_tag::get_tag, get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, macros::lua_check_args, records::type_function_negation_type::TypeFunctionNegationType, type_aliases::{type_function_type_id::TypeFunctionTypeId}};
 use ulua_vm::records::lua_state::LuaState;
+
+use crate::{
+  functions::{
+    alloc_type_user_data::alloc_type_user_data, get_tag::get_tag,
+    get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data,
+    throw_type_error::throw_type_error,
+  },
+  macros::lua_check_args,
+  records::type_function_negation_type::TypeFunctionNegationType,
+  type_aliases::type_function_type_id::TypeFunctionTypeId,
+};
 pub(crate) fn get_negated_value(l: &mut LuaState) -> i32 {
   // Safety: `l` 由 Lua VM 运行时约定传入并全程存活（经 `c_thunk!` 蹦床重建为独占 `&mut`）。
   // `tfnt` 由 class-index 下转取得，仅在 `!is_null()` 守卫分支解引用 `(*tfnt).type_id`，其指向

@@ -1,7 +1,9 @@
-
-
-use crate::{functions::{get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, macros::lua_check_args};
 use ulua_vm::records::lua_state::LuaState;
+
+use crate::{
+  functions::{get_type_user_data::get_type_user_data, throw_type_error::throw_type_error},
+  macros::lua_check_args,
+};
 pub(crate) fn is_equal_to_type(l: &mut LuaState) -> i32 {
   // Safety: `l` 由 Lua VM 运行时约定传入并全程存活（经 `c_thunk!` 蹦床重建为独占 `&mut`）。
   // 参数个数不符时 `throw_type_error` 返回 `!` 不返回；`self_ty`/`arg` 来自 `get_type_user_data`，

@@ -1,11 +1,30 @@
-
-
-use crate::functions::get_tag::get_tag;
 /// 对应 C++ 原生 `static int createTable(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:796`）。
 use alloc::{collections::BTreeMap, string::String};
-use ulua_vm::{functions::lua_l_typeerror_l::lua_l_typeerror_l};
-use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, lua_names::{FIELD_INDEX, FIELD_READ, FIELD_READ_RESULT, FIELD_WRITE}, optional_type_user_data::optional_type_user_data, throw_type_error::throw_type_error}, macros::{lua_check_args, lua_check_tag}, records::{type_function_property::TypeFunctionProperty, type_function_singleton_type::TypeFunctionSingletonType, type_function_string_singleton::TypeFunctionStringSingleton, type_function_table_indexer::TypeFunctionTableIndexer, type_function_table_type::TypeFunctionTableType}, type_aliases::{type_function_type_id::TypeFunctionTypeId, type_function_type_variant::TypeFunctionTypeVariant}};
-use ulua_vm::records::lua_state::LuaState;
+
+use ulua_vm::{functions::lua_l_typeerror_l::lua_l_typeerror_l, records::lua_state::LuaState};
+
+use crate::{
+  functions::{
+    alloc_type_user_data::alloc_type_user_data,
+    get_tag::get_tag,
+    get_type_function_runtime::get_type_function_type_id,
+    get_type_user_data::get_type_user_data,
+    lua_names::{FIELD_INDEX, FIELD_READ, FIELD_READ_RESULT, FIELD_WRITE},
+    optional_type_user_data::optional_type_user_data,
+    throw_type_error::throw_type_error,
+  },
+  macros::{lua_check_args, lua_check_tag},
+  records::{
+    type_function_property::TypeFunctionProperty,
+    type_function_singleton_type::TypeFunctionSingletonType,
+    type_function_string_singleton::TypeFunctionStringSingleton,
+    type_function_table_indexer::TypeFunctionTableIndexer,
+    type_function_table_type::TypeFunctionTableType,
+  },
+  type_aliases::{
+    type_function_type_id::TypeFunctionTypeId, type_function_type_variant::TypeFunctionTypeVariant,
+  },
+};
 pub(crate) fn create_table(l: &mut LuaState) -> i32 {
   // Safety: l 为 VM 调注册闭包传入的存活 lua_State；参数先经 lua_istable/lua_isnoneornil/
   // luaL_typeerror/throw_type_error 校验（格式串收敛在 throw_type_error 一处）；

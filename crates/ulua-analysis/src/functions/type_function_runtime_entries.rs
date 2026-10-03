@@ -14,8 +14,24 @@
 /// 运行期数据；`tftt`/`tfst` 按 class-index 下转，`is_null()`/`is_none()` 分支内
 /// `throw_type_error` 返回 `!` 不返回，故其后解引用合法。
 use ulua_common::fflag;
-use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_mutable_type_function_runtime::get_mutable_type_function_type_id, get_tag::get_tag, get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, push_table_indexer::push_table_indexer, push_type_pack::push_type_pack, throw_type_error::throw_type_error}, records::{type_function_extern_type::TypeFunctionExternType, type_function_function_type::TypeFunctionFunctionType, type_function_property::TypeFunctionProperty, type_function_singleton_type::TypeFunctionSingletonType, type_function_table_type::TypeFunctionTableType}};
 use ulua_vm::records::lua_state::LuaState;
+
+use crate::{
+  functions::{
+    alloc_type_user_data::alloc_type_user_data,
+    get_mutable_type_function_runtime::get_mutable_type_function_type_id, get_tag::get_tag,
+    get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data,
+    push_table_indexer::push_table_indexer, push_type_pack::push_type_pack,
+    throw_type_error::throw_type_error,
+  },
+  records::{
+    type_function_extern_type::TypeFunctionExternType,
+    type_function_function_type::TypeFunctionFunctionType,
+    type_function_property::TypeFunctionProperty,
+    type_function_singleton_type::TypeFunctionSingletonType,
+    type_function_table_type::TypeFunctionTableType,
+  },
+};
 pub(crate) unsafe fn get_table_prop(l: &mut LuaState, prefix: &str, read: bool) -> i32 {
   // Safety: `l` 同址重解释为 `lua_state`；`(*tftt).props`/`(*tfst).variant` 均
   // 在上方非空守卫之后只读访问，指向 VM 分配且本次调用内存活的对象。

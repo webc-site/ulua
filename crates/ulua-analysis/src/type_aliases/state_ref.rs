@@ -1,5 +1,3 @@
-
-
 use ulua_vm::records::lua_state::LuaState;
 pub type StateRef = (
   *mut LuaState,
