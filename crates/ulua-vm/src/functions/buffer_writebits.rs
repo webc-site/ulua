@@ -1,6 +1,6 @@
 use crate::{
   functions::{
-    buffer_window::{BITS_PER_BYTE, buffer_bit_bounds, buffer_data_ref},
+    buffer_window::{BITS_PER_BYTE, buffer_bit_bounds, buffer_data_len, buffer_data_ref},
     load_bits_u64::load_bits_u64,
     lua_l_checkunsigned::lua_l_checkunsigned,
   },
@@ -12,11 +12,12 @@ use crate::{
 /// buffer、2 为位偏移、3 为位宽、4 为待写入值，[`buffer_bit_bounds`] 的界校验保证写入
 /// 区间落在数据界内、越界走报错。
 pub(crate) fn buffer_writebits(l: &mut LuaState) -> i32 {
-  let buf = buffer_data_ref(l, 1);
+  let len = buffer_data_len(l, 1);
   let bitoffset = l.check_number(2) as i64;
   let bitcount = l.check_integer(3);
   let value = lua_l_checkunsigned(l, 4);
-  let (startbyte, endbyte) = buffer_bit_bounds(l, buf.len(), bitoffset, bitcount);
+  let (startbyte, endbyte) = buffer_bit_bounds(l, len, bitoffset, bitcount);
+  let buf = buffer_data_ref(l, 1);
 
   // 字节区间装入 u64（与 buffer_readbits 共享同一装载逻辑）
   let mut data = load_bits_u64(&buf[startbyte..endbyte]);

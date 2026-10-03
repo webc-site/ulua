@@ -31,15 +31,17 @@ pub(crate) unsafe extern "C-unwind" fn lua_loadstring(l: *mut LuaState) -> i32 {
   let l = state(l);
   // Safety: 索引 1 为本次调用的实参槽位；非字符串即报错发散（不返回），返回的切片由
   // 栈槽持有、在本次调用期内有效。
-  let source_bytes = lua_l_checklstring_ref(l, 1);
+  // r16-p28 锚定形：长度快照先行，使首窗在实参判定前即结束借用。
+  let source_len = lua_l_checklstring_ref(l, 1).len();
   // cpp `luaL_optlstring(L, 2, s, NULL)`：槽 2 缺席/nil 时默认值即第一参数的
   // 串本体，否则按 checklstring 取形；长度出参本就弃用。
-  let name_bytes = if l.is_none_or_nil(2) {
-    source_bytes
+  let use_source_name = l.is_none_or_nil(2);
+  let name_len = if use_source_name {
+    source_len
   } else {
     // Safety: 索引 2 为本次调用的实参槽位；数字自动转换、非转换类型按 cpp 抛
     // "string expected" 发散。
-    lua_l_checklstring_ref(l, 2)
+    lua_l_checklstring_ref(l, 2).len()
   };
 
   // Safety: `lua_setsafeenv` 为 unsafe 导出；仅改环境表的 safe 标志位。形参
@@ -48,15 +50,16 @@ pub(crate) unsafe extern "C-unwind" fn lua_loadstring(l: *mut LuaState) -> i32 {
 
   // loadstring 参数可为任意字节串；Rust 编译管线要求 &str（UTF-8），
   // 非法序列 lossy 替换，替代 from_utf8_unchecked 的 UB
-  let source = String::from_utf8_lossy(source_bytes).into_owned();
+  let source = String::from_utf8_lossy(lua_l_checklstring_ref(l, 1)).into_owned();
 
   // 源名按 cpp 的 C 串消费规则止于首个 NUL（原 cstr_cow 的解码面在切片上等价
-  // 复刻），再与 source 同款 lossy 规则转 String
-  let name_end = name_bytes
+  // 复刻），再与 source 同款 lossy 规则转 String；窗内即快照所指槽的当前串
+  let name_window = lua_l_checklstring_ref(l, if use_source_name { 1 } else { 2 });
+  let name_end = name_window
     .iter()
     .position(|&byte| byte == 0)
-    .unwrap_or(name_bytes.len());
-  let chunkname = String::from_utf8_lossy(&name_bytes[..name_end]).into_owned();
+    .unwrap_or(name_len);
+  let chunkname = String::from_utf8_lossy(&name_window[..name_end]).into_owned();
 
   let bytecode = compile_source(&source);
 

@@ -102,8 +102,12 @@ impl LuaState {
     unsafe { lua_objlen(self.read_ptr(), idx) as usize }
   }
 
+  /// 栈槽取串字节（r16-p28 锚定形）：返回切片锚定 `&mut self` 借用——持窗期间不得
+  /// 再经本 state 读参/压栈/触发分配或 GC；窗口指向栈槽串体（Lua 串不可变不移动，
+  /// 槽引用钉住存活）。底层裸窗由 `lua_tolstring_ref` 的 `# Safety` 契约承载，本门面
+  /// 将其借出收窄为不长于 `self` 借用。
   #[inline(always)]
-  pub fn to_bytes<'a>(&mut self, idx: i32) -> Option<&'a [u8]> {
+  pub fn to_bytes(&mut self, idx: i32) -> Option<&[u8]> {
     // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
     unsafe { lua_tolstring_ref(self.as_mut_ptr(), idx) }
   }
@@ -113,24 +117,33 @@ impl LuaState {
     lua_rawequal(self, idx1, idx2) != 0
   }
 
+  /// [`to_bytes`] 的 UTF-8 视图（锚定形同上）。
   #[inline(always)]
-  pub fn to_str<'a>(&mut self, idx: i32) -> Option<&'a str> {
+  pub fn to_str(&mut self, idx: i32) -> Option<&str> {
     self.to_bytes(idx).and_then(|b| from_utf8(b).ok())
   }
 
+  /// 栈槽必取串字节（r16-p28 锚定形）：切片锚定 `&mut self` 借用，持窗期间不得再动
+  /// state；非串实参经 `tag_error` 抛 "string expected" 发散。契约见
+  /// [`lua_l_checklstring_ref`]。
   #[inline(always)]
-  pub fn check_bytes<'a>(&mut self, idx: i32) -> &'a [u8] {
+  pub fn check_bytes(&mut self, idx: i32) -> &[u8] {
     lua_l_checklstring_ref(self, idx)
   }
 
+  /// [`check_bytes`] 的 UTF-8 视图（锚定形同上；非法 UTF-8 回退空串，非 ASCII 串
+  /// 消费方请直接用水切片）。
   #[inline(always)]
-  pub fn check_str<'a>(&mut self, idx: i32) -> &'a str {
+  pub fn check_str(&mut self, idx: i32) -> &str {
     let b = self.check_bytes(idx);
     from_utf8(b).unwrap_or("")
   }
 
+  /// 可选串实参（r16-p28 锚定形）：槽为 none/nil 时回退 `def`，否则等价
+  /// [`check_bytes`]。共享 `'a` 令回退串与 `self` 借用同界——两分支返回值均可读至
+  /// 借用结束；持窗期间不得再动 state。
   #[inline(always)]
-  pub fn opt_bytes<'a>(&mut self, idx: i32, def: &'a [u8]) -> &'a [u8] {
+  pub fn opt_bytes<'a>(&'a mut self, idx: i32, def: &'a [u8]) -> &'a [u8] {
     if self.is_none_or_nil(idx) {
       def
     } else {

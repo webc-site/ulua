@@ -52,7 +52,8 @@ const UNKNOWN_KEY: &str = "unknown";
 /// 以 `to_str` 归一栈 2 键（非字符串报 `unknown`），按 `action` 文案抛错。
 /// 永不返回。
 fn raise_cyclic_error(l: &mut LuaState, action: &str) -> ! {
-  let key = l.to_str(2).unwrap_or(UNKNOWN_KEY);
+  // r16-p28 锚定形：抛错文案先取 owned 快照解耦窗口借用，其后 `l.as_mut_ptr()` 重建可用
+  let key = l.to_str(2).unwrap_or(UNKNOWN_KEY).to_owned();
   // Safety: l 为存活 state 的独占借用；luaL_error! 把 key 格式化进错误消息后
   // 抛错发散。
   unsafe {

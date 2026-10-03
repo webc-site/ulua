@@ -9,7 +9,7 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// Rust 内部核心（§2/§3 出参收口）：cpp `luaL_checklstring`（`laux.cpp:176`）的
+/// Rust 内部核心（§2/§3 出参收口；r16-p28 锚定形）：cpp `luaL_checklstring`（`laux.cpp:176`）的
 /// 切片形态——栈槽 `narg` 处可转成字符串的值返回其全部字节（含内嵌 `\0`，长度即
 /// 切片长度），否则按 cpp 抛 "string expected"。
 ///
@@ -17,15 +17,16 @@ use crate::{
 /// 出参写入；Rust 调用方一律直接用本函数（cpp `MatchState` 的 s/p 串游标即对应
 /// 这里的借用切片）。
 ///
-/// # Safety
-/// C-ABI 镜像垫片（裸指针出参/入参为 C 约定面，按 review.md §2 保留 unsafe 形）：
-/// `l` 须为存活 `LuaState` 且处于可抛错受保护帧（非串实参经 `tag_error` 抛错发散），
-/// `narg` 为其合法栈索引。返回切片指向栈槽串内部字节，在本次 C 函数调用期间有效
-/// （Lua 串不可变且不被移动，实参被栈槽持有故不被回收）——即 cpp 侧
-/// 「`luaL_checklstring` 结果在本次调用内可读」的同一契约。
-pub fn lua_l_checklstring_ref<'a>(l: &mut LuaState, narg: i32) -> &'a [u8] {
-  // SAFETY: 转发同契约的 `lua_tolstring_ref`；`None` 即 cpp 的 `NULL` 失败路径，
-  // 按 `luaL_checklstring` 语义抛 "string expected"（tag_error 发散，不返回）
+/// 调用序契约（正确性，非内存安全）——r16-p28 起返回切片锚定 `l` 的 `&mut` 借用
+/// （生命周期省略，未受约束 `'a` 已消灭）：持窗期间 `l` 被借用钉住，不得再经 `l` 读参/
+/// 压栈/触发分配或 GC（编译器拒绝）；窗口稳定前提（Lua 串不可变且不被移动，实参被栈槽
+/// 持有故不被回收）由该借用承载，存续上界即借用结束点。纯安全代码自此无法把窗口实例化
+/// 为 `'static` 取走。`l` 仍须为存活 `LuaState` 且处于可抛错受保护帧（非串实参经
+/// `tag_error` 抛错发散），`narg` 为其合法栈索引。
+pub fn lua_l_checklstring_ref(l: &mut LuaState, narg: i32) -> &[u8] {
+  // SAFETY: 转发 `lua_tolstring_ref`；其裸窗借出在本门面收窄为不长于 `l` 借用（只此
+  // 一向收窄；Lua 串不可变不移动、栈槽钉住，见函数文档契约）。`None` 即 cpp 的 `NULL`
+  // 失败路径，按 `luaL_checklstring` 语义抛 "string expected"（tag_error 发散，不返回）
   unsafe {
     lua_tolstring_ref(l, narg).unwrap_or_else(|| tag_error(l, narg, LuaType::String as i32))
   }

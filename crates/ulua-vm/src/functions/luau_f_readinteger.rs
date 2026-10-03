@@ -48,7 +48,7 @@ unsafe fn read_buffer_scalar<T: SwapBe>(
       }
 
       // 校验通过：`[offset, offset+size_of::<T>())` 必落数据界内（定位形与
-      // `buffer_at_ref` 同源，契约违约暴露为 panic 级索引而非 UB 级 `add`）
+      // `buffer_range_checked` 同源，契约违约暴露为 panic 级索引而非 UB 级 `add`）
       Some(load_scalar_ref::<T>(
         &buf[offset as u32 as usize..][..size_of::<T>()],
       ))

@@ -1,6 +1,7 @@
 use core::slice::from_raw_parts_mut;
 
 use crate::{
+  enums::lua_type::LuaType,
   functions::{
     buffer_errors::buffer_oob_error, buffer_window::buffer_data_ref,
     lua_l_optinteger::lua_l_optinteger,
@@ -15,18 +16,20 @@ use crate::{
 pub(crate) fn buffer_copy(l: &mut LuaState) -> i32 {
   // 抛错序逐位对齐 cpp（lbuflib.cpp:247-270）：#1 typeerror → #2 checkinteger →
   // #3 typeerror → #4/#5 optinteger → size<0 → oob(源) → oob(目标)。
-  // 借用安排：同对象时两条 &mut 切片不得并存，故目标窗派生后、源窗派生前即折
-  // 为 (ptr, len) 裸量、其 slice 借用到最后一次读为止（NLL）；全程不存在重叠
-  // &mut 的读写时刻，相对 cpp 无条件单条 memmove 无可观察差。
-  let tbuf = buffer_data_ref(l, 1);
+  // 借用安排（r16-p28 锚定形）：typeerror 经 check_type 先行落位，读 #2 偏移后才
+  // 派目标窗；同对象时两条 &mut 切片不得并存，故各窗派生后即刻折为 (ptr, len) 裸量、
+  // slice 借用到快照为止（NLL）；全程不存在重叠 &mut 的读写时刻，相对 cpp 无条件单条
+  // memmove 无可观察差。
+  l.check_type(1, LuaType::Buffer);
   let toffset = l.check_integer(2);
+  let tbuf = buffer_data_ref(l, 1);
   let tptr = tbuf.as_mut_ptr();
   let tlen = tbuf.len();
 
   let sbuf = buffer_data_ref(l, 3);
-  let soffset = lua_l_optinteger(l, 4, 0);
   let sptr = sbuf.as_mut_ptr();
   let slen = sbuf.len();
+  let soffset = lua_l_optinteger(l, 4, 0);
 
   // C++ evaluates `int(slen) - soffset` as the default eagerly (signed overflow
   // is UB upstream for soffset = INT_MIN); wrapping_sub reproduces the two's-
@@ -47,7 +50,7 @@ pub(crate) fn buffer_copy(l: &mut LuaState) -> i32 {
     buffer_oob_error(l);
   }
 
-  // 校验通过后截断回绕必然落界内（`as u32 as usize` 与 `buffer_at_ref` 的定位
+  // 校验通过后截断回绕必然落界内（`as u32 as usize` 与 `buffer_range_checked` 的定位
   // 同款规约：负偏移已在此处折算为大 u32，命中上方 isoutofbounds 抛错）
   let toff = toffset as u32 as usize;
   let soff = soffset as u32 as usize;

@@ -51,7 +51,7 @@ luau_f_arm! {
         let val: T = T::from_u32_trunc(value);
 
         // 校验通过：`[offset, offset+access_size)` 必落数据界内（定位形与
-        // `buffer_at_ref` 同源），按规范小端布局回写
+        // `buffer_range_checked` 同源），按规范小端布局回写
         store_scalar_ref(&mut buf[offset as u32 as usize..][..access_size], val);
         return 0;
       }

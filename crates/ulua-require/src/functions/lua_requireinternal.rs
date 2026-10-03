@@ -71,18 +71,19 @@ pub(crate) unsafe fn lua_requireinternal<C: RequireHost>(
     // Safety: l 存活，luaL_error! 抛错发散（`lua_l_error_l` 为 unsafe fn）。
     unsafe { luaL_error!(l, "unable to find require configuration") };
   };
-  // 对应 cpp `std::string path(luaL_checkstring(L, 1))`：check_bytes 取 VM 串的
-  // 字节视图（Lua 串非 UTF-8，零拷贝不校验）。
-  let path_bytes = l.check_bytes(1);
+  // 对应 cpp `std::string path(luaL_checkstring(L, 1))`：取 VM 串字节视图后落
+  // owned 快照（Lua 串非 UTF-8，不校验；r16-p28 锚定形——窗口须活过 resolve/load
+  // 全程对 `l` 的重借，cpp 同为 std::string 拷贝，一次分配逐点位等价）。
+  let path_bytes = l.check_bytes(1).to_vec();
 
   // cpp 前置：已注册模块缓存命中即直接返回（值留栈顶）
-  if check_registered_modules(l, path_bytes) {
+  if check_registered_modules(l, &path_bytes) {
     return 1;
   }
 
   // resolve_require 触发宿主导航回调（可能执行 VM 配置代码）；宿主方法全部
   // 只借共享引用，重入合法，且函数体已收为安全签名（l 以独占借用收参）。
-  let resolved_require = resolve_require(host, l, requirer_chunkname, path_bytes);
+  let resolved_require = resolve_require(host, l, requirer_chunkname, &path_bytes);
 
   match resolved_require.status {
     // cpp 命中缓存路径：is_cached 已把值留在栈顶，无需再压
@@ -115,7 +116,7 @@ pub(crate) unsafe fn lua_requireinternal<C: RequireHost>(
 
   // 宿主装载：path/chunkname/loadname 以字节视图直传（cpp 传同一 VM 串的
   // NUL 结尾指针，宿主按 C 串读取；首个 NUL 截断由需要该语义的宿主自行处理）
-  let num_results = host.load(l, path_bytes, chunkname, loadname);
+  let num_results = host.load(l, &path_bytes, chunkname, loadname);
 
   if num_results == -1 {
     // 挂起路径：先复核栈未被改动（不一致即 luaL_error! 发散），

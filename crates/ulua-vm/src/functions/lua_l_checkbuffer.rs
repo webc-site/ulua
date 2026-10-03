@@ -6,21 +6,23 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// Rust 内部核心（r11 R-C T1 出参收口，形制对齐 `lua_l_checklstring_ref`）：
-/// cpp `luaL_checkbuffer`（`laux.cpp:150`）的切片形态——栈槽 `narg` 处为 buffer 时
-/// 返回其数据块的可变借用切片，否则按 cpp 抛 "buffer expected"（`tag_error` 发散）。
+/// Rust 内部核心（r11 R-C T1 出参收口，形制对齐 `lua_l_checklstring_ref`；r16-p28
+/// 锚定形）：cpp `luaL_checkbuffer`（`laux.cpp:150`）的切片形态——栈槽 `narg` 处为
+/// buffer 时返回其数据块的可变借用切片，否则按 cpp 抛 "buffer expected"（`tag_error` 发散）。
 ///
 /// C 形 `size_t* len` 出参收口为切片长度；出参折算由垫片 [`lua_l_checkbuffer`] 独家
 /// 承接，Rust 窗口消费方一律直接用本函数。
 ///
-/// # Safety
-/// `l` 须为正在执行的 C 函数帧的存活 `LuaState` 且处于可抛错受保护帧，`narg` 为其
-/// 合法栈索引。返回借用指向栈槽 buffer userdata 的内联数据块，在本次调用期间有效
-/// （buffer 定长不 resize、GC 不移动对象、栈槽引用钉住存活期——契约三要素见
-/// [`lua_tobuffer_bytes_ref`]，与 cpp「`luaL_checkbuffer` 结果在本次调用内可读写」同契）。
-pub fn lua_l_checkbuffer_ref<'a>(l: &mut LuaState, narg: i32) -> &'a mut [u8] {
+/// 调用序契约（正确性，非内存安全）——r16-p28 起返回切片锚定 `l` 的 `&mut` 借用
+/// （生命周期省略，未受约束 `'a` 已消灭）：持窗期间 `l` 被独占借用钉住，不得再经 `l`
+/// 读参、压栈或触发分配/GC（编译器拒绝）；窗口稳定三要素（buffer 定长不 resize、GC 不
+/// 移动对象、栈槽引用钉住存活期，见 [`lua_tobuffer_bytes_ref`]）由该借用承载，存续上界
+/// 即借用结束点。纯安全代码自此无法把窗口实例化为 `'static` 取走。`l` 仍须为正在执行
+/// 的 C 函数帧的存活 `LuaState` 且处于可抛错受保护帧，`narg` 为其合法栈索引。
+pub fn lua_l_checkbuffer_ref(l: &mut LuaState, narg: i32) -> &mut [u8] {
   unsafe {
-    // SAFETY: 转发同契约的 `lua_tobuffer_bytes_ref`；借出寿命 `'a` 由栈槽引用钉住
+    // SAFETY: 转发 `lua_tobuffer_bytes_ref`；其裸窗借出在本门面收窄为不长于 `l` 借用
+    // （只此一向收窄，栈槽引用钉住存续上界，见函数文档契约）
     match lua_tobuffer_bytes_ref(l, narg) {
       Some(bytes) => bytes,
       // `None` 即 cpp 的 NULL 失败路径：按 `luaL_checkbuffer` 语义抛错、不返回

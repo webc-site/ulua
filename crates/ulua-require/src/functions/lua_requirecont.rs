@@ -69,9 +69,11 @@ pub(crate) unsafe extern "C-unwind" fn lua_requirecont(l: *mut LuaState, _status
 
   ulua_common::LUAU_ASSERT!(l.get_top() >= REQUIRE_STACK_VALUES);
   let num_results = l.get_top() - REQUIRE_STACK_VALUES;
-  // cacheKey 视图取栈 2 固定槽（Lua 串非 GC 搬迁对象，指针调用窗内恒有效，
-  // cpp 亦直接使用同一 VM 串指针）。
-  let cache_key = l.check_bytes(2);
+  // cacheKey 视图取栈 2 固定槽（Lua 串非 GC 搬迁对象，指针调用窗内恒有效）。
+  // r16-p28 锚定形：cache_required_result 同时需要 `l` 与窗口，取 owned 快照解耦
+  // 借用（每次 require 收尾一次短串分配，cpp 经 VM 串指针零拷贝——行为等价、
+  // 分配点差异已记探针台账）。
+  let cache_key = l.check_bytes(2).to_vec();
 
   if num_results > 1 {
     // Safety: l 存活，luaL_error! 抛错发散。
@@ -81,7 +83,7 @@ pub(crate) unsafe extern "C-unwind" fn lua_requirecont(l: *mut LuaState, _status
   if num_results == 1 {
     // 栈为固定槽 + 唯一结果的挂起布局，cache_required_result 只操作本协程栈
     // 与注册表（无宿主回调），为纯安全调用。
-    cache_required_result(l, cache_key);
+    cache_required_result(l, &cache_key);
   }
 
   num_results

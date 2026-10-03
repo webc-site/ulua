@@ -17,8 +17,10 @@ pub(crate) unsafe extern "C-unwind" fn lua_proxyrequire<C: RequireHost>(l: *mut 
   // Safety: 真 FFI 入口：l 是 VM 调 proxyrequire 闭包时传入的存活 state，入口
   // 一次重建独占借用；check_bytes 保证栈槽 2 为字符串（否则抛错发散）。
   let l = unsafe { &mut *l };
-  let requirer_chunkname = l.check_bytes(2);
+  // r16-p28 锚定形：窗口借用不能跨越随后以 `l` 为参的 lua_requireinternal，取 owned
+  // 快照解耦（cpp `requireLikeFunc` 同点位本就复制 std::string，语义等价）。
+  let requirer_chunkname = l.check_bytes(2).to_vec();
   // Safety: lua_requireinternal::<C> 按其自身契约操作本帧栈与 upvalue，`C` 与本
   // 闭包体的注入类型一致（同源单态化）。
-  unsafe { lua_requireinternal::<C>(l, requirer_chunkname) }
+  unsafe { lua_requireinternal::<C>(l, &requirer_chunkname) }
 }

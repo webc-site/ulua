@@ -20,12 +20,14 @@ const LANES: usize = LUA_VECTOR_SIZE as usize;
 pub(crate) fn vector_index(l: &mut LuaState) -> i32 {
   let v = check_vector(l, 1);
   let name_bytes = lua_l_checklstring_ref(l, 2);
-
-  if name_bytes.len() == 1 {
+  // 锚定形：快路径先行（借用窗口只读单字节、快照为 Copy 值，push 前借用已结束；
+  // `l` 早返路径与窗口借用互不交叠）；错误臂再取 owned 快照后重建 `l` 裸参
+  let first_byte = (name_bytes.len() == 1).then(|| name_bytes[0]);
+  if let Some(b) = first_byte {
     // 单字节读逐位等值：旧形 `*name as i32` 按 c_char 符号扩展、此处按 u8 零扩展，
     // 分岔仅在高位字节——i8 形 ic<0 转 usize 成巨大值、u8 形 ic>=40，两形皆过不了
     // `ic<LANES` 守卫而同步落错误臂；界内命中的 x/y/z/w（大小写）恒为 ASCII，同值。
-    let ic = (name_bytes[0] as i32 | 0x20) - 'x' as i32;
+    let ic = (b as i32 | 0x20) - 'x' as i32;
 
     const W_OFFSET: i32 = -1; // 'w' - 'x'
     let ic = if ic == W_OFFSET { 3 } else { ic as usize };
@@ -36,7 +38,7 @@ pub(crate) fn vector_index(l: &mut LuaState) -> i32 {
     }
   }
 
-  let name = String::from_utf8_lossy(name_bytes);
+  let name = String::from_utf8_lossy(name_bytes).into_owned();
   // SAFETY: `l.as_mut_ptr()` 为由 `&mut` 借用重建的存活帧裸参（有效性与独占由引用承载），
   // `luaL_error` 经其格式化并抛出错误、不返回；受保护帧前提见函数文档的调用序契约。
   unsafe { luaL_error!(l.as_mut_ptr(), "attempt to index vector with '{}'", name) }

@@ -1,3 +1,5 @@
+use core::slice::from_raw_parts;
+
 use crate::{
   functions::{
     buffer_window::buffer_data_ref, lua_l_checklstring::lua_l_checklstring_ref,
@@ -19,13 +21,20 @@ use crate::{
 /// 源与目的分属两个对象不重叠。
 pub(crate) fn buffer_fromstring(l: &mut LuaState) -> i32 {
   let val = lua_l_checklstring_ref(l, 1);
+  // 锚定形：串窗借用止于 (ptr, len) 快照（Lua 串不可变不移动、#1 槽引用钉住存活，
+  // 快照在写入点仍有效），其后 `l` 恢复可用
+  let (vptr, vlen) = (val.as_ptr(), val.len());
 
   // 新 buffer 压入栈顶；返回裸数据指针面已随 r12-w6b 收窄消灭，数据窗经窄腰切片形取回
-  lua_newbuffer_push_ref(l, val.len());
-  // 刚压入的槽必是 buffer（typeerror 分支不可达），数据界即新建长度 `val.len()`
+  lua_newbuffer_push_ref(l, vlen);
+  // 刚压入的槽必是 buffer（typeerror 分支不可达），数据界即新建长度 `vlen`
   let dst = buffer_data_ref(l, -1);
-  debug_assert_eq!(dst.len(), val.len());
-  dst.copy_from_slice(val);
+  debug_assert_eq!(dst.len(), vlen);
+
+  // SAFETY: 源视图由 #1 串窗的 (ptr, len) 快照重物化——串不可变不移动、栈槽引用钉住
+  // （同 checklstring 切片契约；newbuffer 分配/挪栈不搬移串对象）；目的窗为新建 buffer
+  // 全长，两区间长度相等且分属两个对象不重叠
+  unsafe { dst.copy_from_slice(from_raw_parts(vptr, vlen)) };
 
   1
 }

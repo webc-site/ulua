@@ -18,8 +18,8 @@ pub fn lua_b_assert(l: &mut LuaState) -> i32 {
       // SAFETY: 抛错族契约——`l` 存活且处于受保护帧（库函数调用约定），本调用不返回。
       unsafe { luaL_error!(l.as_mut_ptr(), "{}", ASSERTION_FAILED) };
     }
-    let msg = lua_l_checklstring_ref(l, 2);
-    let msg = String::from_utf8_lossy(msg);
+    // 锚定形：抛错路径先取 owned 快照解耦窗口借用，其后 `l.as_mut_ptr()` 重建可用
+    let msg = String::from_utf8_lossy(lua_l_checklstring_ref(l, 2)).into_owned();
     // SAFETY: 抛错族契约——`l` 存活且处于受保护帧（库函数调用约定），本调用不返回。
     unsafe { luaL_error!(l.as_mut_ptr(), "{}", msg) };
   }

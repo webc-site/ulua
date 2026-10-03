@@ -97,10 +97,12 @@ unsafe fn str_pack_ref(l: &mut LuaState, fmt_bytes: &[u8]) -> i32 {
           lua_l_addlstring(&mut b, dst);
         }
         KOption::Kchar => {
-          // fixed-size string
-          let s = lua_l_checklstring_ref(l, arg);
-          let len = s.len();
+          // fixed-size string（锚定形：先快照长度并过 argcheck，再二次派窗直达写入；
+          // 1 号外的取参路径不改动 arg 槽，二次派窗取回同一串体，typeerror 重复即同
+          // 消息同点位，观察序不变）
+          let len = lua_l_checklstring_ref(l, arg).len();
           l.arg_check(len <= size as usize, arg, "string longer than given size");
+          let s = lua_l_checklstring_ref(l, arg);
           lua_l_addlstring(&mut b, s); // add string
           // 补零到定宽 size：循环变量不参与取数，纯计数重复
           //（原 `while len < size` 游走收为区间迭代；argcheck 已保证 len <= size）
@@ -109,24 +111,26 @@ unsafe fn str_pack_ref(l: &mut LuaState, fmt_bytes: &[u8]) -> i32 {
           }
         }
         KOption::Kstring => {
-          // strings with length count
-          let s = lua_l_checklstring_ref(l, arg);
-          let len = s.len();
+          // strings with length count（同 Kchar：快照长度→argcheck→pack 长度→二次派窗）
+          let len = lua_l_checklstring_ref(l, arg).len();
           l.arg_check(
             size >= size_of::<usize>() as i32 || len < (1usize << (size * 8)),
             arg,
             "string length does not fit in given size",
           );
           packint(&mut b, len as u64, h.islittle, size, 0); // pack length
+          let s = lua_l_checklstring_ref(l, arg);
           lua_l_addlstring(&mut b, s);
           totalsize += len;
         }
         KOption::Kzstr => {
-          // zero-terminated string
-          let s = lua_l_checklstring_ref(l, arg);
-          let len = s.len();
+          // zero-terminated string（判定快照→argcheck→二次派窗写入）
+          let s0 = lua_l_checklstring_ref(l, arg);
+          let has_zero = memchr(0, s0).is_some();
+          let len = s0.len();
           // 原 cstr_bytes strlen==len 的「无内嵌零」判定收为 memchr 单遍扫描
-          l.arg_check(memchr(0, s).is_none(), arg, "string contains zeros");
+          l.arg_check(!has_zero, arg, "string contains zeros");
+          let s = lua_l_checklstring_ref(l, arg);
           lua_l_addlstring(&mut b, s);
           lua_l_addchar(&mut b, 0); // add zero at the end
           totalsize += len + 1;
