@@ -30,7 +30,7 @@ pub unsafe fn lua_l_sandbox(l: *mut LuaState) {
       (*l).pop(1);
     }
 
-    vector_push(l, [0.0, 0.0, 0.0, 0.0]);
+    vector_push(&mut *l, [0.0, 0.0, 0.0, 0.0]);
     if (*l).get_metatable(-1) {
       (*l).set_readonly(-1, true);
       (*l).pop(2);
