@@ -1042,7 +1042,7 @@ dependencies = [
 
 [[package]]
 name = "ulua"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "ulua-analysis",
  "ulua-ast",
@@ -1057,7 +1057,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-analysis"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "bitflags 2.13.2",
  "coarsetime",
@@ -1077,7 +1077,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-ast"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "itoa",
  "memchr",
@@ -1107,7 +1107,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-bytecode"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "foldhash",
  "hashbrown",
@@ -1117,7 +1117,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-code-gen"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "strum",
  "ulua-common",
@@ -1127,7 +1127,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-common"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "fast-float2",
  "foldhash",
@@ -1141,7 +1141,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-compiler"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "memchr",
  "museair",
@@ -1153,7 +1153,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-config"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "hipstr",
  "strum",
@@ -1167,7 +1167,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-require"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "coarsetime",
  "memchr",
@@ -1178,7 +1178,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-rt"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "strum",
  "thiserror",
@@ -1192,7 +1192,7 @@ dependencies = [
 
 [[package]]
 name = "ulua-vm"
-version = "0.1.5"
+version = "0.1.6"
 dependencies = [
  "coarsetime",
  "itoa",
