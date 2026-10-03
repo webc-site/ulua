@@ -82,7 +82,7 @@ unsafe fn settable_num_fastpath(
             }
           })
         };
-        hit.map_or(Err(mp), Ok)
+        hit.ok_or(mp)
       };
 
     let newval = match probe {

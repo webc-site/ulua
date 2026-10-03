@@ -59,13 +59,14 @@ pub unsafe fn lua_v_getimport(
     // global lookup for id0
     let key0 = &*k.add(id0);
     let mut l1_done = false;
-    if (*env).metatable.is_null() && key0.is_string() {
-      if let Some(slot) = lua_h_getstr(&*env, key0.as_string_ptr()) {
-        let p = slot.as_const_ptr();
-        (*l).cachedslot = gval2slot!(env, p);
-        setobj_2_s!(l, res.as_ptr(), p);
-        l1_done = true;
-      }
+    if (*env).metatable.is_null()
+      && key0.is_string()
+      && let Some(slot) = lua_h_getstr(&*env, key0.as_string_ptr())
+    {
+      let p = slot.as_const_ptr();
+      (*l).cachedslot = gval2slot!(env, p);
+      setobj_2_s!(l, res.as_ptr(), p);
+      l1_done = true;
     }
     if !l1_done {
       let mut g = TValue::default();

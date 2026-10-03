@@ -139,7 +139,10 @@ pub(crate) fn index_chain_write(t: *const LuaTable) {
 /// `l` 指向存活 `LuaState`；`t0` 为存活表且 `(*t0).metatable` 非空（调用点契约）；
 /// `key` 为存活 interned 字符串；`val` 为当前帧可写栈槽。体内仅 fasttm/哈希读与
 /// cachedslot/栈槽写，无 VM 重入点，thread_local 槽借用不逃逸。
-#[inline]
+///
+/// `#[inline(never)]`：函数边界锁定——probe 路径与 `lua_v_gettable` 主体布局解耦
+/// （可内联时随 crate 内其他函数体积变化反复翻转内联决策，inherit3 复测 ±15% 级
+/// 布局漂移，见 perf 提交 08428b58 前后的治理记录）。
 #[inline(never)]
 pub(crate) unsafe fn index_chain_probe(
   l: *mut LuaState,
