@@ -100,6 +100,9 @@ struct Config {
   engine_keys: Vec<String>,
   /// 写 JSON 前并入既有结果文件（多后端补测合并）。
   append: bool,
+  /// ulua 侧 FastFlag 覆盖（`--fflag Name=true,Other=false`，同二进制 A/B
+  /// 对照测量用；经 `set_flag_by_name` 应用，未知名报警忽略）。
+  fflags: Vec<(String, bool)>,
 }
 
 /// 解析 `--runs` 之类的计数取值：非法值明确报警并回退默认，
@@ -115,7 +118,8 @@ fn parse_count(raw: &str, name: &str, default: usize) -> usize {
 }
 
 /// 极简参数解析：`--runs[= ]N`、`--json[= ]PATH`、`--group[= ]NAME`、
-/// `--engines[= ]k1,k2`、`--append`；其余非选项参数为用例 id 过滤器。
+/// `--engines[= ]k1,k2`、`--fflag[= ]Name=bool,Name2=bool`、`--append`；
+/// 其余非选项参数为用例 id 过滤器。
 fn parse_args() -> Config {
   let mut cfg = Config {
     runs: DEFAULT_RUNS,
@@ -126,6 +130,7 @@ fn parse_args() -> Config {
     alloc: false,
     engine_keys: Vec::new(),
     append: false,
+    fflags: Vec::new(),
   };
   let mut args = env::args().skip(1);
 
@@ -177,6 +182,21 @@ fn parse_args() -> Config {
         }
       }
       "--append" => cfg.append = true,
+      "--fflag" => {
+        let specs = value();
+        for spec in specs.split(',').map(str::trim).filter(|s| !s.is_empty()) {
+          // `Name=true|false`：缺 `=` 或值非布尔即报警忽略该段（其余段照常）
+          let Some((name, raw)) = spec.split_once('=') else {
+            eprintln!("警告: --fflag 段 {spec:?} 缺 `=bool`，忽略");
+            continue;
+          };
+          match raw.trim() {
+            "true" => cfg.fflags.push((name.trim().to_owned(), true)),
+            "false" => cfg.fflags.push((name.trim().to_owned(), false)),
+            other => eprintln!("警告: --fflag {name}={other} 非布尔值，忽略"),
+          }
+        }
+      }
       "--alloc" => cfg.alloc = true,
       "--cases" | "--case" => {
         let cases = value();
@@ -200,6 +220,15 @@ fn parse_args() -> Config {
 
 fn main() -> Result<(), IoError> {
   let cfg = parse_args();
+  // FastFlag 覆盖先于任何测量（同二进制旗标开关对照测量：A/B 两轮除旗标外
+  // 逐位同参，见 --fflag）。先用 rt enable_jit 的同参烧掉 set_luau_bool_flags
+  // 的启动 Once（其后 no-op），否则覆盖会被首次 enable_jit 全量重置吞掉。
+  ulua_common::records::f_value::set_luau_bool_flags(true);
+  for (name, value) in &cfg.fflags {
+    if !ulua_common::records::f_value::FValue::<bool>::set_flag_by_name(name, *value) {
+      eprintln!("警告: 未知 FastFlag {name}，忽略");
+    }
+  }
   let Some(spec) = group::GROUPS.iter().find(|g| g.id == cfg.group) else {
     let known = group::GROUPS
       .iter()
