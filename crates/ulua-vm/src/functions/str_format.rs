@@ -35,19 +35,26 @@ use crate::{
 /// 跳过宽度/精度格式化路径。
 const DIRECT_APPEND_MIN_LEN: usize = 100;
 
-/// # Safety
-/// 格式串由 `lua_l_checklstring_ref` 取得：借用 GC 堆上存活字符串的字节切片；
-/// Luau 字符串不会被移动或压缩，循环期间栈增长/参数读取不使其悬垂。
-pub(crate) unsafe fn str_format(l: *mut LuaState) -> i32 {
-  // SAFETY: 契约保证 l 存活——checklstring 取 GC 堆字符串字节、buffinit/pushresult 在其栈上操作
+/// 调用序契约（正确性，非内存安全——`l` 的存活前提已由 `&mut` 接收者类型承载）：`l` 须处于可
+/// 抛错受保护帧；栈槽 #1 为格式串实参（非串经 `lua_l_checklstring_ref` 抛 "string expected"
+/// 发散），后续 `%<conv>` 逐个消费 #2.. 实参（缺失/非串/非数值经 `luaL_error`/`check_*` 抛错
+/// 发散）；累加器 `b` 由本帧 `lua_l_buffinit` 登记，结果压栈与追加可触发分配/GC。
+///
+/// 格式串窗口 `f` 须跨整个扫描循环存活（cpp 的 `strfrmt` 游标同形），循环内又须反复经 `l`
+/// 取参/报错，p28 锚定形与 `&mut` 接收者不可共存 ⇒ 按 r16-v29 桥接判例在入口一次就地转手
+/// 裸句柄（借用窗止于本次调用），屏障按 r16-v21 判例保留。
+pub(crate) unsafe fn str_format(l: &mut LuaState) -> i32 {
+  // SAFETY: `l` 由 `&mut` 保证有效且独占，转手后的 `lp` 即同一存活帧；checklstring 取 GC
+  // 堆字符串字节、buffinit/pushresult 在其栈上操作
   unsafe {
-    let top = (*l).get_top();
+    let lp = l.as_mut_ptr();
+    let top = (*lp).get_top();
     let mut arg: i32 = 1;
     // 借用切片形态取格式串：出参 len 由切片长度承接，游标全程按下标推进
-    let f = lua_l_checklstring_ref(&mut *l, arg);
+    let f = lua_l_checklstring_ref(&mut *lp, arg);
 
     let mut b = LuaLStrbuf::new();
-    lua_l_buffinit(&mut *l, &mut b);
+    lua_l_buffinit(&mut *lp, &mut b);
 
     let mut i: usize = 0;
     // 保留下标游走：i 随格式说明符消耗量变步（`%%` 两字节、`%*s` 三字节、
@@ -69,20 +76,20 @@ pub(crate) unsafe fn str_format(l: *mut LuaState) -> i32 {
         i += 1;
         arg += 1;
         if arg > top {
-          luaL_error!(l, "missing argument #{}", arg);
+          luaL_error!(lp, "missing argument #{}", arg);
         }
         lua_l_addvalueany(&mut b, arg);
       } else {
         // format item：扫描 flags/width/prec，得到 `&window[..p]` 即 cpp `form` 内容
         arg += 1;
         if arg > top {
-          luaL_error!(l, "missing argument #{}", arg);
+          luaL_error!(lp, "missing argument #{}", arg);
         }
         let hi = (i + MAX_FORMAT_SPEC_SCAN).min(f.len());
         let window = &f[i..hi];
         // cpp 的扫描止于首个 NUL（嵌入 '\0' 之后不参与解析）
         let window = &window[..memchr(0, window).unwrap_or(window.len())];
-        let p = scan_format_spec(window).unwrap_or_else(|err| luaL_error!(l, "{}", err));
+        let p = scan_format_spec(window).unwrap_or_else(|err| luaL_error!(lp, "{}", err));
         let indicator = f.get(i + p).copied().unwrap_or(0);
         let spec = parse_format_spec(&window[..p]);
         i += p + 1; // 消费 spec 字节与转换指示符（指示符为 0 时下方必报错）
@@ -91,24 +98,24 @@ pub(crate) unsafe fn str_format(l: *mut LuaState) -> i32 {
             // DELIBERATE DEVIATION：越出 i32 域的双精度实参，cpp 的
             // `(int)checknumber` 在 x86 上是 cvttsd2si UB（→INT_MIN→'\0'），
             // Rust 侧取饱和语义（→u8 截断）——定义化 C UB 角落
-            let out = format_char(&spec, (*l).check_number(arg) as i32 as u8);
+            let out = format_char(&spec, (*lp).check_number(arg) as i32 as u8);
             lua_l_addlstring(&mut b, &out);
           }
           b'd' | b'i' => {
-            let value: i64 = if (*l).is_integer_64(arg) {
-              (*l).check_integer_64(arg)
+            let value: i64 = if (*lp).is_integer_64(arg) {
+              (*lp).check_integer_64(arg)
             } else {
               // 越出 i64 域：cpp double→int64 转换为 UB，Rust 取饱和（同 %c 案）
-              (*l).check_number(arg) as i64
+              (*lp).check_number(arg) as i64
             };
             let out = format_int(&spec, value);
             lua_l_addlstring(&mut b, &out);
           }
           b'o' | b'u' | b'x' | b'X' => {
-            let v: u64 = if (*l).is_integer_64(arg) {
-              (*l).check_integer_64(arg) as u64
+            let v: u64 = if (*lp).is_integer_64(arg) {
+              (*lp).check_integer_64(arg) as u64
             } else {
-              let arg_value = (*l).check_number(arg);
+              let arg_value = (*lp).check_number(arg);
               if arg_value < 0.0 {
                 // 越域饱和化：同 %d/%i 案（cpp 侧 UB 角落）
                 (arg_value as i64) as u64
@@ -120,16 +127,16 @@ pub(crate) unsafe fn str_format(l: *mut LuaState) -> i32 {
             lua_l_addlstring(&mut b, &out);
           }
           b'e' | b'E' | b'f' | b'g' | b'G' => {
-            let out = format_float(&spec, indicator, (*l).check_number(arg));
+            let out = format_float(&spec, indicator, (*lp).check_number(arg));
             lua_l_addlstring(&mut b, &out);
           }
           b'q' => {
             // 取参序对齐 cpp `addquoted(L, b, arg)`：先 `check_bytes` 检出串实参
             // （非串经 "string expected" 抛出），再喂切片核心转义拼接
-            addquoted_ref(&mut b, (*l).check_bytes(arg));
+            addquoted_ref(&mut b, (*lp).check_bytes(arg));
           }
           b's' => {
-            let s = lua_l_checklstring_ref(&mut *l, arg);
+            let s = lua_l_checklstring_ref(&mut *lp, arg);
             // no precision and string too long to format, or no format necessary
             if p == 0 || (spec.precision.is_none() && s.len() >= DIRECT_APPEND_MIN_LEN) {
               lua_l_addlstring(&mut b, s);
@@ -140,13 +147,13 @@ pub(crate) unsafe fn str_format(l: *mut LuaState) -> i32 {
           }
           b'*' => {
             // %* is parsed above, so if we got here we must have %...*
-            luaL_error!(l, "'%*' does not take a form");
+            luaL_error!(lp, "'%*' does not take a form");
           }
           _ => {
             // also treat cases 'pnLlh'
             // 指示符字节经 char 格式化：≥0x80 时按 Unicode 码点重编码为多字节，
             // cpp 写原始单字节——仅错误文本字节级差异（DELIBERATE DEVIATION）
-            luaL_error!(l, "invalid option '%{}' to 'format'", indicator as char);
+            luaL_error!(lp, "invalid option '%{}' to 'format'", indicator as char);
           }
         }
       }
@@ -157,4 +164,4 @@ pub(crate) unsafe fn str_format(l: *mut LuaState) -> i32 {
   }
 }
 
-lua_lib_fn!(pub(crate) fn str_format, str_format_arm);
+lua_lib_fn!(pub(crate) fn str_format @ref, str_format_arm);

@@ -47,19 +47,23 @@ unsafe fn str_packsize_ref(l: &mut LuaState, fmt_bytes: &[u8]) -> i32 {
   }
 }
 
-/// C-ABI 镜像垫片（一行委托 [`str_packsize_ref`]）：本面消费点仅 `lua_lib_fn!`
+/// 核心转发垫片（一行委托 [`str_packsize_ref`]）：本面消费点仅 `lua_lib_fn!`
 /// 生成的注册臂 `str_packsize_arm`（luaopen_string.rs:7 导入、:33 STRLIB
 /// "packsize" 注册），全仓实测无其余消费面 ⇒ 保一行形（r12-w5s `byteoffset`
 /// 垫片先例）。
 ///
-/// # Safety
-/// `l` 须为可抛错受保护帧内存活的 `LuaState`：栈槽 #1 为格式串实参（非串经
-/// `check_bytes` 抛 "string expected"），其余义务单源 [`str_packsize_ref`]；
-/// `&mut *l` 的引用重建窗口即本次调用。
-pub(crate) unsafe fn str_packsize(l: *mut LuaState) -> i32 {
-  // SAFETY: 契约保证 `l` 存活独占驱动；payload 切片借用自栈槽 #1 串体，
-  // 本次调用内有效
-  unsafe { str_packsize_ref(&mut *l, (*l).check_bytes(1)) }
+/// 调用序契约（正确性，非内存安全——`l` 的存活前提已由 `&mut` 接收者类型承载，r16-v38 收形后
+/// 本面唯一点名转手、无裸操作，降为安全 `fn`）：`l` 须处于可抛错受保护帧，栈槽 #1 为格式串
+/// 实参（非串经 `check_bytes` 抛 "string expected"），其余义务单源 [`str_packsize_ref`]。
+/// 格式串窗口须与同句的核心调用（该核亦经 `&mut l` 报错）共存，p28 锚定形与 `&mut` 接收者
+/// 不可共存 ⇒ 按 r16-v29 桥接判例在块内一次就地转手裸句柄，借用窗止于本块。
+pub(crate) fn str_packsize(l: &mut LuaState) -> i32 {
+  // SAFETY: `l` 由 `&mut` 保证有效且独占，转手后的 `lp` 即同一存活帧；payload 切片借用自
+  // 栈槽 #1 串体（不可变、不搬移），本次调用内有效
+  unsafe {
+    let lp = l.as_mut_ptr();
+    str_packsize_ref(&mut *lp, (*lp).check_bytes(1))
+  }
 }
 
-lua_lib_fn!(pub(crate) fn str_packsize, str_packsize_arm);
+lua_lib_fn!(pub(crate) fn str_packsize @ref, str_packsize_arm);
