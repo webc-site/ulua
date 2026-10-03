@@ -61,12 +61,10 @@ impl<'a> NonStrictTypeChecker<'a> {
         // as_mutable_type_pack 只是同一基址的 const→mut 视图；emplace 的
         // placement 覆写与 cpp `emplace(Arena&, TypePackId, ...)` 对非持久
         // arena 包节点的原地写语义一致，单线程下写穿无并发访问。
-        unsafe {
-          emplace_type_pack(
-            as_mutable_type_pack(pack),
-            TypePackVariant::TypePack(TypePack::new(alloc::vec![result], Some(free_tail))),
-          )
-        }
+        emplace_type_pack(
+          as_mutable_type_pack(pack),
+          TypePackVariant::TypePack(TypePack::new(alloc::vec![result], Some(free_tail))),
+        )
       };
       let _ = result_pack;
 

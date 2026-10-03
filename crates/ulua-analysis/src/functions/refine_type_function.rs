@@ -131,7 +131,7 @@ pub fn refine_type_function(
     // ctx.arena 内实例节点的存活句柄，scrubber 不持借用跨调用。
     // 句柄先物化为局部值再转发（occurs 判定已确认其为存活 arena 节点）。
     let needle = instance;
-    let mut rts = unsafe { RefineTypeScrubber::new(ctx, needle) };
+    let mut rts = RefineTypeScrubber::new(ctx, needle);
     if let Some(result) = rts.substitute_type_id(target_ty) {
       target_ty = result;
     }

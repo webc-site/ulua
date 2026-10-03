@@ -33,7 +33,7 @@ impl Normalizer {
         normalizer: self as *mut Normalizer,
         initialized_fuel: false,
       };
-      unsafe { fi.fuel_initializer_not_null_normalizer(self as *mut Normalizer) };
+      fi.fuel_initializer_not_null_normalizer(self as *mut Normalizer);
       let _fi = fi;
 
       self.is_intersection_inhabited_type_id_type_id_seen_table_prop_pairs_set_type_id(

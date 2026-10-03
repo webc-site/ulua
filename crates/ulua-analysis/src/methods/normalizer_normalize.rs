@@ -53,7 +53,7 @@ impl Normalizer {
     // self as *mut 派生自当前 &mut self，必非空且对齐，指针仅在调用期内有效；
     // fi 经 _fi 绑定持有至函数返回（与 C++ FuelInitializer 栈对象对齐），构造与
     // Drop 间不会再有对 self 的第二条存活借用。
-    unsafe { fi.fuel_initializer_not_null_normalizer(self as *mut Normalizer) };
+    fi.fuel_initializer_not_null_normalizer(self as *mut Normalizer);
     // 必须绑定命名变量：`let _ = fi` 会立即 drop，FuelInitializer 析构将刚初始化的
     // fuel 清空，导致整个 normalize 子树燃料计量失效（对齐 cpp `FuelInitializer fi{...}`）。
     let _fi = fi;

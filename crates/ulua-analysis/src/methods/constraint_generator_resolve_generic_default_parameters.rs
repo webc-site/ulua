@@ -89,12 +89,10 @@ impl ConstraintGenerator {
         // `as_mutable_type_pack` 得 `*mut TypePackVar` 满足 emplace 的非空有效入参
         // （既有 const_cast 门面，单线程 pass 内该改写无并存借用）；`resolved` 是
         // 上一步解析出的存活 TypePackId。
-        unsafe {
-          emplace_type_pack(
-            as_mutable_type_pack(to_unblock),
-            TypePackVariant::Bound(resolved),
-          )
-        };
+        emplace_type_pack(
+          as_mutable_type_pack(to_unblock),
+          TypePackVariant::Bound(resolved),
+        );
       }
 
       let name_key = ast_pack.name.as_str_or_empty().to_string();

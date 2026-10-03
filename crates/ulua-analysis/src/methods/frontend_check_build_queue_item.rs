@@ -93,7 +93,7 @@ impl Frontend {
       // Safety: 调 unsafe fn `populate_expected_types`，其契约要求模块裸指针非空且指向存活
       // Module（上段局部 Arc 界定）；调用期间其内部对 `(*module).ast_types` 等字段做可变
       // 改写，本函数此刻不再持有该 Module 的其它借用（`&item.source_module` 是另一 Arc）。
-      unsafe { self.populate_expected_types(&item.source_module, module_ptr, &environment_scope) };
+      self.populate_expected_types(&item.source_module, module_ptr, &environment_scope);
 
       if let Some(time_limit) = item.options.module_time_limit_sec
         && item.options.apply_internal_limit_scaling
@@ -144,7 +144,7 @@ impl Frontend {
     // Safety: 主路径的 unsafe fn `populate_expected_types` 调用，指针存活性与借用排它性同
     // 上一段对 `module_ptr` 的论证：`&item.source_module` 借的是另一 Arc，Module 内容此刻
     // 仅由该裸指针访问。
-    unsafe { self.populate_expected_types(&item.source_module, module_ptr, &environment_scope) };
+    self.populate_expected_types(&item.source_module, module_ptr, &environment_scope);
 
     if let Some(time_limit) = item.options.module_time_limit_sec
       && item.options.apply_internal_limit_scaling

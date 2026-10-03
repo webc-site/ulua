@@ -112,11 +112,11 @@ impl TypeAttacher {
     }
   }
 
-  /// # Safety
-  /// 调用方须保证 `local` 非空、对齐，指向 attach 期间存活、地址稳定的 `AstLocal`；本函数读 `annotation`/
-  /// `location` 并在命中时**写回** `(*local).annotation`，故须对该 arena 节点持有独占可变访问、无并存借用。
+  /// 前置：调用方须保证 `local` 非空、对齐，指向 attach 期间存活、地址稳定的 `AstLocal`；本函数读 `annotation`/
+  /// `location` 并在命中时**写回** `alias(local).annotation`，故须对该 arena 节点持有独占可变访问、无并存借用。
   /// cpp `Analysis/src/TypeAttach.cpp:595`（`bool TypeAttacher::visitLocal(AstLocal*)`）。单线程。
-  pub(crate) unsafe fn visit_local(&mut self, local: *mut AstLocal) -> bool {
+  /// 指针转借用经 `arena_handle` 的 `alias`/`alias_ref` 模块级契约承担，本函数自身无 unsafe 操作。
+  pub(crate) fn visit_local(&mut self, local: *mut AstLocal) -> bool {
     // C++ `AstType* annotation = local->annotation;`
     // C++ `if (annotation == nullptr)`
     if alias_ref(local).annotation.is_null() {
@@ -144,7 +144,7 @@ impl TypeAttacher {
     al_ref.vars.iter().for_each(|&var| {
       // Safety: `var` 取自 `al_ref.vars`，均指同一 AST arena 保活、地址稳定的
       // `AstLocal`，满足被调 `unsafe fn visit_local` 的入参存活契约。
-      unsafe { self.visit_local(var) };
+      self.visit_local(var);
     });
 
     true
@@ -156,7 +156,7 @@ impl TypeAttacher {
     let al_ref = alias_ref(al);
     // Safety: `al_ref.local` 已句柄化恒非空（SourceModule arena 保活、地址稳定），
     // `visit_local` 入参契约经 as_ptr 桥接。
-    unsafe { self.visit_local(al_ref.local.as_ptr()) }
+    self.visit_local(al_ref.local.as_ptr())
   }
 
   /// `AstVisitor::visit_stat_for` 桥接。`stat` 为 dispatch `from_mut(node)` 传入、
@@ -176,7 +176,7 @@ impl TypeAttacher {
     stat_ref.vars.iter().for_each(|&var| {
       // Safety: 每个 `var` 来自 `stat_ref.vars`，均为 AST arena 保活、地址稳定的
       // `AstLocal*`，满足 `visit_local` 入参契约。
-      unsafe { self.visit_local(var) };
+      self.visit_local(var);
     });
     true
   }
@@ -204,7 +204,7 @@ impl TypeAttacher {
     unsafe { (*fn_).args.iter_nodes() }.for_each(|arg| {
       // Safety: 每个 `arg` 是该函数节点记录的 AST `AstLocal*`，arena 保活、地址稳定，
       // 满足 `visit_local` 入参契约。
-      unsafe { self.visit_local(arg.as_ptr()) };
+      self.visit_local(arg.as_ptr());
     });
 
     // Safety: `fn_` 依入参契约存活，此处仅瞬态只读取 `return_annotation` 判空。

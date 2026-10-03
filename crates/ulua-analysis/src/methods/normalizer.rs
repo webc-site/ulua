@@ -375,7 +375,7 @@ impl Normalizer {
       normalizer: self as *mut Normalizer,
       initialized_fuel: false,
     };
-    unsafe { fi.fuel_initializer_not_null_normalizer(self as *mut Normalizer) };
+    fi.fuel_initializer_not_null_normalizer(self as *mut Normalizer);
 
     // 对齐 cpp try/catch：仅捕获 NormalizerHitLimits 并返回 None，其余 panic 继续传播。
     match catch_unwind(AssertUnwindSafe(|| {

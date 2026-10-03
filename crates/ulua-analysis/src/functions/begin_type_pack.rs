@@ -15,6 +15,6 @@ pub(crate) fn begin_type_pack_id_txn_log(tp: TypePackId, log: *const TxnLog) -> 
   // （unifier/checker 的 state.log）、或来自 TxnLog::empty() 的进程级 OnceLock 单例，两者
   // 均非空、对齐且在调用期间只读存活；tp 指向 type arena 中存活的 TypePackVar，被调方法
   // 仅经 &self 查询跟随。it 为栈局对象，&mut 重建无并发借用。
-  unsafe { it.type_pack_iterator_type_pack_id_txn_log(tp, log) };
+  it.type_pack_iterator_type_pack_id_txn_log(tp, log);
   it
 }

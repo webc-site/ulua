@@ -152,10 +152,10 @@ impl TypeChecker2 {
         )
       },
     );
-    // Safety: `Frontend`/`TypeChecker2` 同契约——checker 已由 `Box` 落在最终
+    // 说明：`Frontend`/`TypeChecker2` 同契约——checker 已由 `Box` 落在最终
     // 稳定地址且此后不再移动（Box 只移动句柄），布线产生的自指针
     // （`_subtyping.normalizer`、`subtyping`）恒指堆内地址。
-    unsafe { checker.wire_self_pointers() };
+    checker.wire_self_pointers();
     checker
   }
 
@@ -167,10 +167,10 @@ impl TypeChecker2 {
   ///
   /// 新调用点一律走 [`TypeChecker2::new_boxed`]，免手写本调用与裸 `new` 对。
   ///
-  /// # Safety
-  /// The `TypeChecker2` must not be moved after this call, or the wired
-  /// pointers dangle.
-  pub(crate) unsafe fn wire_self_pointers(&mut self) {
+  /// 前置契约：The `TypeChecker2` must not be moved after this call, or the wired
+  /// pointers dangle.（函数体只经 `Handle::from_mut` 由引用构造句柄，无 unsafe 操作，
+  /// 故该契约是文档约定而非语言强制。）
+  pub(crate) fn wire_self_pointers(&mut self) {
     self._subtyping.normalizer = Some(Handle::from_mut(&mut self.normalizer));
     // 孪生对句柄化回填：`Handle::from_mut(&mut self._subtyping)` 与原
     // `&mut self._subtyping as *mut Subtyping` 同一地址、同一自引用契约；

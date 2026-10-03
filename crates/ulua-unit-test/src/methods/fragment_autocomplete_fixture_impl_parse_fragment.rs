@@ -35,15 +35,13 @@ impl FragmentAutocompleteFixtureImpl {
     let names = raw_handle(module_ref.names.as_ref()?);
 
     // Safety: 行 33 判空后把模块物化为只读共享借用（resolver ModulePtr 存活，见上方 31-32 行注记），不伪造 &mut；stale 根直接取 `Module.root` 的 `Option<Handle>`（§2(b) 已句柄化），本次 parse 根经 `from_opt_ptr` 折叠可空性（parse_result.root 为本次 parse 的存活产物），names 取 resolver 内 AstNameTable 非空块地址（cpp names.get() 同形，下游按 & 只读使用）；单线程帧内使用。
-    unsafe {
-      parse_fragment(
-        module_ref.root,
-        Handle::from_opt_ptr(parse_result.root),
-        names,
-        document,
-        cursor_pos,
-        fragment_end_position,
-      )
-    }
+    parse_fragment(
+      module_ref.root,
+      Handle::from_opt_ptr(parse_result.root),
+      names,
+      document,
+      cursor_pos,
+      fragment_end_position,
+    )
   }
 }

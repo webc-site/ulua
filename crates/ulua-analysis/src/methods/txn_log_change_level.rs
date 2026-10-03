@@ -27,7 +27,7 @@ impl TxnLog {
     // 上方 LUAU_ASSERT 已确认其为 Free/Table/Function 之一的 arena 驻留节点；
     // 返回值取自 type_var_changes 堆上 Box 的 `as_mut`，非空且地址随 Box 稳定、
     // 由本 log 独占持有。
-    let new_ty = unsafe { self.queue_type_id(ty) };
+    let new_ty = self.queue_type_id(ty);
     // Safety: `new_ty` 即上方证过的非空存活 PendingType 句柄；
     // get_mutable_pending_type 以 class tag 向下分派，未命中返回 None（原 null
     // 哨兵），命中即 repr(C) 基址重合指向 pending 内嵌 Type 的对应变体的独占可变
@@ -59,7 +59,7 @@ impl TxnLog {
     // Safety: 同 TypeId 版——上方 LUAU_ASSERT 确认 `tp` 为 FreeTypePack 的
     // 存活 arena 节点；queue_type_pack_id 返回 type_pack_changes 堆上 Box 的
     // `as_mut` 句柄，非空且地址稳定、由本 log 独占。
-    let new_tp = unsafe { self.queue_type_pack_id(tp) };
+    let new_tp = self.queue_type_pack_id(tp);
     // Safety: `new_tp` 非空存活（上一条证成）；class tag 命中才返回
     // 指向 pending 内嵌 FreeTypePack 的独占可变借用（未命中为 None，原 null
     // 哨兵），`.level` 仅在 Some 分支写入，本 log 独占、单线程串行无别名。

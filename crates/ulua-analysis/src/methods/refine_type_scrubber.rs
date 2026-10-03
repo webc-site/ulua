@@ -119,14 +119,14 @@ impl RefineTypeScrubber {
   /// C++ `RefineTypeScrubber` ctor（BuiltinTypeFunctions.cpp:1083-1088）：以
   /// `ctx->arena` 基初始化 `Substitution`，并记下 `ctx` 与要剔除的 `needle`。
   ///
-  /// # Safety
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
   /// - `ctx`：本次归约调用的独占借用，指向存活 [`TypeFunctionContext`]——本 ctor
   ///   立即读取其 `arena` 字段，且 `Substitution` 与后续所有覆写都会继续经它读写 arena。
   /// - `needle`：须是 `ctx.arena` 内一个存活的 `TypeId`（调用方传入的 instance 句柄）；
   ///   它只被按值比较，不被解引用。
   /// - 返回对象的 `ctx` 字段是 `Handle`（无生命周期追踪），其有效性完全继承自上面的
   ///   `ctx` 前提；使用该对象期间 `ctx` 所指记录不得失效、不得有并存改写。
-  pub(crate) unsafe fn new(ctx: &mut TypeFunctionContext, needle: TypeId) -> Self {
+  pub(crate) fn new(ctx: &mut TypeFunctionContext, needle: TypeId) -> Self {
     // Safety: 契约给出 ctx 为存活独占借用；此处只读其 arena 字段值（NonNull 拷贝）
     // 交给基类 ctor，不写该记录，也不延长这次共享再借用的生命周期。
     let ctx_ref = &*ctx;

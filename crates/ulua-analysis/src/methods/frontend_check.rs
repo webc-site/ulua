@@ -224,14 +224,12 @@ impl Frontend {
       // 持有、检查期单线程独占；builtin_types 由 Frontend chokepoint 取句柄（恒非空、
       // 长寿），ice_handler 为 `Handle::from_mut(&mut self.ice_handler)`（非空由句柄
       // 类型编码），二者均比 checker 及其 unifier_state 长寿。
-      let mut type_checker = unsafe {
-        TypeChecker::new(
-          global_scope,
-          resolver,
-          builtin_types,
-          Handle::from_mut(&mut self.ice_handler),
-        )
-      };
+      let mut type_checker = TypeChecker::new(
+        global_scope,
+        resolver,
+        builtin_types,
+        Handle::from_mut(&mut self.ice_handler),
+      );
       if self.prepare_module_scope.is_some() {
         let prepare_module_scope = self.prepare_module_scope.clone();
         type_checker.prepare_module_scope = Some(Rc::new(move |name, scope| {

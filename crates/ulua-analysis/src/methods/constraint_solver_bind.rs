@@ -119,10 +119,10 @@ impl ConstraintSolver {
   /// 仅供尚未迁移的 `*const Constraint` 调用点（bidirectional type pusher、
   /// iterable 派发分支等）原样续传；新调用点一律直接用安全形态。
   ///
-  /// # Safety
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
   /// `constraint`：非空、对齐且整调用期间指向存活的 `Constraint`（即正在
   /// 派发的那条约束）；`ty`/`bound_to` 前提同 [`ConstraintSolver::bind`]。
-  pub(crate) unsafe fn bind_not_null_constraint_type_id_type_id(
+  pub(crate) fn bind_not_null_constraint_type_id_type_id(
     &mut self,
     constraint: *const Constraint,
     ty: TypeId,
@@ -194,14 +194,14 @@ impl ConstraintSolver {
       // 最小契约边界（其文件未在本次迁移范围）：`mutable_tp` 由入口校验过
       // owner（或本就不是 Blocked）的 `tp` 取得，occurs-check 失败路径把该
       // 槽覆写为 Bound(errorTypePack)（cpp 同分支），覆写期间无其它借用者。
-      unsafe { emplace_type_pack(mutable_tp, &mut err_arg) };
+      emplace_type_pack(mutable_tp, &mut err_arg);
     } else {
       let mutable_tp = as_mutable_type_pack(tp);
       let mut bound_arg = bound_to;
       // Safety: 正常绑定路径覆写 `.ty = Bound(bound_to)`；`tp`/`bound_to` 均为
       // arena 驻留 pack 句柄且上方已排除 tp==bound_to 自环，callee 契约
       // （目标指针有效、实参 pack 存活）成立。
-      unsafe { emplace_type_pack(mutable_tp, &mut bound_arg) };
+      emplace_type_pack(mutable_tp, &mut bound_arg);
     }
 
     self.unblock_type_pack_id_location(tp, location);
@@ -210,10 +210,10 @@ impl ConstraintSolver {
   /// [`ConstraintSolver::bind_pack`] 的裸指针（cpp `NotNull` 直传）兼容边界，
   /// 仅供尚未迁移的 `*const Constraint` 调用点原样续传。
   ///
-  /// # Safety
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
   /// `constraint`：非空、对齐且整调用期间指向存活的 `Constraint`；
   /// `tp`/`bound_to` 前提同 [`ConstraintSolver::bind_pack`]。
-  pub(crate) unsafe fn bind_not_null_constraint_type_pack_id_type_pack_id(
+  pub(crate) fn bind_not_null_constraint_type_pack_id_type_pack_id(
     &mut self,
     constraint: *const Constraint,
     tp: TypePackId,

@@ -104,7 +104,7 @@ impl TypeChecker2 {
     // 其裸指针在 `uninitialized_fields` 失效之前即不再被使用，与 C++ 中二者
     // 同生死的裸指针共享语义一致。
     let mut finder =
-      unsafe { FindUninitializedAccesses::new(self_local, fields_ptr, method_names) };
+      FindUninitializedAccesses::new(self_local, fields_ptr, method_names);
 
     for stmt in function.body.body.iter_nodes() {
       let stmt_ref = stmt.get();

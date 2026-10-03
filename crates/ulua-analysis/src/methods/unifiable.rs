@@ -32,13 +32,13 @@ LUAU_NOINLINE! {
 // Source: `Analysis/src/TypePack.cpp` (TypePack.cpp:461-466, hand-ported)
 
 LUAU_NOINLINE! {
-/// # Safety
-/// 调用方须保证 `ty` 非空、对齐，指向存活且可独占写的 `TypePackVar`（调用方经 `asMutable` 取得），
+/// 前置：调用方须保证 `ty` 非空、对齐，指向存活且可独占写的 `TypePackVar`（调用方经 `asMutable` 取得），
 /// 且 `*ty_arg` 经 follow 后不等于 `ty`（函数内 LUAU_ASSERT 校验，否则产生自指环）。
-/// 原地覆写 `ty->ty` 为 `BoundTypePack`，本 log/arena 独占、单线程。
+/// 原地覆写 `ty->ty` 为 `BoundTypePack`，本 log/arena 独占、单线程。裸指针转借用
+/// 由 `arena_handle::alias` 的模块级契约承担，故本函数自身无 unsafe 操作。
 /// cpp `Analysis/src/TypePack.cpp:485`（`Unifiable::Bound<TypePackId>* emplaceTypePack(TypePackVar*, TypePackId&)`）；
 /// cpp 尾部回传的 `getMutable<BoundTypePack>` 全仓无人消费，按 review.md §7 移除。
-    pub(crate) unsafe fn emplace_type_pack(ty: *mut TypePackVar, ty_arg: &mut TypePackId) {
+    pub(crate) fn emplace_type_pack(ty: *mut TypePackVar, ty_arg: &mut TypePackId) {
             LUAU_ASSERT!(!eq(ty, follow_type_pack::follow(*ty_arg)));
             // ty->ty.emplace<BoundTypePack>(tyArg)
             alias(ty).ty = TypePackVariant::Bound(*ty_arg);

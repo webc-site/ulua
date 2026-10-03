@@ -33,7 +33,7 @@ impl<'ctx> LintForRange<'ctx> {
 impl<'ctx> AstVisitor for LintForRange<'ctx> {
   fn visit_stat_for(&mut self, node: &mut AstStatFor) -> bool {
     // SAFETY: 遍历入口保证 `node` 指向存活的 AstStatFor，与 `visit_ast_stat_for_linter` 的裸指针契约一致。
-    unsafe { self.visit_ast_stat_for_linter(from_mut(node)) }
+    self.visit_ast_stat_for_linter(from_mut(node))
   }
 }
 
@@ -44,11 +44,11 @@ impl<'ctx> LintForRange<'ctx> {
 
 // —— 原 methods/lint_for_range_visit.rs ——
 impl<'ctx> LintForRange<'ctx> {
-  /// # Safety
-  /// `{node}` 须指向本次遍历期间存活的 parse-arena 节点：非空、对齐，地址在该 arena 释放前不
+  /// 前置：`node` 须指向本次遍历期间存活的 parse-arena 节点：非空、对齐，地址在该 arena 释放前不
   /// 移动；调用方（AstVisitor 遍历驱动）单线程串行访问，函数体内不产生与之重叠的可变借用。
+  /// 指针转借用经 `arena_handle::alias_ref` 模块级契约承担，本函数自身无 unsafe 操作。
   /// 对应 C++ `bool LintForRange::visit(AstStatFor* node)` (`cpp/Analysis/src/Linter.cpp:1262`)。
-  pub(crate) unsafe fn visit_ast_stat_for_linter(&mut self, node: *mut AstStatFor) -> bool {
+  pub(crate) fn visit_ast_stat_for_linter(&mut self, node: *mut AstStatFor) -> bool {
     let node_ref = alias_ref(node);
     // step 落可空 OptNode：cpp `!node->step` 判空以 is_none 承接；from/to 已
     // 句柄化为非空 Node，as_ptr 桥交指针形态判型门面，`.get()` 直出只读视图

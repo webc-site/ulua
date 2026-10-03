@@ -229,9 +229,9 @@ impl Frontend {
 }
 
 impl Frontend {
-  /// # Safety
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
   /// 调用方须保证满足 C++ 原实现的调用契约。
-  pub(crate) unsafe fn populate_expected_types(
+  pub(crate) fn populate_expected_types(
     &self,
     source_module: &SourceModule,
     module: *mut Module,

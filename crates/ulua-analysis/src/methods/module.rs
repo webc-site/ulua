@@ -69,7 +69,7 @@ impl Module {
       // `clone_public_interface` 存活期内保持有效；`builtin_types` 满足函数头
       // 契约；`&log` 按引用→裸指针降级为只读句柄，log 由本函数持有且存活于
       // CPI 使用期——逐项对应 `ClonePublicInterface::new` 的非空存活契约。
-      unsafe { ClonePublicInterface::new(&log, builtin_types, self as *mut Module, mode) };
+      ClonePublicInterface::new(&log, builtin_types, self as *mut Module, mode);
 
     let return_type = clone_public_interface.clone_type_pack(return_type);
 

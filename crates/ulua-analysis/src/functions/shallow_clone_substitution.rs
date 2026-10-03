@@ -23,8 +23,8 @@ use crate::{
   },
   type_aliases::{type_id::TypeId, type_variant::TypeVariant},
 };
-/// # Safety
-pub(crate) unsafe fn shallow_clone_type_id_type_arena_txn_log(
+/// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
+pub(crate) fn shallow_clone_type_id_type_arena_txn_log(
   ty: TypeId,
   dest: &mut TypeArena,
   log: &TxnLog,

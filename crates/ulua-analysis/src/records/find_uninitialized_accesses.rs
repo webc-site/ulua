@@ -42,9 +42,9 @@ pub struct FindUninitializedAccesses {
 impl FindUninitializedAccesses {
   /// C++ 构造函数：`self`/`uninitializedFields` 为借用式共享指针，语义同 NotNull。
   ///
-  /// # Safety
+  /// 前置契约（本函数体经 safe 门面完成指针借用，无 unsafe 操作；以下为文档约定）
   /// `self_`、`uninitialized_fields` 须指向本帧内存期内存有效的对象。
-  pub(crate) unsafe fn new(
+  pub(crate) fn new(
     self_: *mut AstLocal,
     uninitialized_fields: *mut DenseHashSet<String>,
     method_names: DenseHashSet<String>,
