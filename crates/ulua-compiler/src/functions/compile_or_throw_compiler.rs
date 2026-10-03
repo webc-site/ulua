@@ -9,13 +9,12 @@ use ulua_ast::{
     ast_name::AstName,
     ast_name_table::AstNameTable,
     ast_node::AstNode,
-    ast_stat::AstStat,
     node_handle::{Node as ArenaNode, Nodes, OptNode},
     parse_errors::ParseErrors,
     parse_options::ParseOptions,
     parse_result::ParseResult,
   },
-  visit::ast_stat_visit,
+  visit::dispatch_node,
 };
 use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
 use ulua_common::{
@@ -85,12 +84,11 @@ pub fn compile_or_throw_bytecode_builder_parse_result_ast_name_table_compile_opt
   let mut functions = Vec::<Node<AstExprFunction>>::new();
   {
     let mut function_visitor = FunctionVisitor::new(&mut functions);
-    // Safety: root_block 非空由上方 `NonNull` 证明；它指向 parser arena 中存活的
-    // `AstStatBlock`（编译结束前 arena 由调用方持有），repr(C) 首字段重合保证
-    // 向上转 `AstStat` 基类指针合法；FunctionVisitor 只收集子函数指针、不写 AST。
-    unsafe {
-      ast_stat_visit(root_block.cast::<AstStat>().as_ptr(), &mut function_visitor);
-    }
+    // root_ref 已由上方 `NonNull` 边界证明为存活独占的根节点；`dispatch_node`
+    // 收 `&mut AstNode` 按类位分发（根即 `AstStatBlock`，命中 StatBlock 臂），
+    // 与旧「向上转 `AstStat` 基类指针再进裸门面」等价且全链路 safe。
+    // FunctionVisitor 只收集子函数指针、不写 AST。
+    dispatch_node(root_ref, &mut function_visitor);
 
     if function_visitor.has_native_function {
       options.set_for_native_compilation();
@@ -114,11 +112,9 @@ pub fn compile_or_throw_bytecode_builder_parse_result_ast_name_table_compile_opt
   let has_fenv = !names.get_str("getfenv").is_null() || !names.get_str("setfenv").is_null();
   if options.optimization_level >= 1 && has_fenv {
     let mut fenv_visitor = FenvVisitor::default();
-    // Safety: 同上，root_block 非空且指向 arena 存活节点；FenvVisitor 仅置自身
-    // bool 标志、不写 AST。
-    unsafe {
-      ast_stat_visit(root_block.cast::<AstStat>().as_ptr(), &mut fenv_visitor);
-    }
+    // 同 [`FunctionVisitor`] 处：`dispatch_node` 从 root_ref 的独占借用直接分发，
+    // 不落基类裸指针；FenvVisitor 仅置自身 bool 标志、不写 AST。
+    dispatch_node(root_ref, &mut fenv_visitor);
     compiler.getfenv_used = fenv_visitor.getfenv_used;
     compiler.setfenv_used = fenv_visitor.setfenv_used;
   }
