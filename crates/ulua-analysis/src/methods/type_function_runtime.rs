@@ -68,28 +68,28 @@ impl TypeFunctionRuntime {
 
     // lua_State* l = state.get();
     let l = self.state.0;
-    let l.as_mut_ptr(): &mut lua_state::LuaState = alias(l.cast());
+    let vm_l: &mut lua_state::LuaState = alias(l.cast());
 
     // lua_setthreaddata(l, this);
     // `self` 地址只转手存入线程 data 槽、此处不解引用；VM 回调侧
     // （get_type_function_runtime / user_defined_type_function）仅在回调窗口内
     // 经同一地址重建借用——单线程串行，窗口外本 runtime 独占驱动。
-    lua_setthreaddata(l.as_mut_ptr(), from_mut(self).cast());
+    lua_setthreaddata(vm_l, from_mut(self).cast());
 
     // setTypeFunctionEnvironment(l); registerTypeUserData(l); registerTypesLibrary(l);
-    // SAFETY: VM 边界——`l` 是本帧刚建 state；三入口各自的 Safety 契约见其函数
+    // SAFETY: VM 边界——`vm_l` 是本帧刚建 state；三入口各自的 Safety 契约见其函数
     // 文档（如 register_types_library.rs 的调用点论证），此处逐一满足。
     unsafe {
-      set_type_function_environment(&mut *l);
-      register_type_user_data(&mut *l);
-      register_types_library(&mut *l);
+      set_type_function_environment(&mut *vm_l);
+      register_type_user_data(&mut *vm_l);
+      register_types_library(&mut *vm_l);
     }
 
     // luaL_sandbox(l); luaL_sandboxthread(l);
     // SAFETY: VM 边界——同一存活 state 的只借不还式栈操作，紧接 setthreaddata
     // 之后、无任何其它别名读取该栈（与原整体 unsafe 块的时序逐字一致）。
     unsafe {
-      let vm_ptr = from_mut(l.as_mut_ptr());
+      let vm_ptr = from_mut(vm_l);
       lua_l_sandbox(&mut *vm_ptr);
       lua_l_sandboxthread(&mut *vm_ptr);
     }
@@ -117,7 +117,7 @@ impl RegisterErr for TypeFunctionError {
     )
   }
   fn check_result(l: &mut LuaState, name: &str, lua_result: i32) -> Option<Self> {
-    check_result_for_error(&mut *l, name, lua_result)
+    check_result_for_error(l, name, lua_result)
   }
 }
 impl TypeFunctionRuntime {
@@ -154,7 +154,7 @@ impl RegisterErr for String {
     ))
   }
   fn check_result(l: &mut LuaState, name: &str, lua_result: i32) -> Option<Self> {
-    check_result_for_error_deprecated(&mut *l, name, lua_result)
+    check_result_for_error_deprecated(l, name, lua_result)
   }
 }
 impl TypeFunctionRuntime {
@@ -296,7 +296,6 @@ impl TypeFunctionRuntime {
     // SAFETY: VM 边界——`global_vm` 存活主线程（同上方调用窗口前提），
     // 新线程由其拥有、活至 popper 弹出。
     let l_vm = unsafe { lua_newthread(global_vm) };
-    let l = l_vm.cast::<LuaState>();
     // luau_temp_thread_popper popper(global);
     let mut popper = LuauTempThreadPopper::new(global);
 
@@ -322,7 +321,7 @@ impl TypeFunctionRuntime {
     // Rust 侧直传 `&str`
     // SAFETY: VM 边界——`l_vm` 独占存活线程（同上）。
     let load_result = unsafe { luau_load(l_vm, &name_str, &bytecode, 0) };
-    if let Some(error) = E::check_result(&mut *l, &name_str, load_result) {
+    if let Some(error) = E::check_result(alias(l_vm), &name_str, load_result) {
       popper.luau_temp_thread_popper();
       return Some(error);
     }
@@ -332,7 +331,7 @@ impl TypeFunctionRuntime {
     // cpp `lua_resume(l, nullptr, 0)` 的 from=null 即「主线程恢复」契约形态，
     // 由 `resume_main` 单点收口，此处无需再传 null 哨兵。
     let resume_result = alias(l_vm).resume_main(0);
-    if let Some(error) = E::check_result(&mut *l, &name_str, resume_result) {
+    if let Some(error) = E::check_result(alias(l_vm), &name_str, resume_result) {
       popper.luau_temp_thread_popper();
       return Some(error);
     }

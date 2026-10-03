@@ -21,7 +21,6 @@ pub mod intersection_type_iterator;
 pub mod l_value;
 pub mod literal_properties;
 pub mod lookup_result;
-pub mod lua_state;
 pub mod module_name_type;
 pub mod module_ptr_module;
 pub mod name_type;
