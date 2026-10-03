@@ -31,7 +31,7 @@ pub fn lua_xmove(from: &mut LuaState, to: &mut LuaState, n: i32) {
     lua_c_threadbarrier_lapi(to);
 
     // cpp `ensure_stack_impl(to, from, n)`：目标帧不够时扩容，失败在 from 上抛错
-    ensure_stack_impl(to, from, n);
+    ensure_stack_impl(&mut *to, &mut *from, n);
 
     // 槽窗门面：源侧取 `from` 顶下 n 格只读窗、目标侧取 `to` 顶后 n 格预留可写窗
     //（扩容先行已由 ensure_stack_impl 覆盖，窗基址/界内契约见原语文档）

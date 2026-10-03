@@ -24,7 +24,7 @@ pub(crate) fn lua_next(l: &mut LuaState, idx: i32) -> i32 {
     let lp = l.as_mut_ptr();
     api_checknelems!(lp, 1);
     lua_c_threadbarrier_lapi(lp);
-    ensure_stack(lp, 1);
+    ensure_stack(l, 1);
     let t: StkId = index_2_addr(&*lp, idx);
     api_check!(lp, (*t).is_table());
 

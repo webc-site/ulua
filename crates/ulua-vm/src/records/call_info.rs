@@ -20,8 +20,8 @@ pub struct CallInfo {
   /// cpp 建帧即赋值、从不为空，null 只在 `Default` 占位。改 `Option` 会给 `func + 1`、按 `func` 做指针差
   /// 的热点加 unwrap 且让加一不可表达（§9.4）。
   pub func: StkId,
-  /// `top` 是本帧栈顶，纯算式操作数：`(*(*l).ci).top.offset_from((*l).top)`（`ensure_stack.rs:26`）求
-  /// 增栈量、`p_val <= (*(*l).ci).top`（`api_update_top!`）做越界比较、`top - base` 定帧宽。cpp 建帧时
+  /// `top` 是本帧栈顶，纯算式操作数：`(*l.ci).top.offset_from(l.top)`（`ensure_stack.rs` 的
+  /// `try_reserve_stack`）求增栈量、`p_val <= (*(*l).ci).top`（`api_update_top!`）做越界比较、`top - base` 定帧宽。cpp 建帧时
   /// `ci->top` 即写为合法栈内地址，null 只在 `Default` 占位。改 `Option` 会给每次压栈/扩容判定加 unwrap
   /// 分支（§9.4），且相减无法对 `Option` 表达。
   pub top: StkId,

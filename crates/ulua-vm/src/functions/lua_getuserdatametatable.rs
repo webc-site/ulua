@@ -17,7 +17,7 @@ pub unsafe fn lua_getuserdatametatable(l: *mut LuaState, tag: i32) {
   unsafe {
     api_check!(l, (tag as u32) < LUA_UTAG_LIMIT as u32);
     lua_c_threadbarrier_lapi(l);
-    ensure_stack(l, 1);
+    ensure_stack(&mut *l, 1);
 
     let h = (*l).gs_ref().udatamt[tag as usize];
     if !h.is_null() {

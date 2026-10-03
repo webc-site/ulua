@@ -21,7 +21,7 @@ pub unsafe fn lua_clonetable(l: *mut LuaState, idx: i32) {
     lua_c_check_gc!(l);
     lua_c_threadbarrier_lapi(l);
     // cpp `ensure_stack(L, 1)`：随后 sethvalue 直接写 L->top
-    ensure_stack(l, 1);
+    ensure_stack(&mut *l, 1);
 
     let t: StkId = index_2_addr(&*l, idx);
 

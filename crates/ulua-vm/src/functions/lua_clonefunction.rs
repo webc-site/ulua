@@ -22,7 +22,7 @@ pub unsafe fn lua_clonefunction(l: *mut LuaState, idx: i32) {
   unsafe {
     lua_c_check_gc!(l);
     lua_c_threadbarrier_lapi(l);
-    ensure_stack(l, 1);
+    ensure_stack(&mut *l, 1);
     let p: StkId = index_2_addr(&*l, idx);
     let Some(cl) = (*(*p).value.gc).as_closure_mut() else {
       api_check!(l, false);

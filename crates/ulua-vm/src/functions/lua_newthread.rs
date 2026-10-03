@@ -16,7 +16,7 @@ pub unsafe fn lua_newthread(l: *mut LuaState) -> *mut LuaState {
     lua_c_check_gc!(l);
     lua_c_threadbarrier_lapi(l);
     // cpp `ensure_stack(L, 1)`：随后 setthvalue 直接写 L->top
-    ensure_stack(l, 1);
+    ensure_stack(&mut *l, 1);
     let l1 = lua_e_newthread(l);
     setthvalue!(l, (*l).top, l1);
     api_incr_top!(l);

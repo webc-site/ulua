@@ -23,7 +23,7 @@ pub unsafe fn lua_newuserdatadtor(l: *mut LuaState, sz: usize, dtor: LuaDestruct
     api_check!(l, dtor.is_some());
     lua_c_check_gc!(l);
     lua_c_threadbarrier_lapi(l);
-    ensure_stack(l, 1);
+    ensure_stack(&mut *l, 1);
 
     let dtor_size = size_of::<LuaDestructor>();
     // 溢出钳位：cpp `sz + sizeof(LuaDestructor)` 的回绕保护，等价 `saturating_add`

@@ -21,7 +21,7 @@ pub unsafe fn lua_call(l: *mut LuaState, nargs: i32, nresults: i32) {
     // cpp `ensure_stack(L, nresults - (nargs + 1))`：luaD_call 会按 nresults
     // 写结果槽，帧内空槽不够时必须先扩容。
     if nresults > nargs + 1 {
-      ensure_stack(l, nresults - (nargs + 1));
+      ensure_stack(&mut *l, nresults - (nargs + 1));
     }
 
     let func: StkId = (*l).top.sub((nargs + 1) as usize);

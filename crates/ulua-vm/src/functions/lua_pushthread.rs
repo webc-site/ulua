@@ -12,7 +12,7 @@ pub fn lua_pushthread(l: &mut LuaState) -> i32 {
   unsafe {
     lua_c_threadbarrier_lapi(l.as_mut_ptr());
 
-    ensure_stack(l.as_mut_ptr(), 1);
+    ensure_stack(l, 1);
     setthvalue!(l, l.top, l.as_mut_ptr());
     api_incr_top!(l);
     ((*l.global).mainthread == l.as_mut_ptr()) as i32
