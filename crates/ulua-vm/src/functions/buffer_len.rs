@@ -3,16 +3,13 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// # Safety
-///
-/// `l` 必须指向本次 buffer 库调用的存活 `LuaState`，索引/长度实参按约定可读，栈顶有压入结果的余量。
-pub(crate) unsafe fn buffer_len(l: *mut LuaState) -> i32 {
-  // SAFETY: 契约保证 `l` 存活且实参 1 为已检查 buffer userdata，切片长度即其数据界
-  unsafe {
-    let buf = buffer_data_ref(l, 1);
-    (*l).push_number(buf.len() as f64);
-  }
+/// 调用序契约（正确性，非内存安全）：以 buffer 库 C 函数约定被调——`l` 存活与独占由
+/// `&mut LuaState` 承载，实参 1 为已检查 buffer userdata，结果数值压栈需栈顶余量。
+pub(crate) fn buffer_len(l: &mut LuaState) -> i32 {
+  let buf = buffer_data_ref(l, 1);
+  l.push_number(buf.len() as f64);
+
   1
 }
 
-lua_lib_fn!(pub(crate) fn buffer_len, buffer_len_arm);
+lua_lib_fn!(pub(crate) fn buffer_len @ref, buffer_len_arm);
