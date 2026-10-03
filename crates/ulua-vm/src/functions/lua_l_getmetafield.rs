@@ -41,21 +41,24 @@ pub fn lua_l_getmetafield_bytes(l: &mut LuaState, obj: i32, event: &[u8]) -> i32
 }
 
 /// # Safety
-/// `l` 须为存活 LuaState 并处于可分配/GC 的受保护帧；`obj` 为合法栈索引（`lua_getmetatable` 读该值元表），
-/// `event` 须为 NUL 结尾 C 串或 null（C ABI 契约：null 经 `lua_pushstring` 折算为 nil 键，恒未命中）；
-/// 命中时把元方法留在栈顶并移除元表。cpp/VM/src/laux.cpp:279 luaL_getmetafield。
+/// `l` 的存活与独占由 `&mut LuaState` 接收者承载（r16-v47 收形，导出壳经
+/// `capi_shell_l_obj_event!` 的 `@ref` 臂在壳帧内重建该引用，借用窗止于当次调用）；`l` 须处于
+/// 可分配/GC 的受保护帧；`obj` 为合法栈索引（`lua_getmetatable` 读该值元表）；`event` 须为 NUL
+/// 结尾 C 串或 null（C ABI 契约：null 经 `lua_pushstring` 折算为 nil 键，恒未命中），且存活期覆盖
+/// 本次扫描+拷贝窗口；命中时把元方法留在栈顶并移除元表。cpp/VM/src/laux.cpp:279 luaL_getmetafield。
 ///
-/// 首参收形留档（r16-v43）：本枚导出壳经 `capi_shell_l_obj_event!` 宏裸透传（与
-/// `lua_l_callmeta` 壳共用），该宏无引用重建臂——翻形需新宏臂，属宏红线面，本票不动。
-pub unsafe fn lua_l_getmetafield(l: *mut LuaState, obj: i32, event: *const c_char) -> i32 {
+/// `unsafe fn` 屏障按 r16-v21 判例保留：`l` 侧收形后体内已无裸解引用（取元表/压键/查表全经门面与
+/// 安全被调），但 `event` 这枚不受 Rust 类型约束的裸 C 串仍原样转手交 `lua_pushstring`（其体内
+/// `cstr_bytes` 扫描为真实裸操作）——屏障留在本函，不把该前提降级成隐含约定。
+pub unsafe fn lua_l_getmetafield(l: &mut LuaState, obj: i32, event: *const c_char) -> i32 {
   unsafe {
-    if !(*l).get_metatable(obj) {
+    if !l.get_metatable(obj) {
       return 0; // no metatable
     }
 
     // 保 C 契约的 null→nil 键分支；非空即与 `lua_l_getmetafield_bytes(cstr_bytes(event))` 同路径
-    // SAFETY: `l` 为存活调用帧，`&mut *l` 一次性重借用即垫片期望的接收者形
+    // SAFETY: `event` 的存活/NUL 结尾前提即上方契约所列；`&mut *l` 一次性重借用即垫片期望的接收者形
     lua_pushstring(&mut *l, event);
-    metafield_rawget(&mut *l)
+    metafield_rawget(l)
   }
 }

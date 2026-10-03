@@ -131,12 +131,19 @@ macro_rules! capi_libfn_shell_l_cint {
 
 /// `(l, obj, event: *const c_char) -> c_int` 元方法名壳模板：
 /// lua_l_callmeta/lua_l_getmetafield 两壳共用（两份 21 行同形同契约）。
+/// r16-v47 两枚被调 vm 核心首参收形为独占 `&mut LuaState`，本族自此**只余引用重建单臂**：
+/// 裸透传臂随之零消费者，按「无消费者的宏臂既未经展开检验（未命中的宏臂不参与类型检查），
+/// 又属死文本」判例（§7）同票删除，不在退役壳文件留同名显式壳。选臂判据只看被调核心签名的
+/// 接收者形，不看本壳导出形：**导出签名逐字不变**（首参仍为 `*mut LuaState` 裸形，C-ABI
+/// 镜像红线），仅在既有 `unsafe { … }` 体内把该实参重建为 `&mut *l` 独占引用，借用窗严格止于
+/// 当次调用；`event` 仍按 C ABI 原样透传（其 NUL 结尾/允许 null 的前提由被调核心的 `# Safety`
+/// 承担，本壳不扫不落）。本族刻意不备 `@refshared` 臂：两枚核心皆为独占接收者，只读臂零消费者。
 macro_rules! capi_shell_l_obj_event {
-  ($m:ident, $n:ident) => {
+  ($m:ident, $n:ident @ref) => {
     #[doc = concat!(
       "# Safety\n",
-      "C ABI 导出壳（符号 `ulua_", stringify!($n), "`），仅逐参数透传至 `ulua_vm::functions::", stringify!($m), "::", stringify!($n), "(l, obj, event)`，零逻辑，本帧不解引用任何指针。调用方须保证：\n",
-      "- `l`：指向由本 VM 创建的合法 `LuaState`，非空、对齐，整个调用期间存活，且与对该状态的其它访问单线程驱动（不得跨 OS 线程并发）；\n",
+      "C ABI 导出壳（符号 `ulua_", stringify!($n), "`），除把 `l` 在本帧重建为独占引用（`&mut *l`）外，仅逐参数透传至 `ulua_vm::functions::", stringify!($m), "::", stringify!($n), "(&mut *l, obj, event)`，零逻辑，本帧不解引用其余任何指针。调用方须保证：\n",
+      "- `l`：指向由本 VM 创建的合法 `LuaState`，非空、对齐，整个调用期间存活，且与对该状态的其它访问单线程驱动（不得跨 OS 线程并发）——引用重建前提；\n",
       "- `event`（`*const c_char`）：指向 NUL 结尾的只读串缓冲（或按被调契约允许 null），对齐且在调用期间存活；\n",
       "- 其余参数均为值类型（栈索引/标量），其合法性按 Lua/C API 约定由调用方给出，不引入额外内存前提；\n",
       "- 其余安全前置条件与被调函数的 `# Safety` 契约一致。"
@@ -147,8 +154,8 @@ macro_rules! capi_shell_l_obj_event {
       obj: ::core::ffi::c_int,
       event: *const ::core::ffi::c_char,
     ) -> ::core::ffi::c_int {
-      // Safety: C ABI 导出壳，由 C 宿主按 Lua/C API 约定调用：l 为有效 LuaState*；event 指向调用方在本次调用期间持有的 NUL 结尾缓冲；其余为栈索引/值型参数。本壳不解引用任何指针、不在本帧重建引用，仅原样转调 ulua-vm 同名实现，故不存在别名/悬挂窗口；参数合法性前提即该实现 /// # Safety 所列契约。
-      unsafe { ::ulua_vm::functions::$m::$n(l, obj, event) }
+      // Safety: C ABI 导出壳，由 C 宿主按 Lua/C API 约定调用：l 为有效 LuaState*；event 指向调用方在本次调用期间持有的 NUL 结尾缓冲；其余为栈索引/值型参数。被调 vm 核心已前移为 `&mut LuaState` 引用形接收者，本帧把 `l` 重建为独占引用（`&mut *l`，借用窗止于当次调用），除此之外不解引用其余任何指针、不跨调用持有该引用，且 `event` 原样透传不在本帧扫描，故不存在越窗别名/悬挂；参数合法性前提即该实现 /// # Safety 所列契约。
+      unsafe { ::ulua_vm::functions::$m::$n(&mut *l, obj, event) }
     }
   };
 }

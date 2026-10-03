@@ -30,19 +30,25 @@ pub(crate) fn lua_l_callmeta_bytes(l: &mut LuaState, obj: i32, event: &[u8]) -> 
 /// [`lua_l_callmeta_bytes`] 同路径。
 ///
 /// # Safety
-/// `l` 须为存活 LuaState 并处于可调用/可 GC 的受保护帧；`obj` 为 `abs_index`
+/// `l` 的存活与独占由 `&mut LuaState` 接收者承载（r16-v47 收形，导出壳经
+/// `capi_shell_l_obj_event!` 的 `@ref` 臂在壳帧内重建该引用，借用窗止于当次调用）；须处于
+/// 可调用/可 GC 的受保护帧；`obj` 为 `abs_index`
 /// 归一后的合法栈索引（`lua_pushvalue`/元方法入栈读该槽），`event` 须为 NUL
 /// 结尾 C 串或 null；命中元方法后 `lua_call` 建立新帧、可抛错。
 /// cpp/VM/src/laux.cpp:297 luaL_callmeta。
-pub unsafe fn lua_l_callmeta(l: *mut LuaState, obj: i32, event: *const c_char) -> i32 {
+///
+/// `unsafe fn` 屏障按 r16-v21 判例保留：`l` 侧收形后体内已无裸解引用（归一/压槽/调用全经门面与
+/// 安全被调），真实裸操作仅剩 `event` 经 [`lua_l_getmetafield`] 的转手（该核心自身仍为 `unsafe fn`，
+/// 因它要扫这枚裸 C 串）。
+pub unsafe fn lua_l_callmeta(l: &mut LuaState, obj: i32, event: *const c_char) -> i32 {
   unsafe {
     let obj = abs_index(&*l, obj);
-    if lua_l_getmetafield(l, obj, event) == 0 {
+    if lua_l_getmetafield(&mut *l, obj, event) == 0 {
       return 0;
     }
 
-    (*l).push_value(obj);
-    (*l).call(1, 1);
+    l.push_value(obj);
+    l.call(1, 1);
     1
   }
 }
