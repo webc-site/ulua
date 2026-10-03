@@ -1,9 +1,5 @@
 //! Rust 字符串压入 Lua 栈的唯一收口。
 
-use ulua_vm::records::lua_state;
-
-use crate::{records::arena_handle::alias, type_aliases::lua_state::LuaState};
-
 /// 把 `s` 原样压入 VM 栈。
 ///
 /// Rust `str`/`String` 不带 NUL 结尾，因此必须走长度版 `lua_pushlstring`；
@@ -12,6 +8,8 @@ use crate::{records::arena_handle::alias, type_aliases::lua_state::LuaState};
 /// # Safety
 /// `l` 必须是 Lua VM 在本次原生函数调用中传入、且在该调用全程有效的 `lua_State*`；
 /// `s` 的字节在调用期间存活（借自调用方的 arena/栈对象，本函数不接管所有权）。
-pub(crate) unsafe fn push_string(l: *mut LuaState, s: &str) {
-  alias(l as *mut lua_state::LuaState).push_bytes(s.as_bytes())
+use crate::{records::arena_handle::alias};
+use ulua_vm::records::lua_state::LuaState;
+pub(crate) unsafe fn push_string(l: &mut LuaState, s: &str) {
+  alias(l.as_mut_ptr()).push_bytes(s.as_bytes())
 }

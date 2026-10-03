@@ -23,6 +23,7 @@
 ///   TypeFunctionTypeVariant::Primitive(TypeFunctionPrimitiveType::new(Type::Number))
 /// );
 /// ```
+use ulua_vm::records::lua_state::LuaState;
 macro_rules! create_primordial {
   ($(#[$attr:meta])* $name:ident, $variant:expr $(,)?) => {
     $(#[$attr])*
@@ -39,7 +40,7 @@ macro_rules! create_primordial {
       // `&mut`，体内裸操作收口在它一侧），本函数只剩一次不安全 fn 转调；其前置条件（活状态、
       // 栈可增长）由该 VM 调用约定满足；借用窗止于本语句。
       unsafe {
-        crate::functions::alloc_type_user_data::alloc_type_user_data(l, $variant, false)
+        crate::functions::alloc_type_user_data::alloc_type_user_data(&mut *l, $variant, false)
       };
 
       1

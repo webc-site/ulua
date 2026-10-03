@@ -2,34 +2,15 @@
 //! `static std::tuple<std::vector<TypeFunctionTypeId>, std::vector<TypeFunctionTypePackId>>
 //!  getGenerics(lua_State* l, int idx, const char* fname)`
 //! (Analysis/src/TypeFunctionRuntime.cpp:1125-1177).
-use alloc::vec::Vec;
 
-use ulua_vm::{
-  functions::{lua_gettable::lua_gettable, lua_l_typeerror_l::lua_l_typeerror_l},
-  records::lua_state,
-};
-
-use crate::{
-  functions::{
-    allocate_type_function_type_pack::allocate_type_function_type_pack,
-    get_type_function_runtime::{get_type_function_runtime, get_type_function_type_id},
-    get_type_user_data::get_type_user_data,
-    throw_type_error::throw_type_error,
-  },
-  records::{
-    arena_handle::Handle, type_function_generic_type::TypeFunctionGenericType,
-    type_function_generic_type_pack::TypeFunctionGenericTypePack,
-  },
-  type_aliases::{
-    lua_state::LuaState, type_function_type_id::TypeFunctionTypeId,
-    type_function_type_pack_id::TypeFunctionTypePackId,
-    type_function_type_pack_variant::TypeFunctionTypePackVariant,
-  },
-};
 /// # Safety
 /// 调用方须保证满足 C++ 原实现的调用契约。
+use alloc::vec::Vec;
+use ulua_vm::{functions::{lua_gettable::lua_gettable, lua_l_typeerror_l::lua_l_typeerror_l}, records::lua_state};
+use crate::{functions::{allocate_type_function_type_pack::allocate_type_function_type_pack, get_type_function_runtime::{get_type_function_runtime, get_type_function_type_id}, get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, records::{arena_handle::Handle, type_function_generic_type::TypeFunctionGenericType, type_function_generic_type_pack::TypeFunctionGenericTypePack}, type_aliases::{type_function_type_id::TypeFunctionTypeId, type_function_type_pack_id::TypeFunctionTypePackId, type_function_type_pack_variant::TypeFunctionTypePackVariant}};
+use ulua_vm::records::lua_state::LuaState;
 pub(crate) unsafe fn get_generics(
-  l: *mut LuaState,
+  l: &mut LuaState,
   idx: i32,
   fname: &str,
 ) -> (Vec<TypeFunctionTypeId>, Vec<TypeFunctionTypePackId>) {
@@ -39,28 +20,27 @@ pub(crate) unsafe fn get_generics(
   // 类型函数数据存活于本次调用。错误分支 `throw_type_error` 返回 `!` 不返回，`lua_l_typeerror_l`
   // 之后不再解引用任何指针。单线程串行遍历，push/gettable/pop 栈操作平衡、无并发别名。
   unsafe {
-    let vm_l = l as *mut lua_state::LuaState;
     // 注册期写入主线程 thread data 的非空 runtime（null 由 Handle::from_ptr 收敛为 panic）。
-    let runtime = Handle::from_ptr(get_type_function_runtime(l));
+    let runtime = Handle::from_ptr(get_type_function_runtime(&mut *l));
 
     let mut types: Vec<TypeFunctionTypeId> = Vec::new();
     let mut packs: Vec<TypeFunctionTypePackId> = Vec::new();
 
-    if (*vm_l).is_table(idx) {
-      (*vm_l).push_value(idx);
+    if l.is_table(idx) {
+      l.push_value(idx);
 
       let mut i: i32 = 1;
-      while i <= (*vm_l).obj_len(-1) as i32 {
-        (*vm_l).push_integer(i);
-        lua_gettable(&mut *vm_l, -2);
+      while i <= l.obj_len(-1) as i32 {
+        l.push_integer(i);
+        lua_gettable(l.as_mut_ptr(), -2);
 
-        if (*vm_l).is_nil(-1) {
-          (*vm_l).pop(1);
+        if l.is_nil(-1) {
+          l.pop(1);
           break;
         }
 
         // TypeFunctionTypeId ty = getTypeUserData(l, -1);
-        let ty = get_type_user_data(l, -1);
+        let ty = get_type_user_data(&mut *l, -1);
 
         // if (auto gty = get<TypeFunctionGenericType>(ty))
         let gty = get_type_function_type_id::<TypeFunctionGenericType>(ty);
@@ -76,7 +56,7 @@ pub(crate) unsafe fn get_generics(
           } else {
             if !packs.is_empty() {
               throw_type_error(
-                vm_l,
+                l.as_mut_ptr(),
                 format_args!("{}: generic type cannot follow a generic pack", fname),
               );
             }
@@ -85,18 +65,18 @@ pub(crate) unsafe fn get_generics(
           }
         } else {
           throw_type_error(
-            vm_l,
+            l.as_mut_ptr(),
             format_args!("{}: table member was not a generic type", fname),
           );
         }
 
-        (*vm_l).pop(1);
+        l.pop(1);
         i += 1;
       }
 
-      (*vm_l).pop(1);
-    } else if !(*vm_l).is_none_or_nil(idx) {
-      lua_l_typeerror_l(vm_l, idx, "table");
+      l.pop(1);
+    } else if !l.is_none_or_nil(idx) {
+      lua_l_typeerror_l(l.as_mut_ptr(), idx, "table");
     }
 
     (types, packs)

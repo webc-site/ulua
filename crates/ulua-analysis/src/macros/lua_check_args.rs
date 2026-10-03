@@ -10,53 +10,53 @@
 ///
 /// 用法：
 /// ```ignore
-/// lua_check_args!(vm_l, != 1, "type.value: expected 1 argument, but got {}");
+/// lua_check_args!(l, != 1, "type.value: expected 1 argument, but got {}");
 /// ```
 /// 格式串即收口前 `format_args!` 的同一字面量，抛出消息逐字不变。默认形展开
 /// 引入的 `argument_count` 因宏 hygiene 仅守卫式可见；入口后续仍需按实参个数
 /// 判别可选参数缺省时，用具名绑定形把计数绑定让给调用作用域：
 /// ```ignore
-/// lua_check_args!(argument_count = vm_l, 2..=3, "type.setproperty: expected 2-3 arguments, but got {}");
+/// lua_check_args!(argument_count = l, 2..=3, "type.setproperty: expected 2-3 arguments, but got {}");
 /// ```
 macro_rules! lua_check_args {
-  // 具名绑定形须先于匿名形匹配：否则 `argument_count = vm_l` 会被 `$vm_l:expr`
+  // 具名绑定形须先于匿名形匹配：否则 `argument_count = l.as_mut_ptr()` 会被 `$l.as_mut_ptr():expr`
   // 贪婪解析为赋值表达式。
-  ($count:ident = $vm_l:expr, $op:tt $bound:literal, $fmt:literal) => {
-    let $count = (*$vm_l).get_top();
+  ($count:ident = $l.as_mut_ptr():expr, $op:tt $bound:literal, $fmt:literal) => {
+    let $count = (*$l.as_mut_ptr()).get_top();
     if $count $op $bound {
-      throw_type_error($vm_l, format_args!($fmt, $count));
+      throw_type_error($l.as_mut_ptr(), format_args!($fmt, $count));
     }
   };
-  ($count:ident = $vm_l:expr, $lo:literal..=$hi:literal, $fmt:literal) => {
-    let $count = (*$vm_l).get_top();
+  ($count:ident = $l.as_mut_ptr():expr, $lo:literal..=$hi:literal, $fmt:literal) => {
+    let $count = (*$l.as_mut_ptr()).get_top();
     if !($lo..=$hi).contains(&$count) {
-      throw_type_error($vm_l, format_args!($fmt, $count));
+      throw_type_error($l.as_mut_ptr(), format_args!($fmt, $count));
     }
   };
-  ($vm_l:expr, $op:tt $bound:literal, $fmt:literal) => {
-    let argument_count = (*$vm_l).get_top();
+  ($l.as_mut_ptr():expr, $op:tt $bound:literal, $fmt:literal) => {
+    let argument_count = (*$l.as_mut_ptr()).get_top();
     if argument_count $op $bound {
-      throw_type_error($vm_l, format_args!($fmt, argument_count));
+      throw_type_error($l.as_mut_ptr(), format_args!($fmt, argument_count));
     }
   };
   // 区间形态守卫（cpp `!(2 <= n && n <= 3)` 的 Rust 直译）。
-  ($vm_l:expr, $lo:literal..=$hi:literal, $fmt:literal) => {
-    let argument_count = (*$vm_l).get_top();
+  ($l.as_mut_ptr():expr, $lo:literal..=$hi:literal, $fmt:literal) => {
+    let argument_count = (*$l.as_mut_ptr()).get_top();
     if !($lo..=$hi).contains(&argument_count) {
-      throw_type_error($vm_l, format_args!($fmt, argument_count));
+      throw_type_error($l.as_mut_ptr(), format_args!($fmt, argument_count));
     }
   };
 }
 
 /// 生成「实参类型形态违例时连同其 tag 抛 lua type error」的守卫。
 ///
-/// 展开为 `if $cond { throw_type_error($vm_l, format_args!($fmt, get_tag($l, $tag_arg))); }`，
+/// 展开为 `if $cond { throw_type_error($l.as_mut_ptr(), format_args!($fmt, get_tag($l, $tag_arg))); }`，
 /// 与收口前各入口手抄的 9 行骨架逐字符等价；`$l` 为入口原始 `lua_State*` 形参
 /// （local 变量跨不进宏 hygiene，须由调用点显式传入）。
 macro_rules! lua_check_tag {
-  ($vm_l:expr, $cond:expr, $l:expr, $tag_arg:expr, $fmt:literal) => {
+  ($l.as_mut_ptr():expr, $cond:expr, $l:expr, $tag_arg:expr, $fmt:literal) => {
     if $cond {
-      throw_type_error($vm_l, format_args!($fmt, get_tag($l, $tag_arg)));
+      throw_type_error($l.as_mut_ptr(), format_args!($fmt, get_tag($l, $tag_arg)));
     }
   };
 }
@@ -66,10 +66,10 @@ macro_rules! lua_check_tag {
 /// 展开与收口前手抄的 9 行骨架逐字符等价：`fflag` 与 `throw_type_error` 按宏
 /// 展开点解析（各入口均已 import）；消息经 `concat!` 拼接为同一字面量。
 macro_rules! lua_check_not_frozen {
-  ($vm_l:expr, $self_ty:expr, $prefix:literal) => {
+  ($l.as_mut_ptr():expr, $self_ty:expr, $prefix:literal) => {
     if fflag::LuauTypeFunctionSupportsFrozen.get() && (*$self_ty).frozen {
       throw_type_error(
-        $vm_l,
+        $l.as_mut_ptr(),
         format_args!(concat!(
           $prefix,
           ": cannot be called to mutate a frozen type, use `types.copy` to make a copy"

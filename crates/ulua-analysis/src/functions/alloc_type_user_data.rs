@@ -1,21 +1,9 @@
+
+
 use core::mem::size_of;
-
-use ulua_vm::{
-  functions::{lua_l_checkstack::lua_l_checkstack, lua_newuserdatatagged::lua_newuserdatatagged},
-  records::lua_state,
-};
-
-use crate::{
-  functions::{
-    allocate_type_function_type::allocate_type_function_type,
-    get_type_function_runtime::get_type_function_runtime, lua_names::TYPE,
-  },
-  records::{arena_handle::Handle, type_function_type::TypeFunctionType},
-  type_aliases::{
-    lua_state::LuaState, type_function_type_id::TypeFunctionTypeId,
-    type_function_type_variant::TypeFunctionTypeVariant,
-  },
-};
+use ulua_vm::{functions::{lua_l_checkstack::lua_l_checkstack, lua_newuserdatatagged::lua_newuserdatatagged}};
+use crate::{functions::{allocate_type_function_type::allocate_type_function_type, get_type_function_runtime::get_type_function_runtime, lua_names::TYPE}, records::{arena_handle::Handle, type_function_type::TypeFunctionType}, type_aliases::{type_function_type_id::TypeFunctionTypeId, type_function_type_variant::TypeFunctionTypeVariant}};
+use ulua_vm::records::lua_state::LuaState;
 const K_TYPE_USERDATA_TAG: i32 = 42;
 
 /// 对应 C++ `allocTypeUserData`（TypeFunctionRuntime.cpp:383-391）：压入承载
@@ -23,7 +11,7 @@ const K_TYPE_USERDATA_TAG: i32 = 42;
 ///
 /// # Safety
 /// `l` 的存活/独占前提已由 `&mut` 接收者类型承载（r16-v45 收形）；屏障仍保留是因为体内有真实
-/// 裸操作：入口一次就地转手 `lp = l as *mut LuaState as *mut lua_state::LuaState`（两枚不透明
+/// 裸操作：入口一次就地转手 `lp = l.as_mut_ptr()`（两枚不透明
 /// 镜像类型间的地址不变透传），`lua_newuserdatatagged` 返回的用户数据体写入、
 /// `get_type_function_runtime` 取回的主线程 thread data、以及 `*ptr = type_id` 与
 /// `(*type_ptr).frozen` 两处 arena 写皆按裸指针形制进行。余下调用序前提：`l` 须为类型函数
@@ -44,14 +32,14 @@ pub(crate) unsafe fn alloc_type_user_data(
   // TypeFunctionTypeId 即 *const TypeFunctionType 裸值，转 *mut 后写 frozen 指向的是该 arena
   // 可变内存；TYPE 为 NUL 结尾字节串，元表缺失时 lua_setmetatable 为无操作。
   unsafe {
-    let lp = l as *mut LuaState as *mut lua_state::LuaState;
+    let lp = l.as_mut_ptr();
 
     lua_l_checkstack(&mut *lp, 2, "allocating type");
 
     let ptr = lua_newuserdatatagged(lp, size_of::<TypeFunctionTypeId>(), K_TYPE_USERDATA_TAG)
       as *mut TypeFunctionTypeId;
 
-    let runtime = Handle::from_ptr(get_type_function_runtime(l as *mut LuaState));
+    let runtime = Handle::from_ptr(get_type_function_runtime(&mut *l));
     let type_id = allocate_type_function_type(runtime, type_variant);
     *ptr = type_id;
 

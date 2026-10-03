@@ -16,65 +16,13 @@
 // `GenericTypeVisitorTrait`. The overrides already exist as inherent methods
 // (see `methods/find_user_type_function_blockers_visit_user_defined_type_function*`);
 // this trait impl just forwards to them.
-use alloc::{
-  boxed::Box,
-  string::{String, ToString},
-  vec::Vec,
-};
 
+use alloc::{boxed::Box, string::{String}, vec::Vec};
 use ulua_ast::records::ast_name::AstName;
-use ulua_common::{
-  fflag,
-  functions::{c_str::with_c_str, format::format, get_clock::get_clock},
-  macros::luau_assert::LUAU_ASSERT,
-  records::dense_hash_set::DenseHashSet,
-};
-use ulua_vm::{
-  functions::{
-    lua_callbacks::lua_callbacks, lua_getfenv::lua_getfenv, lua_gettable::lua_gettable,
-    lua_getthreaddata::lua_getthreaddata, lua_mainthread::lua_mainthread,
-    lua_newthread::lua_newthread,
-  },
-  macros::lua_registryindex::LUA_REGISTRYINDEX,
-  records::lua_state,
-};
-
-use crate::{
-  enums::reduction::Reduction,
-  functions::{
-    alloc_type_user_data::alloc_type_user_data, check_result_for_error::check_result_for_error,
-    check_result_for_error_deprecated::check_result_for_error_deprecated,
-    deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state,
-    evaluate_type_alias_call::evaluate_type_alias_call, follow_type::follow,
-    get_mutable_type::get_mutable, get_type_user_data::get_type_user_data, is_pending::is_pending,
-    is_type_user_data::is_type_user_data, reset_type_function_state::reset_type_function_state,
-    serialize_type_function_runtime_builder::serialize_type_id_type_function_runtime_builder_state,
-    to_string_type_function_error::to_string,
-  },
-  records::{
-    arena_handle::{alias, alias_nn, alias_ref},
-    extern_type::ExternType,
-    find_user_type_function_blockers::FindUserTypeFunctionBlockers,
-    freeze_type_function_types::FreezeTypeFunctionTypes,
-    generic_type_visitor::{GenericTypeVisitor, GenericTypeVisitorTrait},
-    luau_temp_thread_popper::LuauTempThreadPopper,
-    scoped_assign::ScopedAssign,
-    time_limit_error::TimeLimitError,
-    type_function_context::TypeFunctionContext,
-    type_function_instance_type::TypeFunctionInstanceType,
-    type_function_reduction_result::TypeFunctionReductionResult,
-    type_function_runtime::TypeFunctionRuntime,
-    type_function_runtime_builder_state::TypeFunctionRuntimeBuilderState,
-    user_cancel_error::UserCancelError,
-    visit_key::VisitKey,
-  },
-  type_aliases::{
-    lua_state::LuaState,
-    type_function_type_id::{AsTypeFunctionType, TypeFunctionTypeId},
-    type_id::TypeId,
-    type_pack_id::TypePackId,
-  },
-};
+use ulua_common::{fflag, functions::{c_str::with_c_str, format::format, get_clock::get_clock}, macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet};
+use ulua_vm::{functions::{lua_callbacks::lua_callbacks, lua_getfenv::lua_getfenv, lua_gettable::lua_gettable, lua_getthreaddata::lua_getthreaddata, lua_mainthread::lua_mainthread, lua_newthread::lua_newthread}, macros::lua_registryindex::LUA_REGISTRYINDEX, records::lua_state};
+use crate::{enums::reduction::Reduction, functions::{alloc_type_user_data::alloc_type_user_data, check_result_for_error::check_result_for_error, check_result_for_error_deprecated::check_result_for_error_deprecated, deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state, evaluate_type_alias_call::evaluate_type_alias_call, follow_type::follow, get_mutable_type::get_mutable, get_type_user_data::get_type_user_data, is_pending::is_pending, is_type_user_data::is_type_user_data, reset_type_function_state::reset_type_function_state, serialize_type_function_runtime_builder::serialize_type_id_type_function_runtime_builder_state, to_string_type_function_error::to_string}, records::{arena_handle::{alias, alias_nn, alias_ref}, extern_type::ExternType, find_user_type_function_blockers::FindUserTypeFunctionBlockers, freeze_type_function_types::FreezeTypeFunctionTypes, generic_type_visitor::{GenericTypeVisitor, GenericTypeVisitorTrait}, luau_temp_thread_popper::LuauTempThreadPopper, scoped_assign::ScopedAssign, time_limit_error::TimeLimitError, type_function_context::TypeFunctionContext, type_function_instance_type::TypeFunctionInstanceType, type_function_reduction_result::TypeFunctionReductionResult, type_function_runtime::TypeFunctionRuntime, type_function_runtime_builder_state::TypeFunctionRuntimeBuilderState, user_cancel_error::UserCancelError, visit_key::VisitKey}, type_aliases::{type_function_type_id::{AsTypeFunctionType, TypeFunctionTypeId}, type_id::TypeId, type_pack_id::TypePackId}};
+use ulua_vm::records::lua_state::LuaState;
 impl GenericTypeVisitorTrait for FindUserTypeFunctionBlockers<'_> {
   type Seen = DenseHashSet<VisitKey>;
 
@@ -473,7 +421,7 @@ pub fn user_defined_type_function(
 
   // resetTypeFunctionState(l);
   // SAFETY: VM 边界——`l` 为本帧独占存活线程；契约见 reset_type_function_state.rs。
-  unsafe { reset_type_function_state(l) };
+  unsafe { reset_type_function_state(&mut *l) };
 
   // Push serialized arguments onto the stack
   // for (auto typeParam : typeParams)
@@ -528,20 +476,20 @@ pub fn user_defined_type_function(
   if fflag::LuauTypeFunctionStructuredErrors.get() {
     // if (auto error = checkResultForError(l, name.value, lua_pcall(...)))
     //     return {..., to_string(*error), ctx->typeFunctionRuntime->messages};
-    if let Some(error) = check_result_for_error(l, &name_str, pcall_result) {
+    if let Some(error) = check_result_for_error(&mut *l, &name_str, pcall_result) {
       return erroneous_with(to_string(&error), runtime.messages.clone());
     }
   } else {
     // if (auto error = checkResultForError_DEPRECATED(l, name.value, lua_pcall(...)))
     //     return {..., std::move(error), ctx->typeFunctionRuntime->messages};
-    if let Some(error) = check_result_for_error_deprecated(l, &name_str, pcall_result) {
+    if let Some(error) = check_result_for_error_deprecated(&mut *l, &name_str, pcall_result) {
       return erroneous_with(error, runtime.messages.clone());
     }
   }
 
   // If the return value is not a type userdata, return with error message
   // if (!isTypeUserData(l, 1))
-  if !is_type_user_data(l, 1) {
+  if !is_type_user_data(&mut *l, 1) {
     return erroneous_with(
       format(format_args!(
         "'{}' type function: returned a non-type value",
@@ -552,7 +500,7 @@ pub fn user_defined_type_function(
   }
 
   // TypeFunctionTypeId retTypeFunctionTypeId = getTypeUserData(l, 1);
-  let ret_type_function_type_id: TypeFunctionTypeId = get_type_user_data(l, 1);
+  let ret_type_function_type_id: TypeFunctionTypeId = get_type_user_data(&mut *l, 1);
 
   // structured / deprecated 两条错误通道只在「读哪份错误列表」上不同，反序列化流程一致。
   let structured_errors = fflag::LuauTypeFunctionStructuredErrors.get();

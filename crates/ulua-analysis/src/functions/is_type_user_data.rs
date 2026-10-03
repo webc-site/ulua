@@ -1,10 +1,8 @@
-use ulua_vm::{
-  functions::{lua_isuserdata::lua_isuserdata, lua_touserdatatagged::lua_touserdatatagged},
-  records::lua_state,
-};
 
-use crate::type_aliases::lua_state::LuaState;
-pub fn is_type_user_data(l: *mut LuaState, idx: i32) -> bool {
+
+use ulua_vm::{functions::{lua_isuserdata::lua_isuserdata, lua_touserdatatagged::lua_touserdatatagged}, records::lua_state};
+use ulua_vm::records::lua_state::LuaState;
+pub fn is_type_user_data(l: &mut LuaState, idx: i32) -> bool {
   // kTypeUserdataTag is a constant used for Luau Type Function userdata.
   const K_TYPE_USERDATA_TAG: i32 = 42;
 
@@ -13,11 +11,11 @@ pub fn is_type_user_data(l: *mut LuaState, idx: i32) -> bool {
   // null，二者均按 VM 约定以 `l`+`idx` 索引栈；此处仅比较返回整数、对指针做 `is_null()` 判定，
   // 不解引用任何指针。单线程串行，无别名冲突。
   unsafe {
-    if lua_isuserdata(&*(l as *mut lua_state::LuaState), idx) == 0 {
+    if lua_isuserdata(l.as_mut_ptr(), idx) == 0 {
       return false;
     }
 
-    let result = lua_touserdatatagged(l as *mut lua_state::LuaState, idx, K_TYPE_USERDATA_TAG);
+    let result = lua_touserdatatagged(l.as_mut_ptr(), idx, K_TYPE_USERDATA_TAG);
 
     !result.is_null()
   }

@@ -30,6 +30,7 @@
 //! - `get_mutable_type` 系列返回 `&'static mut T`，同一 `TypeId` 两次调用可得并存 `&mut`。
 //! - 少量以 `NonNull::new_unchecked(&self.x as *const _ as *mut _)` 伪造独占句柄。
 
+use ulua_vm::records::lua_state::LuaState;
 extern crate alloc;
 
 pub mod enums;

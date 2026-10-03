@@ -1,14 +1,12 @@
+
+
 use alloc::string::String;
-
 use ulua_common::functions::{c_str::cstr_cow, format::format};
-use ulua_vm::{
-  functions::{lua_isstring::lua_isstring, lua_typename::lua_typename},
-  records::lua_state,
-};
-
-use crate::{records::arena_handle::alias, type_aliases::lua_state::LuaState};
+use ulua_vm::{functions::{lua_isstring::lua_isstring, lua_typename::lua_typename}};
+use crate::{records::arena_handle::alias};
+use ulua_vm::records::lua_state::LuaState;
 pub fn check_result_for_error_deprecated(
-  l: *mut LuaState,
+  l: &mut LuaState,
   type_function_name: &str,
   lua_result: i32,
 ) -> Option<String> {
@@ -19,7 +17,7 @@ pub fn check_result_for_error_deprecated(
       type_function_name
     ))), // LuaYield, LuaBreak
     _ => {
-      if alias(l as *mut lua_state::LuaState).get_top() == 0 {
+      if alias(l.as_mut_ptr()).get_top() == 0 {
         Some(format(format_args!(
           "'{}' type function errored unexpectedly",
           type_function_name
@@ -27,9 +25,9 @@ pub fn check_result_for_error_deprecated(
       } else if unsafe {
         // Safety: 同上，`l` 存活；gettop != 0 保证 -1 为合法栈索引，
         // lua_isstring 只做 lua_type 分类读取。
-        lua_isstring(&*(l as *mut lua_state::LuaState), -1) != 0
+        lua_isstring(l.as_mut_ptr(), -1) != 0
       } {
-        let err_str = alias(l as *mut lua_state::LuaState)
+        let err_str = alias(l.as_mut_ptr())
           .to_str(-1)
           .unwrap_or_default();
         Some(format(format_args!(
@@ -39,7 +37,7 @@ pub fn check_result_for_error_deprecated(
       } else {
         // `lua_typename` 为安全函数：入参 -1（LUA_TNONE）是上游 cpp `lua_typename(L, -1)`
         // 的直译语义，命中本端口 "no value" 常量分支，返回存活 static c_char 数组；`l` 存活同上。
-        let err_type = lua_typename(l as *mut lua_state::LuaState, -1);
+        let err_type = lua_typename(l.as_mut_ptr(), -1);
         // Safety: err_type 为非空 NUL 结尾 static 字符串（上一条证成）。
         let err_type = unsafe { cstr_cow(err_type) };
         Some(format(format_args!(

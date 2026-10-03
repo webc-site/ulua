@@ -6,38 +6,15 @@
 //! type arguments, saturates them against the alias' declared parameters,
 //! instantiates the alias body, reduces any type functions inside it, then
 //! serializes the result back into a (frozen) type userdata.
-use alloc::vec::Vec;
 
+/// 对应 C++ 原生 `static int evaluateTypeAliasCall(lua_State* L)`（`cpp/Analysis/src/UserDefinedTypeFunction.cpp:99`）。
+use alloc::vec::Vec;
 use ulua_ast::records::location::Location;
 use ulua_common::{fflag, records::dense_hash_map::DenseHashMap};
 use ulua_vm::{macros::lua_upvalueindex::lua_upvalueindex, records::lua_state};
-
-use crate::{
-  functions::{
-    alloc_type_user_data::alloc_type_user_data,
-    deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state,
-    follow_type::follow, get_type_function_runtime::get_type_function_runtime,
-    get_type_user_data::get_type_user_data,
-    reduce_type_functions_type_function::reduce_type_functions,
-    saturate_arguments::saturate_arguments,
-    serialize_type_function_runtime_builder::serialize_type_id_type_function_runtime_builder_state,
-    to_string_error::to_string_type_error, to_string_type_function_error::to_string,
-  },
-  records::{
-    apply_type_function::ApplyTypeFunction, arena_handle::Handle,
-    freeze_type_function_types::FreezeTypeFunctionTypes, substitution::Substitution,
-    txn_log::TxnLog, type_fun::TypeFun,
-  },
-  type_aliases::{
-    lua_state::LuaState, type_function_type_id::TypeFunctionTypeId, type_id::TypeId,
-    type_pack_id::TypePackId,
-  },
-};
-/// # Safety
-/// `l` 必须是 Lua VM 在本次原生函数调用中传入、且在该调用全程有效的 `lua_State*`：VM 已把
-/// 实参压入栈顶，本函数只借用不持有该地址、返回前不跨调用保存；调用期间单线程独占 VM 栈与
-/// 类型运行期数据。对应 C++ 原生 `static int evaluateTypeAliasCall(lua_State* L)`（`cpp/Analysis/src/UserDefinedTypeFunction.cpp:99`）。
-pub(crate) unsafe fn evaluate_type_alias_call(l: *mut LuaState) -> i32 {
+use crate::{functions::{alloc_type_user_data::alloc_type_user_data, deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state, follow_type::follow, get_type_function_runtime::get_type_function_runtime, get_type_user_data::get_type_user_data, reduce_type_functions_type_function::reduce_type_functions, saturate_arguments::saturate_arguments, serialize_type_function_runtime_builder::serialize_type_id_type_function_runtime_builder_state, to_string_error::to_string_type_error, to_string_type_function_error::to_string}, records::{apply_type_function::ApplyTypeFunction, arena_handle::Handle, freeze_type_function_types::FreezeTypeFunctionTypes, substitution::Substitution, txn_log::TxnLog, type_fun::TypeFun}, type_aliases::{type_function_type_id::TypeFunctionTypeId, type_id::TypeId, type_pack_id::TypePackId}};
+use ulua_vm::records::lua_state::LuaState;
+pub(crate) fn evaluate_type_alias_call(l: &mut LuaState) -> i32 {
   unsafe {
     // TypeFun* tf = static_cast<TypeFun*>(lua_tolightuserdata(l, lua_upvalueindex(1)));
     let tf =
@@ -45,7 +22,7 @@ pub(crate) unsafe fn evaluate_type_alias_call(l: *mut LuaState) -> i32 {
 
     // TypeFunctionRuntime* runtime = getTypeFunctionRuntime(l);
     // TypeFunctionRuntimeBuilderState* runtimeBuilder = runtime->runtimeBuilder;
-    let runtime = get_type_function_runtime(l);
+    let runtime = get_type_function_runtime(&mut *l);
     // runtime->runtimeBuilder 由 ScopedAssign 在本次调用窗口内布为非空，重建可变借用后
     // builder state 就以普通 `&mut` 在函数体内流转（serde 入口不再收裸指针）。
     let runtime_builder = &mut *(*runtime).runtime_builder;
@@ -69,7 +46,7 @@ pub(crate) unsafe fn evaluate_type_alias_call(l: *mut LuaState) -> i32 {
     // lua 栈参数从 1 起，arg_index 即上游的 i + 1
     for arg_index in 1..=argument_count {
       // TypeFunctionTypeId tfty = getTypeUserData(l, i + 1);
-      let tfty: TypeFunctionTypeId = get_type_user_data(l, arg_index);
+      let tfty: TypeFunctionTypeId = get_type_user_data(&mut *l, arg_index);
       // TypeId ty = deserialize(tfty, runtimeBuilder);
       let ty = deserialize_type_function_type_id_type_function_runtime_builder_state(
         tfty,
