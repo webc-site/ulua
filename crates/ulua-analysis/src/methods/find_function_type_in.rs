@@ -91,7 +91,7 @@ impl FindFunctionTypeIn {
       // Safety: `||` 短路保证 candidate 非空才进入本调用；candidate 只由
       // get_type::get::<FunctionType> 的 arena 存活结果写入（type arena 活过整个
       // 推断回调），candidate_arg_count 契约（指向存活 FunctionType）满足，
-      // 其内仅只读 arg_types 句柄字段。
+      // 其内经 alias_ref 门面只读取 arg_types 句柄字段。
       || (unsafe { candidate_arg_count(candidate) } as i32 - self.number_of_lambda_parameters).abs()
         > (ftv_arg_count(ftv) as i32 - self.number_of_lambda_parameters).abs()
     {

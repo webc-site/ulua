@@ -37,8 +37,9 @@ unsafe extern "C-unwind" fn print_thunk(l: *mut lua_state::LuaState) -> i32 {
 }
 
 /// # Safety
-/// `l` 必须是即将承载类型函数库、且尚未重复初始化的主 `lua_State*`；本函数在其上创建并注册
-/// `TypeFunctionRuntime` userdatum 与全部原生函数闭包，要求该状态在 VM 生命周期内不被并发访问。
+/// `l`（`&mut LuaState` 接收者）须是即将承载类型函数库、且尚未重复初始化的主线程状态；本函数
+/// 经 `luaL_*`/`lua_push*`（C-ABI）在其上创建并注册 `TypeFunctionRuntime` userdatum 与全部原生
+/// 函数闭包，要求该状态在 VM 生命周期内单线程独占、不被并发访问。
 /// 对应 C++ `void setTypeFunctionEnvironment(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:2094`）。
 pub(crate) unsafe fn set_type_function_environment(l: &mut LuaState) {
   unsafe {

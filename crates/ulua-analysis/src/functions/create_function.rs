@@ -102,8 +102,8 @@ pub(crate) fn create_function(l: &mut LuaState) -> i32 {
 }
 
 /// # Safety
-/// `l` 须为 Lua VM 在本次原生函数调用中传入、调用全程有效的 `lua_State*`（本函数只经它
-/// 读写 VM 栈）；`head_idx`/`tail_idx` 须是该状态栈上的有效索引，且其中若含 userdata，必须
+/// `l`（`&mut LuaState` 接收者）须是 Lua VM 在本次原生函数调用中给出、调用全程存活且被本次
+/// 调用独占的状态（本函数只经它的 C-API 读写 VM 栈）；`head_idx`/`tail_idx` 须是该状态栈上的有效索引，且其中若含 userdata，必须
 /// 是由 `alloc_type_user_data` 登记、可被 `get_type_user_data`/`optional_type_user_data`
 /// 识别的类型 userdata（这些辅助函数会解引用其 type arena 节点）。对应 C++ 原生
 /// `static TypeFunctionTypePackId getTypePack(lua_State* L, int headIdx, int tailIdx)`

@@ -23,7 +23,10 @@ use crate::{
 /// 解引用统一经 `arena_handle::alias_nn*` 门面，unsafe 不外渗。
 pub trait TxnLogGetMutable<TID>: Sized {
   /// # Safety
-  /// 调用方须保证满足 C++ 原实现定义的内部不变量。
+  /// `ty` 须为指向本 `log` 所属类型 arena 中存活、对齐节点的 `TypeId`/`TypePackId`，且 `log`
+  /// 在调用期内存活独占可写（内部 `pending_type_id`/`get_mutable_*` 会按该句柄解引用 arena 节点）。
+  /// 返回值 `Some(NonNull)` 即该 arena/log 槽位的**独占可变句柄**：调用方不得在其借用存活期内
+  /// 对同一节点再取第二处可变借用，也不得在 arena 该节点被释放后继续解引用它。
   unsafe fn get_mutable_from_log(log: &TxnLog, ty: TID) -> Option<NonNull<Self>>;
 }
 
