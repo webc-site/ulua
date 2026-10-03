@@ -235,7 +235,11 @@ pub unsafe fn call_obs_record_at(
     // 定案：poly（proto 漂移）或恒定满阈值，都置 sealed 终止观测，并按剩余
     // 重编译预算决定是否触发暖重编译（预算尽仍 sealed——止损优先，触发豁免）。
     let poly = *funid_ptr != funid;
-    let new_hits = if poly { hits } else { (hits + 1).min(K_HITS_CAP) };
+    let new_hits = if poly {
+      hits
+    } else {
+      (hits + 1).min(K_HITS_CAP)
+    };
     if !poly && new_hits < K_TRIGGER_HITS {
       *state_ptr = (new_hits << 8) | flags;
       return false;
