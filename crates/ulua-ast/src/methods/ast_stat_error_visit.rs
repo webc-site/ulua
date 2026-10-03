@@ -1,7 +1,5 @@
 use crate::{
-  records::{
-    ast_stat_error::AstStatError, ast_visitor::AstVisitor, node_handle::OptNode,
-  },
+  records::{ast_stat_error::AstStatError, ast_visitor::AstVisitor, node_handle::OptNode},
   visit::{AstNodeRefMut, AstVisitable, ast_expr_visit_ref, ast_stat_visit_ref},
 };
 

@@ -12,9 +12,10 @@ use crate::records::{allocator::Allocator, ast_name::AstName};
 
 /// cpp `AstArray<T>{ T* data; size_t size; }` 的逐位镜像：arena 定长视图。
 ///
-/// 不变量（由 [`AstArrayBuilder`]（arena 槽填充）、`AstArray::EMPTY`、
-/// `AstArray::from_slice`（借用视图）与 `Parser::copy_*`（C 拷贝内核）四个唯一
-/// 写入源兑现）：**`data == null` 恒配 `size == 0`**；`data` 非空时
+/// 不变式（由 [`AstArrayBuilder`]（arena 槽填充）、`AstArray::EMPTY`、
+/// `AstArray::from_slice`（借用视图）与 `Parser::copy_initializer_list_t`（拷贝
+/// 内核，现经 `AstArrayBuilder` 构造）四个唯一写入源兑现）：**`data == null` 恒配
+/// `size == 0`**；`data` 非空时
 /// `[data, data + size)` 是 arena 内连续 `size` 个 `T` 的合法区域（`size` 可为 0，
 /// 例如指向空字符串名缓冲的 `{非空, 0}`）。bump arena 从不移动已分配块，故区域
 /// 在持有本视图的节点存活期内稳定。
@@ -28,7 +29,8 @@ use crate::records::{allocator::Allocator, ast_name::AstName};
 /// -p ulua-compiler -p ulua-analysis -p ulua-unit-test -p ulua-code-gen
 /// --all-targets`）：除本文件内 `from_slice`/`finish`/`finish_with`/`from_ast_name`
 /// 四个构造点外，报错落在清单外 6 个文件 8 处——`methods::parser_copy_parser::
-/// copy_t_usize`（arena 分配结果直填 `data`，1 处）、`ulua-ast/tests/ast_array.rs`
+/// copy_t_usize`（arena 分配结果直填 `data`，1 处；该内核此后已折叠进
+/// `copy_initializer_list_t`，经 `AstArrayBuilder` 构造）、`ulua-ast/tests/ast_array.rs`
 /// （字面量构造，1 处）、跨 crate 的 `ulua-compiler` 四处：
 /// `functions::sref_compiler`（`data.data.is_null()` 与 `from_raw_parts(data.data,
 /// ..)`，2 处）、`records::constant`（2 处）、`records::constant_visitor`（1 处）、

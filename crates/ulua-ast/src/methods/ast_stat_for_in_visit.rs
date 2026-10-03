@@ -1,8 +1,6 @@
 use crate::{
   methods::ast_stat_block_visit::ast_stat_block_visit,
-  records::{
-    ast_stat_for_in::AstStatForIn, ast_visitor::AstVisitor, node_handle::OptNode,
-  },
+  records::{ast_stat_for_in::AstStatForIn, ast_visitor::AstVisitor, node_handle::OptNode},
   visit::{AstNodeRefMut, AstVisitable, ast_expr_visit_ref, ast_type_visit_ref},
 };
 

@@ -3,9 +3,7 @@
 //! [`OptNode`] 取得，本模块不再携带 `unsafe`。
 
 use crate::{
-  records::{
-    ast_type_list::AstTypeList, ast_visitor::AstVisitor, node_handle::OptNode,
-  },
+  records::{ast_type_list::AstTypeList, ast_visitor::AstVisitor, node_handle::OptNode},
   visit::{ast_type_pack_visit_ref, ast_type_visit_ref},
 };
 

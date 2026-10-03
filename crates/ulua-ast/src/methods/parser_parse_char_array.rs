@@ -1,4 +1,4 @@
-use ulua_common::{functions::c_slice::c_slice, macros::luau_assert::LUAU_ASSERT};
+use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   enums::type_lexer::Type,
@@ -23,12 +23,10 @@ impl Parser {
     );
 
     // 本函数仅对 QUOTED_STRING/RAW_STRING/INTERP_STRING_SIMPLE 词素调用（上方 assert 记录该不变量），
-    // 词法器对这些类型把字节指针写入 `LexemeData::data` 字段（对齐 cpp 联合体 `data` 臂直读）。
-    let data_ptr = current_lexeme.data.as_ptr();
-    let length = current_lexeme.get_length() as usize;
-    // Safety: STRING/RAW/INTERP 词素的 data/length 由词法器成对写入，指向源缓冲
-    // 内合法字节；空字面量退化为空切片。
-    let bytes = unsafe { c_slice(data_ptr, length) };
+    // 三者均在 `Lexeme::data_bytes` 的负载变体族内：字节区间 `[ptr, ptr + length)`
+    // 的判空与构造收口在该门面，null 负载折叠为空切片（与旧 `c_slice` 的
+    // null/0 折叠逐位等价）。
+    let bytes = current_lexeme.data_bytes().unwrap_or_default();
 
     let original = if want_original {
       self.copy_bytes(bytes)
