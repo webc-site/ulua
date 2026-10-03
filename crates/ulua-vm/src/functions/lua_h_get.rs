@@ -14,6 +14,12 @@ use crate::{
 /// `TValue` 的共享只读借用（cpp ltable.cpp:1119）：本函数全程只读——tag 判别、
 /// `mainposition` 起沿 next 链游走均限定在该表节点数组界内，体内无元方法调用、无栈
 /// 扩容，不存在跨栈重定位使用 `key` 的路径；返回 nil 时给出全局 `LUA_O_NILOBJECT` 哨兵。
+///
+/// `#[inline(always)]`：读侧热链 `lua_v_gettable` 依赖把本函数内联展开（`__index`
+/// 链逐跳查找每跳省一对 call/spill，inherit3 实测锚点）。弱提示 `#[inline]` 会被
+/// crate 内其他函数的体积变化翻转（本轮 `lua_v_getimport` 直查快支连锁致其再度
+/// 丢失内联、inherit3 复测 +17.5%），升级为强制内联锁定形态。
+#[inline(always)]
 pub(crate) unsafe fn lua_h_get(t: *mut LuaTable, key: &TValue) -> *const TValue {
   unsafe {
     let tt = ttype!(key);
