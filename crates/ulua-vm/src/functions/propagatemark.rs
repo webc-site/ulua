@@ -87,8 +87,12 @@ pub(crate) unsafe fn propagatemark(g: *mut global_State) -> usize {
         }
 
         // we could shrink stack at any time but we opt to do it during initial mark to do that just once per cycle
+        // r16-v25 收形消费点：`shrinkstackprotected` 首参已收 `&mut LuaState`，本句直接透传
+        // 手中 `th`（`GcViewMut::Thread` 变体绑定，本就是 `&mut LuaState`），不再经 `th_ptr`
+        // 裸形重建引用（借用窗止于当句）；体内 `th_ptr` 其余裸读位点系 r13 逐点定性保留面，
+        // 原形原位不动。
         if (*g).gcstate as i32 == GCSPROPAGATE {
-          shrinkstackprotected(th_ptr);
+          shrinkstackprotected(th);
         }
 
         size_of::<LuaState>()
