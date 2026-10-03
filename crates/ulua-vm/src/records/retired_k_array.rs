@@ -7,6 +7,8 @@
 //! 在 Proto 上，随 [`crate::functions::lua_f_freeproto::lua_f_freeproto`] 统一
 //! 释放：proto 死亡即无闭包可引用，绝无在途帧，释放安全。
 
+use core::ptr::null_mut;
+
 use crate::type_aliases::t_value::TValue;
 
 /// 退役 k 数组节点（单链）。
@@ -22,8 +24,8 @@ pub struct RetiredKArray {
 impl Default for RetiredKArray {
   fn default() -> Self {
     Self {
-      next: core::ptr::null_mut(),
-      ptr: core::ptr::null_mut(),
+      next: null_mut(),
+      ptr: null_mut(),
       size: 0,
       memcat: 0,
     }
