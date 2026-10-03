@@ -347,22 +347,31 @@ pub(crate) fn lua_r_newblankclass(
   }
 }
 
-/// # Safety（内部 unsafe 块契约，签名安全：唯一调用方 loadsafe 已持契约）
-/// 调用方须保证：`l` 存活且处于受保护帧；`(*(*l).global).gc_threshold` 须已被置 usize::MAX 冻结 GC
-/// 至类构造完成（否则静态区/成员表可被回收）；`memberstooffset`/`offsettomember` 为已按
+/// 按已填充完的成员名数组与 name→offset 表建立类对象，并挂上 `new`/`__init`
+/// constructor 闭包（cpp lclass.cpp:89 `luaR_newclass`）。
+///
+/// # Safety（外部前提；`l` 的存活与独占已由 `&mut LuaState` 承载，不再列入契约）
+/// 调用方须保证：`l` 处于受保护帧（新类分配与 lua_r_setupconstructor 建闭包/新串可触发 GC
+/// 与抛错）；`(*l.global).gc_threshold` 须已被置 usize::MAX 冻结 GC 至类构造完成
+/// （否则静态区/成员表可被回收）；`memberstooffset`/`offsettomember` 为已按
 /// numberofinstancemembers+numberofstaticmembers 分配并填充完的存活表/数组。
-/// cpp lclass.cpp:89 `luaR_newclass`
 ///
 /// `envt` 是 `new`/`__init` 两个 C 闭包的环境表，对应 cpp `lclass.h:17-25` 的第 7 个
 /// 形参：`luau_load` 带非当前环境时必须绑到该环境，而不是 `L->gt`。
 ///
-/// r16-v22 保留外层 `*mut LuaState` 形：本函数外层消费方含出范围文件
-/// （`lua_pushunsigned.rs`/`loadsafe.rs`/`lua_pcallyieldable.rs`/`luau_execute.rs`——
-/// 尤其 `luau_execute.rs` 是并发会话正在改的性能热区），改签名即撞车；本票仅收本文件内
-/// 已改形的核心，转调处一次 `&mut *l` 就地重建引用（借用窗仅在当句内）。外层收形列入未尽事项，
-/// 交主控另票排入。
-pub(crate) fn lua_r_newclass(
-  l: *mut LuaState,
+/// r16-v27 收形：外层首参 `*mut LuaState` → `&mut LuaState`——`l` 的存活与独占交由类型承载，
+/// 实测唯一真实调用点 `loadsafe.rs` 的 class shape 分支就地以一次 `&mut *l` 桥接（借用窗止于
+/// 当句）。本函数**仍为 `unsafe fn`**：体内前提由调用方给出的真实裸指针面（`global_State`
+/// 链基址读数、`(*global).gc_threshold` GC 冻结前置断言）与 `luaM_newarray!` 分配均无既有
+/// 门面，判形须由签名屏障承载，形制对齐 r16-v21 `lua_touserdatatagged_ref`、r16-v25
+/// `shrinkstackprotected` 的「收形不降屏障」判例；本票只收 `l` 一枚形，不改任何 unsafe 授权窗。
+///
+/// r16-v22 曾保留外层 `*mut LuaState` 形（其时把 doc 名指的 `lua_pushunsigned.rs`/
+/// `lua_pcallyieldable.rs` 计为消费方）；v27 复核实测二者均为 doc 名指，真实调用点仅
+/// `loadsafe.rs` 一处且属战役 territory，`luau_execute.rs` 只消费 `lua_r_cloneclass`
+/// （并发热区，本票未触碰），故外层收形不再撞车。
+pub(crate) unsafe fn lua_r_newclass(
+  l: &mut LuaState,
   name: *mut tstring,
   memberstooffset: *mut LuaTable,
   offsettomember: *mut *mut tstring,
@@ -370,19 +379,23 @@ pub(crate) fn lua_r_newclass(
   numberofstaticmembers: i32,
   envt: *mut LuaTable,
 ) -> *mut LuauClass {
-  // SAFETY: 契约保证 `l` 存活、gc_threshold 处于本函数前置断言的暂停态，新类字段填充与成员注册均在分配界内
+  // SAFETY: 契约保证 `l` 处于受保护帧、gc_threshold 处于本函数前置断言的暂停态，新类字段填充与成员注册均在分配界内
+  // （`l` 的存活与独占由 `&mut LuaState` 承载）
   //
   // r13-w1c 逐点定性（w6d 口径保留面）：本体唯一 `(*l).` 点位为 `(*l).global`
   // global_State 链基址读数（r13-w1b resume_finish 同款保留判例），不属栈顶门面/
-  // 边界原语覆盖面，保留。
+  // 边界原语覆盖面，保留。r16-v27 收形后该点位经 `&mut` 的隐式 deref 等价写作 `l.global`
+  // （同址同宽、时序不变），深层 `(*global).gc_threshold` 断言仍为裸读。
   unsafe {
-    let global = (*l).global;
+    let global = l.global;
     LUAU_ASSERT!((*global).gc_threshold == usize::MAX);
 
-    let classobject = lua_r_newblankclass(&mut *l, name, false);
+    let classobject = lua_r_newblankclass(l, name, false);
     let co = &mut *classobject;
 
-    co.staticmembers = luaM_newarray!(l, numberofstaticmembers, TValue, co.memcat);
+    // r16-v27：`luaM_newarray!`/其展开的 `lua_m_new`、`lua_m_toobig` 仍收裸形，
+    // 一次 `l.as_mut_ptr()` 就地重建（借用窗止于当句），未新增授权面
+    co.staticmembers = luaM_newarray!(l.as_mut_ptr(), numberofstaticmembers, TValue, co.memcat);
     // SAFETY:staticmembers 刚按 numberofstaticmembers 分配完成，全部元素可写。
     for member in c_slice_mut(co.staticmembers, numberofstaticmembers as usize) {
       setnilvalue!(member);
@@ -394,7 +407,7 @@ pub(crate) fn lua_r_newclass(
     co.numberofinstancemembers = numberofinstancemembers;
     co.numberofallmembers = numberofinstancemembers + numberofstaticmembers;
 
-    lua_r_setupconstructor(&mut *l, classobject, envt);
+    lua_r_setupconstructor(l, classobject, envt);
 
     classobject
   }
