@@ -418,8 +418,7 @@ pub fn user_defined_type_function(
   }
 
   // resetTypeFunctionState(l);
-  // SAFETY: VM 边界——`l` 为本帧独占存活线程；契约见 reset_type_function_state.rs。
-  unsafe { reset_type_function_state(&mut *l_vm) };
+  reset_type_function_state(l_vm);
 
   // Push serialized arguments onto the stack
   // for (auto typeParam : typeParams)

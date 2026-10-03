@@ -2,7 +2,7 @@
 
 /// 对应 C++ 原生 `static int getProps(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1568`）。
 use alloc::{collections::BTreeMap, string::String};
-use ulua_vm::{functions::{lua_createtable::lua_createtable, lua_settable::lua_settable}, records::lua_state};
+use ulua_vm::functions::{lua_createtable::lua_createtable, lua_settable::lua_settable};
 use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_tag::get_tag, get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, lua_names::{FIELD_READ, FIELD_WRITE}, throw_type_error::throw_type_error}, macros::lua_check_args, records::{type_function_extern_type::TypeFunctionExternType, type_function_property::TypeFunctionProperty, type_function_singleton_type::TypeFunctionSingletonType, type_function_string_singleton::TypeFunctionStringSingleton, type_function_table_type::TypeFunctionTableType}, type_aliases::{type_function_singleton_variant::TypeFunctionSingletonVariant, type_function_type_variant::TypeFunctionTypeVariant}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn get_props(l: &mut LuaState) -> i32 {

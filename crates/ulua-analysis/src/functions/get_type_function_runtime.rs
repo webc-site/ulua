@@ -7,7 +7,7 @@
 /// `TypeFunctionRuntime* getTypeFunctionRuntime(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:357`）。
 use core::ptr::null;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
-use ulua_vm::{functions::{lua_getthreaddata::lua_getthreaddata, lua_mainthread::lua_mainthread}, records::lua_state};
+use ulua_vm::functions::{lua_getthreaddata::lua_getthreaddata, lua_mainthread::lua_mainthread};
 use crate::{records::type_function_runtime::TypeFunctionRuntime, type_aliases::{type_function_type_id::TypeFunctionTypeId, type_function_type_pack_id::TypeFunctionTypePackId, type_function_type_pack_variant::TypeFunctionTypePackVariantMember, type_function_type_variant::TypeFunctionTypeVariantMember}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) unsafe fn get_type_function_runtime(l: &mut LuaState) -> *mut TypeFunctionRuntime {

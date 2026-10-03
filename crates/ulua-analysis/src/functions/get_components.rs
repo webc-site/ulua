@@ -1,7 +1,7 @@
 
 
 /// 对应 C++ 原生 `static int getComponents(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:717`）。
-use ulua_vm::{functions::{lua_createtable::lua_createtable, lua_rawseti::lua_rawseti}, records::lua_state};
+use ulua_vm::functions::{lua_createtable::lua_createtable, lua_rawseti::lua_rawseti};
 use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_tag::get_tag, get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, macros::lua_check_args, records::{type_function_intersection_type::TypeFunctionIntersectionType, type_function_union_type::TypeFunctionUnionType}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn get_components(l: &mut LuaState) -> i32 {

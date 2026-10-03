@@ -3,7 +3,7 @@
 use crate::functions::throw_type_error::throw_type_error;
 /// 对应 C++ 原生 `static int createFunction(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1308`）。
 use alloc::vec::Vec;
-use ulua_vm::{functions::{lua_gettable::lua_gettable, lua_l_typeerror_l::lua_l_typeerror_l}, records::lua_state};
+use ulua_vm::functions::{lua_gettable::lua_gettable, lua_l_typeerror_l::lua_l_typeerror_l};
 use crate::{functions::{alloc_type_user_data::alloc_type_user_data, allocate_type_function_type_pack::allocate_type_function_type_pack, get_generics::get_generics, get_type_function_runtime::{get_type_function_runtime, get_type_function_type_id}, get_type_user_data::get_type_user_data, lua_names::{FIELD_HEAD, FIELD_TAIL}, optional_type_user_data::optional_type_user_data}, macros::lua_check_args, records::{arena_handle::Handle, type_function_function_type::TypeFunctionFunctionType, type_function_generic_type::TypeFunctionGenericType, type_function_generic_type_pack::TypeFunctionGenericTypePack, type_function_type_pack::TypeFunctionTypePack, type_function_variadic_type_pack::TypeFunctionVariadicTypePack}, type_aliases::{type_function_type_pack_id::TypeFunctionTypePackId, type_function_type_pack_variant::TypeFunctionTypePackVariant, type_function_type_variant::TypeFunctionTypeVariant}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn create_function(l: &mut LuaState) -> i32 {

@@ -6,7 +6,6 @@
 /// 下转再按 variant 分派；标签全部是 `'static` 字面量，故返回 `&'static str`
 /// 而非 `String`（调用点仅用于拼错误消息与 `lua_pushlstring`）。
 use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT};
-use ulua_vm::records::lua_state;
 use crate::{enums::type_type_function_runtime::Type, functions::{get_type_function_runtime::get_type_function_type_id, throw_type_error::throw_type_error}, records::{type_function_any_type::TypeFunctionAnyType, type_function_extern_type::TypeFunctionExternType, type_function_function_type::TypeFunctionFunctionType, type_function_generic_type::TypeFunctionGenericType, type_function_intersection_type::TypeFunctionIntersectionType, type_function_negation_type::TypeFunctionNegationType, type_function_never_type::TypeFunctionNeverType, type_function_primitive_type::TypeFunctionPrimitiveType, type_function_singleton_type::TypeFunctionSingletonType, type_function_table_type::TypeFunctionTableType, type_function_union_type::TypeFunctionUnionType, type_function_unknown_type::TypeFunctionUnknownType}, type_aliases::{type_function_type_id::TypeFunctionTypeId}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn get_tag(l: &mut LuaState, ty: TypeFunctionTypeId) -> &'static str {

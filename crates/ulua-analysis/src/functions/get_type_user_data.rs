@@ -2,7 +2,6 @@
 // kTypeUserdataTag is a constant used for Luau Type Function userdata.
 
 use ulua_vm::functions::{lua_l_typeerror_l::lua_l_typeerror_l, lua_touserdatatagged::lua_touserdatatagged};
-use ulua_vm::records::lua_state;
 use crate::type_aliases::{type_function_type_id::TypeFunctionTypeId};
 use ulua_vm::records::lua_state::LuaState;
 const K_TYPE_USERDATA_TAG: i32 = 42;

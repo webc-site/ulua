@@ -6,7 +6,7 @@
 /// # Safety
 /// 调用方须保证满足 C++ 原实现的调用契约。
 use alloc::vec::Vec;
-use ulua_vm::{functions::{lua_gettable::lua_gettable, lua_l_typeerror_l::lua_l_typeerror_l}, records::lua_state};
+use ulua_vm::functions::{lua_gettable::lua_gettable, lua_l_typeerror_l::lua_l_typeerror_l};
 use crate::{functions::{allocate_type_function_type_pack::allocate_type_function_type_pack, get_type_function_runtime::{get_type_function_runtime, get_type_function_type_id}, get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, records::{arena_handle::Handle, type_function_generic_type::TypeFunctionGenericType, type_function_generic_type_pack::TypeFunctionGenericTypePack}, type_aliases::{type_function_type_id::TypeFunctionTypeId, type_function_type_pack_id::TypeFunctionTypePackId, type_function_type_pack_variant::TypeFunctionTypePackVariant}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) unsafe fn get_generics(

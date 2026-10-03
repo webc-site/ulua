@@ -1,7 +1,5 @@
 
 
-/// 对应 C++ 原生 `static int getSingletonValue(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:586`）。
-use ulua_vm::records::lua_state;
 use crate::{enums::type_type_function_runtime::Type, functions::{get_tag::get_tag, get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, push_string::push_string, throw_type_error::throw_type_error}, macros::{lua_check_args, lua_check_tag}, records::{type_function_boolean_singleton::TypeFunctionBooleanSingleton, type_function_primitive_type::TypeFunctionPrimitiveType, type_function_singleton_type::TypeFunctionSingletonType, type_function_string_singleton::TypeFunctionStringSingleton}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn get_singleton_value(l: &mut LuaState) -> i32 {

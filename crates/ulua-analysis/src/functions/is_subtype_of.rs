@@ -1,7 +1,7 @@
 
 
 /// 对应 C++ 原生 `static int isSubtypeOf(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1835`）。
-use ulua_vm::{macros::lua_l_error::luaL_error, records::lua_state};
+use ulua_vm::macros::lua_l_error::luaL_error;
 use crate::{functions::{deserialize_type_function_runtime_builder::deserialize_type_function_type_id_type_function_runtime_builder_state, get_type_function_runtime::get_type_function_runtime, get_type_user_data::get_type_user_data}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn is_subtype_of(l: &mut LuaState) -> i32 {

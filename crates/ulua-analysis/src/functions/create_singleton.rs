@@ -5,7 +5,7 @@
 /// `create_singleton_thunk` 在 C-ABI 边界由 VM 调起，函数体只在读栈与写栈之间切换。
 use ulua_common::{fflag, functions::c_str::cstr_cow};
 use ulua_vm::functions::{lua_l_typename::lua_l_typename, lua_typename::lua_typename};
-use crate::{enums::type_type_function_runtime::Type, functions::{alloc_type_user_data::alloc_type_user_data, throw_type_error::throw_type_error}, records::{arena_handle::{alias, alias_ref}, type_function_boolean_singleton::TypeFunctionBooleanSingleton, type_function_primitive_type::TypeFunctionPrimitiveType, type_function_singleton_type::TypeFunctionSingletonType, type_function_string_singleton::TypeFunctionStringSingleton}, type_aliases::{type_function_singleton_variant::TypeFunctionSingletonVariant, type_function_type_variant::TypeFunctionTypeVariant}};
+use crate::{enums::type_type_function_runtime::Type, functions::{alloc_type_user_data::alloc_type_user_data, throw_type_error::throw_type_error}, records::{type_function_boolean_singleton::TypeFunctionBooleanSingleton, type_function_primitive_type::TypeFunctionPrimitiveType, type_function_singleton_type::TypeFunctionSingletonType, type_function_string_singleton::TypeFunctionStringSingleton}, type_aliases::{type_function_singleton_variant::TypeFunctionSingletonVariant, type_function_type_variant::TypeFunctionTypeVariant}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn create_singleton(l: &mut LuaState) -> i32 {
 

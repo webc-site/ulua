@@ -3,7 +3,7 @@
 use ulua_ast::records::location::Location;
 use ulua_common::{fflag, functions::{c_str::cstr_cow, format::format}, records::variant::Variant5};
 use ulua_vm::{functions::{lua_isstring::lua_isstring, lua_l_typename::lua_l_typename, lua_typename::lua_typename}};
-use crate::{records::{arena_handle::{alias, alias_ref}, runtime_error::RuntimeError, type_function_error::TypeFunctionError}};
+use crate::records::{runtime_error::RuntimeError, type_function_error::TypeFunctionError};
 use ulua_vm::records::lua_state::LuaState;
 pub fn check_result_for_error(
   l: &mut LuaState,
@@ -33,12 +33,9 @@ pub fn check_result_for_error(
           ),
         )
       } else
-      // Safety: l 为存活 lua_State；进入本分支前已确认栈深 != 0，-1 索引落在有效栈槽
-      // 内，lua_isstring 只读取该槽位。
-      if unsafe { lua_isstring(&*l, -1) } != 0 {
-        let err_str = alias(l.as_mut_ptr())
-          .to_str(-1)
-          .unwrap_or_default();
+      // `lua_isstring` 为安全只读入口：进入本分支前已确认栈深 != 0，-1 落在有效栈槽内。
+      if lua_isstring(&*l, -1) != 0 {
+        let err_str = l.to_str(-1).unwrap_or_default();
         Some(
           TypeFunctionError::type_function_error_location_type_function_error_data(
             Location::new(Default::default(), Default::default()),
@@ -50,9 +47,9 @@ pub fn check_result_for_error(
         )
       } else {
         let err_type = if fflag::LuauUdtfFixTypeNameTypo.get() {
-          // Safety: l 存活且栈非空（上一分支保证），-1 落在有效栈槽；luaL_typename
-          // 只读该槽 TValue 并以判空/nilobject 兜底，永不误读空槽。
-          unsafe { lua_l_typename(&*l, -1) }
+          // `lua_l_typename` 为安全只读入口：-1 落在有效栈槽（上一分支保证栈非空），
+          // 其实现按该槽 TValue 的 tag 取串表项，不写栈。
+          lua_l_typename(&*l, -1)
         } else {
           // `lua_typename` 为安全函数：实参 -1 是 LUA_TNONE 常量（与 C++ 上游同值传参），
           // 该取值命中 "no value" 静态表项，不触碰 l 所指状态。

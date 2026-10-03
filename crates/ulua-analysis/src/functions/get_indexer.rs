@@ -1,7 +1,5 @@
 
 
-/// 对应 C++ 原生 `static int getIndexer(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1644`）。
-use ulua_vm::records::lua_state;
 use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_tag::get_tag, get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, lua_names::{FIELD_INDEX, FIELD_READ_RESULT, FIELD_WRITE_RESULT}, throw_type_error::throw_type_error}, macros::lua_check_args, records::{type_function_extern_type::TypeFunctionExternType, type_function_table_type::TypeFunctionTableType}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn get_indexer(l: &mut LuaState) -> i32 {

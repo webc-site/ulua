@@ -14,7 +14,6 @@
 /// 运行期数据；`tftt`/`tfst` 按 class-index 下转，`is_null()`/`is_none()` 分支内
 /// `throw_type_error` 返回 `!` 不返回，故其后解引用合法。
 use ulua_common::fflag;
-use ulua_vm::records::lua_state;
 use crate::{functions::{alloc_type_user_data::alloc_type_user_data, get_mutable_type_function_runtime::get_mutable_type_function_type_id, get_tag::get_tag, get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data, push_table_indexer::push_table_indexer, push_type_pack::push_type_pack, throw_type_error::throw_type_error}, records::{type_function_extern_type::TypeFunctionExternType, type_function_function_type::TypeFunctionFunctionType, type_function_property::TypeFunctionProperty, type_function_singleton_type::TypeFunctionSingletonType, type_function_table_type::TypeFunctionTableType}};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) unsafe fn get_table_prop(l: &mut LuaState, prefix: &str, read: bool) -> i32 {

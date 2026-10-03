@@ -1,7 +1,5 @@
 
 
-/// 对应 C++ 原生 `static int isEqualToType(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1884`）。
-use ulua_vm::records::lua_state;
 use crate::{functions::{get_type_user_data::get_type_user_data, throw_type_error::throw_type_error}, macros::lua_check_args};
 use ulua_vm::records::lua_state::LuaState;
 pub(crate) fn is_equal_to_type(l: &mut LuaState) -> i32 {
