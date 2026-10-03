@@ -8,7 +8,7 @@ use crate::{
 pub unsafe fn os_difftime(l: *mut LuaState) -> i32 {
   unsafe {
     let t1 = (*l).check_number(1);
-    let t2 = lua_l_optnumber(l, 2, 0.0);
+    let t2 = lua_l_optnumber(&mut *l, 2, 0.0);
 
     // difftime in C returns the difference in seconds (t1 - t2) as a double.
     // Since we are targeting wasm32-unknown-unknown and portable environments,

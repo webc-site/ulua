@@ -145,7 +145,7 @@ impl TypeFunctionRuntime {
     // 之后、无任何其它别名读取该栈（与原整体 unsafe 块的时序逐字一致）。
     unsafe {
       let vm_ptr = from_mut(vm_l);
-      lua_l_sandbox(vm_ptr);
+      lua_l_sandbox(&mut *vm_ptr);
       lua_l_sandboxthread(&mut *vm_ptr);
     }
   }

@@ -18,11 +18,11 @@ pub unsafe fn tfreeze(l: *mut LuaState) -> i32 {
 
     (*l).arg_check(not_frozen, 1, "table is already frozen");
 
-    (*l).arg_check(
-      lua_l_getmetafield_bytes(l, 1, TM_METATABLE) == 0,
-      1,
-      "table has a protected metatable",
-    );
+    // 拆两语句（同上方 r16-v3 #60 判例）：被调收形为 `&mut` 实参形后与 `arg_check`
+    // 独占接收者借用冲突；先查元方法后落 arg_check 的求值序不变，句间无场写，拆句逐位等价。
+    let no_meta = lua_l_getmetafield_bytes(&mut *l, 1, TM_METATABLE) == 0;
+
+    (*l).arg_check(no_meta, 1, "table has a protected metatable");
 
     (*l).set_readonly(1, true);
 

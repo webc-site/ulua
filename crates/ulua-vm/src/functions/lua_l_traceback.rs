@@ -15,9 +15,10 @@ use crate::{
 /// the result onto `l`. Faithful 1:1 port of `luaL_traceback` from
 /// `luau/VM/src/laux.cpp:381-425`.
 /// # Safety
-/// `l`/`l1` 均须指向存活 `LuaState`：`l1` 的调用栈自 `level` 起各帧可读（逐帧 lua_getinfo 游走），`l` 承接
-/// 最终 pushresult 压栈；`msg` 仅按 C 语义截读至首个 NUL。对应 cpp laux.cpp:377。
-pub unsafe fn lua_l_traceback(l: *mut LuaState, l1: *mut LuaState, msg: Option<&str>, level: i32) {
+/// `l` 的存活与独占已由 `&mut LuaState` 承载（r16-v43 收形，buffinit 转手经 `&mut *l` 一次性重借用）；
+/// `l1` 仍收裸形并转交 `lua_getinfo`，须指向存活 `LuaState`：其调用栈自 `level` 起各帧可读（逐帧
+/// lua_getinfo 游走），`l` 承接最终 pushresult 压栈；`msg` 仅按 C 语义截读至首个 NUL。对应 cpp laux.cpp:377。
+pub unsafe fn lua_l_traceback(l: &mut LuaState, l1: *mut LuaState, msg: Option<&str>, level: i32) {
   // SAFETY: 契约保证 `L1` 调用栈自 level 起可读、`buf` 可写，帧遍历按 lua_getinfo 语义在界内推进
   unsafe {
     debug_assert!(level >= 0);

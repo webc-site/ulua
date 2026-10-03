@@ -16,9 +16,7 @@ use crate::{
 /// cpp/VM/src/laux.cpp:297 luaL_callmeta。
 pub(crate) fn lua_l_callmeta_bytes(l: &mut LuaState, obj: i32, event: &[u8]) -> i32 {
   let obj = abs_index(l, obj);
-  // SAFETY: `l` 存活（引用形保证）；`lua_l_getmetafield_bytes` 的 `# Safety`
-  // 其余前提（受保护帧、obj 合法、event 为借用切片）由调用序契约成立。
-  if unsafe { lua_l_getmetafield_bytes(l.as_mut_ptr(), obj, event) } == 0 {
+  if lua_l_getmetafield_bytes(&mut *l, obj, event) == 0 {
     return 0;
   }
 

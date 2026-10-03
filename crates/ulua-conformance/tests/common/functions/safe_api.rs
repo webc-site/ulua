@@ -321,8 +321,9 @@ pub fn l_register(l: L, funcs: &[LuaLReg]) {
 
 /// `luaL_sandbox`。
 pub fn sandbox(l: L) {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { lua_l_sandbox(l) }
+  // Safety: `l` 存活（模块级契约）；被调仍为 unsafe fn（`lua_setsafeenv` 裸形屏障），
+  // `&mut *l` 引用重建借用窗止于当次调用。
+  unsafe { lua_l_sandbox(&mut *l) }
 }
 
 /// `luaL_sandboxthread`。
@@ -1014,7 +1015,7 @@ pub fn openlibs_and_sandbox_all(l: L) {
   // Safety: `l` 存活（模块级契约）。
   unsafe {
     lua_l_openlibs(&mut *l);
-    lua_l_sandbox(l);
+    lua_l_sandbox(&mut *l);
     lua_l_sandboxthread(&mut *l);
   }
 }

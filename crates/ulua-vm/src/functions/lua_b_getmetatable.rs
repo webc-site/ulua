@@ -14,9 +14,7 @@ pub fn lua_b_getmetatable(l: &mut LuaState) -> i32 {
     return 1; // no metatable
   }
 
-  // SAFETY: `l` 存活（引用形保证）；`lua_l_getmetafield_bytes` 的 `# Safety` 其余
-  // 前提（1 号槽为合法正索引、事件键存活、受保护帧）由库函数约定与常量实参成立。
-  unsafe { lua_l_getmetafield_bytes(l.as_mut_ptr(), 1, b"__metatable") };
+  lua_l_getmetafield_bytes(l, 1, b"__metatable");
   1 // returns either __metatable field (if present) or metatable
 }
 

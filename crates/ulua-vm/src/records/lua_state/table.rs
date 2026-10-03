@@ -168,7 +168,6 @@ impl LuaState {
   /// `event` 不得携带尾部 `\0`，否则键长多一字节、恒查不中。
   #[inline(always)]
   pub fn get_metafield_bytes(&mut self, obj: i32, event: &[u8]) -> bool {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_l_getmetafield_bytes(self.as_mut_ptr(), obj, event) != 0 }
+    lua_l_getmetafield_bytes(self, obj, event) != 0
   }
 }

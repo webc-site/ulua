@@ -17,7 +17,7 @@ use crate::{
 pub unsafe fn lua_l_error_l(l: *mut LuaState, _fmt: *const c_char, args: Arguments<'_>) -> ! {
   // SAFETY: fmt 与可变参按 `%s/%d/%f` 约定严格匹配（错配即 UB），块内经 lua_o_pushvfstring_ref 格式化后经 `l` 抛出、不返回
   unsafe {
-    lua_l_where(l, 1);
+    lua_l_where(&mut *l, 1);
     lua_pushvfstring(&mut *l, args);
     (*l).concat(2);
     lua_error(&mut *l)

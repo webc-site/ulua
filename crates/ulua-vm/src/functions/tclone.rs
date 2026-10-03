@@ -15,11 +15,11 @@ pub unsafe fn tclone(l: *mut LuaState) -> i32 {
   unsafe {
     (*l).check_type(1, LuaType::Table);
 
-    (*l).arg_check(
-      lua_l_getmetafield_bytes(l, 1, TM_METATABLE) == 0,
-      1,
-      "table has a protected metatable",
-    );
+    // 拆两语句（tfreeze r16-v3 #60 同判例）：被调收形为 `&mut` 实参形后与 `arg_check`
+    // 独占接收者借用冲突（E0499）；求值序本即先查元方法后落 arg_check，句间无场写，拆句逐位等价。
+    let no_meta = lua_l_getmetafield_bytes(&mut *l, 1, TM_METATABLE) == 0;
+
+    (*l).arg_check(no_meta, 1, "table has a protected metatable");
 
     let tt = lua_h_clone(l, (*(*l).base).as_table_ptr());
 

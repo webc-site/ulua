@@ -64,6 +64,6 @@ pub unsafe fn setup_state(l: *mut LuaState) {
   // 持有（luaopen_require 内部 lua_newuserdatadtor 装箱），与状态同生命周期。
   unsafe { luaopen_require(l, create_cli_require_context()) };
 
-  // Safety: `lua_l_sandbox` 为 unsafe 导出；只原地冻结全局表。
+  // Safety: `lua_l_sandbox` 仍为 unsafe 导出（`lua_setsafeenv` 裸形屏障）；只原地冻结全局表。
   unsafe { lua_l_sandbox(l) };
 }
