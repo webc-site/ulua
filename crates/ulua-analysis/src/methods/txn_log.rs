@@ -21,7 +21,7 @@ use crate::{
   },
   methods::txn_log_get_mutable::TxnLogGetMutable,
   records::{
-    arena_handle::{alias, alias_nn_opt, alias_ref},
+    arena_handle::{alias_nn_opt, alias_ref, Handle},
     pending_slot::PendingSlot,
     pending_type::PendingType,
     pending_type_pack::PendingTypePack,
@@ -52,13 +52,14 @@ impl TxnLog {
     &mut self,
     ty: TypeId,
     new_bound_to: Option<TypeId>,
-  ) -> *mut PendingType {
-    // SAFETY: ty 是本日志所属会话 arena 中的存活 TypeId（C++ 断言同款前提）。
+  ) -> Handle<PendingType> {
+    // 前提：ty 是本日志所属会话 arena 中的存活 TypeId（C++ 断言同款前提，
+    // queue_type_id 据此读出 persistent 并克隆入日志）。
     let new_ty = self.queue_type_id(ty);
 
-    // SAFETY: get_mutable_pending_type 是 C++ getMutable<TableType> 的对应物；
+    // get_mutable_pending_type 是 C++ getMutable<TableType> 的对应物；
     // 未命中（原 null 哨兵）由 None 分支按 no-op 处理，与 cpp 判空短路一致。
-    if let Some(table_type) = unsafe { get_mutable_pending_type::<TableType>(new_ty) } {
+    if let Some(table_type) = get_mutable_pending_type::<TableType>(new_ty) {
       table_type.bound_to = new_bound_to;
     }
 
@@ -71,12 +72,12 @@ impl TxnLog {
     &mut self,
     ty: TypeId,
     indexer: Option<TableIndexer>,
-  ) -> *mut PendingType {
-    // SAFETY: 同 bind_table。
+  ) -> Handle<PendingType> {
+    // 同 bind_table。
     let new_ty = self.queue_type_id(ty);
 
-    // SAFETY: 同 bind_table。
-    if let Some(table_type) = unsafe { get_mutable_pending_type::<TableType>(new_ty) } {
+    // 同 bind_table。
+    if let Some(table_type) = get_mutable_pending_type::<TableType>(new_ty) {
       table_type.indexer = indexer;
     }
 
@@ -312,7 +313,7 @@ impl TxnLog {
 }
 
 impl TxnLog {
-  pub fn replace_type_id_t<T>(&mut self, ty: TypeId, replacement: T) -> *mut PendingType
+  pub fn replace_type_id_t<T>(&mut self, ty: TypeId, replacement: T) -> Handle<PendingType>
   where
     T: Into<Type>,
   {
@@ -323,13 +324,13 @@ impl TxnLog {
     &mut self,
     ty: TypeId,
     replacement: Type,
-  ) -> *mut PendingType {
-    // SAFETY: queue_type_id 的「ty 指向存活 Type 节点」前置由调用方契约满足
+  ) -> Handle<PendingType> {
+    // 前提：queue_type_id 的「ty 指向存活 Type 节点」前置由调用方契约满足
     // （C++ ReplaceType 以 arena/pending 存活句柄入参）。
     let new_ty = self.queue_type_id(ty);
-    // alias 的独占借用契约：表项由本 `&mut self` 日志独占，此刻该 pending 槽位
+    // Handle 的独占借用契约：表项由本 `&mut self` 日志独占，此刻该 pending 槽位
     // 仅此一处可变访问（&mut self 已排他了路径）。
-    alias(new_ty).pending.reassign(&replacement);
+    new_ty.get_mut().pending.reassign(&replacement);
     new_ty
   }
 
@@ -337,12 +338,12 @@ impl TxnLog {
     &mut self,
     tp: TypePackId,
     replacement: TypePackVar,
-  ) -> *mut PendingTypePack {
-    // SAFETY: 与 TypeId 侧对称——queue_type_pack_id 要求 tp 存活（C++
+  ) -> Handle<PendingTypePack> {
+    // 前提：与 TypeId 侧对称——queue_type_pack_id 要求 tp 存活（C++
     // ReplaceTypePack 契约）。
     let new_tp = self.queue_type_pack_id(tp);
-    // alias 契约同上：pack 表项此刻仅此一处可变访问。
-    alias(new_tp).pending.reassign(&replacement);
+    // Handle 契约同上：pack 表项此刻仅此一处可变访问。
+    new_tp.get_mut().pending.reassign(&replacement);
     new_tp
   }
 }
