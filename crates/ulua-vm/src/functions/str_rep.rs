@@ -21,9 +21,9 @@ use crate::{
 /// 越 MAXSSIZE 乘积则 `luaL_error` 抛 "resulting string too large" 发散；结果压栈需 `top` 后
 /// ≥1 空槽，分配可触发 GC。
 ///
-/// `unsafe fn` 屏障按 r16-v21 判例保留：目标区仍由 `lua_l_buffinitsize`（裸形被调，经
-/// `l.as_mut_ptr()` 一次就地转手）返回的 `ptr` 经 `from_raw_parts_mut` 成窗，指数填充走
-/// `split_at_mut` 区间复制。
+/// `unsafe fn` 屏障按 r16-v21 判例保留：目标区仍由 `lua_l_buffinitsize`（引用形被调，经
+/// `&mut *l` 再借）返回的裸 `ptr` 经 `from_raw_parts_mut` 成窗，指数填充走 `split_at_mut`
+/// 区间复制。
 pub(crate) unsafe fn str_rep(l: &mut LuaState) -> i32 {
   // SAFETY: `l` 由 `&mut` 保证有效且独占，转手不外于当句；重复次数/串长经溢出检查，
   // 块内经缓冲写入的总量受扩展协议保护
@@ -50,7 +50,7 @@ pub(crate) unsafe fn str_rep(l: &mut LuaState) -> i32 {
     let total = len * (n as usize);
 
     let mut b = LuaLStrbuf::new();
-    let ptr = lua_l_buffinitsize(l.as_mut_ptr(), &mut b, total);
+    let ptr = lua_l_buffinitsize(&mut *l, &mut b, total);
     // 目标缓冲一次成切片：指数填充走 split_at_mut 区间复制，消除 add/copy_nonoverlapping 指针算术
     let buf = from_raw_parts_mut(ptr, total);
 
