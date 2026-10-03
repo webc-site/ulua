@@ -2,8 +2,10 @@
 //! 由 `functions/` 下各壳文件以一次宏调用实例化；`functions/mod.rs` 仅保留模块声明注册表。
 //! 每族宏的 `# Safety` 契约与 `// Safety:` 理由只在本文件书写一次，成员文件不得复述契约文本。
 
-/// 单参 `(l) -> c_int` 通用 C ABI 导出壳模板：现 72 枚同形壳单源生成（46 枚裸透传 +
-/// 23 枚 `@ref` 独占引用重建变体 + 3 枚 `@refshared` 只读引用重建变体），与
+/// 单参 `(l) -> c_int` 通用 C ABI 导出壳模板：现 72 枚同形壳单源生成（40 枚裸透传 +
+/// 29 枚 `@ref` 独占引用重建变体 + 3 枚 `@refshared` 只读引用重建变体；本族枚数自 r16-v40 记账
+/// 46+23+3 以来未增未减，foreach/foreachi/getn/gmatch/iter_aux/iter_codes 六枚随 r16-v41
+/// 迭代器/表族首参收形由裸透传翻入 `@ref`），与
 /// `lua_v_doarithimpl.rs` 的 `arith_tm_exports!` 先例同构
 /// （退役为显式壳的本族同形成员现仅余 `lua_status.rs` 一枚——它同时是全仓先例本体，
 /// 刻意不翻臂以免十余处「见 `lua_status.rs` 先例」引注失效）；lua_b_* 族 15 壳、int64 库族
@@ -83,11 +85,12 @@ macro_rules! capi_shell_l_cint {
   };
 }
 
-/// 同上 `(l) -> c_int` 导出壳模板之库函数变体（现 55 枚：42 枚裸透传 + 13 枚 `@ref`
+/// 同上 `(l) -> c_int` 导出壳模板之库函数变体（现 55 枚：41 枚裸透传 + 14 枚 `@ref`
 /// 引用重建变体；vector_angle/vector_clamp 两壳曾随 vm 侧核心收形退役为显式壳，
 /// 已由 `@ref` 臂于 r16-v32 复归宏模板，str_byte/str_char/str_len/str_split/str_sub
 /// 五枚随 r16-v38 str_* 族首参收形同臂复归，math_clamp/frexp/ldexp/lerp/map/noise
-/// 六枚随 r16-v40 math_* 族首参收形同臂复归）：唯一差异是体内
+/// 六枚随 r16-v40 math_* 族首参收形同臂复归，tunpack 一枚随 r16-v41 迭代器/表族首参收形
+/// 同臂复归）：唯一差异是体内
 /// `// Safety:` 理由注释按 b26 校准保留「l 由 Lua VM 按库函数/闭包约定传入」的调用来源表述。
 /// r16-v32 同备 `@ref` 引用重建变体臂，形制与措辞随上条所述。
 /// 本族刻意不备 `@refshared` 臂：唯一只读形成员即 `lua_status.rs`（本仓先例本体），翻臂会使其余
