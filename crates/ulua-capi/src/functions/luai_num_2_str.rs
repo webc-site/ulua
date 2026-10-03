@@ -2,7 +2,7 @@
 //! vm 侧已收口为 safe 缓冲形态 `luai_num2str_buf(&mut [u8], f64) -> usize`，其指针镜像声明
 //! 随之删除；本壳无法再由 `functions/shells.rs` 中透传裸指针的共用宏 `capi_shell!` 直呼
 //! （宏体语义不得改，同形宏壳零行为变化），故从宏模板退役、写显式 `extern "C-unwind"`
-//! 调用，与 `lua_stackdepth.rs`/`lua_g_getline.rs` 等表示适配显式壳统形：唯一差异是在本帧
+//! 调用，与 `lua_g_getline.rs`/`lua_m_getnextpage.rs` 等表示适配显式壳统形：唯一差异是在本帧
 //! 把 `buf` 重建为契约上界的可写切片后转调，`unsafe` 只留在本 FFI 边界。
 use core::{ffi::c_char, slice};
 
