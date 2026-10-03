@@ -140,6 +140,7 @@ pub(crate) fn index_chain_write(t: *const LuaTable) {
 /// `key` 为存活 interned 字符串；`val` 为当前帧可写栈槽。体内仅 fasttm/哈希读与
 /// cachedslot/栈槽写，无 VM 重入点，thread_local 槽借用不逃逸。
 #[inline]
+#[inline(never)]
 pub(crate) unsafe fn index_chain_probe(
   l: *mut LuaState,
   t0: *mut LuaTable,

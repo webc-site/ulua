@@ -17,6 +17,7 @@ use crate::{
 /// （rehash/扩数组会整体移动节点槽）不受生命周期约束，句柄有效性沿用既有契约：仅在持有
 /// 该表借用、且其间无 newkey/rehash 介入的窗口内读写；跨调用持有槽地址的消费链
 /// （gval2slot/cachedslot、指针出参传播）在边界经 `as_const_ptr` 还原裸形。
+#[inline]
 pub unsafe fn lua_h_getstr<'a>(t: &'a LuaTable, key: *mut tstring) -> Option<Slot<'a>> {
   unsafe {
     walk_nodes(hashstr!(t, key), |n| -> Option<Slot<'a>> {
