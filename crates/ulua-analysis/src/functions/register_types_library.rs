@@ -21,14 +21,14 @@ use crate::{
   type_aliases::lua_state::LuaState,
 };
 
-c_thunk!(create_unknown_thunk, create_unknown);
-c_thunk!(create_never_thunk, create_never);
-c_thunk!(create_any_thunk, create_any);
-c_thunk!(create_boolean_thunk, create_boolean);
-c_thunk!(create_number_thunk, create_number);
-c_thunk!(create_string_thunk, create_string);
-c_thunk!(create_thread_thunk, create_thread);
-c_thunk!(create_buffer_thunk, create_buffer);
+c_thunk!(create_unknown_thunk, create_unknown, @ref);
+c_thunk!(create_never_thunk, create_never, @ref);
+c_thunk!(create_any_thunk, create_any, @ref);
+c_thunk!(create_boolean_thunk, create_boolean, @ref);
+c_thunk!(create_number_thunk, create_number, @ref);
+c_thunk!(create_string_thunk, create_string, @ref);
+c_thunk!(create_thread_thunk, create_thread, @ref);
+c_thunk!(create_buffer_thunk, create_buffer, @ref);
 
 c_thunk!(create_singleton_thunk, create_singleton);
 c_thunk!(create_negation_thunk, create_negation);
