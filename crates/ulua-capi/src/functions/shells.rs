@@ -9,10 +9,14 @@
 /// 刻意不翻臂以免十余处「见 `lua_status.rs` 先例」引注失效）；lua_b_* 族 15 壳、int64 库族
 /// 8 壳与 lua_gettop/lua_isthreadreset/lua_isyieldable 已分别由 `@ref`（r16-v32 一枚、
 /// r16-v34 十四枚、r16-v35 八枚）与 `@refshared`（r16-v36 三枚）臂复归宏模板；
-/// lua_singlestep/lua_c_allocationrate/lua_encodepointer/lua_g_hasnative/
-/// lua_g_onbreak/lua_l_buffinit/lua_pushinteger_64/lua_setthreaddata/lua_a_pushvalue 本就
-/// 非本族形（返回型或参数目不同），见 `functions/lua_status.rs` 先例）。与手写逐壳的差异仅在
-/// 文本层：
+/// lua_singlestep/lua_pushinteger_64/lua_setthreaddata 等曾点名者已随 r16-v37/v39 由
+/// `capi_shell!` 的 `refstate`（独占重建）与 `refshared`（只读重建）参数类型臂复归单源
+/// （连同 lua_c_allocationrate/lua_encodepointer/lua_g_hasnative/lua_g_onbreak/lua_settop/
+/// lua_equal/lua_lessthan/lua_rawequal/lua_l_findtable/lua_l_optlstring/lua_l_checkoption/
+/// lua_g_pusherror/pusherror/lua_setlightuserdataname 共 20 枚，r16-v39 实测）；本族形外者
+/// 现仅余 `lua_l_buffinit`（`&mut *l` + `&mut *b` 双重建）与 `lua_a_pushvalue`
+/// （`&mut *l` + 只读 `&*o` 双重建）仍为显式壳，见 `functions/lua_status.rs` 先例。
+/// 与手写逐壳的差异仅在文本层：
 /// 透传目标在 doc 契约中以 `ulua_vm::functions::` 全路径书写；体内
 /// `// Safety:` 理由注释转通用表述。导出符号名、签名与 rustdoc 逐参数契约语义与
 /// 逐字节手写版一致。
@@ -216,8 +220,9 @@ macro_rules! capi_shell_udfield_set {
 
 /// `(l [, 值型参数...]) -> ()` 压栈导出壳模板：lua_pushvector_lapi 的 4/3 分量两枚
 /// 透传导出壳共用，导出符号名固定为 `ulua_` + 函数名（lua_pushnil/lua_pushboolean/
-/// lua_pushnumber/lua_pushinteger_64 已随 vm 侧接收者前移退役为显式壳，见
-/// `functions/lua_pushinteger_64.rs`）。与手写逐壳的差异仅在文本层：体内
+/// lua_pushnumber 三枚已随 vm 侧接收者前移退役为显式壳，见 `functions/lua_status.rs`
+/// 先例；lua_pushinteger_64 曾同因退役，但已随 r16-v39 由 `capi_shell!` 的 `refstate`
+/// 参数类型臂复归该通用族单源，不在本族）。与手写逐壳的差异仅在文本层：体内
 /// `// Safety:` 理由注释逐壳列举的值型参数名（如「b 均为值型参数」）统一为不点名
 /// 表述；`/// # Safety` 契约逐字不变。
 macro_rules! capi_shell_push {
@@ -295,9 +300,11 @@ macro_rules! capi_shell_check_opt {
 /// capi_shell_tkeyval! 先例）。
 /// r16-v37 只读引用重建变体：本族 4 枚只读形成员（lua_g_hasnative / lua_g_isnative /
 /// lua_isstring / lua_type）曾随 vm 核心收形退役为显式壳，现由下方 `@refshared` 臂复归
-/// 宏模板单源。本族刻意**不在本票开** `@ref`（独占形）臂：实测其消费者为 2 枚显式壳
-/// `lua_singlestep` / `lua_settop`（核心皆为 `&mut LuaState` 且返回 unit），两臂一并补齐
-/// （`@ref` × `-> c_int` 与 `@ref` × `unit` 尾缀）才不剩半态，留待后续专票；无消费者的
+/// 宏模板单源。本族**不开** `@ref`（独占形）臂，且 r16-v39 后此判据由「留待专票」转为
+/// 「永不开臂」：v37 曾指 2 枚显式壳 `lua_singlestep` / `lua_settop` 为该臂候选（核心皆
+/// `&mut LuaState` 且返回 unit，须 `@ref` × `-> c_int` 与 `@ref` × `unit` 两臂一并补齐才
+/// 不剩半态），但 `capi_shell!` 的 `refstate` 参数类型臂本就承载同形，v39 已实测把这两枚
+/// 连同其余 11 枚批量复归该通用族，本族 `@ref` 消费者实测归零；无消费者的
 /// 宏臂既未经展开检验（未命中的臂不参与类型检查）又属死文本，与 `capi_libfn_shell_l_cint!`
 /// 族同判例（见该族头注）。`str_find_aux` 核心仍是裸 `*mut LuaState`，属本族裸透传成员，
 /// 不在 `@ref` 候选之内。
