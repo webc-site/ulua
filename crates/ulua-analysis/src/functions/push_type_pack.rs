@@ -1,9 +1,7 @@
-/// # Safety
-/// `l` 必须是当前调用栈有效、且已挂载 `TypeFunctionRuntime` 的 `lua_State*`；本函数向该栈
-/// 压入若干值（不弹出），调用方须按 C++ 原约定管理栈，且调用期间单线程独占 VM 栈。对应 C++
-/// `void pushTypePack(lua_State* L, TypeFunctionTypePackId tp)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1254`）。
-use ulua_vm::functions::{lua_createtable::lua_createtable, lua_rawseti::lua_rawseti};
-use ulua_vm::records::lua_state::LuaState;
+use ulua_vm::{
+  functions::{lua_createtable::lua_createtable, lua_rawseti::lua_rawseti},
+  records::lua_state::LuaState,
+};
 
 use crate::{
   functions::{
@@ -23,6 +21,12 @@ use crate::{
     type_function_type_variant::TypeFunctionTypeVariant,
   },
 };
+
+/// # Safety
+/// `l` 必须是当前调用栈有效、且已挂载 `TypeFunctionRuntime` 的 `lua_State*`；`tp` 须为空，
+/// 或指向 `TypeFunctionRuntime` 的 `type_pack_arena` 中存活的序列化 pack 节点（shallow+deep
+/// 序列化已完成）；调用期间单线程独占 VM 栈。对应 C++
+/// `void pushTypePack(lua_State* L, TypeFunctionTypePackId tp)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1254`）。
 pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId) {
   // Safety: 前置条件逐项——(1) `l` 按本函数契约是宿主 lua 虚拟机创建的存活
   // lua_State（crate 的 LuaState 是不透明镜像类型），`l as *mut LuaState` 为

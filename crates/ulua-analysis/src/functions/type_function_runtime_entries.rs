@@ -3,16 +3,6 @@
 //! `register_type_user_data`），仅把「消息前缀 + 读/写字段」两个分叉点参数化：
 //! 诊断消息经 `format_args!("{prefix}: ...")` 拼出与原手写字面量逐字节一致的串。
 
-/// 取 `type.readproperty`/`type.writeproperty` 的属性值并按 userdata 推栈
-/// （C++ `readTableProp`/`writeTableProp` 共用骨架）。`read` 选择 `read_ty`
-/// 还是 `write_ty`。
-///
-/// # Safety
-/// `l` 必须是 Lua VM 在本次原生函数调用中传入、且在该调用全程有效的 `lua_State*`：
-/// VM 已把实参压入栈顶，本函数只借用不持有该地址；`prefix` 仅为诊断前缀字面量
-/// （"type.readproperty"/"type.writeproperty"）。调用期间单线程独占 VM 栈与类型
-/// 运行期数据；`tftt`/`tfst` 按 class-index 下转，`is_null()`/`is_none()` 分支内
-/// `throw_type_error` 返回 `!` 不返回，故其后解引用合法。
 use ulua_common::fflag;
 use ulua_vm::records::lua_state::LuaState;
 
@@ -32,6 +22,16 @@ use crate::{
     type_function_table_type::TypeFunctionTableType,
   },
 };
+/// 取 `type.readproperty`/`type.writeproperty` 的属性值并按 userdata 推栈
+/// （C++ `readTableProp`/`writeTableProp` 共用骨架）。`read` 选择 `read_ty`
+/// 还是 `write_ty`。
+///
+/// # Safety
+/// `l` 必须是 Lua VM 在本次原生函数调用中传入、且在该调用全程有效的 `lua_State*`：
+/// VM 已把实参压入栈顶，本函数只借用不持有该地址；`prefix` 仅为诊断前缀字面量
+/// （"type.readproperty"/"type.writeproperty"）。调用期间单线程独占 VM 栈与类型
+/// 运行期数据；`tftt`/`tfst` 按 class-index 下转，`is_null()`/`is_none()` 分支内
+/// `throw_type_error` 返回 `!` 不返回，故其后解引用合法。
 pub(crate) unsafe fn get_table_prop(l: &mut LuaState, prefix: &str, read: bool) -> i32 {
   // Safety: `l` 同址重解释为 `lua_state`；`(*tftt).props`/`(*tfst).variant` 均
   // 在上方非空守卫之后只读访问，指向 VM 分配且本次调用内存活的对象。

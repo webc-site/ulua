@@ -3,8 +3,6 @@
 //!  getGenerics(lua_State* l, int idx, const char* fname)`
 //! (Analysis/src/TypeFunctionRuntime.cpp:1125-1177).
 
-/// # Safety
-/// 调用方须保证满足 C++ 原实现的调用契约。
 use alloc::vec::Vec;
 
 use ulua_vm::{
@@ -28,6 +26,11 @@ use crate::{
     type_function_type_pack_variant::TypeFunctionTypePackVariant,
   },
 };
+
+/// # Safety
+/// `l` 必须是本类型函数运行时会话内存活且单线程独占的 `LuaState`；`idx` 须是该状态栈上
+/// 的有效索引，其内容若为 userdata 则须是由 `alloc_type_user_data` 登记的类型 userdata；
+/// 主线程 thread data 已安装非空 `TypeFunctionRuntime`（由 `set_type_function_environment` 保证）。
 pub(crate) unsafe fn get_generics(
   l: &mut LuaState,
   idx: i32,

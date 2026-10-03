@@ -3,9 +3,6 @@
 
 use ulua_vm::records::lua_state::LuaState;
 
-/// # Safety
-/// 调用方须保证 `l` 为存活且本次调用独占的 `LuaState`（由 `&mut` 接收者承载），
-/// 满足 C++ 原实现的调用契约。
 use crate::{
   functions::{
     alloc_type_user_data::alloc_type_user_data,
@@ -13,6 +10,11 @@ use crate::{
   },
   records::type_function_table_indexer::TypeFunctionTableIndexer,
 };
+
+/// # Safety
+/// `l` 须为存活且本次调用独占的 `LuaState`；`indexer` 内各 `TypeFunctionTypeId`（裸指针）
+/// 若非空须指向 type_arena 中存活的 `TypeFunctionType` 节点，其 `type_variant` 字段在
+/// 本调用期内有效。`indexer` 为 `None` 时仅推 nil，无此要求。
 pub(crate) unsafe fn push_table_indexer(
   l: &mut LuaState,
   indexer: &Option<TypeFunctionTableIndexer>,
