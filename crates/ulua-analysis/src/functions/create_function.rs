@@ -90,7 +90,7 @@ pub(crate) unsafe fn create_function(l: *mut LuaState) -> i32 {
     let (generic_types, generic_packs) = get_generics(l, 3, "types.newfunction");
 
     alloc_type_user_data(
-      l,
+      &mut *l,
       TypeFunctionTypeVariant::Function(TypeFunctionFunctionType {
         generics: generic_types,
         generic_packs,

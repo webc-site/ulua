@@ -32,7 +32,11 @@ pub(crate) unsafe fn create_generic(l: *mut LuaState) -> i32 {
       name: name.to_owned(),
     };
 
-    alloc_type_user_data(l, TypeFunctionTypeVariant::Generic(generic_type), false);
+    alloc_type_user_data(
+      &mut *l,
+      TypeFunctionTypeVariant::Generic(generic_type),
+      false,
+    );
 
     1
   }

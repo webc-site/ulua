@@ -44,7 +44,8 @@ macro_rules! create_nary_variant {
       // 错、返回的 TypeFunctionTypeId 指向 type_arena 存活节点（bump 块、地址不移动）；
       // get_type_function_type_id 按 variant tag 判别、未命中返回 null，判空/as_ref 命中后才
       // 读 components 且只读，写入对象是本地 Vec；push_type/alloc_type_user_data 前置同族
-      // 闭包约定满足。
+      // 闭包约定满足，后者 r16-v45 起收 `&mut`，故在两处调用点就地以 `&mut *l` 重建独占借用
+      // （同一存活帧、借用窗止于该语句，与同块内 `vm_l` 裸形及 `component` arena 句柄互不别名）。
       unsafe {
         let vm_l = l as *mut ulua_vm::records::lua_state::LuaState;
         let arg_size = (*vm_l).get_top();
@@ -75,7 +76,7 @@ macro_rules! create_nary_variant {
 
         if components.is_empty() {
           crate::functions::alloc_type_user_data::alloc_type_user_data(
-            l,
+            &mut *l,
             crate::type_aliases::type_function_type_variant::TypeFunctionTypeVariant::$neutral_variant(
               $neutral::default(),
             ),
@@ -85,7 +86,7 @@ macro_rules! create_nary_variant {
           crate::functions::push_type::push_type(l, components[0]);
         } else {
           crate::functions::alloc_type_user_data::alloc_type_user_data(
-            l,
+            &mut *l,
             crate::type_aliases::type_function_type_variant::TypeFunctionTypeVariant::$result_variant(
               $flat { components },
             ),

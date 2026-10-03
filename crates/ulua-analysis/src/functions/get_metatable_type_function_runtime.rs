@@ -32,7 +32,7 @@ pub(crate) unsafe fn get_metatable(l: *mut LuaState) -> i32 {
     let tfmt = get_type_function_type_id::<TypeFunctionTableType>(self_ty);
     if !tfmt.is_null() {
       if let Some(metatable) = (*tfmt).metatable {
-        alloc_type_user_data(l, (*metatable).type_variant.clone(), false);
+        alloc_type_user_data(&mut *l, (*metatable).type_variant.clone(), false);
       } else {
         (*vm_l).push_nil();
       }
@@ -42,7 +42,7 @@ pub(crate) unsafe fn get_metatable(l: *mut LuaState) -> i32 {
     let tfct = get_type_function_type_id::<TypeFunctionExternType>(self_ty);
     if !tfct.is_null() {
       if let Some(metatable) = (*tfct).metatable {
-        alloc_type_user_data(l, (*metatable).type_variant.clone(), false);
+        alloc_type_user_data(&mut *l, (*metatable).type_variant.clone(), false);
       } else {
         (*vm_l).push_nil();
       }

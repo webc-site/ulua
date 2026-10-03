@@ -47,7 +47,7 @@ pub(crate) unsafe fn push_type_pack(l: *mut LuaState, tp: TypeFunctionTypePackId
       if !(*tftp).head.is_empty() {
         lua_createtable(vm_l, (*tftp).head.len() as i32, 0);
         for (idx, el) in (*tftp).head.iter().enumerate() {
-          alloc_type_user_data(l, (**el).type_variant.clone(), false);
+          alloc_type_user_data(&mut *l, (**el).type_variant.clone(), false);
           lua_rawseti(&mut *vm_l, -2, (idx + 1) as i32);
         }
 
@@ -63,7 +63,7 @@ pub(crate) unsafe fn push_type_pack(l: *mut LuaState, tp: TypeFunctionTypePackId
       if !tfvp.is_null() {
         lua_createtable(vm_l, 0, 1);
 
-        alloc_type_user_data(l, (*(*tfvp).type_id).type_variant.clone(), false);
+        alloc_type_user_data(&mut *l, (*(*tfvp).type_id).type_variant.clone(), false);
         (*vm_l).set_field_bytes(-2, FIELD_TAIL);
       } else {
         let tfgp = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tp);
@@ -71,7 +71,7 @@ pub(crate) unsafe fn push_type_pack(l: *mut LuaState, tp: TypeFunctionTypePackId
           lua_createtable(vm_l, 0, 1);
 
           alloc_type_user_data(
-            l,
+            &mut *l,
             TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
               is_named: (*tfgp).is_named,
               is_pack: true,
@@ -107,14 +107,14 @@ unsafe fn push_type_pack_tail(
   unsafe {
     let tfvp = get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tail);
     if !tfvp.is_null() {
-      alloc_type_user_data(l, (*(*tfvp).type_id).type_variant.clone(), false);
+      alloc_type_user_data(&mut *l, (*(*tfvp).type_id).type_variant.clone(), false);
       return;
     }
 
     let tfgp = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tail);
     if !tfgp.is_null() {
       alloc_type_user_data(
-        l,
+        &mut *l,
         TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
           is_named: (*tfgp).is_named,
           is_pack: true,

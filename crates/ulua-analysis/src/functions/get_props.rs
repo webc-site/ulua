@@ -87,7 +87,7 @@ unsafe fn push_props(
 
     for (name, prop) in props {
       alloc_type_user_data(
-        l,
+        &mut *l,
         TypeFunctionTypeVariant::Singleton(TypeFunctionSingletonType {
           variant: TypeFunctionSingletonVariant::V1(TypeFunctionStringSingleton {
             value: name.clone(),
@@ -107,12 +107,12 @@ unsafe fn push_props(
       lua_createtable(vm_l, 0, size);
 
       if let Some(read_ty) = prop.read_ty {
-        alloc_type_user_data(l, (*read_ty).type_variant.clone(), false);
+        alloc_type_user_data(&mut *l, (*read_ty).type_variant.clone(), false);
         (*vm_l).set_field_bytes(-2, FIELD_READ);
       }
 
       if let Some(write_ty) = prop.write_ty {
-        alloc_type_user_data(l, (*write_ty).type_variant.clone(), false);
+        alloc_type_user_data(&mut *l, (*write_ty).type_variant.clone(), false);
         (*vm_l).set_field_bytes(-2, FIELD_WRITE);
       }
 

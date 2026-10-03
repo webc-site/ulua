@@ -33,7 +33,7 @@ pub(crate) unsafe fn deep_copy(l: *mut LuaState) -> i32 {
       );
     }
 
-    alloc_type_user_data(l, (*copy).type_variant.clone(), false);
+    alloc_type_user_data(&mut *l, (*copy).type_variant.clone(), false);
     1
   }
 }

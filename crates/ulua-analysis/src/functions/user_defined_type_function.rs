@@ -408,7 +408,7 @@ pub fn user_defined_type_function(
               let variant = serialized_ty.as_type().type_variant.clone();
               // SAFETY: VM 边界——`l` 为本帧独占存活线程；被调函数 `# Safety`
               // 契约（见 alloc_type_user_data.rs）的会话前提此刻逐项成立。
-              unsafe { alloc_type_user_data(l, variant, true) };
+              unsafe { alloc_type_user_data(&mut *l, variant, true) };
               // lua_setfield(l, -2, name.c_str());
               l_vm.set_field_str(-2, name);
             }
@@ -427,7 +427,7 @@ pub fn user_defined_type_function(
             if errors_empty {
               let variant = serialized_ty.as_type().type_variant.clone();
               // SAFETY: VM 边界——同上。
-              unsafe { alloc_type_user_data(l, variant, true) };
+              unsafe { alloc_type_user_data(&mut *l, variant, true) };
               l_vm.set_field_str(-2, name);
             }
           }
@@ -509,7 +509,7 @@ pub fn user_defined_type_function(
     // allocTypeUserData(l, serializedTy->type);
     let variant = serialized_ty.as_type().type_variant.clone();
     // SAFETY: VM 边界——同上（本帧独占存活线程）。
-    unsafe { alloc_type_user_data(l, variant, false) };
+    unsafe { alloc_type_user_data(&mut *l, variant, false) };
   }
 
   // Set up an interrupt handler for type functions to respect type checking limits and LSP cancellation requests.

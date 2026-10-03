@@ -22,17 +22,21 @@ const K_TYPE_USERDATA_TAG: i32 = 42;
 /// `TypeFunctionTypeId` 的 tagged 用户数据、写入 `frozen` 并挂 `"type"` 元表。
 ///
 /// # Safety
-/// `l` 须为类型函数 runtime 会话期存活的 `lua_State` 裸指针（cpp 侧 `lua_State* L`
-/// 的同款隐含契约）：`lua_mainthread(l)` 的 thread data 已在 runtime 安装期写入
-/// 非空 `TypeFunctionRuntime`，且本调用发生在单线程 VM 步进内、栈可按
-/// `lua_l_checkstack` 语义扩容；函数体内对这些指针的解引用全部收在下方 unsafe
-/// 块中，其前提即本段所列。
+/// `l` 的存活/独占前提已由 `&mut` 接收者类型承载（r16-v45 收形）；屏障仍保留是因为体内有真实
+/// 裸操作：入口一次就地转手 `lp = l as *mut LuaState as *mut lua_state::LuaState`（两枚不透明
+/// 镜像类型间的地址不变透传），`lua_newuserdatatagged` 返回的用户数据体写入、
+/// `get_type_function_runtime` 取回的主线程 thread data、以及 `*ptr = type_id` 与
+/// `(*type_ptr).frozen` 两处 arena 写皆按裸指针形制进行。余下调用序前提：`l` 须为类型函数
+/// runtime 会话期存活的状态（cpp 侧 `lua_State* L` 的同款隐含契约），其 mainthread 的 thread
+/// data 已在 runtime 安装期写入非空 `TypeFunctionRuntime`，且本调用发生在单线程 VM 步进内、
+/// 栈可按 `lua_l_checkstack` 语义扩容。
 pub(crate) unsafe fn alloc_type_user_data(
-  l: *mut LuaState,
+  l: &mut LuaState,
   type_variant: TypeFunctionTypeVariant,
   frozen: bool,
 ) {
-  // Safety: l 是 Lua VM 调注册闭包时传入的存活 lua_State；lua_l_checkstack 先保证栈可增 2 槽；
+  // Safety: `l` 由 `&mut` 保证存活且本次调用独占，转手后的 `lp` 即同一地址在 vm 侧镜像类型上的
+  // 裸形；lua_l_checkstack 先保证栈可增 2 槽；
   // lua_newuserdatatagged 分配失败走 VM 错误路径、成功返回按最大对齐的 K_TYPE_USERDATA_TAG
   // 用户数据体，容量恰为 size_of::<TypeFunctionTypeId>()；get_type_function_runtime 取回注册期
   // 写入主线程 thread data 的非空 TypeFunctionRuntime（null 时 Handle::from_ptr 直接 panic），
@@ -40,22 +44,21 @@ pub(crate) unsafe fn alloc_type_user_data(
   // TypeFunctionTypeId 即 *const TypeFunctionType 裸值，转 *mut 后写 frozen 指向的是该 arena
   // 可变内存；TYPE 为 NUL 结尾字节串，元表缺失时 lua_setmetatable 为无操作。
   unsafe {
-    lua_l_checkstack(&mut *(l as *mut lua_state::LuaState), 2, "allocating type");
+    let lp = l as *mut LuaState as *mut lua_state::LuaState;
 
-    let ptr = lua_newuserdatatagged(
-      l as *mut lua_state::LuaState,
-      size_of::<TypeFunctionTypeId>(),
-      K_TYPE_USERDATA_TAG,
-    ) as *mut TypeFunctionTypeId;
+    lua_l_checkstack(&mut *lp, 2, "allocating type");
 
-    let runtime = Handle::from_ptr(get_type_function_runtime(l));
+    let ptr = lua_newuserdatatagged(lp, size_of::<TypeFunctionTypeId>(), K_TYPE_USERDATA_TAG)
+      as *mut TypeFunctionTypeId;
+
+    let runtime = Handle::from_ptr(get_type_function_runtime(l as *mut LuaState));
     let type_id = allocate_type_function_type(runtime, type_variant);
     *ptr = type_id;
 
     let type_ptr = *ptr as *mut TypeFunctionType;
     (*type_ptr).frozen = frozen;
 
-    (*(l as *mut lua_state::LuaState)).get_metatable_by_bytes(TYPE);
-    (*(l as *mut lua_state::LuaState)).set_metatable(-2);
+    (*lp).get_metatable_by_bytes(TYPE);
+    (*lp).set_metatable(-2);
   }
 }

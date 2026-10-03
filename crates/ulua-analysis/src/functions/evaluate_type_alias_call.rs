@@ -278,7 +278,7 @@ pub(crate) unsafe fn evaluate_type_alias_call(l: *mut LuaState) -> i32 {
 
     // allocTypeUserData(l, serializedTy->type, /* frozen */ true);
     let type_variant = (*serialized_ty).type_variant.clone();
-    alloc_type_user_data(l, type_variant, true);
+    alloc_type_user_data(&mut *l, type_variant, true);
 
     // return 1;
     1

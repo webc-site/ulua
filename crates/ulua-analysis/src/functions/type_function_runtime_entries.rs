@@ -103,7 +103,7 @@ pub(crate) unsafe fn get_table_prop(l: *mut LuaState, prefix: &str, read: bool) 
         .write_ty
     };
     if let Some(prop_ty) = prop_ty {
-      alloc_type_user_data(l, (*prop_ty).type_variant.clone(), false);
+      alloc_type_user_data(&mut *l, (*prop_ty).type_variant.clone(), false);
     } else {
       (*vm_l).push_nil();
     }
@@ -261,7 +261,7 @@ pub(crate) unsafe fn get_parent(l: *mut LuaState, read: bool) -> i32 {
       (*tfct).write_parent
     };
     if let Some(parent) = parent {
-      alloc_type_user_data(l, (*parent).type_variant.clone(), false);
+      alloc_type_user_data(&mut *l, (*parent).type_variant.clone(), false);
     } else {
       (*vm_l).push_nil();
     }

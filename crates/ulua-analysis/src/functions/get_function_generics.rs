@@ -53,7 +53,7 @@ pub(crate) unsafe fn get_function_generics(l: *mut LuaState) -> i32 {
     let mut pos: i32 = 1;
 
     for el in &(*tfft).generics {
-      alloc_type_user_data(l, (*(*el)).type_variant.clone(), false);
+      alloc_type_user_data(&mut *l, (*(*el)).type_variant.clone(), false);
       lua_rawseti(&mut *vm_l, -2, pos);
       pos += 1;
     }
@@ -62,7 +62,7 @@ pub(crate) unsafe fn get_function_generics(l: *mut LuaState) -> i32 {
       let gty = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(*el);
       LUAU_ASSERT!(!gty.is_null());
       alloc_type_user_data(
-        l,
+        &mut *l,
         TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
           is_named: (*gty).is_named,
           is_pack: true,

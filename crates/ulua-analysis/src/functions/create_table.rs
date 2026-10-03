@@ -130,7 +130,7 @@ pub(crate) unsafe fn create_table(l: *mut LuaState) -> i32 {
     }
 
     alloc_type_user_data(
-      l,
+      &mut *l,
       TypeFunctionTypeVariant::Table(TypeFunctionTableType {
         props,
         indexer,

@@ -44,7 +44,7 @@ pub(crate) unsafe fn create_negation(l: *mut LuaState) -> i32 {
     }
 
     let negation = TypeFunctionNegationType { type_id: arg };
-    alloc_type_user_data(l, TypeFunctionTypeVariant::Negation(negation), false);
+    alloc_type_user_data(&mut *l, TypeFunctionTypeVariant::Negation(negation), false);
 
     1
   }

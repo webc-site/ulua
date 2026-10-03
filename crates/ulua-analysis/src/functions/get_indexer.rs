@@ -43,11 +43,11 @@ pub(crate) unsafe fn get_indexer(l: *mut LuaState) -> i32 {
         let indexer = (*tftt).indexer.as_ref().expect(
           "else 支由同判据 is_none 为假进入，indexer 必为 Some（cpp 同位 is_none 后直 deref）",
         );
-        alloc_type_user_data(l, (*indexer.key_type).type_variant.clone(), false);
+        alloc_type_user_data(&mut *l, (*indexer.key_type).type_variant.clone(), false);
         (*vm_l).set_field_bytes(-2, FIELD_INDEX);
-        alloc_type_user_data(l, (*indexer.value_type).type_variant.clone(), false);
+        alloc_type_user_data(&mut *l, (*indexer.value_type).type_variant.clone(), false);
         (*vm_l).set_field_bytes(-2, FIELD_READ_RESULT);
-        alloc_type_user_data(l, (*indexer.value_type).type_variant.clone(), false);
+        alloc_type_user_data(&mut *l, (*indexer.value_type).type_variant.clone(), false);
         (*vm_l).set_field_bytes(-2, FIELD_WRITE_RESULT);
       }
 
@@ -65,11 +65,11 @@ pub(crate) unsafe fn get_indexer(l: *mut LuaState) -> i32 {
         let indexer = (*tfct).indexer.as_ref().expect(
           "else 支由同判据 is_none 为假进入，indexer 必为 Some（cpp 同位 is_none 后直 deref）",
         );
-        alloc_type_user_data(l, (*indexer.key_type).type_variant.clone(), false);
+        alloc_type_user_data(&mut *l, (*indexer.key_type).type_variant.clone(), false);
         (*vm_l).set_field_bytes(-2, FIELD_INDEX);
-        alloc_type_user_data(l, (*indexer.value_type).type_variant.clone(), false);
+        alloc_type_user_data(&mut *l, (*indexer.value_type).type_variant.clone(), false);
         (*vm_l).set_field_bytes(-2, FIELD_READ_RESULT);
-        alloc_type_user_data(l, (*indexer.value_type).type_variant.clone(), false);
+        alloc_type_user_data(&mut *l, (*indexer.value_type).type_variant.clone(), false);
         (*vm_l).set_field_bytes(-2, FIELD_WRITE_RESULT);
       }
 

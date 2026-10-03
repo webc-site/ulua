@@ -35,7 +35,7 @@ pub(crate) unsafe fn create_singleton(l: *mut LuaState) -> i32 {
     // 有效 lua_State 的入参契约。
     unsafe {
       alloc_type_user_data(
-        l,
+        &mut *l,
         TypeFunctionTypeVariant::Singleton(TypeFunctionSingletonType {
           variant: TypeFunctionSingletonVariant::V0(TypeFunctionBooleanSingleton { value }),
         }),
@@ -52,7 +52,7 @@ pub(crate) unsafe fn create_singleton(l: *mut LuaState) -> i32 {
     // 指向该存活 VM 字符串的切片；`alloc_type_user_data` 在存活 `l` 上压入 userdata。
     unsafe {
       alloc_type_user_data(
-        l,
+        &mut *l,
         TypeFunctionTypeVariant::Singleton(TypeFunctionSingletonType {
           variant: TypeFunctionSingletonVariant::V1(TypeFunctionStringSingleton {
             value: value.to_owned(),
@@ -70,7 +70,7 @@ pub(crate) unsafe fn create_singleton(l: *mut LuaState) -> i32 {
     // `alloc_type_user_data` 在此状态上压入 NilType userdata。
     unsafe {
       alloc_type_user_data(
-        l,
+        &mut *l,
         TypeFunctionTypeVariant::Primitive(TypeFunctionPrimitiveType::new(Type::NilType)),
         false,
       )

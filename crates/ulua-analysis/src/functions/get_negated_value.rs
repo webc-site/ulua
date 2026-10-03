@@ -27,7 +27,7 @@ pub(crate) unsafe fn get_negated_value(l: *mut LuaState) -> i32 {
     let tfnt = get_type_function_type_id::<TypeFunctionNegationType>(self_ty);
 
     if !tfnt.is_null() {
-      alloc_type_user_data(l, (*(*tfnt).type_id).type_variant.clone(), false);
+      alloc_type_user_data(&mut *l, (*(*tfnt).type_id).type_variant.clone(), false);
     } else {
       throw_type_error(
         vm_l,

@@ -56,7 +56,7 @@ pub(crate) unsafe fn create_optional(l: *mut LuaState) -> i32 {
 
     let union_type = TypeFunctionUnionType { components };
     let union_variant = TypeFunctionTypeVariant::Union(union_type);
-    alloc_type_user_data(l, union_variant, false);
+    alloc_type_user_data(&mut *l, union_variant, false);
 
     1
   }
