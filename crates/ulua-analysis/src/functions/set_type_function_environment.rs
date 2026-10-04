@@ -68,7 +68,7 @@ pub(crate) fn set_type_function_environment(l: &mut LuaState) {
     l.pop(1);
 
     // Register Buffer library
-    luaopen_buffer(l.as_mut_ptr());
+    luaopen_buffer(l);
     l.pop(1);
 
     // Register base library
