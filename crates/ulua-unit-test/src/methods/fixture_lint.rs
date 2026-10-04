@@ -11,7 +11,7 @@ const MAIN_MODULE_NAME: &str = "MainModule";
 impl Fixture {
   pub fn lint(&mut self, source: &str, lint_options: Option<LintOptions>) -> LintResult {
     let module_name = ModuleName::from(MAIN_MODULE_NAME);
-    self.config_resolver.default_config.mode = Mode::Strict;
+    self.config_resolver.default_config_mut().mode = Mode::Strict;
     self
       .file_resolver
       .source

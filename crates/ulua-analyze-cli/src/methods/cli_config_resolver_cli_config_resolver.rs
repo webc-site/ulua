@@ -1,7 +1,4 @@
-use alloc::{
-  rc::Rc,
-  vec::Vec,
-};
+use alloc::{rc::Rc, vec::Vec};
 use core::cell::{RefCell, UnsafeCell};
 
 use ulua_analysis::type_aliases::collections::HashMap;

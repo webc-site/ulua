@@ -31,7 +31,7 @@ impl AcFixtureImpl {
       retain_full_type_graphs: true,
       ..Default::default()
     };
-    self.base.config_resolver.default_config.mode = Mode::NoCheck;
+    self.base.config_resolver.default_config_mut().mode = Mode::NoCheck;
     // suggester 启用走 frontend 独占实例（`&mut dyn` chokepoint）：夹具句柄上
     // 的拷贝对 frontend 不可见，只有此处能改到被查询的那份。
     let frontend = self.get_frontend();

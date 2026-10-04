@@ -1,10 +1,6 @@
 //! Port of `CliConfigResolver`（`CLI/src/Analyze.cpp:231-321`）。
 
-use alloc::{
-  rc::Rc,
-  string::String,
-  vec::Vec,
-};
+use alloc::{rc::Rc, string::String, vec::Vec};
 use core::cell::{RefCell, UnsafeCell};
 
 use ulua_analysis::type_aliases::collections::HashMap;

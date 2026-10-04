@@ -1,8 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
-use core::{
-  ptr::NonNull,
-  sync::atomic::AtomicI32,
-};
+use core::{ptr::NonNull, sync::atomic::AtomicI32};
 
 use crate::{
   enums::solver_mode::SolverMode,

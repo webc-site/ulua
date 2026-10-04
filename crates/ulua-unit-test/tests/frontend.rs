@@ -497,7 +497,7 @@ fn frontend_check_without_builtin_next() {
   let mut frontend = Frontend::new_boxed(
     mode,
     Box::new(file_resolver),
-    Some(&mut config_resolver.base),
+    Box::new(config_resolver.clone()),
     FrontendOptions::default(),
   );
 
@@ -1557,7 +1557,7 @@ fn frontend_discard_type_graphs() {
   let mut fe = Frontend::new_boxed(
     mode,
     Box::new(file_resolver),
-    Some(&mut config_resolver.base),
+    Box::new(config_resolver.clone()),
     FrontendOptions::default(),
   );
 
@@ -1654,7 +1654,7 @@ fn frontend_dont_reparse_clean_file_when_linting() {
     .base
     .base
     .config_resolver
-    .default_config
+    .default_config_mut()
     .enabled_lint
     .enable_warning(LintWarning::CODE_FOR_RANGE);
 
@@ -2229,7 +2229,7 @@ fn frontend_it_should_be_safe_to_stringify_errors_when_full_type_graph_is_discar
   let mut fe = Frontend::new_boxed(
     mode,
     Box::new(file_resolver),
-    Some(&mut config_resolver.base),
+    Box::new(config_resolver.clone()),
     FrontendOptions::default(),
   );
 
@@ -4556,7 +4556,7 @@ fn frontend_test_lint_uses_correct_config() {
     .base
     .base
     .config_resolver
-    .config_files
+    .config_files_mut()
     .insert(ModuleName::from("Module/A"), config);
 
   let mut opts = FrontendOptions {
@@ -4572,7 +4572,7 @@ fn frontend_test_lint_uses_correct_config() {
     .base
     .base
     .config_resolver
-    .config_files
+    .config_files_mut()
     .get_mut("Module/A")
     .expect("expected config")
     .enabled_lint

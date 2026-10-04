@@ -2,7 +2,8 @@ use ulua_analysis::{
   enums::solver_mode::SolverMode,
   functions::freeze::freeze,
   records::{
-    frontend::Frontend, frontend_options::FrontendOptions, null_file_resolver::NullFileResolver,
+    frontend::Frontend, frontend_options::FrontendOptions,
+    null_config_resolver::NullConfigResolver, null_file_resolver::NullFileResolver,
     null_module_resolver::NullModuleResolver,
   },
 };
@@ -27,13 +28,13 @@ pub unsafe extern "C-unwind" fn conformance_types_setup(l: *mut LuaState) {
   // cpp `Conformance.test.cpp:2025`：`Frontend frontend{mode, &fileResolver, &configResolver}`。
   // `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」全序列，本入口
   // 免手写 unsafe ctor + `wire_self_pointers`；`file_resolver` 所有权移交 frontend
-  // 独占（null 语义在 cpp 侧靠 `configResolver` 缺位表达，解析器恒有实例；本入口
-  // 用 NullFileResolver 对应 cpp 传入的活对象），C++ `configResolver` 缺位由
-  // `None` 显式承载（同 nullptr 语义，本测试不查 getConfig）。
+  // 独占（cpp 侧解析器恒有活实例，本入口用 NullFileResolver 对应传入的活对象）；
+  // C++ `configResolver` 缺位（nullptr、从不查询 getConfig）由 `NullConfigResolver`
+  // 活实例承载（对齐 NullFileResolver 手法，取消 Option 形态的半截句柄）。
   let mut frontend = Frontend::new_boxed(
     mode,
     Box::new(file_resolver),
-    None,
+    Box::new(NullConfigResolver::new()),
     FrontendOptions::default(),
   );
 
