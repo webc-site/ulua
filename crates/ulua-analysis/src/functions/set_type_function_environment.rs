@@ -38,60 +38,62 @@ unsafe extern "C-unwind" fn print_thunk(l: *mut lua_state::LuaState) -> i32 {
 
 /// 对应 C++ `void setTypeFunctionEnvironment(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:2094`）。
 ///
-/// 本函数是 safe fn：形参为 `&mut LuaState`，存活/独占由引用类型承载；体内 `unsafe`
-/// 块只因 `l.push_c_function` 仍是 VM 侧收 `*const c_char` debugname 的 C 形态不安全
-/// 门面（本票 `luaopen_*` 收形后皆引用形安全直调，不再是 unsafe 理由），
-/// 调用方无需承担任何内存安全前提。
+/// 本函数是 safe fn：形参为 `&mut LuaState`，存活/独占由引用类型承载；体内不安全只剩
+/// `l.push_c_function` 两处窄块——它仍是 VM 侧收 `*const c_char` debugname 的 C 形态门面
+/// （`luaopen_*` 收形后皆引用形安全直调），调用方无需承担任何内存安全前提。
 ///
 /// 调用序契约（正确性，非内存安全）：`l` 须是即将承载类型函数库、且尚未重复初始化的
 /// 主线程状态；本函数在其上创建并注册 `TypeFunctionRuntime` userdatum 与全部原生函数
 /// 闭包，重复调用会覆盖注册（非 UB）。
 pub(crate) fn set_type_function_environment(l: &mut LuaState) {
-  unsafe {
-    // Register math library
-    luaopen_math(l);
-    l.pop(1);
+  // Register math library
+  luaopen_math(l);
+  l.pop(1);
 
-    // Register table library
-    luaopen_table(l);
-    l.pop(1);
+  // Register table library
+  luaopen_table(l);
+  l.pop(1);
 
-    // Register string library
-    luaopen_string(l);
-    l.pop(1);
+  // Register string library
+  luaopen_string(l);
+  l.pop(1);
 
-    // Register bit32 library
-    luaopen_bit32(l);
-    l.pop(1);
+  // Register bit32 library
+  luaopen_bit32(l);
+  l.pop(1);
 
-    // Register utf8 library
-    luaopen_utf_8(l);
-    l.pop(1);
+  // Register utf8 library
+  luaopen_utf_8(l);
+  l.pop(1);
 
-    // Register Buffer library
-    luaopen_buffer(l);
-    l.pop(1);
+  // Register Buffer library
+  luaopen_buffer(l);
+  l.pop(1);
 
-    // Register base library
-    luaopen_base(l);
-    l.pop(1);
+  // Register base library
+  luaopen_base(l);
+  l.pop(1);
 
-    // Remove certain global functions from the base library
-    // static const char* unavailableGlobals[] = {"gcinfo", "getfenv", "newproxy", "setfenv", "pcall", "xpcall"};
-    let unavailable_globals: [&[u8]; 6] = [
-      GLOBAL_GCINFO,
-      GLOBAL_GETFENV,
-      GLOBAL_NEWPROXY,
-      GLOBAL_SETFENV,
-      GLOBAL_PCALL,
-      GLOBAL_XPCALL,
-    ];
-    for &name in &unavailable_globals {
-      l.push_c_function(Some(unsupported_function_thunk), null());
-      l.set_global_bytes(name);
-    }
-
-    l.push_c_function(Some(print_thunk), null());
-    l.set_global_bytes(GLOBAL_PRINT);
+  // Remove certain global functions from the base library
+  // static const char* unavailableGlobals[] = {"gcinfo", "getfenv", "newproxy", "setfenv", "pcall", "xpcall"};
+  let unavailable_globals: [&[u8]; 6] = [
+    GLOBAL_GCINFO,
+    GLOBAL_GETFENV,
+    GLOBAL_NEWPROXY,
+    GLOBAL_SETFENV,
+    GLOBAL_PCALL,
+    GLOBAL_XPCALL,
+  ];
+  for &name in &unavailable_globals {
+    // Safety: `unsupported_function_thunk` 是本文件 `unsafe extern "C-unwind"` 臂（与
+    // `luaLib` 静态表同卫生域），`null()` debugname 是 VM 约定的「无调试名」哨兵；压入的
+    // cfunction 由紧随的 `set_global_bytes` 当场消费。
+    unsafe { l.push_c_function(Some(unsupported_function_thunk), null()) };
+    l.set_global_bytes(name);
   }
+
+  // Safety: 同上——`print_thunk` 为本文件合法 `unsafe extern "C-unwind"` 臂，`null()` 为
+  // VM 约定的无调试名哨兵，压入结果由紧随其后的 `set_global_bytes` 消费。
+  unsafe { l.push_c_function(Some(print_thunk), null()) };
+  l.set_global_bytes(GLOBAL_PRINT);
 }
