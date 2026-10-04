@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use core::ptr::{from_mut, from_ref};
+use core::ptr::from_ref;
 
 use ulua_ast::{
   enums::ast_expr_ref::AstExprRef,
@@ -13,8 +13,8 @@ use ulua_ast::{
     ast_stat_if::AstStatIf,
     ast_visitor::AstVisitor,
   },
-  rtti::ast_node_try_as,
-  visit::{ast_expr_visit, ast_stat_visit},
+  rtti::{ast_node_try_as, ast_node_try_as_mut},
+  visit::{ast_expr_visit_ref, ast_stat_visit_ref},
 };
 use ulua_config::enums::code::Code;
 
@@ -33,15 +33,15 @@ pub struct LintDuplicateCondition<'ctx> {
 
 impl<'ctx> AstVisitor for LintDuplicateCondition<'ctx> {
   fn visit_stat_if(&mut self, node: &mut AstStatIf) -> bool {
-    self.visit_ast_stat_if(from_mut(node))
+    self.visit_ast_stat_if(node)
   }
 
   fn visit_expr_if_else(&mut self, node: &mut AstExprIfElse) -> bool {
-    self.visit_ast_expr_if_else(from_mut(node))
+    self.visit_ast_expr_if_else(node)
   }
 
   fn visit_expr_binary(&mut self, node: &mut AstExprBinary) -> bool {
-    self.visit_ast_expr_binary(from_mut(node))
+    self.visit_ast_expr_binary(node)
   }
 
   fn visit_attr(&mut self, _node: &mut AstAttr) -> bool {
@@ -127,100 +127,91 @@ impl<'ctx> LintDuplicateCondition<'ctx> {
 
 // —— 原 methods/lint_duplicate_condition_visit_linter.rs ——
 impl<'ctx> LintDuplicateCondition<'ctx> {
-  pub(crate) fn visit_ast_stat_if(&mut self, stat: *mut AstStatIf) -> bool {
-    let Some(stat_ref) = alias_opt(stat) else {
+  pub(crate) fn visit_ast_stat_if(&mut self, stat: &mut AstStatIf) -> bool {
+    // `&mut` 形参即非空/独占证明（hook 直接出借 `&mut AstStatIf`），原
+    // `alias_opt` 判空折叠随指针形参退役。
+    let Some(elsebody) = stat.elsebody.get_mut() else {
       return true;
     };
-    let Some(elsebody) = stat_ref.elsebody.get() else {
-      return true;
-    };
-    if ast_node_try_as::<AstStatIf>(elsebody).is_none() {
+    if ast_node_try_as_mut::<AstStatIf>(elsebody).is_none() {
       return true;
     }
     let mut conditions = Vec::with_capacity(2);
-    let mut curr = Some(stat_ref);
+    let mut curr = Some(stat);
     while let Some(head) = curr {
-      unsafe {
-        ast_expr_visit(head.condition.as_ptr(), self);
-        ast_stat_visit(head.thenbody.cast::<AstStat>().as_ptr(), self);
-      }
+      // 子槽已句柄化，独占借用链由 `get_mut()` 逐级供给，`_ref` 门面全链路 safe。
+      ast_expr_visit_ref(head.condition.get_mut(), self);
+      ast_stat_visit_ref(head.thenbody.cast::<AstStat>().get_mut(), self);
       conditions.push(head.condition.as_ptr());
-      if let Some(else_stat) = head.elsebody.get() {
-        if let Some(next) = ast_node_try_as::<AstStatIf>(else_stat) {
+      // 共享读先探类位（等价原共享下转判别），再物化独占借用：命中推进链，
+      // 未命中遍历子树（对应旧 `elsebody.as_ptr()` 门面调用）。
+      let is_chain_if = head.elsebody.is::<AstStatIf>();
+      if let Some(else_stat) = head.elsebody.get_mut() {
+        if is_chain_if {
+          let next =
+            ast_node_try_as_mut::<AstStatIf>(else_stat).expect("类位已探明，下转命中恒成立");
           curr = Some(next);
           continue;
         }
-        unsafe {
-          ast_stat_visit(head.elsebody.as_ptr(), self);
-        }
+        ast_stat_visit_ref(else_stat, self);
       }
       break;
     }
     self.detect_duplicates(&conditions);
     false
   }
-  pub(crate) fn visit_ast_expr_if_else(&mut self, expr: *mut AstExprIfElse) -> bool {
-    let Some(expr_ref) = alias_opt(expr) else {
-      return true;
-    };
-    if !matches!(
-      expr_ref.false_expr.get().as_expr_ref(),
-      AstExprRef::IfElse(_)
-    ) {
+  pub(crate) fn visit_ast_expr_if_else(&mut self, expr: &mut AstExprIfElse) -> bool {
+    // `&mut` 形参退役判空折叠；前置形态判别为只读判型，共享借用止于语句内。
+    if !matches!(expr.false_expr.get().as_expr_ref(), AstExprRef::IfElse(_)) {
       return true;
     }
     let mut conditions = Vec::with_capacity(2);
-    let mut curr = Some(expr_ref);
+    let mut curr = Some(expr);
     while let Some(head) = curr {
-      // 子节点已句柄化恒非空；ast_expr_visit 为既有裸指针门面，经 as_ptr 桥接。
-      unsafe {
-        ast_expr_visit(head.condition.as_ptr(), self);
-        ast_expr_visit(head.true_expr.as_ptr(), self);
-      }
+      // 子节点已句柄化恒非空；`get_mut()` 逐级供给独占借用，`_ref` 门面全链路 safe。
+      ast_expr_visit_ref(head.condition.get_mut(), self);
+      ast_expr_visit_ref(head.true_expr.get_mut(), self);
       conditions.push(head.condition.as_ptr());
-      // false_expr 句柄化后判空折叠消失，RTTI 下转走共享引用门面（与 cpp is<AstExprIfElse> 等价）。
-      if let Some(next) = ast_node_try_as::<AstExprIfElse>(&head.false_expr.get().base) {
+      // false_expr 句柄化后判空折叠消失；先共享读探类位（与 cpp is<AstExprIfElse>
+      // 等价），命中则物化独占借地下转推进链，否则独占遍历子树。
+      if head.false_expr.is::<AstExprIfElse>() {
+        let next = ast_node_try_as_mut::<AstExprIfElse>(head.false_expr.get_mut())
+          .expect("类位已探明，下转命中恒成立");
         curr = Some(next);
         continue;
       }
-      unsafe {
-        ast_expr_visit(head.false_expr.as_ptr(), self);
-      }
+      ast_expr_visit_ref(head.false_expr.get_mut(), self);
       break;
     }
     self.detect_duplicates(&conditions);
     false
   }
-  pub(crate) fn visit_ast_expr_binary(&mut self, expr: *mut AstExprBinary) -> bool {
-    let Some(expr_ref) = alias_opt(expr) else {
-      return true;
-    };
-    if expr_ref.op != AstExprBinaryOp::And && expr_ref.op != AstExprBinaryOp::Or {
+  pub(crate) fn visit_ast_expr_binary(&mut self, expr: &mut AstExprBinary) -> bool {
+    // `&mut` 形参退役判空折叠；`op` 为 Copy 字段读取，共享只读借用止于各判别式。
+    if expr.op != AstExprBinaryOp::And && expr.op != AstExprBinaryOp::Or {
       return true;
     }
-    if expr_ref.op == AstExprBinaryOp::Or
-      && let Some(la) = expr_ref.left.try_as::<AstExprBinary>()
+    if expr.op == AstExprBinaryOp::Or
+      && let Some(la) = expr.left.try_as_mut::<AstExprBinary>()
       && la.op == AstExprBinaryOp::And
     {
-      // left/right 句柄的 try_as：借用半径由所属节点引用供给，不落指针门面。
+      // left/right 句柄的只读 try_as：借用止于布尔读出；后续遍历再逐级出借独占。
       let lb = la.left.try_as::<AstExprBinary>();
       let rb = la.right.try_as::<AstExprBinary>();
       let lb_is_and = lb.is_some_and(|b| b.op == AstExprBinaryOp::And);
       let rb_is_and = rb.is_some_and(|b| b.op == AstExprBinaryOp::And);
-      if lb_is_and || rb_is_and {
-        // This is an and-chain longer than two; continue with duplicate detection.
-      } else {
-        unsafe {
-          // left/right 已句柄化恒非空；ast_expr_visit 为既有裸指针门面，经 as_ptr 桥接。
-          ast_expr_visit(la.left.as_ptr(), self);
-          ast_expr_visit(la.right.as_ptr(), self);
-          ast_expr_visit(expr_ref.right.as_ptr(), self);
-        }
+      if !lb_is_and && !rb_is_and {
+        // left/right/expr.right 已句柄化恒非空；`get_mut()` 供给独占借用喂
+        // `_ref` 门面（la 借 `expr.left`、与 `expr.right` 字段互斥，借用不相交）。
+        ast_expr_visit_ref(la.left.get_mut(), self);
+        ast_expr_visit_ref(la.right.get_mut(), self);
+        ast_expr_visit_ref(expr.right.get_mut(), self);
         return false;
       }
+      // and-chain longer than two; continue with duplicate detection.
     }
     let mut conditions = Vec::with_capacity(2);
-    self.extract_op_chain(&mut conditions, &expr_ref.base, expr_ref.op);
+    self.extract_op_chain(&mut conditions, &expr.base, expr.op);
     self.detect_duplicates(&conditions);
     false
   }
