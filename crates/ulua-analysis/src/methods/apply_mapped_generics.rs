@@ -10,35 +10,13 @@ use crate::{
   macros::{substitution_entry::substitution_entry, substitution_vtable},
   methods::subtyping_bind_generic::dense_hash_map_find_no_default,
   records::{
-    apply_mapped_generics::ApplyMappedGenerics,
-    arena_handle::{Handle, alias_ref},
-    builtin_types::BuiltinTypes,
-    extern_type::ExternType,
-    function_type::FunctionType,
-    generic_type::GenericType,
-    internal_error_reporter::InternalErrorReporter,
-    intersection_builder::IntersectionBuilder,
-    subtyping_environment::SubtypingEnvironment,
-    type_arena::TypeArena,
-    union_builder::UnionBuilder,
+    apply_mapped_generics::ApplyMappedGenerics, extern_type::ExternType,
+    function_type::FunctionType, generic_type::GenericType,
+    intersection_builder::IntersectionBuilder, union_builder::UnionBuilder,
   },
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
 };
 
-impl ApplyMappedGenerics {
-  pub fn apply_mapped_generics(
-    &mut self,
-    builtin_types: Handle<BuiltinTypes>,
-    arena: Handle<TypeArena>,
-    env: &mut SubtypingEnvironment,
-    ice_reporter: Handle<InternalErrorReporter>,
-  ) {
-    self.builtin_types = builtin_types;
-    self.arena = arena;
-    self.env = env as *mut _;
-    self.ice_reporter = ice_reporter;
-  }
-}
 // C++ `ApplyMappedGenerics` overrides `isDirty` / `clean` / `ignoreChildren`
 // (it does NOT override `ignoreChildrenVisit`, so that defaults to
 // `ignoreChildren`). The inherited `substitute` traversal dispatches into these
@@ -51,20 +29,14 @@ impl ApplyMappedGenerics {
 }
 
 impl ApplyMappedGenerics {
-  /// # Safety
-  /// `ty` 为类型 arena bump 节点句柄；本函数经 `self.env`/`self.builtin_types`/`self.arena`
-  /// 三个裸指针（由 apply_mapped_generics 每轮从调用方独占借用的 `&mut` 接线，比本遍历长寿）
-  /// 解引用读取。调用方须保证这些指针非空、对齐且在此遍历期内不被其他可变借用。单线程独占。对应
+  /// `ty` 为类型 arena bump 节点句柄；`self.env`/`self.builtin_types`/`self.arena`
+  /// 均为 `Handle`（非空由类型编码，构造期自调用方独占 `&mut` 接线、比本遍历长寿），
+  /// 解引用收口在 arena_handle 单点，本函数无 `unsafe`。
   pub(crate) fn clean_type_id(&mut self, ty: TypeId) -> TypeId {
-    // Safety: builtin_types 由 apply_mapped_generics 在每轮映射前从调用方存活的
-    // &mut BuiltinTypes（C++ NotNull 语义）接线为非空裸指针，比本遍历长寿；取共享
-    // 引用仅读常量 TypeId，与 env 指向的对象不重叠。
     let bt = self.builtin_types.get();
-    // Safety: self.env 同样每轮接线自调用方独占借用的 &mut SubtypingEnvironment，
-    // 指向存活对象；ty 为类型 arena bump 节点指针，get_mapped_type_bounds 按其
-    // 契约缺界时以 ice_reporter（Handle 编码非空的存活报告器）报告，返回引用借用 env
-    // 内部表，本块之后 env 无其他访问。
-    let bounds = unsafe { (*self.env).get_mapped_type_bounds(ty, self.ice_reporter) };
+    // get_mapped_type_bounds 按其契约缺界时以 ice_reporter（Handle 编码非空的存活
+    // 报告器）报告并发散；返回引用借用 env 内部表，其后对 env 无其他访问。
+    let bounds = self.env.get_mut().get_mapped_type_bounds(ty, self.ice_reporter);
     let lower_bound = &bounds.lower_bound;
     let upper_bound = &bounds.upper_bound;
 
@@ -101,14 +73,13 @@ impl ApplyMappedGenerics {
   }
 
   pub fn clean_type_pack_id(&mut self, tp: TypePackId) -> TypePackId {
-    let env = alias_ref(self.env);
+    let env = self.env.get();
     let result = env.lookup_generic_pack(tp);
     if let Some(mapped_gen) = result.get_if::<TypePackId>() {
       return *mapped_gen;
     }
     LUAU_ASSERT!(false);
-    // Safety: builtin_types 每轮接线自存活的 &mut BuiltinTypes（NotNull 语义），
-    // 此处只读常量 pack id。
+    // builtin_types 为构造期接线的存活 Handle（NotNull 语义），此处只读常量 pack id。
     self.builtin_types.get().any_type_pack
   }
 }
@@ -119,11 +90,11 @@ impl ApplyMappedGenerics {
   /// `ignoreChildrenVisit` 语义即 `Tarjan::ignoreChildrenVisit`
   /// `Substitution.cpp:561` 的定制覆写）。
   ///
-  /// 降 safe 说明：`ty` 为 arena `TypeId` 句柄（同 `get_type_id` 门面纪律），
-  /// 对 `self.env`（构造期 `NotNull<SubtypingEnvironment>` 接线、比本对象长寿）
-  /// 与 `(*ty).persistent` 的解引用收进窄 `unsafe` 块。
+  /// 降 safe 说明：`ty` 为 arena `TypeId` 句柄（同 `get_type_id` 门面纪律）；
+  /// `self.env` 为 `Handle`（非空由类型编码，构造期自调用方独占 `&mut` 接线），
+  /// 解引用收口在 arena_handle 单点，本函数无 `unsafe`。
   pub fn ignore_children_type_id(&mut self, ty: TypeId) -> bool {
-    let env = alias_ref(self.env);
+    let env = self.env.get();
     if get_type::get::<ExternType>(ty).is_some() {
       return true;
     }
@@ -150,10 +121,10 @@ impl ApplyMappedGenerics {
 
 impl ApplyMappedGenerics {
   pub fn is_dirty_type_id(&mut self, ty: TypeId) -> bool {
-    alias_ref(self.env).contains_mapped_type(ty)
+    self.env.get().contains_mapped_type(ty)
   }
 
   pub fn is_dirty_type_pack_id(&mut self, tp: TypePackId) -> bool {
-    alias_ref(self.env).contains_mapped_pack(tp)
+    self.env.get().contains_mapped_pack(tp)
   }
 }

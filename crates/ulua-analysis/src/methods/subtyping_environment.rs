@@ -96,7 +96,7 @@ impl SubtypingEnvironment {
       builtin_types,
       arena,
       ice_reporter,
-      env: self as *mut SubtypingEnvironment,
+      env: Handle::from_mut(self),
     };
     amg.substitute_type_id(ty)
   }
