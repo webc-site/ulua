@@ -66,7 +66,7 @@ macro_rules! rust_flags {
   };
 }
 
-/// 全表清单（219 条）。生成自四个模块的宏定义，顺序与源文件一致。
+/// 全表清单（220 条）。生成自四个模块的宏定义，顺序与源文件一致。
 fn rust_table() -> Vec<FlagEntry> {
   rust_flags! {
     // ---- fflag.rs ----
@@ -161,6 +161,7 @@ fn rust_table() -> Vec<FlagEntry> {
     fflag::LUAU_JIT_SETMETATABLE_FASTCALL => LuauJitSetmetatableFastcall false,
     fflag::LUAU_JIT_SETTABLE_HASH_INLINE => LuauJitSettableHashInline false,
     fflag::LUAU_LVALUE_COMPOUND_ASSIGNMENT_VISIT_LHS => LuauLValueCompoundAssignmentVisitLhs false,
+    fflag::LUAU_NEW_TYPE_PATH_ERROR_MESSAGES => LuauNewTypePathErrorMessages false,
     fflag::LUAU_LIMIT_UNIFICATION_RECURSION => LuauLimitUnificationRecursion false,
     fflag::LUAU_NATIVE_CODE_TARGET_CHECK => LuauNativeCodeTargetCheck false,
     fflag::LUAU_NON_STRICT_MODE_USE_ERROR_SUPRESSING_TAG => LuauNonStrictModeUseErrorSupressingTag false,
