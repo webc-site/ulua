@@ -266,14 +266,28 @@ impl_ast_ref_visit! {
 
 /// `node->visit(visitor)` for any base `*mut AstNode`. 仅由尚未句柄化的下游消费。
 ///
-/// # Safety
-/// `node` 须为 null 或指向存活的 AST 节点。
+/// 保留 `unsafe fn`（review.md §2 rule 1：`node` 是调用方传入的 arena 裸指针，
+/// 函数体经 `OptNode::from_ptr(..).get_mut()` 独占解引用该 place；降级为
+/// safe fn 即允许调用方交出任意悬垂指针触发 UB。visitor 参数走 `&mut`，非
+/// 空+存活+独占由引用类型自带，无须外挂在 `# Safety`）。
 ///
-/// 另需：调用方独占该节点所在 arena（visitor 按 cpp `visit(AstVisitor*)`
-/// 的非 const 语义写穿节点，本门面据此向 `dispatch_node` 交出 `&mut AstNode`）。
+/// # Safety
+/// 逐参数契约（存活期 / 独占性 / 对齐 / 界内）：
+/// - `node`：
+///   - 存活期：null，或指向**存活的 AST 节点**（`#[repr(C)]` 首字段为
+///     `AstNode`，由 `Allocator` 分配的 arena 槽位承载，遍历期间节点存活）。
+///   - 独占性：调用方独占该节点所在 arena 区间——visitor 按 cpp
+///     `visit(AstVisitor*)` 的非 const 语义允许写穿节点，本门面据此向
+///     `dispatch_node` 交出 `&mut AstNode`；`&mut V` 的 visitor 借用与
+///     AST 借用互不重叠。
+///   - 对齐：`node` 非空即须按 `AstNode` 的自然对齐；`OptNode::get_mut` 造的
+///     `&mut AstNode` 沿用该对齐。
+///   - 界内：本门面只解引用 `node` 一个对象，不下探数组；子槽递归经句柄边界
+///     各自的 null 折叠兑现，不越出该节点自身。
+/// - `visitor`：`&mut V` 已自带存活与独占前提，无额外契约。
 pub unsafe fn ast_node_visit<V: AstVisitor + ?Sized>(node: *mut AstNode, visitor: &mut V) {
-  // Safety: 句柄边界 `OptNode::from_ptr(..).get_mut()` 承接本契约——null 折叠为
-  // None（等价旧 null 早退），非空即存活且可独占。
+  // Safety: 句柄边界 `OptNode::from_ptr(..).get_mut()` 承接上方 node 逐参数
+  // 契约——null 折叠为 None（等价旧 null 早退），非空即存活且可独占。
   if let Some(node) = OptNode::from_ptr(node).get_mut() {
     dispatch_node(node, visitor);
   }
