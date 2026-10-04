@@ -227,57 +227,6 @@ macro_rules! impl_visitable {
   };
 }
 
-/// 基类家族 `*mut AstX` 裸指针门面的共享骨架（cpp `X*->visit(visitor)` 的 RTTI
-/// 分发形态）：null 早退 + 一次 repr(C) 基址改写后转交 `dispatch_node`。
-///
-/// 仅存 `ast_expr_visit`/`ast_stat_visit` 两门面：`ast_type_visit`/
-/// `ast_type_pack_visit` 的 crate 内消费点已全部迁至引用形态
-/// （`OptNode`/`Node` 句柄解引用 + `*_visit_ref`），无外部消费方，随本波退役。
-/// 保留的两个门面专供尚未迁移的下游（ulua-compiler/ulua-analysis/
-/// ulua-unit-test），其解引用实为对 [`crate::records::node_handle`] 同一 arena
-/// 契约的转调，下游句柄化完成后即退役。
-/// 每个门面的 `# Safety` 段落由调用点各自书写（clippy `missing_safety_doc` 要求
-/// `unsafe fn` 自身文档含该段落，跨文档「契约同」引用不满足）。
-macro_rules! impl_ast_ptr_visit {
-  (
-    $(
-      $(#[$attr:meta])*
-      $vis:vis fn $name:ident($ptr:ident : *mut $base:ty);
-    )+
-  ) => {
-    $(
-      $(#[$attr])*
-      $vis unsafe fn $name<V: AstVisitor + ?Sized>($ptr: *mut $base, visitor: &mut V) {
-        // Safety: 句柄边界 `OptNode::from_ptr(..).get_mut()` 即「null 折叠 + 非空即
-        // 存活独占」的解引用收口点（契约见 node_handle 模块头）；null 折叠为 None，
-        // 与旧 `dispatch_node` 的 null 早退等价。
-        if let Some(node) = OptNode::from_ptr($ptr).get_mut().map(AstNodeViewMut::as_ast_node_mut) {
-          dispatch_node(node, visitor);
-        }
-      }
-    )+
-  };
-}
-
-impl_ast_ptr_visit! {
-  /// `expr->visit(visitor)` where `expr` is a base `*mut AstExpr` — dispatch to the
-  /// concrete override by RTTI class index. 仅由尚未句柄化的下游消费。
-  ///
-  /// # Safety
-  /// `expr` 须为 null 或指向以 `AstExpr` 为前缀字段的存活节点。
-  ///
-  /// 另需：调用方独占该节点所在 arena（visitor 按 cpp `visit(AstVisitor*)`
-  /// 的非 const 语义写穿节点，本门面据此向 `dispatch_node` 交出 `&mut AstNode`）。
-  pub fn ast_expr_visit(expr: *mut AstExpr);
-
-  /// `stat->visit(visitor)` for a base `*mut AstStat`。
-  ///
-  /// # Safety
-  /// 契约同 [`ast_expr_visit`]：`stat` 须为 null 或指向以 `AstStat` 为前缀字段的
-  /// 存活节点，且调用方独占该节点所在 arena。
-  pub fn ast_stat_visit(stat: *mut AstStat);
-}
-
 /// 基类家族 `&mut AstX` 引用门面的共享骨架（records 句柄引用化 §2 的下游入口）：
 /// 入参独占借用即「该节点在借用期内存活且可独占」的类型系统证明，零 unsafe
 /// 直接转交 `dispatch_node`。四个 `_ref` 门面的 body 逐字相同，收口为单源；
