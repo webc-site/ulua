@@ -2235,6 +2235,15 @@ impl Subtyping {
 
       if sub_indexer.is_read_only && !super_indexer.is_read_only {
         result.with_both_component(Component::TypeField(TypeField::IndexResult));
+        // Source: `Analysis/src/Subtyping.cpp:2637` `isCovariantWith(TableIndexer&)`：
+        // cpp 双旗标（PropertyModifierMismatch ∧ NewTypePathErrorMessages）齐备时
+        // 标记 violation，供 explain_reasonings 走「indexer is read-only…」专枝；
+        // 此前 Rust 未接旗标，专枝为死臂，现补齐。
+        if fflag::LuauPropertyModifierMismatchErrors.get()
+          && fflag::LuauNewTypePathErrorMessages.get()
+        {
+          result.with_property_modifier_violation();
+        }
         return result;
       }
 

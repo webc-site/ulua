@@ -1,11 +1,7 @@
 use alloc::{string::String, vec::Vec};
 
 use ulua_ast::records::location::Location;
-use ulua_common::{
-  fflag,
-  macros::luau_assert::LUAU_ASSERT,
-  records::dense_hash_set::DenseHashSet,
-};
+use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT, records::dense_hash_set::DenseHashSet};
 
 use crate::{
   enums::{subtyping_variance::SubtypingVariance, type_field::TypeField},
@@ -218,8 +214,7 @@ impl TypeChecker2 {
 
         reason = if sub_rendered.prefix.is_empty() && super_rendered.prefix.is_empty() {
           base_reason
-        } else if !sub_rendered.subject.is_empty()
-          && sub_rendered.subject == super_rendered.subject
+        } else if !sub_rendered.subject.is_empty() && sub_rendered.subject == super_rendered.subject
         {
           alloc::format!(
             "Expected {} to be {}`{}`, but got `{}`",

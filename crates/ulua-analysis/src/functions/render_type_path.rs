@@ -175,7 +175,10 @@ fn render_index(current: &mut Phrase, index: &crate::records::index::Index) {
     }
     Kind::MappedPack => {
       next.kind = Kind::PackEntry;
-      next.text = format!("the {position} entry of {}", current.mapped_pack_entry_owner);
+      next.text = format!(
+        "the {position} entry of {}",
+        current.mapped_pack_entry_owner
+      );
     }
     _ => {
       next.kind = Kind::PackEntry;
