@@ -81,9 +81,10 @@ pub struct Frontend {
   pub module_resolver_for_autocomplete: FrontendModuleResolver,
   pub globals: GlobalTypes,
   pub globals_for_autocomplete: GlobalTypes,
-  /// C++ `ConfigResolver* configResolver`，同 `file_resolver`：恒非空建模的
-  /// 外部对象句柄（null 入参以 dangling 占位、契约为从不查询 getConfig），
+  /// C++ `ConfigResolver* configResolver`：恒非空建模的外部对象句柄
+  /// （null 入参以 dangling 占位、契约为从不查询 getConfig），
   /// 构造时布线；读取一律经 [`Frontend::config_resolver_ref`] chokepoint。
+  /// （后续批收口目标：对齐 `file_resolver` 的所有权形态。）
   pub config_resolver: NonNull<ConfigResolver>,
   pub options: FrontendOptions,
   pub ice_handler: InternalErrorReporter,
