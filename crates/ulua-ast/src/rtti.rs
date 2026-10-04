@@ -417,25 +417,46 @@ pub(crate) use define_ast_ref_enum;
 
 /// 本模块唯一的共享引用类型改写核心（cpp `static_cast<T*>(this)` 的收口点）。
 ///
-/// # Safety
-/// `node` 所属 place 的对象必须存活且动态类型就是 `T`：调用方已验证其
-/// `class_index == T::CLASS_INDEX`，且 `T` 是 `#[repr(C)]`、首字段（传递地）为
-/// 基节点的生成结构——基址重合，改写后的引用 denote 同一个 place；借用寿命
-/// 由该对象的合法共享借用供给。
+/// 保留 `unsafe fn`（review.md §2 rule 1：函数体解引用由本函数自造的裸指针，
+/// 且合法性依赖调用方持有的类型不变量证据——降级为 safe fn 会允许任意 `&B`
+/// 强转为 `&T`，是即时 UB；门面侧的窄 `unsafe { ref_cast(..) }` 块即证据交接）。
+///
+/// # Safety（逐参数契约）
+/// - `node`：
+///   - 存活期：`node` 所指 place 在返回借用的寿命内有效；由入参 `&B` 借用供给。
+///   - 独占性：共享借用即可，无需独占；返回 `&T` 与入参共享借用共寿命不产生
+///     额外 `&mut` 别名。
+///   - 对齐：`T` 与 `B` 均为 `#[repr(C)]`、`T` 传递地以 `B` 为首字段，故
+///     `ptr::from_ref(node).cast::<T>()` 保持同一基址与 `T` 所需的对齐。
+///   - 界内：改写覆盖单个对象（非数组区间）；`T` 与 `B` 首字段基址重合，
+///     `[ptr, ptr + size_of::<B>())` 完整落在 `T` 的字段布局内。
+/// - 动态类型前提：调用方已验证 `class_index == T::CLASS_INDEX`，即该 place
+///   的真实类型就是 `T`（`Allocator` 按具体节点类型写入 class_index，与其
+///   一一对应）。
 #[inline]
 unsafe fn ref_cast<B, T>(node: &B) -> &T {
-  // Safety: 函数级 # Safety 契约即合法性证明：repr(C) 首字段链保证
-  // ptr::from_ref(node) 与 &T 同址同布局起点。
+  // Safety: 上方逐参数契约——class_index 命中 + repr(C) 首字段链保证基址/对齐
+  // 重合，共享借用寿命由 `&B` 继承。
   unsafe { &*(ptr::from_ref(node).cast::<T>()) }
 }
 
-/// [`ref_cast`] 的独占形态。
+/// [`ref_cast`] 的独占形态：契约同上，另需调用方对该 place 持有独占借用。
 ///
-/// # Safety
-/// 同 [`ref_cast`]，另需调用方持有该 place 的独占借用（无重叠别名）。
+/// 保留 `unsafe fn`（§2 rule 1，理由同 [`ref_cast`]）：独占性沿 `&mut B` 继承
+/// 到 `&mut T`，一旦降级即失去「调用方必须自证 class_index 命中」这道关卡。
+///
+/// # Safety（逐参数契约）
+/// - `node`：
+///   - 存活期：入参 `&mut B` 借用期内该 place 有效。
+///   - 独占性：`&mut B` 即该 place 在借用期内无其它别名（共享或独占）的类型
+///     系统证明；独占沿 `&mut T` 原样传递。
+///   - 对齐：同 [`ref_cast`]，`#[repr(C)]` 首字段链保证基址/对齐重合。
+///   - 界内：单对象改写，非数组区间。
+/// - 动态类型前提：`class_index == T::CLASS_INDEX`（同 [`ref_cast`]）。
 #[inline]
 unsafe fn mut_cast<B, T>(node: &mut B) -> &mut T {
-  // Safety: 函数级 # Safety 契约，独占性沿 &mut 继承。
+  // Safety: 上方逐参数契约——独占性由 `&mut B` 继承，class_index 命中由调用点
+  // 兑现；`ptr::from_mut` 与 `cast::<T>` 只换类型视图，不移动、不改对齐。
   unsafe { &mut *(ptr::from_mut(node).cast::<T>()) }
 }
 
@@ -591,13 +612,26 @@ pub(crate) fn ast_node_as_family_mut<T: AstFamily>(
 /// 传递 / map key / 判等（比身份不取引用），不进借用系统，也就不制造假
 /// `'static`。判型命中后指针改写纯为地址类型视图，零解引用承诺由契约给出。
 ///
-/// # Safety
-/// `node` 须为 null 或指向存活的 repr(C) AST 节点（首字段传递地为 `AstNode`）。
+/// 保留 `unsafe fn`（§2 rule 1：入参 `impl AstNodePtr` 由调用方交出 `*mut T`
+/// 裸指针形态、函数体经 `place_ref_at` 只读解引用该 place 的 `class_index`，
+/// 二者共同构成解引用契约，降级为 safe fn 会把 arena 存活前提漏交给类型系统
+/// 无法证明的调用方）。
+///
+/// # Safety（逐参数契约）
+/// - `node`（`impl AstNodePtr`：`*mut T`/`Node<T>`/`OptNode<T>`）：
+///   - 存活期：`node` 为 null 或指向**存活的 repr(C) AST 节点**（首字段传递地
+///     为 `AstNode`）；本函数只读 `class_index`（偏移 0），不解引用返回的
+///     `NonNull<T>`，故调用点自身不产生借用。
+///   - 独占性：判型阶段仅共享读取；返回 `NonNull<T>` 只透传地址、不承诺借用，
+///     后续写穿前提由消费点自行按 arena 契约证明。
+///   - 对齐：非空即须按 `T` 的 `#[repr(C)]` 节点布局对齐；`T` 与 `AstNode`
+///     基址重合，`NonNull::from(base).cast::<T>()` 保址保对齐。
+///   - 界内：单对象读取（`class_index` 一字段），非数组区间。
 #[inline]
 pub unsafe fn ast_node_try_cast_ptr<T: AstNodeClass>(node: impl AstNodePtr) -> Option<NonNull<T>> {
-  // Safety: 契约保证 null 不解引用；非空即存活节点，只读偏移 0 基类的
-  // class_index 判型，命中后指针 cast 仅改类型视图不改地址（repr(C) 基址重合），
-  // 指针出自存活借用，NonNull 非空性由 place_ref_at 的成功先行兑现。
+  // Safety: 上方逐参数契约——判空先行由 place_ref_at 兑现；非空即存活节点的
+  // 偏移 0 只读，`NonNull` 非空性由 place_ref_at 成功先行兑现；cast 仅改类型
+  // 视图不改地址（repr(C) 基址重合）。
   place_ref_at(node.as_ast_node())
     .filter(|base| ast_node_is::<T>(*base))
     .map(|base| NonNull::from(base).cast::<T>())
@@ -640,14 +674,30 @@ pub fn cst_node_try_as<T: CstNodeClass>(node: &CstNode) -> Option<&T> {
 /// 构造于同一 arena，「该 AST 节点在 `'b` 内被独占」即蕴含其映射的 CST 节点在
 /// `'b` 内可独占写。
 ///
-/// # Safety
-/// `node` 须为 null 或指向存活的 repr(C) CST 节点（首字段传递地为 `CstNode`），
-/// 且调用方持有该 CST 节点所在 arena 区间的独占。
+/// 保留 `unsafe fn`（§2 rule 1：入参 `*mut CstNode` 是调用方从 `CstNodeMap` 的
+/// 值域取出的 arena 裸指针、函数体经 `place_mut_at` 独占解引用该 place，两者
+/// 共同构成解引用契约；降级为 safe fn 会把 arena 存活/独占前提漏交类型系统，
+/// 允许调用方以任意 `*mut CstNode` 触发 UB）。
+///
+/// # Safety（逐参数契约）
+/// - `node`：
+///   - 存活期：`node` 为 null 或指向**存活的 repr(C) CST 节点**（首字段传递地
+///     为 `CstNode`），返回的 `&'b mut T` 借用半径 `'b` 内该 place 有效；`'b`
+///     由同 arena AST 节点的独占借用供给（AST/CST 同步构造，同处同一 arena）。
+///   - 独占性：调用方持有该 CST 节点所在 arena 区间的**独占**（本函数交出
+///     `&mut T`，无重叠别名）。
+///   - 对齐：`T` 与 `CstNode` 同为 `#[repr(C)]` 首字段链，基址/对齐重合；
+///     `place_mut_at` 造的 `&mut CstNode` 需按 CST 节点自然对齐。
+///   - 界内：单对象改写（class_index 命中判型 + repr(C) 首字段基址重合），非
+///     数组区间。
 #[inline]
 pub(crate) unsafe fn cst_node_as<'b, T: CstNodeClass>(node: *mut CstNode) -> Option<&'b mut T> {
-  // Safety: 契约保证非空即存活且可独占；判型与类型改写收口到独占形态。
+  // Safety: 上方逐参数契约——判空先行，非空即存活且可独占；判型与类型改写
+  // 收口到独占形态 `mut_cast`，其 `# Safety` 契约由本函数的 class_index 命中
+  // 复核与 `&mut` 独占继承一并兑现。
   let base = place_mut_at(node)?;
   (base.class_index == T::CLASS_INDEX).then(||
-    // Safety: class_index 命中 ⇒ 动态类型为 T，repr(C) 基址重合，独占性继承。
+    // Safety: class_index 命中 ⇒ 动态类型为 T，repr(C) 基址重合，独占性自
+    // `place_mut_at` 交来的 `&mut CstNode` 继承。
     unsafe { mut_cast::<CstNode, T>(base) })
 }
