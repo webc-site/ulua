@@ -1,6 +1,8 @@
 use crate::{
   enums::tms::TMS,
-  functions::lua_t_gettmbyobj::lua_t_gettmbyobj,
+  functions::{
+    c_slice_mut, lua_t_gettmbyobj::lua_t_gettmbyobj,
+  },
   macros::{lua_g_typeerror::luaG_typeerror, setobj_2_s::setobj_2_s},
   records::{lua_state::LuaState, slot::Slot},
   type_aliases::stk_id::StkId,
@@ -15,9 +17,9 @@ use crate::{
 pub unsafe fn lua_v_tryfunc_tm(l: *mut LuaState, func: Slot<'_>) {
   // SAFETY: 契约保证 func 与 [func, top) 区间为当前帧可写栈槽、top 有空余，挪位与覆写均不越栈界
   unsafe {
-    // 句柄落回裸槽视图一处：帧挪位协议（`p > func` 区间比较与逐格后移）是帧内裸指针
-    // 算术，按设计票边界不变量保持 `StkId` 形态；`as_ptr` 为 `inline(always)` 指针
-    // 读出，与原裸形参同址同宽度（§9.4）
+    // 句柄落回裸槽视图一处：帧挪位窗（`[func, top]` 后移一格）是帧内栈区切片，
+    // 起点/终点经 `Slot::as_ptr` 与既有 top 字段现读派生；`as_ptr`/`slot_distance`
+    // 均为 `inline(always)` 指针读出，与原裸形参同址同宽度（§9.4）
     let func = func.as_ptr();
 
     let tm = lua_t_gettmbyobj(l, func, TMS::TmCall);
@@ -25,19 +27,15 @@ pub unsafe fn lua_v_tryfunc_tm(l: *mut LuaState, func: Slot<'_>) {
       luaG_typeerror!(l, func, "call");
     }
 
-    // r12-w7a2 收编（同形单点·挪位协议窗）：`(*l).top` 预绑定单次读，供后移循环
-    // 起点 cursor——本函数契约保证全程不重分配栈（见 # Safety），循环仅写
-    // 已界内槽、不触场域；r12-w9b 续收后尾写不再消费本绑定，改经 advance_top
-    // 现读场域提交（见下方尾写注记，两者在契约下同值）
-    let top = (*l).top;
-    let mut p = top;
-    while p > func {
-      setobj_2_s!(l, p, p.wrapping_sub(1));
-      p = p.wrapping_sub(1);
-    }
+    // cpp `for (p = L->top; p > func; p--) setobj2s(L, p, p-1)`：把 `[func, top]`
+    // （含预留 top 槽，界内契约见 # Safety）两端点整体后移一格，收为一次切片
+    // `copy_within`（dst>src 的后向写序与 cpp 递减游标逐位一致）；全程不重分配栈，
+    // 窗基址由 func 现读派生，尾槽 `top` 写为移位落点、随后抬顶提交。
+    let win = c_slice_mut(func, LuaState::slot_distance(func, (*l).top) as usize + 1);
+    win.copy_within(0..win.len() - 1, 1);
 
     // r12-w9b 收编（抬顶提交形）：尾写经 advance_top(1) 原语落笔——本函数契约保证
-    // 全程不重分配栈、循环只写已界内槽不触 `top` 场域，故原式「场再读后 wrapping_add」
+    // 全程不重分配栈、移位窗只写已界内槽不触 `top` 场域，故原式「场再读后 wrapping_add」
     // 与原语内 `self.top.add(1)` 同址同值（top 有空余槽见 # Safety），逐位等价且更贴
     // cpp `L->top++` 的现读场语义；断言位点原无，维持不带断言的提交形。
     (*l).advance_top(1);
