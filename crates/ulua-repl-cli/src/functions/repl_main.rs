@@ -27,6 +27,7 @@ use crate::functions::{
   counters_dump::counters_dump, counters_init::counters_init, coverage_dump::coverage_dump,
   coverage_init::coverage_init, profiler_dump::profiler_dump, profiler_start::profiler_start,
   profiler_stop::profiler_stop, run_file::run_file, run_repl::run_repl, setup_state::setup_state,
+  state_ref::state,
 };
 
 // CLI-level static from Repl.cpp: `static bool codegen`. `program_argc/argv`
@@ -167,9 +168,10 @@ pub fn repl_main(args: &[impl AsRef<str>]) -> i32 {
     let mut iter = files.iter().peekable();
     while let Some(file) = iter.next() {
       let is_last_file = iter.peek().is_none();
-      // run_file 现为 crate 内安全编排入口；l 在守卫作用域内存活（close 在循环之后）
-      // 满足其 gl 契约；file/program_args 借自本帧 Vec 迭代、调用窗口内不失效。
-      let ran = run_file(file, l, interactive && is_last_file, program_args);
+      // run_file 现为 crate 内借用形安全编排 fn；gl 由本入口经 `state` 门面物化一次，
+      // 在守卫作用域内存活（close 在循环之后）满足其存活契约；file/program_args
+      // 借自本帧 Vec 迭代、调用窗口内不失效。
+      let ran = run_file(file, state(l), interactive && is_last_file, program_args);
       failed += (!ran) as i32;
     }
 

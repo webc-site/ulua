@@ -10,8 +10,6 @@ use ulua_vm::{
   records::lua_state::LuaState,
 };
 
-use crate::functions::state_ref::state;
-
 /// 对应 C++ `MaxTraversalLimit`（Repl.cpp），safe_get_table 与补全逻辑复用。
 pub const MAX_TRAVERSAL_LIMIT: i32 = 50;
 
@@ -21,21 +19,15 @@ pub const MAX_TRAVERSAL_LIMIT: i32 = 50;
 /// interned 键多一字节、恒查不中。
 pub(crate) const META_INDEX_FIELD: &[u8] = b"__index";
 
-// DELIBERATE DEVIATION（review.md §9.3）：全程在 ulua-vm c-API 栈上操作
-// （pushvalue/rawget/pop/replace + `luaL_getmetafield_bytes`），`*mut LuaState`
-// 解引用与相对索引是本函数赖以成立的 VM 边界固有形态，非纯 Rust 逻辑——本函数
-// 即边界本体，故按 clippy `not_unsafe_ptr_arg_deref` 的判定留 `unsafe fn` +
-// `# Safety` 契约；句柄解引用经 `state` 门面收敛为入口一次。
+// review.md §2/§3 收形：`l` 由裸 `*mut LuaState` 收编为借用 `&mut LuaState`——本函数
+// 全部栈操作（pushvalue/rawget/pop/replace/remove + `lua_l_getmetafield_bytes`）在引用
+// 接收者上均为 ulua-vm 安全面，解引用对象是调用方交出的存活借用而非函数自持裸指针，
+// 故降为安全 `fn`，原 `# Safety` 契约降级为下述「调用序契约」（正确性，非内存安全）。
+// `state` 门面与 `&mut *l` 重借用随之消亡（review.md §3 禁 `&*x`）。
 //
-// review.md §2 的消除对象是「纯逻辑层的 pub unsafe fn」；此处 unsafe 并非逻辑层
-// 装饰，而是「解引用调用方持有的 VM 状态裸指针」这一不可省略前提的类型化表达。
-/// # Safety
-///
-/// `l` 必须是有效、活跃的 `LuaState` 指针；`table_index` 指向栈上的表，
-/// 且待查找的键位于栈顶。
-pub unsafe fn safe_get_table(l: *mut LuaState, table_index: i32) {
-  // Safety: `# Safety` 契约保证 `l` 非空、活跃，经 `state` 门面物化后全走安全方法。
-  let l = state(l);
+// 调用序契约（由调用方 complete_indexer 成立）：`l` 为活跃状态机，`table_index` 指向
+// 栈上的表，且待查找的键位于栈顶。
+pub fn safe_get_table(l: &mut LuaState, table_index: i32) {
   // 循环不变式：待搜索的表在 -1，键在 -2；退出时结果（值或 nil）在 -1。
   // 相对索引（`-1`/`-2`）的界内性由该不变式逐步支撑。
   l.push_value(table_index); // 复制表，建立不变式
@@ -45,7 +37,7 @@ pub unsafe fn safe_get_table(l: *mut LuaState, table_index: i32) {
     l.push_value(-2); // 复制键
     // 按不变式 `-2` 是表、顶是键副本，弹副本查表并把结果压回顶（此时结果 -1、
     // 表 -2、原键 -3）。
-    lua_rawget(&mut *l, -2); // 尝试查找键
+    lua_rawget(l, -2); // 尝试查找键
 
     if !l.is_nil(-1) || loop_count >= MAX_TRAVERSAL_LIMIT {
       break;
@@ -54,7 +46,7 @@ pub unsafe fn safe_get_table(l: *mut LuaState, table_index: i32) {
     l.pop(1); // 弹出 nil 结果，栈回到不变式形态（表在 -1、键在 -2）
     // `-1` 是被搜索的表，命中则压入 `__index` 字段值（切片全长即键，见
     // `META_INDEX_FIELD` 注；被调已随 r16-v43 收形为引用形）。
-    if lua_l_getmetafield_bytes(&mut *l, -1, META_INDEX_FIELD) == 0 {
+    if lua_l_getmetafield_bytes(l, -1, META_INDEX_FIELD) == 0 {
       // getmetafield 返 0 时未压栈；补 nil 作为查找结果后退出。
       l.push_nil();
       break;
