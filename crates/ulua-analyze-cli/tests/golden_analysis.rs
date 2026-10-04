@@ -59,6 +59,21 @@ fn analyze_nonstrict(ws: &Workspace, file: &str) -> (i32, String) {
   (code(&output), stderr_of(&output))
 }
 
+/// 以 strict 模式 + `--fflags=true` 跑一份 golden 源，返回 (退出码, stderr)。
+/// 对应 cpp golden 矩阵的 `flags-on` 快照生成命令行（`--fflags=true` 点亮全部
+/// `Luau*` 旗标，含 `LuauNewTypePathErrorMessages` → `renderTypePath` 紧凑子类型
+/// 原因渲染）。Rust 默认裸跑刻意保持该旗标关（见 `is_default_enabled_flag`），
+/// 故 flags-on 形态必须显式传本开关。
+fn analyze_strict_flags_on(ws: &Workspace, file: &str) -> (i32, String) {
+  let output = ws.run(&[
+    "--mode=strict",
+    "--solver=new",
+    "--fflags=true",
+    file,
+  ]);
+  (code(&output), stderr_of(&output))
+}
+
 /// cpp `analysis/generics/generic_result_mismatch`：泛型函数实例化后返回值类型
 /// 与注解不符，strict 报 TypeError（行列 5,23），nonstrict 放行。
 #[test]
@@ -1003,7 +1018,11 @@ assert(value == "ready")
   assert_eq!(stderr, "");
 }
 
-/// cpp `analysis/union-types/disallow_less_specific_assign`（flags-off 形态移植：Rust CLI 默认旗标复现 cpp flags-off 渲染）：联合参数 `value: number | string` 赋给 `number` 注解，strict（2,33）报联合分量不是 number 子类型。
+/// cpp `analysis/union-types/disallow_less_specific_assign`：联合参数 `value: number | string`
+/// 赋给 `number` 注解，strict（2,33）报联合分量不是 number 子类型。默认（无 `--fflags`）
+/// 复现 cpp `flags-off` verbose 渲染（"the 2nd component of the union is ..."）；
+/// `--fflags=true`（点亮 `LuauNewTypePathErrorMessages`）复现 cpp `flags-on` 紧凑渲染
+/// （分量子路径 `renderTypePath` 出空前缀 ⇒ 落回 `baseReason`），二者逐字节对位。
 #[test]
 fn golden_union_disallow_less_specific_assign() {
   let ws = ws("disallow-less-specific-assign");
@@ -1022,6 +1041,14 @@ end
     stderr,
     "./disallow_less_specific_assign.luau(2,33): TypeError: Expected this to be 'number', but got 'number | string'; \n\
      the 2nd component of the union is `string`, which is not a subtype of `number`\n",
+  );
+
+  let (code, stderr) = analyze_strict_flags_on(&ws, "disallow_less_specific_assign.luau");
+  assert_eq!(code, 1);
+  assert_eq!(
+    stderr,
+    "./disallow_less_specific_assign.luau(2,33): TypeError: Expected this to be 'number', but got 'number | string'; \n\
+     `string` is not a subtype of `number`\n",
   );
 
   let (code, stderr) = analyze_nonstrict(&ws, "disallow_less_specific_assign.luau");
@@ -1146,7 +1173,11 @@ end
   assert_eq!(stderr, "");
 }
 
-/// cpp `analysis/user-defined-type-functions/intersection_methods`（flags-off 形态移植：Rust CLI 默认旗标复现 cpp flags-off 渲染）：`types.intersectionof` 分量遍历重建交集，_show 注 never 报（22,12）unreachable（交分量枚举 verbose 渲染）。
+/// cpp `analysis/user-defined-type-functions/intersection_methods`：`types.intersectionof`
+/// 分量遍历重建交集，_show 注 never 报（22,12）unreachable。默认复现 cpp `flags-off`
+/// verbose 渲染（"the Nth component of the intersection is ..."）；`--fflags=true`
+/// 复现 cpp `flags-on` 紧凑渲染（交分量子路径出空前缀 ⇒ 各 `baseReason`）。交集分量
+/// 枚举序在 on/off 两侧一致（区别于 union 排序代际缺口），故两形态皆逐字节对位。
 #[test]
 fn golden_user_type_function_intersection_methods() {
   let ws = ws("intersection-methods");
@@ -1187,6 +1218,17 @@ end
      this is because \n\
      \t * the 1st component of the intersection is `{ boolean: boolean, number: number }`, which is not a subtype of `never`\n\
      \t * the 2nd component of the intersection is `{ boolean: boolean, string: string }`, which is not a subtype of `never`\n",
+  );
+
+  let (code, stderr) = analyze_strict_flags_on(&ws, "intersection_methods.luau");
+  assert_eq!(code, 1);
+  assert_eq!(
+    stderr,
+    "./intersection_methods.luau(22,12): TypeError: Expected this to be unreachable, but got\n\
+     \t'{ boolean: boolean, number: number } & { boolean: boolean, string: string }'; \n\
+     this is because \n\
+     \t * `{ boolean: boolean, number: number }` is not a subtype of `never`\n\
+     \t * `{ boolean: boolean, string: string }` is not a subtype of `never`\n",
   );
 
   let (code, stderr) = analyze_nonstrict(&ws, "intersection_methods.luau");

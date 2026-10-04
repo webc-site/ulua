@@ -18,5 +18,10 @@ pub fn is_default_enabled_flag(name: &str) -> bool {
         // 且 x64 臂 SIGSEGV 未根除（CI bench/windows 双炸），回炉前默认关——
         // 代码保留（LuauJitSettableHashInline 旗标可显式打开）。
         | "LuauJitSettableHashInline"
+        // 新式紧凑子类型原因渲染：cpp 默认 false 且非实验性，随 setLuauFlagsDefault
+        // 自动点亮；本移植默认刻意保持关，使 `ulua-analyze` 裸跑复现 cpp flags-off
+        // 渲染（golden 套件 flags-off 形态基线，禁为凑绿翻默认）。flags-on 紧凑形态
+        // 经 render_type_path 可达，由 --fflags=true / --fflags=LuauNewTypePathErrorMessages 显式开启。
+        | "LuauNewTypePathErrorMessages"
     )
 }

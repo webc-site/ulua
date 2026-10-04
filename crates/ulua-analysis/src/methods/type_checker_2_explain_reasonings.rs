@@ -1,11 +1,16 @@
 use alloc::{string::String, vec::Vec};
 
 use ulua_ast::records::location::Location;
-use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT};
+use ulua_common::{
+  fflag,
+  macros::luau_assert::LUAU_ASSERT,
+  records::dense_hash_set::DenseHashSet,
+};
 
 use crate::{
-  enums::subtyping_variance::SubtypingVariance,
+  enums::{subtyping_variance::SubtypingVariance, type_field::TypeField},
   functions::{
+    render_type_path::{RenderMetadata, render_type_path},
     to_string_human::to_string_human,
     to_string_to_string::to_string_type_or_pack,
     traverse_type_path::{self, traverse_type_pack_root as traverse},
@@ -66,6 +71,8 @@ impl TypeChecker2 {
     }
 
     let mut reasons: Vec<String> = Vec::new();
+    // cpp `DenseHashSet<std::string> seenReasons`：仅 flags-on 去重，避免重复诊断。
+    let mut seen_reasons: DenseHashSet<String> = DenseHashSet::default();
     let mut suppressed = true;
     for reasoning in r.reasoning.iter() {
       if reasoning.sub_path.path_empty() && reasoning.super_path.path_empty() {
@@ -147,35 +154,127 @@ impl TypeChecker2 {
         super_leaf_as_string
       );
 
+      let new_render = fflag::LuauNewTypePathErrorMessages.get();
+
       let reason: String;
 
       if fflag::LuauPropertyModifierMismatchErrors.get() && reasoning.is_property_modifier_violation
       {
-        // The leaf types at the end of the paths are the same type, so a
-        // plain "X is not a subtype of X" message would be misleading.
-        let mut prop_name = String::from("a property");
-        let mut is_read_only = true;
-        let last = reasoning
-          .sub_path
-          .last()
-          .expect("cpp LUAU_ASSERT：进入本支时 sub_path 末元素必为 Property 分量");
-        LUAU_ASSERT!(matches!(last, Component::Property(_)));
-        if let Component::Property(prop) = last {
-          prop_name = alloc::format!("`{}`", prop.name());
-          is_read_only = prop.is_read();
+        // cpp 3547-3558：flags-on 下先探测末分量是否 IndexResult（读写索引器不符）。
+        let mut rendered_indexer_mismatch = false;
+        let mut body = String::new();
+        if new_render
+          && matches!(
+            reasoning.sub_path.last(),
+            Some(Component::TypeField(TypeField::IndexResult))
+          )
+        {
+          body = String::from(
+            "the indexer is read-only in the latter type, but the former type requires a read-write indexer",
+          );
+          rendered_indexer_mismatch = true;
         }
 
-        if is_read_only {
-          reason = alloc::format!(
-            "{} is a read-only property in the latter type, but the former type requires a read-write property",
-            prop_name
-          );
-        } else {
-          reason = alloc::format!(
-            "{} is a write-only property in the latter type, but the former type requires a read-write property",
-            prop_name
-          );
+        if !rendered_indexer_mismatch {
+          // The leaf types at the end of the paths are the same type, so a
+          // plain "X is not a subtype of X" message would be misleading.
+          let mut prop_name = String::from("a property");
+          let mut is_read_only = true;
+          let last = reasoning
+            .sub_path
+            .last()
+            .expect("cpp LUAU_ASSERT：进入本支时 sub_path 末元素必为 Property 分量");
+          LUAU_ASSERT!(matches!(last, Component::Property(_)));
+          if let Component::Property(prop) = last {
+            prop_name = alloc::format!("`{}`", prop.name());
+            is_read_only = prop.is_read();
+          }
+
+          body = if is_read_only {
+            alloc::format!(
+              "{} is a read-only property in the latter type, but the former type requires a read-write property",
+              prop_name
+            )
+          } else {
+            alloc::format!(
+              "{} is a write-only property in the latter type, but the former type requires a read-write property",
+              prop_name
+            )
+          };
         }
+        reason = body;
+      } else if new_render {
+        // cpp 3578-3643：renderTypePath 渲染 + 紧凑级联。`expectedReturnPack`/
+        // 取反两枝依 metadata，本端口未采（见 render_type_path 模块文档），故略。
+        let metadata = RenderMetadata;
+        let sub_rendered = render_type_path(&reasoning.sub_path, &metadata);
+        let super_rendered = render_type_path(&reasoning.super_path, &metadata);
+
+        let variance_prefix = match reasoning.variance {
+          SubtypingVariance::Invariant => "exactly ",
+          SubtypingVariance::Contravariant => "a supertype of ",
+          _ => "",
+        };
+
+        reason = if sub_rendered.prefix.is_empty() && super_rendered.prefix.is_empty() {
+          base_reason
+        } else if !sub_rendered.subject.is_empty()
+          && sub_rendered.subject == super_rendered.subject
+        {
+          alloc::format!(
+            "Expected {} to be {}`{}`, but got `{}`",
+            sub_rendered.subject,
+            variance_prefix,
+            super_leaf_as_string,
+            sub_leaf_as_string
+          )
+        } else if reasoning.sub_path == reasoning.super_path
+          && !sub_rendered.subject.is_empty()
+          && !super_rendered.subject.is_empty()
+        {
+          alloc::format!(
+            "Expected {} to be {}`{}`, but {}`{}`",
+            super_rendered.subject,
+            variance_prefix,
+            super_leaf_as_string,
+            sub_rendered.prefix,
+            sub_leaf_as_string
+          )
+        } else if reasoning.sub_path == reasoning.super_path
+          && sub_rendered.prefix == super_rendered.prefix
+        {
+          alloc::format!(
+            "{}`{}` in the latter type and `{}` in the former type, and {}",
+            sub_rendered.prefix,
+            sub_leaf_as_string,
+            super_leaf_as_string,
+            base_reason
+          )
+        } else if !sub_rendered.prefix.is_empty() && !super_rendered.prefix.is_empty() {
+          alloc::format!(
+            "{}`{}` and {}`{}`, and {}",
+            sub_rendered.prefix,
+            sub_leaf_as_string,
+            super_rendered.prefix,
+            super_leaf_as_string,
+            base_reason
+          )
+        } else if !sub_rendered.prefix.is_empty() {
+          alloc::format!(
+            "{}`{}`, which is not {} `{}`",
+            sub_rendered.prefix,
+            sub_leaf_as_string,
+            relation,
+            super_leaf_as_string
+          )
+        } else {
+          alloc::format!(
+            "{}`{}`, and {}",
+            super_rendered.prefix,
+            super_leaf_as_string,
+            base_reason
+          )
+        };
       } else if reasoning.sub_path == reasoning.super_path {
         reason = alloc::format!(
           "{}`{}` in the latter type and `{}` in the former type, and {}",
@@ -210,7 +309,14 @@ impl TypeChecker2 {
         );
       }
 
-      reasons.push(reason);
+      // cpp 3664-3672：flags-on 去重，只收录首次出现的原因以免重复诊断。
+      if new_render {
+        if seen_reasons.try_insert(reason.clone()) {
+          reasons.push(reason);
+        }
+      } else {
+        reasons.push(reason);
+      }
 
       // if we haven't already proved this isn't suppressing, we have to keep checking.
       if suppressed {
