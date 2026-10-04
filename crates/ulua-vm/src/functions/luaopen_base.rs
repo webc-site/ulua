@@ -2,7 +2,7 @@
 
 use crate::{
   functions::{
-    auxopen::auxopen, cstr, lua_b_assert::lua_b_assert_arm, lua_b_error::lua_b_error_arm,
+    auxopen::auxopen, lua_b_assert::lua_b_assert_arm, lua_b_error::lua_b_error_arm,
     lua_b_gcinfo::lua_b_gcinfo_arm, lua_b_getfenv::lua_b_getfenv_arm,
     lua_b_getmetatable::lua_b_getmetatable_arm, lua_b_inext::lua_b_inext_arm,
     lua_b_ipairs::lua_b_ipairs_arm, lua_b_newproxy::lua_b_newproxy_arm, lua_b_next::lua_b_next_arm,
@@ -49,10 +49,12 @@ const VERSION_NAME: &[u8] = b"_VERSION";
 /// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
 /// push_value/set_global_bytes/set_field_bytes 皆安全门面直调，注册建表与压串所经
 /// `lua_l_register_bytes`/`lua_pushlstring_bytes` 亦已降为安全 `fn`（r12-w6d，裸操作屏障下沉
-/// 被调内部），仅 `auxopen` 与 `lua_pushcclosurek` 两处 C 形态被调各自落窄块（被调方自身保留
-/// `# Safety`：裸 C 函数指针与 `lua_s_new` 转手未清零），故本体维持安全 `fn`）：`l` 须为可分配、可抛错的受保护帧且栈顶之上
-/// 留足空槽；`auxopen`/`lua_pushcclosurek` 的 debugname 为静态 NUL 结尾字面量，臂为本文件静态表
-/// 同款合法 `unsafe extern "C-unwind"` 函数。cpp/VM/src/lbaselib.cpp:438-489 luaopen_base。
+/// 被调内部），`auxopen`/`lua_pushcclosurek` 同批降为安全 `fn`（§10：debugname 收原生字节窗，
+/// 体内裸操作自落窄块），故本体维持安全 `fn`）：`l` 须为可分配、可抛错的受保护帧且栈顶之上
+/// 留足空槽；`auxopen`/`lua_pushcclosurek` 的 debugname 为**不含终止 NUL** 的静态字节字面量
+/// （写点存引用、`dumpclosure` 全长写出，cpp `%s`/`getstr` 只观察 NUL 前字节，多一个 NUL 即
+/// 多一个可见字节），臂为本文件静态表同款合法 `unsafe extern "C-unwind"` 函数。
+/// cpp/VM/src/lbaselib.cpp:438-489 luaopen_base。
 pub fn luaopen_base(l: &mut LuaState) -> i32 {
   l.push_value(LUA_GLOBALSINDEX);
   l.set_global_bytes(G_NAME);
@@ -66,50 +68,31 @@ pub fn luaopen_base(l: &mut LuaState) -> i32 {
   lua_pushlstring_bytes(l, b"Luau");
   l.set_global_bytes(VERSION_NAME);
 
-  // SAFETY: `l.as_mut_ptr()` 为当前独占借用重建的裸句柄，借用窗止于本次调用；
-  // `cstr(b"ipairs\0")` 指向静态 NUL 结尾字面量，两臂为合法 `unsafe extern "C-unwind"`
-  // 静态表同款函数，满足 `auxopen` 的存活/有效前提
-  unsafe {
-    auxopen(
-      l.as_mut_ptr(),
-      cstr(b"ipairs\0"),
-      Some(lua_b_ipairs_arm),
-      Some(lua_b_inext_arm),
-    );
-  }
-  // SAFETY: 同上（`cstr(b"pairs\0")` 静态 NUL 字面量，pairs/next 两臂合法）
-  unsafe {
-    auxopen(
-      l.as_mut_ptr(),
-      cstr(b"pairs\0"),
-      Some(lua_b_pairs_arm),
-      Some(lua_b_next_arm),
-    );
-  }
+  // §10：`auxopen` 的 name 窗一物两用（闭包 debugname + `set_field_bytes` 键），
+  // 键面按全长切片写出，故取 cpp:472-473 的 "ipairs"/"pairs" 本体、不含终止 NUL；
+  // 两臂合法、`l` 独占由引用承载，被调已降 safe fn
+  auxopen(l, b"ipairs", Some(lua_b_ipairs_arm), Some(lua_b_inext_arm));
+  auxopen(l, b"pairs", Some(lua_b_pairs_arm), Some(lua_b_next_arm));
 
-  // SAFETY: `l.as_mut_ptr()` 重建自当前独占借用、借用窗止于本次调用；pcally/pcallcont
-  // 为合法 C 臂且遵循 Lua C 函数约定，debugname 为静态 NUL 字面量，nup=0 无待捕获上值
-  unsafe {
-    lua_pushcclosurek(
-      l.as_mut_ptr(),
-      Some(lua_b_pcally_arm),
-      cstr(b"pcall\0"),
-      0,
-      Some(lua_b_pcallcont_arm),
-    );
-  }
+  // §10：debugname 为 cpp:475/482 的静态名窗（无终止 NUL），nup=0 无待捕获上值，
+  // pcally/pcallcont 为合法 C 臂——被调 `lua_pushcclosurek` 已降 safe fn，直调无裸操作
+  lua_pushcclosurek(
+    l,
+    Some(lua_b_pcally_arm),
+    Some(b"pcall"),
+    0,
+    Some(lua_b_pcallcont_arm),
+  );
   l.set_field_bytes(-2, b"pcall");
 
-  // SAFETY: 同上（xpcally/xpcallcont 为合法 C 臂，debugname 为静态 NUL 字面量，nup=0）
-  unsafe {
-    lua_pushcclosurek(
-      l.as_mut_ptr(),
-      Some(lua_b_xpcally_arm),
-      cstr(b"xpcall\0"),
-      0,
-      Some(lua_b_xpcallcont_arm),
-    );
-  }
+  // §10：同上（cpp:482/487 的 "xpcall" 名窗，xpcally/xpcallcont 为合法 C 臂，nup=0）
+  lua_pushcclosurek(
+    l,
+    Some(lua_b_xpcally_arm),
+    Some(b"xpcall"),
+    0,
+    Some(lua_b_xpcallcont_arm),
+  );
   l.set_field_bytes(-2, b"xpcall");
 
   1

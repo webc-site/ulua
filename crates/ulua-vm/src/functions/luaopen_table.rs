@@ -2,7 +2,7 @@
 
 use crate::{
   functions::{
-    cstr, foreach::foreach_arm, foreachi::foreachi_arm, getn::getn_arm,
+    foreach::foreach_arm, foreachi::foreachi_arm, getn::getn_arm,
     lua_l_register::lua_l_register_bytes, maxn::maxn_arm, tclear::tclear_arm, tclone::tclone_arm,
     tconcat::tconcat_arm, tcreate::tcreate_arm, tfind::tfind_arm, tfreeze::tfreeze_arm,
     tinsert::tinsert_arm, tisfrozen::tisfrozen_arm, tmove::tmove_arm, tpack::tpack_arm,
@@ -34,8 +34,8 @@ static TAB_FUNCS: [LuaLReg; 17] = [
 
 /// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
 /// 建库表/注册所经 `lua_l_register_bytes` 已降为安全 `fn`（r12-w6d，其窄块下沉承担裸 C
-/// 函数指针转手），push cfunction 仍经 `push_c_function` 不安全被调而落
-/// 窄块（被调方自身保留 `# Safety`），故本体降为安全
+/// 函数指针转手），`push_c_function` 同批降为安全 `fn`（§10：debugname 收原生字节窗），
+/// 故本体降为安全
 /// `fn`）：`l` 须为可分配、可抛错的受保护帧且栈顶之上留足空槽（`lua_l_register_bytes` push 库表；
 /// push cfunction 后 `set_global_bytes` 消费之）。cpp/VM/src/ltablib.cpp:694 luaopen_table。
 pub fn luaopen_table(l: &mut LuaState) -> i32 {
@@ -43,9 +43,10 @@ pub fn luaopen_table(l: &mut LuaState) -> i32 {
   // 不含尾部 `\0` 的静态字节切片，满足 `lua_l_register_bytes` 切片契约
   lua_l_register_bytes(l, Some(b"table"), &TAB_FUNCS);
 
-  // SAFETY: `tunpack_arm` 为本文件静态表的合法 C 臂（与 TAB_FUNCS 同一注册面），
-  // `cstr(b"unpack\0")` 为静态 NUL 结尾字面量，满足 `push_c_function` 的 debugname 存活契约
-  unsafe { l.push_c_function(Some(tunpack_arm), cstr(b"unpack\0")) };
+  // §10：debugname 为 cpp:699 的静态名窗 "unpack"（不含终止 NUL——闭包 debugname 的
+  // `dumpclosure` 读出面按全长切片写出）；`tunpack_arm` 与 TAB_FUNCS 同一注册面的合法
+  // C 臂，`push_c_function` 已降 safe fn，直调无裸操作
+  l.push_c_function(Some(tunpack_arm), Some(b"unpack"));
   l.set_global_bytes(b"unpack");
 
   1

@@ -2,16 +2,17 @@ use crate::{
   functions::{
     coclose::coclose_arm, cocreate::cocreate_arm, coresumecont::coresumecont_arm,
     coresumey::coresumey_arm, corunning::corunning_arm, costatus::costatus_arm, cowrap::cowrap_arm,
-    coyield::coyield_arm, coyieldable::coyieldable_arm, cstr, lua_l_register::lua_l_register_bytes,
-    lua_pushcclosurek::lua_pushcclosurek_ref,
+    coyield::coyield_arm, coyieldable::coyieldable_arm, lua_l_register::lua_l_register_bytes,
+    lua_pushcclosurek::lua_pushcclosurek,
   },
   macros::lua_lib_fn::lua_lib_fn,
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
 };
 
 /// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票把首参收形为
-/// 引用形后，注册/压闭包/落字段全经 `lua_l_register_bytes`/`lua_pushcclosurek_ref`/`set_field_bytes`
+/// 引用形后，注册/压闭包/落字段全经 `lua_l_register_bytes`/`lua_pushcclosurek`/`set_field_bytes`
 /// 门面，其中 `lua_l_register_bytes` 已降为安全 `fn`（r12-w6d，裸 C 臂转手屏障下沉被调内部），
+/// `lua_pushcclosurek` 亦随 §10 收形降为安全 `fn`（debugname 收原生字节窗，体内窄块自承裸操作），
 /// 故本体为安全 `fn`）：`l` 须为可分配、可抛错的受保护帧，`CO_FUNCS` 为本文件静态的合法 C 臂表；
 /// `set_field_bytes(-2, ...)` 要求 resume 闭包已压栈、coroutine 模块表在 -2。
 /// cpp/VM/src/lcorolib.cpp `luaopen_coroutine`。
@@ -20,10 +21,13 @@ pub(crate) fn luaopen_coroutine(l: &mut LuaState) -> i32 {
   // 不含尾部 `\0` 的静态字节切片，满足 `lua_l_register_bytes` 切片契约
   lua_l_register_bytes(l, Some(b"coroutine"), &CO_FUNCS);
 
-  lua_pushcclosurek_ref(
+  // §10：debugname 为 cpp:499 的静态名窗 "resume"，不含终止 NUL（闭包 debugname 由
+  // `dumpclosure` 全长写出，且 `set_field_bytes` 键面同为全长）；coresumey/coresumecont
+  // 为合法 C 臂、nup=0 无待捕获上值，被调已降 safe fn
+  lua_pushcclosurek(
     l,
     Some(coresumey_arm),
-    cstr(b"resume\0"),
+    Some(b"resume"),
     0,
     Some(coresumecont_arm),
   );

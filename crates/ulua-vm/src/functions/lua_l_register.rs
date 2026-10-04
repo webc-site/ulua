@@ -53,5 +53,3 @@ pub fn lua_l_register_bytes(l: &mut LuaState, libname: Option<&[u8]>, lr: &[LuaL
     l.set_field_bytes(-2, reg.name);
   }
 }
-  }
-}
