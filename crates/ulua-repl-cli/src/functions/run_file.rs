@@ -26,12 +26,14 @@ const OK: i32 = LuaStatus::Ok as i32;
 /// （沿用 w1e `load.rs` 的 `spawn_module_thread` 多步收口体例，此处为 runFile 专用的
 /// 简化两步版）。
 ///
-/// # Safety
-///
-/// `gl` 为存活主状态；返回的线程指针自此由 `gl` 的栈槽持有（调用方以 `gl.pop(1)` 配平），
-/// 与 `gl` 在整个脚本运行窗口内共同存活。
-unsafe fn sandboxed_thread(gl: &mut LuaState) -> *mut LuaState {
-  // Safety: 两步同属本 fn 契约覆盖的存活主状态窗口。
+/// 调用序契约（正确性，非内存安全——`gl` 的存活/独占前提已由 `&mut` 接收者类型承载，
+/// review.md §2 诚实降级为安全 `fn`）：`gl` 为存活主状态；返回的线程指针自此由 `gl`
+/// 的栈槽持有（调用方以 `gl.pop(1)` 配平），与 `gl` 在整个脚本运行窗口内共同存活。
+/// 体内两步 `lua_*` c-API 仍为 ulua-vm `unsafe` 导出，裸操作下沉为下方单个窄 `unsafe`
+/// 块（`// SAFETY:` 就地论证）。
+fn sandboxed_thread(gl: &mut LuaState) -> *mut LuaState {
+  // SAFETY: 两步均为 ulua-vm c-API 导出，`lua_newthread` 交出的 `l` 与 `gl` 同属
+  // 存活主状态窗口，`&mut *l` 重借窗止于当句。
   unsafe {
     let l = lua_newthread(gl);
     // new thread needs to have the globals sandboxed
@@ -65,9 +67,9 @@ pub(crate) fn run_file(
   };
 
   // module needs to run in a new thread, isolated from the rest
-  // Safety: `sandboxed_thread` 前置即本入口的 gl 存活契约——返回线程由 gl 栈槽持有、
-  // 末段 `gl.pop(1)` 配平，并经 `state` 门面物化后栈操作走安全方法。
-  let l = state(unsafe { sandboxed_thread(gl) });
+  // `sandboxed_thread` 现收 `&mut` 借用为安全 fn，其 c-API 边界 unsafe 已下沉体内窄块，
+  // 返回线程经 `state` 门面物化后栈操作走安全方法。
+  let l = state(sandboxed_thread(gl));
 
   // cpp Repl.cpp:604 `("@" + normalizePath(name)).c_str()`：源名直接以 String
   // 持有，内部 NUL 由 `luau_load` 按 cpp `strlen` 规则截断，无需预补终止符

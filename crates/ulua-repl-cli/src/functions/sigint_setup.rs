@@ -46,8 +46,9 @@ pub(crate) unsafe fn install(l: *mut LuaState) {
   REPL_STATE.store(l, Ordering::SeqCst);
 
   REGISTER_ONCE.call_once(|| {
-    // Safety: 状态已先行发布（call_once 前同步 store），register 的契约成立。
-    unsafe { register() };
+    // `register` 现收编为安全 fn（唯一 unsafe 是 registry 边界，已下沉体内窄块）；
+    // 状态已先行发布（call_once 前同步 store），register 的调用序契约成立。
+    register();
   });
 }
 
@@ -63,20 +64,20 @@ pub(crate) fn withdraw() {
   REPL_STATE.store(null_mut(), Ordering::SeqCst);
 }
 
-/// # Safety
-///
-/// 注册进程级 SIGINT 处理函数，仅在单线程 REPL 启动路径且状态先行发布后调用；
+/// 调用序契约（正确性，非内存安全）：仅在单线程 REPL 启动路径且状态先行发布后调用；
 /// `arm_interrupt` 必须只做原子读 + 判空 + 单槽写（async-signal-safe 子集，
 /// 契约见其文档），且永不 panic（registry 的 dispatch 发生在信号上下文）。
+/// 无裸指针形参，唯一的真实不安全为 registry 的 OS 级注册调用，下沉为下方窄 `unsafe`
+/// 块（review.md §2 诚实降级为安全 `fn`）。
 // DELIBERATE DEVIATION（review.md §9.3，平台 FFI 例外）：委托 signal-hook-registry
 // 完成 OS 级 sigaction/CRT signal 注册（POSIX/Windows 差异与裸 `unsafe extern`
 // 声明均落在该库，本 crate 不再出现平台分支）；回调须 async-signal-safe。
-unsafe fn register() {
+fn register() {
   // registry 用 handler 数组取代单一 OS handler，注册后常驻进程（与原先
   // signal() 装上后直到进程退出都不摘的行为一致）；注册失败理论上不可能
   // （SIGINT 合法且不在 FORBIDDEN 表内），与原实现忽略 signal() 返回值
   // 同样静默略过。
-  // Safety: `arm_interrupt` 是 async-signal-safe 的 `Fn()`（原子读 + 判空 +
+  // SAFETY: `arm_interrupt` 是 async-signal-safe 的 `Fn()`（原子读 + 判空 +
   // 单槽写，无锁无堆无 panic），满足 registry::register 对回调的全部契约。
   let _ = unsafe { signal_hook_registry::register(SIGINT, arm_interrupt) };
 }
