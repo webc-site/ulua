@@ -2,7 +2,7 @@
 
 use alloc::vec::Vec;
 
-use ulua_common::{records::dense_hash_map::DenseHashMap, LUAU_ASSERT};
+use ulua_common::{LUAU_ASSERT, records::dense_hash_map::DenseHashMap};
 
 use crate::{
   functions::follow_type::follow,
@@ -16,9 +16,9 @@ use crate::{
     generic_bounds::GenericBounds,
     internal_error_reporter::InternalErrorReporter,
     mapped_generic_environment::MappedGenericEnvironment,
+    substitution::Substitution,
     subtyping_environment::{GenericScope, SubtypingEnvironment},
     subtyping_result::SubtypingResult,
-    substitution::Substitution,
     txn_log::TxnLog,
     type_arena::TypeArena,
   },
@@ -125,7 +125,10 @@ impl SubtypingEnvironment {
   /// cpp `containsMappedPack`（`Subtyping.cpp:565-574`）：本帧 pack 映射命中即真，
   /// 否则沿父链外行；栈形态下等价于「任意帧 lookup 到 TypePackId」。
   pub fn contains_mapped_pack(&self, tp: TypePackId) -> bool {
-    self.lookup_generic_pack(tp).get_if::<TypePackId>().is_some()
+    self
+      .lookup_generic_pack(tp)
+      .get_if::<TypePackId>()
+      .is_some()
   }
 }
 

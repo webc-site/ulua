@@ -343,8 +343,9 @@ impl Subtyping {
     {
       let sub_has_bounds = dense_hash_map_find_no_default(&env.current().mapped_generics, &sub_ty)
         .is_some_and(|b| !b.is_empty());
-      let super_has_bounds = dense_hash_map_find_no_default(&env.current().mapped_generics, &super_ty)
-        .is_some_and(|b| !b.is_empty());
+      let super_has_bounds =
+        dense_hash_map_find_no_default(&env.current().mapped_generics, &super_ty)
+          .is_some_and(|b| !b.is_empty());
       if sub_has_bounds || super_has_bounds {
         let ok = self.bind_generic(env, sub_ty, super_ty);
         result.is_subtype = ok;
@@ -1934,7 +1935,8 @@ impl Subtyping {
             // g may shadow an existing generic, so push a fresh set of bounds
             bounds.push(GenericBounds::default());
           } else {
-            *env.current_mut().mapped_generics.get_or_insert(g) = alloc::vec![GenericBounds::default()];
+            *env.current_mut().mapped_generics.get_or_insert(g) =
+              alloc::vec![GenericBounds::default()];
           }
         }
       }

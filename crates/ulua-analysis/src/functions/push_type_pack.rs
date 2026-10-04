@@ -60,7 +60,7 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
     } else if let Some(tfvp) = get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tp) {
       lua_createtable(l.as_mut_ptr(), 0, 1);
 
-      alloc_type_user_data(l, (*(*tfvp).type_id).type_variant.clone(), false);
+      alloc_type_user_data(l, (*tfvp.type_id).type_variant.clone(), false);
       l.set_field_bytes(-2, FIELD_TAIL);
     } else if let Some(tfgp) = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tp) {
       lua_createtable(l.as_mut_ptr(), 0, 1);
@@ -96,7 +96,7 @@ unsafe fn push_type_pack_tail(l: &mut LuaState, tail: TypeFunctionTypePackId) {
   // 传参，格式串收敛在 throw_type_error 一处；单线程串行、无别名。
   unsafe {
     if let Some(tfvp) = get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tail) {
-      alloc_type_user_data(l, (*(*tfvp).type_id).type_variant.clone(), false);
+      alloc_type_user_data(l, (*tfvp.type_id).type_variant.clone(), false);
       return;
     }
 

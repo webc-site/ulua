@@ -36,7 +36,10 @@ impl ApplyMappedGenerics {
     let bt = self.builtin_types.get();
     // get_mapped_type_bounds 按其契约缺界时以 ice_reporter（Handle 编码非空的存活
     // 报告器）报告并发散；返回引用借用 env 内部表，其后对 env 无其他访问。
-    let bounds = self.env.get_mut().get_mapped_type_bounds(ty, self.ice_reporter);
+    let bounds = self
+      .env
+      .get_mut()
+      .get_mapped_type_bounds(ty, self.ice_reporter);
     let lower_bound = &bounds.lower_bound;
     let upper_bound = &bounds.upper_bound;
 
