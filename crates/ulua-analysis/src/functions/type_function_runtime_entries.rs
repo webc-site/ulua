@@ -2,9 +2,10 @@
 //! 孪生）的共享实现。各入口保持函数名与守卫语义不变，仅把「消息前缀 + 读/写字段」
 //! 两个分叉点参数化：诊断消息经 `format_args!("{prefix}: ...")` 拼出与原手写字面量
 //! 逐字节一致的串。入口本身是 safe `fn`——孪生入口以 `&mut LuaState` 收形，真正的
-//! C 边界在 `c_thunk!` 生成的 `unsafe extern "C-unwind"` thunk；本模块的 unsafe 仅
-//! 收口在保留 `unsafe fn` 的 `push_type_pack`/`push_table_indexer` 调用点上
-//! （二者解引用 arena 节点句柄，前提见其 `# Safety`）。
+//! C 边界在 `c_thunk!` 生成的 `unsafe extern "C-unwind"` thunk；本模块及其孪生
+//! 推栈实现（`push_type_pack`/`push_table_indexer`）已全部收形为 safe `fn`，
+//! arena 节点句柄解引用经 `as_type()`/`get_type_function_type_*` safe 门面，
+//! 仅 `lua_createtable` FFI 调用点保留窄 `unsafe {}` 块。
 
 use ulua_common::fflag;
 use ulua_vm::records::lua_state::LuaState;
@@ -275,9 +276,9 @@ pub(crate) fn get_parent(l: &mut LuaState, read: bool) -> i32 {
 /// 取 `type.readindexer`/`type.writeindexer`（C++ `getReadIndexer`/
 /// `getWriteIndexer` 共用骨架，仅消息前缀随 `prefix` 分叉）。
 ///
-/// 内存安全前提：`l` 由 `&mut` 承载；`indexer` 借用自 class-index 命中的 arena
-/// 存活节点。仅 `push_table_indexer`（保留 `unsafe fn`，其内句柄解引用前提见其
-/// `# Safety`）调用点保留 `unsafe` 块；`throw_type_error` 已降级为 safe fn。
+/// 调用序契约（正确性，非内存安全）：`l` 由 `&mut` 承载；`indexer` 借用自 class-index
+/// 命中的 arena 存活节点，句柄解引用经 `push_table_indexer` 内的 `as_type()` safe
+/// 门面收口；`push_table_indexer` 与 `throw_type_error` 均已降级为 safe fn。
 pub(crate) fn get_indexer(l: &mut LuaState, prefix: &str) -> i32 {
   let argument_count = l.get_top();
   if argument_count != 1 {
@@ -290,19 +291,12 @@ pub(crate) fn get_indexer(l: &mut LuaState, prefix: &str) -> i32 {
   let self_ty = get_type_user_data(l, 1);
 
   if let Some(tftt) = get_type_function_type_id::<TypeFunctionTableType>(self_ty) {
-    // Safety: 保留 `unsafe fn` `push_table_indexer`；`indexer` 为 arena 存活节点字段，其内
-    // 句柄的存活前提由该函数 `# Safety` 文档所述消费契约担保（同源守卫）。
-    unsafe {
-      push_table_indexer(l, &tftt.indexer);
-    }
+    push_table_indexer(l, &tftt.indexer);
     return 1;
   }
 
   if let Some(tfct) = get_type_function_type_id::<TypeFunctionExternType>(self_ty) {
-    // Safety: 同上，保留 `unsafe fn` `push_table_indexer` 对 extern 侧 indexer 字段。
-    unsafe {
-      push_table_indexer(l, &tfct.indexer);
-    }
+    push_table_indexer(l, &tfct.indexer);
     return 1;
   }
 
@@ -321,8 +315,8 @@ pub(crate) fn get_indexer(l: &mut LuaState, prefix: &str) -> i32 {
 /// 字段随参数分叉，两者都是整包 push。
 ///
 /// 内存安全前提：`l` 由 `&mut` 承载；`tfft` 为 class-index 命中的 arena 存活节点
-/// 借用；pack 字段是 type_pack_arena 句柄、连同 `l` 交给保留 `unsafe fn`
-/// `push_type_pack`（其 `# Safety` 同源契约）。
+/// 借用；pack 字段是 type_pack_arena 句柄、连同 `l` 交给 safe `push_type_pack`
+/// （其内解引用经 `as_type()`/`get_type_function_type_pack_id` safe 门面收口）。
 pub(crate) fn get_function_pack(l: &mut LuaState, prefix: &str, params: bool) -> i32 {
   let argument_count = l.get_top();
   if argument_count != 1 {
@@ -352,10 +346,7 @@ pub(crate) fn get_function_pack(l: &mut LuaState, prefix: &str, params: bool) ->
   } else {
     tfft.ret_types
   };
-  // Safety: 保留 `unsafe fn` `push_type_pack`，pack 为本次调用期存活的 arena 句柄。
-  unsafe {
-    push_type_pack(l, pack);
-  }
+  push_type_pack(l, pack);
 
   1
 }

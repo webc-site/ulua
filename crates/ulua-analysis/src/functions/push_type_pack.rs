@@ -17,102 +17,86 @@ use crate::{
     type_function_variadic_type_pack::TypeFunctionVariadicTypePack,
   },
   type_aliases::{
-    type_function_type_pack_id::TypeFunctionTypePackId,
+    type_function_type_pack_id::TypeFunctionTypePackId, type_function_type_id::AsTypeFunctionType,
     type_function_type_variant::TypeFunctionTypeVariant,
   },
 };
 
-/// # Safety
-/// `l` 必须是当前调用栈有效、且已挂载 `TypeFunctionRuntime` 的 `lua_State*`；`tp` 须为空，
-/// 或指向 `TypeFunctionRuntime` 的 `type_pack_arena` 中存活的序列化 pack 节点（shallow+deep
-/// 序列化已完成）；调用期间单线程独占 VM 栈。对应 C++
+/// 调用序契约（正确性，非内存安全）：`l` 的存活与本次调用的栈独占由 `&mut` 承载；
+/// `tp` 须为 `TypeFunctionRuntime` 的 `type_pack_arena` 中存活的序列化 pack 句柄
+/// （shallow+deep 序列化完成后才会被推送）——节点解引用一律经 safe 门面
+/// （`get_type_function_type_pack_id`/`as_pack`/`as_type`，arena 地址不迁移的构造
+/// 不变量收口其内部 unsafe）。对应 C++
 /// `void pushTypePack(lua_State* L, TypeFunctionTypePackId tp)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:1254`）。
-pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId) {
-  // Safety: 前置条件逐项——(1) `l` 按本函数契约是宿主 lua 虚拟机创建的存活
-  // lua_State（crate 的 LuaState 是不透明镜像类型），`l as *mut LuaState` 为
-  // 同一对象的重解释，lua_newstate 保证其对齐；(2) tp 是 TypeFunctionRuntime
-  // bump arena 中的完整序列化 pack 节点（仅在 shallow+deep 序列化完成后被推送），
-  // get_type_function_type_pack_id 按 class index 分派：命中 Some 即动态类型正确，
-  // head 元素与 variadic 的 `type_id` 同为 arena 分配/序列化回填的非空节点，`(**el)`、
-  // `(*(*tfvp).type_id)` 与 C++ oracle `tfvp->type->type`（TypeFunctionRuntime.cpp:1254）
-  // 同前提；(3)
-  // lua_createtable/lua_rawseti/lua_setfield/throw_type_error 依 Lua C-API 栈约定
-  // 使用：createtable 压入 1 表，字段经 setfield(rawseti) 弹出，键名是 lua_names 的静态 NUL 结尾
-  // NUL 结尾字面量；整块单线程串行执行，无别名。
-  unsafe {
-    if let Some(tftp) = get_type_function_type_pack_id::<TypeFunctionTypePack>(tp) {
-      lua_createtable(l.as_mut_ptr(), 0, 2);
+pub(crate) fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId) {
+  if let Some(tftp) = get_type_function_type_pack_id::<TypeFunctionTypePack>(tp) {
+    // Safety: `l` 按 `&mut` 契约为宿主 lua 虚拟机创建的存活 lua_State（crate 的
+    // LuaState 是不透明镜像类型），`l.as_mut_ptr()` 为同一对象的重解释；createtable
+    // 压入 1 表，后续字段经 setfield(rawseti) 弹出，单线程串行执行、无别名。
+    unsafe { lua_createtable(l.as_mut_ptr(), 0, 2) };
 
-      if !tftp.head.is_empty() {
-        lua_createtable(l.as_mut_ptr(), tftp.head.len() as i32, 0);
-        for (idx, el) in tftp.head.iter().enumerate() {
-          alloc_type_user_data(l, (**el).type_variant.clone(), false);
-          lua_rawseti(l, -2, (idx + 1) as i32);
-        }
-
-        l.set_field_bytes(-2, FIELD_HEAD);
+    if !tftp.head.is_empty() {
+      // Safety: 同上，createtable 压入 head 长的数组表，逐项 rawseti 消费栈顶。
+      unsafe { lua_createtable(l.as_mut_ptr(), tftp.head.len() as i32, 0) };
+      for (idx, el) in tftp.head.iter().enumerate() {
+        alloc_type_user_data(l, el.as_type().type_variant.clone(), false);
+        lua_rawseti(l, -2, (idx + 1) as i32);
       }
 
-      if let Some(tail) = tftp.tail {
-        push_type_pack_tail(l, tail);
-        l.set_field_bytes(-2, FIELD_TAIL);
-      }
-    } else if let Some(tfvp) = get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tp) {
-      lua_createtable(l.as_mut_ptr(), 0, 1);
-
-      alloc_type_user_data(l, (*tfvp.type_id).type_variant.clone(), false);
-      l.set_field_bytes(-2, FIELD_TAIL);
-    } else if let Some(tfgp) = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tp) {
-      lua_createtable(l.as_mut_ptr(), 0, 1);
-
-      alloc_type_user_data(
-        l,
-        TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
-          is_named: tfgp.is_named,
-          is_pack: true,
-          name: tfgp.name.clone(),
-        }),
-        false,
-      );
-      l.set_field_bytes(-2, FIELD_TAIL);
-    } else {
-      throw_type_error(l, format_args!("unsupported type pack type"));
+      l.set_field_bytes(-2, FIELD_HEAD);
     }
+
+    if let Some(tail) = tftp.tail {
+      push_type_pack_tail(l, tail);
+      l.set_field_bytes(-2, FIELD_TAIL);
+    }
+  } else if let Some(tfvp) = get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tp) {
+    // Safety: 同上，createtable 压入 1 表，tail 字段经 setfield 消费。
+    unsafe { lua_createtable(l.as_mut_ptr(), 0, 1) };
+
+    alloc_type_user_data(l, tfvp.type_id.as_type().type_variant.clone(), false);
+    l.set_field_bytes(-2, FIELD_TAIL);
+  } else if let Some(tfgp) = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tp) {
+    // Safety: 同上，createtable 压入 1 表，tail 字段经 setfield 消费。
+    unsafe { lua_createtable(l.as_mut_ptr(), 0, 1) };
+
+    alloc_type_user_data(
+      l,
+      TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
+        is_named: tfgp.is_named,
+        is_pack: true,
+        name: tfgp.name.clone(),
+      }),
+      false,
+    );
+    l.set_field_bytes(-2, FIELD_TAIL);
+  } else {
+    throw_type_error(l, format_args!("unsupported type pack type"));
   }
 }
 
-/// # Safety
-/// `l` 须为存活且本次调用独占的 `LuaState`（由 `&mut` 接收者承载，写栈经 C-API）。
-/// `tail` 须为
-/// 非空且指向存活类型函数 pack 节点的 `TypeFunctionTypePackId`，且其变体属于
-/// 被识别的 variadic/generic pack——本函数在 null 检查后以 `(*tfvp).type_id` /
-/// `(*tfgp).…` 解引用它，并经 `alloc_type_user_data` 与 Lua C-API（FFI）写栈。
-unsafe fn push_type_pack_tail(l: &mut LuaState, tail: TypeFunctionTypePackId) {
-  // Safety: 依函数头 # Safety——`l` 为本次调用独占的存活 lua_State，
-  // tail 为运行时 arena 中存活 pack 节点；get_type_function_type_pack_id
-  // 按 class index 分派，命中 Some 即类型正确，`(*(*tfvp).type_id)` 的 type_id
-  // 已由 deep 序列化回填（与 C++ pushTypePack 尾部同一解引用）；
-  // alloc_type_user_data/throw_type_error 按 Lua C-API 栈约定
-  // 传参，格式串收敛在 throw_type_error 一处；单线程串行、无别名。
-  unsafe {
-    if let Some(tfvp) = get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tail) {
-      alloc_type_user_data(l, (*tfvp.type_id).type_variant.clone(), false);
-      return;
-    }
-
-    if let Some(tfgp) = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tail) {
-      alloc_type_user_data(
-        l,
-        TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
-          is_named: tfgp.is_named,
-          is_pack: true,
-          name: tfgp.name.clone(),
-        }),
-        false,
-      );
-      return;
-    }
-
-    throw_type_error(l, format_args!("unsupported type pack type"));
+/// 调用序契约（正确性，非内存安全）：`l` 的存活/独占由 `&mut` 承载；`tail` 须为
+/// 存活 pack arena 句柄且其变体属于被识别的 variadic/generic pack——解引用经
+/// `get_type_function_type_pack_id`/`as_type` safe 门面收口，违反调用序仅得到
+/// 错误诊断而非内存不安全。
+fn push_type_pack_tail(l: &mut LuaState, tail: TypeFunctionTypePackId) {
+  if let Some(tfvp) = get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tail) {
+    alloc_type_user_data(l, tfvp.type_id.as_type().type_variant.clone(), false);
+    return;
   }
+
+  if let Some(tfgp) = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tail) {
+    alloc_type_user_data(
+      l,
+      TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
+        is_named: tfgp.is_named,
+        is_pack: true,
+        name: tfgp.name.clone(),
+      }),
+      false,
+    );
+    return;
+  }
+
+  throw_type_error(l, format_args!("unsupported type pack type"));
 }
