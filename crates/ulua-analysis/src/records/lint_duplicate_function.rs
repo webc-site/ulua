@@ -9,7 +9,7 @@ use ulua_ast::{
     node_handle::OptNode,
   },
   rtti::ast_node_try_as,
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_common::records::dense_hash_map::DenseHashMap;
 use ulua_config::enums::code::Code;
