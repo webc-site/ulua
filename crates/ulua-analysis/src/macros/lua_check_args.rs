@@ -67,9 +67,11 @@ macro_rules! lua_check_tag {
 ///
 /// 展开与收口前手抄的 9 行骨架逐字符等价：`fflag` 与 `throw_type_error` 按宏
 /// 展开点解析（各入口均已 import）；消息经 `concat!` 拼接为同一字面量。
+/// 节点 `frozen` 读只经 [`AsTypeFunctionType::as_type`] 门面（该 trait 须在展开点入
+/// 作用域），宏本体不再出现裸解引用。
 macro_rules! lua_check_not_frozen {
   ($l:expr, $self_ty:expr, $prefix:literal) => {
-    if fflag::LuauTypeFunctionSupportsFrozen.get() && (*$self_ty).frozen {
+    if fflag::LuauTypeFunctionSupportsFrozen.get() && $self_ty.as_type().frozen {
       throw_type_error(
         $l,
         format_args!(concat!(

@@ -10,19 +10,18 @@ use crate::{
 };
 
 /// # Safety
-/// `l` 须为存活 `LuaState` 且**不得被宿主回调重入**：本票把首参收形为引用形，但体内仍有一处真实
-/// 裸指针转手——`cocreate` 尚未收形，须把 `l` 的自身地址交其重建独占借用（借用窗止于当次调用，
-/// 转交期间本函数不得再经 `l` 访问）。该转手不是纯形式：`cocreate` → `lua_newthread` 会走
-/// `lua_c_check_gc!`/线程屏障并在末尾把同一 `*mut LuaState` 交给宿主 `cb.userthread` 回调，若宿主
-/// 回调就地再取该帧的可变引用，`&mut` 接收者所承诺的独占即被打破（别名 UB），故此前提超出
-/// `&mut LuaState` 所能承载，保留 `unsafe fn`；`cocreate` 对非函数实参经 `check_type` 抛错发散。
-/// 随后的 `auxwrapy_arm`/`auxwrapcont_arm` 是写进闭包的静态 `extern "C-unwind"` 函数指针，其续延
-/// 契约要求上值 1 恰为 `cocreate` 刚压入的新线程槽（`nup = 1` 即捕获该槽），`debugname` 传 null
-/// 对应 cpp 的 `NULL`（被调只存指针不读）。cpp `lcorolib.cpp:340`。
+/// 首参 `l` 的存活/独占前提已由 `&mut` 接收者类型承载；保留 `unsafe fn` 的真前提在 `cocreate`
+/// 被调一侧：`cocreate` 内部 `lua_newthread` → `lua_c_check_gc!`/线程屏障并解引用新建线程指针，
+/// 仍是带 `# Safety` 的 `unsafe fn`，故本函数以 `unsafe` 调用之（借用窗止于本次调用）；`cocreate`
+/// 对非函数实参经 `check_type` 抛错发散。
+/// 随后的 `auxwrapy_arm`/`auxwrapcont_arm` 是写进闭包的静态 `extern "C-unwind"` 函数指针（由被调方
+/// 存储、不在本帧解引用），其续延契约要求上值 1 恰为 `cocreate` 刚压入的新线程槽（`nup = 1` 即捕获
+/// 该槽），`debugname` 传 null 对应 cpp 的 `NULL`（被调只存指针不读）。cpp `lcorolib.cpp:340`。
 pub unsafe fn cowrap(l: &mut LuaState) -> i32 {
-  // SAFETY: `l.as_mut_ptr()` 即本帧存活 `LuaState` 自身地址（由 `&mut` 接收者保证存活/对齐），
-  // 被调方按上述契约就地重建借用、不留存该指针，借用窗止于本次调用
-  unsafe { cocreate(l.as_mut_ptr()) };
+  // SAFETY: `cocreate` 为带 `# Safety` 的 `unsafe fn`（内部 lua_newthread 走 GC/线程屏障且解
+  // 引用新线程指针）；`l` 为接收者存活独占借用，借用于本次调用，返回后本函数不再经 `l` 之前的
+  // 裸地址访问
+  unsafe { cocreate(l) };
 
   lua_pushcclosurek_ref(l, Some(auxwrapy_arm), null(), 1, Some(auxwrapcont_arm));
 
