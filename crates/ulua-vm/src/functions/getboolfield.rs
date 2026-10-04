@@ -2,23 +2,17 @@ use crate::{functions::lua_rawgetfield::lua_rawgetfield_bytes, records::lua_stat
 
 /// `key` 为纯 Rust 字节切片（如 `b"isdst"`），直接传给 `lua_rawgetfield_bytes`。
 ///
-/// # Safety
-///
-/// `L` 必须指向存活 `LuaState` 且表位于约定的相对索引处，键/值槽按各参数约定可读/可写。
-pub(crate) unsafe fn getboolfield(l: *mut LuaState, key: &[u8]) -> i32 {
-  // SAFETY: 契约保证 `L` 栈顶相对索引处为可读表，rawget 探测与布尔读取在当前帧栈界内完成
-  unsafe {
-    lua_rawgetfield_bytes(&mut *l, -1, key);
+/// r19-w4 收形：首参 `*mut LuaState` → `&mut LuaState`，存活与独占交由类型承载；
+/// 体内 `lua_rawgetfield_bytes`/`LuaState` 方法族均收 `&mut self`/`&self`，无调用方
+/// 传入的裸指针参数被解引用（`key: &[u8]` 亦为引用），依 §2 假合规防线判例（dev
+/// `SubtypingEnvironment::get_mapped_type_bounds` 降 safe 判例）由 `unsafe fn` 降为 `fn`。
+pub(crate) fn getboolfield(l: &mut LuaState, key: &[u8]) -> i32 {
+  lua_rawgetfield_bytes(l, -1, key);
 
-    let is_nil = (*l).is_nil(-1);
+  let is_nil = l.is_nil(-1);
 
-    let res: i32 = if is_nil {
-      -1
-    } else {
-      (*l).to_boolean(-1) as i32
-    };
+  let res: i32 = if is_nil { -1 } else { l.to_boolean(-1) as i32 };
 
-    (*l).pop(1);
-    res
-  }
+  l.pop(1);
+  res
 }

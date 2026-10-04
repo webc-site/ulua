@@ -72,10 +72,6 @@ impl<'a> BcVmConst<'a> {
     pub fn as_number() -> f64 = Number, 0.0;
     /// 读活跃的字符串字节切片（`string_view` 语义：原始字节，不要求 UTF-8）。
     pub fn as_string() -> &'a [u8] = String, &[];
-    /// 按 import id 读取活跃变体。
-    pub fn as_import() -> u32 = Import, 0;
-    /// 按子闭包 proto 下标读取活跃变体。
-    pub fn as_closure() -> u32 = Closure, 0;
     /// 按 64 位有符号整型读取活跃变体。
     pub(crate) fn as_integer() -> i64 = Integer, 0;
   });

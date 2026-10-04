@@ -1,6 +1,6 @@
 //! Source: `tests/Fixture.h`
 
-use std::{rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use hashbrown::HashMap;
 use ulua_analysis::{
@@ -15,13 +15,18 @@ use ulua_ast::records::ast_expr::AstExpr;
 
 use crate::records::{source_table::SourceTable, test_require_suggester::TestRequireSuggester};
 
-#[derive(Debug, Default)]
+/// 测试解析器的可变状态全部经 `Rc` 共享：`Frontend` 独占持有本类型的克隆
+/// （`fixture_get_frontend` 移交所有权）后，夹具句柄与 frontend 内实例读写
+/// 的是同一份表，与 cpp「Frontend 存裸指针、宿主直改字段」的可见性等价。
+#[derive(Debug, Default, Clone)]
 pub struct TestFileResolver {
   /// cpp `TestFileResolver::source`。`Rc` 是为了让 `TestRequireSuggester` 及其
   /// 派生的 [`crate::records::test_require_node::TestRequireNode`] 共享同一张表（cpp 用 `&resolver->source` 裸指针）。
   pub source: Rc<SourceTable>,
-  pub source_types: HashMap<ModuleName, SourceCodeType>,
-  pub environments: HashMap<ModuleName, String>,
+  /// 内部可变的共享表：见结构体注（宿主与 frontend 各持一份句柄仍可互通）。
+  pub source_types: Rc<RefCell<HashMap<ModuleName, SourceCodeType>>>,
+  /// 同 `source_types`。
+  pub environments: Rc<RefCell<HashMap<ModuleName, String>>>,
   /// C++ `FileResolver::requireSuggester` 成员；经 trait 的
   /// `require_suggester` 读取。
   ///
@@ -78,5 +83,9 @@ impl FileResolver for TestFileResolver {
 
   fn require_suggester(&self) -> Option<&Arc<dyn RequireSuggester>> {
     self.require_suggester.as_ref()
+  }
+
+  fn enable_require_suggester(&mut self) {
+    Self::enable_require_suggester(self)
   }
 }

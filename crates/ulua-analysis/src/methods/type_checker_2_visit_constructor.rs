@@ -11,16 +11,19 @@ use ulua_ast::{
   records::{
     ast_class_method::AstClassMethod, ast_class_property::AstClassProperty,
     ast_stat_assign::AstStatAssign, ast_stat_class::AstStatClass, ast_type::AstType,
+    node_handle::OptNode,
   },
   rtti::ast_node_try_as,
-  visit::{ast_expr_visit, ast_stat_visit},
+  visit::{ast_expr_visit_ref, ast_stat_visit_ref},
 };
 use ulua_common::{LUAU_ASSERT, fflag, records::dense_hash_set::DenseHashSet};
 
 use crate::{
   records::{
-    arena_handle::alias_ref, find_uninitialized_accesses::FindUninitializedAccesses,
-    syntax_error::SyntaxError, type_checker_2::TypeChecker2,
+    arena_handle::{alias, alias_ref},
+    find_uninitialized_accesses::FindUninitializedAccesses,
+    syntax_error::SyntaxError,
+    type_checker_2::TypeChecker2,
     uninitialized_field_access::UninitializedFieldAccess,
   },
   type_aliases::type_error_data::TypeErrorData,
@@ -29,12 +32,12 @@ use crate::{
 impl TypeChecker2 {
   /// cpp `visitConstructor`。`stat`/`method` 为当前模块 AST arena 存活节点的
   /// 共享引用（原 `*mut AstStatClass` 形参已引用化，非空由引用类型承载），
-  /// `method.function` 经 alias_ref 门面换引用；指针仅保留身份比较与
-  /// visit 门面（visit.rs 契约）的传参用途。
+  /// `method.function` 经 `alias` 门面物化独占借用（visitor 写穿子树需独占，
+  /// 与旧指针门面的写穿契约一致）；指针仅保留身份比较用途。
   pub fn visit_constructor(&mut self, stat: &AstStatClass, method: &AstClassMethod) {
     LUAU_ASSERT!(fflag::DebugLuauUserDefinedClasses.get());
 
-    let function = alias_ref(method.function);
+    let function = alias(method.function);
 
     if function.args.is_empty() {
       self.report_error_type_error_data_location(
@@ -105,16 +108,16 @@ impl TypeChecker2 {
     // 同生死的裸指针共享语义一致。
     let mut finder = FindUninitializedAccesses::new(self_local, fields_ptr, method_names);
 
-    for stmt in function.body.body.iter_nodes() {
+    for stmt in function.body.body.iter_nodes_mut() {
       let stmt_ref = stmt.get();
       // 只检查无条件执行的赋值语句。
       if let Some(assignment) = ast_node_try_as::<AstStatAssign>(stmt_ref) {
-        // 先在赋值右侧搜索越界的字段访问（ast_expr_visit 为 visit.rs 的
-        // 指针门面 unsafe fn，节点来自 assignment.values 的 arena 元素）。
-        for value in assignment.values.iter() {
-          // Safety: value 是 assignment.values 数组界内元素，parser 写入的
-          // arena 存活节点。
-          unsafe { ast_expr_visit(*value, &mut finder) };
+        // 先在赋值右侧搜索越界的字段访问：values 裸槽经 `OptNode::from_ptr`
+        // 句柄边界折叠 null（与旧指针门面同语义）后出借独占借用喂 `_ref` 门面。
+        for &value in assignment.values.iter() {
+          if let Some(expr) = OptNode::from_ptr(value).get_mut() {
+            ast_expr_visit_ref(expr, &mut finder);
+          }
         }
 
         // 再登记哪些字段已初始化（iter_nodes 安全门面直出元素引用）。
@@ -141,9 +144,9 @@ impl TypeChecker2 {
           }
         }
       } else {
-        // Safety: stmt 是 function.body.body 界内元素（arena 存活节点），
-        // ast_stat_visit 为 visit.rs 的指针门面 unsafe fn。
-        unsafe { ast_stat_visit(stmt.as_ptr(), &mut finder) };
+        // 非赋值语句整树推进：句柄 `get_mut()` 出借独占借用喂 `_ref` 门面，
+        // 全链路 safe（遍历序与时机同旧指针门面）。
+        ast_stat_visit_ref(stmt.get_mut(), &mut finder);
       }
     }
 

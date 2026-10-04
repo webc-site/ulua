@@ -25,13 +25,6 @@ pub trait IntoLua: Sized {
 pub trait FromLua: Sized {
   /// Perform the conversion.
   fn from_lua(value: Value, lua: &Lua) -> Result<Self>;
-
-  /// Convert an argument at 1-based position `i`. The default forwards to
-  /// [`FromLua::from_lua`]; specific impls can produce nicer messages.
-  /// Mirrors `mlua::FromLua::from_lua_arg`.
-  fn from_lua_arg(arg: Value, _i: usize, _to: Option<&str>, lua: &Lua) -> Result<Self> {
-    Self::from_lua(arg, lua)
-  }
 }
 
 /// Convert a Rust value into a sequence of Lua values (multiple returns / args).

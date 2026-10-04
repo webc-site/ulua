@@ -36,14 +36,16 @@ pub struct Fixture {
   /// C++ `std::unique_ptr<SourceModule>` (null until a parse happens).
   pub source_module: Option<Box<SourceModule>>,
   pub module_resolver: NullModuleResolver,
-  /// 两个 resolver 以 `Box` 钉在堆地址上（fe-selfptr 挂账⑥收口）：`Frontend`
-  /// 按 C++ 语义只存其裸句柄（`NonNull<dyn FileResolver>` /
-  /// `NonNull<ConfigResolver>`，且 `TestConfigResolver` 的 C ABI 回桥以
+  /// `config_resolver` 以 `Box` 钉在堆地址上：`Frontend` 按 C++ 语义只存其裸
+  /// 句柄（`NonNull<ConfigResolver>`，且 `TestConfigResolver` 的 C ABI 回桥以
   /// base 字段地址反推宿主），而 `Fixture` 会按值移动（`XxxFixture::default()`
   /// 返回值搬进调用槽）。钉堆后句柄在构造期一次布线即恒有效，
   /// `get_frontend` 不再需要每次访问刷新裸句柄。
   pub config_resolver: Box<TestConfigResolver>,
-  pub file_resolver: Box<TestFileResolver>,
+  /// 夹具侧句柄：可变状态全部经 `Rc` 共享槽承载（见 `TestFileResolver` 注）。
+  /// `get_frontend` 把克隆移交 `Frontend` 独占持有后，本句柄与 frontend 内
+  /// 实例读写同一份表，测试对 `file_resolver.source` 等既有访问形态不变。
+  pub file_resolver: TestFileResolver,
 
   // ScopedFastFlag members are declared first in C++, so their destructors run
   // last. Rust drops fields in declaration order, so keep them at the end.

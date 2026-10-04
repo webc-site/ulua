@@ -3,10 +3,13 @@
 use ulua_ast::{
   records::{ast_node::AstNode, ast_stat_block::AstStatBlock},
   rtti::AstNodePtr,
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 
-use crate::records::{arena_handle::alias_opt, find_node::FindNode};
+use crate::records::{
+  arena_handle::{alias_opt, alias_opt_mut},
+  find_node::FindNode,
+};
 
 impl FindNode {
   /// 对 AST 节点位置进行命中检测并记录 best 节点指针。
@@ -32,12 +35,12 @@ impl FindNode {
   pub(crate) fn visit_ast_stat_block(&mut self, block: *mut AstStatBlock) -> bool {
     self.visit_ast_node(block.as_ast_node());
 
-    let Some(block_ref) = alias_opt(block) else {
+    let Some(block_ref) = alias_opt_mut(block) else {
       return false;
     };
-    let body = &block_ref.body;
+    let body = &mut block_ref.body;
 
-    for stat in body.iter_nodes() {
+    for stat in body.iter_nodes_mut() {
       let stat_ref = stat.get();
 
       if stat_ref.base.location.end < self.pos {
@@ -47,11 +50,9 @@ impl FindNode {
         break;
       }
 
-      // Safety: stat 同上为非空存活 AstStat 指针，self 实现 AstVisitor；与 C++
-      // stat->visit(visitor) 的动态分派同前提。
-      unsafe {
-        ast_stat_visit(stat.as_ptr(), self);
-      }
+      // 句柄 `get_mut()` 逐级出借独占借用喂 `_ref` 门面，全链路 safe（对应
+      // cpp 裸指针分发路径，遍历序与时机不变）。
+      ast_stat_visit_ref(stat.get_mut(), self);
     }
 
     false

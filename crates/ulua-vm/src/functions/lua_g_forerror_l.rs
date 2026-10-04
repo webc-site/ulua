@@ -14,7 +14,7 @@ use crate::{
 /// 本函数经 `lua_g_runerror` 格式化消息并抛错，返回 `!`（永不正常返回）。
 pub(crate) unsafe fn lua_g_forerror_str(l: *mut LuaState, o: *const TValue, what: &str) -> ! {
   unsafe {
-    let t: *const c_char = lua_t_objtypename(l, &*o);
+    let t: *const c_char = lua_t_objtypename(&*l, &*o);
 
     lua_g_runerror!(
       l,
