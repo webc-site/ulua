@@ -26,9 +26,7 @@ pub(crate) fn lua_l_where(l: &mut LuaState, level: i32) {
   for _ in 0..level {
     if ci == l.base_ci {
       lua_rawcheckstack(l, 1);
-      // SAFETY: `l` 存活独占由接收者引用承载（契约）；`lua_pushlstring_bytes` 借引用形写
-      // 刚由 `lua_rawcheckstack(l, 1)` 预留的 top 槽，前置序与收口前逐位一致。
-      unsafe { lua_pushlstring_bytes(l, b"") };
+      lua_pushlstring_bytes(l, b"");
       return;
     }
     // SAFETY: 契约保证 `base_ci <= ci` 且二者同处一个 CallInfo 数组，`sub(1)` 上跳一层
@@ -67,7 +65,5 @@ pub(crate) fn lua_l_where(l: &mut LuaState, level: i32) {
   }
 
   lua_rawcheckstack(l, 1);
-  // SAFETY: 同前一处——`l` 存活独占由接收者引用承载，写入槽由 `lua_rawcheckstack(l, 1)`
-  // 预留。
-  unsafe { lua_pushlstring_bytes(l, b"") };
+  lua_pushlstring_bytes(l, b"");
 }
