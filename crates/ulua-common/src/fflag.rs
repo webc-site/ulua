@@ -29,6 +29,12 @@ luau_flag_module! {
   LUAU_FASTFLAGVARIABLE!(DEBUG_CODEGEN_CHAOS_A64, DebugCodegenChaosA64);
   // crates/ulua-code-gen translate_inst_call_inline（本仓 JIT 用户函数 call inlining 刀）
   LUAU_FASTFLAGVARIABLE!(LUAU_JIT_CALL_INLINE, LuauJitCallInline);
+  // 本仓 JIT SETTABLE 哈希直插内联刀（translate_inst_get_table：数字键主位空直插/
+  // 等键覆写，nsieve 写侧归因 77% RT 回落的针对性快路）
+  LUAU_FASTFLAGVARIABLE!(LUAU_JIT_SETTABLE_HASH_INLINE, LuauJitSettableHashInline);
+  // 本仓 JIT setmetatable FASTCALL 下沉刀（translate_builtin_setmetatable +
+  // ulua-vm lua_codegen_setmetatable：oop 归因 call_fallback 19% + 字符串驻留 6%）
+  LUAU_FASTFLAGVARIABLE!(LUAU_JIT_SETMETATABLE_FASTCALL, LuauJitSetmetatableFastcall);
   // JIT call inlining 第 2 阶段：CALL 站点 proto 观测 + 暖重编译 + proto 守卫
   // （ulua-vm call_obs / call_prolog，ulua-code-gen translate_inst_call_inline）
   LUAU_FASTFLAGVARIABLE!(LUAU_JIT_CALL_INLINE_OBS, LuauJitCallInlineObs);

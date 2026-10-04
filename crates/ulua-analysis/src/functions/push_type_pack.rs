@@ -32,21 +32,20 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
   // lua_State（crate 的 LuaState 是不透明镜像类型），`l as *mut LuaState` 为
   // 同一对象的重解释，lua_newstate 保证其对齐；(2) tp 是 TypeFunctionRuntime
   // bump arena 中的完整序列化 pack 节点（仅在 shallow+deep 序列化完成后被推送），
-  // get_type_function_type_pack_id 按 class index 分派：判空后 `(*tftp)`/`(*tfvp)`/
-  // `(*tfgp)` 命中即动态类型正确且基址重合；head 元素与 variadic 的 `type_id`
-  // 同为 arena 分配/序列化回填的非空节点，`(**el)`、`(*(*tfvp).type_id)` 与 C++
-  // oracle `tfvp->type->type`（TypeFunctionRuntime.cpp:1254）同前提；(3)
+  // get_type_function_type_pack_id 按 class index 分派：命中 Some 即动态类型正确，
+  // head 元素与 variadic 的 `type_id` 同为 arena 分配/序列化回填的非空节点，`(**el)`、
+  // `(*(*tfvp).type_id)` 与 C++ oracle `tfvp->type->type`（TypeFunctionRuntime.cpp:1254）
+  // 同前提；(3)
   // lua_createtable/lua_rawseti/lua_setfield/throw_type_error 依 Lua C-API 栈约定
   // 使用：createtable 压入 1 表，字段经 setfield(rawseti) 弹出，键名是 lua_names 的静态 NUL 结尾
   // NUL 结尾字面量；整块单线程串行执行，无别名。
   unsafe {
-    let tftp = get_type_function_type_pack_id::<TypeFunctionTypePack>(tp);
-    if !tftp.is_null() {
+    if let Some(tftp) = get_type_function_type_pack_id::<TypeFunctionTypePack>(tp) {
       lua_createtable(l.as_mut_ptr(), 0, 2);
 
-      if !(*tftp).head.is_empty() {
-        lua_createtable(l.as_mut_ptr(), (*tftp).head.len() as i32, 0);
-        for (idx, el) in (*tftp).head.iter().enumerate() {
+      if !tftp.head.is_empty() {
+        lua_createtable(l.as_mut_ptr(), tftp.head.len() as i32, 0);
+        for (idx, el) in tftp.head.iter().enumerate() {
           alloc_type_user_data(l, (**el).type_variant.clone(), false);
           lua_rawseti(l, -2, (idx + 1) as i32);
         }
@@ -54,36 +53,30 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
         l.set_field_bytes(-2, FIELD_HEAD);
       }
 
-      if let Some(tail) = (*tftp).tail {
+      if let Some(tail) = tftp.tail {
         push_type_pack_tail(l, tail);
         l.set_field_bytes(-2, FIELD_TAIL);
       }
+    } else if let Some(tfvp) = get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tp) {
+      lua_createtable(l.as_mut_ptr(), 0, 1);
+
+      alloc_type_user_data(l, (*tfvp.type_id).type_variant.clone(), false);
+      l.set_field_bytes(-2, FIELD_TAIL);
+    } else if let Some(tfgp) = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tp) {
+      lua_createtable(l.as_mut_ptr(), 0, 1);
+
+      alloc_type_user_data(
+        l,
+        TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
+          is_named: tfgp.is_named,
+          is_pack: true,
+          name: tfgp.name.clone(),
+        }),
+        false,
+      );
+      l.set_field_bytes(-2, FIELD_TAIL);
     } else {
-      let tfvp = get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tp);
-      if !tfvp.is_null() {
-        lua_createtable(l.as_mut_ptr(), 0, 1);
-
-        alloc_type_user_data(l, (*(*tfvp).type_id).type_variant.clone(), false);
-        l.set_field_bytes(-2, FIELD_TAIL);
-      } else {
-        let tfgp = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tp);
-        if !tfgp.is_null() {
-          lua_createtable(l.as_mut_ptr(), 0, 1);
-
-          alloc_type_user_data(
-            l,
-            TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
-              is_named: (*tfgp).is_named,
-              is_pack: true,
-              name: (*tfgp).name.clone(),
-            }),
-            false,
-          );
-          l.set_field_bytes(-2, FIELD_TAIL);
-        } else {
-          throw_type_error(l, format_args!("unsupported type pack type"));
-        }
-      }
+      throw_type_error(l, format_args!("unsupported type pack type"));
     }
   }
 }
@@ -97,25 +90,23 @@ pub(crate) unsafe fn push_type_pack(l: &mut LuaState, tp: TypeFunctionTypePackId
 unsafe fn push_type_pack_tail(l: &mut LuaState, tail: TypeFunctionTypePackId) {
   // Safety: 依函数头 # Safety——`l` 为本次调用独占的存活 lua_State，
   // tail 为运行时 arena 中存活 pack 节点；get_type_function_type_pack_id
-  // 按 class index 分派，判空命中后 `(*tfvp)`/`(*tfgp)` 类型正确、基址重合，
-  // `(*(*tfvp).type_id)` 的 type_id 已由 deep 序列化回填（与 C++ pushTypePack
-  // 尾部同一解引用）；alloc_type_user_data/throw_type_error 按 Lua C-API 栈约定
+  // 按 class index 分派，命中 Some 即类型正确，`(*(*tfvp).type_id)` 的 type_id
+  // 已由 deep 序列化回填（与 C++ pushTypePack 尾部同一解引用）；
+  // alloc_type_user_data/throw_type_error 按 Lua C-API 栈约定
   // 传参，格式串收敛在 throw_type_error 一处；单线程串行、无别名。
   unsafe {
-    let tfvp = get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tail);
-    if !tfvp.is_null() {
-      alloc_type_user_data(l, (*(*tfvp).type_id).type_variant.clone(), false);
+    if let Some(tfvp) = get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tail) {
+      alloc_type_user_data(l, (*tfvp.type_id).type_variant.clone(), false);
       return;
     }
 
-    let tfgp = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tail);
-    if !tfgp.is_null() {
+    if let Some(tfgp) = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tail) {
       alloc_type_user_data(
         l,
         TypeFunctionTypeVariant::Generic(TypeFunctionGenericType {
-          is_named: (*tfgp).is_named,
+          is_named: tfgp.is_named,
           is_pack: true,
-          name: (*tfgp).name.clone(),
+          name: tfgp.name.clone(),
         }),
         false,
       );

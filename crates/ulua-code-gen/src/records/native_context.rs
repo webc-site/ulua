@@ -12,7 +12,7 @@ use crate::{
     NativeForgLoopIterFn, NativeForgPrepXnextFn, NativeGetImportFn, NativeHCloneFn, NativeHGetnFn,
     NativeHNewFn, NativeHResizearrayFn, NativeHSetnumFn, NativeMathBinaryFn, NativeMathFrexpFn,
     NativeMathLdexpFn, NativeMathModfFn, NativeMathUnaryFn, NativeNewUserdataFn, NativeTGettmFn,
-    NativeTObjtypenamestrFn, NativeTableAccessFn,
+    NativeSetMetatableFn, NativeTObjtypenamestrFn, NativeTableAccessFn,
   },
   type_aliases::api::LuauFastFunction,
 };
@@ -43,6 +43,8 @@ pub struct NativeContext {
   pub lua_v_dolen: Option<NativeDolenFn>,
   pub lua_v_gettable: Option<NativeTableAccessFn>,
   pub lua_v_settable: Option<NativeTableAccessFn>,
+  /// JIT setmetatable 快速通道（本 fork 扩展，`SetMetatableChecked` 生成码直调）
+  pub setmetatable_checked: Option<NativeSetMetatableFn>,
   pub lua_v_concat: Option<NativeConcatFn>,
 
   pub lua_h_getn: Option<NativeHGetnFn>,
@@ -120,6 +122,7 @@ impl Default for NativeContext {
     Self {
       gate_entry: None,
       gate_exit: null_mut(),
+      setmetatable_checked: None,
       dummynode: null(),
       lua_v_lessthan: None,
       lua_v_lessequal: None,

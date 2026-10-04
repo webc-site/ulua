@@ -190,6 +190,12 @@ fn visit_vm_reg_defs_uses(
       state.use_range(vm_reg_op(ops[0]) + 1, function.int_op(ops[1]));
       state.def_range(function, vm_reg_op(ops[0]), function.int_op(ops[2]));
     }
+    IrCmd::SetMetatableChecked => {
+      // JIT setmetatable 快速通道：def ra（结果）、use obj/mt 实参寄存器
+      state.def(function, ops[0], 0);
+      state.use_(ops[1], 0);
+      state.use_(ops[2], 0);
+    }
     IrCmd::RETURN => {
       state.use_range(vm_reg_op(ops[0]), function.int_op(ops[1]));
     }
@@ -544,6 +550,7 @@ pub fn mark_dead_stores_in_inst(
     | IrCmd::INTERRUPT
     | IrCmd::CheckGc
     | IrCmd::CALL
+    | IrCmd::SetMetatableChecked
     | IrCmd::ForgloopFallback
     | IrCmd::FallbackGetglobal
     | IrCmd::FallbackSetglobal

@@ -155,7 +155,7 @@ pub fn toposort(stats: &[StatHandle<AstStat>]) -> Vec<StatHandle<AstStat>> {
     if arena[next].depends.is_empty() && !is_block_terminator(arena[next].element.get()) {
       prune(&mut arena, next);
       result.push(arena[next].element);
-    } else if !contains_function_call(arena[next].element.get()) {
+    } else if !contains_function_call(arena[next].element.get_mut()) {
       q.push_back(next);
     } else {
       result.extend(drain(&mut arena, &mut q, Some(next)));

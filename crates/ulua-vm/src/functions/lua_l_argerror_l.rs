@@ -11,7 +11,7 @@ use crate::{
 pub unsafe fn lua_l_argerror_l(l: *mut LuaState, narg: i32, extramsg: &str) -> ! {
   // SAFETY: 契约保证 l 为存活受保护帧，currfuncname 只读帧名、luaL_error 抛错不返回
   unsafe {
-    match currfuncname(l) {
+    match currfuncname(&*l) {
       Some(fname) => luaL_error!(
         l,
         "invalid argument #{} to '{}' ({})",

@@ -292,6 +292,7 @@ pub mod lua_cleartable;
 pub mod lua_clonefunction;
 pub mod lua_clonetable;
 pub mod lua_close;
+pub mod lua_codegen_setmetatable;
 pub mod lua_concat;
 pub mod lua_costatus;
 pub mod lua_cpcall;

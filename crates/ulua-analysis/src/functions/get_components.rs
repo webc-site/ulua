@@ -17,18 +17,17 @@ use crate::{
 pub(crate) fn get_components(l: &mut LuaState) -> i32 {
   // Safety: `l` 由 Lua VM 按类型函数运行时的 C 调用约定传入，非空且在整个调用内存活；
   // `l` 由 `c_thunk!` 蹦床重建为独占 `&mut`。`get_type_user_data`
-  // 返回的类型函数指针经 `is_null` 判定后才解引用：`get_type_function_type_id` 按 RTTI
-  // class-index 下转，命中即类型正确，故 `(*tfut).components`/`(*tfit).components` 及其中
-  // `*component`(arena 存活 TypeId、地址不移动) 读取 `type_variant` 合法；未命中分支的
+  // 命中 Some 的返回类型才读取 `components`：`get_type_function_type_id` 按 RTTI
+  // class-index 下转，命中即类型正确；`*component`(arena 存活 TypeId、地址不移动) 读取
+  // `type_variant` 合法；未命中分支的
   // `throw_type_error` 返回 `!`（longjmp 不返回）。单线程串行执行，VM 栈操作无并发别名。
   unsafe {
     lua_check_args!(l, != 1, "type.components: expected 1 argument, but got {}");
 
     let self_ty = get_type_user_data(l, 1);
 
-    let tfut = get_type_function_type_id::<TypeFunctionUnionType>(self_ty);
-    if !tfut.is_null() {
-      let components = &(*tfut).components;
+    if let Some(tfut) = get_type_function_type_id::<TypeFunctionUnionType>(self_ty) {
+      let components = &tfut.components;
 
       lua_createtable(l.as_mut_ptr(), components.len() as i32, 0);
       for (i, &component) in components.iter().enumerate() {
@@ -39,9 +38,8 @@ pub(crate) fn get_components(l: &mut LuaState) -> i32 {
       return 1;
     }
 
-    let tfit = get_type_function_type_id::<TypeFunctionIntersectionType>(self_ty);
-    if !tfit.is_null() {
-      let components = &(*tfit).components;
+    if let Some(tfit) = get_type_function_type_id::<TypeFunctionIntersectionType>(self_ty) {
+      let components = &tfit.components;
 
       lua_createtable(l.as_mut_ptr(), components.len() as i32, 0);
       for (i, &component) in components.iter().enumerate() {

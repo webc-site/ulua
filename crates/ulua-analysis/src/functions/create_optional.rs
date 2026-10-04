@@ -14,7 +14,7 @@ use crate::{
   },
   macros::lua_check_args,
   records::{
-    arena_handle::Handle, type_function_primitive_type::TypeFunctionPrimitiveType,
+    type_function_primitive_type::TypeFunctionPrimitiveType,
     type_function_union_type::TypeFunctionUnionType,
   },
   type_aliases::{
@@ -24,22 +24,21 @@ use crate::{
 pub(crate) fn create_optional(l: &mut LuaState) -> i32 {
   // Safety: l 为 VM 调注册闭包传入的存活 lua_State；实参个数先校验（throw_type_error 内部收口格式串
   // 字面量+匹配实参）；get_type_user_data 非 type 实参抛错，argument 指向 type_arena 存活
-  // 节点；union_ty 判 is_null 命中后才解引用读 components（bump 块地址不移动，只读）；
-  // runtime 句柄取回注册期写入主线程 thread data 的非空 TypeFunctionRuntime（null 由
-  // Handle::from_ptr 收敛为 panic），allocate_type_function_type 返回其 arena 稳定指针，
+  // 节点；union_ty 命中 Some 后才读取 components（bump 块地址不移动，只读）；
+  // runtime 句柄取回注册期写入主线程 thread data 的非空 TypeFunctionRuntime（未挂载属
+  // 契约违例，expect 收敛为确定性 panic），allocate_type_function_type 返回其 arena 稳定指针，
   // nil_id 仅作裸指针入集合不被解引用。
   unsafe {
-    let runtime = Handle::from_ptr(get_type_function_runtime(l));
+    let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
     lua_check_args!(l, != 1, "types.optional: expected 1 argument, but got {}");
 
     let argument: TypeFunctionTypeId = get_type_user_data(l, 1);
 
     let mut components: Vec<TypeFunctionTypeId> = Vec::new();
 
-    let union_ty = get_type_function_type_id::<TypeFunctionUnionType>(argument);
-    if !union_ty.is_null() {
-      components.reserve((*union_ty).components.len() + 1);
-      components.extend((*union_ty).components.iter().copied());
+    if let Some(union_ty) = get_type_function_type_id::<TypeFunctionUnionType>(argument) {
+      components.reserve(union_ty.components.len() + 1);
+      components.extend(union_ty.components.iter().copied());
     } else {
       components.push(argument);
     }

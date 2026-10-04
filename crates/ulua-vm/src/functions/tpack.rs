@@ -1,36 +1,28 @@
 use crate::{
-  functions::{c_slice, c_slice_mut, lua_createtable::lua_createtable, lua_h_setstr::lua_h_setstr},
-  macros::{
-    lua_lib_fn::lua_lib_fn, lua_s_newliteral::lua_s_newliteral, setnvalue::setnvalue,
-    setobj_2_t::setobj2t,
-  },
-  records::{lua_state::LuaState, lua_t_value::TValue, lua_table::LuaTable},
+  functions::lua_rawseti::lua_rawseti, macros::lua_lib_fn::lua_lib_fn, records::lua_state::LuaState,
 };
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn tpack(l: *mut LuaState) -> i32 {
-  unsafe {
-    let n = (*l).get_top(); // number of elements to pack
-    lua_createtable(l, n, 1); // create result table
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；收形后建表/
+/// 拷元/落 `n` 字段全经 `create_table`/`push_value`/`lua_rawseti`/`set_field_bytes` 安全门面，
+/// 不再直写新建表的 `array` 裸槽，体内已无裸操作，故本体降为安全 `fn`）：`l` 须处于可抛错、
+/// 可分配/GC 的受保护 C 帧——1..=n 号位为待打包实参（n = `get_top`），`create_table` 后新建表落在
+/// 绝对槽 `n + 1`，其后每轮 `push_value` 的顶槽即 `lua_rawseti` 待弹 value（帧余量 ≥ LUA_MINSTACK，
+/// 与 C 帧约定同形）。写入值与 cpp `setobj2t` 直写数组段逐位同值，仅多出保守写屏障（不成观测差）。
+/// cpp/VM/src/ltablib.cpp:345 tpack。
+pub fn tpack(l: &mut LuaState) -> i32 {
+  let n = l.get_top(); // number of elements to pack
+  l.create_table(n, 1); // create result table
 
-    // 栈顶槽地址经 `top_slot(-1)` 读数原语取得（createtable 后帧内既有槽，界内契约见原语）
-    let t: *mut LuaTable = (*(*l).top_slot(-1)).as_table_ptr();
-
-    // SAFETY:t->array 与栈 base 均有 n 个有效 TValue（createtable 预留）。
-    for (e, v) in c_slice_mut((*t).array, n as usize)
-      .iter_mut()
-      .zip(c_slice((*l).base, n as usize))
-    {
-      setobj2t!(l, e as *mut TValue, v as *const TValue as *mut TValue);
-    }
-
-    // t.n = number of elements
-    let nv = lua_h_setstr(l, t, lua_s_newliteral(l, b"n"));
-    setnvalue!(nv, n as f64);
-
-    1 // return table
+  let t = n + 1; // 新建表所在绝对槽
+  for i in 1..=n {
+    l.push_value(i);
+    lua_rawseti(l, t, i);
   }
+
+  l.push_integer(n); // t.n = number of elements
+  l.set_field_bytes(t, b"n");
+
+  1 // return table
 }
 
-lua_lib_fn!(pub fn tpack, tpack_arm);
+lua_lib_fn!(pub fn tpack @ref, tpack_arm);

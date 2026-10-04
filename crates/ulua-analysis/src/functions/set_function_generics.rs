@@ -18,7 +18,7 @@ pub(crate) fn set_function_generics(l: &mut LuaState) -> i32 {
 
     lua_check_tag!(
       l,
-      tfft.is_null(),
+      tfft.is_none(),
       self_ty,
       "type.setgenerics: expected self to be a function, but got {} instead"
     );
@@ -33,8 +33,10 @@ pub(crate) fn set_function_generics(l: &mut LuaState) -> i32 {
 
     let (generic_types, generic_packs) = get_generics(l, 2, "types.setgenerics");
 
-    (*tfft).generics = generic_types;
-    (*tfft).generic_packs = generic_packs;
+    // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
+    let tfft = tfft.expect("上方 is_none 分支经 throw_type_error(-> !) 早退，至此必为 Some");
+    tfft.generics = generic_types;
+    tfft.generic_packs = generic_packs;
 
     0
   }

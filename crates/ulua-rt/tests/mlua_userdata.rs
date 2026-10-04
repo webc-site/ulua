@@ -154,7 +154,7 @@ fn test_userdata_take() -> Result<()> {
 #[test]
 fn test_fields() -> Result<()> {
   // Adapted from mlua's `test_fields`: covers `add_field`,
-  // `add_field_method_get`/`set`, and `add_field_function_get`/`set`. The
+  // `add_field_method_get`/`set`, and `add_field_function_get`. The
   // user-value and `add_meta_field` parts of the mlua test are dropped
   // (deferred subsystems).
   let lua = Lua::new();

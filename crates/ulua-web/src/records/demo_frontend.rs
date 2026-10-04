@@ -1,6 +1,7 @@
-//! demo `Frontend` 会话：拥有一对 demo resolver 与自引用的 `Frontend`，
-//! 把 C++ `Web.cpp` 里「构造 → 落位 → `wireSelfPointers` → 注册内置全局」的
-//! 裸指针布线契约收敛进本类型，令 `check_script` 等入口保持纯安全代码。
+//! demo `Frontend` 会话：移交解析器所有权给自引用的 `Frontend`（宿主侧只留
+//! `source` 共享槽），保留 config resolver 的长寿 Box，把 C++ `Web.cpp` 里
+//! 「构造 → 落位 → `wireSelfPointers` → 注册内置全局」的裸指针布线契约
+//! 收敛进本类型，令 `check_script` 等入口保持纯安全代码。
 
 use std::string::{String, ToString};
 
@@ -16,7 +17,8 @@ use ulua_analysis::{
 use ulua_common::fflag;
 
 use crate::records::{
-  demo_config_resolver::demo_config_resolver, demo_file_resolver::DemoFileResolver,
+  demo_config_resolver::demo_config_resolver,
+  demo_file_resolver::{DemoFileResolver, SourceSlot},
 };
 
 /// 一次 demo 类型检查会话。
@@ -25,36 +27,37 @@ use crate::records::{
 /// 均指向自身），契约要求「落位后不得移动」。这里用 `Box` 把 frontend 固定堆上
 /// （Box 句柄可自由移动，堆内容地址恒定），从类型结构上消灭栈上落位假设。
 pub(crate) struct DemoFrontend {
-  /// Drop 按字段声明序：frontend 先析构、resolver 后析构，与原实现
-  /// （栈局部逆序析构）一致；frontend 持有的 resolver 裸指针在此期间不会被回访。
-  ///
-  /// 三个指针字段全部 `Box` 固定堆地址：`Frontend` 内存的是构造时布线的裸
-  /// 指针，任何一次对 resolver/frontend 值的移动都会让其内部指针悬垂；Box
-  /// 句柄可自由移动而堆内容恒定，从类型结构上消灭「落位后不得移动」假设。
+  /// Drop 按字段声明序：frontend 先析构、resolver 随 frontend 的 Box 字段一并
+  /// 释放（所有权已移交），与原实现「栈局部逆序析构、frontend 先亡」一致。
+  /// `frontend` 与 `_config_resolver` 以 `Box` 固定堆地址：`Frontend` 内存的
+  /// config 裸指针是构造期布线，移动 Box 句柄不悬垂；解析器则已由 `Frontend`
+  /// 独占持有（无别名），宿主侧只剩 [`Self::source`] 共享槽做源码改写。
   frontend: Box<Frontend>,
   /// 被 `frontend` 以裸指针引用，须与其同生共死；本类型不再直接读它
   /// （读取全部经 frontend 内部的 `*mut ConfigResolver`），前缀 `_` 声明该意图。
   /// demo 配置无接收者状态（`'static` 单例，见 `demo_config_resolver`），此 Box
   /// 只为维持 frontend 槽位指针的存续期契约。
   _config_resolver: Box<ConfigResolver>,
-  /// 同 [`Self::_config_resolver`]；`source` 表在每次检查前被清空重写。
-  file_resolver: Box<DemoFileResolver>,
+  /// 同 [`Self::_config_resolver`] 的「共享状态」位；`source` 表在每次检查前被
+  /// 清空重写。所有权移交 frontend 后仍经此 `Rc` 槽互通（见 `DemoFileResolver` 注）。
+  source: SourceSlot,
 }
 
 impl DemoFrontend {
   /// 对应 `CLI/src/Web.cpp:142-182` 的构造段：建 resolver → 构造 `Frontend` →
   /// 设求解器模式 → 注册 Luau 内置全局。
   pub(crate) fn new(use_new_solver: bool) -> Self {
-    let mut file_resolver = Box::new(DemoFileResolver::default());
+    let file_resolver = DemoFileResolver::default();
+    let source = file_resolver.source.clone();
     // cpp `DemoConfigResolver()` 构造即默认配置，故安全构造器直接对应；
     // 配置是 `'static` 单例，无 `base` 子对象回cast、无调用点 unsafe。
     let mut config_resolver = Box::new(demo_config_resolver());
     let options = FrontendOptions::default();
 
-    // 构造入参为 `&mut dyn FileResolver`：`&mut *Box` 在实参位隐式 unsizing。
+    // 构造入参为移交所有权的 `Box<dyn FileResolver>`：本类型不再持第二把可变
+    // 别名，后续源码改写一律经 `source` 共享槽。
     // `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」全序列，
-    // 调用点免手写 unsafe ctor + `wire_self_pointers`；resolver 以 `&mut` 引用
-    // 传入、被 `Box` 钉住堆地址，与本结构同生命周期，满足其外部句柄长寿契约。
+    // 调用点免手写 unsafe ctor + `wire_self_pointers`。
     // solver mode 由 `LuauSolverV2` 快标志派生（该模式在构造期决定 `GlobalTypes` 建法）。
     let mode = if fflag::LuauSolverV2.get() {
       SolverMode::New
@@ -63,7 +66,7 @@ impl DemoFrontend {
     };
     let frontend = Frontend::new_boxed(
       mode,
-      &mut *file_resolver,
+      Box::new(file_resolver),
       Some(&mut *config_resolver),
       options,
     );
@@ -71,7 +74,7 @@ impl DemoFrontend {
     let mut this = Self {
       frontend,
       _config_resolver: config_resolver,
-      file_resolver,
+      source,
     };
     this.frontend.set_luau_solver_mode(if use_new_solver {
       SolverMode::New
@@ -100,13 +103,13 @@ impl DemoFrontend {
   pub(crate) fn check_source(&mut self, module: &str, source: &str) -> String {
     // frontend.clear(); fileResolver.source.clear();
     self.frontend.clear();
-    self.file_resolver.source.clear();
+    self.source.borrow_mut().clear();
 
     // fileResolver.source[module] = source;
     let name: ModuleName = module.into();
     self
-      .file_resolver
       .source
+      .borrow_mut()
       .insert(name.clone(), source.to_string());
 
     // Luau::CheckResult checkResult = frontend.check("main");

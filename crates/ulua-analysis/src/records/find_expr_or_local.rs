@@ -46,7 +46,7 @@ impl FindExprOrLocal {
 
 impl AstVisitor for FindExprOrLocal {
   fn visit_stat_block(&mut self, node: &mut AstStatBlock) -> bool {
-    for stat in node.body.iter_nodes() {
+    for stat in node.body.iter_nodes_mut() {
       let stat_ref = stat.get();
       if stat_ref.base.location.end <= self.pos {
         continue;
@@ -54,8 +54,8 @@ impl AstVisitor for FindExprOrLocal {
       if stat_ref.base.location.begin > self.pos {
         break;
       }
-      // SAFETY: 同上，委托 ulua-ast 的遍历分发。
-      unsafe { visit::ast_stat_visit(stat.as_ptr(), self) };
+      // 句柄 `get_mut()` 出借独占借用喂 `_ref` 门面，全链路 safe。
+      visit::ast_stat_visit_ref(stat.get_mut(), self);
     }
     false
   }

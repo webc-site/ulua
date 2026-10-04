@@ -4,7 +4,7 @@ use ulua_ast::{
     ast_array::AstArray, ast_expr::AstExpr, ast_stat_assign::AstStatAssign,
     ast_stat_local::AstStatLocal, ast_visitor::AstVisitor, location::Location,
   },
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_config::enums::code::Code;
 

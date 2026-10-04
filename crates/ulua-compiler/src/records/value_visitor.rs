@@ -1,4 +1,4 @@
-use core::{mem, ptr::from_mut};
+use core::mem;
 
 use ulua_ast::{
   records::{
@@ -10,7 +10,7 @@ use ulua_ast::{
     ast_visitor::AstVisitor,
   },
   rtti::{ast_node_try_as, ast_node_try_as_mut},
-  visit::{ast_expr_visit, ast_expr_visit_ref},
+  visit::ast_expr_visit_ref,
 };
 use ulua_common::{fflag, records::dense_hash_map::DenseHashMap};
 
@@ -54,10 +54,9 @@ impl ValueVisitor {
     }
 
     // C++ `var->visit(this)`：经节点分发器跟踪复杂左值内的赋值，如
-    // `t[function() t = nil end] = 5`。
-    // Safety: var 借用证明存活且独占（函数契约）；分发器只读走链并经 visitor
-    // 写自身 map，不回写 AST 节点。
-    unsafe { ast_expr_visit(from_mut(var), self) };
+    // `t[function() t = nil end] = 5`。var 的 `&mut` 借用即存活+独占证明，
+    // `_ref` 门面全链路 safe：分发器只读走链并经 visitor 写自身 map，不回写 AST。
+    ast_expr_visit_ref(var, self);
   }
 
   pub fn new(
@@ -102,8 +101,11 @@ impl AstVisitor for ValueVisitor {
       self.assign((!var.is_null()).then(|| Node::new(var).borrow_mut()));
     }
     for &value in node.values.iter() {
-      // Safety: value 同上，指向 arena 内存活 AstExpr。
-      unsafe { ast_expr_visit(value, self) };
+      // value 为 parser 保证非空存活的表达式槽（见上）；null 折叠为早退，
+      // 与旧指针门面等价；`borrow_mut()` 交出独占借用，`_ref` 门面全链路 safe。
+      if let Some(value) = Node::try_new(value) {
+        ast_expr_visit_ref(value.borrow_mut(), self);
+      }
     }
 
     false
