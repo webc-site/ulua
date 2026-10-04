@@ -22,7 +22,7 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 use ulua_ast::records::ast_name::AstName;
 use ulua_common::{
   fflag,
-  functions::{c_str::with_c_str, format::format, get_clock::get_clock},
+  functions::{format::format, get_clock::get_clock},
   macros::luau_assert::LUAU_ASSERT,
   records::dense_hash_set::DenseHashSet,
 };
@@ -427,16 +427,15 @@ pub fn user_defined_type_function(
           // LUA_PUSHLIGHTUSERDATA(l, definition.first);
           // LUA_PUSHCCLOSURE(l, evaluateTypeAliasCall, name.c_str(), 1);
           // lua_setfield(l, -2, name.c_str());
-          // 一次补 NUL 同时喂 closure 的 debugname 与 setfield 的键：两个 callee
-          // 都在调用期内把串 `lua_s_new` 驻留进 intern 表，指针不外存。
           // SAFETY: 同上——身份键按地址值透传。
           unsafe { l_vm.push_lightuserdata(def_ptr.cast()) };
-          with_c_str(name.as_bytes(), |c_name| {
-            // SAFETY: VM 边界——`c_name` 由 `with_c_str` 保证调用期内 NUL 结尾
-            // 有效；thunk 契约见其 `# Safety`；nup=1 与上方刚压入的
-            // lightuserdata 配对。
-            unsafe { l_vm.push_c_closure(Some(evaluate_type_alias_call_thunk), c_name, 1) }
-          });
+          // §10：debugname 收 `Option<&'static [u8]>`（VM 存引用不复制，闭包存活契约）。
+          // `name` 是运行期 `Name = String`（`environment_alias` 容器内的键），拿不到
+          // `'static` 字节窗；本 crate 禁止 `Box::leak`/`transmute` 伪造存活期，故此处传
+          // `None`（空名哨兵），并把「运行期别名名的 debugname」列为出界项待主代理裁决。
+          // （dev 旧形 `with_c_str` 把临时栈缓冲指针交给 VM 长期留存，本就是悬垂读。）
+          // 表键仍由紧随的 `set_field_str` 原样写入，注册语义不变。
+          l_vm.push_c_closure(Some(evaluate_type_alias_call_thunk), None, 1);
           l_vm.set_field_str(-2, name);
         }
       }

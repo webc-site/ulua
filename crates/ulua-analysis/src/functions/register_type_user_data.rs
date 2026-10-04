@@ -7,7 +7,7 @@
 //! and the userdata destructor.
 // `kTypeUserdataTag` (Analysis/src/TypeFunctionRuntime.cpp:250).
 
-use core::{ffi::c_void, ptr::null};
+use core::ffi::c_void;
 
 use ulua_common::fflag;
 use ulua_vm::{
@@ -153,67 +153,64 @@ static TYPE_USERDATA_METHODS: [LuaLReg; 28] = [
 /// push/setfield），调用期间不得有其它线程或借用并发改写该 VM 的全局状态；
 /// 本函数只在 VM 初始化的单线程阶段调用一次。
 pub(crate) fn register_type_user_data(l: &mut LuaState) {
-  // Safety: 块内不安全操作都落在 ulua-vm 的 `lua_l_*`/`lua_*` `unsafe fn` 与被调
-  // 方法内部，其前置条件即 `l` 的存活独占契约（由 `&mut` 接收者承载）。方法表是
-  // `static` 常量数组，名字字节串与 thunk 函数指针
-  // 均为 'static，VM 注册表留存它们无悬垂。注册的 thunk 只在 VM 回调时运行，
-  // 届时 VM 保证自身 `l` 参数有效（见 `c_thunk!` 展开内证成）。
-  unsafe {
-    // Create and register metatable for type userdata
-    // luaL_newmetatable(l, "type");
-    l.new_metatable_by_bytes(TYPE);
+  // 本函数体已无裸操作：`l` 的具名方法、`lua_l_register_bytes`、`lua_setuserdatadtor`
+  // 均为 safe fn（§10 后 debugname 收原生 `Option<&'static [u8]>` 字节窗，不再有
+  // `*const c_char` 形参），故原先包裹整块的 `unsafe` 已按「参数皆引用、体内不再解引用」
+  // 诚实降级移除。
+  // 名字字节窗全部是 `static`/`const`（'static），闭包留存引用无悬垂；注册的 thunk
+  // 只在 VM 回调时运行，届时 VM 保证自身 `l` 参数有效（见 `c_thunk!` 展开内证成）。
+  // Create and register metatable for type userdata
+  // luaL_newmetatable(l, "type");
+  l.new_metatable_by_bytes(TYPE);
 
-    // lua_pushstring(l, "type"); lua_setfield(l, -2, "__type");
-    l.push_bytes(TYPE);
-    l.set_field_bytes(-2, FIELD_TYPE_TAG);
+  // lua_pushstring(l, "type"); lua_setfield(l, -2, "__type");
+  l.push_bytes(TYPE);
+  l.set_field_bytes(-2, FIELD_TYPE_TAG);
 
-    // Protect metatable from being changed
-    // lua_pushstring(l, "The metatable is locked"); lua_setfield(l, -2, "__metatable");
-    l.push_bytes(METATABLE_LOCKED);
-    l.set_field_bytes(-2, FIELD_METATABLE);
+  // Protect metatable from being changed
+  // lua_pushstring(l, "The metatable is locked"); lua_setfield(l, -2, "__metatable");
+  l.push_bytes(METATABLE_LOCKED);
+  l.set_field_bytes(-2, FIELD_METATABLE);
 
-    // lua_pushcfunction(l, isEqualToType, "__eq"); lua_setfield(l, -2, "__eq");
-    l.push_c_function(Some(is_equal_to_type_thunk), null());
-    l.set_field_bytes(-2, FIELD_EQ);
+  // lua_pushcfunction(l, isEqualToType, "__eq"); lua_setfield(l, -2, "__eq");
+  // 注：cpp 此处传 "__eq"，dev 既有实现传空名哨兵；本次同步只做签名形态迁移，
+  // 不改既有行为，差异单独上报主代理裁决。
+  l.push_c_function(Some(is_equal_to_type_thunk), None);
+  l.set_field_bytes(-2, FIELD_EQ);
 
-    // Indexing will be a dynamic function because some type fields are dynamic
-    // lua_newtable(l);
-    l.new_table();
-    // luaL_register(l, nullptr, typeUserdataMethods);
-    // （lua_l_register_bytes 已降为安全 fn，r12-w6d；块内剩余不安全面为 push_c_function/
-    // push_c_closure 等裸形方法）
-    lua_l_register_bytes(l, None, &TYPE_USERDATA_METHODS);
+  // Indexing will be a dynamic function because some type fields are dynamic
+  // lua_newtable(l);
+  l.new_table();
+  // luaL_register(l, nullptr, typeUserdataMethods);
+  // （lua_l_register_bytes 已降为安全 fn，r12-w6d）
+  lua_l_register_bytes(l, None, &TYPE_USERDATA_METHODS);
 
-    // if (FFlag::LuauUdtfTypeIsSubtypeOf)
-    if fflag::LuauUdtfTypeIsSubtypeOf.get() {
-      // lua_pushcfunction(l, isSubtypeOf, "issubtypeof"); lua_setfield(l, -2, "issubtypeof");
-      l.push_c_function(
-        Some(is_subtype_of_thunk),
-        METHOD_IS_SUBTYPE_OF.as_ptr().cast(),
-      );
-      l.set_field_bytes(-2, METHOD_IS_SUBTYPE_OF);
-    }
-
-    // lua_setreadonly(l, -1, true);
-    l.set_readonly(-1, true);
-    // LUA_PUSHCCLOSURE(l, typeUserdataIndex, "__index", 1);
-    l.push_c_closure(
-      Some(type_userdata_index_thunk),
-      FIELD_INDEX_CLOSURE.as_ptr().cast(),
-      1,
-    );
-    // lua_setfield(l, -2, "__index");
-    l.set_field_bytes(-2, FIELD_INDEX_CLOSURE);
-
-    // lua_setreadonly(l, -1, true);
-    l.set_readonly(-1, true);
-    // lua_pop(l, 1);
-    l.pop(1);
-
-    // Sets up a destructor for the type userdata.
-    // lua_setuserdatadtor(l, kTypeUserdataTag, deallocTypeUserData);
-    // 登记 dtor：`lua_setuserdatadtor` 收 `&mut`（safe），前面各 `l.…` 具名方法调用
-    // 均为短借即还，此处无并存别名；`l` 存活由本函数 `&mut` 接收者承载。
-    lua_setuserdatadtor(l, K_TYPE_USERDATA_TAG, Some(dealloc_type_user_data_thunk));
+  // if (FFlag::LuauUdtfTypeIsSubtypeOf)
+  if fflag::LuauUdtfTypeIsSubtypeOf.get() {
+    // lua_pushcfunction(l, isSubtypeOf, "issubtypeof"); lua_setfield(l, -2, "issubtypeof");
+    l.push_c_function(Some(is_subtype_of_thunk), Some(METHOD_IS_SUBTYPE_OF));
+    l.set_field_bytes(-2, METHOD_IS_SUBTYPE_OF);
   }
+
+  // lua_setreadonly(l, -1, true);
+  l.set_readonly(-1, true);
+  // LUA_PUSHCCLOSURE(l, typeUserdataIndex, "__index", 1);
+  l.push_c_closure(
+    Some(type_userdata_index_thunk),
+    Some(FIELD_INDEX_CLOSURE),
+    1,
+  );
+  // lua_setfield(l, -2, "__index");
+  l.set_field_bytes(-2, FIELD_INDEX_CLOSURE);
+
+  // lua_setreadonly(l, -1, true);
+  l.set_readonly(-1, true);
+  // lua_pop(l, 1);
+  l.pop(1);
+
+  // Sets up a destructor for the type userdata.
+  // lua_setuserdatadtor(l, kTypeUserdataTag, deallocTypeUserData);
+  // 登记 dtor：`lua_setuserdatadtor` 收 `&mut`（safe），前面各 `l.…` 具名方法调用
+  // 均为短借即还，此处无并存别名；`l` 存活由本函数 `&mut` 接收者承载。
+  lua_setuserdatadtor(l, K_TYPE_USERDATA_TAG, Some(dealloc_type_user_data_thunk));
 }

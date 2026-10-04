@@ -1,9 +1,9 @@
 //! 与 Lua VM 交互时用到的静态名字常量。
 //!
-//! 本 crate 不是 C ABI 实现层，故名字一律以 **NUL 结尾的 `&[u8]` 常量**表达
-//! （调用点 `.as_ptr().cast()` 收口给 `*const c_char` 形参，`LuaLReg::name`
-//! 字段本身即 `&'static [u8]`）：既消灭了重复字面量，也让「哪些字符串是 VM
-//! 契约的一部分」集中可审。
+//! 本 crate 不是 C ABI 实现层，故名字一律以**原生 `&[u8]` 常量**（'static、不含终止
+//! NUL）表达：VM 侧 `lua_l_*`/`lua_*` 的字节窗门面（`set_field_bytes`、
+//! `push_c_function` 的 `debugname` 等）直取切片，`LuaLReg::name` 字段本身即
+//! `&'static [u8]`。既消灭了重复字面量，也让「哪些字符串是 VM 契约的一部分」集中可审。
 
 /// type userdata 的元表名，同时是 `__type` 字段的值。
 pub(crate) const TYPE: &[u8] = b"type";
