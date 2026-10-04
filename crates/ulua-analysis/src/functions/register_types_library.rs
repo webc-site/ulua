@@ -76,9 +76,10 @@ const TYPES_METHODS: [LuaLReg; 9] = [
 /// 余量且 state 未被其他持有者并发访问（runtime 为单线程构造路径）。
 pub(crate) fn register_types_library(l: &mut LuaState) {
   // luaL_register(l, "types", methods);
-  // Safety: `l` 为本次调用独占的存活 state（`&mut` 接收者承载）；`LIB_TYPES` 是静态
-  // NUL 结尾字节串；`TYPES_METHODS` 为常量数组，期间无人改写。
-  unsafe { lua_l_register_bytes(l, Some(LIB_TYPES), &TYPES_METHODS) };
+  // lua_l_register_bytes 已降为安全 fn（r12-w6d）：`l` 为本次调用独占的存活 state
+  // （`&mut` 接收者承载）；`LIB_TYPES` 是静态 NUL 结尾字节串；`TYPES_METHODS` 为常量
+  // 数组，期间无人改写。
+  lua_l_register_bytes(l, Some(LIB_TYPES), &TYPES_METHODS);
 
   // Set fields for type userdata
   // for (luaL_Reg* l = fields; l->name; l++) { l->func(L); lua_setfield(L, -2, l->name); }

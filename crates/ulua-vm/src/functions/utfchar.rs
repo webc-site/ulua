@@ -19,9 +19,9 @@ pub fn utfchar(l: &mut LuaState) -> i32 {
   if n == 1 {
     // optimize common case of single char
     let charstr = buffutfchar(l, 1, &mut buff);
-    // SAFETY: `lua_pushlstring_bytes` 切片核心契约自具（l 由 &mut 承载存活/独占，界内拷入
-    // 堆上 TString、不留借出窗）；charstr 为 buff 自有的界内编码窗
-    unsafe { lua_pushlstring_bytes(l, charstr) };
+    // lua_pushlstring_bytes 已降为安全切片核心（r12-w6d）：l 由 &mut 承载存活/独占，
+    // charstr 为 buff 自有的界内编码窗，核心界内拷入堆串、不留借出窗
+    lua_pushlstring_bytes(l, charstr);
   } else {
     let mut b = LuaLStrbuf::new();
     lua_l_buffinit(l, &mut b);

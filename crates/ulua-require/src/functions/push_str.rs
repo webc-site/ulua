@@ -30,15 +30,14 @@ pub(crate) fn c_str_prefix_owned(s: &[u8]) -> Vec<u8> {
 }
 
 /// 对应 cpp `lua_pushstring(L, s.c_str())` 的零拷贝等价实现：按首个 NUL 截断后
-/// 经 `lua_pushlstring_bytes`（切片 ref 核心）直推（cpp `lua_pushstring` 内部
-/// 同为 strlen + pushlstring），免去 NUL 补齐与堆分配。
+/// 经 `lua_pushlstring_bytes`（切片 ref 核心，r12-w6d 已降为安全 `fn`）直推（cpp
+/// `lua_pushstring` 内部同为 strlen + pushlstring），免去 NUL 补齐与堆分配。
 ///
 /// `l` 为存活 `LuaState` 的独占借用（引用即存活证明），故本函数对调用方安全。
 pub(crate) fn push_c_str(l: &mut LuaState, s: &[u8]) {
-  // Safety: `l` 为 `&mut LuaState` 独占借用（引用即存活证明）；切片经
-  // c_str_prefix 收敛为无 NUL 字节视图，lua_pushlstring_bytes 把字节拷入 VM
-  // 字符串存储后不再引用该切片。
-  unsafe { lua_pushlstring_bytes(l, c_str_prefix(s)) };
+  // 切片经 c_str_prefix 收敛为无 NUL 字节视图，lua_pushlstring_bytes 把字节拷入
+  // VM 字符串存储后不再引用该切片。
+  lua_pushlstring_bytes(l, c_str_prefix(s));
 }
 
 /// cpp 的模块注册键归一：`std::tolower` 逐字节小写后 `lua_pushstring(c_str())`。
