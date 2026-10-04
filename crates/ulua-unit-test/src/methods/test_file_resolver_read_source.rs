@@ -8,6 +8,7 @@ impl TestFileResolver {
     let source = self.source.get(name)?;
     let source_type = self
       .source_types
+      .borrow()
       .get(name)
       .copied()
       .unwrap_or(SourceCode::MODULE);

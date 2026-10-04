@@ -262,7 +262,7 @@ pub(crate) fn lua_r_setupconstructor(
   // SAFETY: 契约保证 `l`/`classobject`/`env` 存活，构造器闭包与 new 名串注册仅触及类静态区与 env 表的合法槽位
   unsafe {
     let new_key = lua_s_newlstr(l, b"new");
-    let constructor = lua_f_new_cclosure(l.as_mut_ptr(), 1, env);
+    let constructor = lua_f_new_cclosure(l, 1, env);
     let ctor_c = &mut (*constructor).inner.c;
     ctor_c.f = Some(lua_r_constructobject_arm);
     ctor_c.debugname = cstr(b"luaR_constructobject\0");
@@ -291,7 +291,7 @@ pub(crate) fn lua_r_setupconstructor(
       lua_c_barrier!(l, classobject, dest);
     }
 
-    let default_ctor = lua_f_new_cclosure(l.as_mut_ptr(), 1, env);
+    let default_ctor = lua_f_new_cclosure(l, 1, env);
     let default_ctor_c = &mut (*default_ctor).inner.c;
     default_ctor_c.f = Some(lua_r_defaultcreateobject_arm);
     default_ctor_c.debugname = cstr(b"luaR_defaultcreateobject\0");

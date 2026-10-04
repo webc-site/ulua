@@ -17,7 +17,7 @@ pub unsafe extern "C-unwind" fn conformance_types_setup(l: *mut LuaState) {
   // 分析侧的 Frontend 搭建是纯 safe Rust（`new_boxed` 门面 + `freeze`），不触碰 `l`，
   // 故先于 unsafe 段成形。
   let _module_resolver = NullModuleResolver::new();
-  let mut file_resolver = NullFileResolver::new();
+  let file_resolver = NullFileResolver::new();
   let mode = if fflag::DebugLuauForceOldSolver.get() {
     SolverMode::Old
   } else {
@@ -26,11 +26,12 @@ pub unsafe extern "C-unwind" fn conformance_types_setup(l: *mut LuaState) {
 
   // cpp `Conformance.test.cpp:2025`：`Frontend frontend{mode, &fileResolver, &configResolver}`。
   // `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」全序列，本入口
-  // 免手写 unsafe ctor + `wire_self_pointers`；`file_resolver` 是本函数局部且
-  // frontend 后声明（Box 内的 frontend 先析构），句柄覆盖整个使用期；C++
-  // `configResolver` 缺位由 `None` 显式承载（同 nullptr 语义，本测试不查 getConfig）。
+  // 免手写 unsafe ctor + `wire_self_pointers`；`file_resolver` 所有权移交 frontend
+  // 独占（null 语义在 cpp 侧靠 `configResolver` 缺位表达，解析器恒有实例；本入口
+  // 用 NullFileResolver 对应 cpp 传入的活对象），C++ `configResolver` 缺位由
+  // `None` 显式承载（同 nullptr 语义，本测试不查 getConfig）。
   let mut frontend =
-    Frontend::new_boxed(mode, &mut file_resolver, None, FrontendOptions::default());
+    Frontend::new_boxed(mode, Box::new(file_resolver), None, FrontendOptions::default());
 
   // cpp `Conformance.test.cpp:2026-2028`：`registerBuiltinGlobals(frontend,
   // frontend.globals)` → `freeze(frontend.globals.globalTypes)`。上游那两个引用

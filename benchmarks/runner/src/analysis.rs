@@ -69,16 +69,16 @@ impl BenchConfigResolver {
 
 /// Frontend 搭建（可选执行模块检查）：`check=false` 时只注册/冻结内置全局，
 /// 作为 `check=true` 的固定开销基线（分析组两个引擎只差这一开关，共用本函数）。
-/// resolver 均为本地且后于 frontend 声明，frontend（Box）先析构，满足
-/// Frontend 持有裸指针的长寿契约。
+/// 解析器所有权移交 `Frontend` 独占；config resolver 本地且后于 frontend 声明，
+/// frontend（Box）先析构，满足 Frontend 持有裸指针的长寿契约。
 pub(crate) fn run(check: bool, src: &str) -> Result<Option<String>, String> {
-  let mut file_resolver = BenchFileResolver {
+  let file_resolver = BenchFileResolver {
     source: src.to_owned(),
   };
   let mut config_resolver = BenchConfigResolver::new(Mode::Strict);
   let mut frontend = Frontend::new_boxed(
     SolverMode::New,
-    &mut file_resolver,
+    Box::new(file_resolver),
     Some(&mut config_resolver.base),
     FrontendOptions::default(),
   );

@@ -177,7 +177,7 @@ pub(crate) fn alias<T>(p: *mut T) -> &'static mut T {
 
 /// [`alias`] 的共享只读形态。
 pub(crate) fn alias_ref<T>(p: *const T) -> &'static T {
-  // SAFETY: 同 [`alias]，共享读不产生可变别名。
+  // SAFETY: 同 [`alias`] 的模块级契约，共享读不产生可变别名。
   unsafe { &*p }
 }
 

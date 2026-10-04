@@ -30,6 +30,6 @@ pub(crate) unsafe fn lua_f_closeupval(l: *mut LuaState, uv: *mut UpVal, dead: bo
     let value = addr_of_mut!((*uv).u.value);
     setobj!(l, value, (*uv).v);
     (*uv).v = value;
-    lua_c_upvalclosed(l, uv);
+    lua_c_upvalclosed(&mut *l, uv);
   }
 }

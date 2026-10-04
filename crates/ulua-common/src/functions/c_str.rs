@@ -2,27 +2,29 @@
 //! 把「先判 null 再逐字节读宿主缓冲」的手工守卫收敛到唯一一处，避免各 crate
 //! 各自复制一份 lossy 解码包装。
 //!
-//! **层定位标注（review.md §10）**：本模块的存在意义是支撑 `ulua-capi` / `ulua-vm`
-//! 的 C 字符串层——它是全仓读取宿主 NUL 结尾缓冲区的唯一合法门面，入参形态
-//! `*const c_char` 属 C ABI 边界契约、予以保留（各消费者一律经此转 Rust 类型，
-//! 不得自行解引用宿主缓冲）。内部实现完全 Rust 化：NUL 扫描单点收口到私有
-//! [`from_c_ptr`]，产出 `&[u8]`/`Cow<str>`（review.md §10：C 串包装类型零残留，
-//! 不借道标准库的 C 字符串垫片），读取方向两枚公开函数只剩
-//! 判空形态与解码策略的差异。写入方向（静态字节串 / 动态字节串 → `*const c_char`）
-//! 同样收口于本门面（[`cstr`] / [`with_c_str`]），消费者不得散落 `.as_ptr().cast()`。
+//! **层定位标注（review.md §10）**：§10 的唯一豁免层是 `ulua-capi`（C ABI 实现层本身）。
+//! 本模块不是「豁免清单」，而是把尚未 Rust 化的 `*const c_char` 位点**收口到唯一一处**的
+//! 过渡门面：全仓读取宿主 NUL 结尾缓冲区只能经此，消费者不得自行解引用宿主缓冲、
+//! 不得散落 `.as_ptr().cast()`。内部实现完全 Rust 化：NUL 扫描单点收口到私有
+//! [`from_c_ptr`]，产出 `&[u8]`/`Cow<str>`（§10：C 串包装类型 `CStr`/`CString` 零残留，
+//! 不借道标准库的 C 字符串垫片），读取方向两枚公开函数只剩判空形态与解码策略的差异。
+//! 写入方向（静态字节串 / 动态字节串 → `*const c_char`）同样收口于本门面
+//! （[`cstr`] / [`with_c_str`]）。
 //!
 //! ## 消费者普查（review.md §10 复审 · cstr-final-r5）
 //!
-//! 真 C 边界（豁免保留）：`ulua-capi`（C ABI 实现层本身）与 `ulua-vm`——后者是
-//! C 库移植，其 `lua_*` API 面即 lua.h 契约（`lua_getinfo` 的 `what` 模板、
-//! `lua_Debug` 的 `*const c_char` 字段、`lua_pushcclosurek` 的 debugname、
-//! `lua_exception::what()`），跨 crate 消费者必须经本门面进出其缓冲区。
-//! 合法消费清单：ulua-rt（`debug_cstr` / `is_lua_what_cstr` 读 `LuaDebug` 回填
-//! 字段；`GETINFO_*` / `*_NAME` 静态模板走契约参数位）、ulua-web（`cstr_cow` 读
-//! `lua_exception::what()` 与 `ar.short_src`）、ulua-analysis / ulua-require /
-//! ulua-repl-cli / ulua-code-gen / ulua-conformance 等 VM C API 消费者、以及
-//! ulua-common 自身的 [`assert_call_handler`](crate::functions::assert_call_handler::assert_call_handler)
-//! C 形入口（宿主注入的 `extern "C-unwind"` `AssertHandler` 即真边界）。
+//! 真 C 边界（`*const c_char` 属契约要求、长期保留）：仅 `ulua-capi`，以及宿主注入的
+//! `extern "C-unwind"` 回调（如本 crate 的
+//! [`assert_call_handler`](crate::functions::assert_call_handler::assert_call_handler)）。
+//! `ulua-vm` 的 `lua_*` C 形态面（`lua_getinfo` 的 `what` 模板、`LuaDebug` 的
+//! `*const c_char` 字段、`lua_pushcclosurek` 的 debugname、`lua_exception::what()`）
+//! **不是 FFI 边界、不构成豁免**：它是 lua.h 的形状复刻，Rust 侧消费者一律应拿
+//! `&[u8]`/`&str`/`Cow`，这些签名属待消灭对象（review.md §3「`c_char` 仅在 FFI」+ §10，
+//! 与 vm 内部 `lua_*` 裸指针收形同批推进）。在其改完之前，跨 crate 进出其缓冲区仍必须
+//! 经本门面，不得新增绕过路径。既有消费清单：ulua-rt（`debug_cstr` / `is_lua_what_cstr`
+//! 读 `LuaDebug` 回填字段；`GETINFO_*` / `*_NAME` 静态模板走契约参数位）、ulua-web
+//! （`cstr_cow` 读 `lua_exception::what()` 与 `ar.short_src`）、ulua-analysis /
+//! ulua-require / ulua-repl-cli / ulua-code-gen / ulua-conformance 等 VM C API 消费者。
 //!
 //! 内部 Rust-to-Rust 路径不再借道 C 形 API：`assert_fail`（`LUAU_ASSERT!` 宏的
 //! 全仓展开点）现直接把宏产物 NUL 结尾 `&[u8]` 交给安全核心，指针折算只发生在

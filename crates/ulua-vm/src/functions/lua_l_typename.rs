@@ -19,7 +19,8 @@ pub fn lua_l_typename(l: &LuaState, idx: i32) -> *const c_char {
   if obj.is_null() || eq(obj, LUA_O_NILOBJECT) {
     NO_VALUE_BYTES.as_ptr().cast()
   } else {
-    // SAFETY:obj 指向存活 TValue；`lua_t_objtypename` 只读类型名表，不写穿 `l`。
-    unsafe { lua_t_objtypename(l.read_ptr(), &*obj) }
+    // SAFETY: `obj` 指向存活 TValue；`lua_t_objtypename` 收 `&LuaState` 只读、不写穿 `l`，
+    // 收形后原 `l.read_ptr()` 裸转发随消亡（借用窗止于本调用语句）。
+    unsafe { lua_t_objtypename(l, &*obj) }
   }
 }
