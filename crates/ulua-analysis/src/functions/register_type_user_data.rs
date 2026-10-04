@@ -180,7 +180,8 @@ pub(crate) fn register_type_user_data(l: &mut LuaState) {
     // lua_newtable(l);
     l.new_table();
     // luaL_register(l, nullptr, typeUserdataMethods);
-    // Safety: `lua_l_register_bytes` 要求存活独占 state，由 `&mut` 接收者承载；借用窗止于当句。
+    // （lua_l_register_bytes 已降为安全 fn，r12-w6d；块内剩余不安全面为 push_c_function/
+    // push_c_closure 等裸形方法）
     lua_l_register_bytes(l, None, &TYPE_USERDATA_METHODS);
 
     // if (FFlag::LuauUdtfTypeIsSubtypeOf)

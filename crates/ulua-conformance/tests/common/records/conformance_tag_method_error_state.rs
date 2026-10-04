@@ -1,6 +1,6 @@
 use core::sync::atomic::{AtomicBool, AtomicI32, Ordering};
 
-pub struct ConformanceTagMethodErrorState {
+pub(crate) struct ConformanceTagMethodErrorState {
   pub index: AtomicI32,
   pub lua_break: AtomicBool,
 }
@@ -25,5 +25,5 @@ impl Default for ConformanceTagMethodErrorState {
   }
 }
 
-pub static CONFORMANCE_TAG_METHOD_ERROR_STATE: ConformanceTagMethodErrorState =
+pub(crate) static CONFORMANCE_TAG_METHOD_ERROR_STATE: ConformanceTagMethodErrorState =
   ConformanceTagMethodErrorState::new();

@@ -9,7 +9,7 @@ pub const CONFORMANCE_INTERRUPT_MODE_HANG: i32 = 2;
 /// 计数清零，好让外层循环里的下一次 `pcall` 又能跑满 1000 次中断。
 pub const CONFORMANCE_INTERRUPT_MODE_HANG_PCALL: i32 = 3;
 
-pub struct ConformanceInterruptState {
+pub(crate) struct ConformanceInterruptState {
   pub mode: AtomicI32,
   pub index: AtomicI32,
 }
@@ -38,5 +38,5 @@ impl Default for ConformanceInterruptState {
   }
 }
 
-pub static CONFORMANCE_INTERRUPT_STATE: ConformanceInterruptState =
+pub(crate) static CONFORMANCE_INTERRUPT_STATE: ConformanceInterruptState =
   ConformanceInterruptState::new();

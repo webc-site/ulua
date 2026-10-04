@@ -200,12 +200,9 @@ pub fn callbacks_mut<'a>(l: L) -> &'a mut LuaCallbacks {
   unsafe { &mut *lua_callbacks(l) }
 }
 
-/// `lua_newuserdatadtor` 的内联析构类型（与 `LuaDestructor` 一致）。
-pub type UserdataDtorRaw = LuaDestructor;
-
-/// `lua_newthread` 的返回值同样是存活线程栈，归父状态持有；用例经门面取得后
-/// 可安全作为后续 [`L`] 参数。
-pub type AtomAssignFn = Option<unsafe extern "C-unwind" fn(L, *const c_char, usize) -> i16>;
+/// `lua_callbacks.useratom` 的签名：`(L, *const c_char, usize) -> i16` 的可空形态
+/// （`None` 表示未挂 atom 分配钩子）。
+pub(crate) type AtomAssignFn = Option<unsafe extern "C-unwind" fn(L, *const c_char, usize) -> i16>;
 
 // ---------------------------------------------------------------------------
 // 栈管理
@@ -315,9 +312,10 @@ pub fn open_base(l: L) -> c_int {
 /// `luaL_register(l, NULL, funcs)` 的 bytes 核心形：`libname` 以 `None` 表达
 /// 「注册到当前栈顶」。
 pub fn l_register(l: L, funcs: &[LuaLReg]) {
-  // Safety: `l` 存活（模块级契约）；被调仍为 unsafe fn（`lr` 裸 C 函数指针与 `lua_s_new`
-  // 裸形转手的屏障），`&mut *l` 引用重建借用窗止于当次调用；`funcs` 为借用切片，
-  // 各项 name/func 仅在本调用期内被读取。
+  // Safety: `l` 存活（模块级契约）；`&mut *l` 一次性裸指针重借用是本块唯一不安全面，
+  // 借用窗止于当次调用；被调 `lua_l_register_bytes` 已降为安全 fn（r12-w6d，`lr` 裸 C
+  // 函数指针与 intern 转手屏障下沉被调内部）；`funcs` 为借用切片，各项 name/func
+  // 仅在本调用期内被读取。
   unsafe { lua_l_register_bytes(&mut *l, None, funcs) }
 }
 
@@ -678,7 +676,7 @@ pub fn newuserdatatagged(l: L, sz: usize, tag: c_int) -> *mut c_void {
 }
 
 /// `lua_newuserdatadtor(l, sz, dtor)`：带内联析构的 userdata。
-pub fn newuserdatadtor(l: L, sz: usize, dtor: UserdataDtorRaw) -> *mut c_void {
+pub fn newuserdatadtor(l: L, sz: usize, dtor: LuaDestructor) -> *mut c_void {
   // Safety: `l` 存活；`dtor` 遵循 Lua 析构 C 约定（用例桩函数自带）。
   unsafe { lua_newuserdatadtor(l, sz, dtor) }
 }

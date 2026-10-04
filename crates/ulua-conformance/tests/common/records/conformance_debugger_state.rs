@@ -4,7 +4,7 @@ use ulua_vm::records::lua_state::LuaState;
 
 /// 断点/单步命中计数与被中断线程登记（cpp debuggerHook 的静态量）。
 #[derive(Debug)]
-pub struct ConformanceDebuggerState {
+pub(crate) struct ConformanceDebuggerState {
   pub breakhits: AtomicI32,
   /// 「无登记」的裸指针空哨兵收进本字段：以地址 `0` 位型表示 `None`，
   /// 对外只经 [`Self::set_interruptedthread`] / [`Self::take_interruptedthread`]
@@ -53,4 +53,5 @@ impl Default for ConformanceDebuggerState {
   }
 }
 
-pub static CONFORMANCE_DEBUGGER_STATE: ConformanceDebuggerState = ConformanceDebuggerState::new();
+pub(crate) static CONFORMANCE_DEBUGGER_STATE: ConformanceDebuggerState =
+  ConformanceDebuggerState::new();
