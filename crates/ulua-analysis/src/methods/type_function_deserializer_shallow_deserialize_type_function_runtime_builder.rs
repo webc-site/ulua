@@ -158,11 +158,13 @@ impl TypeFunctionDeserializer {
     }
   }
 
-  /// # Safety
-  /// 调用方须保证 `self.state` 非空且指向反序列化期间存活的 builder state，其 `ctx` 构造接线恒非空；
-  /// 被解引用的 bump arena 块地址不移动，`tp` 为待反序列化的存活序列化型 pack 句柄。
-  /// 单线程独占驱动下对这些 arena/上下文的可变借用不并存。cpp `Analysis/src/TypeFunctionRuntimeBuilder.cpp:826`。
-  pub(crate) unsafe fn shallow_deserialize_type_function_type_pack_id(
+  /// 调用序契约（正确性，非内存安全）：`self.state` 须已由装配步接线（体内
+  /// `expect(STATE_WIRED)` 拦断违约）、`ctx` 构造接线恒非空，被解引用的 bump arena
+  /// 块地址不移动，`tp` 为待反序列化的存活序列化 pack 句柄；单线程独占驱动下对
+  /// arena/上下文的可变借用不并存。违约形态为确定性 panic 或错值，非 UB——裸
+  /// 解引用收口在体内窄 `unsafe {}` 块（与 type 侧孪生函数同一形态）。cpp
+  /// `Analysis/src/TypeFunctionRuntimeBuilder.cpp:826`。
+  pub(crate) fn shallow_deserialize_type_function_type_pack_id(
     &mut self,
     tp: TypeFunctionTypePackId,
   ) -> TypePackId {

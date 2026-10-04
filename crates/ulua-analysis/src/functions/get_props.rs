@@ -25,8 +25,7 @@ use crate::{
   },
   type_aliases::{
     type_function_singleton_variant::TypeFunctionSingletonVariant,
-    type_function_type_id::AsTypeFunctionType,
-    type_function_type_variant::TypeFunctionTypeVariant,
+    type_function_type_id::AsTypeFunctionType, type_function_type_variant::TypeFunctionTypeVariant,
   },
 };
 pub(crate) fn get_props(l: &mut LuaState) -> i32 {

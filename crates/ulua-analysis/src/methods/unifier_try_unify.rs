@@ -490,15 +490,12 @@ impl Unifier {
       .is_some()
       && self.log.txn_log_get::<TableType, TypeId>(sub_ty).is_some()
     {
-      // SAFETY: 进入本分支 ⇒ 上文两侧 txn_log_get::<TableType> 均为 Some，即
-      // sub_ty/super_ty 都是 TableType 句柄，满足被调方非 table 即 ice 的前置条件；
-      // literal_properties
-      // 源自本函数参数 `Option<&LiteralProperties>`——lp 指针在其借用（整个 try_unify
-      // 同步调用期）内有效，None 时传 null，被调方按 C++ `const LiteralProperties*`
-      // 契约判空使用。
-      unsafe {
-        self.unifier_try_unify_tables(sub_ty, super_ty, is_intersection, literal_properties)
-      };
+      // 调用序前提（被调方已收形为 safe fn）：进入本分支 ⇒ 上文两侧
+      // txn_log_get::<TableType> 均为 Some，即 sub_ty/super_ty 都是 TableType 句柄，
+      // 满足被调方非 table 即 ice 的前置条件；literal_properties 源自本函数参数
+      // `Option<&LiteralProperties>`——借用覆盖整个 try_unify 同步调用期，None 时
+      // 被调方按 C++ `const LiteralProperties*` 契约判空使用。
+      self.unifier_try_unify_tables(sub_ty, super_ty, is_intersection, literal_properties);
     } else if self
       .log
       .txn_log_get::<TableType, TypeId>(super_ty)

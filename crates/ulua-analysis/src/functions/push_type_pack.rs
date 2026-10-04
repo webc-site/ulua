@@ -17,7 +17,7 @@ use crate::{
     type_function_variadic_type_pack::TypeFunctionVariadicTypePack,
   },
   type_aliases::{
-    type_function_type_pack_id::TypeFunctionTypePackId, type_function_type_id::AsTypeFunctionType,
+    type_function_type_id::AsTypeFunctionType, type_function_type_pack_id::TypeFunctionTypePackId,
     type_function_type_variant::TypeFunctionTypeVariant,
   },
 };
