@@ -43,7 +43,7 @@ pub unsafe fn os_time(l: *mut LuaState) -> i32 {
       // `t == -1` path rejects out-of-range dates, so a wrapped field can't UB.
       ts.tm_mon = getfield(l, b"month", -1).wrapping_sub(1);
       ts.tm_year = getfield(l, b"year", -1).wrapping_sub(1900);
-      ts.tm_isdst = getboolfield(l, b"isdst");
+      ts.tm_isdst = getboolfield(&mut *l, b"isdst");
 
       os_timegm(&ts)
     };
