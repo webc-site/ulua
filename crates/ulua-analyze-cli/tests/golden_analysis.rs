@@ -2,7 +2,9 @@
 //!
 //! cpp 侧每个 `.luau` 是一个测试，在 `flags-on`/`flags-off` × `strict`/`nonstrict`
 //! 矩阵下跑 `luau-analyze --mode=<mode> --solver=new`，期望输出来自相邻的
-//! `<name>.flags-<on|off>.<mode>.output` 精确快照。Rust CLI 无 `--fflags` 全量开关，
+//! `<name>.flags-<on|off>.<mode>.output` 精确快照。cpp golden 运行器只对**现存**
+//! 快照文件做逐字节校验，缺文件形态不断言；Rust CLI 以 `--fflags=true` 对应
+//! cpp `flags-on` 配置（点亮全部 `Luau*` 旗标），裸跑对应 `flags-off`。
 //! 各用例的形态选择（on 全等 / off 形态 / `--!golden ok` 指令）见下方覆盖口径逐类说明。
 //!
 //! 快照中的文件路径是 CLI 实参回显（cpp 从仓库根传 `analysis/.../x.luau`）；
@@ -16,23 +18,33 @@
 //! cpp TEST_CASE 内嵌源码」机检，仅 `keyof_basic` 可对上
 //! `type_function_keyof_type_function_works` 的部分用例级对位，其余 35 条无
 //! 用例级镜像（`ulua-unit-test` 是 API 级用例族，源码多有改写，不构成 golden
-//! 逐字节对位）。本批补齐 31 例 CLI 冒烟，套件至 47/52：
+//! 逐字节对位）。w6 批补齐 31 例 CLI 冒烟至 47/52，w6d（本票）再补 keyof 区
+//! 4 例 flags-on 形态至 51/52：
 //! - 23 例四快照（flags-on/flags-off × strict/nonstrict）逐字节全等，单形态移植；
 //! - 7 例按 cpp `flags-off` 快照形态移植（`index_unknown_refined_with_type`、
 //!   `index_unknown_refined_with_typeof`、`disallow_less_specific_assign`、
 //!   `error_handling_pcall`、`intersection_methods`、`optional_type`、
-//!   `union_methods`）：Rust CLI 默认旗标复现 cpp flags-off 渲染；flags-on
-//!   全开旗标后的新式紧凑子类型原因渲染（`LuauNewTypePathErrorMessages` 一族，
-//!   未同步）不可在本套件表达，另见 `type_function_user.rs` 尾部缺口台账；
+//!   `union_methods`）：Rust CLI 默认旗标复现 cpp flags-off 渲染；其中
+//!   `disallow_less_specific_assign`、`intersection_methods` 两例经 w6d 追加
+//!   `--fflags=true` 断言，复现 cpp `flags-on` 紧凑渲染（`render_type_path`），
+//!   on/off 两态均逐字节对位；
+//! - 4 例 keyof 区（`keyof_basic`、`keyof_metatable`、`keyof_union_common_keys`、
+//!   `rawkeyof_ignores_metatable`）按 cpp `flags-on` strict 快照移植（联合分量
+//!   子路径渲染空前缀 ⇒ `baseReason` 紧凑形态）+ `flags-on` nonstrict 空输出；
+//!   其 cpp `flags-off` strict 快照（`keyof_metatable`/`keyof_union_common_keys`
+//!   两枚）Rust 裸跑不可逐字节复现——sub 联合内部成员序与 cpp 不一致，
+//!   旧式原因的分量序号错位（Rust 「1st」 vs cpp 「3rd」/「2nd」），属
+//!   union 构造排序面缺口（非渲染移植），继续登记不可凑绿断言；
+//!   `keyof_basic`/`rawkeyof_ignores_metatable` 的 flags-off.strict 快照在 cpp
+//!   侧本就不存在（golden runner 仅校验现存快照文件，缺文件不断言）。
 //! - 1 例（`type-states/initialize_optional_with_nil`）夹具仅带 `--!golden ok`
 //!   指令、无快照：按 cpp golden 运行器语义（`expectations.py`：`ok` 要求全部
 //!   命令 returncode 0）断言双模式退出码 0 + stderr 空。
 //!
-//! 其余 5 例未移植：`keyof_basic`、`keyof_metatable`、`keyof_union_common_keys`、
-//! `rawkeyof_ignores_metatable`、`negation`——Rust CLI 默认输出与 cpp 现存任一
-//! 快照形态（on/off）都逐字节不同（union 子类型失败原因的措辞代际差异；
-//! `keyof_metatable` 连分量序号、`negation` 连被打印类型都不同），禁为凑绿
-//! 放宽断言，登记为渲染/排序面缺口。
+//! 其余 1 例未移植：`negation`——其 flags-on 原因依赖 metadata 版 `traverse`
+//! 采集的 `enclosingNegation`（`render_type_path` 端口暂空 metadata，见模块
+//! 偏差登记）且 Rust 默认输出与 cpp 现存快照连被打印类型都不同；flags-off
+//! 形态同前不可达。禁为凑绿放宽断言，登记为渲染采集/排序面缺口。
 //!
 //! `cpp/tests/golden/meta`（10 例）是 cpp golden 运行器自身的框架自检，非语言
 //! 行为回归，不移植。
@@ -65,12 +77,14 @@ fn analyze_nonstrict(ws: &Workspace, file: &str) -> (i32, String) {
 /// 原因渲染）。Rust 默认裸跑刻意保持该旗标关（见 `is_default_enabled_flag`），
 /// 故 flags-on 形态必须显式传本开关。
 fn analyze_strict_flags_on(ws: &Workspace, file: &str) -> (i32, String) {
-  let output = ws.run(&[
-    "--mode=strict",
-    "--solver=new",
-    "--fflags=true",
-    file,
-  ]);
+  let output = ws.run(&["--mode=strict", "--solver=new", "--fflags=true", file]);
+  (code(&output), stderr_of(&output))
+}
+
+/// 以 nonstrict 模式 + `--fflags=true` 跑一份 golden 源，对应 cpp 矩阵的
+/// `flags-on` nonstrict 快照单元。
+fn analyze_nonstrict_flags_on(ws: &Workspace, file: &str) -> (i32, String) {
+  let output = ws.run(&["--mode=nonstrict", "--solver=new", "--fflags=true", file]);
   (code(&output), stderr_of(&output))
 }
 
@@ -363,6 +377,164 @@ end
   );
 
   let (code, stderr) = analyze_nonstrict(&ws, "keyof_invalid_operand.luau");
+  assert_eq!(code, 0);
+  assert_eq!(stderr, "");
+}
+
+/// cpp `analysis/type-functions/keyof_basic`（flags-on 形态移植，w6d）：
+/// `keyof<MyObject>` 返回 `"x" | "y" | "z"` 联合赋给 `"x" | "y"`，联合分量子路径
+/// 经 `renderTypePath` 渲染出空前缀（cpp `TypePath.cpp:936-939` 非 Pack Index 早退）
+/// ⇒ 落回 `baseReason` 紧凑形态（cpp `keyof_basic.flags-on.strict.output`）；
+/// nonstrict 双态空输出（on/off 快照皆空）；flags-off.strict 无 cpp 快照不校验。
+#[test]
+fn golden_type_function_keyof_basic_flags_on() {
+  let ws = ws("keyof-basic");
+  ws.write(
+    "keyof_basic.luau",
+    r#"type MyObject = { x: number, y: number, z: number }
+type KeysOfMyObject = keyof<MyObject>
+
+local function _ok(idx: KeysOfMyObject): "x" | "y" | "z"
+    return idx
+end
+
+local function _err(idx: KeysOfMyObject): "x" | "y"
+    return idx
+end
+"#,
+  );
+
+  let (code, stderr) = analyze_strict_flags_on(&ws, "keyof_basic.luau");
+  assert_eq!(code, 1);
+  assert_eq!(
+    stderr,
+    "./keyof_basic.luau(9,12): TypeError: Expected this to be '\"x\" | \"y\"', but got '\"x\" | \"y\" | \"z\"'; \n\
+     `\"z\"` is not a subtype of `\"x\" | \"y\"`\n"
+  );
+
+  let (code, stderr) = analyze_nonstrict(&ws, "keyof_basic.luau");
+  assert_eq!(code, 0);
+  assert_eq!(stderr, "");
+
+  let (code, stderr) = analyze_nonstrict_flags_on(&ws, "keyof_basic.luau");
+  assert_eq!(code, 0);
+  assert_eq!(stderr, "");
+}
+
+/// cpp `analysis/type-functions/keyof_metatable`（flags-on 形态移植，w6d）：
+/// `keyof<typeof(obj)>` 含元表 `__index` 键 `"w"`，赋给 `"x" | "y" | "z"` 时报
+/// 紧凑 `baseReason`（cpp `keyof_metatable.flags-on.strict.output`；长类型走
+/// tab 换行版 `Expected this to be\n\t…\nbut got\n\t…`）。flags-off 快照在 cpp
+/// 存在但 Rust 裸跑的分量序号不同（union 构造排序面缺口，见模块头台账），
+/// 不校验该形态。
+#[test]
+fn golden_type_function_keyof_metatable_flags_on() {
+  let ws = ws("keyof-metatable");
+  ws.write(
+    "keyof_metatable.luau",
+    r#"local metatable = { __index = { w = 1 } }
+local obj = setmetatable({ x = 1, y = 2, z = 3 }, metatable)
+type KeysOfMyObject = keyof<typeof(obj)>
+
+local function _ok(idx: KeysOfMyObject): "w" | "x" | "y" | "z"
+    return idx
+end
+
+local function _err(idx: KeysOfMyObject): "x" | "y" | "z"
+    return idx
+end
+"#,
+  );
+
+  let (code, stderr) = analyze_strict_flags_on(&ws, "keyof_metatable.luau");
+  assert_eq!(code, 1);
+  assert_eq!(
+    stderr,
+    "./keyof_metatable.luau(10,12): TypeError: Expected this to be\n\t'\"x\" | \"y\" | \"z\"'\nbut got\n\t'\"w\" | \"x\" | \"y\" | \"z\"'; \n\
+     `\"w\"` is not a subtype of `\"x\" | \"y\" | \"z\"`\n"
+  );
+
+  let (code, stderr) = analyze_nonstrict(&ws, "keyof_metatable.luau");
+  assert_eq!(code, 0);
+  assert_eq!(stderr, "");
+
+  let (code, stderr) = analyze_nonstrict_flags_on(&ws, "keyof_metatable.luau");
+  assert_eq!(code, 0);
+  assert_eq!(stderr, "");
+}
+
+/// cpp `analysis/type-functions/keyof_union_common_keys`（flags-on 形态移植，
+/// w6d）：`keyof<First | Second>` 取公共键 `"y" | "z"` 赋给 `"z"`，报紧凑
+/// `baseReason`（cpp `keyof_union_common_keys.flags-on.strict.output`）。
+/// flags-off 快照的分量序号缺口同 `keyof_metatable`，不校验该形态。
+#[test]
+fn golden_type_function_keyof_union_common_keys_flags_on() {
+  let ws = ws("keyof-union-common-keys");
+  ws.write(
+    "keyof_union_common_keys.luau",
+    r#"type First = { x: number, y: number, z: number }
+type Second = { w: number, y: number, z: number }
+type CommonKeys = keyof<First | Second>
+
+local function _err(idx: CommonKeys): "z"
+    return idx
+end
+"#,
+  );
+
+  let (code, stderr) = analyze_strict_flags_on(&ws, "keyof_union_common_keys.luau");
+  assert_eq!(code, 1);
+  assert_eq!(
+    stderr,
+    "./keyof_union_common_keys.luau(6,12): TypeError: Expected this to be '\"z\"', but got '\"y\" | \"z\"'; \n\
+     `\"y\"` is not a subtype of `\"z\"`\n"
+  );
+
+  let (code, stderr) = analyze_nonstrict(&ws, "keyof_union_common_keys.luau");
+  assert_eq!(code, 0);
+  assert_eq!(stderr, "");
+
+  let (code, stderr) = analyze_nonstrict_flags_on(&ws, "keyof_union_common_keys.luau");
+  assert_eq!(code, 0);
+  assert_eq!(stderr, "");
+}
+
+/// cpp `analysis/type-functions/rawkeyof_ignores_metatable`（flags-on 形态移植，
+/// w6d）：`rawkeyof` 忽略元表键，`"x" | "y" | "z"` 赋给 `"x" | "y"` 报紧凑
+/// `baseReason`（cpp `rawkeyof_ignores_metatable.flags-on.strict.output`）；
+/// flags-off.strict 无 cpp 快照不校验。
+#[test]
+fn golden_type_function_rawkeyof_ignores_metatable_flags_on() {
+  let ws = ws("rawkeyof-ignores-metatable");
+  ws.write(
+    "rawkeyof_ignores_metatable.luau",
+    r#"local metatable = { __index = { w = 1 } }
+local obj = setmetatable({ x = 1, y = 2, z = 3 }, metatable)
+type RawKeys = rawkeyof<typeof(obj)>
+
+local function _ok(idx: RawKeys): "x" | "y" | "z"
+    return idx
+end
+
+local function _err(idx: RawKeys): "x" | "y"
+    return idx
+end
+"#,
+  );
+
+  let (code, stderr) = analyze_strict_flags_on(&ws, "rawkeyof_ignores_metatable.luau");
+  assert_eq!(code, 1);
+  assert_eq!(
+    stderr,
+    "./rawkeyof_ignores_metatable.luau(10,12): TypeError: Expected this to be '\"x\" | \"y\"', but got '\"x\" | \"y\" | \"z\"'; \n\
+     `\"z\"` is not a subtype of `\"x\" | \"y\"`\n"
+  );
+
+  let (code, stderr) = analyze_nonstrict(&ws, "rawkeyof_ignores_metatable.luau");
+  assert_eq!(code, 0);
+  assert_eq!(stderr, "");
+
+  let (code, stderr) = analyze_nonstrict_flags_on(&ws, "rawkeyof_ignores_metatable.luau");
   assert_eq!(code, 0);
   assert_eq!(stderr, "");
 }
