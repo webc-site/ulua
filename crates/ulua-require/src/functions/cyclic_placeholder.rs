@@ -54,17 +54,13 @@ const UNKNOWN_KEY: &str = "unknown";
 fn raise_cyclic_error(l: &mut LuaState, action: &str) -> ! {
   // r16-p28 锚定形：抛错文案先取 owned 快照解耦窗口借用，其后 `l.as_mut_ptr()` 重建可用
   let key = l.to_str(2).unwrap_or(UNKNOWN_KEY).to_owned();
-  // Safety: l 为存活 state 的独占借用；luaL_error! 把 key 格式化进错误消息后
-  // 抛错发散。
-  unsafe {
-    luaL_error!(
-      l.as_mut_ptr(),
-      "Cannot {} the exported field '{}'{}",
-      action,
-      key,
-      CYCLIC_TAIL
-    )
-  }
+  luaL_error!(
+    l,
+    "Cannot {} the exported field '{}'{}",
+    action,
+    key,
+    CYCLIC_TAIL
+  )
 }
 
 /// cpp `CyclicDependencyIndexError`：访问占位表字段即报错。

@@ -31,5 +31,5 @@ pub unsafe extern "C-unwind" fn int_64_newindex(l: *mut LuaState) -> c_int {
   let name_str = from_utf8(name).unwrap_or("");
   // 末分支按 cpp 抛「未知字段」Lua 错误，该调用不返回。
   // Safety: `l` 存活；`luaL_error` 以 long-jump 终止本回调。
-  unsafe { luaL_error!(l, "unknown field {name_str}") }
+  unsafe { luaL_error!(&mut *l, "unknown field {name_str}") }
 }

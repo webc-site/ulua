@@ -31,13 +31,10 @@ fn try_reserve_stack(l: &mut LuaState, size: i32) -> bool {
 /// `luaO_pushfstring(L, "stack overflow")` 与其后的 `lua_error(L)`；发散。
 ///
 /// 调用序契约（正确性，非内存安全——`l` 的存活/独占由 `&mut` 承载，r12-w6 收形降为安全
-/// `fn`）：`l` 处于可抛错帧；窄块内 `lua_o_pushfstring` 仍收 `*mut` 形参，`as` 重建自
-/// 独占借用、借用窗止于当句（r16-v21 判例），压 msg 与抛错的次序与 cpp 逐指令一致。
+/// `fn`）：`l` 处于可抛错帧；`lua_o_pushfstring` 已随 wave-6d 降为引用形安全门面，压 msg
+/// 与抛错的次序与 cpp 逐指令一致。
 fn report_stack_overflow(l: &mut LuaState) -> ! {
-  // SAFETY: 契约保证 `l` 可推送错误消息并可抛错；`lua_error` 引用形安全门面直传借用。
-  unsafe {
-    lua_o_pushfstring(l, format_args!("stack overflow"));
-  }
+  lua_o_pushfstring(l, format_args!("stack overflow"));
   lua_error(l)
 }
 

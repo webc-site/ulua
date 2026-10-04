@@ -9,9 +9,10 @@ use crate::{
 };
 
 /// # Safety
-/// `l` 的存活与独占已由 `&mut LuaState` 承载（r16-v29 收形）；`getfunc`/`lua_setsafeenv`/
-/// `luaL_error!`（终端 `lua_l_error_l`）仍收裸形，转手各经一次 `l.as_mut_ptr()` 就地重建
-/// （借用窗止于当句），屏障按 r16-v21 判例保留；其余前提即 C++ 参考实现之栈序约定
+/// `l` 的存活与独占已由 `&mut LuaState` 承载（r16-v29 收形）；`getfunc`/`lua_setsafeenv`
+/// 仍收裸形，转手各经一次 `l.as_mut_ptr()` 就地重建
+/// （借用窗止于当句），屏障按 r16-v21 判例保留；`luaL_error!`（终端 `lua_l_error_l`）已随
+/// wave-6d 降为引用形安全门面；其余前提即 C++ 参考实现之栈序约定
 /// （索引 1/2 槽存活可读，抛错路径须处于受保护帧）。
 pub(crate) unsafe fn lua_b_setfenv(l: &mut LuaState) -> i32 {
   unsafe {
@@ -25,10 +26,7 @@ pub(crate) unsafe fn lua_b_setfenv(l: &mut LuaState) -> i32 {
       lua_setfenv(l, -2);
       return 0;
     } else if lua_iscfunction(l, -2) != 0 || lua_setfenv(l, -2) == 0 {
-      luaL_error!(
-        l.as_mut_ptr(),
-        "'setfenv' cannot change environment of given object"
-      );
+      luaL_error!(l, "'setfenv' cannot change environment of given object");
     }
     1
   }

@@ -27,7 +27,7 @@ pub unsafe fn lua_l_register_bytes(l: &mut LuaState, libname: Option<&[u8]>, lr:
         l.pop(1);
         if !lua_l_findtable_bytes(&mut *l, LUA_GLOBALSINDEX, libname, size).is_null() {
           let name = String::from_utf8_lossy(libname);
-          luaL_error!(l.as_mut_ptr(), "name conflict for module '{}'", name);
+          luaL_error!(l, "name conflict for module '{}'", name);
         }
         l.push_value(-1);
         l.set_field_bytes(-3, libname);

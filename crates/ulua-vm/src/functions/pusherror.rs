@@ -46,9 +46,7 @@ pub(crate) fn pusherror_bytes(l: &mut LuaState, msg: &[u8]) {
     // 源名偏移串），调用期间存活且 NUL 终止，`cstr_cow` 的 NUL 扫描必界内终止。
     let chunk = unsafe { cstr_cow(chunkid) };
     let msg_str = String::from_utf8_lossy(msg);
-    // SAFETY: `l` 为独占接收者引用；`lua_o_pushfstring` 仅经 `l` 压栈取副作用，
-    // format 临时（chunk/line/msg_str）全程存活至本调用语句结束。
-    unsafe { lua_o_pushfstring(l, format_args!("{}:{}: {}", chunk, line, msg_str)) };
+    lua_o_pushfstring(l, format_args!("{}:{}: {}", chunk, line, msg_str));
   } else {
     l.push_bytes(msg);
   }

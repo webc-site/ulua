@@ -36,7 +36,7 @@ pub(crate) unsafe fn auxresume(l: *mut LuaState, co: *mut LuaState, narg: i32) -
 
     if narg != 0 {
       if lua_checkstack(&mut *co, narg) == 0 {
-        luaL_error!(l, "too many arguments to resume");
+        luaL_error!(&mut *l, "too many arguments to resume");
       }
       lua_xmove(&mut *l, &mut *co, narg);
     } else {
@@ -46,7 +46,7 @@ pub(crate) unsafe fn auxresume(l: *mut LuaState, co: *mut LuaState, narg: i32) -
       // isize→i32 折形在现域无截差（协程栈槽距受 LUAI_MAXSTACK 约束、远小于 i32::MAX），
       // 比较两侧同为 i32 后与原 isize 式同真值（LUAI_MAXCSTACK 为 i32 常量）
       if (*co).get_top() > LUAI_MAXCSTACK {
-        luaL_error!(l, "too many arguments to resume");
+        luaL_error!(&mut *l, "too many arguments to resume");
       }
     }
 
@@ -59,7 +59,7 @@ pub(crate) unsafe fn auxresume(l: *mut LuaState, co: *mut LuaState, narg: i32) -
       if nres != 0 {
         // +1 accounts for true/false status in resumefinish
         if nres + 1 > LUA_MINSTACK && lua_checkstack(&mut *l, nres + 1) == 0 {
-          luaL_error!(l, "too many results to resume");
+          luaL_error!(&mut *l, "too many results to resume");
         }
         lua_xmove(&mut *co, &mut *l, nres); // move yielded values
       }

@@ -69,7 +69,7 @@ pub(crate) unsafe fn sort_rec(
           i += 1;
           if sort_less(l, t, i, p, pred) != 0 {
             if i >= u {
-              luaL_error!(l, "invalid order function for sorting");
+              luaL_error!(&mut *l, "invalid order function for sorting");
             }
             continue;
           }
@@ -81,7 +81,7 @@ pub(crate) unsafe fn sort_rec(
           j -= 1;
           if sort_less(l, t, p, j, pred) != 0 {
             if j <= lo {
-              luaL_error!(l, "invalid order function for sorting");
+              luaL_error!(&mut *l, "invalid order function for sorting");
             }
             continue;
           }

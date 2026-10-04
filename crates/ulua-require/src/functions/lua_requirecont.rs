@@ -76,8 +76,7 @@ pub(crate) unsafe extern "C-unwind" fn lua_requirecont(l: *mut LuaState, _status
   let cache_key = l.check_bytes(2).to_vec();
 
   if num_results > 1 {
-    // Safety: l 存活，luaL_error! 抛错发散。
-    unsafe { luaL_error!(l, "module must return a single value") };
+    luaL_error!(l, "module must return a single value");
   }
 
   if num_results == 1 {

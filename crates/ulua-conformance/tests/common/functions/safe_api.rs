@@ -1208,7 +1208,7 @@ pub fn l_checklstring<'a>(l: L, narg: c_int) -> &'a [u8] {
 /// `luaL_typeerror`：按类型名抛 Lua 错误（不返回）。
 pub fn l_typeerror(l: L, narg: c_int, tname: &str) -> ! {
   // Safety: `l` 为存活受保护帧；抛错经 VM 展开发散。
-  unsafe { lua_l_typeerror_l(l, narg, tname) }
+  unsafe { lua_l_typeerror_l(&mut *l, narg, tname) }
 }
 
 /// `luaL_checkvector` 的切片形态：返回参数 `narg` 处 vector 的

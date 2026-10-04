@@ -21,6 +21,6 @@ pub fn get_type_user_data(l: &mut LuaState, idx: i32) -> TypeFunctionTypeId {
       return *typ;
     }
 
-    lua_l_typeerror_l(l.as_mut_ptr(), idx, "type");
+    lua_l_typeerror_l(l, idx, "type");
   }
 }

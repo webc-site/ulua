@@ -32,7 +32,7 @@ pub(crate) unsafe fn coclose(l: *mut LuaState) -> i32 {
       && status != LuaCoStatus::CoSus as i32
     {
       let sname = LuaCoStatus::from_c_int(status).map_or("dead", LuaCoStatus::as_str);
-      luaL_error!(l, "cannot close {} coroutine", sname);
+      luaL_error!(&mut *l, "cannot close {} coroutine", sname);
     }
 
     if (*co).status as i32 == LuaStatus::Ok as i32 || (*co).status as i32 == LuaStatus::Yield as i32

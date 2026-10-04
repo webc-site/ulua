@@ -49,7 +49,7 @@ pub unsafe extern "C-unwind" fn vec_2_direct_namecall(
       let method = unsafe { cstr_text(method) };
       // Safety: 按 cpp 抛「非方法」Lua 错误（`l` 存活、格式串为已校验的 `method`），
       // 该调用不返回。
-      unsafe { luaL_error!(l, "{method} is not a valid method of vec2") }
+      unsafe { luaL_error!(&mut *l, "{method} is not a valid method of vec2") }
     }
   }
 }

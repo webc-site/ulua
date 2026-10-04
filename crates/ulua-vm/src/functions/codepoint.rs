@@ -36,9 +36,7 @@ fn codepoint_ref(l: &mut LuaState, bytes: &[u8]) -> i32 {
 
   // 纯界判定留在 unsafe 外；仅抛错调用收进窄块（抛出文本与点位同 cpp :119）
   if (pose as i64 - posi as i64) >= i32::MAX as i64 {
-    // SAFETY: 调用方垫片契约保证 `l` 为可捕获错误的存活帧，lua_l_error_l
-    // 抛出不返回（longjmp 等价发散）
-    unsafe { luaL_error!(l, "string slice too long") };
+    luaL_error!(l, "string slice too long");
   }
 
   let n = (pose - posi) + 1;
@@ -52,8 +50,7 @@ fn codepoint_ref(l: &mut LuaState, bytes: &[u8]) -> i32 {
     let (step, code) = utf_8_decode(&bytes[i..]);
     // 解码失败经 luaL_error(!) 抛出不返回：let-else 收敛判定，消除哨兵回退值
     let Some(code) = code else {
-      // SAFETY: 同上，`l` 存活帧内 "invalid UTF-8 code" 抛出发散
-      unsafe { luaL_error!(l, "invalid UTF-8 code") };
+      luaL_error!(l, "invalid UTF-8 code");
     };
     l.push_integer(code as i32);
     pushed += 1;

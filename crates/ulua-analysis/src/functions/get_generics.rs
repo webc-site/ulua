@@ -28,8 +28,9 @@ use crate::{
 };
 
 /// 本函数是 safe fn：形参为 `&mut LuaState`/`i32`/`&str`，无调用方传入的裸指针；体内
-/// `unsafe` 块只因 `lua_l_typeerror_l`/`lua_gettable` 等 VM 侧 C-ABI 门面的裸转手，
-/// 返回的 arena 句柄向量源自本次调用内部分配，调用方无需承担任何内存安全前提。
+/// `lua_l_typeerror_l`/`lua_gettable` 等 VM 侧门面已随 wave-6d/r16 收形为引用形安全
+/// 函数，调用方无需承担任何内存安全前提。
+/// 返回的 arena 句柄向量源自本次调用内部分配。
 ///
 /// 调用序契约（正确性，非内存安全）：`l` 须为类型函数运行时会话内存活的状态；`idx` 须是
 /// 该状态栈上的有效索引，其内容若为 userdata 则须是由 `alloc_type_user_data` 登记的类型
@@ -40,69 +41,64 @@ pub(crate) fn get_generics(
   idx: i32,
   fname: &str,
 ) -> (Vec<TypeFunctionTypeId>, Vec<TypeFunctionTypePackId>) {
-  // Safety: `l` 由 Lua VM 按类型函数运行时约定传入并全程存活（经入口以独占 `&mut` 借入）。
-  // 错误分支 `throw_type_error` 返回 `!` 不返回，`lua_l_typeerror_l`
-  // 之后不再解引用任何指针。单线程串行遍历，push/gettable/pop 栈操作平衡、无并发别名。
-  unsafe {
-    // 注册期写入主线程 thread data 的非空 runtime（未挂载属契约违例，`expect` 收敛为
-    // 确定性 panic）。
-    let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
+  // 注册期写入主线程 thread data 的非空 runtime（未挂载属契约违例，`expect` 收敛为
+  // 确定性 panic）。
+  let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
 
-    let mut types: Vec<TypeFunctionTypeId> = Vec::new();
-    let mut packs: Vec<TypeFunctionTypePackId> = Vec::new();
+  let mut types: Vec<TypeFunctionTypeId> = Vec::new();
+  let mut packs: Vec<TypeFunctionTypePackId> = Vec::new();
 
-    if l.is_table(idx) {
-      l.push_value(idx);
+  if l.is_table(idx) {
+    l.push_value(idx);
 
-      let mut i: i32 = 1;
-      while i <= l.obj_len(-1) as i32 {
-        l.push_integer(i);
-        lua_gettable(l, -2);
+    let mut i: i32 = 1;
+    while i <= l.obj_len(-1) as i32 {
+      l.push_integer(i);
+      lua_gettable(l, -2);
 
-        if l.is_nil(-1) {
-          l.pop(1);
-          break;
-        }
-
-        // TypeFunctionTypeId ty = getTypeUserData(l, -1);
-        let ty = get_type_user_data(l, -1);
-
-        // if (auto gty = get<TypeFunctionGenericType>(ty))
-        match get_type_function_type_id::<TypeFunctionGenericType>(ty) {
-          Some(gty) if gty.is_pack => {
-            packs.push(allocate_type_function_type_pack(
-              runtime,
-              TypeFunctionTypePackVariant::V2(TypeFunctionGenericTypePack {
-                is_named: gty.is_named,
-                name: gty.name.clone(),
-              }),
-            ));
-          }
-          Some(_) => {
-            if !packs.is_empty() {
-              throw_type_error(
-                l,
-                format_args!("{}: generic type cannot follow a generic pack", fname),
-              );
-            }
-
-            types.push(ty);
-          }
-          None => throw_type_error(
-            l,
-            format_args!("{}: table member was not a generic type", fname),
-          ),
-        }
-
+      if l.is_nil(-1) {
         l.pop(1);
-        i += 1;
+        break;
+      }
+
+      // TypeFunctionTypeId ty = getTypeUserData(l, -1);
+      let ty = get_type_user_data(l, -1);
+
+      // if (auto gty = get<TypeFunctionGenericType>(ty))
+      match get_type_function_type_id::<TypeFunctionGenericType>(ty) {
+        Some(gty) if gty.is_pack => {
+          packs.push(allocate_type_function_type_pack(
+            runtime,
+            TypeFunctionTypePackVariant::V2(TypeFunctionGenericTypePack {
+              is_named: gty.is_named,
+              name: gty.name.clone(),
+            }),
+          ));
+        }
+        Some(_) => {
+          if !packs.is_empty() {
+            throw_type_error(
+              l,
+              format_args!("{}: generic type cannot follow a generic pack", fname),
+            );
+          }
+
+          types.push(ty);
+        }
+        None => throw_type_error(
+          l,
+          format_args!("{}: table member was not a generic type", fname),
+        ),
       }
 
       l.pop(1);
-    } else if !l.is_none_or_nil(idx) {
-      lua_l_typeerror_l(l.as_mut_ptr(), idx, "table");
+      i += 1;
     }
 
-    (types, packs)
+    l.pop(1);
+  } else if !l.is_none_or_nil(idx) {
+    lua_l_typeerror_l(l, idx, "table");
   }
+
+  (types, packs)
 }

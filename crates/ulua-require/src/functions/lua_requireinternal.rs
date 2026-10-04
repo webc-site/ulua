@@ -68,8 +68,7 @@ pub(crate) unsafe fn lua_requireinternal<C: RequireHost>(
   // Safety: 契约保证 upvalue(1) 处为 push_closure::<C> 构造、以 `C` 装箱的宿主
   // userdata（与闭包同寿命），重建共享引用只用于读取宿主方法。
   let Some(host) = (unsafe { borrowed_host::<C>(l, lua_upvalueindex(1)) }) else {
-    // Safety: l 存活，luaL_error! 抛错发散（`lua_l_error_l` 为 unsafe fn）。
-    unsafe { luaL_error!(l, "unable to find require configuration") };
+    luaL_error!(l, "unable to find require configuration");
   };
   // 对应 cpp `std::string path(luaL_checkstring(L, 1))`：取 VM 串字节视图后落
   // owned 快照（Lua 串非 UTF-8，不校验；r16-p28 锚定形——窗口须活过 resolve/load
@@ -122,8 +121,7 @@ pub(crate) unsafe fn lua_requireinternal<C: RequireHost>(
     // 挂起路径：先复核栈未被改动（不一致即 luaL_error! 发散），
     // lua_yield 由协程状态机接续
     if l.get_top() != stack_values {
-      // Safety: l 存活，luaL_error! 抛错发散。
-      unsafe { luaL_error!(l, "stack cannot be modified when require yields") };
+      luaL_error!(l, "stack cannot be modified when require yields");
     }
     // Safety: l 存活，lua_yield 由协程状态机接续。
     unsafe { lua_yield(l, 0) }

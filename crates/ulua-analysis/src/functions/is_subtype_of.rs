@@ -17,7 +17,7 @@ pub(crate) fn is_subtype_of(l: &mut LuaState) -> i32 {
     let argument_count = l.get_top();
     if argument_count != 2 {
       luaL_error!(
-        l.as_mut_ptr(),
+        l,
         "type.issubtypeof: expected 2 arguments, but got {}",
         argument_count
       );
@@ -34,13 +34,13 @@ pub(crate) fn is_subtype_of(l: &mut LuaState) -> i32 {
       runtime_builder,
     );
     if !runtime_builder.errors.is_empty() || !runtime_builder.errors_deprecated.is_empty() {
-      luaL_error!(l.as_mut_ptr(), "failed to deserialize the self type");
+      luaL_error!(l, "failed to deserialize the self type");
     }
 
     let super_ty =
       deserialize_type_function_type_id_type_function_runtime_builder_state(arg, runtime_builder);
     if !runtime_builder.errors.is_empty() || !runtime_builder.errors_deprecated.is_empty() {
-      luaL_error!(l.as_mut_ptr(), "failed to deserialize the argument type");
+      luaL_error!(l, "failed to deserialize the argument type");
     }
 
     // ctx 只在 deserialize 会话之后读取：借用延到最后使用处，不再与上面两次

@@ -50,6 +50,5 @@ pub unsafe extern "C-unwind" fn lua_collectgarbage(l: *mut LuaState) -> c_int {
   }
 
   // luaL_error! 恒发散（longjmp），无需回退值
-  // Safety: 同上；宏内 `lua_pushstring`/`lua_error` 均以 `l` 为活跃状态为前提。
-  unsafe { luaL_error!(l, "collectgarbage must be called with 'count' or 'collect'") }
+  luaL_error!(l, "collectgarbage must be called with 'count' or 'collect'")
 }

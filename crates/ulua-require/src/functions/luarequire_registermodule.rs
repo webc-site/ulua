@@ -26,13 +26,10 @@ pub unsafe extern "C-unwind" fn luarequire_registermodule(l: *mut LuaState) -> i
   let l = unsafe { &mut *l };
 
   if l.get_top() != REGISTER_MODULE_ARGS {
-    // Safety: l 存活，luaL_error! 抛错发散。
-    unsafe {
-      luaL_error!(
-        l.as_mut_ptr(),
-        "expected 2 arguments: aliased require path and desired result"
-      )
-    };
+    luaL_error!(
+      l,
+      "expected 2 arguments: aliased require path and desired result"
+    );
   }
 
   let path = c_str_prefix_owned(l.check_bytes(1));

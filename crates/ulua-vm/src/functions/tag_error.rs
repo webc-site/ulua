@@ -9,5 +9,5 @@ use crate::{
 pub(crate) unsafe fn tag_error(l: *mut LuaState, narg: i32, tag: i32) -> ! {
   let tname = lua_typename_str(tag).unwrap_or("unknown");
   // SAFETY: 直接转发 `lua_l_typeerror_l`；`l` 存活与 narg 可读由本函数契约传递，调用后抛错不返回
-  unsafe { lua_l_typeerror_l(l, narg, tname) }
+  unsafe { lua_l_typeerror_l(&mut *l, narg, tname) }
 }

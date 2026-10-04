@@ -67,7 +67,7 @@ unsafe fn spawn_module_thread(l: &mut LuaState) -> *mut LuaState {
 /// `msg` 为纯 Rust 格式化串，在被调窗口内消费、无逃逸借用。
 pub(crate) unsafe fn throw(l: *mut LuaState, msg: Arguments<'_>) -> ! {
   // Safety: 前置条件即本 fn 契约（`l` 活跃受保护、栈留 ≥2 空槽），原样透传给 `lua_l_error_l`。
-  unsafe { lua_l_error_l(l, msg) }
+  unsafe { lua_l_error_l(&mut *l, msg) }
 }
 
 /// FFI 边界（ulua-vm / ulua-require c-API）：`luau_load` 成功后、运行前的模块

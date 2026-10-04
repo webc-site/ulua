@@ -186,7 +186,6 @@ unsafe extern "C-unwind" fn runtime_luau_config_interrupt(l: *mut LuaState, _gc:
   // Safety: 见函数 # Safety：槽内容为 null 或本次配置执行期写入的存活 timer
   // 地址，as_ref 判空后仅做只读 is_finished（Cell 承载可变性）。
   if unsafe { timer.as_ref() }.is_some_and(|timer| timer.is_finished()) {
-    // Safety: l 存活，luaL_error! 抛错发散。
-    unsafe { luaL_error!(l, "{CONFIG_TIMEOUT_MSG}") };
+    luaL_error!(l, "{CONFIG_TIMEOUT_MSG}");
   }
 }

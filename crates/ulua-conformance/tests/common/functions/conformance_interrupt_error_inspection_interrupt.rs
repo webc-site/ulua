@@ -24,7 +24,7 @@ pub unsafe extern "C-unwind" fn conformance_interrupt_error_inspection_interrupt
 
   if step == target {
     // Safety: `l` 为本用例存活的 LuaState；按 cpp 在此抛 "test" Lua 错误，该调用不返回。
-    unsafe { luaL_error!(l, "test") };
+    unsafe { luaL_error!(&mut *l, "test") };
   }
 
   CONFORMANCE_INTERRUPT_ERROR_INSPECTION_STATE

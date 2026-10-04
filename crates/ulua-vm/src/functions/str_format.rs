@@ -76,20 +76,20 @@ pub(crate) unsafe fn str_format(l: &mut LuaState) -> i32 {
         i += 1;
         arg += 1;
         if arg > top {
-          luaL_error!(lp, "missing argument #{}", arg);
+          luaL_error!(&mut *lp, "missing argument #{}", arg);
         }
         lua_l_addvalueany(&mut b, arg);
       } else {
         // format item：扫描 flags/width/prec，得到 `&window[..p]` 即 cpp `form` 内容
         arg += 1;
         if arg > top {
-          luaL_error!(lp, "missing argument #{}", arg);
+          luaL_error!(&mut *lp, "missing argument #{}", arg);
         }
         let hi = (i + MAX_FORMAT_SPEC_SCAN).min(f.len());
         let window = &f[i..hi];
         // cpp 的扫描止于首个 NUL（嵌入 '\0' 之后不参与解析）
         let window = &window[..memchr(0, window).unwrap_or(window.len())];
-        let p = scan_format_spec(window).unwrap_or_else(|err| luaL_error!(lp, "{}", err));
+        let p = scan_format_spec(window).unwrap_or_else(|err| luaL_error!(&mut *lp, "{}", err));
         let indicator = f.get(i + p).copied().unwrap_or(0);
         let spec = parse_format_spec(&window[..p]);
         i += p + 1; // 消费 spec 字节与转换指示符（指示符为 0 时下方必报错）
@@ -147,13 +147,17 @@ pub(crate) unsafe fn str_format(l: &mut LuaState) -> i32 {
           }
           b'*' => {
             // %* is parsed above, so if we got here we must have %...*
-            luaL_error!(lp, "'%*' does not take a form");
+            luaL_error!(&mut *lp, "'%*' does not take a form");
           }
           _ => {
             // also treat cases 'pnLlh'
             // 指示符字节经 char 格式化：≥0x80 时按 Unicode 码点重编码为多字节，
             // cpp 写原始单字节——仅错误文本字节级差异（DELIBERATE DEVIATION）
-            luaL_error!(lp, "invalid option '%{}' to 'format'", indicator as char);
+            luaL_error!(
+              &mut *lp,
+              "invalid option '%{}' to 'format'",
+              indicator as char
+            );
           }
         }
       }

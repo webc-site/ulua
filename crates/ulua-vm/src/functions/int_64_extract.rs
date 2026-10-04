@@ -20,8 +20,7 @@ pub fn int64_extract(l: &mut LuaState) -> i32 {
   // `f` is bounded to [0,63] above; compare `w > 64 - f` so a near-i64::MAX
   // width can't overflow the `f + w` addition.
   if w > 64 - f {
-    // SAFETY: `l` 为借用形式的存活调用帧（&mut 保证有效且独占），as_mut_ptr 由该借用重取裸指针，luaL_error 抛错不返回。
-    unsafe { luaL_error!(l.as_mut_ptr(), "trying to access non-existent bits") };
+    luaL_error!(l, "trying to access non-existent bits");
   }
 
   lua_pushinteger_64(l, (((n as u64) >> f as u32) & mask64(w as i32)) as i64);

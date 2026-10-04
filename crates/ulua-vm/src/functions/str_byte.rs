@@ -39,8 +39,7 @@ pub fn str_byte(l: &mut LuaState) -> i32 {
   // 恒假——忠实保留，防 sync-cpp 时漂移
   if posi + n <= pose {
     // overflow?
-    // SAFETY: `l` 为借用形式的存活调用帧（&mut 保证有效且独占），as_mut_ptr 由该借用重取裸指针，luaL_error 抛错不返回。
-    unsafe { luaL_error!(l.as_mut_ptr(), "string slice too long") };
+    luaL_error!(l, "string slice too long");
   }
 
   lua_l_checkstack(l, n, "string slice too long");

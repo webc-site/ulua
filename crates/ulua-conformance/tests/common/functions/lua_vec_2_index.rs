@@ -59,5 +59,5 @@ pub unsafe extern "C-unwind" fn lua_vec_2_index(l: *mut LuaState) -> i32 {
   // 末分支按 cpp 抛 Lua 错误（宏内为 C ABI `luaL_error`，格式串为已校验的
   // `name`）；该调用不返回。
   // Safety: `l` 存活；`luaL_error` 以 long-jump 终止本回调。
-  unsafe { luaL_error!(l, "{name} is not a valid member of vector") }
+  unsafe { luaL_error!(&mut *l, "{name} is not a valid member of vector") }
 }

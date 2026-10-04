@@ -95,7 +95,7 @@ pub(crate) unsafe fn addfield(l: *mut LuaState, b: &mut LuaLStrbuf, i: i32, t: O
     if tt != LuaType::String as i32 && tt != LuaType::Number as i32 {
       let tn = cstr_cow(lua_l_typename(&*l, -1));
       luaL_error!(
-        l,
+        &mut *l,
         "invalid value ({}) at index {} in table for 'concat'",
         tn,
         i

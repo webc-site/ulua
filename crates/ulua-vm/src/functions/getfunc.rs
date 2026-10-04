@@ -35,7 +35,7 @@ pub(crate) unsafe fn getfunc(l: *mut LuaState, opt: i32) {
       }
       if (*l).is_nil(-1) {
         luaL_error!(
-          l,
+          &mut *l,
           "no function environment for tail call at level {}",
           level
         );

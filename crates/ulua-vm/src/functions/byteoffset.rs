@@ -49,9 +49,7 @@ fn byteoffset_ref(l: &mut LuaState, bytes: &[u8]) -> i32 {
     }
   } else {
     if is_cont_at(bytes, posi) {
-      // SAFETY: 调用方垫片契约保证 `l` 为可捕获错误的存活帧，lua_l_error_l
-      // 抛出不返回（longjmp 等价发散）；纯判定留在 unsafe 外，仅抛错收窄块
-      unsafe { luaL_error!(l, "initial position is a continuation byte") };
+      luaL_error!(l, "initial position is a continuation byte");
     }
     if n < 0 {
       while n < 0 && posi > 0 {

@@ -48,8 +48,7 @@ pub(crate) fn math_random(l: &mut LuaState) -> i32 {
       l.push_integer(r);
     }
     _ => {
-      // SAFETY: `l` 为借用形式的存活调用帧（&mut 保证有效且独占），as_mut_ptr 由该借用重取裸指针，luaL_error 抛错不返回。
-      unsafe { luaL_error!(l.as_mut_ptr(), "wrong number of arguments") };
+      luaL_error!(l, "wrong number of arguments");
     }
   }
   1

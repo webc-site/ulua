@@ -20,7 +20,7 @@ pub unsafe extern "C-unwind" fn lua_vec_2_newindex(l: *mut LuaState) -> i32 {
   } else {
     // 末分支按 cpp 抛 Lua 错误（格式串为已校验的 `name`），不返回。
     // Safety: `l` 存活；`luaL_error` 以 long-jump 终止本回调。
-    unsafe { luaL_error!(l, "{name} is not a writable member of vec2") }
+    unsafe { luaL_error!(&mut *l, "{name} is not a writable member of vec2") }
   }
 
   0

@@ -39,9 +39,7 @@ pub(crate) fn vector_index(l: &mut LuaState) -> i32 {
   }
 
   let name = String::from_utf8_lossy(name_bytes).into_owned();
-  // SAFETY: `l.as_mut_ptr()` 为由 `&mut` 借用重建的存活帧裸参（有效性与独占由引用承载），
-  // `luaL_error` 经其格式化并抛出错误、不返回；受保护帧前提见函数文档的调用序契约。
-  unsafe { luaL_error!(l.as_mut_ptr(), "attempt to index vector with '{}'", name) }
+  luaL_error!(l, "attempt to index vector with '{}'", name)
 }
 
 lua_lib_fn!(pub(crate) fn vector_index @ref, vector_index_arm);

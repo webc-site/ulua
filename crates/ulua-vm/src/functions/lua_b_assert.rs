@@ -15,13 +15,11 @@ pub fn lua_b_assert(l: &mut LuaState) -> i32 {
   l.check_any(1);
   if !l.to_boolean(1) {
     if l.is_none_or_nil(2) {
-      // SAFETY: 抛错族契约——`l` 存活且处于受保护帧（库函数调用约定），本调用不返回。
-      unsafe { luaL_error!(l.as_mut_ptr(), "{}", ASSERTION_FAILED) };
+      luaL_error!(l, "{}", ASSERTION_FAILED);
     }
     // 锚定形：抛错路径先取 owned 快照解耦窗口借用，其后 `l.as_mut_ptr()` 重建可用
     let msg = String::from_utf8_lossy(lua_l_checklstring_ref(l, 2)).into_owned();
-    // SAFETY: 抛错族契约——`l` 存活且处于受保护帧（库函数调用约定），本调用不返回。
-    unsafe { luaL_error!(l.as_mut_ptr(), "{}", msg) };
+    luaL_error!(l, "{}", msg);
   }
   l.get_top()
 }

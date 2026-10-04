@@ -6,8 +6,8 @@ use crate::{
 };
 
 /// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；收形后取参/
-/// 判型/落值全经安全门面，`moveelements` 亦为引用形安全核心（r12-w6），体内唯一 `unsafe` 为
-/// `luaL_error` 自由函数的裸指针转手）：`l` 须
+/// 判型/落值全经安全门面，`moveelements` 亦为引用形安全核心（r12-w6），`luaL_error` 已随
+/// wave-6d 降为引用形安全门面，体内无 `unsafe` 残留）：`l` 须
 /// 处于可抛错的受保护帧，栈 1 号位为 table（`check_type` 校验、非表即抛错发散），故交与
 /// `moveelements` 的 srct/dstt=1 槽必为表且满足其 `f <= e + 1` 入约；`check_integer`/
 /// `arg_check`/`luaL_error` 失败即抛错不返回，`moveelements`/`lua_rawseti` 可触发再哈希与 GC。
@@ -28,7 +28,7 @@ pub fn tinsert(l: &mut LuaState) -> i32 {
       }
       pos
     }
-    _ => unsafe { luaL_error!(l.as_mut_ptr(), "wrong number of arguments to 'insert'") },
+    _ => luaL_error!(l, "wrong number of arguments to 'insert'"),
   };
 
   lua_rawseti(l, 1, pos); // t[pos] = v

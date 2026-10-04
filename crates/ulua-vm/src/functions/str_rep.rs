@@ -44,7 +44,7 @@ pub(crate) unsafe fn str_rep(l: &mut LuaState) -> i32 {
     }
 
     if len > (MAXSSIZE as usize) / (n as usize) {
-      luaL_error!(l.as_mut_ptr(), "resulting string too large");
+      luaL_error!(l, "resulting string too large");
     }
 
     let total = len * (n as usize);

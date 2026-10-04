@@ -21,8 +21,7 @@ pub fn int64_replace(l: &mut LuaState) -> i32 {
   l.arg_check((0..=63).contains(&f), 3, "field cannot be negative");
   l.arg_check(0 < w, 4, "width must be positive");
   if f + w > 64 {
-    // SAFETY: `l` 为借用形式的存活调用帧（&mut 保证有效且独占），as_mut_ptr 由该借用重取裸指针，luaL_error 抛错不返回。
-    unsafe { luaL_error!(l.as_mut_ptr(), "trying to access non-existent bits") };
+    luaL_error!(l, "trying to access non-existent bits");
   }
 
   let n = n as u64;
