@@ -1,20 +1,17 @@
-use crate::{
-  functions::lua_yield::lua_yield, macros::lua_lib_fn::lua_lib_fn, records::lua_state::LuaState,
-};
+use crate::{macros::lua_lib_fn::lua_lib_fn, records::lua_state::LuaState};
 
-/// # Safety
-/// `l` 须为可 yield 的协程 `LuaState`：`(*l).base..(*l).top` 区间即待产出结果（nres=top-base，须 ≥0），
-/// 该协程须由 `lua_resume`/`auxresume` 驱动、非主线程；`lua_yield` 通过 unwind 挂起当前协程并回到恢复点，
-/// 调用方须处于受保护帧以承接跨 VM 边界的展开。
-/// cpp VM/src/lcorolib.cpp:348
-pub unsafe fn coyield(l: *mut LuaState) -> i32 {
-  unsafe {
-    // r16-b2 收编：顶-基槽距读数落既有 get_top 门面——其本体 slot_distance(base, top)
-    // 即被替代式 `top.offset_from(base) as i32` 的同址同宽镜像（现读位点不变）；
-    // isize→i32 折形在现域无截差（协程栈槽距受 LUAI_MAXSTACK 约束、远小于 i32::MAX）
-    let nres = (*l).get_top();
-    lua_yield(l, nres)
-  }
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
+/// 读数/让渡全经安全门面，体内已无裸操作，故本体降为安全 `fn`）：`l` 须为正被 `lua_resume`/
+/// `auxresume` 驱动的协程帧，`get_top` 取出的 `nres` 即 `top - base` 的结果窗槽距，`yield_thread`
+/// 据此写回 `base = top - nres`（恒等复位）与 `status`；非可 yield 帧（`n_ccalls > base_ccalls`）
+/// 由被调方走抛错分支，不产生越界槽写。cpp VM/src/lcorolib.cpp:348 coyield。
+pub fn coyield(l: &mut LuaState) -> i32 {
+  // 顶-基槽距读数走 `get_top` 门面（r16-b2 收编留痕：其本体 `slot_distance(base, top)` 即被替代
+  // 式 `top.offset_from(base) as i32` 的同址同宽镜像，现读位点不变；isize→i32 折形在协程栈槽距
+  // 受 LUAI_MAXSTACK 约束的现域内无截差）
+  let nres = l.get_top();
+
+  l.yield_thread(nres)
 }
 
-lua_lib_fn!(pub fn coyield, coyield_arm);
+lua_lib_fn!(pub fn coyield @ref, coyield_arm);
