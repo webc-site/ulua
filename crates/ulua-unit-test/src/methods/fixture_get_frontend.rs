@@ -27,14 +27,14 @@ impl Fixture {
       // Frontend 落在 Box 钉死的堆地址上，`builtin_types` 与两个 module_resolver
       // 的自指针从此恒有效（原「unsafe ctor + 搬入 self.frontend + 每次调用重跑
       // wire_self_pointers」的悬置/搬移窗口就此消失）。
-      // 两个 resolver（fe-selfptr 挂账⑥收口）已随 `Fixture` 字段 `Box` 钉堆：
-      // `&mut` 引用所指堆地址在 `Fixture` 生命周期内恒定，构造期这一次布线
-      // （`NonNull::from` 记录裸句柄）即永久有效，此前「每次访问前刷新句柄」
-      // 的绕行就此移除。
       self.frontend = Some(Frontend::new_boxed(
         mode,
-        // 显式 deref：让泛型实参 `F` 推导为 `TestFileResolver` 本体而非 Box。
-        &mut *self.file_resolver,
+        // 移交解析器所有权：`Frontend` 独占克隆，可变状态经 `Rc` 共享槽与
+        // `self.file_resolver` 互通（见 `TestFileResolver` 结构体注），测试侧
+        // 后续读写照旧可见，无需第二把可变别名。
+        Box::new(self.file_resolver.clone()),
+        // `config_resolver` 仍按 cpp 语义以裸句柄别名共享：`Box` 钉堆保证
+        // 构造期一次布线的地址恒有效。
         Some(&mut self.config_resolver.base),
         options,
       ));

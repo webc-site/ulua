@@ -28,6 +28,9 @@ use ulua_ast::{
   rtti::ast_node_try_as,
 };
 
+/// `source` 共享槽的类型别名（`DemoFrontend` 移交所有权后仍持句柄读写）。
+pub(crate) type SourceSlot = Rc<RefCell<HashMap<ModuleName, String>>>;
+
 /// cpp 侧 `source` 表默认空构造，故 `Default` 即全部初始化需求。
 /// `source` 经 `Rc<RefCell>` 共享：`DemoFrontend` 移交所有权后仍持同一张表的
 /// 句柄做「清空重写」，与 cpp 宿主直写 `fileResolver.source` 的可见性等价。

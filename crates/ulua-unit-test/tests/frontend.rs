@@ -482,30 +482,27 @@ fn frontend_check_module_references_correct_ast_root() {
 // Source: `tests/Frontend.test.cpp`
 #[test]
 fn frontend_check_without_builtin_next() {
-  let mut file_resolver = TestFileResolver::default();
+  let file_resolver = TestFileResolver::default();
+  // source 表经 `Rc` 共享槽互通：所有权移交后测试仍可直写、frontend 读到的同一份表。
+  let source = file_resolver.source.clone();
   let mut config_resolver = TestConfigResolver::default();
   let mode = if fflag::DebugLuauForceOldSolver.get() {
     SolverMode::Old
   } else {
     SolverMode::New
   };
-  // `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」：resolver 是
-  // 本测试函数局部（frontend 后声明先析构，句柄恒覆盖使用期），Box 钉死 Frontend
-  // 堆地址，调用点免手写 unsafe ctor + wire_self_pointers。
+  // `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」：解析器
+  // 所有权随 Box 移交 frontend 独占，Box 钉死 Frontend 堆地址，调用点免手写
+  // unsafe ctor + wire_self_pointers。
   let mut frontend = Frontend::new_boxed(
     mode,
-    &mut file_resolver,
+    Box::new(file_resolver),
     Some(&mut config_resolver.base),
     FrontendOptions::default(),
   );
 
-  file_resolver.source.insert(
-    String::from("Module/A"),
-    String::from("for k,v in 2 do end"),
-  );
-  file_resolver
-    .source
-    .insert(String::from("Module/B"), String::from("return next"));
+  source.insert(String::from("Module/A"), String::from("for k,v in 2 do end"));
+  source.insert(String::from("Module/B"), String::from("return next"));
 
   // We don't care about the result. That we haven't crashed is enough.
   frontend.check_module_name_optional_frontend_options(&ModuleName::from("Module/A"), None);
@@ -1542,24 +1539,26 @@ return {x = a, y = b, z = c}
 // Source: `tests/Frontend.test.cpp`
 #[test]
 fn frontend_discard_type_graphs() {
-  let mut file_resolver = TestFileResolver::default();
+  let file_resolver = TestFileResolver::default();
+  // source 表经 `Rc` 共享槽互通：所有权移交后测试仍可直写、frontend 读到的同一份表。
+  let source = file_resolver.source.clone();
   let mut config_resolver = TestConfigResolver::default();
   let mode = if fflag::DebugLuauForceOldSolver.get() {
     SolverMode::Old
   } else {
     SolverMode::New
   };
-  // `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」：resolver 是
-  // 本测试函数局部（fe 后声明先析构，句柄恒覆盖使用期），Box 钉死 Frontend 堆
-  // 地址，调用点免手写 unsafe ctor + wire_self_pointers。
+  // `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」：解析器
+  // 所有权随 Box 移交 frontend 独占，Box 钉死 Frontend 堆地址，调用点免手写
+  // unsafe ctor + wire_self_pointers。
   let mut fe = Frontend::new_boxed(
     mode,
-    &mut file_resolver,
+    Box::new(file_resolver),
     Some(&mut config_resolver.base),
     FrontendOptions::default(),
   );
 
-  file_resolver.source.insert(
+  source.insert(
     String::from("Module/A"),
     String::from(
       r#"
@@ -2212,24 +2211,26 @@ a:b() -- this should error, since A doesn't define a:b()
 // Source: `tests/Frontend.test.cpp`
 #[test]
 fn frontend_it_should_be_safe_to_stringify_errors_when_full_type_graph_is_discarded() {
-  let mut file_resolver = TestFileResolver::default();
+  let file_resolver = TestFileResolver::default();
+  // source 表经 `Rc` 共享槽互通：所有权移交后测试仍可直写、frontend 读到的同一份表。
+  let source = file_resolver.source.clone();
   let mut config_resolver = TestConfigResolver::default();
   let mode = if fflag::DebugLuauForceOldSolver.get() {
     SolverMode::Old
   } else {
     SolverMode::New
   };
-  // `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」：resolver 是
-  // 本测试函数局部（fe 后声明先析构，句柄恒覆盖使用期），Box 钉死 Frontend 堆
-  // 地址，调用点免手写 unsafe ctor + wire_self_pointers。
+  // `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」：解析器
+  // 所有权随 Box 移交 frontend 独占，Box 钉死 Frontend 堆地址，调用点免手写
+  // unsafe ctor + wire_self_pointers。
   let mut fe = Frontend::new_boxed(
     mode,
-    &mut file_resolver,
+    Box::new(file_resolver),
     Some(&mut config_resolver.base),
     FrontendOptions::default(),
   );
 
-  file_resolver.source.insert(
+  source.insert(
     String::from("Module/A"),
     String::from(
       r#"

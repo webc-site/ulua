@@ -103,20 +103,20 @@ pub fn run(args: &[String]) -> i32 {
   };
 
   // CliFileResolver fileResolver; CliConfigResolver configResolver(mode);
-  // resolver 与 frontend 一并 Box 固定堆地址：`Frontend` 存的是构造时布线的
-  // 裸指针，移动任何一个都会让内部指针悬垂；Box 句柄可自由移动、堆内容恒定，
-  // 从类型结构上消灭「落位后不得移动」的栈假设。构造入参以 `&mut dyn
-  // FileResolver` 引用借用传入（unsize 强制在参数上完成）。
-  let mut file_resolver = Box::new(CliFileResolver::new());
+  // config resolver 与 frontend 一并 Box 固定堆地址：`Frontend` 存的是构造时
+  // 布线的裸指针，移动它会让内部指针悬垂；Box 句柄可自由移动、堆内容恒定，
+  // 从类型结构上消灭「落位后不得移动」的栈假设。解析器则移交所有权给
+  // `Frontend` 独占（构造入参为 `Box<dyn FileResolver>`，宿主不再持别名）。
+  let file_resolver = Box::new(CliFileResolver::new());
   let mut config_resolver = Box::new(CliConfigResolver::new(mode));
 
   // Frontend frontend(solverMode, &fileResolver, &configResolver, frontendOptions);
   // `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」全序列，
-  // 调用点不再有 unsafe 构造/`wire_self_pointers` 两步手写；resolver 经
+  // 调用点不再有 unsafe 构造/`wire_self_pointers` 两步手写；config resolver 经
   // `Box` 钉住堆地址、存活至 `run` 结束，满足其外部句柄长寿契约。
   let mut frontend = Frontend::new_boxed(
     solver_mode,
-    &mut *file_resolver,
+    file_resolver,
     Some(&mut config_resolver.base),
     frontend_options,
   );
