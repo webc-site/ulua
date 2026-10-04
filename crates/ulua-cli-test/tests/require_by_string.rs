@@ -1077,3 +1077,23 @@ fn require_by_string_require_with_ambiguity_in_alias_discovery() {
 // 字段，非表槽位，Cow 改型不适用）。基线 `cargo test --test require_by_string`
 // 20 passed / 0 failed 不变。残留：两表第 1（及 2 基路径）槽位字面量 `.into()`
 // 仍按值 String（不在历票票面，未登记让位，后续票若收需同法改型+`&*` 解借用口）。
+// ---------- 台账：`cpp/tests/ClassRuntimeErrors.test.cpp` 普查（w6，2026-10-04） ----------
+//
+// 该文件共 3 枚 TEST_CASE、引用 `cpp/tests/classes/` 下 5 枚夹具。逐枚对位：
+// - `RequireClassOverrideInstanceMemberError`（cpp:20-32，夹具
+//   class_override_instance_member_error）与
+//   `RequireClassExtendsNonOpenParent`（cpp:34-46，夹具
+//   class_extends_non_open_parent）：夹具已逐字节 vendored 至
+//   `fixtures/tests/require/without_config/`，即本文件
+//   `require_by_string_user_defined_classes` 的 errs 两行（cpp 期望片段逐字一致）。
+// - `RequireClassOverridesComparisonMetamethods`（cpp:48-69，夹具
+//   class_override_eq / class_override_lt / class_override_le）：**未移植**。
+//   cpp 报错源在 `cpp/VM/src/lclass.cpp:366-384`（`luaR_addclassmember` 的
+//   instancemetatable 非空臂检查比较元方法覆盖），Rust 对应
+//   `crates/ulua-vm/src/functions/lua_r_addclassmember.rs` 无该检查臂；实测
+//   （三夹具逐一试 require，flags 同 cpp ScopedFastFlag 五元组）输出为
+//   `false	"stdin:1: module must return a single value"`（chunk 静默完成、未报
+//   cpp 期望的 "Overriding comparison metamethods is not allowed (...)"），
+//   与 cpp oracle 不一致，属被测源码缺口，禁投红灯测试。源码修复落地后，
+//   将三夹具逐字节 vendor 并按 errs 表行形态补两行片段断言即可（期望片段
+//   见 cpp:60/64/68）。
