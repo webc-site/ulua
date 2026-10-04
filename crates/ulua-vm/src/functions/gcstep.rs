@@ -71,7 +71,7 @@ pub(crate) unsafe fn gcstep(l: *mut LuaState, limit: usize) -> usize {
           LUAU_ASSERT!(!isdead!(g, (*g).mainthread as *mut GCObject));
           makewhite!(g, (*g).mainthread as *mut GCObject);
 
-          shrinkbuffers(l);
+          shrinkbuffers(&mut *l);
 
           (*g).gcstate = GCSPAUSE as u8;
         }

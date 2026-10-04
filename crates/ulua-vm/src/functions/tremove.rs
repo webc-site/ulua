@@ -8,7 +8,7 @@ use crate::{
 };
 
 /// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；收形后判型/
-/// 取长/取值/落值全经安全门面，体内唯一 `unsafe` 为自由函数取参面的裸指针转手，无越窗别名）：`l`
+/// 取长/取值/落值全经安全门面，`moveelements` 亦为引用形安全核心（r12-w6），体内已无裸操作）：`l`
 /// 须处于可抛错的受保护帧，栈 1 号位为 table（`check_type` 校验、非表即抛错发散），故交与
 /// `moveelements` 的 srct/dstt=1 槽必为表，且 `pos <= n` 前置保证其 `f <= e + 1` 入约；
 /// `lua_l_optinteger` 非整数即抛错发散，`moveelements`/`raw_get_i`/`lua_rawseti` 可触发再哈希与 GC。
@@ -24,9 +24,8 @@ pub fn tremove(l: &mut LuaState) -> i32 {
 
   l.raw_get_i(1, pos); // result = t[pos]
 
-  // SAFETY: `as_mut_ptr` 自 `&mut` 独占借用就地派生，借用窗止于本次调用；槽 1 已由上方
-  // `check_type` 保证为表，`pos + 1 <= n + 1` 即被调 `f <= e + 1` 入约。
-  unsafe { moveelements(l.as_mut_ptr(), 1, 1, pos + 1, n, pos, false) };
+  // r12-w6 收形：`moveelements` 已前移 `&mut LuaState` 引用形安全核心，直传独占借用
+  moveelements(l, 1, 1, pos + 1, n, pos, false);
 
   l.push_nil();
   lua_rawseti(l, 1, n); // t[n] = nil
