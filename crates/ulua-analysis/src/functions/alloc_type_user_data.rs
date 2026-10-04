@@ -20,16 +20,18 @@ const K_TYPE_USERDATA_TAG: i32 = 42;
 /// 对应 C++ `allocTypeUserData`（TypeFunctionRuntime.cpp:383-391）：压入承载
 /// `TypeFunctionTypeId` 的 tagged 用户数据、写入 `frozen` 并挂 `"type"` 元表。
 ///
-/// # Safety
-/// `l` 的存活/独占前提已由 `&mut` 接收者类型承载（r16-v45 收形）；屏障仍保留是因为体内有真实
-/// 裸操作：入口一次就地转手 `lp = l.as_mut_ptr()`（两枚不透明
-/// 镜像类型间的地址不变透传），`lua_newuserdatatagged` 返回的用户数据体写入、
-/// `get_type_function_runtime` 取回的主线程 thread data、以及 `*ptr = type_id` 与
-/// `(*type_ptr).frozen` 两处 arena 写皆按裸指针形制进行。余下调用序前提：`l` 须为类型函数
-/// runtime 会话期存活的状态（cpp 侧 `lua_State* L` 的同款隐含契约），其 mainthread 的 thread
-/// data 已在 runtime 安装期写入非空 `TypeFunctionRuntime`，且本调用发生在单线程 VM 步进内、
-/// 栈可按 `lua_l_checkstack` 语义扩容。
-pub(crate) unsafe fn alloc_type_user_data(
+/// 本函数是 safe fn：形参全部为受检引用/owned 值，体内裸操作（`l.as_mut_ptr()` 镜像
+/// 透传、`lua_newuserdatatagged` 返回体的写入、`*ptr = type_id` 与 `(*type_ptr).frozen`
+/// 两处 arena 写）解引用的指针全部源自本次调用体内获取——FFI 返回值或
+/// `allocate_type_function_type` 新分配的 arena 节点（bump 块地址不移动），调用方
+/// 无需承担任何内存安全前提。
+///
+/// 调用序契约（正确性，非内存安全）：`l` 须为类型函数 runtime 会话期存活的状态
+/// （cpp 侧 `lua_State* L` 的同款隐含契约），其 mainthread 的 thread data 已在 runtime
+/// 安装期写入 `TypeFunctionRuntime`——未挂载时 `get_type_function_runtime` 的 `expect`
+/// 收敛为确定性 panic，不构成 UB；本调用发生在单线程 VM 步进内，栈可按
+/// `lua_l_checkstack` 语义扩容。
+pub(crate) fn alloc_type_user_data(
   l: &mut LuaState,
   type_variant: TypeFunctionTypeVariant,
   frozen: bool,

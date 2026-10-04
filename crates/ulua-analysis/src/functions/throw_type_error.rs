@@ -16,11 +16,16 @@ pub(crate) const SEPARATE_RW_INDEXER_MSG: &str =
 
 /// 以 `args` 为消息文本，经 `luaL_error` 语义向当前 VM 调用帧抛出错误（不返回）。
 ///
-/// # Safety
-/// `l` 必须是当前存活、处于可抛出错误的受保护调用帧内、且栈上至少留有两个空闲槽的
-/// `LuaState`；调用方须保证单线程独占该 VM 栈。本函数末尾 `lua_error` 必抛，故 `!`。
-pub(crate) unsafe fn throw_type_error(l: &mut LuaState, args: Arguments<'_>) -> ! {
-  // Safety: 前置条件即本 fn 契约（`l` 存活受保护、栈留 2 空槽），原样透传给
-  // `lua_l_error_l`；`args` 由调用点 `format_args!` 现场构造，占位符与实参静态匹配。
+/// 本函数是 safe fn：形参为 `&mut LuaState` 与 owned 的 [`Arguments`]，存活/独占由引用
+/// 类型承载；体内 `unsafe` 块只因 `lua_l_error_l` 是 VM 侧 C-ABI 门面（收 `*mut`，经
+/// `l.as_mut_ptr()` 就地派生），调用方无需承担任何内存安全前提。
+///
+/// 调用序契约（正确性，非内存安全）：`l` 应处于原生函数调用的受保护执行帧内、栈上
+/// 留有 `lua_l_error_l` 语义所需的空间；违约时 VM 错误路径以 panic/abort 确定性收敛，
+/// 不构成 UB。本函数末尾必抛，故返回 `!`。
+pub(crate) fn throw_type_error(l: &mut LuaState, args: Arguments<'_>) -> ! {
+  // Safety: `l` 由 `&mut` 承载存活与本次调用的独占性，`as_mut_ptr()` 为同一对象的
+  // 镜像透传；`args` 由调用点 `format_args!` 现场构造，占位符与实参静态匹配。
+  // 受保护帧/栈空间为上方调用序契约（违约收敛为 panic/abort，非 UB）。
   unsafe { lua_l_error_l(l.as_mut_ptr(), args) }
 }

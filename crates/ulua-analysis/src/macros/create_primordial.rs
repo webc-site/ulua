@@ -36,13 +36,7 @@ macro_rules! create_primordial {
     pub(crate) fn $name(
       l: &mut ulua_vm::records::lua_state::LuaState,
     ) -> i32 {
-      // Safety: `l` 由 `c_thunk!` 的 `@ref` 蹦床在本次调用帧内从 VM 传入的存活 `lua_State*`
-      // 重建而来，此处把该独占借用原样移交 `alloc_type_user_data`（r16-v45 起该核心同收
-      // `&mut`，体内裸操作收口在它一侧）；其前置条件（活状态、栈可增长）由该 VM 调用约定
-      // 满足，借用窗止于本语句。
-      unsafe {
-        crate::functions::alloc_type_user_data::alloc_type_user_data(l, $variant, false)
-      };
+      crate::functions::alloc_type_user_data::alloc_type_user_data(l, $variant, false);
 
       1
     }

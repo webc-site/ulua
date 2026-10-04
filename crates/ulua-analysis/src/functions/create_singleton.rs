@@ -24,18 +24,13 @@ use crate::{
 pub(crate) fn create_singleton(l: &mut LuaState) -> i32 {
   if l.is_boolean(1) {
     let value = l.check_boolean(1);
-    // Safety: `l` 为存活 lua_State 且索引 1 实参在位（刚判定为布尔）；
-    // `alloc_type_user_data` 在此状态上检查栈空间并压入新 userdata，满足其对
-    // 有效 lua_State 的入参契约。
-    unsafe {
-      alloc_type_user_data(
-        l,
-        TypeFunctionTypeVariant::Singleton(TypeFunctionSingletonType {
-          variant: TypeFunctionSingletonVariant::V0(TypeFunctionBooleanSingleton { value }),
-        }),
-        false,
-      )
-    };
+    alloc_type_user_data(
+      l,
+      TypeFunctionTypeVariant::Singleton(TypeFunctionSingletonType {
+        variant: TypeFunctionSingletonVariant::V0(TypeFunctionBooleanSingleton { value }),
+      }),
+      false,
+    );
 
     return 1;
   }
@@ -44,31 +39,23 @@ pub(crate) fn create_singleton(l: &mut LuaState) -> i32 {
     // cpp `std::string value = luaL_checkstring(L, 1)`：与 oracle 同形地先落地拥有值，
     // 借用窗不跨过 `alloc_type_user_data` 的写栈。
     let value = l.check_str(1).to_owned();
-    // Safety: 前置 `lua_type==String` 保证索引 1 是字符串；`alloc_type_user_data` 在存活
-    // `l` 上压入 userdata。
-    unsafe {
-      alloc_type_user_data(
-        l,
-        TypeFunctionTypeVariant::Singleton(TypeFunctionSingletonType {
-          variant: TypeFunctionSingletonVariant::V1(TypeFunctionStringSingleton { value }),
-        }),
-        false,
-      )
-    };
+    alloc_type_user_data(
+      l,
+      TypeFunctionTypeVariant::Singleton(TypeFunctionSingletonType {
+        variant: TypeFunctionSingletonVariant::V1(TypeFunctionStringSingleton { value }),
+      }),
+      false,
+    );
 
     return 1;
   }
 
   if l.is_nil(1) {
-    // Safety: `l` 为存活 lua_State（nil 分支仍持有有效状态），索引 1 实参在位；
-    // `alloc_type_user_data` 在此状态上压入 NilType userdata。
-    unsafe {
-      alloc_type_user_data(
-        l,
-        TypeFunctionTypeVariant::Primitive(TypeFunctionPrimitiveType::new(Type::NilType)),
-        false,
-      )
-    };
+    alloc_type_user_data(
+      l,
+      TypeFunctionTypeVariant::Primitive(TypeFunctionPrimitiveType::new(Type::NilType)),
+      false,
+    );
 
     return 1;
   }
@@ -78,33 +65,25 @@ pub(crate) fn create_singleton(l: &mut LuaState) -> i32 {
     // Safety: `lua_l_typename` 对存活 `l` 索引 1 恒返回静态 NUL 结尾串
     // （"no value" 或对象类型名），`cstr_cow` 因此有效且不接管所有权。
     let type_name = unsafe { cstr_cow(lua_l_typename(&*l, 1)) };
-    // Safety: `l` 存活；错误经 throw_type_error 收口，消息为其类型名（经
-    // `format_args!` 安全转发）；`throw_type_error` 返回 `!`，此分支不再落到函数末尾。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!(
-          "types.singleton: can't create a singleton from a {}",
-          type_name
-        ),
-      )
-    }
+    throw_type_error(
+      l,
+      format_args!(
+        "types.singleton: can't create a singleton from a {}",
+        type_name
+      ),
+    )
   } else {
     // 上游遗留消息：lua_typename 收到的是类型常量而非栈索引，
     // C++ 原样传 1（LUA_TNIL），故恒为 "nil"，忠实保留
     // Safety: `lua_typename(_, 1)` 把 1 当作类型常量 LUA_TNIL 索引静态表
     // `TYPENAMES_C`，返回其静态 NUL 结尾串，`cstr_cow` 有效。
     let type_name = unsafe { cstr_cow(lua_typename(l.as_mut_ptr(), 1)) };
-    // Safety: 同修正分支——`l` 存活、错误经 throw_type_error 收口、消息为其类型名；
-    // `throw_type_error` 发散返回 `!`。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!(
-          "types.singleton: can't create singleton from `{}` type",
-          type_name
-        ),
-      )
-    }
+    throw_type_error(
+      l,
+      format_args!(
+        "types.singleton: can't create singleton from `{}` type",
+        type_name
+      ),
+    )
   }
 }

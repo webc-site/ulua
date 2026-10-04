@@ -43,60 +43,52 @@ macro_rules! create_nary_variant {
     pub(crate) fn $name(
       l: &mut ulua_vm::records::lua_state::LuaState,
     ) -> i32 {
-      // Safety: l 为 VM 调注册闭包传入的存活 lua_State；get_type_user_data 对非 type 实参先抛
-      // 错、返回的 TypeFunctionTypeId 指向 type_arena 存活节点（bump 块、地址不移动）；
-      // get_type_function_type_id 按 variant tag 判别、未命中返回 None，Some 命中后才
-      // 读 components 且只读，写入对象是本地 Vec；push_type/alloc_type_user_data 前置同族
-      // 闭包约定满足，二者均收 `&mut`，故在各调用点以 `l` 重借独占借用
-      // （同一存活帧、借用窗止于该语句，与 `component` arena 句柄互不别名）。
-      unsafe {
-        let arg_size = l.get_top();
-        let mut components: ::alloc::vec::Vec<
-          crate::type_aliases::type_function_type_id::TypeFunctionTypeId,
-        > = ::alloc::vec::Vec::with_capacity(arg_size as usize);
+      let arg_size = l.get_top();
+      let mut components: ::alloc::vec::Vec<
+        crate::type_aliases::type_function_type_id::TypeFunctionTypeId,
+      > = ::alloc::vec::Vec::with_capacity(arg_size as usize);
 
-        for i in 1..=arg_size {
-          let component = crate::functions::get_type_user_data::get_type_user_data(l, i);
+      for i in 1..=arg_size {
+        let component = crate::functions::get_type_user_data::get_type_user_data(l, i);
 
-          if let Some(nary_component) =
-            crate::functions::get_type_function_runtime::get_type_function_type_id::<$flat>(
-              component,
-            )
-          {
-            components.extend(nary_component.components.iter().copied());
-          } else if crate::functions::get_type_function_runtime::get_type_function_type_id::<
-            $neutral,
-          >(component)
-            .is_some()
-          {
-            continue;
-          } else {
-            components.push(component);
-          }
-        }
-
-        if components.is_empty() {
-          crate::functions::alloc_type_user_data::alloc_type_user_data(
-            l,
-            crate::type_aliases::type_function_type_variant::TypeFunctionTypeVariant::$neutral_variant(
-              $neutral::default(),
-            ),
-            false,
-          );
-        } else if components.len() == 1 {
-          crate::functions::push_type::push_type(l, components[0]);
+        if let Some(nary_component) =
+          crate::functions::get_type_function_runtime::get_type_function_type_id::<$flat>(
+            component,
+          )
+        {
+          components.extend(nary_component.components.iter().copied());
+        } else if crate::functions::get_type_function_runtime::get_type_function_type_id::<
+          $neutral,
+        >(component)
+          .is_some()
+        {
+          continue;
         } else {
-          crate::functions::alloc_type_user_data::alloc_type_user_data(
-            l,
-            crate::type_aliases::type_function_type_variant::TypeFunctionTypeVariant::$result_variant(
-              $flat { components },
-            ),
-            false,
-          );
+          components.push(component);
         }
-
-        1
       }
+
+      if components.is_empty() {
+        crate::functions::alloc_type_user_data::alloc_type_user_data(
+          l,
+          crate::type_aliases::type_function_type_variant::TypeFunctionTypeVariant::$neutral_variant(
+            $neutral::default(),
+          ),
+          false,
+        );
+      } else if components.len() == 1 {
+        crate::functions::push_type::push_type(l, components[0]);
+      } else {
+        crate::functions::alloc_type_user_data::alloc_type_user_data(
+          l,
+          crate::type_aliases::type_function_type_variant::TypeFunctionTypeVariant::$result_variant(
+            $flat { components },
+          ),
+          false,
+        );
+      }
+
+      1
     }
   };
 }
