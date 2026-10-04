@@ -26,8 +26,8 @@ pub(crate) fn is_subtype_of(l: &mut LuaState) -> i32 {
     let self_ty = get_type_user_data(l, 1);
     let arg = get_type_user_data(l, 2);
 
-    let runtime = get_type_function_runtime(l);
-    let runtime_builder = &mut *(*runtime).runtime_builder;
+    let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
+    let runtime_builder = &mut *(runtime.get_mut().runtime_builder);
 
     let sub_ty = deserialize_type_function_type_id_type_function_runtime_builder_state(
       self_ty,

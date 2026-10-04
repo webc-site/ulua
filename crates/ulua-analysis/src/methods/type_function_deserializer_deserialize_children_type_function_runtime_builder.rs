@@ -12,9 +12,7 @@ use crate::{
   enums::polarity::Polarity,
   functions::{
     get_mutable_type,
-    get_mutable_type_function_runtime::{
-      get_mutable_type_function_type_id, get_mutable_type_function_type_pack_id,
-    },
+    get_mutable_type_function_runtime::get_mutable_type_function_type_id,
     get_mutable_type_pack,
     get_type_function_runtime::{get_type_function_type_id, get_type_function_type_pack_id},
   },
@@ -76,19 +74,12 @@ use crate::{
 };
 
 /// runtime arena（`type_arena`）里的**源**负载：cpp `getMutable<TypeFunctionT>(tfti)`
-/// 在本端口只读不写，故折成共享引用；变体不符时得 `None`，与原先「裸指针判空」
-/// 同义。arena 解引用收口在被包装的 `unsafe fn` 内。
+/// 在本端口只读不写，故走共享只读取值器折成 `&`；变体不符时得 `None`，与原先
+/// 「裸指针判空后 const 投影」同义。存活/独占前提见 [`get_type_function_type_id`]
+/// （arena 句柄构造不变量）。
 #[inline]
 fn tf_source<T: TypeFunctionTypeVariantMember>(tfti: TypeFunctionTypeId) -> Option<&'static T> {
-  // SAFETY: 本函数契约由 `deserialize_children_type_id` 保证——`tfti` 出自反序列化
-  // 队列，即 runtime `type_arena`（chunked `TypedAllocator`，元素地址不再搬移）内
-  // 存活节点的句柄；helper 只在非空时按 tag 探测一次，命中即返回该槽位内变体字段
-  // 地址，与节点同寿命，且整个游程内源侧只读（写句柄都在目标 arena 一侧）。
-  unsafe {
-    get_mutable_type_function_type_id::<T>(tfti)
-      .cast_const()
-      .as_ref()
-  }
+  get_type_function_type_id::<T>(tfti)
 }
 
 /// 类型包侧的 [`tf_source`]，arena 为 `type_pack_arena`。
@@ -96,41 +87,33 @@ fn tf_source<T: TypeFunctionTypeVariantMember>(tfti: TypeFunctionTypeId) -> Opti
 fn tf_pack_source<T: TypeFunctionTypePackVariantMember>(
   tftp: TypeFunctionTypePackId,
 ) -> Option<&'static T> {
-  // SAFETY: 同 `tf_source`，句柄指向 runtime `type_pack_arena` 存活节点。
-  unsafe {
-    get_mutable_type_function_type_pack_id::<T>(tftp)
-      .cast_const()
-      .as_ref()
-  }
+  get_type_function_type_pack_id::<T>(tftp)
 }
 
 /// 需要以可变句柄交给 `SerializedFunctionScope` 的源负载（cpp 侧同一
-/// `getMutable`），契约同 [`tf_source`]。
+/// `getMutable`）：本轮反序列化由 `&mut self` 串行驱动，本步骤内该变体字段
+/// 无其他在册借用（同源的其他臂按 tag 互斥，最多一条臂命中）；前提见
+/// [`get_mutable_type_function_type_id`] 函数头。
 #[inline]
 fn tf_source_mut<T: TypeFunctionTypeVariantMember>(
   tfti: TypeFunctionTypeId,
 ) -> Option<&'static mut T> {
-  // SAFETY: `tfti` 为 runtime `type_arena` 存活节点句柄；本轮反序列化由
-  // `&mut self` 串行驱动，本步骤内该变体字段无其他在册借用（同源的其他臂按
-  // tag 互斥，最多一条臂命中）。
-  unsafe { get_mutable_type_function_type_id::<T>(tfti).as_mut() }
+  get_mutable_type_function_type_id::<T>(tfti)
 }
 
-/// runtime 侧只读探测：cpp `get<TypeFunctionT>(ty)`，空句柄以 `None` 表达。
+/// runtime 侧只读探测：cpp `get<TypeFunctionT>(ty)`，未命中（含空句柄契约违例兜底）
+/// 以 `None` 表达；存活/独占前提见 [`get_type_function_type_id`] 的函数头。
 #[inline]
 fn tf_read<T: TypeFunctionTypeVariantMember>(ty: TypeFunctionTypeId) -> Option<&'static T> {
-  // SAFETY: `ty` 是队列里 `TypeFunctionTypeId`（`*const TypeFunctionType`）句柄，
-  // 由 runtime bump arena 分配、本轮存活；helper 内部已先判空，未命中返回 null。
-  unsafe { get_type_function_type_id::<T>(ty).as_ref() }
+  get_type_function_type_id::<T>(ty)
 }
 
-/// 类型包侧的 [`tf_read`]。
+/// 类型包侧的 [`tf_read`]，arena 为 `type_pack_arena`。
 #[inline]
 fn tf_pack_read<T: TypeFunctionTypePackVariantMember>(
   tp: TypeFunctionTypePackId,
 ) -> Option<&'static T> {
-  // SAFETY: 同 `tf_read`，句柄指向 runtime `type_pack_arena` 存活节点。
-  unsafe { get_type_function_type_pack_id::<T>(tp).as_ref() }
+  get_type_function_type_pack_id::<T>(tp)
 }
 
 impl TypeFunctionDeserializer {

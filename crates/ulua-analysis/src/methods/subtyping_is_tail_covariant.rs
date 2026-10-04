@@ -64,7 +64,7 @@ impl Subtyping {
         result
       }
       LookupResult::V1(_) => {
-        let ok = env.mapped_generic_packs.bind_generic(sub_tp, super_tp);
+        let ok = env.current_mut().mapped_generic_packs.bind_generic(sub_tp, super_tp);
         let mut result = SubtypingResult::uncacheable(ok);
         result.with_both_component(Component::PackField(PackField::Tail));
         result
@@ -88,7 +88,7 @@ impl Subtyping {
           result
         }
         LookupResult::V1(_) => {
-          let ok = env.mapped_generic_packs.bind_generic(super_tp, sub_tp);
+          let ok = env.current_mut().mapped_generic_packs.bind_generic(super_tp, sub_tp);
           let mut result = SubtypingResult::uncacheable(ok);
           result.with_both_component(Component::PackField(PackField::Tail));
           result
@@ -134,7 +134,7 @@ impl Subtyping {
         result
       }
       LookupResult::V1(_) => {
-        let ok = env.mapped_generic_packs.bind_generic(super_tp, sub_tp);
+        let ok = env.current_mut().mapped_generic_packs.bind_generic(super_tp, sub_tp);
         let mut result = SubtypingResult::uncacheable(ok);
         result.with_both_component(Component::PackField(PackField::Tail));
         result
@@ -191,7 +191,7 @@ impl Subtyping {
         result
       }
       LookupResult::V1(_) => {
-        let ok = env.mapped_generic_packs.bind_generic(sub_tp, super_tp);
+        let ok = env.current_mut().mapped_generic_packs.bind_generic(sub_tp, super_tp);
         let mut result = SubtypingResult::uncacheable(ok);
         result.with_both_component(Component::PackField(PackField::Tail));
         result
@@ -239,6 +239,7 @@ impl Subtyping {
       }
       LookupResult::V1(_) => {
         let ok = env
+          .current_mut()
           .mapped_generic_packs
           .bind_generic(sub_tp, empty_type_pack);
         let mut result = SubtypingResult::uncacheable(ok);
@@ -288,6 +289,7 @@ impl Subtyping {
       }
       LookupResult::V1(_) => {
         let ok = env
+          .current_mut()
           .mapped_generic_packs
           .bind_generic(super_tp, empty_type_pack);
         let mut result = SubtypingResult::uncacheable(ok);

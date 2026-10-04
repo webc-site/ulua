@@ -18,7 +18,7 @@ use crate::{
     throw_type_error::throw_type_error,
   },
   records::{
-    arena_handle::Handle, type_function_generic_type::TypeFunctionGenericType,
+    type_function_generic_type::TypeFunctionGenericType,
     type_function_generic_type_pack::TypeFunctionGenericTypePack,
   },
   type_aliases::{
@@ -36,13 +36,13 @@ pub(crate) unsafe fn get_generics(
   idx: i32,
   fname: &str,
 ) -> (Vec<TypeFunctionTypeId>, Vec<TypeFunctionTypePackId>) {
-  // Safety: `l` 由 Lua VM 按类型函数运行时约定传入并全程存活（经入口以独占 `&mut` 借入）。`get_type_user_data`/`get_type_function_type_id::<TypeFunctionGenericType>`
-  // 的下转按 class-index 判定，`gty` 仅在 `!is_null()` 守卫后才解引用读取 is_pack/is_named/name；
-  // 类型函数数据存活于本次调用。错误分支 `throw_type_error` 返回 `!` 不返回，`lua_l_typeerror_l`
+  // Safety: `l` 由 Lua VM 按类型函数运行时约定传入并全程存活（经入口以独占 `&mut` 借入）。
+  // 错误分支 `throw_type_error` 返回 `!` 不返回，`lua_l_typeerror_l`
   // 之后不再解引用任何指针。单线程串行遍历，push/gettable/pop 栈操作平衡、无并发别名。
   unsafe {
-    // 注册期写入主线程 thread data 的非空 runtime（null 由 Handle::from_ptr 收敛为 panic）。
-    let runtime = Handle::from_ptr(get_type_function_runtime(l));
+    // 注册期写入主线程 thread data 的非空 runtime（未挂载属契约违例，`expect` 收敛为
+    // 确定性 panic）。
+    let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
 
     let mut types: Vec<TypeFunctionTypeId> = Vec::new();
     let mut packs: Vec<TypeFunctionTypePackId> = Vec::new();
@@ -64,17 +64,17 @@ pub(crate) unsafe fn get_generics(
         let ty = get_type_user_data(l, -1);
 
         // if (auto gty = get<TypeFunctionGenericType>(ty))
-        let gty = get_type_function_type_id::<TypeFunctionGenericType>(ty);
-        if !gty.is_null() {
-          if (*gty).is_pack {
+        match get_type_function_type_id::<TypeFunctionGenericType>(ty) {
+          Some(gty) if gty.is_pack => {
             packs.push(allocate_type_function_type_pack(
               runtime,
               TypeFunctionTypePackVariant::V2(TypeFunctionGenericTypePack {
-                is_named: (*gty).is_named,
-                name: (*gty).name.clone(),
+                is_named: gty.is_named,
+                name: gty.name.clone(),
               }),
             ));
-          } else {
+          }
+          Some(_) => {
             if !packs.is_empty() {
               throw_type_error(
                 l,
@@ -84,11 +84,10 @@ pub(crate) unsafe fn get_generics(
 
             types.push(ty);
           }
-        } else {
-          throw_type_error(
+          None => throw_type_error(
             l,
             format_args!("{}: table member was not a generic type", fname),
-          );
+          ),
         }
 
         l.pop(1);

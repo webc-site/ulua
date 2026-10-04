@@ -45,10 +45,10 @@ pub(crate) fn evaluate_type_alias_call(l: &mut LuaState) -> i32 {
 
     // TypeFunctionRuntime* runtime = getTypeFunctionRuntime(l);
     // TypeFunctionRuntimeBuilderState* runtimeBuilder = runtime->runtimeBuilder;
-    let runtime = get_type_function_runtime(l);
+    let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
     // runtime->runtimeBuilder 由 ScopedAssign 在本次调用窗口内布为非空，重建可变借用后
     // builder state 就以普通 `&mut` 在函数体内流转（serde 入口不再收裸指针）。
-    let runtime_builder = &mut *(*runtime).runtime_builder;
+    let runtime_builder = &mut *(runtime.get_mut()).runtime_builder;
 
     // ApplyTypeFunction applyTypeFunction{runtimeBuilder->ctx->arena};
     // builder state 的 ctx 是 Handle（类型编码非空，构造点为存活 `&mut` 借用），

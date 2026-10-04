@@ -45,7 +45,7 @@ macro_rules! create_nary_variant {
     ) -> i32 {
       // Safety: l 为 VM 调注册闭包传入的存活 lua_State；get_type_user_data 对非 type 实参先抛
       // 错、返回的 TypeFunctionTypeId 指向 type_arena 存活节点（bump 块、地址不移动）；
-      // get_type_function_type_id 按 variant tag 判别、未命中返回 null，判空/as_ref 命中后才
+      // get_type_function_type_id 按 variant tag 判别、未命中返回 None，Some 命中后才
       // 读 components 且只读，写入对象是本地 Vec；push_type/alloc_type_user_data 前置同族
       // 闭包约定满足，二者均收 `&mut`，故在各调用点以 `l` 重借独占借用
       // （同一存活帧、借用窗止于该语句，与 `component` arena 句柄互不别名）。
@@ -62,13 +62,12 @@ macro_rules! create_nary_variant {
             crate::functions::get_type_function_runtime::get_type_function_type_id::<$flat>(
               component,
             )
-            .as_ref()
           {
             components.extend(nary_component.components.iter().copied());
-          } else if !crate::functions::get_type_function_runtime::get_type_function_type_id::<
+          } else if crate::functions::get_type_function_runtime::get_type_function_type_id::<
             $neutral,
           >(component)
-            .is_null()
+            .is_some()
           {
             continue;
           } else {
