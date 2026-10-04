@@ -440,7 +440,8 @@ impl Fixture {
       let l = lua_l_newstate();
       assert!(!l.is_null(), "luaL_newstate failed");
       lua_l_openlibs(&mut *l);
-      luaopen_require(l, MemHost::new());
+      // luaopen_require 已收形为安全 fn：此处是夹具的裸句柄边界，一次物化借用直传。
+      luaopen_require(&mut *l, MemHost::new());
       l
     };
     Self {

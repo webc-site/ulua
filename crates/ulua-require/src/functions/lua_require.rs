@@ -60,20 +60,20 @@ pub(crate) unsafe extern "C-unwind" fn lua_require<C: RequireHost>(l: *mut LuaSt
   // 函数帧（cpp 的手动 level 游标），越界由返回 0 先行报错；ar.what/ar.source 为
   // 回填的 null 或调用期内存活的 C 串，判空/解引用统一收口在 cstr_bytes 门面
   // （source 为 null 时译成空 chunkname，cpp 直接传指针，Rust 保底避免 UB）；
-  // what 为 NUL 结尾静态字节串（`cstr` 门面）。尾段 lua_requireinternal::<C> 按
-  // 其自身契约操作本帧栈与 upvalue（`C` 即本闭包体的单态化宿主类型）。
-  unsafe {
+  // what 为 NUL 结尾静态字节串（`cstr` 门面）。`l.as_mut_ptr()` 由上一句独占借用
+  // 借出、窗止于当句；尾段 lua_requireinternal::<C> 已收形为安全 fn，其对
+  // upvalue(1) 宿主槽与栈布局的要求即本闭包体的 `# Safety` 契约（同源单态化）。
+  let requirer_chunkname = unsafe {
     for level in 1.. {
-      if lua_getinfo(l, level, cstr(GETINFO_WHAT_OPT), &mut ar) == 0 {
+      if lua_getinfo(l.as_mut_ptr(), level, cstr(GETINFO_WHAT_OPT), &mut ar) == 0 {
         luaL_error!(l, "{NOT_ALLOWED_MSG}");
       }
       // `what` 单字符判定经 cstr_bytes 门面收口（null 译空串 → false）。
-      let is_c_function = cstr_bytes(ar.what).first() == Some(&b'C');
-      if !is_c_function {
+      if cstr_bytes(ar.what).first() != Some(&b'C') {
         break;
       }
     }
-    let requirer_chunkname = cstr_bytes(ar.source);
-    lua_requireinternal::<C>(l, requirer_chunkname)
-  }
+    cstr_bytes(ar.source)
+  };
+  lua_requireinternal::<C>(l, requirer_chunkname)
 }

@@ -4,7 +4,6 @@ use ulua_vm::{
   enums::lua_status::LuaStatus,
   functions::{
     lua_error::lua_error, lua_tolstring::lua_tolstring_ref, lua_touserdata::lua_touserdata,
-    lua_yield::lua_yield,
   },
   macros::{lua_l_error::luaL_error, lua_upvalueindex::lua_upvalueindex},
   records::lua_state::LuaState,
@@ -21,8 +20,8 @@ use crate::{
   records::navigation_context::{HostSlot, RequireHost},
 };
 
-/// cpp `lua_requireinternal` 取配置的样板（`lua_touserdata` → cast → 判空）在
-/// 本 crate 的唯一收口：`push_closure::<C>` 把宿主机装箱进 [`HostSlot`]`<C>` 放进带
+/// cpp `lua_requireinternal` 取配置的样板（`lua_touserdata` → cast → 判空）在本
+/// crate 的唯一收口：`push_closure::<C>` 把宿主机装箱进 [`HostSlot`]`<C>` 放进带
 /// GC 析构器的 userdata 并收作闭包唯一 upvalue，这里按同一 `C` 重建其共享引用
 /// （引用只用于读取宿主方法；装载路径上宿主可重入 require，故必须共享而非独占借用
 /// ——宿主页面的可变性由实现方的内部可变性自持）。
@@ -31,42 +30,54 @@ use crate::{
 /// 带入：注入点写入与这里读回由同一个 `C` 约束，零 `dyn`、零虚分派（原
 /// `&dyn RequireHost` 返回值的擦除理由已在 [`HostSlot`] 处作废）。
 ///
+/// 收形说明（review.md §2）：`l` 的存活/独占前提已由 `&mut LuaState` 引用形承载，
+/// 不再折回裸指针；本函数**仍保留 `unsafe`**，因为契约不在「`l` 是否有效」而在两个
+/// 无法由类型表达的前提（见下）。
+///
 /// # Safety
-/// `l` 必须指向存活的 `LuaState`；`idx` 处须是 `push_closure::<C>` 构造、被闭包
-/// upvalue 持有（与闭包同寿命）的宿主 userdata，且其装箱类型与本函数的 `C` 一致
-/// （由闭包体与槽位同源单态化保证）。
-unsafe fn borrowed_host<'ctx, C: RequireHost>(l: *mut LuaState, idx: i32) -> Option<&'ctx C> {
-  // Safety: 契约保证 idx 处是与 `l` 同帧存活、以 `C` 装箱的宿主 userdata
-  // （lua_touserdata 只取该槽地址、不移动栈）；`Option` 证非空后重建指向已构造
-  // `Box<C>` 的共享引用，再经 `Box` 解引用借出宿主本体——共享引用可与重入导航的
-  // 其它共享引用合法并存。
+/// - `l`：存活 `LuaState` 的独占借用，`idx` 处栈槽属于该帧且在本次调用期内不被移动。
+/// - `idx`：须是 `push_closure::<C>` 构造、被闭包 upvalue 持有（与闭包同寿命）的宿主
+///   userdata 槽，且其装箱类型与本函数的 `C` 一致（由闭包体与槽位同源单态化保证）。
+/// - 返回引用的 `'ctx`：由调用方选定，必须短于该 upvalue userdata 的存活期（即闭包
+///   本体未被 GC 回收的窗口）；调用方不得把它降级为 `'static` 或跨帧缓存。
+unsafe fn borrowed_host<'ctx, C: RequireHost>(l: &mut LuaState, idx: i32) -> Option<&'ctx C> {
+  // SAFETY: 本函数 `# Safety` 保证 idx 处是与 `l` 同帧存活、以 `C` 装箱的宿主
+  // userdata；`lua_touserdata` 只取该槽地址（不移动栈），`l.as_mut_ptr()` 由上方
+  // 独占借用借出、窗止于当句。`Option` 证非空后重建指向已构造 `Box<C>` 的共享
+  // 引用，再经 `Box` 解引用借出宿主本体——共享引用可与重入导航的其它共享引用
+  // 合法并存；其寿命前提即 fn 契约第三条。
   unsafe {
-    lua_touserdata(l, idx).map(|ud| {
+    lua_touserdata(l.as_mut_ptr(), idx).map(|ud| {
       let slot = NonNull::from(ud).cast::<HostSlot<C>>().as_ref();
       &**slot
     })
   }
 }
 
-/// # Safety
-/// `l` 必须指向存活的 `LuaState`；upvalue(1) 须为 `push_closure::<C>` 建立的宿主
-/// userdata，栈顶为 require 路径参数（由 C 闭包调用约定保证）。
-/// `requirer_chunkname` 为 requirer chunkname 字节串，由真 FFI 入口经 `cstr_bytes`
-/// 门面一次性取得。
-pub(crate) unsafe fn lua_requireinternal<C: RequireHost>(
-  l: *mut LuaState,
+/// require 闭包的公共实现（cpp `lua_requireinternal`）：归一帧栈 → 取宿主 → 查已注册
+/// 模块缓存 → 解析路径 → 装载并交 continuation 收尾。
+///
+/// 收形（review.md §2/§3）：`l` 由 `*mut LuaState` 收编为独占借用 `&mut LuaState`，
+/// 存活与独占前提由类型承载，故降为安全 `fn`；两个调用点（`lua_require::<C>` /
+/// `lua_proxyrequire::<C>` 这两个真 Lua/C 闭包）本就已物化好借用，直传即可，不再
+/// 在边界上折回裸指针。体内残余的裸操作只落在两处 ulua-vm c-API
+/// （`borrowed_host` 的 upvalue 读回、`lua_tolstring_ref` 的锚定视图）与本 crate 的
+/// Lua/C 回调 `lua_requirecont` 上，各自下沉为带 `// SAFETY:` 论证的最小 `unsafe` 块。
+///
+/// 调用序契约（正确性，非内存安全）：`l` 为 require 闭包帧的当前状态，upvalue(1)
+/// 须由 `push_closure::<C>` 以同一个 `C` 装箱宿主（由注入点与闭包体同源单态化保证），
+/// 栈 1 为 require 路径参数（由 C 闭包调用约定与 `check_bytes` 的判型保证）；
+/// `requirer_chunkname` 为发起方 chunkname 字节串，本次调用期内存活。
+pub(crate) fn lua_requireinternal<C: RequireHost>(
+  l: &mut LuaState,
   requirer_chunkname: &[u8],
 ) -> i32 {
-  // Safety: l 是 VM 调 require 闭包时传入的当前有效状态（fn # Safety 契约），
-  // 入口一次重建独占借用（不与其他别名冲突），后续均为同一存活帧上的 VM 栈
-  // 操作与宿主调用。
-  let l: &mut LuaState = unsafe { &mut *l };
-
   // 对应 cpp `lua_settop(L, 1)`：把闭包帧归一为 require 路径 1 个实参
   l.set_top(1);
 
-  // Safety: 契约保证 upvalue(1) 处为 push_closure::<C> 构造、以 `C` 装箱的宿主
-  // userdata（与闭包同寿命），重建共享引用只用于读取宿主方法。
+  // SAFETY: `C` 与本闭包体的注入类型一致（fn 调用序契约），故 upvalue(1) 处的宿主
+  // userdata 必以 `C` 装箱；借出的共享引用只在本次 require 窗口内使用，与 upvalue
+  // userdata 同寿命（闭包在栈上即被 GC 视为根）。
   let Some(host) = (unsafe { borrowed_host::<C>(l, lua_upvalueindex(1)) }) else {
     luaL_error!(l, "unable to find require configuration");
   };
@@ -89,8 +100,8 @@ pub(crate) unsafe fn lua_requireinternal<C: RequireHost>(
     Status::Cached => return 1,
     Status::ErrorReported => {
       push_c_str(l, &resolved_require.error);
-      // l 存活，lua_error 由 VM 状态机接续（`!` 发散收敛为 i32）。
-      lua_error(&mut *l)
+      // `lua_error` 已前移 `&mut LuaState` 引用形（安全 fn，内部抛错不返回）。
+      lua_error(l)
     }
     _ => {}
   }
@@ -104,12 +115,13 @@ pub(crate) unsafe fn lua_requireinternal<C: RequireHost>(
   let stack_values = l.get_top();
   ulua_common::LUAU_ASSERT!(stack_values == REQUIRE_STACK_VALUES);
 
-  // Safety: -2/-1 为装载阶段刚压入的字符串槽（恒为字符串），lua_tolstring_ref
-  // 返回指向被栈槽持有的 VM 串的字节视图；两调用均为只读栈访问，不占栈位。
+  // SAFETY: -2/-1 为装载阶段刚压入的字符串槽（恒为字符串），`lua_tolstring_ref` 的
+  // `'ctx` 锚定形在此收口：返回视图指向被栈槽持有的 VM 串，只在紧随的 `host.load`
+  // 调用窗口内消费（槽位不出现在其间的压弹中，两调用均只读、不占栈位）。
   let (chunkname, loadname) = unsafe {
     (
-      lua_tolstring_ref(l, -2).unwrap_or(&[]),
-      lua_tolstring_ref(l, -1).unwrap_or(&[]),
+      lua_tolstring_ref(l.as_mut_ptr(), -2).unwrap_or(&[]),
+      lua_tolstring_ref(l.as_mut_ptr(), -1).unwrap_or(&[]),
     )
   };
 
@@ -123,11 +135,12 @@ pub(crate) unsafe fn lua_requireinternal<C: RequireHost>(
     if l.get_top() != stack_values {
       luaL_error!(l, "stack cannot be modified when require yields");
     }
-    // Safety: l 存活，lua_yield 由协程状态机接续。
-    unsafe { lua_yield(l, 0) }
+    // `yield_thread` 为 `LuaState` 安全门面（本体 lua_yield 的裸指针折形收在方法内）
+    l.yield_thread(0)
   } else {
     // 同步装载完成，continuation 按自身契约收尾本帧栈
-    // Safety: l 存活，lua_requirecont 按自身契约收尾本帧栈。
-    unsafe { lua_requirecont(l, LuaStatus::Ok as i32) }
+    // SAFETY: `lua_requirecont` 是 Lua/C continuation 回调体，其 `# Safety` 只要求
+    // `l` 为存活状态；本帧即该状态的当前协程，且 `_status` 形参按其契约忽略。
+    unsafe { lua_requirecont(l.as_mut_ptr(), LuaStatus::Ok as i32) }
   }
 }

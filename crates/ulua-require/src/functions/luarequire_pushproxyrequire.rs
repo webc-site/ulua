@@ -11,22 +11,28 @@ const PROXY_REQUIRE_DEBUGNAME: &[u8] = b"proxyrequire\0";
 /// 建立并压入 proxyrequire 闭包（cpp `luarequire_pushproxyrequire`）：以
 /// `(path, requirerChunkname)` 两参按既有模块视角解析路径。
 ///
+/// 保留 `unsafe fn` + 裸句柄形参的裁定（review.md §2 判定 1）：本导出是跨 crate
+/// `pub` 的宿主入口（`ulua-cli-test/tests/require_by_string.rs` 直接以 `*mut
+/// LuaState` 调用），改形需同步该禁区调用点；函数体解引用 `l`（重建独占借用后交给
+/// 已降形的 [`push_closure`]），故契约仍须由签名强制。收形仅下沉到体内：裸指针的
+/// 解引用点收敛为一次物化，其后的装箱/挂闭包全在安全 `fn` 里完成。
+///
 /// # Safety
-/// `l` 必须指向存活的 `LuaState`（宿主 Lua/C API 句柄，本 crate 归 ulua-vm
-/// C-API 真边界裁定）；`host` 前提同 [`crate::functions::luarequire_pushrequire`]。
+/// - `l`：必须指向存活的 `LuaState`（宿主 Lua/C API 句柄），且在本次调用窗口内无人
+///   并发可变借用；调用后栈顶新增一个闭包值，由调用方负责配平。
+/// - `host`：须为 `C: 'static` 的静态生命周期值，装箱进与闭包同寿命的 userdata 后由
+///   GC 终结；`lua_proxyrequire::<C>` 与本 `C` 同源单态化。
 pub unsafe fn luarequire_pushproxyrequire<C: RequireHost + 'static>(
   l: *mut LuaState,
   host: C,
 ) -> i32 {
-  // Safety: l 为宿主提供的有效 LuaState；host 经 push_closure 装箱移交；
-  // `lua_proxyrequire::<C>` 是本 crate 静态存活闭包体按同一宿主类型 `C` 的
-  // 单态化实例（coerce 为 C 函数指针）。
-  unsafe {
-    push_closure(
-      l,
-      host,
-      Some(lua_proxyrequire::<C>),
-      PROXY_REQUIRE_DEBUGNAME,
-    )
-  }
+  // Safety: 契约保证 l 为存活独占句柄，此处一次物化为 `&mut LuaState`；
+  // push_closure 为安全 fn，其调用序契约（debugname 静态 NUL 串、受保护帧、
+  // 函数指针与 C 同源单态化）在本调用点逐项成立。
+  push_closure(
+    unsafe { &mut *l },
+    host,
+    Some(lua_proxyrequire::<C>),
+    PROXY_REQUIRE_DEBUGNAME,
+  )
 }
