@@ -14,7 +14,7 @@ use crate::{
 pub(crate) fn getfield(l: &mut LuaState, key: &[u8], d: i32) -> i32 {
   lua_rawgetfield_bytes(l, -1, key);
 
-  if lua_isnumber(&*l, -1) != 0 {
+  if lua_isnumber(l, -1) != 0 {
     // `lua_tointeger!` 即 `i32`，无需再 cast
     let res = l.to_integer(-1).unwrap_or(0);
     l.pop(1);
