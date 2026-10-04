@@ -4,8 +4,8 @@
 //! 标记的读写已并入 `registry_table` 的 mark 门面（set/take 两式）。
 //!
 //! 本文件对 `&mut LuaState` 操作，全部栈读写走 vm 的安全方法；仅两处保留
-//! 最小 `unsafe`（各带 `# Safety`）：登记元方法 C 闭包（VM 回调契约）与
-//! `luaL_error` 抛错入口。
+//! 最小 `unsafe`（各带 `# Safety`）：`unsafe extern "C-unwind"` 元方法臂重建
+//! 独占借用、`luaL_error` 抛错入口（登记元方法 C 闭包随 §10 收形降为安全调用）。
 //!
 //! DELIBERATE DEVIATION：cpp 用静态变量 `&cyclicPlaceholderMetatableSentinel`
 //! 的裸地址作注册表 `lua_rawgetp/rawsetp` 键；Rust 侧改以本 crate 私有的注册表
@@ -14,7 +14,6 @@
 //! 逐项一致；仅 `debug.getregistry()` 下该内部槽的可见形态从 lightuserdata
 //! 地址变为隐藏命名的字符串键。
 
-use ulua_common::functions::c_str::cstr;
 use ulua_vm::{
   enums::lua_type::LuaType,
   functions::lua_rawiter::lua_rawiter,
@@ -35,11 +34,12 @@ const PLACEHOLDER_METATABLE_KEY: &[u8] = b"_LUAU_CYCLIC_PLACEHOLDER_METATABLE";
 /// 占位元表 `__metatable` 的锁定文案（cpp `lua_pushliteral`）；字节串切片入参，
 /// 无 NUL 约定（驻留内容不含终止符）。
 const METATABLE_LOCKED: &[u8] = b"The metatable is locked";
-/// 两个元方法 C 闭包的调试名（cpp `debugname`，NUL 结尾静态字节串，
-/// 仅在 `push_c_function` 收口点转 C 指针）。
-const INDEX_ERROR_NAME: &[u8] = b"CyclicDependencyIndexError\0";
-const NEW_INDEX_ERROR_NAME: &[u8] = b"CyclicDependencyNewIndexError\0";
-/// 元表字段名（NUL 结尾字节串，仅 `lua_setfield` 收口点转 C 指针）。
+/// 两个元方法 C 闭包的调试名（cpp `debugname`，静态字节窗，**不含终止 NUL**：
+/// §10 后 `push_c_function` 直取 `Option<&'static [u8]>`，VM 只存引用不复制，
+/// 而 `dumpclosure` 的 GC 台账按全长窗写出名字，留 NUL 就多一个可见字节）。
+const INDEX_ERROR_NAME: &[u8] = b"CyclicDependencyIndexError";
+const NEW_INDEX_ERROR_NAME: &[u8] = b"CyclicDependencyNewIndexError";
+/// 元表字段名（`set_field_bytes` 的原生字节窗，无终止 NUL——键面同样全长写出）。
 const INDEX_FIELD: &[u8] = b"__index";
 const NEW_INDEX_FIELD: &[u8] = b"__newindex";
 const METATABLE_FIELD: &[u8] = b"__metatable";
@@ -90,13 +90,12 @@ unsafe extern "C-unwind" fn cyclic_dependency_new_index_error(l: *mut LuaState) 
 /// cpp 元表方法登记的共同体：压入 C 闭包并设为栈顶表的字段
 /// （`__index`/`__newindex` 两处同形样板的单点收口）。
 ///
-/// `func` 须为静态存活的 VM 元方法闭包；`debug_name` 为 NUL 结尾静态字节串。
+/// `func` 须为静态存活的 VM 元方法闭包；`debug_name` 为静态字节窗（不含终止 NUL）。
 fn set_meta_method(l: &mut LuaState, field: &[u8], func: LuaCFunction, debug_name: &'static [u8]) {
-  // Safety: func 静态存活（仅登记函数指针）；debug_name 为 NUL 结尾静态串，满足
-  // push_c_function 闭包存活期内有效契约（净压一值，set_field_bytes 随后消费）。
-  unsafe {
-    l.push_c_function(func, cstr(debug_name));
-  }
+  // §10：`push_c_function` 已降 safe fn（debugname 收原生字节窗，闭包存活契约由
+  // `Option<&'static [u8]>` 承载），入参无调用方裸操作位，此处不再有 `unsafe` 理由；
+  // `func` 为静态存活的元方法臂，净压一值由随后的 `set_field_bytes` 消费。
+  l.push_c_function(func, Some(debug_name));
   l.set_field_bytes(-2, field);
 }
 

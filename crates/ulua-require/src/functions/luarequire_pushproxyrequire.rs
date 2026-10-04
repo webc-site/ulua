@@ -5,8 +5,9 @@ use crate::{
   records::navigation_context::RequireHost,
 };
 
-/// proxyrequire 闭包的调试名（NUL 结尾静态字节串）。
-const PROXY_REQUIRE_DEBUGNAME: &[u8] = b"proxyrequire\0";
+/// proxyrequire 闭包的调试名（cpp `debugname`，静态字节窗，**不含终止 NUL**：
+/// VM 只存引用，`dumpclosure` 按全长窗写出，留 NUL 会在 GC 台账多一个可见 NUL 字节）。
+const PROXY_REQUIRE_DEBUGNAME: &[u8] = b"proxyrequire";
 
 /// 建立并压入 proxyrequire 闭包（cpp `luarequire_pushproxyrequire`）：以
 /// `(path, requirerChunkname)` 两参按既有模块视角解析路径。

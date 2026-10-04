@@ -5,7 +5,6 @@ use core::{
   ptr::{drop_in_place, write},
 };
 
-use ulua_common::functions::c_str::cstr;
 use ulua_vm::{
   functions::{lua_newuserdatadtor::lua_newuserdatadtor, lua_pushcclosurek::lua_pushcclosurek},
   macros::lua_l_error::luaL_error,
@@ -44,13 +43,13 @@ unsafe extern "C-unwind" fn drop_require_host<C: RequireHost>(_l: *mut LuaState,
 /// # Safety
 /// `l` 必须指向存活的 `LuaState`；`requirelikefunc` 须为静态存活的
 /// `LuaCFunction` 闭包体（其运行期按 upvalue(1) 以 `C` 取回本上下文）；`debugname`
-/// 须为 NUL 结尾静态字节串（调用点 `b"..\0"`，经 `cstr` 交向
-/// `lua_pushcclosurek` 的 C 形参收口）。
+/// 须为在闭包存活期内保持有效的**静态字节窗（不含终止 NUL）**——§10 收形后
+/// `lua_pushcclosurek` 直取 `Option<&'static [u8]>`，VM 只存引用不复制。
 pub(crate) unsafe fn push_closure<C: RequireHost + 'static>(
   l: *mut LuaState,
   host: C,
   requirelikefunc: LuaCFunction,
-  // NUL 结尾静态字节串（调用点 `b"..\0"`）。
+  // 静态字节窗（调用点 `b".."`，不含终止 NUL）。
   debugname: &'static [u8],
 ) -> i32 {
   // Safety: l 为宿主开启库时存活的 LuaState；lua_newuserdatadtor 按 Lua/C API
@@ -74,17 +73,17 @@ pub(crate) unsafe fn push_closure<C: RequireHost + 'static>(
   unsafe { write(ud.cast::<HostSlot<C>>(), Box::new(host)) };
 
   // Safety: ud 处 userdata 此刻在栈顶，pushcclosurek(n=1) 将其收作唯一 upvalue；
-  // debugname 为 NUL 结尾静态串经 cstr 门面交出 C 指针；lua_requirecont 为静态
+  // `l` 按本函数契约为存活且独占的 LuaState，此处一次重建借用交出 `&mut` 形参
+  // （借用窗止于本次调用）；`debugname` 为静态字节窗，随闭包长期持有由
+  // `Option<&'static [u8]>` 承载（VM 只存引用不复制）；lua_requirecont 为静态
   // 存活函数指针（不访问宿主，故各闭包体共用同一 continuation）。
-  unsafe {
-    lua_pushcclosurek(
-      l,
-      requirelikefunc,
-      cstr(debugname),
-      1,
-      Some(lua_requirecont),
-    );
-  }
+  lua_pushcclosurek(
+    unsafe { &mut *l },
+    requirelikefunc,
+    Some(debugname),
+    1,
+    Some(lua_requirecont),
+  );
 
   1
 }

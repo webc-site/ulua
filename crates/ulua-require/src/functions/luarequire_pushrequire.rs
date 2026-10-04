@@ -5,8 +5,9 @@ use crate::{
   records::navigation_context::RequireHost,
 };
 
-/// require 闭包的调试名（NUL 结尾静态字节串，仅 `lua_pushcclosurek` 收口点转 C 指针）。
-const REQUIRE_DEBUGNAME: &[u8] = b"require\0";
+/// require 闭包的调试名（cpp `debugname`，静态字节窗，**不含终止 NUL**——VM 只存
+/// 引用，`dumpclosure` 按全长窗写出，保留 NUL 会在 GC 台账里多一个可见 NUL 字节）。
+const REQUIRE_DEBUGNAME: &[u8] = b"require";
 
 /// 建立并压入 require 闭包（cpp `luarequire_pushrequire`），不注册全局。
 ///
