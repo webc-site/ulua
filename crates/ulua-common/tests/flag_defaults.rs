@@ -158,6 +158,8 @@ fn rust_table() -> Vec<FlagEntry> {
     fflag::LUAU_ITERATIVE_INSTANTIATION_QUEUER => LuauIterativeInstantiationQueuer false,
     fflag::LUAU_JIT_CALL_INLINE => LuauJitCallInline false,
     fflag::LUAU_JIT_CALL_INLINE_OBS => LuauJitCallInlineObs false,
+    fflag::LUAU_JIT_SETMETATABLE_FASTCALL => LuauJitSetmetatableFastcall false,
+    fflag::LUAU_JIT_SETTABLE_HASH_INLINE => LuauJitSettableHashInline false,
     fflag::LUAU_LVALUE_COMPOUND_ASSIGNMENT_VISIT_LHS => LuauLValueCompoundAssignmentVisitLhs false,
     fflag::LUAU_LIMIT_UNIFICATION_RECURSION => LuauLimitUnificationRecursion false,
     fflag::LUAU_NATIVE_CODE_TARGET_CHECK => LuauNativeCodeTargetCheck false,
