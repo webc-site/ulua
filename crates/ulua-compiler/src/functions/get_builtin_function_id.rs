@@ -16,7 +16,7 @@ use crate::records::{builtin::Builtin, compile_options::CompileOptions};
 
 /// 表项：`(库名, 方法名, fastcall id)`，均为不含 NUL 的字节串；空串库名表示
 /// 全局函数（cpp `builtin.isGlobal(...)`，对应 `object` 为空名）。
-pub type BuiltinEntry = (&'static [u8], &'static [u8], LuauBuiltinFunction);
+pub(crate) type BuiltinEntry = (&'static [u8], &'static [u8], LuauBuiltinFunction);
 
 /// 无条件识别段：不依赖任何 FastFlag。分组序即表内字节字典序：
 /// 全局(:72-104) → bit32(:176-208) → buffer(:230-257) → math(:106-174) →

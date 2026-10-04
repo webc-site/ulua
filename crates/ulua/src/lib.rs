@@ -1,14 +1,14 @@
 //! # ulua
 //!
 //! A faithful Rust translation of [Luau](https://github.com/luau-lang/luau) —
-//! Roblox's typed Lua. This umbrella crate re-exports the individual layers
-//! (lexer/parser/AST, bytecode, compiler, register VM, type checker, config and
-//! require resolution) and convenience helpers — [`compile`],
+//! Roblox's typed Lua. This umbrella crate re-exports the layers callers drive
+//! from here — the lexer/parser/AST ([`ast`]), the mlua-style runtime ([`rt`])
+//! and the register VM ([`vm`]) — plus convenience helpers — [`compile`],
 //! [`eval`], [`eval_bytecode`], and [`check`] — for the common "compile a string / run a string /
 //! run bytecode / type-check a string" cases.
 //!
-//! For finer-grained control depend on the sub-crates directly; they are all
-//! re-exported here as modules.
+//! For finer-grained control depend on the sub-crates directly; only the three
+//! layers above are re-exported here as modules.
 //!
 //! ```
 //! ulua::eval("assert(1 + 1 == 2)").unwrap();
@@ -20,24 +20,16 @@
 //! # }
 //! ```
 
-// Re-export the sub-crates as modules so `ulua::vm::...` etc. work from one dep.
+// Re-export as modules only the sub-crates that are actually reached through
+// the umbrella (`ast`, `rt`, `vm`), so `ulua::vm::...` works from one dep; the
+// other layers are used through their own crates.
 use std::{result::Result as StdResult, sync::Once};
 
-pub use ulua_analysis as analysis;
 pub use ulua_ast as ast;
-pub use ulua_bytecode as bytecode;
 /// Compile-time checked Luau source macros (`checked-macros` feature).
 #[cfg(feature = "checked-macros")]
 pub use ulua_checked_macros::{luau, luau_file, ulua, ulua_file};
-pub use ulua_common as common;
-pub use ulua_compiler as compiler;
-pub use ulua_config as config;
-pub use ulua_require as require;
 pub use ulua_rt as rt;
-/// The `async`-feature coroutine-as-`Future`/`Stream` driver, re-exported when
-/// the umbrella's `async` feature (which forwards to `ulua-rt/async`) is on.
-#[cfg(feature = "async")]
-pub use ulua_rt::AsyncThread;
 // The headline high-level, mlua-style API. Re-exported flat at the crate root
 // so `ulua::Lua`, `ulua::Table`, etc. are available directly.
 //
@@ -58,13 +50,6 @@ pub use ulua_rt::{
   MaybeSync, MetaMethod, MultiValue, Nil, Number, RegistryKey, Result, Scope, StdLib, Table,
   TablePairs, TableSequence, Thread, ThreadStatus, TypeMetatable, UserData, UserDataFields,
   UserDataMethods, UserDataRef, UserDataRefMut, Value, Variadic, Vector, VmState, WeakLua,
-};
-/// The `serde`-feature Rust↔Lua serialization surface, re-exported when the
-/// umbrella's `serde` feature (forwarding to `ulua-rt/serde`) is on.
-#[cfg(feature = "serde")]
-pub use ulua_rt::{
-  DeserializeOptions, LuaDeserializer, LuaSerdeExt, LuaSerializer, SerializableTable,
-  SerializableValue, SerializeOptions,
 };
 // The static type-check helpers now live on `ulua-rt` (behind its `typecheck`
 // feature, which the umbrella turns on by default). Re-export them so
