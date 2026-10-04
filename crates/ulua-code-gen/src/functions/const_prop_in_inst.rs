@@ -1979,6 +1979,13 @@ pub fn const_prop_in_inst(
       state.invalidate_registers_from(first_reg);
       state.invalidate_user_call();
     }
+    IrCmd::SetMetatableChecked => {
+      // 语义等价 LBF_SETMETATABLE fastcall（handle_builtin_effects 同款失效面）：
+      // 元表写使整个堆失效；ra 起寄存器失效（结果寄存器写入）。
+      state.invalidate_heap();
+      let ra = vm_reg_op(op_a(cur_mut(function, index)));
+      state.invalidate_registers_from(ra);
+    }
     IrCmd::FallbackGetglobal => {
       state.invalidate_ir_op(op_b_ref(cur_ref(function, index)));
       state.invalidate_user_call();

@@ -8,6 +8,7 @@
 
 use ulua_common::{
   enums::luau_bytecode_type::LuauBytecodeType,
+  fflag,
   macros::luau_insn_ops::{luau_insn_a, luau_insn_b, luau_insn_c},
 };
 
@@ -58,6 +59,22 @@ pub(crate) fn translate_table_access(
   // 前置 Table 守卫需 fallback 值供后续 TryNumToIndex/CheckArraySize 等复用，保持 eager 创建。
   let mut fallback = build.fallback_block(pcpos as u32);
 
+  // SET 专属：CheckArraySize 越界后的哈希直插块组（本 fork 扩展，cpp 无对应路径）。
+  // rt 侧 nsieve/tablegrow 形负载中整数键表的数组段长期为空（等步长整数键
+  // 达不到 computesizes 的 50% 吸收阈值），全部写落哈希段——仅内联数组段直写
+  // 会让守卫链全付后仍每次回落 helper（sample 归因：写侧 77% 样本在
+  // settable_num_fastpath/newkey/rehash）。此处对齐 SETTABLEKS J4b 的内联插入
+  // 形态：主位空直插 / 等键覆写，其余（哨兵表、碰撞、rehash）仍落 helper。
+  // GET 无插入语义，不建块（空块会破坏块序计算）。
+  let hash_blocks = if is_set && fflag::LuauJitSettableHashInline.get() {
+    Some((
+      build.fallback_block(pcpos as u32),
+      build.fallback_block(pcpos as u32),
+    ))
+  } else {
+    None
+  };
+
   let reg_rb = build.vm_reg(rb);
   let tb = build.inst_ir_cmd_ir_op(IrCmd::LoadTag, reg_rb);
   let a_is_table = bc_types.a == LuauBytecodeType::LBC_TYPE_TABLE.0 as u8;
@@ -76,13 +93,20 @@ pub(crate) fn translate_table_access(
   let const_int_one = build.const_int(1);
   let index = build.inst_ir_cmd_ir_op_ir_op(IrCmd::SubInt, index, const_int_one);
 
-  build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CheckArraySize, vb, index, fallback);
+  // 守卫次序说明：NoMetatable/Readonly 先于 CheckArraySize（纯守卫无副作用，
+  // 失败去向同为 helper 块，行为不变），使数组路与哈希直插路共享这两道守卫。
+  // CheckArraySize 越界去向：SET 走哈希直插块（数组段外落哈希段），GET 仍落 helper。
+  let oob_target = match hash_blocks {
+    Some((hash_block, _)) => hash_block,
+    None => fallback,
+  };
   build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckNoMetatable, vb, fallback);
+  build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CheckArraySize, vb, index, oob_target);
 
   let reg_ra = build.vm_reg(ra);
 
   if is_set {
-    // SET：写方向须先挡掉只读表，再取数组槽写回；末尾补前向 barrier，防旧值所在表逃逸
+    // SET：写方向先挡掉只读表，再取数组槽写回；末尾补前向 barrier，防旧值所在表逃逸
     build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckReadonly, vb, fallback);
     let arr_el = build.inst_ir_cmd_ir_op_ir_op(IrCmd::GetArrAddr, vb, index);
     let tva = build.inst_ir_cmd_ir_op(IrCmd::LoadTvalue, reg_ra);
@@ -98,14 +122,77 @@ pub(crate) fn translate_table_access(
 
   let next = build.block_at_inst((pcpos + 1) as u32);
 
-  let scope = FallbackStreamScope::new(build, fallback, next);
+  // 块布局（SET 带 hash_blocks 时，镜像 SETTABLEKS J4b 的发射序）：
+  //   主路数组直写 → hash_block（直插）→ occupied_block（覆写检查）→ fallback（helper）→ next
+  // GET（无 hash_blocks）保持原形态：主路 → fallback → next。
+  let tail_scope_block = match hash_blocks {
+    Some((hash_block, _)) => hash_block,
+    None => fallback,
+  };
+
+  let scope = FallbackStreamScope::new(build, tail_scope_block, next);
   let build = &mut *scope.build;
 
-  let savedpc_arg = build.const_uint((pcpos + 1) as u32);
-  build.inst_ir_cmd_ir_op(IrCmd::SetSavedpc, savedpc_arg);
-  let reg_ra = build.vm_reg(ra);
-  let reg_rb = build.vm_reg(rb);
-  let reg_rc = build.vm_reg(rc);
-  build.inst_ir_cmd_ir_op_ir_op_ir_op(cmd, reg_ra, reg_rb, reg_rc);
-  build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
+  match hash_blocks {
+    None => {
+      // GET 原路径：helper 块即尾块
+      let savedpc_arg = build.const_uint((pcpos + 1) as u32);
+      build.inst_ir_cmd_ir_op(IrCmd::SetSavedpc, savedpc_arg);
+      let reg_ra = build.vm_reg(ra);
+      let reg_rb = build.vm_reg(rb);
+      let reg_rc = build.vm_reg(rc);
+      build.inst_ir_cmd_ir_op_ir_op_ir_op(cmd, reg_ra, reg_rb, reg_rc);
+      build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
+    }
+    Some((_, occupied_block)) => {
+    // 哈希直插块：主位空 → 直插新键（setnodekey 数字版含 tmcache 作废）+ 值落位
+    // + 前向屏障。键为数字（非 collectable），键侧屏障空操作，不再补
+    // BarrierTableForward（对齐 cpp luaC_barriert 对非收集对象的零动作语义）。
+    let reg_rb = build.vm_reg(rb);
+    let vb = build.inst_ir_cmd_ir_op(IrCmd::LoadPointer, reg_rb);
+    let reg_rc = build.vm_reg(rc);
+    let node = build.inst_ir_cmd_ir_op_ir_op(IrCmd::GetHashNodeAddrNum, vb, reg_rc);
+
+    // 主位可插判定（哨兵表 node==dummynode 或 val 非空 → 覆写检查分支）
+    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CheckNodeInsertable, node, vb, occupied_block);
+
+    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::StoreNodeKeyNum, node, reg_rc, vb);
+    let reg_ra = build.vm_reg(ra);
+    let tva = build.inst_ir_cmd_ir_op(IrCmd::LoadTvalue, reg_ra);
+    let offset = build.const_int(0);
+    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::StoreTvalue, node, tva, offset);
+    let undef = build.undef();
+    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::BarrierTableForward, vb, reg_ra, undef);
+    build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
+
+    // 覆写检查分支：node 键为等值数字 → 直接覆写值（probe 命中口径）；
+    // 否则（碰撞/他型键）→ helper 全路径。
+    build.begin_block(occupied_block);
+
+    let reg_rb = build.vm_reg(rb);
+    let vb = build.inst_ir_cmd_ir_op(IrCmd::LoadPointer, reg_rb);
+    let reg_rc = build.vm_reg(rc);
+    let node = build.inst_ir_cmd_ir_op_ir_op(IrCmd::GetHashNodeAddrNum, vb, reg_rc);
+    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::JumpIfNodeKeyNotNum, node, reg_rc, fallback);
+
+    let reg_ra = build.vm_reg(ra);
+    let tva = build.inst_ir_cmd_ir_op(IrCmd::LoadTvalue, reg_ra);
+    let offset = build.const_int(0);
+    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::StoreTvalue, node, tva, offset);
+    let undef = build.undef();
+    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::BarrierTableForward, vb, reg_ra, undef);
+    build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
+
+    // helper 块：SetSavedpc + 全路径 helper 调用（快路未吞的形态一律到此）
+    build.begin_block(fallback);
+
+    let savedpc_arg = build.const_uint((pcpos + 1) as u32);
+    build.inst_ir_cmd_ir_op(IrCmd::SetSavedpc, savedpc_arg);
+    let reg_ra = build.vm_reg(ra);
+    let reg_rb = build.vm_reg(rb);
+    let reg_rc = build.vm_reg(rc);
+    build.inst_ir_cmd_ir_op_ir_op_ir_op(cmd, reg_ra, reg_rb, reg_rc);
+    build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
+    }
+  }
 }

@@ -278,6 +278,28 @@ pub fn visit_vm_reg_defs_uses<V: VmRegDefsUsesVisitor>(
 
     IrCmd::MarkDead => {}
 
+    // SETTABLE 数字键哈希直插快路（本 fork 扩展）：只读寄存器键（op_b，VmReg）。
+    // 表指针操作数为 Inst（块内 LoadPointer 产物，其 VmReg 使用由该 LoadPointer
+    // 自行声明，同 SETTABLEKS J4b 形态），不经此登记。
+    IrCmd::GetHashNodeAddrNum => {
+      visitor.use_(op_b_ref(inst), 0);
+    }
+
+    IrCmd::JumpIfNodeKeyNotNum => {
+      visitor.use_(op_b_ref(inst), 0);
+    }
+
+    IrCmd::StoreNodeKeyNum => {
+      visitor.use_(op_b_ref(inst), 0);
+    }
+
+    // JIT setmetatable 快速通道：写 ra（结果=obj）、读 obj/mt 实参寄存器。
+    IrCmd::SetMetatableChecked => {
+      visitor.def(op_a_ref(inst), 0);
+      visitor.use_(op_b_ref(inst), 0);
+      visitor.use_(op_c_ref(inst), 0);
+    }
+
     _ => {
       for op in inst.ops.as_slice() {
         CODEGEN_ASSERT!(op.kind() != IrOpKind::VmReg);

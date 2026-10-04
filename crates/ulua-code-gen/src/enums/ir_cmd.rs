@@ -16,7 +16,16 @@ pub enum IrCmd {
   GetArrAddr,
   GetSlotNodeAddr,
   GetHashNodeAddr,
+  /// 数字键运行时哈希主位（SETTABLE 哈希直插快路）：对寄存器内的 double 键值
+  /// 内联 hashnum（MurmurHash64B 收尾）后取 `node[hash & (sizenode-1)]` 地址，
+  /// 与 rt 侧 `hashnum` 逐位一致。cpp 无此场景（cpp JIT 不内联哈希写）。
+  GetHashNodeAddrNum,
   GetClosureUpvalAddr,
+  /// JIT setmetatable 快速通道（本 fork 扩展，cpp 无对应）：内联类型守卫后直调
+  /// `NativeContext::setmetatable_checked` 完成赋值段；返回 0（前置不满足）跳
+  /// op(3) fallback 块，错误路径由解释器保真。op(0)=ra 结果寄存器、op(1)=obj、
+  /// op(2)=mt、op(3)=fallback 目标。
+  SetMetatableChecked,
   StoreTag,
   StoreExtra,
   StorePointer,
@@ -149,6 +158,14 @@ pub enum IrCmd {
   CheckNodeValue,
   CheckNodeInsertable,
   StoreNodeKey,
+  /// 数字键主位 occupied 时的等键判定（SETTABLE 哈希直插快路）：node 键 tag 为
+  /// NUMBER 且 payload 与寄存器内 double 相等（`luai_numeq` 口径）则落空直通
+  /// （覆写值），否则跳 op(2)。语义对齐 rt `walk_nodes` 探测谓词。
+  JumpIfNodeKeyNotNum,
+  /// 数字键 `setnodekey`（SETTABLE 哈希直插快路）：key.value 拷自寄存器内
+  /// double、extra 清零、tt=LUA_TNUMBER（next 高位保留的位域写），并作废
+  /// 本表 tmcache——与 [`IrCmd::StoreNodeKey`] 同构，仅 tag 与值源不同。
+  StoreNodeKeyNum,
   CheckBufferLen,
   CheckUserdataTag,
   CheckCmpNum,
