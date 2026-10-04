@@ -32,24 +32,21 @@ pub(crate) fn get_props(l: &mut LuaState) -> i32 {
   // Safety: `l` 由 Lua 虚拟机按其 C 函数调用约定传入，是一个有效、对齐且存活于本次
   // 调用期间的 `*mut LuaState`（对应 `lua_CFunction` 形参契约）；据此重解释得到的
   // `l.as_mut_ptr()` 指向同一状态机。`lua_gettop`/`throw_type_error` 等 lua_* 调用只以该状态为参数
-  // 操作栈。`get_type_user_data`/`get_type_function_type_id` 均为 `unsafe fn`，契约要求
-  // 传入存活 userdata/类型句柄并返回空或指向存活 arena 节点的指针：`tftt`/`tfct` 在
-  // `!is_null()` 守卫后才解引用，且其 RTTI class-index 命中 ⇒ `repr(C)` 基址重合，指向
-  // 的 `props` 字段随类型 arena 存活；`get_tag` 同理只读该 userdata。单线程执行无别名。
+  // 操作栈。`get_type_user_data` 返回存活 userdata/类型句柄；`tftt`/`tfct` 命中 Some 才读取
+  // `props`，其指向 type_arena 存活节点（class-index 命中 ⇒ `repr(C)` 基址重合，RTTI 校验由
+  // 下转门面完成）；`get_tag` 同理只读该 userdata。单线程执行无别名。
   unsafe {
     lua_check_args!(l, != 1, "type.properties: expected 1 arguments, but got {}");
 
     let self_ty = get_type_user_data(l, 1);
 
-    let tftt = get_type_function_type_id::<TypeFunctionTableType>(self_ty);
-    if !tftt.is_null() {
-      push_props(l, &(*tftt).props);
+    if let Some(tftt) = get_type_function_type_id::<TypeFunctionTableType>(self_ty) {
+      push_props(l, &tftt.props);
       return 1;
     }
 
-    let tfct = get_type_function_type_id::<TypeFunctionExternType>(self_ty);
-    if !tfct.is_null() {
-      push_props(l, &(*tfct).props);
+    if let Some(tfct) = get_type_function_type_id::<TypeFunctionExternType>(self_ty) {
+      push_props(l, &tfct.props);
       return 1;
     }
 

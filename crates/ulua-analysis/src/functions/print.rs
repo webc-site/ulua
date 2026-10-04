@@ -21,8 +21,8 @@ pub(crate) fn print(l: &mut LuaState) -> i32 {
       l.pop(1);
     }
 
-    let ctx = get_type_function_runtime(l);
-    (*ctx).messages.push(result);
+    let ctx = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
+    ctx.get_mut().messages.push(result);
 
     0
   }

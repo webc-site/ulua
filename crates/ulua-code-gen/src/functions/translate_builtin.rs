@@ -41,6 +41,7 @@ use crate::{
     translate_builtin_math_unary::translate_builtin_math_unary,
     translate_builtin_number_to_2_number::translate_builtin_number_to_2_number,
     translate_builtin_number_to_number_libm::translate_builtin_number_to_number_libm,
+    translate_builtin_setmetatable::translate_builtin_setmetatable,
     translate_builtin_string_len::translate_builtin_string_len,
     translate_builtin_table_insert::translate_builtin_table_insert,
     translate_builtin_type::translate_builtin_type,
@@ -328,6 +329,9 @@ pub fn translate_builtin(
     LBF::LBF_TYPEOF => translate_builtin_typeof(build, nparams, ra, arg, args, nresults),
     LBF::LBF_VECTOR => d3!(translate_builtin_vector, arg3),
     LBF::LBF_TABLE_INSERT => d3!(translate_builtin_table_insert, args),
+    LBF::LBF_SETMETATABLE => {
+      translate_builtin_setmetatable(build, nparams, ra, arg, args, nresults, fallback)
+    }
     LBF::LBF_STRING_LEN => d3!(translate_builtin_string_len, args),
     LBF::LBF_BIT32_BYTESWAP => d3c!(translate_builtin_bit_32_unary, IrCmd::ByteswapUint, args),
     LBF::LBF_BUFFER_READI8 => buf_read!(BufferReadi8, 1, IntToNum),

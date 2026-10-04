@@ -3,17 +3,14 @@ use crate::{
   records::lua_state::LuaState,
 };
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn coyieldable(l: *mut LuaState) -> i32 {
-  unsafe {
-    // r16-v3 #60 拆两语句：`lua_isyieldable` 前移 `&LuaState` 只读形后，原单语句的
-    // `(*l).push_boolean(&…)` 门面独占接收者与只读实参借用冲突；原位现读（求值次序
-    // 本就先读计数后落笔，句间无场写）拆分等价。
-    let yieldable = lua_isyieldable(&*l) != 0;
-    (*l).push_boolean(yieldable);
-    1
-  }
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
+/// 判读/压栈全经安全门面，体内已无裸操作，故本体降为安全 `fn`）：`l` 须为正被本线程驱动的存活
+/// `LuaState`（`lua_isyieldable` 只读其 `n_ccalls`/`base_ccalls` 两计数），`push_boolean` 占用
+/// top 之上 1 个空槽。cpp/VM/src/lcorolib.cpp:361 coyieldable。
+pub fn coyieldable(l: &mut LuaState) -> i32 {
+  l.push_boolean(lua_isyieldable(l) != 0);
+
+  1
 }
 
-lua_lib_fn!(pub fn coyieldable, coyieldable_arm);
+lua_lib_fn!(pub fn coyieldable @ref, coyieldable_arm);

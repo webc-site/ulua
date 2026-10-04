@@ -3,16 +3,16 @@ use crate::{macros::lua_lib_fn::lua_lib_fn, records::lua_state::LuaState};
 /// IEEE-754 double 的符号位掩码。
 const SIGN_BIT_MASK: u64 = 1 << 63;
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn math_modf(l: *mut LuaState) -> i32 {
-  unsafe {
-    // C `modf(x, &ip)`：整数部分入 ip，小数部分为返回值；cpp 先推 ip 再推 fp。
-    let (fp, ip) = modf((*l).check_number(1));
-    (*l).push_number(ip);
-    (*l).push_number(fp);
-    2
-  }
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
+/// 取数/压栈全经安全门面，体内已无裸操作，故本体降为安全 `fn`）：`l` 须处于可抛错的受保护帧——
+/// 栈 1 号位为数字（`check_number` 非数字即抛错发散），两次 `push_number` 占用 top 之上 2 个空槽。
+/// cpp/VM/src/lmathlib.cpp:125 math_modf。
+pub fn math_modf(l: &mut LuaState) -> i32 {
+  // C `modf(x, &ip)`：整数部分入 ip，小数部分为返回值；cpp 先推 ip 再推 fp。
+  let (fp, ip) = modf(l.check_number(1));
+  l.push_number(ip);
+  l.push_number(fp);
+  2
 }
 
 /// libc `modf(x, &ip)` 的等价实现：返回 `(fp, ip)`，满足 `x == fp + ip`，
@@ -53,4 +53,4 @@ fn signed_zero(x: f64) -> f64 {
 // modf_of_infinite_keeps_signed_zero_fraction、modf_of_nan_yields_nan_pair、
 // modf_of_zero_keeps_sign、modf_of_integral_and_wide_values_is_exact。
 
-lua_lib_fn!(pub fn math_modf, math_modf_arm);
+lua_lib_fn!(pub fn math_modf @ref, math_modf_arm);

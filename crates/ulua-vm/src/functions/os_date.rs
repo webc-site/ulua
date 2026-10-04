@@ -13,12 +13,13 @@
 //! removed). The current clock reads through [`now_epoch_seconds`]
 //! (`coarsetime`).
 
+use core::slice::from_raw_parts;
+
 #[cfg(not(target_os = "windows"))]
 use crate::functions::localtime_r::ZONE_UTC;
 use crate::{
   functions::{
     localtime_r::{TimeT, Tm, fill_civil, localtime_r},
-    lua_createtable::lua_createtable,
     lua_l_addlstring::lua_l_addlstring,
     lua_l_buffinit::lua_l_buffinit,
     lua_l_pushresult::lua_l_pushresult,
@@ -81,77 +82,92 @@ fn os_gmtime_r(timep: &TimeT) -> Option<Tm> {
   Some(result)
 }
 
-/// # Safety
-/// `l` 须为存活 LuaState 并处于 os.date 的受保护帧：栈 1 号位为可选格式串（`opt_bytes` 返回本帧存活的字节切片，
-/// 首字节判 UTC 前缀），2 号位可选数字时间（`is_none_or_nil`/`lua_l_checknumber`）；
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
+/// 取参/建表/判读全经安全门面，仅格式串窗与 `LuaLStrbuf` 三处留窄腰 `unsafe`，其缓冲游标界内
+/// 由被调方自身扩容维护）：栈 1 号位为可选格式串（`opt_bytes` 对非串经 `check_bytes` 抛错发散，
+/// 首字节判 UTC 前缀），2 号位可选数字时间（`is_none_or_nil`/`check_number` 同）；
 /// 时间取值/分解为纯 Rust（`now_epoch_seconds`/`os_gmtime_r`/`localtime_r`，超范围返回 None → pushnil），
 /// `localtime_r` 的区缩写随返回元组移交本 match 臂持有，`tm_zone` 指针的读取（渲染循环）均在其存活期内；
-/// `lua_createtable`/`lua_l_buffinit`/`lua_l_pushresult` 可分配/GC/抛错。cpp/VM/src/loslib.cpp:112 os_date。
-pub(crate) unsafe fn os_date(l: *mut LuaState) -> i32 {
-  unsafe {
-    let mut fmt: &[u8] = (*l).opt_bytes(1, b"%c");
-    let t: TimeT = if (*l).is_none_or_nil(2) {
-      now_epoch_seconds()
-    } else {
-      (*l).check_number(2) as TimeT
-    };
-    // 元组第二项承载 `tm_zone`（非 Windows 字段）可能指向的堆缓冲，随 match 臂存活至渲染结束
-    let stm = if fmt.first() == Some(&b'!') {
-      // UTC?
-      fmt = &fmt[1..]; // skip '!'
-      os_gmtime_r(&t).map(|tm| (tm, None))
-    } else if t < 0 {
-      // localtime fails for dates before the epoch on some platforms, so disallow that
-      None
-    } else {
-      // 本地时区分解；区缩写堆缓冲随元组移交 match 臂
-      localtime_r(&t)
-    };
+/// `create_table`/`lua_l_buffinit`/`lua_l_pushresult` 可分配/GC/抛错，`arg_error` 分支发散故其后
+/// 不再经 `b` 的 `l` 句柄写入。cpp/VM/src/loslib.cpp:112 os_date。
+pub(crate) fn os_date(l: &mut LuaState) -> i32 {
+  // 锚定形：`opt_bytes` 返回切片的生命周期钉在 `&mut l` 上，而其后 `check_number`/`create_table`/
+  // `arg_error` 均需重新独占借用 `l`；故先快照 (ptr, len) 让本次借用止于此处，再重物化为不受
+  // 该借用约束的切片
+  let fmt = l.opt_bytes(1, b"%c");
+  let (fmt_ptr, fmt_len) = (fmt.as_ptr(), fmt.len());
+  // SAFETY: 源窗为上方门面自同一栈槽取回的 (ptr, len) 快照——Lua 串不可变不移动、索引 1 的栈槽
+  // 引用在本帧内钉住该窗，快照与重物化之间无任何写点（同 checklstring 切片契约）
+  let mut fmt = unsafe { from_raw_parts(fmt_ptr, fmt_len) };
 
-    match stm {
-      // invalid date?
-      None => (*l).push_nil(),
-      Some((stm, _zone)) if fmt == b"*t" => {
-        lua_createtable(l, 0, 9); // 9 = number of fields
-        setfield(l, b"sec", stm.tm_sec);
-        setfield(l, b"min", stm.tm_min);
-        setfield(l, b"hour", stm.tm_hour);
-        setfield(l, b"day", stm.tm_mday);
-        setfield(l, b"month", stm.tm_mon + 1);
-        setfield(l, b"year", stm.tm_year + 1900);
-        setfield(l, b"wday", stm.tm_wday + 1);
-        setfield(l, b"yday", stm.tm_yday + 1);
-        setboolfield(l, b"isdst", stm.tm_isdst);
-      }
-      Some((stm, _zone)) => {
-        let mut b = LuaLStrbuf::new();
-        lua_l_buffinit(&mut *l, &mut b);
+  let t: TimeT = if l.is_none_or_nil(2) {
+    now_epoch_seconds()
+  } else {
+    l.check_number(2) as TimeT
+  };
+  // 元组第二项承载 `tm_zone`（非 Windows 字段）可能指向的堆缓冲，随 match 臂存活至渲染结束
+  let stm = if fmt.first() == Some(&b'!') {
+    // UTC?
+    fmt = &fmt[1..]; // skip '!'
+    os_gmtime_r(&t).map(|tm| (tm, None))
+  } else if t < 0 {
+    // localtime fails for dates before the epoch on some platforms, so disallow that
+    None
+  } else {
+    // 本地时区分解；区缩写堆缓冲随元组移交 match 臂
+    localtime_r(&t)
+  };
 
-        // 零拷贝迭代剩余格式串；peek 前瞻实现 C++ 的 *(s + 1) 判定
-        let mut fmt = fmt.iter().copied().peekable();
-        while let Some(c) = fmt.next() {
-          match (c, fmt.peek().copied()) {
-            // 转换指示符：'%' 后跟合法字符（非末尾），集合即 LUA_STRFTIMEOPTIONS。
-            (b'%', Some(next)) => {
-              if !is_strftimeoption(next) {
-                (*l).arg_error(1, "invalid conversion specifier");
-              }
-              let rendered = strftime_directive(&stm, next);
-              lua_l_addlstring(&mut b, rendered.as_bytes());
-              fmt.next(); // 消费指示符字节
-            }
-            // 无转换指示符（非 '%' 或 '%' 位于末尾）：原样输出
-            _ => lua_l_addchar!(&mut b, c),
-          }
-        }
-        lua_l_pushresult(&mut b);
-      }
+  match stm {
+    // invalid date?
+    None => l.push_nil(),
+    Some((stm, _zone)) if fmt == b"*t" => {
+      l.create_table(0, 9); // 9 = number of fields
+      setfield(l, b"sec", stm.tm_sec);
+      setfield(l, b"min", stm.tm_min);
+      setfield(l, b"hour", stm.tm_hour);
+      setfield(l, b"day", stm.tm_mday);
+      setfield(l, b"month", stm.tm_mon + 1);
+      setfield(l, b"year", stm.tm_year + 1900);
+      setfield(l, b"wday", stm.tm_wday + 1);
+      setfield(l, b"yday", stm.tm_yday + 1);
+      setboolfield(l, b"isdst", stm.tm_isdst);
     }
-    1
+    Some((stm, _zone)) => {
+      let mut b = LuaLStrbuf::new();
+      lua_l_buffinit(l, &mut b);
+
+      // 零拷贝迭代剩余格式串；peek 前瞻实现 C++ 的 *(s + 1) 判定
+      let mut fmt = fmt.iter().copied().peekable();
+      while let Some(c) = fmt.next() {
+        match (c, fmt.peek().copied()) {
+          // 转换指示符：'%' 后跟合法字符（非末尾），集合即 LUA_STRFTIMEOPTIONS。
+          (b'%', Some(next)) => {
+            if !is_strftimeoption(next) {
+              l.arg_error(1, "invalid conversion specifier");
+            }
+            let rendered = strftime_directive(&stm, next);
+            // SAFETY: `b` 由上方 `lua_l_buffinit` 绑定本帧存活 `l`；游标 p/end 的界内维护与
+            // 缓冲扩容均由被调方自身完成，本窗只交出渲染出的定长字节
+            unsafe { lua_l_addlstring(&mut b, rendered.as_bytes()) };
+            fmt.next(); // 消费指示符字节
+          }
+          // 无转换指示符（非 '%' 或 '%' 位于末尾）：原样输出
+          // SAFETY: 同 addlstring 窗——宏内 `p < end` 判定失败即先经 `lua_l_prepbuffsize` 扩容，
+          // 写入位点恒在界内游标上
+          _ => unsafe { lua_l_addchar!(&mut b, c) },
+        }
+      }
+      // SAFETY: `b` 仍绑定本帧存活 `l` 且自此不再另有对 `l` 的借用窗（arg_error 分支已发散），
+      // 结果串压入 top 之上的空槽
+      unsafe { lua_l_pushresult(&mut b) };
+    }
   }
+
+  1
 }
 
-lua_lib_fn!(pub(crate) fn os_date, os_date_arm);
+lua_lib_fn!(pub(crate) fn os_date @ref, os_date_arm);
 
 // §8 留证：被测口 `os_gmtime_r` 是本文件私有函数（`os.date` 的 `!` 分解内部步骤，
 // 非导出面），测试还借用 `localtime_r.rs` 测试模块的 `pub(crate)` 采样集与

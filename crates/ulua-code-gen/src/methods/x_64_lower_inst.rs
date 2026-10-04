@@ -62,6 +62,8 @@ const K_TKEY_TAG_MASK: i32 = (1 << K_TKEY_TAG_BITS) - 1;
 /// `TKey.extra`（+8，与 `tt_next`(+12) 相邻）；`t_key` 模块私有，offset 数值冻结于
 /// `TKey` repr(C) 布局（value 8B + extra 4B + tt_next 4B）。
 const K_OFFSET_OF_TKEY_EXTRA: i32 = K_OFFSET_OF_TKEY_TAG_NEXT - 4;
+/// MurmurHash64B 收尾混合常量（rt `murmur_hash_64b` 同源；步序见 GetHashNodeAddrNum）。
+const MURMUR_MIX_CONST: i32 = 0x5BD1_E995u32 as i32;
 const INT_MAX: i32 = i32::MAX;
 // 结构体偏移由编译器按 Rust 布局计算, 对齐 cpp 的 offsetof(TString, len) / offsetof(Buffer, len)
 const K_TSTRING_LEN_OFFSET: i32 = offset_of!(tstring, len) as i32;
@@ -95,6 +97,7 @@ use crate::functions::{
   call_barrier_table_fast::call_barrier_table_fast,
   call_get_table::call_get_table,
   call_length_helper::call_length_helper,
+  call_set_metatable::call_set_metatable,
   call_set_table::call_set_table,
   call_step_gc::call_step_gc,
   check_object_barrier_conditions::check_object_barrier_conditions,
@@ -3765,6 +3768,19 @@ impl IrLoweringX64 {
       }
       IrCmd::GetTable => self.lower_get_set_table(inst, call_get_table),
       IrCmd::SetTable => self.lower_get_set_table(inst, call_set_table),
+      IrCmd::SetMetatableChecked => {
+        // JIT setmetatable 快速通道（本 fork 扩展）：直调 RT 赋值段；返回 0 跳 fallback
+        {
+          let (build, regs) = self.build_regs_mut();
+          call_set_metatable(regs, build, vm_reg_op(inst.op(1)), vm_reg_op(inst.op(2)));
+        }
+        // 结果 0 → op(3)（fallback 块，解释器路径保真错误）
+        self.build_mut().test(
+          OperandX64::reg(RegisterX64::EAX),
+          OperandX64::reg(RegisterX64::EAX),
+        );
+        self.jump_or_abort_on_undef_condition(ConditionX64::Equal, inst.op(3), index, next);
+      }
       IrCmd::GetCachedImport => {
         {
           self.regs.assert_all_free();
@@ -4348,6 +4364,296 @@ impl IrLoweringX64 {
           ),
           OperandX64::imm(LuaType::String as i32),
         );
+      }
+      IrCmd::GetHashNodeAddrNum => {
+        {
+          // SETTABLE 数字键哈希直插快路：对寄存器内 double 键内联 hashnum
+          // （低 32 位 h1、高 32 位截符号位 h2，MurmurHash64B 收尾 8 步混合），
+          // 再按 lsizenode 掩码取主位节点地址——与 rt `hashnum`/`mainposition`
+          // 逐位一致（桶号一致是后续 GETTABLE 探测命中的前提，红线）。
+          // 自定义移位量只能放进 RegisterX64::CL：先占 RCX 再分配哈希临时——
+          // 临时经分配器空闲池（K_GPR_ALLOC_ORDER）取得，不会再落到 RCX；
+          // 若先 alloc 后 take，寄存器紧张时临时会占住 RCX（K_INVALID 占用），
+          // 同臂 take(RCX) 即撞上 free=false + users=K_INVALID 的坏状态
+          //（LUAU_ASSERT user != K_INVALID_INST_IDX，take_reg GPR 臂）。
+          // cpp: `ScopedRegX64 shiftTmp{regs, regs.takeReg(rcx, kInvalidInstIdx)};`（IrLoweringX64.cpp:179）
+          let mut shift_tmp = self.scoped_reg();
+          shift_tmp.take(RegisterX64::RCX);
+
+          let bits = self.alloc_scoped_reg(SizeX64::Qword);
+          let h2 = self.alloc_scoped_reg(SizeX64::Qword);
+          let scratch = self.alloc_scoped_reg(SizeX64::Qword);
+
+          // bits = key TValue 的 payload（double 位型）；h1 即 bits 低 32 位
+          self.emit_mov(
+            OperandX64::reg(bits.reg),
+            tv_slot(SizeX64::Qword, R_BASE, vm_reg_op(inst.op(1)), 0),
+          );
+          self
+            .build_mut()
+            .mov(OperandX64::reg(h2.reg), OperandX64::reg(bits.reg));
+          self
+            .build_mut()
+            .shr(OperandX64::reg(h2.reg), OperandX64::imm(32));
+          self.build_mut().and_(
+            OperandX64::reg(dword_reg(h2.reg)),
+            OperandX64::imm(0x7FFF_FFFF),
+          );
+          let h1d = dword_reg(bits.reg);
+          let h2d = dword_reg(h2.reg);
+          let sd = dword_reg(scratch.reg);
+
+          // MurmurHash64B 收尾（常量与步序不可改动，见 murmur_hash_64b）
+          self
+            .build_mut()
+            .mov(OperandX64::reg(sd), OperandX64::reg(h2d));
+          self
+            .build_mut()
+            .shr(OperandX64::reg(sd), OperandX64::imm(18));
+          self
+            .build_mut()
+            .xor_(OperandX64::reg(h1d), OperandX64::reg(sd));
+          self
+            .build_mut()
+            .imul_imm(OperandX64::reg(h1d), OperandX64::reg(h1d), MURMUR_MIX_CONST);
+
+          self
+            .build_mut()
+            .mov(OperandX64::reg(sd), OperandX64::reg(h1d));
+          self
+            .build_mut()
+            .shr(OperandX64::reg(sd), OperandX64::imm(22));
+          self
+            .build_mut()
+            .xor_(OperandX64::reg(h2d), OperandX64::reg(sd));
+          self
+            .build_mut()
+            .imul_imm(OperandX64::reg(h2d), OperandX64::reg(h2d), MURMUR_MIX_CONST);
+
+          self
+            .build_mut()
+            .mov(OperandX64::reg(sd), OperandX64::reg(h2d));
+          self
+            .build_mut()
+            .shr(OperandX64::reg(sd), OperandX64::imm(17));
+          self
+            .build_mut()
+            .xor_(OperandX64::reg(h1d), OperandX64::reg(sd));
+          self
+            .build_mut()
+            .imul_imm(OperandX64::reg(h1d), OperandX64::reg(h1d), MURMUR_MIX_CONST);
+
+          self
+            .build_mut()
+            .mov(OperandX64::reg(sd), OperandX64::reg(h1d));
+          self
+            .build_mut()
+            .shr(OperandX64::reg(sd), OperandX64::imm(19));
+          self
+            .build_mut()
+            .xor_(OperandX64::reg(h2d), OperandX64::reg(sd));
+          self
+            .build_mut()
+            .imul_imm(OperandX64::reg(h2d), OperandX64::reg(h2d), MURMUR_MIX_CONST);
+
+          // index = h2 & ((1 << lsizenode) - 1)（CL 已在臂首前置占用）
+
+          let table = self.reg_op(inst.op(0));
+          self.build_mut().mov(
+            OperandX64::reg(dword_reg(shift_tmp.reg)),
+            OperandX64::imm(1_i32),
+          );
+          self.emit_mov(
+            OperandX64::reg(byte_reg(shift_tmp.reg)),
+            OperandX64::mem(
+              SizeX64::Byte,
+              RegisterX64::NOREG,
+              1,
+              table,
+              (offset_of!(LuaTable, lsizenode) as i32),
+            ),
+          );
+          self.build_mut().shl(
+            OperandX64::reg(dword_reg(shift_tmp.reg)),
+            OperandX64::reg(byte_reg(shift_tmp.reg)),
+          );
+          self
+            .build_mut()
+            .dec(OperandX64::reg(dword_reg(shift_tmp.reg)));
+          self.build_mut().and_(
+            OperandX64::reg(h2d),
+            OperandX64::reg(dword_reg(shift_tmp.reg)),
+          );
+
+          inst.reg_x64 = self.regs.alloc_reg(SizeX64::Qword, index);
+          let hoist_tbl = self.reg_op(inst.op(0));
+          self.emit_mov(
+            OperandX64::reg(inst.reg_x64),
+            OperandX64::mem(
+              SizeX64::Qword,
+              RegisterX64::NOREG,
+              1,
+              hoist_tbl,
+              (offset_of!(LuaTable, node) as i32),
+            ),
+          );
+          // node += index << K_LUA_NODE_SIZE_LOG2（h2 已掩码，Qword 视图高位为零）
+          self.build_mut().shl(
+            OperandX64::reg(h2.reg),
+            OperandX64::imm(K_LUA_NODE_SIZE_LOG2),
+          );
+          self
+            .build_mut()
+            .add(OperandX64::reg(inst.reg_x64), OperandX64::reg(h2.reg));
+        }
+      }
+      IrCmd::JumpIfNodeKeyNotNum => {
+        {
+          // 主位 occupied 时的等键判定（SETTABLE 哈希直插快路覆写分支前提）：
+          // node 键 tag==NUMBER 且 payload 与寄存器内 double 相等则落空直通
+          // （覆写值），否则跳 op(2)（helper 块）。谓词对齐 rt `walk_nodes`
+          // 探测（is_number 严格 NUMBER + luai_numeq 浮点等值，±0.0 同键）。
+          let tmp = self.alloc_scoped_reg(SizeX64::Qword);
+          let mut fresh = Label::default();
+
+          // node.key 的 tag_next 字：低 4 位 tt，与 next 同字——先取位域再比较
+          let hoist_node = self.reg_op(inst.op(0));
+          self.build_mut().mov(
+            OperandX64::reg(dword_reg(tmp.reg)),
+            OperandX64::mem(
+              SizeX64::Dword,
+              RegisterX64::NOREG,
+              1,
+              hoist_node,
+              (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_TAG_NEXT,
+            ),
+          );
+          self.build_mut().and_(
+            OperandX64::reg(dword_reg(tmp.reg)),
+            OperandX64::imm(K_TKEY_TAG_MASK),
+          );
+          self.build_mut().cmp(
+            OperandX64::reg(dword_reg(tmp.reg)),
+            OperandX64::imm(LuaType::Number as i32),
+          );
+          self.jump_or_abort_on_undef_no_finalize(
+            ConditionX64::NotEqual,
+            inst.op(2),
+            index,
+            next,
+            &mut fresh,
+          );
+
+          // 键值浮点等值比较（luai_numeq 口径；非等或 unordered 均跳 helper）
+          let node_key = self.alloc_scoped_reg(SizeX64::Xmmword);
+          let key_val = self.alloc_scoped_reg(SizeX64::Xmmword);
+          self.emit_vmovsd(
+            OperandX64::reg(node_key.reg),
+            OperandX64::mem(
+              SizeX64::Qword,
+              RegisterX64::NOREG,
+              1,
+              hoist_node,
+              offset_of!(LuaNode, key) as i32,
+            ),
+          );
+          self.emit_vmovsd(
+            OperandX64::reg(key_val.reg),
+            tv_slot(SizeX64::Qword, R_BASE, vm_reg_op(inst.op(1)), 0),
+          );
+          self
+            .build_mut()
+            .vucomisd(OperandX64::reg(node_key.reg), OperandX64::reg(key_val.reg));
+          self.jump_or_abort_on_undef_no_finalize(
+            ConditionX64::NotZero,
+            inst.op(2),
+            index,
+            next,
+            &mut fresh,
+          );
+          self.jump_or_abort_on_undef_no_finalize(
+            ConditionX64::Parity,
+            inst.op(2),
+            index,
+            next,
+            &mut fresh,
+          );
+          self.finalize_target_label(inst.op(2), index, &mut fresh);
+        }
+      }
+      IrCmd::StoreNodeKeyNum => {
+        {
+          // SETTABLE 数字键 `setnodekey`（哈希直插快路）：tmcache 作废 +
+          // key.value 拷自寄存器内 double、extra 清零、tt=LUA_TNUMBER（next
+          // 高 28 位保留的位域写，与 StoreNodeKey 同一红线论证）。
+          let hoist_tm_tbl = self.reg_op(inst.op(2));
+          self.build_mut().mov(
+            OperandX64::mem(
+              SizeX64::Byte,
+              RegisterX64::NOREG,
+              1,
+              hoist_tm_tbl,
+              (offset_of!(LuaTable, tmcache) as i32),
+            ),
+            OperandX64::imm(0_i32),
+          );
+
+          let tmp = self.alloc_scoped_reg(SizeX64::Qword);
+
+          // node.key.value = 寄存器内 double 位型
+          let hoist_key_value = self.reg_op(inst.op(0));
+          self.emit_mov(
+            OperandX64::reg(tmp.reg),
+            tv_slot(SizeX64::Qword, R_BASE, vm_reg_op(inst.op(1)), 0),
+          );
+          self.build_mut().mov(
+            OperandX64::mem(
+              SizeX64::Qword,
+              RegisterX64::NOREG,
+              1,
+              hoist_key_value,
+              (offset_of!(LuaNode, key) as i32) + (offset_of!(TValue, value) as i32),
+            ),
+            OperandX64::reg(tmp.reg),
+          );
+
+          // key.extra(+8) 清零（数字键 extra 无语义）
+          let hoist_key_extra = self.reg_op(inst.op(0));
+          self.build_mut().mov(
+            OperandX64::mem(
+              SizeX64::Dword,
+              RegisterX64::NOREG,
+              1,
+              hoist_key_extra,
+              (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_EXTRA,
+            ),
+            OperandX64::imm(0_i32),
+          );
+
+          // tt 位域写：仅置低 4 位，next 高 28 位保留（removeentry 语义，见 StoreNodeKey）
+          let hoist_key_tt = self.reg_op(inst.op(0));
+          self.build_mut().and_(
+            OperandX64::mem(
+              SizeX64::Dword,
+              RegisterX64::NOREG,
+              1,
+              hoist_key_tt,
+              (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_TAG_NEXT,
+            ),
+            OperandX64::imm(0xFFFFFFF0u32 as i32),
+          );
+          let hoist_key_tt_or = self.reg_op(inst.op(0));
+          self.build_mut().or_(
+            OperandX64::mem(
+              SizeX64::Dword,
+              RegisterX64::NOREG,
+              1,
+              hoist_key_tt_or,
+              (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_TAG_NEXT,
+            ),
+            OperandX64::imm(LuaType::Number as i32),
+          );
+        }
       }
       IrCmd::CheckBufferLen => {
         {

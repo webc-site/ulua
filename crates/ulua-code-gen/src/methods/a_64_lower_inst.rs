@@ -70,6 +70,8 @@ const K_TKEY_TAG_BITS: i32 = 4;
 const K_OFFSET_OF_TKEY_EXTRA: i32 = K_OFFSET_OF_TKEY_TAG_NEXT - 4;
 const FEATURE_JSCVT: u32 = FeaturesA64::FeatureJscvt as u32;
 const FEATURE_ADV_SIMD: u32 = FeaturesA64::FeatureAdvSimd as u32;
+/// MurmurHash64B 收尾混合常量（rt `murmur_hash_64b` 同源；步序见 GetHashNodeAddrNum）。
+const MURMUR_MIX_CONST: i32 = 0x5BD1_E995u32 as i32;
 const LUA_TNIL: u8 = LuaType::Nil as u8;
 const LUA_TBOOLEAN: u8 = LuaType::Boolean as u8;
 const LUA_TNUMBER: u8 = LuaType::Number as u8;
@@ -2691,6 +2693,26 @@ impl IrLoweringA64 {
       IrCmd::SetTable => {
         self.lower_get_set_table(index, inst, offset_of!(NativeContext, lua_v_settable));
       }
+      IrCmd::SetMetatableChecked => {
+        // JIT setmetatable 快速通道（本 fork 扩展）：直调 RT 赋值段；W0=0 → fallback 块
+        self.spill_regs(index, &[]);
+        self.build_mut().mov(X0, R_STATE);
+        self.emit_vm_reg_addr(X1, inst.op(1));
+        self.emit_vm_reg_addr(X2, inst.op(2));
+        self.emit_ldr(
+          X3,
+          native_ctx(offset_of!(NativeContext, setmetatable_checked)),
+        );
+        self.build_mut().blr(X3);
+
+        emit_update_base(self.build_mut());
+
+        let mut fresh = Label::default();
+        let result_w = cast_reg(KindA64::W, X0);
+        let target = self.get_target_label(inst.op(3), index, &mut fresh);
+        self.with_target_label(target, |s, l| s.build_mut().cbz(result_w, l));
+        self.finalize_target_label(inst.op(3), index, &mut fresh);
+      }
       IrCmd::GetCachedImport => {
         {
           self.spill_regs(index, &[]);
@@ -3212,6 +3234,171 @@ impl IrLoweringA64 {
           self
             .build_mut()
             .orr_rr_u32(tempw, tempw, LUA_TSTRING as u32);
+          let hoist_tt = self.reg_op(inst.op(0));
+          self.emit_str(
+            tempw,
+            mem(
+              hoist_tt,
+              (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_TAG_NEXT,
+            ),
+          );
+        }
+      }
+      IrCmd::GetHashNodeAddrNum => {
+        {
+          // SETTABLE 数字键哈希直插快路：对寄存器内 double 键内联 hashnum
+          // （低 32 位 h1、高 32 位截符号位 h2，MurmurHash64B 收尾 8 步混合），
+          // 再按 lsizenode 掩码取主位节点地址——与 rt `hashnum`/`mainposition`
+          // 逐位一致（桶号一致是后续 GETTABLE 探测命中的前提，红线）。
+          let bits = self.regs.alloc_temp(KindA64::X);
+          let h2x = self.regs.alloc_temp(KindA64::X);
+          let h2 = cast_reg(KindA64::W, h2x);
+          let m = self.regs.alloc_temp(KindA64::W);
+
+          // bits = key TValue 的 payload（double 位型）
+          let key_addr = self.temp_addr(
+            inst.op(1),
+            (offset_of!(TValue, value) as i32),
+            RegisterA64::NOREG,
+          );
+          self.emit_ldr(bits, key_addr);
+
+          // h2 = (bits >> 32) & 0x7fffffff；h1 直接以 bits 低 32 位视图参与
+          self.build_mut().lsr_rr_u8(h2x, bits, 32);
+          self.build_mut().and_rr_u32(h2, h2, 0x7FFF_FFFF);
+          let h1 = cast_reg(KindA64::W, bits);
+
+          // MurmurHash64B 收尾（常量与步序不可改动，见 murmur_hash_64b）。
+          // eor_rrr_i32 的 shift 符号约定：正=LSL、负=LSR（place_sr_3 bit22），
+          // 此处全部为右移语义。
+          self.build_mut().mov_imm(m, MURMUR_MIX_CONST);
+          self.build_mut().eor_rrr_i32(h1, h1, h2, -18);
+          self.build_mut().mul(h1, h1, m);
+          self.build_mut().eor_rrr_i32(h2, h2, h1, -22);
+          self.build_mut().mul(h2, h2, m);
+          self.build_mut().eor_rrr_i32(h1, h1, h2, -17);
+          self.build_mut().mul(h1, h1, m);
+          self.build_mut().eor_rrr_i32(h2, h2, h1, -19);
+          self.build_mut().mul(h2, h2, m);
+
+          // index = h2 & ((1 << lsizenode) - 1)（GetHashNodeAddr 尾部同构）
+          let mask = self.regs.alloc_temp(KindA64::W);
+          let lsize = self.regs.alloc_temp(KindA64::W);
+          let table = self.reg_op(inst.op(0));
+          self.emit_mov(mask, -1);
+          self.emit_ldrb(lsize, mem(table, (offset_of!(LuaTable, lsizenode) as i32)));
+          self.build_mut().lsl(mask, mask, lsize);
+          self.build_mut().bic(h2, h2, mask, 0);
+
+          inst.reg_a64 = self.regs.alloc_reuse(KindA64::X, index, &[(inst.op(0))]);
+          let hoist_tbl = self.reg_op(inst.op(0));
+          self.emit_ldr(
+            inst.reg_a64,
+            mem(hoist_tbl, (offset_of!(LuaTable, node) as i32)),
+          );
+          let h2x_z = cast_reg(KindA64::X, h2);
+          self
+            .build_mut()
+            .add_rrr_i32(inst.reg_a64, inst.reg_a64, h2x_z, K_LUA_NODE_SIZE_LOG2);
+        }
+      }
+      IrCmd::JumpIfNodeKeyNotNum => {
+        {
+          // 主位 occupied 时的等键判定（SETTABLE 哈希直插快路覆写分支前提）：
+          // node 键 tag==NUMBER 且 payload 与寄存器内 double 相等则落空直通
+          // （覆写值），否则跳 op(2)（helper 块）。谓词对齐 rt `walk_nodes`
+          // 探测（is_number 严格 NUMBER + luai_numeq 浮点等值，±0.0 同键）。
+          let mut fresh = Label::default();
+          let temp1 = self.regs.alloc_temp(KindA64::X);
+          let temp2 = self.regs.alloc_temp(KindA64::X);
+
+          // node.key.value 与 tag（tag_next 字低 4 位）
+          let hoist_node = self.reg_op(inst.op(0));
+          self.emit_ldp(
+            temp1,
+            temp2,
+            mem(hoist_node, (offset_of!(LuaNode, key) as i32)),
+          );
+          self.build_mut().ubfx(
+            temp2,
+            temp2,
+            ((K_OFFSET_OF_TKEY_TAG_NEXT - 8) * 8) as u8,
+            K_TKEY_TAG_BITS as u8,
+          );
+          self.build_mut().cmp(temp2, LUA_TNUMBER as u16);
+          let target = self.get_target_label(inst.op(2), index, &mut fresh);
+          self.with_target_label(target, |s, l| {
+            s.build_mut().b_cond(ConditionA64::NotEqual, l)
+          });
+
+          // 键值浮点等值比较（luai_numeq 口径，fmov X→D 后 fcmp）
+          let key_addr = self.temp_addr(
+            inst.op(1),
+            (offset_of!(TValue, value) as i32),
+            RegisterA64::NOREG,
+          );
+          self.emit_ldr(temp2, key_addr);
+
+          let d_node = self.regs.alloc_temp(KindA64::D);
+          let d_key = self.regs.alloc_temp(KindA64::D);
+          self.build_mut().fmov_rr(d_node, temp1);
+          self.build_mut().fmov_rr(d_key, temp2);
+          self.build_mut().fcmp(d_node, d_key);
+          self.with_target_label(target, |s, l| {
+            s.build_mut().b_cond(ConditionA64::NotEqual, l)
+          });
+          self.finalize_target_label(inst.op(2), index, &mut fresh);
+        }
+      }
+      IrCmd::StoreNodeKeyNum => {
+        {
+          // SETTABLE 数字键 `setnodekey`（哈希直插快路）：tmcache 作废 +
+          // key.value 拷自寄存器内 double、extra 清零、tt=LUA_TNUMBER（next
+          // 高 28 位保留的位域写，与 StoreNodeKey 同一红线论证）。
+          let hoist_tbl = self.reg_op(inst.op(2));
+          self
+            .build_mut()
+            .strb(WZR, mem(hoist_tbl, (offset_of!(LuaTable, tmcache) as i32)));
+
+          let temp = self.regs.alloc_temp(KindA64::X);
+          let key_addr = self.temp_addr(
+            inst.op(1),
+            (offset_of!(TValue, value) as i32),
+            RegisterA64::NOREG,
+          );
+          self.emit_ldr(temp, key_addr);
+
+          let hoist_key_value = self.reg_op(inst.op(0));
+          self.emit_str(
+            temp,
+            mem(
+              hoist_key_value,
+              (offset_of!(LuaNode, key) as i32) + (offset_of!(TValue, value) as i32),
+            ),
+          );
+
+          let tempw = cast_reg(KindA64::W, temp);
+          let hoist_extra = self.reg_op(inst.op(0));
+          self.emit_str(
+            WZR,
+            mem(
+              hoist_extra,
+              (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_EXTRA,
+            ),
+          );
+
+          let hoist_tt_load = self.reg_op(inst.op(0));
+          self.emit_ldr(
+            tempw,
+            mem(
+              hoist_tt_load,
+              (offset_of!(LuaNode, key) as i32) + K_OFFSET_OF_TKEY_TAG_NEXT,
+            ),
+          );
+          self.build_mut().and_rr_u32(tempw, tempw, 0xFFFFFFF0);
+          self
+            .build_mut()
+            .orr_rr_u32(tempw, tempw, LUA_TNUMBER as u32);
           let hoist_tt = self.reg_op(inst.op(0));
           self.emit_str(
             tempw,

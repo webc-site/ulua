@@ -1,8 +1,11 @@
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  functions::get_mutable_type_function_runtime::{
-    get_mutable_type_function_type_id, get_mutable_type_function_type_pack_id,
+  functions::{
+    get_mutable_type_function_runtime::{
+      get_mutable_type_function_type_id, get_mutable_type_function_type_pack_id,
+    },
+    get_type_function_runtime::{get_type_function_type_id, get_type_function_type_pack_id},
   },
   records::{
     type_function_any_type::TypeFunctionAnyType, type_function_cloner::TypeFunctionCloner,
@@ -31,44 +34,33 @@ use crate::{
 };
 
 /// 源侧（只读）变体负载：cpp `getMutable<T>(ty)` 的 const 投影，变体不符得
-/// `None`（与原先「裸指针判空」同义）。arena 解引用与 const_cast 全部收口在
-/// `get_mutable_type_function_type_id` 内，此处只把裸指针折成引用。
+/// `None`；存活/独占前提见 [`get_type_function_type_id`]（arena 句柄构造不变量）。
 #[inline]
 fn source_of<T: TypeFunctionTypeVariantMember>(ty: TypeFunctionTypeId) -> Option<&'static T> {
-  // SAFETY: `ty` 出自 cloner 队列，即 `TypeFunctionRuntime::type_arena`
-  // （chunked bump arena，元素一经分配地址不再搬移）内存活节点的 const 句柄；
-  // helper 只做一次 tag 探测，命中时返回指向该槽位内变体字段的指针，与节点同
-  // 寿命。克隆游程由 `&mut self` 单线程串行驱动，本步骤内源节点不再有其他写
-  // 句柄，故由此派生的共享引用可安全延长至游程结束。
-  unsafe { get_mutable_type_function_type_id::<T>(ty).as_ref() }
+  get_type_function_type_id::<T>(ty)
 }
 
-/// 目标侧（可写）变体负载：`tfti` 恒为 `shallow_clone_*` 新建的克隆节点。
+/// 目标侧（可写）变体负载：`tfti` 恒为 `shallow_clone_*` 新建的克隆节点，
+/// 本步骤内独占可写（`run()` 的 `&mut self` 串行推进且 seen 表去重）。
 #[inline]
 fn target_of<T: TypeFunctionTypeVariantMember>(tfti: TypeFunctionTypeId) -> Option<&'static mut T> {
-  // SAFETY: 同 `source_of` 的 arena 前提；`tfti` 是本轮新建的目标节点（bump
-  // 分配，地址必异于源），`run()` 的 `&mut self` 独占推进且 seen 表去重，故本
-  // 步骤内该变体字段只有这一个可写句柄。
-  unsafe { get_mutable_type_function_type_id::<T>(tfti).as_mut() }
+  get_mutable_type_function_type_id::<T>(tfti)
 }
 
-/// 类型包侧的 `source_of`，arena 为 `type_pack_arena`，契约同上。
+/// 类型包侧的 [`source_of`]，arena 为 `type_pack_arena`，前提同上。
 #[inline]
 fn pack_source_of<T: TypeFunctionTypePackVariantMember>(
   tp: TypeFunctionTypePackId,
 ) -> Option<&'static T> {
-  // SAFETY: `tp` 为 runtime `type_pack_arena` 存活节点的 const 句柄，地址稳定。
-  unsafe { get_mutable_type_function_type_pack_id::<T>(tp).as_ref() }
+  get_type_function_type_pack_id::<T>(tp)
 }
 
-/// 类型包侧的 `target_of`。
+/// 类型包侧的 [`target_of`]。
 #[inline]
 fn pack_target_of<T: TypeFunctionTypePackVariantMember>(
   tftp: TypeFunctionTypePackId,
 ) -> Option<&'static mut T> {
-  // SAFETY: `tftp` 为 `shallow_clone_type_function_type_pack_id` 新建的目标
-  // 节点，本队列步骤内独占可写。
-  unsafe { get_mutable_type_function_type_pack_id::<T>(tftp).as_mut() }
+  get_mutable_type_function_type_pack_id::<T>(tftp)
 }
 
 impl TypeFunctionCloner {
