@@ -126,20 +126,19 @@ unsafe fn check_run(l: *mut LuaState, ml: &mut LuaState, run_status: i32) {
 /// 对应 cpp `load` 回调体：宿主在 require 同步执行窗口内调用（由
 /// `RequireHost::load` 的 `ReplRequirer` 实现转交）。
 ///
-// DELIBERATE DEVIATION（review.md §9.3）：require 宿主的模块装载驱动全程在
-// `*mut LuaState` 句柄上开线程/xmove/resume（ulua-vm c-API）；边界的 `unsafe`
-// 已收敛为上列带 `# Safety` 契约的最小私有封装，`load` 自身为安全 fn，字节串
-// 入参在本边界一次性转 owned，后续只见 Rust 类型。
+// review.md §2/§3 收形：`l` 由裸 `*mut LuaState` 收编为借用 `&mut LuaState`（真实
+// 物化点下移到 trait 实现上游的 `lua_requireinternal` C 边界）。模块装载驱动仍全程
+// 在 VM 句柄上开线程/xmove/resume（ulua-vm c-API）；边界的 `unsafe` 收敛为带 `# Safety`
+// 契约的最小私有封装，`load` 自身为安全 fn，字节串入参在本边界一次性转 owned，后续
+// 只见 Rust 类型（review.md §2/§3/§10）。新线程句柄 `ml` 由 `spawn_module_thread` 交出
+// 裸指针，仍经 `state` 门面物化一次。
 pub(crate) fn load(
   req: &ReplRequirer,
-  l: *mut LuaState,
+  l: &mut LuaState,
   _path: &[u8],
   chunkname: &[u8],
   loadname: &[u8],
 ) -> i32 {
-  // Safety: `state` 门面契约——`l` 为 ulua-require 在 require 同步窗口内交出的
-  // 活跃句柄，单线程驱动、借用窗口内无并存可变别名。
-  let l = state(l);
   // module needs to run in a new thread, isolated from the rest
   // note: we create ML on main thread so that it doesn't inherit environment of l
   // Safety: `spawn_module_thread` 前置即本入口的 l 活跃契约。
@@ -192,9 +191,9 @@ pub(crate) fn load(
   // xmove 之后 l 栈顶是 [thread, result]，`remove(l, -2)` 弹走的正是该线程槽，
   // 只留 result。
   // Safety: ml 与 l 同属一个 VM 且都存活（xmove 前提成立）；-1 值移出后线程槽
-  // 已无引用需求（值已移出），remove 只搬运栈槽、不读已失效内存。r16-v3：callee
-  // 已前移引用形，本 fn（unsafe fn 体）内即时建借用、无需再包块。
-  lua_xmove(&mut *ml, &mut *l, 1);
+  // 已无引用需求（值已移出），remove 只搬运栈槽、不读已失效内存。callee 已前移
+  // 引用形，直接以借用传参（免 `&mut *` 重折叠）。
+  lua_xmove(ml, l, 1);
   // remove ML thread from l stack
   l.remove(-2);
 

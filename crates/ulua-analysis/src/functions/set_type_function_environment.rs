@@ -36,12 +36,16 @@ unsafe extern "C-unwind" fn print_thunk(l: *mut lua_state::LuaState) -> i32 {
   unsafe { print(&mut *l) }
 }
 
-/// # Safety
-/// `l`（`&mut LuaState` 接收者）须是即将承载类型函数库、且尚未重复初始化的主线程状态；本函数
-/// 经 `luaL_*`/`lua_push*`（C-ABI）在其上创建并注册 `TypeFunctionRuntime` userdatum 与全部原生
-/// 函数闭包，要求该状态在 VM 生命周期内单线程独占、不被并发访问。
 /// 对应 C++ `void setTypeFunctionEnvironment(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:2094`）。
-pub(crate) unsafe fn set_type_function_environment(l: &mut LuaState) {
+///
+/// 本函数是 safe fn：形参为 `&mut LuaState`，存活/独占由引用类型承载；体内 `unsafe`
+/// 块只因 `luaopen_*` 是 VM 侧 C-ABI 门面（收 `*mut`，经 `l.as_mut_ptr()` 就地派生），
+/// 调用方无需承担任何内存安全前提。
+///
+/// 调用序契约（正确性，非内存安全）：`l` 须是即将承载类型函数库、且尚未重复初始化的
+/// 主线程状态；本函数在其上创建并注册 `TypeFunctionRuntime` userdatum 与全部原生函数
+/// 闭包，重复调用会覆盖注册（非 UB）。
+pub(crate) fn set_type_function_environment(l: &mut LuaState) {
   unsafe {
     // Register math library
     luaopen_math(l);
@@ -64,7 +68,7 @@ pub(crate) unsafe fn set_type_function_environment(l: &mut LuaState) {
     l.pop(1);
 
     // Register Buffer library
-    luaopen_buffer(l.as_mut_ptr());
+    luaopen_buffer(l);
     l.pop(1);
 
     // Register base library

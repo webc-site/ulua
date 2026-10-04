@@ -10,25 +10,19 @@ use ulua_vm::{
   records::lua_state::LuaState,
 };
 
-use crate::functions::{complete_partial_matches::complete_partial_matches, state_ref::state};
+use crate::functions::complete_partial_matches::complete_partial_matches;
 
-// DELIBERATE DEVIATION（review.md §9.3）：沿 `.`/`:` 逐级下钻全局表补全，全程在
-// `*mut LuaState` 栈上 push/rawget/replace（ulua-vm c-API）；按 §2 收口为
-// 「安全入口 + 入口单点物化 + 逐块 `// Safety:` 论证」形态。下钻字符串入参为借用
-// `&str`，无 C 串透传。
+// review.md §2/§3 收形：`l` 由裸 `*mut LuaState` 收编为借用 `&mut LuaState`（真实
+// 物化点上移到 get_completions 入口一次）。沿 `.`/`:` 逐级下钻全局表补全全程走
+// `lua_checkstack`/push/rawget/replace 等 ulua-vm 引用形安全面，本函数体内无 `unsafe`。
 //
-// 前置条件（由调用方 get_completions 链成立）：`l` 必须是有效、活跃的
-// `LuaState` 指针。
+// 调用序契约（由调用方 get_completions 成立）：`l` 为活跃状态机。
 pub(crate) fn complete_indexer(
-  l: *mut LuaState,
+  l: &mut LuaState,
   edit_buffer: &str,
   add_completion_callback: &mut impl FnMut(&str, &str),
 ) {
-  // Safety: l 为 REPL 补全链传入的存活状态（前置条件见上），经 `state` 门面物化后
-  // 全走安全方法；unsafe 导出在各块内论证。
-  let l = state(l);
-  // r16-v3：`lua_checkstack` 已前移 `&mut LuaState` 引用形，`l` 经 `state` 门面物化后
-  // 直传借用，本点无 unsafe 残留；先预留 LUA_MINSTACK 槽位再压入 LUA_GLOBALSINDEX
+  // `lua_checkstack` 为引用形安全面：先预留 LUA_MINSTACK 槽位再压入 LUA_GLOBALSINDEX
   // 全局表起始搜索。
   lua_checkstack(l, LUA_MINSTACK);
   l.push_value(LUA_GLOBALSINDEX);
@@ -56,15 +50,14 @@ pub(crate) fn complete_indexer(
     // 安全方法压键：`push_bytes` 以字节切片全长为键（无 NUL 截断/补齐），
     // prefix 借自本帧 &str。
     l.push_bytes(prefix.as_bytes());
-    // Safety: `safe_get_table` 为 unsafe fn，前提（-2 指向栈上表、键在栈顶）恰由
+    // safe_get_table 收形为借用后为安全 fn：前提（-2 指向栈上表、键在栈顶）恰由
     // 本轮 push 建立；其/后续 lua_remove 保持每轮 push 后移除中间键、留下查询结果。
-    unsafe { safe_get_table(l, -2) };
+    safe_get_table(l, -2);
     l.remove(-2);
 
     // -1 为上一行 get_table 的结果槽；is_table/try_replace_top_with_index 只读栈顶
     // 并可在命中时以 __index/_index 表替换之（单槽改写，拓扑仍为 1 值）。
-    // Safety: `try_replace_top_with_index` 为 unsafe fn，前提（栈顶为表）恰由上句成立。
-    let descended = l.is_table(-1) || unsafe { try_replace_top_with_index(l) };
+    let descended = l.is_table(-1) || try_replace_top_with_index(l);
     if descended {
       // find(['.', ':']) 返回的 sep 必落在字符边界上
       complete_only_functions = lookup.as_bytes()[sep] == b':';

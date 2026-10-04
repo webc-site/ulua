@@ -129,13 +129,9 @@ impl TypeFunctionRuntime {
     lua_setthreaddata(vm_l, from_mut(self).cast());
 
     // setTypeFunctionEnvironment(l); registerTypeUserData(l); registerTypesLibrary(l);
-    // SAFETY: VM 边界——`vm_l` 是本帧刚建 state；三入口各自的 Safety 契约见其函数
-    // 文档（如 register_types_library.rs 的调用点论证），此处逐一满足。
-    unsafe {
-      set_type_function_environment(&mut *vm_l);
-      register_type_user_data(&mut *vm_l);
-      register_types_library(&mut *vm_l);
-    }
+    set_type_function_environment(&mut *vm_l);
+    register_type_user_data(&mut *vm_l);
+    register_types_library(&mut *vm_l);
 
     // luaL_sandbox(l); luaL_sandboxthread(l);
     // SAFETY: VM 边界——同一存活 state 的只借不还式栈操作，紧接 setthreaddata

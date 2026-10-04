@@ -20,8 +20,10 @@ use crate::{
 // Safety: 由 VM 在 safepoint 上调用（与 cpp 直接把 profilerTrigger 装入
 // interrupt 槽一致），`l` 为触发中断的存活状态。
 unsafe extern "C-unwind" fn profiler_interrupt(l: *mut LuaState, gc: c_int) {
-  // 前置条件（l 存活、VM 线程）即 safepoint 回调约定，透传给 profiler_trigger。
-  profiler_trigger(l, gc);
+  // 前置条件（l 存活、VM 线程）即 safepoint 回调约定；C 边界一次物化为借用后透传给
+  // profiler_trigger（其体内仅走引用形安全面/带契约块）。
+  // Safety: `l` 由 VM 在 safepoint 上交出，指向触发中断的存活状态（本 fn 契约）。
+  profiler_trigger(unsafe { &mut *l }, gc);
 }
 
 /// 采样线程本体。控制量经 [`profiler_start`](super::profiler_start) 的

@@ -3,7 +3,9 @@ use ulua_vm::{
   records::lua_state_guard::LuaStateGuard,
 };
 
-use crate::functions::{run_repl_impl::run_repl_impl, setup_state::setup_state, sigint_setup};
+use crate::functions::{
+  run_repl_impl::run_repl_impl, setup_state::setup_state, sigint_setup, state_ref::state,
+};
 
 /// 交互式 REPL 进程入口：新建状态、初始化、挂载 Ctrl-C、沙箱化线程并运行交互循环。
 ///
@@ -36,8 +38,9 @@ pub(crate) fn run_repl() {
   // /// # Safety 前提）；循环结束后由下方 withdraw 先摘状态再 close。
   unsafe { sigint_setup::install(l) };
 
-  // Safety: l 为本帧存活的刚建状态。
-  unsafe { lua_l_sandboxthread(&mut *l) };
+  // 冻结线程全局表：`lua_l_sandboxthread` 为 ulua-vm 安全引用形，经 `state` 门面一次
+  // 物化后直调，本点不再裸解引用 `l`（review.md §2 收口）。
+  lua_l_sandboxthread(state(l));
   // run_repl_impl 现为 crate 内安全编排 fn；l 在整个交互式循环期间有效且单线程驱动
   // （其文档契约）由本入口守卫保证。
   run_repl_impl(l);

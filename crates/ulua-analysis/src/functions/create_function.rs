@@ -32,92 +32,92 @@ use crate::{
   },
 };
 pub(crate) fn create_function(l: &mut LuaState) -> i32 {
-  // Safety: 本函数是注册进 Lua 的 C 函数，VM 依调用约定传入存活非空的 `*mut
-  // LuaState`，故 `l as *mut lua_state::LuaState` 为同一对象的合法重解释；块内所有
-  // lua_* C-API 调用仅在该 state 上读写其自身的栈槽（下标 1..=3 与 push 后负索引
-  // -1/-2 均在已校验的 argument_count 范围内），不构造悬垂/别名引用；runtime 句柄是注册期写入
-  // 主线程 thread data 的非空 TypeFunctionRuntime（未挂载属契约违例，expect 收敛为 panic）。
-  unsafe {
-    let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
-    lua_check_args!(l, > 3, "types.newfunction: expected 0-3 arguments, but got {}");
+  let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
+  lua_check_args!(l, > 3, "types.newfunction: expected 0-3 arguments, but got {}");
 
-    let arg_types: TypeFunctionTypePackId;
+  let arg_types: TypeFunctionTypePackId;
 
-    if l.is_table(1) {
-      l.get_field_bytes(1, FIELD_HEAD);
-      l.get_field_bytes(1, FIELD_TAIL);
+  if l.is_table(1) {
+    l.get_field_bytes(1, FIELD_HEAD);
+    l.get_field_bytes(1, FIELD_TAIL);
 
-      arg_types = get_type_pack_runtime(&mut *l, -2, -1);
+    arg_types = get_type_pack_runtime(l, -2, -1);
 
-      l.pop(2);
-    } else if !l.is_none_or_nil(1) {
-      lua_l_typeerror_l(l.as_mut_ptr(), 1, "table");
-    } else {
-      arg_types = allocate_type_function_type_pack(
-        runtime,
-        TypeFunctionTypePackVariant::V0(TypeFunctionTypePack {
-          head: Vec::new(),
-          tail: None,
-        }),
-      );
-    }
-
-    let ret_types: TypeFunctionTypePackId;
-
-    if l.is_table(2) {
-      l.get_field_bytes(2, FIELD_HEAD);
-      l.get_field_bytes(2, FIELD_TAIL);
-
-      ret_types = get_type_pack_runtime(&mut *l, -2, -1);
-
-      l.pop(2);
-    } else if !l.is_none_or_nil(2) {
-      lua_l_typeerror_l(l.as_mut_ptr(), 2, "table");
-    } else {
-      ret_types = allocate_type_function_type_pack(
-        runtime,
-        TypeFunctionTypePackVariant::V0(TypeFunctionTypePack {
-          head: Vec::new(),
-          tail: None,
-        }),
-      );
-    }
-
-    let (generic_types, generic_packs) = get_generics(&mut *l, 3, "types.newfunction");
-
-    alloc_type_user_data(
-      &mut *l,
-      TypeFunctionTypeVariant::Function(TypeFunctionFunctionType {
-        generics: generic_types,
-        generic_packs,
-        arg_types,
-        ret_types,
-        arg_names: Vec::new(),
+    l.pop(2);
+  } else if !l.is_none_or_nil(1) {
+    // Safety: `lua_l_typeerror_l` 是 vm 侧 C 形态门面，`l.as_mut_ptr()` 为 `&mut l`
+    // 同一对象的镜像透传；下标 1 由上方 `is_table`/`is_none_or_nil` 分支确证为已入栈实参。
+    unsafe { lua_l_typeerror_l(l.as_mut_ptr(), 1, "table") };
+  } else {
+    arg_types = allocate_type_function_type_pack(
+      runtime,
+      TypeFunctionTypePackVariant::V0(TypeFunctionTypePack {
+        head: Vec::new(),
+        tail: None,
       }),
-      false,
     );
-
-    1
   }
+
+  let ret_types: TypeFunctionTypePackId;
+
+  if l.is_table(2) {
+    l.get_field_bytes(2, FIELD_HEAD);
+    l.get_field_bytes(2, FIELD_TAIL);
+
+    ret_types = get_type_pack_runtime(l, -2, -1);
+
+    l.pop(2);
+  } else if !l.is_none_or_nil(2) {
+    // Safety: 同上，`l.as_mut_ptr()` 为镜像透传；下标 2 是已校验范围内的实参位。
+    unsafe { lua_l_typeerror_l(l.as_mut_ptr(), 2, "table") };
+  } else {
+    ret_types = allocate_type_function_type_pack(
+      runtime,
+      TypeFunctionTypePackVariant::V0(TypeFunctionTypePack {
+        head: Vec::new(),
+        tail: None,
+      }),
+    );
+  }
+
+  let (generic_types, generic_packs) = get_generics(l, 3, "types.newfunction");
+
+  alloc_type_user_data(
+    l,
+    TypeFunctionTypeVariant::Function(TypeFunctionFunctionType {
+      generics: generic_types,
+      generic_packs,
+      arg_types,
+      ret_types,
+      arg_names: Vec::new(),
+    }),
+    false,
+  );
+
+  1
 }
 
-/// # Safety
-/// `l`（`&mut LuaState` 接收者）须是 Lua VM 在本次原生函数调用中给出、调用全程存活且被本次
-/// 调用独占的状态（本函数只经它的 C-API 读写 VM 栈）；`head_idx`/`tail_idx` 须是该状态栈上的有效索引，且其中若含 userdata，必须
-/// 是由 `alloc_type_user_data` 登记、可被 `get_type_user_data`/`optional_type_user_data`
-/// 识别的类型 userdata（这些辅助函数会解引用其 type arena 节点）。对应 C++ 原生
+/// 对应 C++ 原生
 /// `static TypeFunctionTypePackId getTypePack(lua_State* L, int headIdx, int tailIdx)`
 /// （`cpp/Analysis/src/TypeFunctionRuntime.cpp:1208`）。
-pub(crate) unsafe fn get_type_pack_runtime(
+///
+/// 本函数是 safe fn：形参为 `&mut LuaState`/`i32`，无调用方传入的裸指针，体内亦无原生
+/// unsafe 操作（VM 读写全部经 safe 门面）；返回的 pack 句柄由 runtime bump arena 分配、
+/// 比 `l` 长寿，与 `get_type_user_data` 同形态。
+///
+/// 调用序契约（正确性，非内存安全）：`l` 须为本次原生函数调用全程存活的状态；
+/// `head_idx`/`tail_idx` 须是其栈上有效索引，且其中若含 userdata，必须是由
+/// `alloc_type_user_data` 登记、可被 `get_type_user_data`/`optional_type_user_data`
+/// 识别的类型 userdata；runtime 未挂载时 `expect` 以确定性 panic 收敛，不构成 UB。
+pub(crate) fn get_type_pack_runtime(
   l: &mut LuaState,
   head_idx: i32,
   tail_idx: i32,
 ) -> TypeFunctionTypePackId {
-  // 前提依 fn 文档契约：`l` 为存活独占状态、`head_idx`/`tail_idx` 是其栈上有效
-  // 索引；get_type_user_data/optional_type_user_data 仅识别 alloc_type_user_data
-  // 登记的 userdata；gty 命中 Some 后仅读取 is_pack/is_named/name（arena 块地址不
-  // 移动）；runtime 句柄同 create_function：注册期接线、非空由 expect 兜底 panic。
-  // 本体已无原生 unsafe 操作，`unsafe fn` 形态属未批次遗留。
+  // 调用序契约见函数头：runtime 未挂载由 expect 兜底 panic；
+  // get_type_user_data/optional_type_user_data 仅识别 alloc_type_user_data
+  // 登记的 userdata；gty 命中 Some 后仅读取 is_pack/is_named/name（arena 块地址
+  // 不移动）。
   let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
   let mut head = Vec::new();
 
@@ -126,14 +126,14 @@ pub(crate) unsafe fn get_type_pack_runtime(
 
     for i in 1..=l.obj_len(-1) as i32 {
       l.push_integer(i);
-      lua_gettable(&mut *l, -2);
+      lua_gettable(l, -2);
 
       if l.is_nil(-1) {
         l.pop(1);
         break;
       }
 
-      head.push(get_type_user_data(&mut *l, -1));
+      head.push(get_type_user_data(l, -1));
       l.pop(1);
     }
 
@@ -142,7 +142,7 @@ pub(crate) unsafe fn get_type_pack_runtime(
 
   let mut tail: Option<TypeFunctionTypePackId> = None;
 
-  if let Some(type_id) = optional_type_user_data(&mut *l, tail_idx) {
+  if let Some(type_id) = optional_type_user_data(l, tail_idx) {
     match get_type_function_type_id::<TypeFunctionGenericType>(type_id) {
       Some(gty) if gty.is_pack => {
         tail = Some(allocate_type_function_type_pack(

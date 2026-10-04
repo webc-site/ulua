@@ -12,7 +12,7 @@ use ulua_vm::{
 };
 
 use crate::{
-  functions::{ZERO_DEBUG, state_ref::state},
+  functions::ZERO_DEBUG,
   records::profiler::{GC_STATE_COUNT, ProfilerMain, ProfilerShared},
 };
 
@@ -121,10 +121,10 @@ fn accumulate_sample(data: &mut BTreeMap<String, u64>, stack: &str, elapsed_tick
 /// （`crates/ulua-repl-cli/src/functions/profiler_loop.rs`）的 safepoint 回调约定
 /// 成立；与 [`crate::functions::counters_track::counters_track`] 同款「安全入口 +
 /// 边界块」形态）：`l` 必须指向存活的 `LuaState` 且本函数在 VM 线程上调用。
-pub(crate) fn profiler_trigger(l: *mut LuaState, gc: i32) {
-  // Safety: l 由 safepoint 回调约定保证为 VM 线程当前有效状态（前置条件见本 fn
-  // 文档），经 `state` 门面一次物化后全走安全方法/带契约块。
-  let l = state(l);
+// review.md §2/§3 收形：`l` 由裸 `*mut LuaState` 收编为借用 `&mut LuaState`，真实物化
+// 点上移到 safepoint C 回调 `profiler_interrupt`（其体内一次 `&mut *l`）。采样本体
+// collect_stack/lua_callbacks 均在该借用上走 ulua-vm 引用形安全面/带契约块。
+pub(crate) fn profiler_trigger(l: &mut LuaState, gc: i32) {
   G_PROFILER_MAIN.with(|cell| {
     // 触发窗口内整帧独占本线程字段：一次 borrow_mut，逐字段切分借用。
     // 本帧不调用会重入 interrupt 的 VM 原语（getinfo 纯读栈），无双重借用。

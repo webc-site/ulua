@@ -123,18 +123,23 @@ static BUFFER_LIB: [LuaLReg; 28] = join::<28>(&BUFFER_BASE, &INTEGER_TAIL);
 /// # Safety
 /// `l` 须为存活 LuaState 且栈顶之上至少留 1 个空槽（`lua_l_register_bytes` 会 push 库表并作为返回值）；
 /// 须在可分配/GC 的受保护帧内调用。
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载，r12-w6
+/// 收形后本体降为安全 `fn`；建库表/注册仍经 `lua_l_register_bytes` 的不安全被调而落窄块，
+/// 被调方自身保留其 `# Safety`）：`l` 须为可分配、可抛错的受保护帧且栈顶之上至少留 1 空槽
+/// （`lua_l_register_bytes` 会 push 库表并作为返回值）。
 /// cpp/VM/src/lbuflib.cpp:433 luaopen_buffer。
-pub unsafe fn luaopen_buffer(l: *mut LuaState) -> i32 {
-  unsafe {
-    let buffer_lib: &[LuaLReg] = if fflag::LuauIntegerLibrary.get() {
-      &BUFFER_LIB
-    } else {
-      &BUFFER_BASE
-    };
+pub fn luaopen_buffer(l: &mut LuaState) -> i32 {
+  let buffer_lib: &[LuaLReg] = if fflag::LuauIntegerLibrary.get() {
+    &BUFFER_LIB
+  } else {
+    &BUFFER_BASE
+  };
 
-    lua_l_register_bytes(&mut *l, Some(LIB_BUFFER), buffer_lib);
-    1
-  }
+  // SAFETY: `BUFFER_LIB`/`BUFFER_BASE` 为本文件静态的合法 C 臂表，名字为不含尾部 `\0`
+  // 的静态字节切片，满足 `lua_l_register_bytes` 的切片契约；`l` 的存活/独占由借用承载。
+  unsafe { lua_l_register_bytes(l, Some(LIB_BUFFER), buffer_lib) };
+
+  1
 }
 
-lua_lib_fn!(pub fn luaopen_buffer, luaopen_buffer_arm);
+lua_lib_fn!(pub fn luaopen_buffer @ref, luaopen_buffer_arm);

@@ -60,7 +60,7 @@ pub unsafe fn lua_c_fullgc(l: *mut LuaState) {
       gcstep(l, usize::MAX);
     }
 
-    shrinkbuffersfull(l);
+    shrinkbuffersfull(&mut *l);
 
     let heapgoalsizebytes = ((*g).totalbytes / GC_PERCENT_BASE) * (*g).gcgoal as usize;
     // cpp lgc.cpp:1405：按无符号回绕语义计算，避免极端 gcgoal/gcstepmul 配置下的溢出 panic

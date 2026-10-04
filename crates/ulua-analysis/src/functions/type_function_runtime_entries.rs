@@ -3,8 +3,8 @@
 //! 两个分叉点参数化：诊断消息经 `format_args!("{prefix}: ...")` 拼出与原手写字面量
 //! 逐字节一致的串。入口本身是 safe `fn`——孪生入口以 `&mut LuaState` 收形，真正的
 //! C 边界在 `c_thunk!` 生成的 `unsafe extern "C-unwind"` thunk；本模块的 unsafe 仅
-//! 收口在未批次内的 `unsafe fn`（`throw_type_error`/`push_type_pack`/
-//! `push_table_indexer`/`alloc_type_user_data`）调用点上。
+//! 收口在保留 `unsafe fn` 的 `push_type_pack`/`push_table_indexer` 调用点上
+//! （二者解引用 arena 节点句柄，前提见其 `# Safety`）。
 
 use ulua_common::fflag;
 use ulua_vm::records::lua_state::LuaState;
@@ -31,51 +31,41 @@ use crate::{
 ///
 /// 内存安全前提：`l` 由 `&mut` 承载存活/独占；`tftt`/`tfst` 为 class-index 命中的
 /// arena 存活节点借用（判据见 [`get_type_function_type_id`]），`prop_ty` 为
-/// type_arena 句柄、经 `alias_ref` 只读取 variant；仅未批次的
-/// `throw_type_error`/`alloc_type_user_data` 调用点保留 `unsafe` 块。
+/// type_arena 句柄、经 `alias_ref` 只读取 variant。`throw_type_error` 与
+/// `alloc_type_user_data` 已降级为 safe fn，调用点无 `unsafe` 块。
 pub(crate) fn get_table_prop(l: &mut LuaState, prefix: &str, read: bool) -> i32 {
   let argument_count = l.get_top();
   if argument_count != 2 {
-    // Safety: `throw_type_error` 属未批次 VM 会话 unsafe fn；`l` 为本次原生调用
-    // 全程有效的独占状态。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!("{prefix}: expected 2 arguments, but got {argument_count}"),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!("{prefix}: expected 2 arguments, but got {argument_count}"),
+    );
   }
 
   let self_ty = get_type_user_data(l, 1);
   let tftt = get_type_function_type_id::<TypeFunctionTableType>(self_ty);
   if tftt.is_none() {
     let tag = get_tag(l, self_ty);
-    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!(
-          "{prefix}: expected self to be either a table, but got {} instead",
-          tag
-        ),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!(
+        "{prefix}: expected self to be either a table, but got {} instead",
+        tag
+      ),
+    );
   }
 
   let key = get_type_user_data(l, 2);
   let tfst = get_type_function_type_id::<TypeFunctionSingletonType>(key);
   if tfst.is_none() {
     let tag = get_tag(l, key);
-    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!(
-          "{prefix}: expected to be given a singleton type, but got {} instead",
-          tag
-        ),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!(
+        "{prefix}: expected to be given a singleton type, but got {} instead",
+        tag
+      ),
+    );
   }
 
   // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
@@ -85,16 +75,13 @@ pub(crate) fn get_table_prop(l: &mut LuaState, prefix: &str, read: bool) -> i32 
     .get_if_1();
   if tfsst.is_none() {
     let tag = get_tag(l, key);
-    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!(
-          "{prefix}: expected to be given a string singleton type, but got {} instead",
-          tag
-        ),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!(
+        "{prefix}: expected to be given a string singleton type, but got {} instead",
+        tag
+      ),
+    );
   }
 
   let tftt = tftt.expect("同上，is_none 分支经 throw_type_error(-> !) 早退");
@@ -118,11 +105,7 @@ pub(crate) fn get_table_prop(l: &mut LuaState, prefix: &str, read: bool) -> i32 
       .write_ty
   };
   if let Some(prop_ty) = prop_ty {
-    // Safety: 未批次 `alloc_type_user_data`（`l` 存活独占由 `&mut` 承载；variant
-    // 经 `alias_ref` 自 type_arena 存活句柄只读克隆）。
-    unsafe {
-      alloc_type_user_data(l, alias_ref(prop_ty).type_variant.clone(), false);
-    }
+    alloc_type_user_data(l, alias_ref(prop_ty).type_variant.clone(), false);
   } else {
     l.push_nil();
   }
@@ -136,62 +119,50 @@ pub(crate) fn get_table_prop(l: &mut LuaState, prefix: &str, read: bool) -> i32 
 ///
 /// 内存安全前提：`l` 由 `&mut` 承载存活/独占；`tftt`/`tfst` 为 class-index 命中的
 /// arena 存活节点借用（判据见 [`get_mutable_type_function_type_id`] 与
-/// [`get_type_function_type_id`] 的函数头），`frozen` 标志经 `alias_ref` 只读；
-/// 仅未批次 `throw_type_error` 调用点保留 `unsafe` 块。
+/// [`get_type_function_type_id`] 的函数头），`frozen` 标志经 `alias_ref` 只读。
+/// `throw_type_error` 已降级为 safe fn，调用点无 `unsafe` 块。
 pub(crate) fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: bool) -> i32 {
   let argument_count = l.get_top();
   if !(2..=3).contains(&argument_count) {
-    // Safety: 未批次 `throw_type_error` 的会话调用，`l` 存活独占。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!("{prefix}: expected 2-3 arguments, but got {argument_count}"),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!("{prefix}: expected 2-3 arguments, but got {argument_count}"),
+    );
   }
 
   let self_ty = get_type_user_data(l, 1);
   let tftt = get_mutable_type_function_type_id::<TypeFunctionTableType>(self_ty);
   if tftt.is_none() {
     let tag = get_tag(l, self_ty);
-    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!(
-          "{prefix}: expected self to be a table, but got {} instead",
-          tag
-        ),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!(
+        "{prefix}: expected self to be a table, but got {} instead",
+        tag
+      ),
+    );
   }
 
   if fflag::LuauTypeFunctionSupportsFrozen.get() && alias_ref(self_ty).frozen {
-    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!(
-          "{prefix}: cannot be called to mutate a frozen type, use `types.copy` to make a copy"
-        ),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!(
+        "{prefix}: cannot be called to mutate a frozen type, use `types.copy` to make a copy"
+      ),
+    );
   }
 
   let key = get_type_user_data(l, 2);
   let tfst = get_type_function_type_id::<TypeFunctionSingletonType>(key);
   if tfst.is_none() {
     let tag = get_tag(l, key);
-    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!(
-          "{prefix}: expected to be given a singleton type, but got {} instead",
-          tag
-        ),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!(
+        "{prefix}: expected to be given a singleton type, but got {} instead",
+        tag
+      ),
+    );
   }
 
   // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
@@ -201,16 +172,13 @@ pub(crate) fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: bool) -> i
     .get_if_1();
   if tfsst.is_none() {
     let tag = get_tag(l, key);
-    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!(
-          "{prefix}: expected to be given a string singleton type, but got {} instead",
-          tag
-        ),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!(
+        "{prefix}: expected to be given a string singleton type, but got {} instead",
+        tag
+      ),
+    );
   }
 
   // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
@@ -264,34 +232,28 @@ pub(crate) fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: bool) -> i
 /// 仅 `read_parent`/`write_parent` 字段随 `read` 切换）。
 ///
 /// 内存安全前提：`l` 由 `&mut` 承载；`tfct` 为 class-index 命中的 arena 存活节点
-/// 借用；`parent` 为 type_arena 句柄，经 `alias_ref` 只读取 variant。仅未批次
-/// `unsafe fn` 调用点保留 `unsafe` 块。
+/// 借用；`parent` 为 type_arena 句柄，经 `alias_ref` 只读取 variant。本函数内
+/// 调用点（`throw_type_error`/`alloc_type_user_data`）均已降级为 safe fn。
 pub(crate) fn get_parent(l: &mut LuaState, read: bool) -> i32 {
   let argument_count = l.get_top();
   if argument_count != 1 {
-    // Safety: 未批次 `throw_type_error` 的会话调用，`l` 存活独占。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!("type.parent: expected 1 arguments, but got {argument_count}"),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!("type.parent: expected 1 arguments, but got {argument_count}"),
+    );
   }
 
   let self_ty = get_type_user_data(l, 1);
   let tfct = get_type_function_type_id::<TypeFunctionExternType>(self_ty);
   if tfct.is_none() {
     let tag = get_tag(l, self_ty);
-    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!(
-          "type.parent: expected self to be a class, but got {} instead",
-          tag
-        ),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!(
+        "type.parent: expected self to be a class, but got {} instead",
+        tag
+      ),
+    );
   }
 
   // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
@@ -302,11 +264,7 @@ pub(crate) fn get_parent(l: &mut LuaState, read: bool) -> i32 {
     tfct.write_parent
   };
   if let Some(parent) = parent {
-    // Safety: 未批次 `alloc_type_user_data`；variant 经 `alias_ref` 自 type_arena
-    // 存活句柄只读克隆。
-    unsafe {
-      alloc_type_user_data(l, alias_ref(parent).type_variant.clone(), false);
-    }
+    alloc_type_user_data(l, alias_ref(parent).type_variant.clone(), false);
   } else {
     l.push_nil();
   }
@@ -318,24 +276,21 @@ pub(crate) fn get_parent(l: &mut LuaState, read: bool) -> i32 {
 /// `getWriteIndexer` 共用骨架，仅消息前缀随 `prefix` 分叉）。
 ///
 /// 内存安全前提：`l` 由 `&mut` 承载；`indexer` 借用自 class-index 命中的 arena
-/// 存活节点。仅未批次 `unsafe fn`（`throw_type_error`/`push_table_indexer`）
-/// 调用点保留 `unsafe` 块。
+/// 存活节点。仅 `push_table_indexer`（保留 `unsafe fn`，其内句柄解引用前提见其
+/// `# Safety`）调用点保留 `unsafe` 块；`throw_type_error` 已降级为 safe fn。
 pub(crate) fn get_indexer(l: &mut LuaState, prefix: &str) -> i32 {
   let argument_count = l.get_top();
   if argument_count != 1 {
-    // Safety: 未批次 `throw_type_error` 的会话调用，`l` 存活独占。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!("{prefix}: expected 1 arguments, but got {argument_count}"),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!("{prefix}: expected 1 arguments, but got {argument_count}"),
+    );
   }
 
   let self_ty = get_type_user_data(l, 1);
 
   if let Some(tftt) = get_type_function_type_id::<TypeFunctionTableType>(self_ty) {
-    // Safety: 未批次 `push_table_indexer`；`indexer` 为 arena 存活节点字段，其内
+    // Safety: 保留 `unsafe fn` `push_table_indexer`；`indexer` 为 arena 存活节点字段，其内
     // 句柄的存活前提由该函数 `# Safety` 文档所述消费契约担保（同源守卫）。
     unsafe {
       push_table_indexer(l, &tftt.indexer);
@@ -344,7 +299,7 @@ pub(crate) fn get_indexer(l: &mut LuaState, prefix: &str) -> i32 {
   }
 
   if let Some(tfct) = get_type_function_type_id::<TypeFunctionExternType>(self_ty) {
-    // Safety: 同上，未批次 `push_table_indexer` 对 extern 侧 indexer 字段。
+    // Safety: 同上，保留 `unsafe fn` `push_table_indexer` 对 extern 侧 indexer 字段。
     unsafe {
       push_table_indexer(l, &tfct.indexer);
     }
@@ -352,16 +307,13 @@ pub(crate) fn get_indexer(l: &mut LuaState, prefix: &str) -> i32 {
   }
 
   let tag = get_tag(l, self_ty);
-  // Safety: 末分支未批次 `throw_type_error`（返回 `!`，不返回至此）。
-  unsafe {
-    throw_type_error(
-      l,
-      format_args!(
-        "{prefix}: expected self to be either a table or class, but got {} instead",
-        tag
-      ),
-    );
-  }
+  throw_type_error(
+    l,
+    format_args!(
+      "{prefix}: expected self to be either a table or class, but got {} instead",
+      tag
+    ),
+  );
 }
 
 /// 取 `type.parameters`/`type.returns`（C++ `getFunctionParameters`/
@@ -369,34 +321,28 @@ pub(crate) fn get_indexer(l: &mut LuaState, prefix: &str) -> i32 {
 /// 字段随参数分叉，两者都是整包 push。
 ///
 /// 内存安全前提：`l` 由 `&mut` 承载；`tfft` 为 class-index 命中的 arena 存活节点
-/// 借用；pack 字段是 type_pack_arena 句柄、连同 `l` 交给未批次
+/// 借用；pack 字段是 type_pack_arena 句柄、连同 `l` 交给保留 `unsafe fn`
 /// `push_type_pack`（其 `# Safety` 同源契约）。
 pub(crate) fn get_function_pack(l: &mut LuaState, prefix: &str, params: bool) -> i32 {
   let argument_count = l.get_top();
   if argument_count != 1 {
-    // Safety: 未批次 `throw_type_error` 的会话调用，`l` 存活独占。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!("{prefix}: expected 1 arguments, but got {argument_count}"),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!("{prefix}: expected 1 arguments, but got {argument_count}"),
+    );
   }
 
   let self_ty = get_type_user_data(l, 1);
   let tfft = get_type_function_type_id::<TypeFunctionFunctionType>(self_ty);
   if tfft.is_none() {
     let tag = get_tag(l, self_ty);
-    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
-    unsafe {
-      throw_type_error(
-        l,
-        format_args!(
-          "{prefix}: expected self to be a function, but got {} instead",
-          tag
-        ),
-      );
-    }
+    throw_type_error(
+      l,
+      format_args!(
+        "{prefix}: expected self to be a function, but got {} instead",
+        tag
+      ),
+    );
   }
 
   // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
@@ -406,7 +352,7 @@ pub(crate) fn get_function_pack(l: &mut LuaState, prefix: &str, params: bool) ->
   } else {
     tfft.ret_types
   };
-  // Safety: 未批次 `push_type_pack`，pack 为本次调用期存活的 arena 句柄。
+  // Safety: 保留 `unsafe fn` `push_type_pack`，pack 为本次调用期存活的 arena 句柄。
   unsafe {
     push_type_pack(l, pack);
   }

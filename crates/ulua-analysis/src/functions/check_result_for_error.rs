@@ -41,7 +41,7 @@ pub fn check_result_for_error(
         )
       } else
       // `lua_isstring` 为安全只读入口：进入本分支前已确认栈深 != 0，-1 落在有效栈槽内。
-      if lua_isstring(&*l, -1) != 0 {
+      if lua_isstring(l, -1) != 0 {
         let err_str = l.to_str(-1).unwrap_or_default();
         Some(
           TypeFunctionError::type_function_error_location_type_function_error_data(
@@ -56,7 +56,7 @@ pub fn check_result_for_error(
         let err_type = if fflag::LuauUdtfFixTypeNameTypo.get() {
           // `lua_l_typename` 为安全只读入口：-1 落在有效栈槽（上一分支保证栈非空），
           // 其实现按该槽 TValue 的 tag 取串表项，不写栈。
-          lua_l_typename(&*l, -1)
+          lua_l_typename(l, -1)
         } else {
           // `lua_typename` 为安全函数：实参 -1 是 LUA_TNONE 常量（与 C++ 上游同值传参），
           // 该取值命中 "no value" 静态表项，不触碰 l 所指状态。

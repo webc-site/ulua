@@ -39,9 +39,9 @@ pub unsafe fn setup_state(l: *mut LuaState) {
     unsafe { luau_codegen_create(l) };
   }
 
-  // r16-v3：`lua_l_openlibs` 已前移引用形；本 fn 为 unsafe fn 体（edition 2021 隐式
-  // unsafe 语境），`&mut *l` 即时建引用无需块包裹。仅初始化标准库表。
-  lua_l_openlibs(&mut *l);
+  // `lua_l_openlibs` 已前移引用形：`l` 经上方 `state` 门面物化为 `&mut LuaState` 后
+  // 直传借用（免 `&mut *l` 重折叠，review.md §3），仅初始化标准库表。
+  lua_l_openlibs(l);
 
   // Note: a CALLGRIND build also registers {"callgrind", lua_callgrind}; the
   // upstream default (non-CALLGRIND) build registers only these two.
