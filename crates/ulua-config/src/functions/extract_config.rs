@@ -52,15 +52,14 @@ fn new_sandbox() -> Option<StateGuard> {
 
   // 先入守卫再开库：openlibs/sandbox 自身可抛错（VVM 错误通道即 OOM），
   // 守卫保证展开路径 lua_close——对齐 cpp LuauConfig.cpp:145 的 closing
-  // unique_ptr 先于 openlibs 构造的顺序
-  let guard = StateGuard(state);
-
-  // Safety: null 已被 NonNull::new 上界拒绝，state 为 lua_l_newstate
-  // 刚创建的有效 VM 状态，可安全开库与沙箱化
-  unsafe {
-    lua_l_openlibs(&mut *state.as_ptr());
-    lua_l_sandbox(&mut *state.as_ptr());
-  }
+  // unique_ptr 先于 openlibs 构造的顺序。裸指针物化收在 `StateGuard::state`
+  // 单点，本函数不再对 `NonNull` 手工折 `&mut *as_ptr()`（review.md §3）。
+  let mut guard = StateGuard(state);
+  lua_l_openlibs(guard.state());
+  // Safety: null 已被 NonNull::new 上界拒绝，守卫不变量保证 state 为
+  // lua_l_newstate 刚创建且未 close 的有效 VM 状态；sandbox 的「已 openlibs」
+  // 前置由上一句满足，独占借用由 `state()` 按同一不变量物化。
+  unsafe { lua_l_sandbox(guard.state()) };
 
   Some(guard)
 }
@@ -77,15 +76,17 @@ fn execute_and_extract(
   callbacks: &InterruptCallbacks,
 ) -> Result<ConfigTable, ConfigError> {
   if let Some(init) = callbacks.init_callback {
-    // Safety: `ConfigInitCallback` 契约——`userdata` 指向配置执行同步窗口内
-    // 存活的数据，VM 状态是本函数调用方（run_in_sandbox）守卫持有的有效状态；
-    // 回调仅在本调用点使用指针，返回后不再保留。
-    unsafe { (init.callback)(l.as_mut_ptr(), init.userdata) };
+    // Safety: `ConfigInitFn` 契约——`l` 是本窗口由调用方（run_in_sandbox）守卫
+    // 持有的独占借用，借出窗止于当句；`userdata` 指向配置执行同步窗口内存活
+    // 的数据，回调返回后不再保留。
+    unsafe { (init.callback)(l, init.userdata) };
   }
 
   // Safety: l 为 new_sandbox 返回的有效 VM 状态；
-  // lua_callbacks 对有效状态恒返回非空回调表指针；interrupt 槽签名为
-  // `extern "C-unwind"` fn 指针，与 InterruptCallbacks::interrupt_callback 类型一致
+  // lua_callbacks 对有效状态恒返回非空回调表指针；interrupt 槽类型即
+  // InterruptCallbacks::interrupt_callback 所持的 [`InterruptFn`]（同一
+  // `lua_CInterrupt` 约定，调用点裸形折返系 vm 侧 `lua_callbacks` 收 *mut，
+  // 见该门面收形的越界提案）。
   unsafe { (*lua_callbacks(l.as_mut_ptr())).interrupt = callbacks.interrupt_callback };
 
   // 沙箱 VM 主协程首启无父调用方，走 `resume_main`（C 契约 `from == NULL` 的

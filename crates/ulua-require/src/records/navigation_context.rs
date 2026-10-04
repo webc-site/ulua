@@ -1,6 +1,6 @@
 use alloc::{boxed::Box, vec::Vec};
 
-use ulua_config::records::interrupt_callbacks::ConfigInitCallback;
+use ulua_config::records::interrupt_callbacks::{ConfigInitCallback, InterruptFn};
 use ulua_vm::records::lua_state::LuaState;
 
 use crate::enums::{
@@ -63,9 +63,14 @@ pub trait NavigationContext {
     None
   }
 
-  fn luau_config_interrupt(
-    &self,
-  ) -> Option<unsafe extern "C-unwind" fn(l: *mut LuaState, gc: i32)> {
+  /// Luau 配置执行期的中断回调，返回 [`InterruptFn`]。
+  ///
+  /// 别名形态（`unsafe extern "C-unwind" fn(*mut LuaState, c_int)`）由 VM
+  /// `LuaCallbacks.interrupt` 槽的 `lua_CInterrupt` 约定钉死——C 侧回调 +
+  /// 可经 `luaL_error` 发散，保留 C 调用约定的裁定与完整契约（谁调用、
+  /// 栈帧、存活期、unwind）见 [`InterruptFn`] 文档；本 trait 只是消费面，
+  /// 直投别名、不再逐处重拼裸签名。
+  fn luau_config_interrupt(&self) -> Option<InterruptFn> {
     None
   }
 }
