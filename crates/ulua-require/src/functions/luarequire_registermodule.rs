@@ -37,6 +37,8 @@ pub unsafe extern "C-unwind" fn luarequire_registermodule(l: *mut LuaState) -> i
   // 对应 cpp `path.length() == 0 || path[0] != '@'`：空串同样不满足首字节判定。
   if path.first() != Some(&ALIAS_PREFIX) {
     // Safety: l 存活，lua_l_argerror_l 报错发散（与 cpp 同样由 VM 侧终止）。
+    // vm 侧 `lua_l_argerror_l` 仍收 `*mut LuaState`（禁区门面，收编 `&mut` 形
+    // 已列越界待办）；`l.as_mut_ptr()` 由上方独占借用借出、窗止于当句。
     unsafe { lua_l_argerror_l(l.as_mut_ptr(), 1, "path must begin with '@'") };
   }
 
