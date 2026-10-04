@@ -249,16 +249,23 @@ fn main() -> Result<(), IoError> {
   // 测量失败（引擎/写盘错误）经 ? 直接返回，诊断行只在完整跑完后打印。
   group::run_group(spec, &cfg)?;
 
-  // JIT 诊断面收尾：把「后端支持 + A64 特性位 + 内联发射计数」一行打进 stderr，
-  // 随 CI 日志永久留痕。发射序列（逐站 `[call-inline] hit` 行）与本计数在本地
-  // runner 机器和 CI runner 上一致，即「COBS 观测→暖重编译→funid 守卫内联」
-  // 全链与平台无关地工作；用例集含内联目标而计数为 0，才指示链在该机断裂。
-  // 读取点在测量全部结束后，进程级 Relaxed 读，不触任何测量窗口。
+  // JIT 诊断面收尾：把「后端支持 + A64 特性位 + 内联发射计数 + 生效 Luau 旗标
+  // 集」打进 stderr，随 CI 日志永久留痕。发射序列（逐站 `[call-inline] hit` 行）
+  // 与本计数在本地 runner 机器和 CI runner 上一致，即「COBS 观测→暖重编译→
+  // funid 守卫内联」全链与平台无关地工作；用例集含内联目标而计数为 0，或
+  // luau_flags_on 缺关键旗标，才指示链在该机断裂。只列 Luau* 前缀（Debug*/
+  // 实验旗标与 JIT 链无关）；读取点在测量全部结束后，进程级 Relaxed 读，不触
+  // 任何测量窗口。
+  let luau_flags_on: Vec<&'static str> = f_value::FValue::<bool>::names_with_value(true)
+    .into_iter()
+    .filter(|name| name.starts_with("Luau"))
+    .collect();
   eprintln!(
-    "[jit-diag] codegen_supported={} cpu_features_a64={:#x} call_inline_emitted={}",
+    "[jit-diag] codegen_supported={} cpu_features_a64={:#x} call_inline_emitted={} luau_flags_on={}",
     is_supported(),
     get_cpu_features_a_64(),
-    CALL_INLINE_EMITTED.load(Ordering::Relaxed)
+    CALL_INLINE_EMITTED.load(Ordering::Relaxed),
+    luau_flags_on.join(",")
   );
   Ok(())
 }
