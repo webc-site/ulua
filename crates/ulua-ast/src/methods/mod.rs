@@ -119,7 +119,6 @@ pub mod ast_stat_type_function_ast_stat_type_function;
 pub mod ast_stat_type_function_visit;
 pub mod ast_stat_while_ast_stat_while;
 pub mod ast_stat_while_visit;
-pub mod ast_type_as_type;
 pub mod ast_type_ast_type;
 pub mod ast_type_error_ast_type_error;
 pub mod ast_type_error_visit;
