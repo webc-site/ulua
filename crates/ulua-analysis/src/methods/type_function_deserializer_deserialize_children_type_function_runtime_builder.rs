@@ -551,23 +551,20 @@ impl TypeFunctionDeserializer {
 
     target.generic_packs.reserve(source.generic_packs.len());
     for &tp in &source.generic_packs {
-      // SAFETY: `shallow_deserialize_type_function_type_pack_id` 的前提是
-      // `self.state`/`state->ctx` 构造期接线非空且本轮存活（本函数入口已按同一
-      // 契约取用），与入参句柄无关；它只向目标 arena 追加槽位。
-      let g = unsafe { self.shallow_deserialize_type_function_type_pack_id(tp) };
+      // 调用序前提：`self.state`/`state->ctx` 构造期接线非空且本轮存活（本函数
+      // 入口已按同一契约取用），与入参句柄无关；浅反序列化只向目标 arena 追加槽位。
+      let g = self.shallow_deserialize_type_function_type_pack_id(tp);
       target.generic_packs.push(g);
     }
 
     if !source.arg_types.is_null() {
-      // SAFETY: 同上——state 链条有效，浅反序列化只在目标 arena 追加。
-      target.arg_types =
-        unsafe { self.shallow_deserialize_type_function_type_pack_id(source.arg_types) };
+      // 调用序前提同上——state 链条有效，浅反序列化只在目标 arena 追加。
+      target.arg_types = self.shallow_deserialize_type_function_type_pack_id(source.arg_types);
     }
 
     if !source.ret_types.is_null() {
-      // SAFETY: 同上。
-      target.ret_types =
-        unsafe { self.shallow_deserialize_type_function_type_pack_id(source.ret_types) };
+      // 调用序前提同上。
+      target.ret_types = self.shallow_deserialize_type_function_type_pack_id(source.ret_types);
     }
 
     if fflag::LuauTypeFunctionSerializeArgNames.get() {
@@ -612,9 +609,8 @@ impl TypeFunctionDeserializer {
     }
 
     if let Some(tail) = source.tail {
-      // SAFETY: `shallow_deserialize_type_function_type_pack_id` 只要求
-      // `self.state`/`state->ctx` 链条非空存活（本轮 builder 已保证）。
-      target.tail = Some(unsafe { self.shallow_deserialize_type_function_type_pack_id(tail) });
+      // 调用序前提：`self.state`/`state->ctx` 链条非空存活（本轮 builder 已保证）。
+      target.tail = Some(self.shallow_deserialize_type_function_type_pack_id(tail));
     }
   }
 

@@ -90,9 +90,10 @@ impl Frontend {
         module_ptr.check_duration_sec = duration;
       }
 
-      // Safety: 调 unsafe fn `populate_expected_types`，其契约要求模块裸指针非空且指向存活
-      // Module（上段局部 Arc 界定）；调用期间其内部对 `(*module).ast_types` 等字段做可变
-      // 改写，本函数此刻不再持有该 Module 的其它借用（`&item.source_module` 是另一 Arc）。
+      // 调用序契约（`populate_expected_types` 为 safe fn，其体内借用经 safe 门面）：
+      // 其契约要求模块裸指针非空且指向存活 Module（上段局部 Arc 界定）；调用期间其内部
+      // 对 `(*module).ast_types` 等字段做可变改写，本函数此刻不再持有该 Module 的其它
+      // 借用（`&item.source_module` 是另一 Arc）。
       self.populate_expected_types(&item.source_module, module_ptr, &environment_scope);
 
       if let Some(time_limit) = item.options.module_time_limit_sec
@@ -141,9 +142,9 @@ impl Frontend {
     let module_ptr: *mut Module = shared_mut(&module);
     alias(module_ptr).check_duration_sec = duration;
 
-    // Safety: 主路径的 unsafe fn `populate_expected_types` 调用，指针存活性与借用排它性同
-    // 上一段对 `module_ptr` 的论证：`&item.source_module` 借的是另一 Arc，Module 内容此刻
-    // 仅由该裸指针访问。
+    // 调用序契约（同上一段 `populate_expected_types` 的 safe fn 头文档）：指针存活
+    // 与借用排它性由 `module_ptr` 的来源 Arc 与调用时序界定，`&item.source_module`
+    // 借的是另一 Arc，Module 内容此刻仅由该指针访问。
     self.populate_expected_types(&item.source_module, module_ptr, &environment_scope);
 
     if let Some(time_limit) = item.options.module_time_limit_sec

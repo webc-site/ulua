@@ -71,19 +71,19 @@ impl Unifier {
 
   /// `void Unifier::tryUnifyTables(TypeId sub_ty, TypeId super_ty, bool isIntersection, const LiteralProperties* literalProperties)`
   ///
-  /// # Safety
-  /// - `sub_ty`、`super_ty`：必须是经 `self.log.txn_log_get_mutable::<TableType>`
-  ///   可解析为非空 pending 表项的表类型句柄。唯一调用方
-  ///   （`unifier_try_unify_unifier.rs`）在入口处已用
+  /// 调用序契约（正确性，非内存安全；review.md §2 收形——体内解引用全部经
+  /// `txn_log_get_mutable`/`alias_nn*` safe 门面与 `.expect` 拦断，违约为确定性
+  /// panic/错误诊断而非 UB）：
+  /// - `sub_ty`、`super_ty`：应能经 `self.log.txn_log_get_mutable::<TableType>`
+  ///   解析为非空 pending 表项。唯一调用方（`unifier_try_unify.rs`）在入口处已用
   ///   `txn_log_get::<TableType>(…).is_some()` 双向验证；违约时函数头走
-  ///   `ice_string` 分支但不会中止（C++ 对应 LUAU_ASSERT+throw），后续对
-  ///   `sub_table`/`super_table` 的解引用即失去非空前提。
-  /// - `is_intersection`：纯数据位（C++ bool 默认参数），无指针契约。
-  /// - `literal_properties`：null（C++ 默认 `nullptr`）或指向在本调用完整
-  ///   存续期内保持存活且不被改写的 `LiteralProperties`——函数仅经
-  ///   `not_in_literal_properties` 只读 `find`，不跨调用保存该指针；非空侧
-  ///   由调用方自 `Option<&LiteralProperties>` 借转裸，借用覆盖整个同步调用。
-  pub(crate) unsafe fn unifier_try_unify_tables(
+  ///   `ice_string` 分支但不会中止（C++ 对应 LUAU_ASSERT+throw），后续表项读处
+  ///   由 `expect` 钉住并 panic。
+  /// - `is_intersection`：纯数据位（C++ bool 默认参数），无指针语义。
+  /// - `literal_properties`：`None`（C++ 默认 `nullptr`）或在本调用完整存续期内
+  ///   有效的共享借用——函数仅经 `not_in_literal_properties` 只读 `find`，
+  ///   不跨调用保存该借用。
+  pub(crate) fn unifier_try_unify_tables(
     &mut self,
     mut sub_ty: TypeId,
     mut super_ty: TypeId,
@@ -537,11 +537,10 @@ impl Unifier {
     // 逐位等价：捕获 follow/commit 后 pending 表项换址（同一逻辑表但不同节点）。
     if super_table != new_super_table || sub_table != new_sub_table {
       if self.errors.is_empty() {
-        // Safety: 走到此处说明 follow 后 sub_ty/super_ty 表身份未变（仍是表
-        // 类型句柄，仅 txn log pending 重写导致句柄换址），被调方
-        // `unifier_try_unify_tables` 的表句柄契约成立；末参传 None 即 C++
-        // 默认 nullptr，满足其「None 或调用期内存活」的字面量属性契约。
-        unsafe { self.unifier_try_unify_tables(sub_ty, super_ty, is_intersection, None) };
+        // 调用序前提：走到此处说明 follow 后 sub_ty/super_ty 表身份未变（仍是表
+        // 类型句柄，仅 txn log pending 重写导致句柄换址），被调方的表句柄契约成立；
+        // 末参传 None 即 C++ 默认 nullptr，满足其「None 或调用期内有效」的字面量属性契约。
+        self.unifier_try_unify_tables(sub_ty, super_ty, is_intersection, None);
       }
       return true;
     }

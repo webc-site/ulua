@@ -15,66 +15,54 @@ use crate::{
     type_function_table_indexer::TypeFunctionTableIndexer,
     type_function_table_type::TypeFunctionTableType,
   },
+  type_aliases::type_function_type_id::AsTypeFunctionType,
 };
 pub(crate) fn get_indexer(l: &mut LuaState) -> i32 {
-  // Safety: `l` 由 Lua VM 运行时约定传入并全程存活（经 `c_thunk!` 蹦床重建为独占 `&mut`）。`tftt`/`tfct`
-  // 按 class-index 下转，仅命中 Some 分支才读取 `indexer`；indexer 字段先经 `is_none()` 判定、
-  // else 支由同判据 `expect` 取回（必为 Some），其 key_type/value_type 是 arena 存活 TypeId
-  // （地址不移动）。各 `throw_type_error` 分支返回 `!` 不返回。单线程串行执行，无并发别名。
-  unsafe {
-    lua_check_args!(l, != 1, "type.indexer: expected 1 arguments, but got {}");
+  // `l` 的存活/独占由 `&mut` 承载（`c_thunk!` 蹦床重建）；`tftt`/`tfct` 按 class-index
+  // 下转、仅命中 Some 分支才读 `indexer`，其 key_type/value_type 句柄经 `as_type()`
+  // safe 门面消费（arena 地址不迁移的构造不变量收口）。全部调用为 safe fn，无 unsafe。
+  lua_check_args!(l, != 1, "type.indexer: expected 1 arguments, but got {}");
 
-    let self_ty = get_type_user_data(l, 1);
+  let self_ty = get_type_user_data(l, 1);
 
-    if let Some(tftt) = get_type_function_type_id::<TypeFunctionTableType>(self_ty) {
-      push_indexer_3(l, &tftt.indexer);
-      return 1;
-    }
-
-    if let Some(tfct) = get_type_function_type_id::<TypeFunctionExternType>(self_ty) {
-      push_indexer_3(l, &tfct.indexer);
-      return 1;
-    }
-
-    let tag = get_tag(l, self_ty);
-    throw_type_error(
-      l,
-      format_args!(
-        "type.indexer: self to be either a table or class, but got {} instead",
-        tag
-      ),
-    );
+  if let Some(tftt) = get_type_function_type_id::<TypeFunctionTableType>(self_ty) {
+    push_indexer_3(l, &tftt.indexer);
+    return 1;
   }
+
+  if let Some(tfct) = get_type_function_type_id::<TypeFunctionExternType>(self_ty) {
+    push_indexer_3(l, &tfct.indexer);
+    return 1;
+  }
+
+  let tag = get_tag(l, self_ty);
+  throw_type_error(
+    l,
+    format_args!(
+      "type.indexer: self to be either a table or class, but got {} instead",
+      tag
+    ),
+  );
 }
 
 /// `type.indexer` 的 table/extern 两支共用形态：无 indexer 推 nil，否则推
 /// `{index, readresult, writeresult}`（read/write 同为 value_type，cpp 同构）。
 ///
-/// # Safety
-/// `l` 须为存活且本次调用独占的 `LuaState`（写栈经 C-API）；`indexer` 内的
-/// `TypeFunctionTypeId`（裸指针）若非空须指向 type_arena 存活节点，本函数以
-/// `(*..).type_variant` 只读它们并经 `alloc_type_user_data` 消费。
-unsafe fn push_indexer_3(l: &mut LuaState, indexer: &Option<TypeFunctionTableIndexer>) {
-  if indexer.is_none() {
+/// 调用序契约（正确性，非内存安全）：`l` 的存活/独占由 `&mut` 承载；`indexer` 为
+/// arena 存活节点的字段借用，其内 `TypeFunctionTypeId` 句柄经 `as_type()` safe
+/// 门面只读 `type_variant`，违反调用序仅得到错误诊断。
+fn push_indexer_3(l: &mut LuaState, indexer: &Option<TypeFunctionTableIndexer>) {
+  let Some(indexer) = indexer else {
     l.push_nil();
     return;
-  }
+  };
 
   l.create_table(0, 3);
 
-  // Safety: 上方 is_none 分支已 return，此处必为 Some（cpp 同位 is_none 后直 deref）。
-  let indexer = indexer
-    .as_ref()
-    .expect("is_none 分支已 return，至此必为 Some");
-  // Safety: 本函数 `# Safety` 段契约——`key_type`/`value_type` 为 type_arena 存活
-  // 句柄、variant 只读克隆，`l` 存活且本次调用独占（`alloc_type_user_data` 与
-  // vm 栈写原语的未批次 unsafe 前提）。
-  unsafe {
-    alloc_type_user_data(l, (*indexer.key_type).type_variant.clone(), false);
-    l.set_field_bytes(-2, FIELD_INDEX);
-    alloc_type_user_data(l, (*indexer.value_type).type_variant.clone(), false);
-    l.set_field_bytes(-2, FIELD_READ_RESULT);
-    alloc_type_user_data(l, (*indexer.value_type).type_variant.clone(), false);
-    l.set_field_bytes(-2, FIELD_WRITE_RESULT);
-  }
+  alloc_type_user_data(l, indexer.key_type.as_type().type_variant.clone(), false);
+  l.set_field_bytes(-2, FIELD_INDEX);
+  alloc_type_user_data(l, indexer.value_type.as_type().type_variant.clone(), false);
+  l.set_field_bytes(-2, FIELD_READ_RESULT);
+  alloc_type_user_data(l, indexer.value_type.as_type().type_variant.clone(), false);
+  l.set_field_bytes(-2, FIELD_WRITE_RESULT);
 }

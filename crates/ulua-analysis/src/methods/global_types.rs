@@ -177,10 +177,10 @@ impl GlobalTypes {
     register_scope(&global_type_function_scope);
 
     // unfreeze(*builtinTypes->arena);
-    // Safety: builtin_types 为 NotNull 契约接线的存活单例，其 arena 字段是 Box 独占
-    // 堆分配的 TypeArena（唯一对象、地址稳定）；构造序列单线程执行，unfreeze 期间
-    // 无其他借用指向该 arena，满足 `BuiltinTypes::arena_handle` 的 `# Safety` 契约。
-    unfreeze(unsafe { BuiltinTypes::arena_handle(builtin_types) }.get_mut());
+    // 调用序前提（见 `BuiltinTypes::arena_handle` 文档）：builtin_types 为 NotNull
+    // 接线会话句柄，其 arena 字段是 Box 独占堆分配的 TypeArena（唯一对象、地址稳定）；
+    // 构造序列单线程执行，unfreeze 期间无其他借用指向该 arena。
+    unfreeze(BuiltinTypes::arena_handle(builtin_types).get_mut());
 
     let string_metatable_ty = make_string_metatable(builtin_types, mode);
 
@@ -197,9 +197,9 @@ impl GlobalTypes {
     persist(string_metatable_ty);
 
     // freeze(*builtinTypes->arena);
-    // Safety: 与上方 unfreeze 分支同一论证——Box 独占的 arena 对象、构造序列
+    // 调用序前提与上方 unfreeze 分支同一论证——Box 独占的 arena 对象、构造序列
     // 单线程且此刻无并发借用，句柄物化不引入别名。
-    freeze(unsafe { BuiltinTypes::arena_handle(builtin_types) }.get_mut());
+    freeze(BuiltinTypes::arena_handle(builtin_types).get_mut());
 
     Self {
       builtin_types: Some(builtin_types),
