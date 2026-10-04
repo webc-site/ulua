@@ -160,3 +160,29 @@ J1+J5 到 1.1~1.3x；综合 <1.0 需要 J1+J2+J3 全部到位且站点类基准�
   指纹一致），但派发仅占 nsieve 16%，实测中性（-0~2% med，不达 5% 门）→
   还原弃用。教训：融合前先看剖面，nsieve 的时间在表慢路径（40%）与哈希读
   （19%），不在派发。
+
+- 2026-10-04：JIT 环级 tag 外提（loop-level tag hoisting）——**实测证伪，
+  故未采纳**。机制假设：method JIT 热环每迭代付 LoadTag+CheckTag（TValue
+  16B 装箱税），把「环内已证 number」的 tag 检查外提出循环可让算术落
+  XMM/V 短链。实现（已还原）：全函数 tag MUST 数据流（工作表迭代不动点，
+  传播规则镜像 OptimizeConstProp 的 save/invalidate 臂），产出各块入口
+  已证 tag，经 `setup_block_entry_state` 灌入唯一一次块链遍历，kill 走
+  既有 CheckTag/LoadTag 臂；旗标 `LuauCodegenLoopTagHoist`。
+  - 静态面成立：micro_arith 环内 CHECK_TAG 11→4（剩余 4 处均为 fallback
+    DO_ARITH 写同槽的语义必要检查，元表可返回任意类型，静态不可证）；
+    a64 原生码热环 tag 检查三连（ldr w,[x25,N]; cmp #3; b.ne）12→1，
+    proto 代码量 1008→704B（-30%），i%48→fadd→fmul 全程驻 d 寄存器连续
+    浮点链。定向单测钉住 kill 面与 fallback 保守面均按设计工作。
+  - 配对评测定谳（同二进制 `--fflag` 开关，ABBA 交错，off 自身地板
+    2.2~5.4%）：JIT geomean **-0.4%（噪音内）**；直接靶 micro_arith
+    +2.4%（地板 4.9%，中性）；spectralnorm/mandel +1.4%/+0.5%（地板内）；
+    **nbody +4.9% 稳定超地板回退**（地板 2.2%，两轮独立复测 +6.6%/+4.9%），
+    踩「回退 ≤2%」红线。nbody 环体 970→893 条（检查确实被杀）但读数变慢，
+    定性为 fallback 块连带死亡引发的全局块布局重排彩票。
+  - 成因链：a64 微架构下 `ldr+cmp+b.ne` tag 检查与浮点链无数据依赖，
+    分支预测命中 + 超标量窗口把检查税基本吸收——**依赖链主导的 FP 环里
+    删检查不产生收益，只产生布局扰动**。与 FORNLOOP 整数快路证伪同构
+    （该处检查税同样被 FP 依赖链吸收）。结论：解释器侧/JIT 侧残余差距
+    （spectralnorm 5.2x、nbody 3.98x）不在此形态，杠杆仍在 J1 BBV 类型
+    版本化（GETTABLE 读侧类型传播删检查——写侧证据缺失正是本轮保守面
+    不许证的部分）与 J5 布局排序。代码已完整还原，无残留实现。

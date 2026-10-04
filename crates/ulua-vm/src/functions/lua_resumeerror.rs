@@ -29,10 +29,9 @@ pub unsafe fn lua_resumeerror(l: *mut LuaState, from: *mut LuaState) -> i32 {
     let old_n_c_calls = (*l).n_ccalls;
     let old_n_c_calls_i32: i32 = old_n_c_calls as i32;
 
-    let status = LuaStatus::ErrRun as i32;
+    let mut status = LuaStatus::ErrRun as i32;
 
     let ci = resume_findhandler(l);
-    let mut status = status;
     if !ci.is_null() {
       (*l).status = status as u8;
       // SAFETY: 细粒度恢复入参契约——`ci` 为 `resume_findhandler` 取回的存活 handler

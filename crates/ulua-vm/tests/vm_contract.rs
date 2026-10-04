@@ -173,9 +173,9 @@ fn unreferenced_string_collectable_by_full_gc() {
 fn string_rep_preserves_bytes_and_stack() {
   let s = State::new();
   // Safety: `s.l` 存活；luaopen_string/pushlstring/tolstring 只要求非空 L 与
-  // 可读字节区，`bytes` 切片借用覆盖各次调用。
+  // 可读字节区，`bytes` 切片借用覆盖各次调用；`&mut *s.l` 引用重建借用窗止于当次调用。
   unsafe {
-    luaopen_string(s.l);
+    luaopen_string(&mut *s.l);
     for bytes in [b"".as_slice(), b"a", b"t\0\xff", &[0xff; 1024]] {
       for n in [-1, 0, 1, 2, 3, 31, 32, 33] {
         (*s.l).get_field_str(1, "rep");

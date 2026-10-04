@@ -831,14 +831,13 @@ fn raw_copy_slot(state: StateView<'_>, t: i32, src: i64, dst: i64) {
 unsafe extern "C-unwind" fn c_gettable(raw: *mut LuaState) -> i32 {
   // Safety: C-ABI 边界点(pcall 帧实参):本函数只经 protected_table_op 在 lua_pcall
   // 下被 VM 调用,`raw` 是该帧内正在执行的协程状态;一次转视图,只在本次调用内。
-  let state = unsafe { StateView::from_raw(raw) };
-  // Safety: 栈布局 `[table, key]`（+ 其下闭包槽）由调用方 `Table::get` 的
-  // ensure_stack(3) 与压栈序列保证，故槽 1 为有效表索引；返回 1 声明留下结果
-  // 一槽，与 gettable 行为一致。
-  unsafe {
-    lua_gettable(&mut *state.as_mut_ptr(), 1);
-    1
-  }
+  let mut state = unsafe { StateView::from_raw(raw) };
+  // 调用序契约（正确性，非内存安全）:栈布局 `[table, key]`（+ 其下闭包槽）由调用方
+  // `Table::get` 的 ensure_stack(3) 与压栈序列保证，故槽 1 为有效表索引；返回 1 声明
+  // 留下结果一槽，与 gettable 行为一致。`lua_gettable` 收 `&mut` 引用形，视图经
+  // DerefMut 瞬时下沉。
+  lua_gettable(&mut state, 1);
+  1
 }
 
 /// C trampoline: stack is `[table, key, value]`; performs `lua_settable`.
@@ -848,13 +847,12 @@ unsafe extern "C-unwind" fn c_gettable(raw: *mut LuaState) -> i32 {
 /// 协程状态，栈布局 `[table, key, value]` 由 [`Table::set`] 的压栈序列保证。
 unsafe extern "C-unwind" fn c_settable(raw: *mut LuaState) -> i32 {
   // Safety: C-ABI 边界点(pcall 帧实参),同 `c_gettable`;一次转视图,只在本次调用内。
-  let state = unsafe { StateView::from_raw(raw) };
-  // Safety: 调用方 `Table::set` 预留头寸并压入 `[table, key, value]`，槽 1 为有效表；
-  // `lua_settable` 消费 key+value，返回 0 声明无结果留下，与 pcall nresults=0 一致。
-  unsafe {
-    lua_settable(&mut *state.as_mut_ptr(), 1);
-    0
-  }
+  let mut state = unsafe { StateView::from_raw(raw) };
+  // 调用序契约（正确性，非内存安全）:调用方 `Table::set` 预留头寸并压入
+  // `[table, key, value]`，槽 1 为有效表；`lua_settable` 消费 key+value，返回 0 声明
+  // 无结果留下，与 pcall nresults=0 一致。
+  lua_settable(&mut state, 1);
+  0
 }
 
 /// C trampoline: 栈是 `[table]`；先压一个 nil 作 luaV_objlen 的可写结果
