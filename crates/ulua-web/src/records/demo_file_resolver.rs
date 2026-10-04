@@ -12,6 +12,8 @@
 
 use foldhash::fast::FixedState;
 use hashbrown::HashMap as BrownHashMap;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 type HashMap<K, V> = BrownHashMap<K, V, FixedState>;
 use ulua_analysis::{
@@ -26,17 +28,22 @@ use ulua_ast::{
   rtti::ast_node_try_as,
 };
 
+/// `source` 共享槽的类型别名（`DemoFrontend` 移交所有权后仍持句柄读写）。
+pub(crate) type SourceSlot = Rc<RefCell<HashMap<ModuleName, String>>>;
+
 /// cpp 侧 `source` 表默认空构造，故 `Default` 即全部初始化需求。
+/// `source` 经 `Rc<RefCell>` 共享：`DemoFrontend` 移交所有权后仍持同一张表的
+/// 句柄做「清空重写」，与 cpp 宿主直写 `fileResolver.source` 的可见性等价。
 #[derive(Debug, Default)]
 pub(crate) struct DemoFileResolver {
-  pub source: HashMap<ModuleName, String>,
+  pub source: Rc<RefCell<HashMap<ModuleName, String>>>,
 }
 
 impl FileResolver for DemoFileResolver {
   /// `std::optional<Luau::SourceCode> readSource(const ModuleName&)`
   /// (`CLI/src/Web.cpp:18-25`)
   fn read_source(&mut self, name: &ModuleName) -> Option<SourceCode> {
-    self.source.get(name).map(|source| SourceCode {
+    self.source.borrow().get(name).map(|source| SourceCode {
       source: source.clone(),
       r#type: SourceCode::MODULE,
     })
