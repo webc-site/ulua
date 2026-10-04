@@ -34,16 +34,16 @@ pub unsafe fn os_time(l: *mut LuaState) -> i32 {
       (*l).check_type(1, LuaType::Table);
       (*l).set_top(1);
 
-      ts.tm_sec = getfield(l, b"sec", 0);
-      ts.tm_min = getfield(l, b"min", 0);
-      ts.tm_hour = getfield(l, b"hour", 12);
-      ts.tm_mday = getfield(l, b"day", -1);
+      ts.tm_sec = getfield(&mut *l, b"sec", 0);
+      ts.tm_min = getfield(&mut *l, b"min", 0);
+      ts.tm_hour = getfield(&mut *l, b"hour", 12);
+      ts.tm_mday = getfield(&mut *l, b"day", -1);
       // wrapping_sub avoids `int` underflow on an INT_MIN month/year (UB in
       // C++; panic with overflow-checks). os_timegm widens to i64 and the
       // `t == -1` path rejects out-of-range dates, so a wrapped field can't UB.
-      ts.tm_mon = getfield(l, b"month", -1).wrapping_sub(1);
-      ts.tm_year = getfield(l, b"year", -1).wrapping_sub(1900);
-      ts.tm_isdst = getboolfield(l, b"isdst");
+      ts.tm_mon = getfield(&mut *l, b"month", -1).wrapping_sub(1);
+      ts.tm_year = getfield(&mut *l, b"year", -1).wrapping_sub(1900);
+      ts.tm_isdst = getboolfield(&mut *l, b"isdst");
 
       os_timegm(&ts)
     };

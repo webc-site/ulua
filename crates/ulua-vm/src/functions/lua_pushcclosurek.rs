@@ -57,7 +57,11 @@ pub(crate) fn lua_pushcclosurek_ref(
   // 存活期由契约 3 钉住）；出栈后 `pending`（top 起 nup 槽）与 `captured`（闭包 upvals
   // 堆块）两窗不相交，逐格 `setobj2n` 即 cpp 倒序写的同一对复制
   unsafe {
-    let cl = lua_f_new_cclosure(l.as_mut_ptr(), nup, getcurrenv(l.as_mut_ptr()));
+    // cpp `luaF_newCclosure(L, nup, getcurrenv(L))` 实参求值序即先取当前 env 再建闭包；
+    // 收形后 `lua_f_new_cclosure` 首参借 `&mut l`，故先就地一次借出裸指针完成
+    // `getcurrenv` 只读求值，再借出 `l` 建闭包，与原形参求值位点/顺序逐位一致
+    let env = getcurrenv(l.as_mut_ptr());
+    let cl = lua_f_new_cclosure(l, nup, env);
     let cc = addr_of_mut!((*cl).inner.c);
     (*cc).f = r#fn;
     (*cc).cont = cont;
