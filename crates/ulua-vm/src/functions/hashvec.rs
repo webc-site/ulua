@@ -32,18 +32,16 @@ const fn norm_scramble(x: u32) -> u32 {
 /// 布局绑定节点地址，判据同 [`hashint`]）；构造点收口为末句 `hashpow2!` 单表达式。
 /// cpp `ltable.cpp:143-175`。
 pub(crate) fn hashvec(t: &LuaTable, v: &[f32; LUA_VECTOR_SIZE as usize]) -> *mut LuaNode {
-  let x0 = norm_scramble(v[0].to_bits());
-  let x1 = norm_scramble(v[1].to_bits());
-  let x2 = norm_scramble(v[2].to_bits());
-
-  // OSH 空间哈希：各分量乘不同质数再异或（cpp ltable.cpp:166）
-  let h = x0.wrapping_mul(OSH_PRIMES[0])
-    ^ x1.wrapping_mul(OSH_PRIMES[1])
-    ^ x2.wrapping_mul(OSH_PRIMES[2]);
-
-  // 本仓向量恒 3 分量（LUA_VECTOR_SIZE=3，`as_vector_ref` 视图同宽）：cpp
-  // `#if LUA_VECTOR_SIZE == 4` 追加第 4 分量臂（ltable.cpp:171）在本形下由数组
-  // 长度静态排除，无运行期死支（§3 死代码消除，行为对 3 分量 oracle 逐位一致）。
+  // OSH 空间哈希：逐分量归一打散后乘各自质数再异或（cpp ltable.cpp:153-166）。
+  // 取折叠而非逐分量展开：参与分量数随 `LUA_VECTOR_SIZE` 自适应（cpp
+  // `#if LUA_VECTOR_SIZE == 4` 的第 4 分量臂在 4-wide 构建下自动生效，不再依赖
+  // 本文件写死分量下标），且 XOR 满足交换结合、0 为单位元，3-wide 读数与 cpp
+  // `x0*p0 ^ x1*p1 ^ x2*p2` 逐位一致。
+  let h = v
+    .iter()
+    .map(|&comp| norm_scramble(comp.to_bits()))
+    .zip(OSH_PRIMES)
+    .fold(0, |acc, (x, prime)| acc ^ x.wrapping_mul(prime));
 
   // 哈希恒按 2^k 归约取节点（cpp ltable.cpp:174 `hashpow2(t, h)`，与
   // hashint/hashnum/hashpointer 同收口至 hashpow2!）
