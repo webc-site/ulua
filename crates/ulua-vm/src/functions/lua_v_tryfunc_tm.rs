@@ -1,8 +1,6 @@
 use crate::{
   enums::tms::TMS,
-  functions::{
-    c_slice_mut, lua_t_gettmbyobj::lua_t_gettmbyobj,
-  },
+  functions::{c_slice_mut, lua_t_gettmbyobj::lua_t_gettmbyobj},
   macros::{lua_g_typeerror::luaG_typeerror, setobj_2_s::setobj_2_s},
   records::{lua_state::LuaState, slot::Slot},
   type_aliases::stk_id::StkId,

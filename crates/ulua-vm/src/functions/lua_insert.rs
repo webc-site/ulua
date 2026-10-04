@@ -3,9 +3,7 @@
 use core::ptr::eq;
 
 use crate::{
-  functions::{
-    c_slice_mut, index_2_addr::index_2_addr, lapi_barrier::lua_c_threadbarrier_lapi,
-  },
+  functions::{c_slice_mut, index_2_addr::index_2_addr, lapi_barrier::lua_c_threadbarrier_lapi},
   macros::{api_check::api_check, lua_o_nilobject::LUA_O_NILOBJECT},
   records::lua_state::LuaState,
 };

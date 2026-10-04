@@ -11,7 +11,7 @@ use crate::{
 pub fn lua_settop(l: &mut LuaState, idx: i32) {
   unsafe {
     if idx >= 0 {
-      api_check!(l, idx as isize <= LuaState::slot_distance(l.base, l.stack_last) as isize);
+      api_check!(l, idx <= LuaState::slot_distance(l.base, l.stack_last));
       // cpp `ensure_stack(L, idx - (L->top - L->base))`：把栈顶抬高到 idx 之
       // 前必须保证 idx 落在 ci->top 之内，否则下面的 setnilvalue 会写出栈数组。
       // r16-b2 收编：顶-基槽距读数落既有 get_top 门面——其本体 slot_distance(base, top)
