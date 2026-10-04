@@ -1,5 +1,5 @@
 use alloc::fmt;
-use core::{ffi::c_char, mem::size_of};
+use core::mem::size_of;
 
 use memchr::memchr;
 use ulua_common::{
@@ -15,7 +15,7 @@ use ulua_common::{
 use crate::{
   enums::{feedback_vector_slot_kind::FeedbackVectorSlotKind, value_view::ValueView},
   functions::{
-    c_slice_mut, cstr_bytes, fits,
+    c_slice_mut, fits,
     lua_a_toobject::lua_a_toobject,
     lua_c_barrierback::lua_c_barrierback,
     lua_f_new_lclosure::lua_f_new_lclosure,
@@ -23,11 +23,12 @@ use crate::{
     lua_h_new::lua_h_new,
     lua_h_set::lua_h_set,
     lua_h_setstr::lua_h_setstr,
-    lua_o_chunkid::lua_o_chunkid,
+    lua_o_chunkid::{chunkid_slice, lua_o_chunkid_ref},
     lua_pushlstring::lua_pushlstring_bytes,
     lua_r_newclass::lua_r_newclass,
     lua_s_newlstr::lua_s_newlstr,
     read::read,
+    tstr_bytes::cut_at_nul,
     read_string::{ReadStringError, read_string},
     read_var_int::read_var_int,
     remap_userdata_types::remap_userdata_types,
@@ -963,27 +964,18 @@ unsafe fn push_chunk_error(l: *mut LuaState, chunkname: &str, detail: fmt::Argum
 }
 
 /// 按 cpp `luaO_chunkid(chunkbuf, sizeof(chunkbuf), chunkname, strlen(chunkname))`
-/// 的入参形态求 chunkid。
+/// 的入参形态求 chunkid（§10 收形：全程切片，垫片与指针窗消亡）。
 ///
-/// 前置条件（非调用方裸指针契约，全部由本函数自有的借用建立）：返回的 NUL 前字节
+/// 前置条件（全部由本函数自有的借用建立，非调用方裸指针契约）：返回的 NUL 前字节
 /// 切片借用 `buf` 或 `name`（`=`/`@` 未超长时 cpp 直接返回 `source + 1`），故两者都必须在
 /// 返回值存活期间不被释放/复用；生命周期参数已把 `buf` 与 `name` 的借用绑成同一 `'a`。
-/// `name` 须为恰以一个 NUL 结尾的字节串（`ChunkName::as_nul_bytes` 的构造保证）。
-/// 传入 `lua_o_chunkid` 的指针全部由这两个借用现场导出，故签名安全、无调用方契约。
-fn chunkid_buf<'a>(buf: &'a mut [c_char; LUA_IDSIZE as usize], name: &'a [u8]) -> &'a [u8] {
-  // SAFETY: buf 独占可变、name 为恰以一个 NUL 结尾的字节串，lua_o_chunkid 只写 buf 与读 name
-  unsafe {
-    // 末位是终止符，`len() - 1` 即 cpp 的 strlen
-    let chunkid = lua_o_chunkid(
-      buf.as_mut_ptr(),
-      buf.len(),
-      name.as_ptr().cast(),
-      name.len() - 1,
-    );
-    // SAFETY: lua_o_chunkid 的两个出口（buf / source + 1）都是 NUL 结尾串，
-    // 且其存储由 `buf` 或 `name` 持有（'a），满足 cstr_bytes 门面前置条件。
-    cstr_bytes(chunkid)
-  }
+/// `name` 须为恰以一个 NUL 结尾的字节串（`ChunkName::as_nul_bytes` 的构造保证），
+/// 末位截掉后 `len()` 即 cpp 的 `strlen`；观察面按旧 C 串扫描读（首 NUL）等值截断。
+fn chunkid_buf<'a>(buf: &'a mut [u8; LUA_IDSIZE as usize], name: &'a [u8]) -> &'a [u8] {
+  let src = &name[..name.len() - 1];
+  let site = lua_o_chunkid_ref(&mut buf[..], src);
+  let buf: &'a [u8; LUA_IDSIZE as usize] = buf;
+  cut_at_nul(chunkid_slice(buf, src, site))
 }
 
 /// 把错误消息字节压入 `l` 栈顶：`lua_pushlstring_bytes` 在返回前完成拷贝，

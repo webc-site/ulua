@@ -1,12 +1,9 @@
-use core::mem::zeroed;
-
 use itoa::Buffer;
 
 use crate::{
   functions::{
-    cstr, cstr_bytes, lua_getinfo::lua_getinfo, lua_l_addchar::lua_l_addchar,
-    lua_l_addlstring::lua_l_addlstring, lua_l_buffinit::lua_l_buffinit,
-    lua_l_pushresult::lua_l_pushresult,
+    lua_getinfo::lua_getinfo, lua_l_addchar::lua_l_addchar, lua_l_addlstring::lua_l_addlstring,
+    lua_l_buffinit::lua_l_buffinit, lua_l_pushresult::lua_l_pushresult,
   },
   records::{lua_debug::LuaDebug, lua_l_strbuf::LuaLStrbuf, lua_state::LuaState},
 };
@@ -17,7 +14,7 @@ use crate::{
 /// # Safety
 /// `l` 的存活与独占已由 `&mut LuaState` 承载（r16-v43 收形，buffinit 转手经 `&mut *l` 一次性重借用）；
 /// `l1` 仍收裸形并转交 `lua_getinfo`，须指向存活 `LuaState`：其调用栈自 `level` 起各帧可读（逐帧
-/// lua_getinfo 游走），`l` 承接最终 pushresult 压栈；`msg` 仅按 C 语义截读至首个 NUL。对应 cpp laux.cpp:377。
+/// lua_getinfo 游走），`l` 承接最终 pushresult 压栈。对应 cpp laux.cpp:377。
 pub unsafe fn lua_l_traceback(l: &mut LuaState, l1: *mut LuaState, msg: Option<&str>, level: i32) {
   // SAFETY: 契约保证 `L1` 调用栈自 level 起可读、`buf` 可写，帧遍历按 lua_getinfo 语义在界内推进
   unsafe {
@@ -36,18 +33,20 @@ pub unsafe fn lua_l_traceback(l: &mut LuaState, l1: *mut LuaState, msg: Option<&
       lua_l_addchar(&mut buf, b'\n');
     }
 
-    let mut ar: LuaDebug = zeroed();
+    let mut ar: LuaDebug = LuaDebug::default();
     let mut num = Buffer::new();
     let mut i: i32 = level;
 
-    while lua_getinfo(l1, i, cstr(b"sln\0"), &mut ar) != 0 {
-      if cstr_bytes(ar.what) == b"C" {
+    // §10：选项串与记录字段全为原生字节窗，无 cstr 门面折转；写端已按 NUL
+    // 扫描读等值截断（见 `auxgetinfo`/`ShortSrc`），读面直取即旧观察值
+    while lua_getinfo(l1, i, b"sln", &mut ar) != 0 {
+      if ar.what == Some(b"C") {
         i += 1;
         continue;
       }
 
-      if !ar.source.is_null() {
-        lua_l_addlstring(&mut buf, cstr_bytes(ar.short_src));
+      if ar.source.is_some() {
+        lua_l_addlstring(&mut buf, ar.short_src.bytes());
       }
 
       if ar.currentline > 0 {
@@ -55,9 +54,9 @@ pub unsafe fn lua_l_traceback(l: &mut LuaState, l1: *mut LuaState, msg: Option<&
         lua_l_addlstring(&mut buf, num.format(ar.currentline).as_bytes());
       }
 
-      if !ar.name.is_null() {
+      if let Some(name) = ar.name {
         lua_l_addlstring(&mut buf, b" function ");
-        lua_l_addlstring(&mut buf, cstr_bytes(ar.name));
+        lua_l_addlstring(&mut buf, name);
       }
 
       lua_l_addchar(&mut buf, b'\n');

@@ -1,6 +1,6 @@
 //! Source: `VM/src/lvmexecute.cpp:147-200` (hand-ported)
 
-use core::{ffi::c_void, mem::zeroed, ptr::null_mut};
+use core::{ffi::c_void, ptr::null_mut};
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
@@ -86,7 +86,7 @@ pub unsafe fn luau_callhook(l: *mut LuaState, hook: LuaHook, userdata: Option<*m
     (*(*l).ci).top = (*l).top.add(LUA_MINSTACK as usize);
     LUAU_ASSERT!((*(*l).ci).top <= (*l).stack_last);
 
-    let mut ar: LuaDebug = zeroed();
+    let mut ar = LuaDebug::default();
     ar.currentline = if (*cl).is_c != 0 {
       -1
     } else {

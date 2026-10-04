@@ -1,9 +1,7 @@
-use core::ptr::null;
-
 use crate::{
   functions::{
     auxwrapcont::auxwrapcont_arm, auxwrapy::auxwrapy_arm, cocreate::cocreate,
-    lua_pushcclosurek::lua_pushcclosurek_ref,
+    lua_pushcclosurek::lua_pushcclosurek,
   },
   macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
@@ -23,7 +21,7 @@ pub unsafe fn cowrap(l: &mut LuaState) -> i32 {
   // 裸地址访问
   unsafe { cocreate(l) };
 
-  lua_pushcclosurek_ref(l, Some(auxwrapy_arm), null(), 1, Some(auxwrapcont_arm));
+  lua_pushcclosurek(l, Some(auxwrapy_arm), None, 1, Some(auxwrapcont_arm));
 
   1
 }

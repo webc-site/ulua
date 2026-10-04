@@ -1,4 +1,4 @@
-use core::ffi::{c_char, c_void};
+use core::ffi::c_void;
 
 use super::LuaState;
 use crate::{
@@ -278,20 +278,22 @@ impl LuaState {
     unsafe { lua_pushlightuserdatatagged(self.as_mut_ptr(), p, 0) }
   }
 
-  /// # Safety
-  /// `f` 须遵循 Lua C 函数约定；`debugname` 须为空或在闭包存活期内有效的 NUL 字符串指针。
+  /// 压入无名或有名 C 函数闭包（cpp `lua_pushccfunction` 面，§10 收形：
+  /// `debugname` 为闭包存活契约下的原生字节窗，`None` 即原 null 哨兵）。
+  ///
+  /// 调用序契约（正确性，非内存安全；判例3 降 safe——入参无调用方裸指针解引用
+  /// 位，`self` 独占由 `&mut` 承载）：`f` 须遵循 Lua C 函数约定；`debugname` 须在
+  /// 闭包存活期内保持有效。
   #[inline(always)]
-  pub unsafe fn push_c_function(&mut self, f: LuaCFunction, debugname: *const c_char) {
-    // SAFETY: `f`/`debugname` 按本方法契约原样透传给 `lua_pushcclosurek`。
-    unsafe { lua_pushcclosurek(self.as_mut_ptr(), f, debugname, 0, None) }
+  pub fn push_c_function(&mut self, f: LuaCFunction, debugname: Option<&'static [u8]>) {
+    lua_pushcclosurek(self, f, debugname, 0, None)
   }
 
-  /// # Safety
-  /// `f` 须遵循 Lua C 函数约定；`debugname` 须为空或在闭包存活期内有效的 NUL 字符串指针；栈顶须有 `nup` 个待捕获上值。
+  /// 压入带 `nup` 个已栈顶上值的 C 闭包（契约与 [`Self::push_c_function`] 同一，
+  /// 另须栈顶已有 `nup` 个待捕获值）。
   #[inline(always)]
-  pub unsafe fn push_c_closure(&mut self, f: LuaCFunction, debugname: *const c_char, nup: i32) {
-    // SAFETY: `f`/`debugname`/`nup` 按本方法契约原样透传给 `lua_pushcclosurek`。
-    unsafe { lua_pushcclosurek(self.as_mut_ptr(), f, debugname, nup, None) }
+  pub fn push_c_closure(&mut self, f: LuaCFunction, debugname: Option<&'static [u8]>, nup: i32) {
+    lua_pushcclosurek(self, f, debugname, nup, None)
   }
 
   #[inline(always)]
