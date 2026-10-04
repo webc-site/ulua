@@ -12,7 +12,7 @@ pub fn lua_b_tostring(l: &mut LuaState) -> i32 {
   // SAFETY: `l` 存活（引用形保证）；`lua_l_tolstring_ref` 的 `# Safety` 其余前提
   // （1 号槽为合法正索引、受保护帧）由库函数约定成立。结果串压栈即目的（返回 1
   // 即栈顶该串），切片引用不外传。
-  let _ = unsafe { lua_l_tolstring_ref(l.as_mut_ptr(), 1) };
+  let _ = unsafe { lua_l_tolstring_ref(l, 1) };
   1
 }
 
