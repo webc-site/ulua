@@ -13,8 +13,8 @@
 //!
 //! 无栈协议：obj/mt 直接以调用帧栈槽指针传入，不触碰 `l.top`（调用方 FASTCALL
 //! 约定已把实参落在栈槽，栈布局由生成码维护）。
-///
-/// Source: `VM/src/lbaselib.cpp:100` + `VM/src/lapi.cpp:1067`（hand-ported 组合）
+//!
+//! Source: `VM/src/lbaselib.cpp:100` + `VM/src/lapi.cpp:1067`（hand-ported 组合）
 
 use crate::{
   functions::{lua_g_readonlyerror::check_writable, lua_h_getstr::lua_h_getstr, lua_s_newlstr::lua_s_newlstr},
