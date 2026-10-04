@@ -107,7 +107,10 @@ impl DemoFrontend {
 
     // fileResolver.source[module] = source;
     let name: ModuleName = module.into();
-    self.source.borrow_mut().insert(name.clone(), source.to_string());
+    self
+      .source
+      .borrow_mut()
+      .insert(name.clone(), source.to_string());
 
     // Luau::CheckResult checkResult = frontend.check("main");
     let check_result = self

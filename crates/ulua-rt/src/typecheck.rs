@@ -25,9 +25,11 @@
 /// [`Error::TypeError`](crate::Error::TypeError). Unlike a flat error string,
 /// the location fields let an editor / build tool point at the exact span.
 use core::{fmt, result::Result};
-use std::cell::RefCell;
-use std::panic::{AssertUnwindSafe, catch_unwind};
-use std::rc::Rc;
+use std::{
+  cell::RefCell,
+  panic::{AssertUnwindSafe, catch_unwind},
+  rc::Rc,
+};
 
 use ulua_analysis::{
   enums::solver_mode::SolverMode,
@@ -475,8 +477,10 @@ fn run_check(source: &str, definitions: Option<&str>) -> Vec<TypeDiagnostic> {
   // frontend 独占（其状态经 `source` 的 Rc 槽共享）；config resolver 是本函数
   // 局部（frontend 声明在其后、按逆序先析构），存入的裸句柄覆盖 frontend 使用期；
   // Box 使 Frontend 地址恒定。
-  let mut frontend =
-    make_wired_frontend(Box::new(CheckFileResolver::new(source)), &mut config_resolver.base);
+  let mut frontend = make_wired_frontend(
+    Box::new(CheckFileResolver::new(source)),
+    &mut config_resolver.base,
+  );
 
   // Register builtins + host definitions, then type-check the script.
   // （Old solver 路径已由 `make_wired_frontend` 在构造期定下。）

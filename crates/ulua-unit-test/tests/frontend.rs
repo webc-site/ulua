@@ -501,7 +501,10 @@ fn frontend_check_without_builtin_next() {
     FrontendOptions::default(),
   );
 
-  source.insert(String::from("Module/A"), String::from("for k,v in 2 do end"));
+  source.insert(
+    String::from("Module/A"),
+    String::from("for k,v in 2 do end"),
+  );
   source.insert(String::from("Module/B"), String::from("return next"));
 
   // We don't care about the result. That we haven't crashed is enough.

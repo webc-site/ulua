@@ -30,8 +30,12 @@ pub unsafe extern "C-unwind" fn conformance_types_setup(l: *mut LuaState) {
   // 独占（null 语义在 cpp 侧靠 `configResolver` 缺位表达，解析器恒有实例；本入口
   // 用 NullFileResolver 对应 cpp 传入的活对象），C++ `configResolver` 缺位由
   // `None` 显式承载（同 nullptr 语义，本测试不查 getConfig）。
-  let mut frontend =
-    Frontend::new_boxed(mode, Box::new(file_resolver), None, FrontendOptions::default());
+  let mut frontend = Frontend::new_boxed(
+    mode,
+    Box::new(file_resolver),
+    None,
+    FrontendOptions::default(),
+  );
 
   // cpp `Conformance.test.cpp:2026-2028`：`registerBuiltinGlobals(frontend,
   // frontend.globals)` → `freeze(frontend.globals.globalTypes)`。上游那两个引用

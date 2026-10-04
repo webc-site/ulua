@@ -1,10 +1,6 @@
 //! Source: `tests/Fixture.h`
 
-use std::{
-  cell::RefCell,
-  rc::Rc,
-  sync::Arc,
-};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use hashbrown::HashMap;
 use ulua_analysis::{

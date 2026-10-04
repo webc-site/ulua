@@ -10,10 +10,10 @@
 //! `foldhash` 固定种子别名（review.md §5：哈希统一 foldhash，无序语义同 std），
 //! 仅 get/insert/clear、无迭代。
 
+use std::{cell::RefCell, rc::Rc};
+
 use foldhash::fast::FixedState;
 use hashbrown::HashMap as BrownHashMap;
-use std::cell::RefCell;
-use std::rc::Rc;
 
 type HashMap<K, V> = BrownHashMap<K, V, FixedState>;
 use ulua_analysis::{
