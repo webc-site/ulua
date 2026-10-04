@@ -130,7 +130,7 @@ impl ApplyMappedGenerics {
     if let Some(f) = get_type::get::<FunctionType>(ty) {
       for &g in &f.generics {
         let g = follow_type::follow(g);
-        if let Some(bounds) = dense_hash_map_find_no_default(&env.mapped_generics, &g)
+        if let Some(bounds) = dense_hash_map_find_no_default(&env.current().mapped_generics, &g)
           && !bounds.is_empty()
         {
           return true;

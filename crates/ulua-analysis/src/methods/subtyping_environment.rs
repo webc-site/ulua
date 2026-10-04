@@ -1,6 +1,8 @@
 //! `subtyping_environment` 方法汇总：原先按 cpp 符号逐方法拆分的同前缀小文件合并至此，行为逐字保留。
 
-use ulua_common::LUAU_ASSERT;
+use alloc::vec::Vec;
+
+use ulua_common::{records::dense_hash_map::DenseHashMap, LUAU_ASSERT};
 
 use crate::{
   functions::follow_type::follow,
@@ -9,18 +11,65 @@ use crate::{
   },
   records::{
     apply_mapped_generics::ApplyMappedGenerics,
-    arena_handle::{Handle, alias, alias_ref},
+    arena_handle::Handle,
     builtin_types::BuiltinTypes,
     generic_bounds::GenericBounds,
     internal_error_reporter::InternalErrorReporter,
-    substitution::Substitution,
-    subtyping_environment::SubtypingEnvironment,
+    mapped_generic_environment::MappedGenericEnvironment,
+    subtyping_environment::{GenericScope, SubtypingEnvironment},
     subtyping_result::SubtypingResult,
+    substitution::Substitution,
     txn_log::TxnLog,
     type_arena::TypeArena,
   },
   type_aliases::{lookup_result::LookupResult, type_id::TypeId, type_pack_id::TypePackId},
 };
+
+impl GenericScope {
+  fn new() -> Self {
+    Self {
+      mapped_generics: DenseHashMap::default(),
+      mapped_generic_packs: MappedGenericEnvironment {
+        frames: Vec::new(),
+        current_scope_index: None,
+      },
+      substitutions: DenseHashMap::default(),
+      seen_set_cache: DenseHashMap::default(),
+      iteration_count: 0,
+    }
+  }
+}
+
+impl SubtypingEnvironment {
+  /// 根作用域构造：cpp `SubtypingEnvironment env;`（`Subtyping.cpp:618/665`）。
+  pub(crate) fn new() -> Self {
+    Self {
+      scopes: alloc::vec![GenericScope::new()],
+    }
+  }
+
+  /// 当前（栈顶）作用域，对应 cpp 传入的「当前环境」本体。
+  pub(crate) fn current(&self) -> &GenericScope {
+    self.scopes.last().expect("不变量：根帧恒在栈")
+  }
+
+  /// [`current`](Self::current) 的可变形态。
+  pub(crate) fn current_mut(&mut self) -> &mut GenericScope {
+    self.scopes.last_mut().expect("不变量：根帧恒在栈")
+  }
+
+  /// 进入 nested generic bounds 作用域：cpp `SubtypingEnvironment boundsEnv;
+  /// boundsEnv.parent = &env;`（`Subtyping.cpp:3088-3089`）。
+  pub(crate) fn push_scope(&mut self) {
+    self.scopes.push(GenericScope::new());
+  }
+
+  /// 离开作用域并销毁该帧，对应 cpp 子环境离开作用域即析构。
+  pub(crate) fn pop_scope(&mut self) {
+    LUAU_ASSERT!(self.scopes.len() > 1);
+    self.scopes.pop();
+  }
+}
 
 impl SubtypingEnvironment {
   /// C++ `SubtypingEnvironment::applyMappedGenerics` (`Subtyping.cpp:504-513`):
@@ -54,97 +103,87 @@ impl SubtypingEnvironment {
 }
 
 impl SubtypingEnvironment {
+  /// cpp `containsMappedPack`（`Subtyping.cpp:565-574`）：本帧 pack 映射命中即真，
+  /// 否则沿父链外行；栈形态下等价于「任意帧 lookup 到 TypePackId」。
   pub fn contains_mapped_pack(&self, tp: TypePackId) -> bool {
-    let lookup_result: LookupResult = self.lookup_generic_pack(tp);
-    match lookup_result {
-      LookupResult::V0(_) => true,
-      _ => {
-        if !self.parent.is_null() {
-          alias_ref(self.parent).contains_mapped_pack(tp)
-        } else {
-          false
-        }
-      }
-    }
+    self.lookup_generic_pack(tp).get_if::<TypePackId>().is_some()
   }
 }
 
 impl SubtypingEnvironment {
+  /// cpp `containsMappedType`（`Subtyping.cpp:553-563`）：自栈顶向外逐帧探测
+  /// 本帧 `mapped_generics` 非空界。
   pub fn contains_mapped_type(&self, ty: TypeId) -> bool {
     let ty = follow(ty);
-    if let Some(bounds) = dense_hash_map_find_no_default(&self.mapped_generics, &ty)
-      && !bounds.is_empty()
-    {
-      return true;
-    }
-
-    if !self.parent.is_null() {
-      return alias_ref(self.parent).contains_mapped_type(ty);
-    }
-
-    false
+    self.scopes.iter().rev().any(|scope| {
+      dense_hash_map_find_no_default(&scope.mapped_generics, &ty)
+        .is_some_and(|bounds| !bounds.is_empty())
+    })
   }
 }
 
 impl SubtypingEnvironment {
-  /// 查找 `ty`（经 `follow`）在父链中对应的泛型约束边界。
+  /// 查找 `ty`（经 `follow`）在作用域栈中对应的泛型约束边界，自栈顶向外取
+  /// 首个非空 bounds 的最后一项。
   ///
-  /// 前提由 `SubtypingEnvironment` 构造不变量保证：`self.parent` 为空，或指向
-  /// 比本环境长寿的外层作用域环境；`ice_reporter` 非空（`Handle` 类型编码）且
-  /// 在本调用返回前存活。`ty` 为类型 arena 中存活节点（与任意 `TypeId` 用法同契约）。
+  /// 前提由 `SubtypingEnvironment` 构造不变量保证：`ice_reporter` 非空
+  /// （`Handle` 类型编码）且在本调用返回前存活；`ty` 为类型 arena 中存活节点
+  /// （与任意 `TypeId` 用法同契约）。
   pub(crate) fn get_mapped_type_bounds(
     &mut self,
     ty: TypeId,
     ice_reporter: Handle<InternalErrorReporter>,
   ) -> &mut GenericBounds {
     let ty = follow(ty);
-    if let Some(bounds) = dense_hash_map_find_mut_no_default(&mut self.mapped_generics, &ty)
-      && !bounds.is_empty()
-    {
-      // 链上 `!bounds.is_empty()` 蕴含 last_mut() 命中 Some。
-      return bounds.last_mut().expect("链上 !bounds.is_empty() 蕴含非空");
-    }
-
-    if !self.parent.is_null() {
-      // `self.parent` 非空由构造不变量保证；`alias()` 将其转为 `&'static mut`，
-      // 父链严格向外指且无自别名，递归返回的借用覆盖本次调用。
-      return alias(self.parent).get_mapped_type_bounds(ty, ice_reporter);
-    }
-
-    LUAU_ASSERT!(false);
-    // `ice_reporter` 为 Handle（非空由类型编码，对应 C++ 引用形参）；`ice_string`
-    // 只上报一条诊断消息并 panic 发散，不产生并存别名。
-    ice_reporter
-      .get()
-      .ice_string("Trying to access bounds for a type with no in-scope bounds");
-    unreachable!()
+    // 先以共享遍历定位命中帧（可变迭代器元素引用无法逃逸出循环，故两趟；
+    // 帧深为 generic 嵌套层数，O(层数) 探测，冷路径）。
+    let offset_from_top = self.scopes.iter().rev().position(|scope| {
+      dense_hash_map_find_no_default(&scope.mapped_generics, &ty)
+        .is_some_and(|bounds| !bounds.is_empty())
+    });
+    let Some(offset_from_top) = offset_from_top else {
+      LUAU_ASSERT!(false);
+      // `ice_reporter` 为 Handle（非空由类型编码，对应 C++ 引用形参）；`ice_string`
+      // 只上报一条诊断消息并 panic 发散，不产生并存别名。
+      ice_reporter
+        .get()
+        .ice_string("Trying to access bounds for a type with no in-scope bounds");
+      unreachable!()
+    };
+    let from_top = self.scopes.len() - 1 - offset_from_top;
+    let scope = &mut self.scopes[from_top];
+    let bounds = dense_hash_map_find_mut_no_default(&mut scope.mapped_generics, &ty)
+      .expect("共享探测趟已命中该键，可变趟无删改必再命中");
+    // 命中判据含 `!bounds.is_empty()`，蕴含 last_mut() 命中 Some。
+    bounds.last_mut().expect("判据 !bounds.is_empty() 蕴含非空")
   }
 }
 
 impl SubtypingEnvironment {
+  /// cpp `lookupGenericPack`（`Subtyping.cpp:590-600`）：自栈顶向外取首个
+  /// `TypePackId` 命中；全程未命中时返回最外层（根帧）自身的查找结果，
+  /// 与原父链递归在最外层返回 `result` 逐字一致。
   pub fn lookup_generic_pack(&self, tp: TypePackId) -> LookupResult {
-    let result = self.mapped_generic_packs.lookup_generic_pack(tp);
-    if result.get_if::<TypePackId>().is_some() {
-      result
-    } else if !self.parent.is_null() {
-      alias_ref(self.parent).lookup_generic_pack(tp)
-    } else {
-      result
+    let mut outermost: Option<LookupResult> = None;
+    for scope in self.scopes.iter().rev() {
+      let result = scope.mapped_generic_packs.lookup_generic_pack(tp);
+      if result.get_if::<TypePackId>().is_some() {
+        return result;
+      }
+      outermost = Some(result);
     }
+    outermost.expect("不变量：根帧恒在栈")
   }
 }
 
 impl SubtypingEnvironment {
   pub fn try_find_substitution(&self, ty: TypeId) -> Option<TypeId> {
-    if let Some(it) = self.substitutions.find(&ty) {
-      return Some(*it);
-    }
-
-    if !self.parent.is_null() {
-      return alias_ref(self.parent).try_find_substitution(ty);
-    }
-
-    None
+    self
+      .scopes
+      .iter()
+      .rev()
+      .find_map(|scope| scope.substitutions.find(&ty))
+      .copied()
   }
 }
 
@@ -153,14 +192,10 @@ impl SubtypingEnvironment {
     &self,
     sub_and_super: (TypeId, TypeId),
   ) -> Option<&SubtypingResult> {
-    if let Some(it) = self.seen_set_cache.find(&sub_and_super) {
-      return Some(it);
-    }
-
-    if !self.parent.is_null() {
-      return alias_ref(self.parent).try_find_subtyping_result(sub_and_super);
-    }
-
-    None
+    self
+      .scopes
+      .iter()
+      .rev()
+      .find_map(|scope| scope.seen_set_cache.find(&sub_and_super))
   }
 }

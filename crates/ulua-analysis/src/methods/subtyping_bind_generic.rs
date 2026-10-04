@@ -88,16 +88,16 @@ impl Subtyping {
     let super_ty = follow_type::follow(super_ty);
     let mut original_sub_ty_bounds: Option<GenericBounds> = None;
 
-    let super_bounds_snapshot = dense_hash_map_find_no_default(&env.mapped_generics, &super_ty)
+    let super_bounds_snapshot = dense_hash_map_find_no_default(&env.current().mapped_generics, &super_ty)
       .and_then(|bounds| bounds.last().cloned());
 
-    let sub_has_local_bounds = dense_hash_map_find_no_default(&env.mapped_generics, &sub_ty)
+    let sub_has_local_bounds = dense_hash_map_find_no_default(&env.current().mapped_generics, &sub_ty)
       .is_some_and(|bounds| !bounds.is_empty());
 
     if sub_has_local_bounds {
       LUAU_ASSERT!(get_type::get::<GenericType>(sub_ty).is_some());
 
-      let sub_bounds = dense_hash_map_find_mut_no_default(&mut env.mapped_generics, &sub_ty)
+      let sub_bounds = dense_hash_map_find_mut_no_default(&mut env.current_mut().mapped_generics, &sub_ty)
         .expect("sub_has_local_bounds 判据即同键 find==Some 且非空，中间无删改");
       let sub_bounds_back = sub_bounds.last_mut().expect("判据已含 !is_empty()");
       original_sub_ty_bounds = Some(sub_bounds_back.clone());
@@ -128,13 +128,13 @@ impl Subtyping {
       }
     }
 
-    let super_has_local_bounds = dense_hash_map_find_no_default(&env.mapped_generics, &super_ty)
+    let super_has_local_bounds = dense_hash_map_find_no_default(&env.current().mapped_generics, &super_ty)
       .is_some_and(|bounds| !bounds.is_empty());
 
     if super_has_local_bounds {
       LUAU_ASSERT!(get_type::get::<GenericType>(super_ty).is_some());
 
-      let super_bounds = dense_hash_map_find_mut_no_default(&mut env.mapped_generics, &super_ty)
+      let super_bounds = dense_hash_map_find_mut_no_default(&mut env.current_mut().mapped_generics, &super_ty)
         .expect("super_has_local_bounds 判据即同键 find==Some 且非空，中间无删改");
       let super_bounds_back = super_bounds.last_mut().expect("判据已含 !is_empty()");
       let lower_super_bounds = &mut super_bounds_back.lower_bound;

@@ -1,7 +1,3 @@
-use alloc::vec::Vec;
-
-use ulua_common::records::dense_hash_map::DenseHashMap;
-
 use crate::{
   enums::{
     normalization_result::NormalizationResult,
@@ -10,8 +6,7 @@ use crate::{
   functions::should_suppress_errors_type_utils::should_suppress_errors,
   records::{
     generic_bounds::GenericBounds, generic_bounds_mismatch::GenericBoundsMismatch,
-    intersection_builder::IntersectionBuilder,
-    mapped_generic_environment::MappedGenericEnvironment, scope::Scope, subtyping::Subtyping,
+    intersection_builder::IntersectionBuilder, scope::Scope, subtyping::Subtyping,
     subtyping_environment::SubtypingEnvironment, subtyping_result::SubtypingResult,
     union_builder::UnionBuilder,
   },
@@ -29,7 +24,7 @@ impl Subtyping {
     let mut aggregate_lower_bound = UnionBuilder::new(self.arena, self.builtin_types);
     aggregate_lower_bound.reserve(bounds.lower_bound.size());
     for &t in &bounds.lower_bound.order {
-      if let Some(mapped_bounds) = env.mapped_generics.find(&t)
+      if let Some(mapped_bounds) = env.current().mapped_generics.find(&t)
         && mapped_bounds.is_empty()
       {
         continue;
@@ -41,7 +36,7 @@ impl Subtyping {
     let mut aggregate_upper_bound = IntersectionBuilder::new(self.arena, self.builtin_types);
     aggregate_upper_bound.reserve(bounds.upper_bound.size());
     for &t in &bounds.upper_bound.order {
-      if let Some(mapped_bounds) = env.mapped_generics.find(&t)
+      if let Some(mapped_bounds) = env.current().mapped_generics.find(&t)
         && mapped_bounds.is_empty()
       {
         continue;
@@ -88,24 +83,15 @@ impl Subtyping {
       result.is_subtype = false;
     }
 
-    let mut bounds_env = SubtypingEnvironment {
-      parent: env as *mut SubtypingEnvironment,
-      mapped_generics: DenseHashMap::default(),
-      mapped_generic_packs: MappedGenericEnvironment {
-        frames: Vec::new(),
-        current_scope_index: None,
-      },
-      substitutions: DenseHashMap::default(),
-      seen_set_cache: DenseHashMap::default(),
-      iteration_count: 0,
-    };
+    // cpp `SubtypingEnvironment boundsEnv; boundsEnv.parent = &env;`
+    // （`Subtyping.cpp:3088-3089`）：栈形态即压入一帧新作用域，bounds 子求解
+    // 结束后弹栈销毁（cpp 子环境离开作用域析构）。
+    env.push_scope();
     let mut bounds_result = self
       .is_covariant_with_subtyping_environment_type_id_type_id_not_null_scope(
-        &mut bounds_env,
-        lower_bound,
-        upper_bound,
-        scope,
+        env, lower_bound, upper_bound, scope,
       );
+    env.pop_scope();
     bounds_result.reasoning.clear();
 
     if res == NormalizationResult::False {
