@@ -11,8 +11,8 @@ use crate::{
     NativeFCloseFn, NativeFFindupvalFn, NativeFNewLclosureFn, NativeForgLoopFallbackFn,
     NativeForgLoopIterFn, NativeForgPrepXnextFn, NativeGetImportFn, NativeHCloneFn, NativeHGetnFn,
     NativeHNewFn, NativeHResizearrayFn, NativeHSetnumFn, NativeMathBinaryFn, NativeMathFrexpFn,
-    NativeMathLdexpFn, NativeMathModfFn, NativeMathUnaryFn, NativeNewUserdataFn, NativeTGettmFn,
-    NativeSetMetatableFn, NativeTObjtypenamestrFn, NativeTableAccessFn,
+    NativeMathLdexpFn, NativeMathModfFn, NativeMathUnaryFn, NativeNewUserdataFn,
+    NativeSetMetatableFn, NativeTGettmFn, NativeTObjtypenamestrFn, NativeTableAccessFn,
   },
   type_aliases::api::LuauFastFunction,
 };

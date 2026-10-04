@@ -16,8 +16,12 @@
 //!
 //! Source: `VM/src/lbaselib.cpp:100` + `VM/src/lapi.cpp:1067`（hand-ported 组合）
 
+use core::ptr::null_mut;
+
 use crate::{
-  functions::{lua_g_readonlyerror::check_writable, lua_h_getstr::lua_h_getstr, lua_s_newlstr::lua_s_newlstr},
+  functions::{
+    lua_g_readonlyerror::check_writable, lua_h_getstr::lua_h_getstr, lua_s_newlstr::lua_s_newlstr,
+  },
   macros::lua_c_objbarrier::lua_c_objbarrier,
   records::{lua_state::LuaState, lua_table::LuaTable},
   type_aliases::t_value::TValue,
@@ -68,7 +72,7 @@ pub unsafe extern "C-unwind" fn lua_codegen_setmetatable_export(
 
     // 赋值段（lapi lua_setmetatable 的 Table 分支逐位同形：字段写 + objbarrier）
     let mt_ptr: *mut LuaTable = if mt_is_nil {
-      core::ptr::null_mut()
+      null_mut()
     } else {
       (*mt).as_table_ptr()
     };

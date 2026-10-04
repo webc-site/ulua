@@ -4383,7 +4383,9 @@ impl IrLoweringX64 {
           self
             .build_mut()
             .mov(OperandX64::reg(h2.reg), OperandX64::reg(bits.reg));
-          self.build_mut().shr(OperandX64::reg(h2.reg), OperandX64::imm(32));
+          self
+            .build_mut()
+            .shr(OperandX64::reg(h2.reg), OperandX64::imm(32));
           self.build_mut().and_(
             OperandX64::reg(dword_reg(h2.reg)),
             OperandX64::imm(0x7FFF_FFFF),
@@ -4393,30 +4395,54 @@ impl IrLoweringX64 {
           let sd = dword_reg(scratch.reg);
 
           // MurmurHash64B 收尾（常量与步序不可改动，见 murmur_hash_64b）
-          self.build_mut().mov(OperandX64::reg(sd), OperandX64::reg(h2d));
-          self.build_mut().shr(OperandX64::reg(sd), OperandX64::imm(18));
-          self.build_mut().xor_(OperandX64::reg(h1d), OperandX64::reg(sd));
+          self
+            .build_mut()
+            .mov(OperandX64::reg(sd), OperandX64::reg(h2d));
+          self
+            .build_mut()
+            .shr(OperandX64::reg(sd), OperandX64::imm(18));
+          self
+            .build_mut()
+            .xor_(OperandX64::reg(h1d), OperandX64::reg(sd));
           self
             .build_mut()
             .imul_imm(OperandX64::reg(h1d), OperandX64::reg(h1d), MURMUR_MIX_CONST);
 
-          self.build_mut().mov(OperandX64::reg(sd), OperandX64::reg(h1d));
-          self.build_mut().shr(OperandX64::reg(sd), OperandX64::imm(22));
-          self.build_mut().xor_(OperandX64::reg(h2d), OperandX64::reg(sd));
+          self
+            .build_mut()
+            .mov(OperandX64::reg(sd), OperandX64::reg(h1d));
+          self
+            .build_mut()
+            .shr(OperandX64::reg(sd), OperandX64::imm(22));
+          self
+            .build_mut()
+            .xor_(OperandX64::reg(h2d), OperandX64::reg(sd));
           self
             .build_mut()
             .imul_imm(OperandX64::reg(h2d), OperandX64::reg(h2d), MURMUR_MIX_CONST);
 
-          self.build_mut().mov(OperandX64::reg(sd), OperandX64::reg(h2d));
-          self.build_mut().shr(OperandX64::reg(sd), OperandX64::imm(17));
-          self.build_mut().xor_(OperandX64::reg(h1d), OperandX64::reg(sd));
+          self
+            .build_mut()
+            .mov(OperandX64::reg(sd), OperandX64::reg(h2d));
+          self
+            .build_mut()
+            .shr(OperandX64::reg(sd), OperandX64::imm(17));
+          self
+            .build_mut()
+            .xor_(OperandX64::reg(h1d), OperandX64::reg(sd));
           self
             .build_mut()
             .imul_imm(OperandX64::reg(h1d), OperandX64::reg(h1d), MURMUR_MIX_CONST);
 
-          self.build_mut().mov(OperandX64::reg(sd), OperandX64::reg(h1d));
-          self.build_mut().shr(OperandX64::reg(sd), OperandX64::imm(19));
-          self.build_mut().xor_(OperandX64::reg(h2d), OperandX64::reg(sd));
+          self
+            .build_mut()
+            .mov(OperandX64::reg(sd), OperandX64::reg(h1d));
+          self
+            .build_mut()
+            .shr(OperandX64::reg(sd), OperandX64::imm(19));
+          self
+            .build_mut()
+            .xor_(OperandX64::reg(h2d), OperandX64::reg(sd));
           self
             .build_mut()
             .imul_imm(OperandX64::reg(h2d), OperandX64::reg(h2d), MURMUR_MIX_CONST);
