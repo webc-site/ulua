@@ -101,23 +101,27 @@ pub(crate) fn create_function(l: &mut LuaState) -> i32 {
   }
 }
 
-/// # Safety
-/// `l`（`&mut LuaState` 接收者）须是 Lua VM 在本次原生函数调用中给出、调用全程存活且被本次
-/// 调用独占的状态（本函数只经它的 C-API 读写 VM 栈）；`head_idx`/`tail_idx` 须是该状态栈上的有效索引，且其中若含 userdata，必须
-/// 是由 `alloc_type_user_data` 登记、可被 `get_type_user_data`/`optional_type_user_data`
-/// 识别的类型 userdata（这些辅助函数会解引用其 type arena 节点）。对应 C++ 原生
+/// 对应 C++ 原生
 /// `static TypeFunctionTypePackId getTypePack(lua_State* L, int headIdx, int tailIdx)`
 /// （`cpp/Analysis/src/TypeFunctionRuntime.cpp:1208`）。
-pub(crate) unsafe fn get_type_pack_runtime(
+///
+/// 本函数是 safe fn：形参为 `&mut LuaState`/`i32`，无调用方传入的裸指针，体内亦无原生
+/// unsafe 操作（VM 读写全部经 safe 门面）；返回的 pack 句柄由 runtime bump arena 分配、
+/// 比 `l` 长寿，与 `get_type_user_data` 同形态。
+///
+/// 调用序契约（正确性，非内存安全）：`l` 须为本次原生函数调用全程存活的状态；
+/// `head_idx`/`tail_idx` 须是其栈上有效索引，且其中若含 userdata，必须是由
+/// `alloc_type_user_data` 登记、可被 `get_type_user_data`/`optional_type_user_data`
+/// 识别的类型 userdata；runtime 未挂载时 `expect` 以确定性 panic 收敛，不构成 UB。
+pub(crate) fn get_type_pack_runtime(
   l: &mut LuaState,
   head_idx: i32,
   tail_idx: i32,
 ) -> TypeFunctionTypePackId {
-  // 前提依 fn 文档契约：`l` 为存活独占状态、`head_idx`/`tail_idx` 是其栈上有效
-  // 索引；get_type_user_data/optional_type_user_data 仅识别 alloc_type_user_data
-  // 登记的 userdata；gty 命中 Some 后仅读取 is_pack/is_named/name（arena 块地址不
-  // 移动）；runtime 句柄同 create_function：注册期接线、非空由 expect 兜底 panic。
-  // 本体已无原生 unsafe 操作，`unsafe fn` 形态属未批次遗留。
+  // 调用序契约见函数头：runtime 未挂载由 expect 兜底 panic；
+  // get_type_user_data/optional_type_user_data 仅识别 alloc_type_user_data
+  // 登记的 userdata；gty 命中 Some 后仅读取 is_pack/is_named/name（arena 块地址
+  // 不移动）。
   let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
   let mut head = Vec::new();
 

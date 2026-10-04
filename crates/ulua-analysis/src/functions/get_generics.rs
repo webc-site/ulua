@@ -27,11 +27,15 @@ use crate::{
   },
 };
 
-/// # Safety
-/// `l` 必须是本类型函数运行时会话内存活且单线程独占的 `LuaState`；`idx` 须是该状态栈上
-/// 的有效索引，其内容若为 userdata 则须是由 `alloc_type_user_data` 登记的类型 userdata；
-/// 主线程 thread data 已安装非空 `TypeFunctionRuntime`（由 `set_type_function_environment` 保证）。
-pub(crate) unsafe fn get_generics(
+/// 本函数是 safe fn：形参为 `&mut LuaState`/`i32`/`&str`，无调用方传入的裸指针；体内
+/// `unsafe` 块只因 `lua_l_typeerror_l`/`lua_gettable` 等 VM 侧 C-ABI 门面的裸转手，
+/// 返回的 arena 句柄向量源自本次调用内部分配，调用方无需承担任何内存安全前提。
+///
+/// 调用序契约（正确性，非内存安全）：`l` 须为类型函数运行时会话内存活的状态；`idx` 须是
+/// 该状态栈上的有效索引，其内容若为 userdata 则须是由 `alloc_type_user_data` 登记的类型
+/// userdata；主线程 thread data 已在 runtime 安装期写入 `TypeFunctionRuntime`——违约时
+/// `expect`/VM 错误路径以确定性 panic 收敛，不构成 UB。
+pub(crate) fn get_generics(
   l: &mut LuaState,
   idx: i32,
   fname: &str,
