@@ -271,7 +271,8 @@ impl_ast_ref_visit! {
 /// safe fn 即允许调用方交出任意悬垂指针触发 UB。visitor 参数走 `&mut`，非
 /// 空+存活+独占由引用类型自带，无须外挂在 `# Safety`）。
 ///
-/// # Safety（逐参数契约）
+/// # Safety
+/// 逐参数契约（存活期 / 独占性 / 对齐 / 界内）：
 /// - `node`：
 ///   - 存活期：null，或指向**存活的 AST 节点**（`#[repr(C)]` 首字段为
 ///     `AstNode`，由 `Allocator` 分配的 arena 槽位承载，遍历期间节点存活）。

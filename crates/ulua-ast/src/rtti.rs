@@ -421,7 +421,8 @@ pub(crate) use define_ast_ref_enum;
 /// 且合法性依赖调用方持有的类型不变量证据——降级为 safe fn 会允许任意 `&B`
 /// 强转为 `&T`，是即时 UB；门面侧的窄 `unsafe { ref_cast(..) }` 块即证据交接）。
 ///
-/// # Safety（逐参数契约）
+/// # Safety
+/// 逐参数契约（存活期 / 独占性 / 对齐 / 界内）：
 /// - `node`：
 ///   - 存活期：`node` 所指 place 在返回借用的寿命内有效；由入参 `&B` 借用供给。
 ///   - 独占性：共享借用即可，无需独占；返回 `&T` 与入参共享借用共寿命不产生
@@ -445,7 +446,8 @@ unsafe fn ref_cast<B, T>(node: &B) -> &T {
 /// 保留 `unsafe fn`（§2 rule 1，理由同 [`ref_cast`]）：独占性沿 `&mut B` 继承
 /// 到 `&mut T`，一旦降级即失去「调用方必须自证 class_index 命中」这道关卡。
 ///
-/// # Safety（逐参数契约）
+/// # Safety
+/// 逐参数契约（存活期 / 独占性 / 对齐 / 界内）：
 /// - `node`：
 ///   - 存活期：入参 `&mut B` 借用期内该 place 有效。
 ///   - 独占性：`&mut B` 即该 place 在借用期内无其它别名（共享或独占）的类型
@@ -617,7 +619,8 @@ pub(crate) fn ast_node_as_family_mut<T: AstFamily>(
 /// 二者共同构成解引用契约，降级为 safe fn 会把 arena 存活前提漏交给类型系统
 /// 无法证明的调用方）。
 ///
-/// # Safety（逐参数契约）
+/// # Safety
+/// 逐参数契约（存活期 / 独占性 / 对齐 / 界内）：
 /// - `node`（`impl AstNodePtr`：`*mut T`/`Node<T>`/`OptNode<T>`）：
 ///   - 存活期：`node` 为 null 或指向**存活的 repr(C) AST 节点**（首字段传递地
 ///     为 `AstNode`）；本函数只读 `class_index`（偏移 0），不解引用返回的
@@ -679,7 +682,8 @@ pub fn cst_node_try_as<T: CstNodeClass>(node: &CstNode) -> Option<&T> {
 /// 共同构成解引用契约；降级为 safe fn 会把 arena 存活/独占前提漏交类型系统，
 /// 允许调用方以任意 `*mut CstNode` 触发 UB）。
 ///
-/// # Safety（逐参数契约）
+/// # Safety
+/// 逐参数契约（存活期 / 独占性 / 对齐 / 界内）：
 /// - `node`：
 ///   - 存活期：`node` 为 null 或指向**存活的 repr(C) CST 节点**（首字段传递地
 ///     为 `CstNode`），返回的 `&'b mut T` 借用半径 `'b` 内该 place 有效；`'b`
