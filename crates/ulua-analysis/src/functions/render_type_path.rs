@@ -14,11 +14,12 @@
 //! `RenderMetadata` 恒为空 —— 返回包单值与取反（negation）类 flags-on 原因
 //! 仍不可达，留待后续与 negation 渲染专项对齐。
 use alloc::{format, string::String};
+use core::mem::take;
 
 use crate::{
   enums::{pack_field::PackField, type_field::TypeField, variant::Variant},
   functions::to_human_readable_index::to_human_readable_index,
-  records::path::Path,
+  records::{index::Index, path::Path, property_type_path::Property},
   type_aliases::component::Component,
 };
 
@@ -104,13 +105,15 @@ fn render(current: &mut Phrase, component: &Component) {
   }
 }
 
-fn render_property(current: &mut Phrase, property: &crate::records::property_type_path::Property) {
-  let mut next = Phrase::default();
-  next.kind = Kind::Property;
-  next.property_is_read = property.is_read;
+fn render_property(current: &mut Phrase, property: &Property) {
+  let mut next = Phrase {
+    kind: Kind::Property,
+    property_is_read: property.is_read,
+    ..Default::default()
+  };
 
   if current.kind == Kind::Property && current.property_is_read {
-    next.property_prefix = core::mem::take(&mut current.property_prefix);
+    next.property_prefix = take(&mut current.property_prefix);
     next.property_name = format!("{}.{}", current.property_name, property.name);
   } else {
     next.property_name = property.name.clone();
@@ -143,7 +146,7 @@ fn render_property(current: &mut Phrase, property: &crate::records::property_typ
   *current = next;
 }
 
-fn render_index(current: &mut Phrase, index: &crate::records::index::Index) {
+fn render_index(current: &mut Phrase, index: &Index) {
   // cpp：非 Pack 变体（Union / Intersection）跳过，保持 current 不变。
   if index.variant != Variant::Pack {
     return;
@@ -343,8 +346,10 @@ fn render_pack_field(current: &mut Phrase, field: PackField) {
 }
 
 fn render_pack_slice(current: &mut Phrase, start_index: usize) {
-  let mut next = Phrase::default();
-  next.kind = Kind::PackSlice;
+  let mut next = Phrase {
+    kind: Kind::PackSlice,
+    ..Default::default()
+  };
   let position = to_human_readable_index(start_index);
 
   match current.kind {
@@ -406,8 +411,10 @@ fn render_reduction(current: &mut Phrase) {
 }
 
 fn render_generic_pack_mapping(current: &mut Phrase) {
-  let mut next = Phrase::default();
-  next.kind = Kind::MappedPack;
+  let mut next = Phrase {
+    kind: Kind::MappedPack,
+    ..Default::default()
+  };
 
   match current.kind {
     Kind::Tail => {
