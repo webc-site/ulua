@@ -39,6 +39,7 @@ use ulua_vm::{
     lua_c_barrierf::lua_c_barrierf_export,
     lua_c_barriertable::lua_c_barriertable_export,
     lua_c_step::lua_c_step_export,
+    lua_codegen_setmetatable::lua_codegen_setmetatable_export,
     lua_f_close::lua_f_close_export,
     lua_f_findupval::lua_f_findupval_export,
     lua_f_new_lclosure::lua_f_new_lclosure_export,
@@ -103,6 +104,11 @@ pub type NativeDolenFn =
 /// 表读写（`luaV_gettable` / `luaV_settable`），`val` 为结果/待写栈槽。
 pub type NativeTableAccessFn =
   unsafe extern "C-unwind" fn(l: *mut LuaState, t: *const TValue, key: *mut TValue, val: StkId);
+
+/// JIT setmetatable 快速通道（本 fork 扩展）：obj/mt 为调用帧栈槽，返回 1 = 已赋值、
+/// 0 = 前置不满足须走解释器 fallback（错误消息与抛出时机由 fallback 路径保真）。
+pub type NativeSetMetatableFn =
+  unsafe extern "C-unwind" fn(l: *mut LuaState, obj: *const TValue, mt: *const TValue) -> i32;
 
 /// 字符串拼接（`luaV_concat`），`total`/`last` 为栈上区间端点。
 pub type NativeConcatFn = unsafe extern "C-unwind" fn(l: *mut LuaState, total: i32, last: i32);
@@ -285,6 +291,7 @@ pub const LUA_V_DOLEN: NativeDolenFn = lua_v_dolen_export;
 pub const LUA_V_GETTABLE: NativeTableAccessFn = lua_v_gettable_export;
 pub const LUA_V_SETTABLE: NativeTableAccessFn = lua_v_settable_export;
 pub const LUA_V_CONCAT: NativeConcatFn = lua_v_concat_export;
+pub const CODEGEN_SETMETATABLE: NativeSetMetatableFn = lua_codegen_setmetatable_export;
 
 pub const LUA_H_GETN: NativeHGetnFn = lua_h_getn_export;
 pub const LUA_H_NEW: NativeHNewFn = lua_h_new_export;
