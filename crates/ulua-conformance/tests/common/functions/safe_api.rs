@@ -308,8 +308,8 @@ pub fn openlibs(l: L) {
 
 /// `luaopen_base`：装载 base 库并返回其栈占用（供 [`pop`] 回收）。
 pub fn open_base(l: L) -> c_int {
-  // Safety: `l` 存活（模块级契约）。
-  unsafe { luaopen_base(l) }
+  // r16-v3 同款：callee 已前移 `&mut LuaState` 引用形，经 `state_mut` 收口点直传独占引用。
+  luaopen_base(state_mut(l))
 }
 
 /// `luaL_register(l, NULL, funcs)` 的 bytes 核心形：`libname` 以 `None` 表达
