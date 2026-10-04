@@ -1,7 +1,6 @@
 extern crate alloc;
 
 use alloc::{borrow::Cow, string::String, vec};
-use core::ptr::null;
 
 use ulua_cli_lib::functions::{
   get_parent_path::get_parent_path, join_paths_file_utils::join_paths,
@@ -89,9 +88,10 @@ fn run_code_str(l: *mut LuaState, src: &str) {
 /// 注册运行时模块 `@test/helloworld`（hello = "world"）供 require 读取
 fn register_test_module(l: *mut LuaState) {
   // Safety: `l` 指向 fixture 初始化完成的主线程；pushcclosurek/push_str/newtable/settable/call 的栈序列配平。
-  // `lua_pushcclosurek` 的 `debugname` 传 null 为空名哨兵（同 cpp nullptr）。
+  // `lua_pushcclosurek` 的 `debugname` 传 `None` 为空名哨兵（同 cpp nullptr；
+  // §10 收形后为 safe fn，形参 `&mut LuaState`，就地一次重建借用、窗止于本调用）。
   unsafe {
-    lua_pushcclosurek(l, Some(luarequire_registermodule), null(), 0, None);
+    lua_pushcclosurek(&mut *l, Some(luarequire_registermodule), None, 0, None);
     (*l).push_str("@test/helloworld");
     (*l).new_table();
     (*l).push_str("hello");
@@ -636,9 +636,9 @@ fn require_by_string_check_clear_cache() {
   assert_cached(l, &cache_key);
 
   // Safety: `l` 为 fixture 主线程；pushcclosurek + call 栈序列配平。
-  // 真边界：`lua_pushcclosurek` 的 `debugname: *const c_char` 传 null 为空名哨兵（同 cpp nullptr）。
+  // `debugname` 传 `None` 即空名哨兵（§10 原生 `Option` 形态，同 cpp nullptr）。
   unsafe {
-    lua_pushcclosurek(l, Some(luarequire_clearcache), null(), 0, None);
+    lua_pushcclosurek(&mut *l, Some(luarequire_clearcache), None, 0, None);
     (*l).call(0, 0);
   }
 
@@ -660,9 +660,9 @@ fn require_by_string_check_clear_cache_entry() {
   assert_cached(l, &cache_key);
 
   // Safety: `l` 为 fixture 主线程；pushcclosurek/push_str/call 栈序列配平。
-  // 真边界：`lua_pushcclosurek` 的 `debugname: *const c_char` 传 null 为空名哨兵（同 cpp nullptr）。
+  // `debugname` 传 `None` 即空名哨兵（§10 原生 `Option` 形态，同 cpp nullptr）。
   unsafe {
-    lua_pushcclosurek(l, Some(luarequire_clearcacheentry), null(), 0, None);
+    lua_pushcclosurek(&mut *l, Some(luarequire_clearcacheentry), None, 0, None);
     (*l).push_str(&cache_key);
     (*l).call(1, 0);
   }
