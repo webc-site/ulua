@@ -6,7 +6,7 @@ use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   enums::lua_type::LuaType,
-  functions::{cstr_bytes, gettablemode::gettablemode, removeentry::removeentry},
+  functions::{gettablemode::gettablemode, removeentry::removeentry},
   macros::{
     gkey::{gkey, gval},
     gnode::gnode,
@@ -27,20 +27,20 @@ pub(crate) unsafe fn traversetable(g: *mut global_State, h: *mut LuaTable) -> i3
     }
 
     // is there a weak mode?
-    // C++ `strchr(modev, 'k'/'v') != NULL`：contains 等价（mode 串仅 1~2 字节）
-    let modev = gettablemode(g, &*h);
-    let (weakkey, weakvalue) = if modev.is_null() {
-      (0, 0)
-    } else {
-      let mode = cstr_bytes(modev);
-      let weakkey = mode.contains(&b'k') as i32;
-      let weakvalue = mode.contains(&b'v') as i32;
-      if weakkey != 0 || weakvalue != 0 {
-        // is really weak?
-        (*h).gclist = (*g).weak; // must be cleared after GC, ...
-        (*g).weak = h as *mut GCObject; // ... so put in the appropriate list
+    // C++ `strchr(modev, 'k'/'v') != NULL`：contains 等价（mode 串仅 1~2 字节）；
+    // w6e §10 收口后 `gettablemode` 直出原生字节切片，cstr 转读点位消亡
+    let (weakkey, weakvalue) = match gettablemode(&*g, &*h) {
+      None => (0, 0),
+      Some(mode) => {
+        let weakkey = mode.contains(&b'k') as i32;
+        let weakvalue = mode.contains(&b'v') as i32;
+        if weakkey != 0 || weakvalue != 0 {
+          // is really weak?
+          (*h).gclist = (*g).weak; // must be cleared after GC, ...
+          (*g).weak = h as *mut GCObject; // ... so put in the appropriate list
+        }
+        (weakkey, weakvalue)
       }
-      (weakkey, weakvalue)
     };
 
     if weakkey != 0 && weakvalue != 0 {

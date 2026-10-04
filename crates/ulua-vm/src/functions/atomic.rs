@@ -44,10 +44,12 @@ pub(crate) unsafe fn atomic(l: *mut LuaState) -> usize {
     (*g).grayagain = null_mut();
     work += propagateall(g);
 
-    work += cleartable(l, (*g).weak);
+    // w6e 收形消费点：`cleartable`/`clearupvals` 首参已折 `&mut LuaState`，借用窗止于
+    // 当句；`list` 仍为 GC 裸单链（保留面），体内其余裸读位点原形原位不动。
+    work += cleartable(&mut *l, (*g).weak);
     (*g).weak = null_mut();
 
-    work += clearupvals(l);
+    work += clearupvals(&mut *l);
 
     (*g).currentwhite = otherwhite!(g) as u8;
     (*g).sweepgcopage = (*g).allgcopages;
