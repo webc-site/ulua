@@ -353,7 +353,7 @@ impl TypeMetatable for Function {
   fn push_representative(lua: &Lua) {
     // Push a throwaway C function so `lua_setmetatable` targets the global
     // function-type slot.
-    // `push_anonymous_closure` 是带契约的 safe 门面（`lua_pushcclosurek` 的 null-name
+    // `push_anonymous_closure` 是带契约的 safe 门面（`push_c_closure` 的 null-name
     // 特化）：`noop_cfn` 是恒返回 0 的 `extern "C-unwind"` 全函数，与 `LuaCFunction`
     // C-ABI 兼容；`nup=0` 不消费栈，`cont=None` 为合法空续体。
     push_anonymous_closure(lua.state(), Some(noop_cfn), 0);

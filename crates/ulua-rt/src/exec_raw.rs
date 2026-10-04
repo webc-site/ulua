@@ -22,11 +22,11 @@ use crate::{
   userdata::{alloc_userdata_slot, init_userdata_slot, typed_userdata},
 };
 
-/// `exec_raw_trampoline` 闭包的调试名：静态 NUL 结尾字节串，交给 `lua_pushcclosurek`
-/// 的 `*const c_char` 收口点（消费侧按 NUL 扫描读取，结尾 `\0` 不可省）。
-const EXEC_RAW_NAME: &[u8] = b"ulua-rt-exec-raw\0";
-/// `create_c_function` 闭包的调试名：同上，静态 NUL 结尾字节串。
-const C_FUNCTION_NAME: &[u8] = b"ulua-rt-c-function\0";
+/// `exec_raw_trampoline` 闭包的调试名：静态原生字节串（不含终止 NUL），交给
+/// `push_named_closure` 的 `Option<&'static [u8]>` 收口点（review.md §10）。
+const EXEC_RAW_NAME: &[u8] = b"ulua-rt-exec-raw";
+/// `create_c_function` 闭包的调试名：同上，静态原生字节串。
+const C_FUNCTION_NAME: &[u8] = b"ulua-rt-c-function";
 
 /// The raw closure slot stored in the `exec_raw` trampoline's upvalue userdata.
 /// `FnMut`-once: the trampoline takes it out and runs it exactly once.
@@ -158,10 +158,10 @@ impl Lua {
         slot: Cell::new(boxed),
       },
     );
-    // `push_named_closure`（state.rs safe 门面族，`lua_pushcclosurek` 收口点）：
+    // `push_named_closure`（state.rs safe 门面族，`push_c_closure` 收口点）：
     // `nup=1` 消费栈顶刚写入的 slot userdata 作 upvalue 1，绑定的
     // `exec_raw_trampoline::<F>` 与载荷同一 `F` 单态化；`EXEC_RAW_NAME` 是
-    // `'static` NUL 结尾字节串（消费侧按 NUL 扫描读取）。
+    // `'static` 原生字节窗（不含终止 NUL）。
     push_named_closure(state, Some(exec_raw_trampoline::<F>), EXEC_RAW_NAME, 1);
     // Push the arguments after the function, then protected-call.
     // `stack_top`（safe 门面）只读栈深；`base` 是压入参数前记录的真实栈深
@@ -200,10 +200,10 @@ impl Lua {
   /// results, return the result count). Mirrors mlua's `unsafe` contract.
   pub unsafe fn create_c_function(&self, func: LuaCFunction) -> Result<Function> {
     let state = self.state();
-    // `push_named_closure`（state.rs safe 门面族，`lua_pushcclosurek` 收口点）：
+    // `push_named_closure`（state.rs safe 门面族，`push_c_closure` 收口点）：
     // `state` 存活；`func` 的合法性（遵守 ulua 调用约定）由本 `unsafe fn` 契约
     // 交给调用方（见其 `# Safety` 段），此处仅把它原样交给门面；`C_FUNCTION_NAME`
-    // 为 `'static` NUL 结尾字节串、nupvalue=0 与栈上无 upvalue 一致。该调用总把
+    // 为 `'static` 原生字节窗、nupvalue=0 与栈上无 upvalue 一致。该调用总把
     // 一个函数压到栈顶，`pop_ref` 随即消费这唯一栈槽取注册引用，索引有效。
     push_named_closure(state, func, C_FUNCTION_NAME, 0);
     // `pop_ref`（safe fn）消费上一步压到栈顶的唯一函数值并登记注册表引用。

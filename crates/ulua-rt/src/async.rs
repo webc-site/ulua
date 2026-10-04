@@ -798,20 +798,20 @@ end
 ///
 /// 调用序契约（由全部调用点满足，越界即违约）：`lua` 指向正由当前线程驱动的存活 VM，
 /// 其栈上有 1 层登记头寸；那 `nupvals` 个 upvalue 已按顺序压在该 VM 栈顶
-/// （`lua_pushcclosurek` 会消费它们；`nupvals` 为 0 时无此要求）；`f` 是符合
-/// `lua_CFunction` 契约的本模块 trampoline；`name` 是以 NUL 结尾的 `'static` 调试名
-/// （VM 在闭包整个存活期内按 C 串读取）。上述内存/ABI 前置全部收在
-/// [`push_named_closure`]（`lua_pushcclosurek` 的带契约 safe 门面）一处，故本函数
+/// （`push_c_closure` 会消费它们；`nupvals` 为 0 时无此要求）；`f` 是符合
+/// `lua_CFunction` 契约的本模块 trampoline；`name` 是 `'static` 原生调试名字节窗
+/// （不含终止 NUL，VM 只存引用不复制、随闭包整个存活期持有）。上述内存/ABI 前置
+/// 全部收在 [`push_named_closure`]（`push_c_closure` 的带契约 safe 门面）一处，故本函数
 /// 自身是 safe fn、无边界块；`pop_ref` 同为带契约 safe 门面。
 fn take_c_closure(
   lua: &Lua,
   f: unsafe extern "C-unwind" fn(*mut LuaState) -> i32,
-  // NUL 结尾静态名字字节串（调用点 `b"..\0"` 字面量；消费侧按 NUL 扫描读取）。
+  // 原生静态名字字节窗（调用点 `b".."` 字面量，不含终止 NUL）。
   name: &'static [u8],
   nupvals: i32,
 ) -> Function {
   // `push_named_closure` 落实函数头契约：state 存活且有头寸（`lua` 句柄）；`Some(f)`
-  // 是本模块单态化的合法 `lua_CFunction` trampoline；`name` 是 `'static` NUL 调试名；
+  // 是本模块单态化的合法 `lua_CFunction` trampoline；`name` 是 `'static` 原生字节窗；
   // `nupvals` 个 upvalue 已按调用方说明压在栈顶。
   push_named_closure(lua.state(), Some(f), name, nupvals);
   // `pop_ref` 是带契约的 safe 门面：弹出栈顶值并在注册表登记引用。
@@ -864,16 +864,16 @@ where
   );
   // 上一句压入的回调 userdata 正处在栈顶，即本闭包唯一的 upvalue（`nupvals = 1`
   // 会消费它）；`take_c_closure` 现为带调用序契约的 safe fn：state 存活 + 一层登记
-  // 头寸由 `lua` 句柄给出，`name` 是 `'static` NUL 串，边界收在其内部的
+  // 头寸由 `lua` 句柄给出，`name` 是 `'static` 原生字节窗，边界收在其内部的
   // `push_named_closure` 一处。
-  let get_future = take_c_closure(lua, get_future_c::<F, A, FR>, b"ulua-rt-get-future\0", 1);
+  let get_future = take_c_closure(lua, get_future_c::<F, A, FR>, b"ulua-rt-get-future", 1);
 
   // 2. Build the `poll` and `unpack` C closures (no upvalues).
   // 栈顶无待消费 upvalue（`nupvals = 0`）；trampoline 为本模块单态化的 `poll_c::<FR, R>`；
   // `lua` 同上且有登记闭包的一层头寸——契约同上一句。
-  let poll = take_c_closure(lua, poll_c::<FR, R>, b"ulua-rt-poll\0", 0);
+  let poll = take_c_closure(lua, poll_c::<FR, R>, b"ulua-rt-poll", 0);
   // 同上——`unpack_c` 是自带实参闸门的合法 trampoline，`nupvals = 0`。
-  let unpack = take_c_closure(lua, unpack_c, b"ulua-rt-unpack\0", 0);
+  let unpack = take_c_closure(lua, unpack_c, b"ulua-rt-unpack", 0);
 
   // 3. Fetch `coroutine.yield`.
   let coroutine: Table = lua.globals().get("coroutine")?;

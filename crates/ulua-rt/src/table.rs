@@ -906,13 +906,13 @@ impl TableOp {
     }
   }
 
-  /// 该算子的栈帧描述：闭包名（NUL 结尾静态字节串，消费侧按 NUL 扫描读取）、
+  /// 该算子的栈帧描述：闭包名（原生静态字节窗，不含终止 NUL）、
   /// 实参数、结果数、闭包插入的负偏移（落在「刚压入的闭包 + `nargs` 实参」窗口内）。
   fn frame(self) -> (&'static [u8], i32, i32, i32) {
     match self {
-      TableOp::Get => (b"ulua-rt-gettable\0", 2, 1, -3),
-      TableOp::Set => (b"ulua-rt-settable\0", 3, 0, -4),
-      TableOp::Len => (b"ulua-rt-len\0", 1, 1, -2),
+      TableOp::Get => (b"ulua-rt-gettable", 2, 1, -3),
+      TableOp::Set => (b"ulua-rt-settable", 3, 0, -4),
+      TableOp::Len => (b"ulua-rt-len", 1, 1, -2),
     }
   }
 }
@@ -924,7 +924,7 @@ impl TableOp {
 /// 必须存活且由当前线程驱动；栈顶恰有 `op` 所要求的实参槽布局（见 [`TableOp`] 各变体
 /// 摘要），并已按其 `ensure_stack` 预留 closure 槽 + `lua_pcall` 帧头寸。三步全是
 /// safe 门面：`push_named_closure` 收本模块符合 `lua_CFunction` 契约的 C-ABI
-/// trampoline 与 `b".."` NUL 结尾静态名；`insert_at`(-3/-4/-2) 落在「刚压闭包 +
+/// trampoline 与 `b".."` 原生静态名字节窗；`insert_at`(-3/-4/-2) 落在「刚压闭包 +
 /// nargs 实参」窗口内，仅换位、不增减栈深；`run_pcall` 在受保护帧内运行，元方法
 /// 抛错呈为状态码。
 fn protected_table_op(state: StateView<'_>, op: TableOp) -> i32 {

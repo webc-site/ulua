@@ -9,7 +9,7 @@
 //! destructor reconstitutes and drops the `Box`, so the closure's captured
 //! environment is freed exactly when the GC collects the function. The
 //! userdata is then captured as **upvalue 1** of a monomorphized C trampoline
-//! function ([`trampoline::<F, A, R>`]) pushed via [`lua_pushcclosurek`] with
+//! function ([`trampoline::<F, A, R>`]) pushed via [`push_named_closure`] with
 //! `nup = 1`. No `dyn` fat pointer, no vtable hop: the call is a direct call
 //! on the concrete closure type.
 //!
@@ -460,10 +460,10 @@ macro_rules! wrap_mut_closure {
 }
 pub(crate) use wrap_mut_closure;
 
-/// `trampoline` 闭包的调试名：静态 NUL 结尾字节串，交给 `lua_pushcclosurek` 的
-/// `*const c_char` 收口点（被闭包长期持有，`'static` 永不失效）。VM 不在压栈时
-/// intern，消费侧（`currfuncname` 等）按 NUL 扫描读取，故结尾 `\0` 不可省。
-const CALLBACK_NAME: &[u8] = b"ulua-rt-callback\0";
+/// `trampoline` 闭包的调试名：静态原生字节串（不含终止 NUL），交给
+/// `push_named_closure` 的 `Option<&'static [u8]>` 收口点（被闭包长期持有，
+/// `'static` 永不失效；review.md §10 后 VM 只存引用、读取面为整窗）。
+const CALLBACK_NAME: &[u8] = b"ulua-rt-callback";
 
 pub(crate) fn create_callback_function<F, A, R>(lua: &Lua, func: F) -> Result<Function>
 where
@@ -496,8 +496,8 @@ where
   // The userdata is now on top of the stack; capture it as upvalue 1 of
   // the trampoline closure. `push_named_closure`（state.rs safe 门面族）：
   // `nup=1` 消费栈顶刚压的 userdata；绑定的 `trampoline::<F, A, R>` 与载荷布局
-  // 同一 `(F, A, R)` 单态化；debugname 是被闭包长期持有的 `'static` NUL 结尾
-  // 静态字节串；`cont=None`（不可 yield 路径无续体）。
+  // 同一 `(F, A, R)` 单态化；debugname 是被闭包长期持有的 `'static` 原生
+  // 字节窗（不含终止 NUL）；`cont=None`（不可 yield 路径无续体）。
   push_named_closure(state, Some(trampoline::<F, A, R>), CALLBACK_NAME, 1);
   // The closure is now on top; take a registry ref. `pop_ref`（safe fn）弹走闭包并
   // 登记注册表引用，净栈变化为零。

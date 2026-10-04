@@ -10,8 +10,6 @@ use core::{
 
 #[cfg(feature = "jit")]
 use ulua_code_gen::functions::luau_codegen_compile::luau_codegen_warm_recompile;
-use ulua_common::functions::c_str::cstr_bytes;
-
 #[cfg(feature = "async")]
 use crate::async_support::{
   AsyncThread, LuaNativeAsyncFn, WrappedAsync, register_implicit_thread, unregister_implicit_thread,
@@ -19,7 +17,7 @@ use crate::async_support::{
 #[cfg(feature = "async")]
 use crate::state::StateView;
 use crate::{
-  debug::{debug_cstr, get_info},
+  debug::{debug_str, get_info},
   error::{ExternalError, Result},
   multi::MultiValue,
   registry::RegHandle,
@@ -32,11 +30,11 @@ use crate::{
 };
 
 /// `lua_getinfo` 选项串：仅 `s`（函数类型），供 `is_lua_closure` 判定用。
-/// 静态 NUL 结尾字节串，收口点交给 `*const c_char` 契约 API。
-const GETINFO_S: &[u8] = b"s\0";
+/// review.md §10 后为原生选项字节窗（无终止 NUL）。
+const GETINFO_S: &[u8] = b"s";
 /// `lua_getinfo` 选项串：`n`（名字）+ `s`（源/类型）+ `a`（参数）+ `u`（upvalue）。
-/// 供 `Function::info` 用，静态 NUL 结尾字节串。
-const GETINFO_NSAU: &[u8] = b"nsau\0";
+/// 供 `Function::info` 用，原生选项字节窗。
+const GETINFO_NSAU: &[u8] = b"nsau";
 
 /// A handle to a callable Lua value (a Lua closure or a Rust function).
 ///
@@ -377,10 +375,10 @@ impl Function {
     // `reference.push()`（safe fn）落 VM 侧 `lua_rawgeti` 自带栈预留，压入后 -1
     // 即本函数值——正满足下一行 `level = -1` 的解读。
     self.reference.push();
-    // `get_info`（safe 门面）收口零初始化 + `lua_getinfo` out 参数两步：`state`
-    // 存活、栈顶是刚压入的本函数值（`level = -1` 解到它）、`GETINFO_S` 为静态
-    // NUL 结尾选项串且不含 `f`，不压值。
-    let closure = get_info(state, -1, GETINFO_S).is_some_and(|ar| is_lua_what_cstr(ar.what));
+    // `get_info`（safe 门面）收口默认初值 + `lua_getinfo` out 参数两步：`state`
+    // 存活、栈顶是刚压入的本函数值（`level = -1` 解到它）、`GETINFO_S` 为原生
+    // 选项字节窗且不含 `f`，不压值。
+    let closure = get_info(state, -1, GETINFO_S).is_some_and(|ar| is_lua_what(ar.what));
     // `getinfo` 不压不弹，栈顶仍是 push 压入的本函数值；`pop_stack`（safe 门面）
     // 弹回这一层，恢复调用方栈深。
     pop_stack(state, 1);
@@ -397,31 +395,35 @@ impl Function {
     // `reference.push()`（safe fn）的栈头寸与 id 有效性论证同 `environment`，
     // 压入后 `level = -1` 解到刚压入的本函数。
     self.reference.push();
-    // `get_info`（safe 门面）收口零初始化 + `lua_getinfo` out 参数：`state` 存活、
-    // 栈顶是本函数值；选项串 `GETINFO_NSAU` 是静态 NUL 串且不含 `f`，不额外压栈。
-    // 回填的 `what` 指 VM 静态字面量，`source`/`name` 指经闭包→proto 可达的
-    // TString（函数值在栈上即存活、GC 不移动），`short_src` 指 `ar` 内嵌缓冲——
+    // `get_info`（safe 门面）收口默认初值 + `lua_getinfo` out 参数：`state` 存活、
+    // 栈顶是本函数值；选项窗 `GETINFO_NSAU` 不含 `f`，不额外压栈。回填的
+    // `what` 指 VM 静态模板字节，`source`/`name` 借经闭包→proto 可达的 TString
+    // 串体（函数值在栈上即存活、GC 不移动），`short_src` 为 `ar` 内嵌定长载体——
     // 全部在下面的构造里当场拷成 owned `String`，即在本帧内消费完毕。
     let info = match get_info(state, -1, GETINFO_NSAU) {
       None => FunctionInfo::default(),
       Some(ar) => {
-        let what = debug_cstr(ar.what).unwrap_or_default();
+        // `what` 是 VM 静态模板窗（`b"Lua"`/`b"C"`），按字节判型免解码；对外
+        // 仍交 lossy 串，与旧 `cstr_cow` 读面等值。
+        let what_bytes = ar.what.unwrap_or_default();
+        let is_lua = is_lua_what(ar.what);
+        let what = String::from_utf8_lossy(what_bytes).into_owned();
         let line_defined = (ar.linedefined > 0).then_some(ar.linedefined as i64);
         // Lua chunks are loaded with a `=<name>` chunkname marker; mlua
         // reports the bare name in `source`, so strip a single leading
         // `=`/`@` for Lua/main functions. C functions keep their VM-reported
         // source verbatim (e.g. `=[C]`), matching mlua.
-        let source = debug_cstr(ar.source).map(|s| {
-          if is_lua_what(&what) && (s.starts_with('=') || s.starts_with('@')) {
+        let source = debug_str(ar.source).map(|s| {
+          if is_lua && (s.starts_with('=') || s.starts_with('@')) {
             s[1..].to_string()
           } else {
             s
           }
         });
         FunctionInfo {
-          name: debug_cstr(ar.name),
+          name: debug_str(ar.name),
           source,
-          short_src: debug_cstr(ar.short_src),
+          short_src: debug_str(Some(ar.short_src.bytes())),
           line_defined,
           last_line_defined: None, // Luau does not report it.
           what,
@@ -438,21 +440,12 @@ impl Function {
   }
 }
 
-/// `"Lua"` 和 `"main"` 是 Lua 闭包的 what 标记；`"C"` 是原生函数。
-/// [`Function::is_lua_closure`] 与 [`Function::info`] 共用。
-fn is_lua_what(what: &str) -> bool {
-  what == "Lua" || what == "main"
-}
-
-/// 直接按字节判定 VM 内部的 `what` C 字符串（`"Lua"`/`"main"` 均为 ASCII，
-/// 免去 UTF-8 校验与 `String` 分配）。safe 门面：null 由 `cstr_bytes` 收口
-/// 归一为空切片（与任何目标都不等 ⇒ `false`），调用方不再自带判空哨兵。
-fn is_lua_what_cstr(what: *const c_char) -> bool {
-  // Safety: `lua_Debug.what` 的字段契约——被 `s` 选项回填时必指 VM 静态字面量
-  // （"C"/"Lua"/"main"）的 NUL 结尾串，未被回填则保持 null；`cstr_bytes` 的
-  // 前置条件（null 或 NUL 结尾）恰覆盖此域，扫描止于自带 NUL，比较只读字节。
-  let bytes = unsafe { cstr_bytes(what) };
-  bytes == b"Lua" || bytes == b"main"
+/// `"Lua"` 和 `"main"` 是 Lua 闭包的 what 模板字节；`"C"` 是原生函数。
+/// [`Function::is_lua_closure`] 与 [`Function::info`] 共用。review.md §10：
+/// `what` 为 VM 静态模板窗（`Option<&'static [u8]>`，`None` = 未回填），按字节
+/// 切片等值判定，`None` 自然落 `false`，无需判空哨兵。
+fn is_lua_what(what: Option<&[u8]>) -> bool {
+  matches!(what, Some(b"Lua") | Some(b"main"))
 }
 
 /// Concatenate the bound prefix with `extra` (both `bind` variants share it).

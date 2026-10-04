@@ -304,10 +304,10 @@ impl Seek for BufferCursor {
 // on the stack.
 // ---------------------------------------------------------------------------
 
-/// `c_newbuffer` 闭包的调试名：静态 NUL 结尾字节串，交给 `lua_pushcclosurek` 的
-/// `*const c_char` 收口点（会被闭包长期持有，`'static` 永不失效；消费侧按 NUL
-/// 扫描读取，结尾 `\0` 不可省）。
-const NEWBUFFER_NAME: &[u8] = b"ulua-rt-newbuffer\0";
+/// `c_newbuffer` 闭包的调试名：静态原生字节串（不含终止 NUL），交给
+/// `push_named_closure` 的 `Option<&'static [u8]>` 收口点（会被闭包长期持有，
+/// `'static` 永不失效；review.md §10 后 VM 只存引用、读取面为整窗）。
+const NEWBUFFER_NAME: &[u8] = b"ulua-rt-newbuffer";
 
 /// C trampoline: stack is `[size]` (a number). Allocates a buffer of that many
 /// bytes via `lua_newbuffer_push_ref`, leaving the buffer object on top.
@@ -341,8 +341,8 @@ pub(crate) fn create_buffer_with_capacity(lua: &Lua, size: usize) -> Result<Buff
   // 栈峰值：trampoline 闭包 + size 实参两层（pcall 弹出并压回结果）。
   ensure_stack(state, 2)?;
   // `push_named_closure`/`push_number`（safe 门面）：`state` 存活且上一行已预留
-  // 2 层头寸，恰覆盖 push closure + push number；`NEWBUFFER_NAME` 满足其 NUL
-  // 结尾 'static 名契约；`c_newbuffer` 是与 `LuaCFunction` C-ABI 兼容的
+  // 2 层头寸，恰覆盖 push closure + push number；`NEWBUFFER_NAME` 满足其
+  // `'static` 原生字节窗名契约；`c_newbuffer` 是与 `LuaCFunction` C-ABI 兼容的
   // `unsafe extern "C-unwind"` 入口，`nupvalue=0` 与栈上无 upvalue 一致；
   // `size as f64` 的饱和转换在 VM 侧再还原。
   push_named_closure(state, Some(c_newbuffer), NEWBUFFER_NAME, 0);
