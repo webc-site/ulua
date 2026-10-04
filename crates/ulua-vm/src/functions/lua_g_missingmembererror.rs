@@ -16,11 +16,11 @@ pub(crate) unsafe fn lua_g_missingmembererror(
   // SAFETY: 契约保证 `l` 为存活调用帧、self 的类元信息可读、name 为存活串；错误经 luaG 路径抛出不返回
   unsafe {
     if !(*p2).is_string() {
-      let t1 = lua_t_objtypename(l, &*p1);
-      let t2 = lua_t_objtypename(l, &*p2);
+      let t1 = lua_t_objtypename(&*l, &*p1);
+      let t2 = lua_t_objtypename(&*l, &*p2);
       lua_g_runerror!(l, "cannot index {} with a {}", cstr_cow(t1), cstr_cow(t2),)
     } else {
-      let t1 = lua_t_objtypename(l, &*p1);
+      let t1 = lua_t_objtypename(&*l, &*p1);
       let key = (*p2).as_string_ptr();
       lua_g_runerror!(
         l,

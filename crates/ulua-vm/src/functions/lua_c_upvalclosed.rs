@@ -11,10 +11,12 @@ use crate::{
 };
 
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn lua_c_upvalclosed(l: *mut LuaState, uv: *mut UpVal) {
+/// `uv` 须为存活且已关闭（`upisopen!` 恒假）的 UpVal，其 `v`/GC 头自洽；`l` 的存活与独占由
+/// `&mut LuaState` 承载（r19-w4 收形），但 `uv` 为调用方传入的裸指针、体内经 `lua_c_barrier!`
+/// 解引用其 `(*uv).v`，依 §2 判例保持 `unsafe fn`。cpp `lgc.cpp:1327 luaC_upvalclosed`。
+pub(crate) unsafe fn lua_c_upvalclosed(l: &mut LuaState, uv: *mut UpVal) {
   unsafe {
-    let g = (*l).global;
+    let g = l.global;
     let o = uv as *mut GCObject;
 
     LUAU_ASSERT!(!upisopen!(uv)); // upvalue was closed but needs GC state fixup
