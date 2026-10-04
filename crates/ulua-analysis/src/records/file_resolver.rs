@@ -50,4 +50,10 @@ pub trait FileResolver {
   fn require_suggester(&self) -> Option<&Arc<dyn RequireSuggester>> {
     None
   }
+
+  /// 启用 `requireSuggester` 挂载：基类缺省 no-op，仅需提供 require 补全
+  /// 候选的实现覆写。cpp 侧宿主可直写 `resolver->requireSuggester` 成员；
+  /// Rust 侧解析器由 `Frontend` 独占持有后，宿主只能经 `&mut dyn` 走本
+  /// 方法启用，不再有第二把可变别名。
+  fn enable_require_suggester(&mut self) {}
 }
