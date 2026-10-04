@@ -61,45 +61,42 @@ static MATH_FUNCS: [LuaLReg; 37] = [
   LuaLReg::new(b"isfinite", math_isfinite),
 ];
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn luaopen_math(l: *mut LuaState) -> i32 {
-  // r13-w1a 逐点定性（w6d 口径保留面；普查 15 行命中，注记零新增命中行）：其中
-  // 14 行 push_number/set_field_bytes 七对，皆 records/lua_state/{stack,table}.rs
-  // 既有门面收编形态（前波 safe-ify 已收），零翻案、零新造门面、本席零动作。
-  // 保留一处：经 l 的 global 字段向 global_State 链 rngstate 的 pcg 种子落笔，
-  // 不属栈门面/边界原语覆盖面——已 grep 核遍 LuaState 门面全方法面（stack/
-  // access/table/error/thread 与 slot.rs 的 api 索引域构造子，全部方法清点），
-  // 无 global 侧既有方法，按 r13-w1b 判例原样保留；不新造 getglobal/read_global
-  // 类方法（不在派单面，免生造名）。lua_encodepointer（引用形取参、指针身份种子
-  // 读数，cpp 同形）与 lua_l_register_bytes（r16-v49 收形后引用形取参，指针面只剩
-  // `lr` 的 C 函数指针与 `lua_s_new` 裸形转手）为自由函数调用点，
-  // 非裸解引用收编面，保留。r16-b3 续：gs_mut 门面落地后本点解锁——seed 先算
-  // （:78 现序保持）再经 `gs_mut().rngstate` 一句一借落笔，借用不跨调用。
-  unsafe {
-    let mut seed = lua_encodepointer(&*l, l as usize) as u64;
-    seed ^= 0;
-    pcg_32_seed(&mut (*l).gs_mut().rngstate, seed);
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
+/// 体内不安全仅剩 `lua_l_register_bytes` 一处窄块（被调方自身保留 `# Safety`：裸 C 函数指针与
+/// `lua_s_new` 转手未清零），其余皆安全门面直调，故本体降为安全 `fn`）：`l` 须为可分配、可抛错
+/// 的受保护帧且栈顶之上留足空槽（注册表 push 库表并作为返回值）。
+/// 种子落笔序逐点定性（w6d 口径保留面）：push_number/set_field_bytes 七对皆
+/// records/lua_state/{stack,table}.rs 既有门面收编形态，零翻案；经 `gs_mut().rngstate` 的 pcg
+/// 种子落笔自 r16-b3 起走安全门面一句一借、借用不跨调用；`lua_encodepointer`（引用形取参、
+/// 指针身份种子读数，cpp 同形）为自由函数安全调用点。cpp/VM/src/lmathlib.cpp:517 luaopen_math。
+pub fn luaopen_math(l: &mut LuaState) -> i32 {
+  // DELIBERATE DEVIATION: cpp lmathlib.cpp:519-521 种子再 XOR time(NULL)/clock()；
+  // Rust 侧保持确定性种子（wasm/一致性测试可重现），`^= 0` 即该豁免锚点，勿删。
+  let mut seed = lua_encodepointer(l, l as *const LuaState as usize) as u64;
+  seed ^= 0;
+  pcg_32_seed(&mut l.gs_mut().rngstate, seed);
 
-    lua_l_register_bytes(&mut *l, Some(b"math"), &MATH_FUNCS);
+  // SAFETY: `MATH_FUNCS` 为本文件同卫生域生成的合法 `unsafe extern "C-unwind"` 臂静态表，
+  // 名字为不含尾部 `\0` 的静态字节切片，满足 `lua_l_register_bytes` 切片契约；
+  // `l` 的存活/独占由借用承载
+  unsafe { lua_l_register_bytes(l, Some(b"math"), &MATH_FUNCS) };
 
-    (*l).push_number(LUAU_PI);
-    (*l).set_field_bytes(-2, b"pi");
-    (*l).push_number(f64::INFINITY);
-    (*l).set_field_bytes(-2, b"huge");
-    (*l).push_number(LUAU_NAN);
-    (*l).set_field_bytes(-2, b"nan");
-    (*l).push_number(LUAU_E);
-    (*l).set_field_bytes(-2, b"e");
-    (*l).push_number(LUAU_PHI);
-    (*l).set_field_bytes(-2, b"phi");
-    (*l).push_number(LUAU_SQRT2);
-    (*l).set_field_bytes(-2, b"sqrt2");
-    (*l).push_number(LUAU_TAU);
-    (*l).set_field_bytes(-2, b"tau");
+  l.push_number(LUAU_PI);
+  l.set_field_bytes(-2, b"pi");
+  l.push_number(f64::INFINITY);
+  l.set_field_bytes(-2, b"huge");
+  l.push_number(LUAU_NAN);
+  l.set_field_bytes(-2, b"nan");
+  l.push_number(LUAU_E);
+  l.set_field_bytes(-2, b"e");
+  l.push_number(LUAU_PHI);
+  l.set_field_bytes(-2, b"phi");
+  l.push_number(LUAU_SQRT2);
+  l.set_field_bytes(-2, b"sqrt2");
+  l.push_number(LUAU_TAU);
+  l.set_field_bytes(-2, b"tau");
 
-    1
-  }
+  1
 }
 
-lua_lib_fn!(pub fn luaopen_math, luaopen_math_arm);
+lua_lib_fn!(pub fn luaopen_math @ref, luaopen_math_arm);
