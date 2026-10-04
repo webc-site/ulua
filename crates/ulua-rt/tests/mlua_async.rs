@@ -28,11 +28,15 @@
 
 #![cfg(feature = "async")]
 
-use std::{sync::Arc, time::Duration};
+use std::{
+  sync::Arc,
+  task::{Context, Poll},
+  time::Duration,
+};
 
-use futures_util::stream::TryStreamExt;
+use futures_util::{stream::TryStreamExt, task::noop_waker};
 use tokio::{
-  sync::Mutex,
+  sync::{Mutex, Notify},
   task::{LocalSet, spawn_local, yield_now},
   time::{sleep, timeout},
 };
@@ -377,8 +381,8 @@ async fn test_async_thread_error() -> Result<()> {
 #[tokio::test]
 async fn test_async_terminate_drop_lua() -> Result<()> {
   // First half of mlua's `test_async_terminate`: the future captures the
-  // `Lua` instance; dropping the AsyncThread (via tokio timeout) while the
-  // future is pending must release the held mutex guard.
+  // `Lua` instance; dropping the AsyncThread while the future is pending
+  // must release the held mutex guard.
   let mutex = Arc::new(Mutex::new(0u32));
   {
     let lua = Lua::new();
@@ -393,7 +397,33 @@ async fn test_async_terminate_drop_lua() -> Result<()> {
       }
     })?;
 
-    let _ = timeout(Duration::from_millis(30), func.call_async::<()>(())).await;
+    let fut = func.call_async::<()>(());
+    tokio::pin!(fut);
+    let waker = noop_waker();
+    let mut cx = Context::from_waker(&waker);
+    // Manual bounded polling replaces the 30ms-timeout-vs-100ms-sleep race:
+    // a stalled executor could let the timeout fire before the closure ever
+    // acquired the lock, so `try_lock().is_ok()` passed vacuously and pinned
+    // nothing. Polling until the guard is observably held makes
+    // "parked inside the critical section, then dropped" a closed loop.
+    let mut parked_holding_guard = false;
+    for _ in 0..64 {
+      match fut.as_mut().poll(&mut cx) {
+        Poll::Ready(_) => break,
+        Poll::Pending => {
+          if mutex.try_lock().is_err() {
+            parked_holding_guard = true;
+            break;
+          }
+        }
+      }
+    }
+    assert!(
+      parked_holding_guard,
+      "async fn never parked while holding the mutex guard"
+    );
+    // `fut` — and the `Lua` it captured — drop here, mid-await while the
+    // guard is held; that is the drop-under-cancellation path under test.
   }
   assert!(mutex.try_lock().is_ok());
 
@@ -408,9 +438,22 @@ async fn test_async_terminate_drop_lua() -> Result<()> {
 async fn test_async_task_abort() -> Result<()> {
   let lua = Lua::new();
 
-  let sleep = lua.create_async_function(move |_lua, n: u64| async move {
-    sleep_ms(n).await;
-    Ok(())
+  // The original raced a main-side sleep_ms(100) against the Lua-side
+  // sleep(200): once both deadlines elapse during one executor stall the
+  // scheduler picks the two ready tasks in arbitrary order, so the Lua task
+  // could set `result` before the abort landed — a load-dependent false
+  // failure. Now the sleep signals entry via `Notify`, and the task parks on
+  // an hour-long timer the test can never outrun, so "aborted mid-await,
+  // side effect not applied" is a closed loop.
+  let entered = Arc::new(Notify::new());
+  let notify = entered.clone();
+  let sleep = lua.create_async_function(move |_lua, n: u64| {
+    let notify = notify.clone();
+    async move {
+      notify.notify_one();
+      sleep_ms(n).await;
+      Ok(())
+    }
   })?;
   lua.globals().set("sleep", sleep)?;
 
@@ -420,13 +463,21 @@ async fn test_async_task_abort() -> Result<()> {
       let lua2 = lua.clone();
       let jh = spawn_local(async move {
         lua2
-          .load("sleep(200) result = 'done'")
+          .load("sleep(3600000) result = 'done'")
           .exec_async()
           .await
           .unwrap();
       });
-      sleep_ms(100).await; // Wait for the task to start
+      // 30s is a liveness bound for a broken handshake (fail, don't hang),
+      // not a deadline raced against anything.
+      timeout(Duration::from_secs(30), entered.notified())
+        .await
+        .expect("task never entered the async sleep");
       jh.abort();
+      assert!(
+        jh.await.is_err(),
+        "aborted task must report cancellation once its future is dropped"
+      );
     })
     .await;
   local.await;
