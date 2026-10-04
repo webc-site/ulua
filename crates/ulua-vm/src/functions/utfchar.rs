@@ -31,8 +31,9 @@ pub fn utfchar(l: &mut LuaState) -> i32 {
       // 切片，不与 b 缓冲重叠（同 cpp memcpy 前置条件）
       unsafe { lua_l_addlstring(&mut b, charstr) };
     }
-    // SAFETY: b 为 buffinit 接线存活态、结果槽由 C 帧约定预留；可分配、可 GC
-    unsafe { lua_l_pushresult(&mut b) };
+    // w6e 降级消费点：`lua_l_pushresult` 已降为安全 fn，包裹消亡；b 为 buffinit 接线
+    // 存活态、结果槽由 C 帧约定预留；可分配、可 GC
+    lua_l_pushresult(&mut b);
   }
   1
 }
