@@ -4,16 +4,19 @@
 //! [`ulua`](https://github.com/webc-site/ulua) — a pure-Rust translation of
 //! Roblox's [Luau](https://github.com/luau-lang/luau).
 //!
-//! The public surface deliberately mirrors [`mlua`](https://docs.rs/mlua)'s
-//! interface — the same type names ([`Lua`], [`Value`], [`Table`],
+//! The safe API borrows its *shape* from [`mlua`](https://docs.rs/mlua) for
+//! familiarity — it uses the same type names ([`Lua`], [`Value`], [`Table`],
 //! [`Function`], [`LuaString`], [`MultiValue`], [`Variadic`], [`Error`]), the
 //! same method names and call shapes (`Lua::new`, `lua.globals()`,
 //! `lua.create_function`, `lua.load(src).eval::<T>()`, `table.set/get`,
 //! `function.call::<R>(args)`), and the same conversion traits ([`FromLua`],
 //! [`IntoLua`], [`FromLuaMulti`], [`IntoLuaMulti`]) and userdata traits
-//! ([`UserData`], [`UserDataMethods`]). The *implementation*, however, is
-//! entirely original: it is written directly over ulua's pure-Rust C API
-//! (`lua_*`), not over a C FFI.
+//! ([`UserData`], [`UserDataMethods`]). This is only a naming/ergonomics
+//! affinity: the crate does **not** promise mlua API compatibility or a full
+//! interface mirror. The *implementation* is entirely original — written
+//! directly over ulua's pure-Rust C API (`lua_*`), not over a C FFI — and it
+//! diverges where that is cleaner (see the `api` module and the `DEVIATION`
+//! notes).
 //!
 //! ```
 //! use ulua_rt::prelude::*;
@@ -76,7 +79,10 @@
 // callback / future boxes carry a `MaybeSend` bound (`+ Send` under `send`)
 // exactly like the synchronous callbacks. See `async.rs` + `sync.rs`.
 
-/// The public, raw `lua_*` API surface (the mlua-style `mlua::ffi` counterpart).
+/// A deliberately minimal, `unsafe` slice of the raw `lua_*` API — only the
+/// items ulua's low-level public interface needs to expose (e.g. for
+/// [`Lua::create_c_function`](crate::Lua::create_c_function)); not a full C-API
+/// mirror. The complete raw surface lives in the `ulua-vm` crate.
 pub mod api;
 mod app_data;
 #[cfg(feature = "async")]
