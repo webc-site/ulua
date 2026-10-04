@@ -54,7 +54,7 @@ impl Parser {
     // error, not a crash).
     install_parse_error_panic_hook();
 
-    let mut p = Parser::new(buffer, names, allocator as *mut Allocator, options);
+    let mut p = Parser::new(buffer, names, allocator, options);
 
     let result = catch_unwind(AssertUnwindSafe(|| {
       let root = body(&mut p);

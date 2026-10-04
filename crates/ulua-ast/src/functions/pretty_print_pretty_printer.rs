@@ -111,7 +111,7 @@ pub fn pretty_print_string_view_parse_options_bool_bool(
 ) -> PrettyPrintResult {
   options.store_cst_data = true;
 
-  // Box 钉堆：AstNameTable/Parser 内部存 `*mut Allocator`（捕获宿主地址），
+  // Box 钉堆：AstNameTable/Parser 内部存 `NonNull<Allocator>`（捕获宿主地址），
   // 宿主一旦移动即悬垂（同 ulua-compiler tests.rs string_table! 先例）。
   let mut allocator = Box::new(Allocator::new());
   let mut names = AstNameTable::new(&mut allocator);
