@@ -17,7 +17,7 @@ impl Parser {
   pub fn new<B>(
     buffer: &B,
     names: &mut AstNameTable,
-    allocator: *mut Allocator,
+    allocator: &mut Allocator,
     options: ParseOptions,
   ) -> Self
   where
@@ -34,10 +34,10 @@ impl Parser {
     let mut parser = Parser {
       options,
       lexer: Lexer::new(buffer.as_ref(), names, resume_position),
-      // cpp `Allocator&` 引用形参的非空性在此一次性证明（引用即非空），
-      // 后续解引用全部收口在 `Parser::arena`。
-      allocator: NonNull::new(allocator)
-        .expect("arena 分配器槽位恒非空（cpp 引用参数不可为空，空即调用方 bug）"),
+      // cpp `Allocator&` 引用形参的 Rust 形态即 `&mut Allocator`：非空与存活由
+      // 引用类型承载，此处一次性折算成 `NonNull` 字段，后续解引用全部收口在
+      // `Parser::arena`。
+      allocator: NonNull::from(allocator),
       comment_locations: Vec::new(),
       hotcomments: Vec::new(),
       hotcomment_header: true,

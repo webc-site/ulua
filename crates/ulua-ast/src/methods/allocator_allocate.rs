@@ -27,19 +27,14 @@ const PAGE_ALIGN: usize = align_of::<Page>();
 /// 快路径：尝试在 root 页内按 `ALIGN` 对齐分配 `size` 字节。
 /// 返回 (对齐后的起始指针, 分配后的页内偏移)；放不下则返回 None。
 ///
-/// # Safety
-/// `root` 必须指向有效且仍被拥有的 `Page`。
-unsafe fn try_take_from_root(
-  root: NonNull<Page>,
-  offset: usize,
-  size: usize,
-) -> Option<(*mut u8, usize)> {
-  let data_ptr = unsafe {
-    // Safety: 入参类型即「非空」证明，且调用方保证 root 指向本 Allocator 独占持有的
-    // 存活 Page（root 由 allocate 写入、仅本链表持有）；data 是 Page 内定长数组字段，
-    // 地址随页固定；此处仅读数组基址。
-    (*root.as_ptr()).data.as_ptr() as usize
-  };
+/// 入参 `root` 已是 [`NonNull`] 句柄，解引用目标是 `Allocator` 独占拥有的页链
+/// 字段（`self.root` 由 `allocate` 写入、仅本链表持有，`&mut self` 借据在调用
+/// 瞬间仍在）——「非空」由类型承载、「存活且可独占」由字段所有权不变量承载，
+/// 故本函数为 safe `fn`，残留 unsafe 块各带 `// Safety:` 写明前提（§2 收口）。
+fn try_take_from_root(root: NonNull<Page>, offset: usize, size: usize) -> Option<(*mut u8, usize)> {
+  // Safety: 上段契约——root 出自 `Allocator::root`（Option<NonNull> 证非空、
+  // 页链唯一所有权）；data 是 Page 内定长数组字段，地址随页固定；此处仅读数组基址。
+  let data_ptr = unsafe { (*root.as_ptr()).data.as_ptr() as usize };
   let result = (data_ptr + offset + ALIGN - 1) & !(ALIGN - 1);
 
   if result + size <= data_ptr + DEFAULT_PAGE_DATA_SIZE {
@@ -53,8 +48,8 @@ impl Allocator {
   pub fn allocate(&mut self, size: usize) -> *mut u8 {
     // 无页（root 为 None）即快路径必然失败，直接走慢路径建页，不再手写判空。
     if let Some(root) = self.root {
-      // Safety: root 由本 Allocator 独占拥有（Option<NonNull> 已证非空），指向有效 Page。
-      if let Some((ptr, new_offset)) = unsafe { try_take_from_root(root, self.offset, size) } {
+      // root 出自本 Allocator 独占持有的页链，快路径为 safe fn，直调无 unsafe。
+      if let Some((ptr, new_offset)) = try_take_from_root(root, self.offset, size) {
         self.offset = new_offset;
         return ptr;
       }
