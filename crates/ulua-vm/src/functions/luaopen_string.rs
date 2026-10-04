@@ -34,15 +34,21 @@ static STRLIB: [LuaLReg; 17] = [
   LuaLReg::new(b"unpack", str_unpack_arm),
 ];
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn luaopen_string(l: *mut LuaState) -> i32 {
-  unsafe {
-    lua_l_register_bytes(&mut *l, Some(b"string"), &STRLIB);
-    createmetatable_mut(l);
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
+/// 建库表/注册与建 metatable 仍经 `lua_l_register_bytes`/`createmetatable_mut` 两处不安全被调而
+/// 落窄块（被调方自身保留 `# Safety`：裸 C 函数指针与 `lua_s_new` 转手未清零），故本体降为安全
+/// `fn`）：`l` 须为可分配、可抛错的受保护帧且栈顶之上留足空槽；`createmetatable_mut` 要求调用前
+/// 栈顶即字符串库表（相对 -2）。cpp/VM/src/lstrlib.cpp:1746 luaopen_string。
+pub fn luaopen_string(l: &mut LuaState) -> i32 {
+  // SAFETY: `STRLIB` 为本文件同卫生域生成的合法 `unsafe extern "C-unwind"` 臂静态表，
+  // 名字为不含尾部 `\0` 的静态字节切片，满足 `lua_l_register_bytes` 切片契约
+  unsafe { lua_l_register_bytes(l, Some(b"string"), &STRLIB) };
 
-    1
-  }
+  // SAFETY: `l.as_mut_ptr()` 为当前独占借用重建的裸句柄，借用窗止于本次调用；
+  // 上一步已把字符串库表置于栈顶，满足 `createmetatable_mut` 的 -2 栈位前提
+  unsafe { createmetatable_mut(l.as_mut_ptr()) };
+
+  1
 }
 
-lua_lib_fn!(pub fn luaopen_string, luaopen_string_arm);
+lua_lib_fn!(pub fn luaopen_string @ref, luaopen_string_arm);

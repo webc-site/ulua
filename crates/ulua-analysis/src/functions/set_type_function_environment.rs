@@ -44,23 +44,23 @@ unsafe extern "C-unwind" fn print_thunk(l: *mut lua_state::LuaState) -> i32 {
 pub(crate) unsafe fn set_type_function_environment(l: &mut LuaState) {
   unsafe {
     // Register math library
-    luaopen_math(l.as_mut_ptr());
+    luaopen_math(l);
     l.pop(1);
 
     // Register table library
-    luaopen_table(l.as_mut_ptr());
+    luaopen_table(l);
     l.pop(1);
 
     // Register string library
-    luaopen_string(l.as_mut_ptr());
+    luaopen_string(l);
     l.pop(1);
 
     // Register bit32 library
-    luaopen_bit32(l.as_mut_ptr());
+    luaopen_bit32(l);
     l.pop(1);
 
     // Register utf8 library
-    luaopen_utf_8(&mut *l);
+    luaopen_utf_8(l);
     l.pop(1);
 
     // Register Buffer library
@@ -68,7 +68,7 @@ pub(crate) unsafe fn set_type_function_environment(l: &mut LuaState) {
     l.pop(1);
 
     // Register base library
-    luaopen_base(l.as_mut_ptr());
+    luaopen_base(l);
     l.pop(1);
 
     // Remove certain global functions from the base library
