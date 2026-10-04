@@ -29,6 +29,9 @@ use crate::{
 /// `l` 必须是正在执行的 C 函数帧的存活 `LuaState`，`idx` 为其合法栈索引；`__tostring`
 /// 元方法回跑可改栈、可抛错，返回后不得继续持旧栈槽指针；返回切片指向压入栈顶的转换
 /// 结果串内部，再次操作该栈前有效（寿命 `'a` 与 [`lua_tolstring_ref`] 同形）。
+/// r12-w6 保留判据（判例 1）：签名携带调用方 supplied 的裸 `l` 且体内经 `&mut *l` 重建
+/// 解引用；ulua-analysis/ulua-web/ulua-rt 三个越界消费 crate 现均以 `as_mut_ptr()` 裸形
+/// 转手——收形 `&mut` 的消费面同步已登记交主代理。
 /// cpp laux.cpp:612。
 pub unsafe fn lua_l_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a [u8]> {
   unsafe {

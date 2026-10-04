@@ -123,6 +123,9 @@ static BUFFER_LIB: [LuaLReg; 28] = join::<28>(&BUFFER_BASE, &INTEGER_TAIL);
 /// # Safety
 /// `l` 须为存活 LuaState 且栈顶之上至少留 1 个空槽（`lua_l_register_bytes` 会 push 库表并作为返回值）；
 /// 须在可分配/GC 的受保护帧内调用。
+/// r12-w6 保留判据（判例 1）：跨 crate 直消费面（ulua-analysis `set_type_function_environment.rs`）
+/// 现以裸形转手，本票所有权边界禁改该 crate——收形 `&mut` 的同步改动点已登记交主代理，届时核心
+/// 前移 + `lua_lib_fn! @ref` 臂一步到位。
 /// cpp/VM/src/lbuflib.cpp:433 luaopen_buffer。
 pub unsafe fn luaopen_buffer(l: *mut LuaState) -> i32 {
   unsafe {

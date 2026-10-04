@@ -22,7 +22,9 @@ use crate::{
 ///
 /// `l` 必须是正在执行的 C 函数帧的存活 `LuaState`，`idx` 为其合法栈索引（越界读错槽）；
 /// 返回切片指向栈槽串内部字节，下一次操作 `l` 前有效（寿命 `'a` 与 [`lua_touserdata`]
-/// 等既有收口同形，由调用方保证不跨 VM 操作持有）。cpp lapi.cpp:497。
+/// 等既有收口同形，由调用方保证不跨 VM 操作持有）。r12-w6 保留判据（判例 1）：签名携带
+/// 调用方 supplied 的裸 `l` 且体内解引用；ulua-rt/ulua-require/ulua-repl-cli 越界消费面
+/// 现以裸形转手，收形同步点已登记交主代理。cpp lapi.cpp:497。
 pub unsafe fn lua_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a [u8]> {
   unsafe {
     let mut o: StkId = index_2_addr(&*l, idx);

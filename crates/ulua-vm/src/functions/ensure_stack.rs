@@ -24,8 +24,7 @@ fn try_reserve_stack(l: &mut LuaState, size: i32) -> bool {
   // SAFETY: `l.ci` 指向当前帧（契约），其 `top` 与 `l.top` 同属一个栈数组，
   // `slot_distance` 只做同分配内的槽距相对比较；i32 折形无截差（槽距受栈上限约束），
   // 与被替代式 `size as isize <= ci->top.offset_from(top)` 谓词逐位等价、短路次序不变。
-  LuaState::slot_distance(l.top, unsafe { (*l.ci).top }) >= size
-    || lua_checkstack(l, size) != 0
+  LuaState::slot_distance(l.top, unsafe { (*l.ci).top }) >= size || lua_checkstack(l, size) != 0
 }
 
 /// 在 `l` 上推送并抛出 "stack overflow"，对应 cpp lapi.cpp:64

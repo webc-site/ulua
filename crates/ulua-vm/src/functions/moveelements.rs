@@ -55,15 +55,7 @@ unsafe fn copy_array_range(srcarray: *mut TValue, dstarray: *mut TValue, f: i32,
 /// 后 rawgeti/rawseti 均引用形安全门面，体内已无裸操作，故本体降为安全 `fn`）：`srct`/`dstt`
 /// 为界内可读的表索引，每轮 rawgeti+rawseti 成对保持栈深不变。
 #[inline]
-fn move_stack_range(
-  l: &mut LuaState,
-  srct: i32,
-  dstt: i32,
-  f: i32,
-  t: i32,
-  n: i32,
-  reverse: bool,
-) {
+fn move_stack_range(l: &mut LuaState, srct: i32, dstt: i32, f: i32, t: i32, n: i32, reverse: bool) {
   // f+i/t+i 即两表整数键：改为源/目标两条等差键区间 zip 游走，消除手工 i 与逐轮基址加法；
   // 端点用 i64 计算，极端键下 i32 端点会溢出，键值本身恒在 i32 域内回截无损
   let src_keys = i64::from(f)..i64::from(f) + i64::from(n);
