@@ -17,7 +17,7 @@ pub(crate) unsafe fn lua_h_next(l: *mut LuaState, t: &LuaTable, key: StkId) -> i
     // 查询键的 tag 读链（含 dead key 判定）已全部收敛在 findindex（B2a 已 match 化）；
     // 本函数对表槽位仅剩值轴 nil 判定，改用 B1 的 ValueView。
     // findindex 只读查询键，从出参槽即时借用（写回发生在其后）。
-    let i = findindex(l, t, &*key) + 1;
+    let i = findindex(&mut *l, t, &*key) + 1;
     let sizearray = t.sizearray;
 
     // try first array part：切 array_window 共享窗，窗[i] ⇔ cpp `array[i]`（E1 契约逐位
