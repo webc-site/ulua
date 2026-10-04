@@ -1,4 +1,4 @@
-use core::ptr::{null, null_mut};
+use core::ptr::null_mut;
 
 use crate::{
   enums::lua_type::LuaType,
@@ -35,7 +35,7 @@ pub(crate) fn lua_f_new_cclosure(l: &mut LuaState, nelems: i32, e: *mut LuaTable
     let cc = &mut cl.inner.c;
     cc.f = None;
     cc.cont = None;
-    cc.debugname = null();
+    cc.debugname = None;
 
     c
   }

@@ -1,39 +1,40 @@
-use core::{ffi::c_char, ptr::null};
+//! review.md §10 收形：函数名读取返回原生 `Option<&'static [u8]>`（不含终止 NUL
+//! 的串体字节，`None` 即原 null 哨兵），与 `LuaDebug::name` 字段同形直连，
+//! 不再经 `*const c_char`/`getstr` 指针面折转。
 
 use crate::{
-  macros::getstr::getstr,
+  functions::tstr_bytes::tstr_bytes,
   records::{closure::Closure, proto::Proto},
 };
 
+/// 取闭包的调试名（C 闭包 `c.debugname` / Lua 闭包 `p.debugname`）。
+///
 /// # Safety
 ///
-/// `l` 必须指向存活 `lua_State` 且所查询的调用帧/Proto/输出记录按约定存活可写。
-pub(crate) unsafe fn getfuncname(cl: *mut Closure) -> *const c_char {
-  // SAFETY: 契约保证 `ci` 为存活调用帧，向上回溯读取的 func 槽/原型常量索引均落在其所属结构界内
+/// `cl` 为 null 或指向存活 `Closure`；非空时其 `inner.c.debugname` 引用的静态串、
+/// 或 `inner.l.p->debugname` TString 串体须在返回值寿命内保持有效（函数值在
+/// 栈/帧上即存活、GC 不移动——与 `LuaDebug::name` 的存活契约同一）。
+pub(crate) unsafe fn getfuncname<'a>(cl: *mut Closure) -> Option<&'a [u8]> {
+  // SAFETY: 契约即上所列——null 直接返回 `None`（原 null 哨兵）；C 臂只透传
+  // 闭包自有的 `Option<&'static [u8]>` 字段，Lua 臂经 `tstr_bytes` 单点把
+  // TString 指针折成恰覆盖 payload 的字节窗
   unsafe {
     if cl.is_null() {
-      return null();
+      return None;
     }
 
     if (*cl).is_c != 0 {
-      let c_debugname = (*cl).inner.c.debugname;
-      if !c_debugname.is_null() {
-        c_debugname
-      } else {
-        null()
-      }
+      (*cl).inner.c.debugname
     } else {
       let p: *mut Proto = (*cl).inner.l.p;
-
-      if !p.is_null() {
-        let p_debugname = (&(*p)).debugname;
-        if !p_debugname.is_null() {
-          getstr(p_debugname)
-        } else {
-          null()
-        }
+      if p.is_null() {
+        return None;
+      }
+      let p_debugname = (&*p).debugname;
+      if p_debugname.is_null() {
+        None
       } else {
-        null()
+        Some(tstr_bytes(p_debugname))
       }
     }
   }

@@ -5,7 +5,7 @@ use ulua_common::macros::luau_assert::LUAU_ASSERT;
 use crate::{
   enums::{lua_type::LuaType, value_view::ValueView},
   functions::{
-    c_slice, c_slice_mut, cstr, cstr_cow, lua_d_call::lua_d_call,
+    c_slice, c_slice_mut, cstr_cow, lua_d_call::lua_d_call,
     lua_f_new_cclosure::lua_f_new_cclosure, lua_h_getstr::lua_h_getstr, lua_m_newgco::lua_m_newgco,
     lua_s_newlstr::lua_s_newlstr, lua_v_gettable::lua_v_gettable,
   },
@@ -265,7 +265,7 @@ pub(crate) fn lua_r_setupconstructor(
     let constructor = lua_f_new_cclosure(l, 1, env);
     let ctor_c = &mut (*constructor).inner.c;
     ctor_c.f = Some(lua_r_constructobject_arm);
-    ctor_c.debugname = cstr(b"luaR_constructobject\0");
+    ctor_c.debugname = Some(b"luaR_constructobject");
     setclassvalue!(l, &mut ctor_c.upvals[0], classobject);
     ctor_c.cont = None;
 
@@ -294,7 +294,7 @@ pub(crate) fn lua_r_setupconstructor(
     let default_ctor = lua_f_new_cclosure(l, 1, env);
     let default_ctor_c = &mut (*default_ctor).inner.c;
     default_ctor_c.f = Some(lua_r_defaultcreateobject_arm);
-    default_ctor_c.debugname = cstr(b"luaR_defaultcreateobject\0");
+    default_ctor_c.debugname = Some(b"luaR_defaultcreateobject");
     setclassvalue!(l, &mut default_ctor_c.upvals[0], classobject);
     default_ctor_c.cont = None;
 

@@ -32,9 +32,10 @@ pub(crate) unsafe fn dumpclosure(f: *mut c_void, cl: &Closure) {
 
     if cl.is_c != 0 {
       let c = &cl.inner.c;
-      if !c.debugname.is_null() {
+      // §10：C 闭包 debugname 为原生字节窗，直写无需指针/NUL 面
+      if let Some(name) = c.debugname {
         c_file_write_bytes(f, b",\"name\":\"");
-        c_file_write_str(f, c.debugname);
+        c_file_write_bytes(f, name);
         c_file_write_bytes(f, b"\"");
       }
       if cl.nupvalues != 0 {

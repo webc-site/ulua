@@ -1,9 +1,7 @@
-use core::mem::zeroed;
-
 use crate::{
   functions::{
-    cstr_bytes, getthread::getthread, lua_getinfo::lua_getinfo,
-    lua_rawcheckstack::lua_rawcheckstack, lua_xmove::lua_xmove,
+    getthread::getthread, lua_getinfo::lua_getinfo, lua_rawcheckstack::lua_rawcheckstack,
+    lua_xmove::lua_xmove, tstr_bytes::cut_at_nul,
   },
   macros::lua_lib_fn::lua_lib_fn,
   records::{lua_debug::LuaDebug, lua_state::LuaState},
@@ -45,10 +43,12 @@ pub(crate) unsafe fn db_info(l: *mut LuaState) -> i32 {
       (*l).arg_error(arg + 1, "function or level expected");
     }
 
-    let options = (*l).check_bytes(arg + 2);
+    // §10：`luaL_checkstring` 的选项串按 C 语义截读至首个 NUL（cpp `for (; *it; it++)`
+    // 等值点，截断收敛一处后整窗下传）
+    let options = cut_at_nul((*l).check_bytes(arg + 2));
 
-    let mut ar: LuaDebug = zeroed();
-    if lua_getinfo(l1, level, options.as_ptr().cast(), &mut ar) == 0 {
+    let mut ar: LuaDebug = LuaDebug::default();
+    if lua_getinfo(l1, level, options, &mut ar) == 0 {
       return 0;
     }
 
@@ -72,7 +72,7 @@ pub(crate) unsafe fn db_info(l: *mut LuaState) -> i32 {
 
       match ch {
         b's' => {
-          (*l).push_bytes(cstr_bytes(ar.short_src));
+          (*l).push_bytes(ar.short_src.bytes());
           results += 1;
         }
         b'l' => {
@@ -80,12 +80,7 @@ pub(crate) unsafe fn db_info(l: *mut LuaState) -> i32 {
           results += 1;
         }
         b'n' => {
-          let name = if !ar.name.is_null() {
-            cstr_bytes(ar.name)
-          } else {
-            b"".as_slice()
-          };
-          (*l).push_bytes(name);
+          (*l).push_bytes(ar.name.unwrap_or(b""));
           results += 1;
         }
         b'f' => {

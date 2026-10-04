@@ -3,10 +3,14 @@ use core::ffi::c_char;
 
 use crate::{
   functions::{
-    cstr_bytes_ref::cstr_bytes_ref, cstr_cow, currentline::currentline, getluaproto::get_lua_proto,
-    lua_o_chunkid::lua_o_chunkid, lua_o_pushfstring::lua_o_pushfstring,
+    cstr_bytes_ref::cstr_bytes_ref,
+    currentline::currentline,
+    getluaproto::get_lua_proto,
+    lua_o_chunkid::{chunkid_slice, lua_o_chunkid_ref},
+    lua_o_pushfstring::lua_o_pushfstring,
+    tstr_bytes::{cut_at_nul, tstr_bytes},
   },
-  macros::{getstr::getstr, is_lua::isLua, lua_idsize::LUA_IDSIZE},
+  macros::{is_lua::isLua, lua_idsize::LUA_IDSIZE},
   records::lua_state::LuaState,
 };
 
@@ -24,27 +28,17 @@ pub(crate) fn pusherror_bytes(l: &mut LuaState, msg: &[u8]) {
   // SAFETY: `ci` 为刚自存活 `l` 取出的当前帧；`isLua!` 帧宏读 `(*ci).func` 及函数
   // 对象型字段，系纯读谓词，不留存引用。
   if unsafe { isLua!(ci) } {
-    let mut chunkbuf: [c_char; LUA_IDSIZE as usize] = [0; LUA_IDSIZE as usize];
+    // §10：chunkid 全链切片化——源名经 `tstr_bytes` 单点取窗，截断核心就地写
+    // 栈上 `[u8; LUA_IDSIZE]` scratch，观察面按旧 C 串扫描读等值（首 NUL）截断
+    let mut chunkbuf = [0u8; LUA_IDSIZE as usize];
     // SAFETY: `isLua!` 谓词真值确立本帧为 Lua 闭包存活帧：`get_lua_proto` 帧面取
-    // proto、`(*proto).source`/`(*source).len` 对象面裸读与 `getstr`/`lua_o_chunkid`
-    // 裸指针垫片均在帧-对象存活界内成立；`chunkbuf` 写窗落点由本函数局部缓冲承载，
-    // 返回指针寿命随 `chunkbuf`/`source`（`lua_o_chunkid` 契约），出窗仅透传该指针。
-    let chunkid = unsafe {
+    // proto、`(*proto).source` 对象面裸读与 `tstr_bytes` 单点均在帧-对象存活界内成立
+    let (src, line) = unsafe {
       let proto = get_lua_proto(ci);
-      let source = (*proto).source;
-      lua_o_chunkid(
-        chunkbuf.as_mut_ptr(),
-        chunkbuf.len(),
-        getstr(source),
-        (*source).len as usize,
-      )
+      (tstr_bytes((*proto).source), currentline(&*ci))
     };
-    // SAFETY: `ci` 为存活帧；`&*ci` 构造的引用形 `currentline` 系帧面纯读，借用窗
-    // 止于本调用语句。
-    let line = unsafe { currentline(&*ci) };
-    // SAFETY: `chunkid` 为 `lua_o_chunkid` 落点（`chunkbuf` 内 NUL 结尾串或 TString
-    // 源名偏移串），调用期间存活且 NUL 终止，`cstr_cow` 的 NUL 扫描必界内终止。
-    let chunk = unsafe { cstr_cow(chunkid) };
+    let site = lua_o_chunkid_ref(&mut chunkbuf, src);
+    let chunk = String::from_utf8_lossy(cut_at_nul(chunkid_slice(&chunkbuf, src, site)));
     let msg_str = String::from_utf8_lossy(msg);
     // SAFETY: `l` 为独占接收者引用；`lua_o_pushfstring` 仅经 `l` 压栈取副作用，
     // format 临时（chunk/line/msg_str）全程存活至本调用语句结束。

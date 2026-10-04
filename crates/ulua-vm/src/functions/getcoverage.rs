@@ -1,4 +1,4 @@
-use core::{ffi::c_void, ptr::null};
+use core::ffi::c_void;
 
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
@@ -9,8 +9,9 @@ use ulua_common::{
 };
 
 use crate::{
-  functions::{c_slice, lua_g_getline::lua_g_getline},
-  macros::getstr::getstr,
+  functions::{
+    c_slice, lua_g_getline::lua_g_getline, tstr_bytes::{cut_at_nul, tstr_bytes},
+  },
   records::proto::Proto,
   type_aliases::lua_coverage::LuaCoverage,
 };
@@ -50,28 +51,22 @@ pub(crate) fn getcoverage(
     }
   }
 
+  // §10：函数名收原生串体窗（interned TString 经 `tstr_bytes` 单点取窗、
+  // 按旧 C 串扫描读等值截断）；`hits` 收共享切片，`size` 参数由长度承载
   let debugname = if p.debugname.is_null() {
-    null()
+    None
   } else {
-    // SAFETY: 契约保证 `debugname` 非空即指向存活 `tstring`，`getstr` 仅取串体首址（只读）。
-    unsafe { getstr(p.debugname) }
+    // SAFETY: 契约保证 `debugname` 非空即指向存活 `tstring`（loader/编译器不变量），
+    // `tstr_bytes` 单点取恰覆盖 payload 的窗
+    Some(cut_at_nul(unsafe { tstr_bytes(p.debugname) }))
   };
   let linedefined = p.linedefined;
 
   if let Some(cb) = callback {
-    // SAFETY: C-ABI 宿主回调属运行期开放边界——`lua_getcoverage` 的 `# Safety` 收口
-    // `context` 与回调型别匹配、回调在本调用窗口内可解引用 `buffer` 首址但不得留存；
-    // `buffer` 为本帧独占可变区，借用半径止于本次调用。
-    unsafe {
-      cb(
-        context,
-        debugname,
-        linedefined,
-        depth,
-        buffer.as_mut_ptr(),
-        buffer.len(),
-      )
-    };
+    // SAFETY: 宿主回调属运行期开放边界——`lua_getcoverage` 的 `# Safety` 收口
+    // `context` 与回调型别匹配、回调不得留存借用窗；`buffer` 为本帧独占可变区，
+    // 共享再借用止于本次调用。
+    unsafe { cb(context, debugname, linedefined, depth, &*buffer) };
   }
 
   // SAFETY: 契约保证子原型数组按 `sizep` 存活（递归下传，同函数 doc）。

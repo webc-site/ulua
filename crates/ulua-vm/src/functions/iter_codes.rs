@@ -1,5 +1,3 @@
-use core::ptr::null;
-
 use crate::{
   functions::iter_aux::iter_aux_arm, macros::lua_lib_fn::lua_lib_fn, records::lua_state::LuaState,
 };
@@ -12,9 +10,8 @@ use crate::{
 /// cpp VM/src/lutf8lib.cpp:267
 pub fn iter_codes(l: &mut LuaState) -> i32 {
   l.check_bytes(1);
-  // SAFETY: `iter_aux_arm` 是本文件同卫生域生成的合法 `unsafe extern "C-unwind" fn`（遵循 Lua
-  // C 函数约定），`null()` 为 `push_c_function` 契约允许的空 debugname。
-  unsafe { l.push_c_function(Some(iter_aux_arm), null()) };
+  // §10：`None` 即原 `null()` 空 debugname 契约位；被登记 `_arm` 遵循 Lua C 函数约定。
+  l.push_c_function(Some(iter_aux_arm), None);
   l.push_value(1);
   l.push_integer(0);
   3

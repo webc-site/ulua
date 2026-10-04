@@ -1,9 +1,7 @@
-use core::ptr::null;
-
 use crate::{
   functions::{
     auxwrapcont::auxwrapcont_arm, auxwrapy::auxwrapy_arm, cocreate::cocreate,
-    lua_pushcclosurek::lua_pushcclosurek_ref,
+    lua_pushcclosurek::lua_pushcclosurek,
   },
   macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
@@ -24,7 +22,7 @@ pub unsafe fn cowrap(l: &mut LuaState) -> i32 {
   // 被调方按上述契约就地重建借用、不留存该指针，借用窗止于本次调用
   unsafe { cocreate(l.as_mut_ptr()) };
 
-  lua_pushcclosurek_ref(l, Some(auxwrapy_arm), null(), 1, Some(auxwrapcont_arm));
+  lua_pushcclosurek(l, Some(auxwrapy_arm), None, 1, Some(auxwrapcont_arm));
 
   1
 }

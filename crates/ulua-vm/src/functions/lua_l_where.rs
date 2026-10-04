@@ -1,19 +1,22 @@
 //! Source: `VM/src/laux.cpp:71-83` (hand-ported)
 
+use alloc::string::String;
+
 use crate::{
   functions::{
-    cstr_cow, currentline::currentline, getluaproto::get_lua_proto, lua_o_chunkid::lua_o_chunkid,
-    lua_o_pushfstring::lua_o_pushfstring, lua_pushlstring::lua_pushlstring_bytes,
-    lua_rawcheckstack::lua_rawcheckstack,
+    currentline::currentline, getluaproto::get_lua_proto,
+    lua_o_chunkid::{chunkid_slice, lua_o_chunkid_ref}, lua_o_pushfstring::lua_o_pushfstring,
+    lua_pushlstring::lua_pushlstring_bytes, lua_rawcheckstack::lua_rawcheckstack,
+    tstr_bytes::{cut_at_nul, tstr_bytes},
   },
-  macros::{getstr::getstr, is_lua::isLua, lua_idsize::LUA_IDSIZE},
+  macros::{is_lua::isLua, lua_idsize::LUA_IDSIZE},
   records::lua_state::LuaState,
 };
 
 /// # Safety
 /// `l` 的存活与独占已由 `&mut LuaState` 承载（r16-v43 收形）；体内沿 `l.ci..l.base_ci` 帧链的
-/// 裸指针游走（`ci.sub(1)`、`isLua!`、`(*proto).source` 读、`currentline(&*ci)`）与 `lua_o_chunkid`
-/// 缓冲裸窗仍属真实裸操作，屏障按 r16-v21 判例保留。其余前提：`level` 沿 `l.ci..l.base_ci` 帧链上跳
+/// 裸指针游走（`ci.sub(1)`、`isLua!`、`(*proto).source` 读、`currentline(&*ci)`、`tstr_bytes` 折窗）
+/// 仍属真实裸操作，屏障按 r16-v21 判例保留；chunkid 核心已收为栈上切片缓冲、无裸窗。其余前提：`level` 沿 `l.ci..l.base_ci` 帧链上跳
 /// （遇 base_ci 提前压空串返回），落点 `ci` 若 `isLua!` 则 `get_lua_proto` 非空、其 `(*proto).source`
 /// 存活（读 `len` 且 `getstr` 覆盖串体，写入 `chunkbuf[LUA_IDSIZE]`）；`currentline(ci)` 复用同帧。
 /// 每处 `lua_pushlstring`/`lua_o_pushfstring` 前先 `lua_rawcheckstack(l,1)` 保证 `top` 后留 ≥1 槽；可触发 GC。
@@ -35,16 +38,14 @@ pub(crate) unsafe fn lua_l_where(l: &mut LuaState, level: i32) {
     if isLua!(ci) {
       let proto = get_lua_proto(ci);
       let source = (*proto).source;
-      let mut chunkbuf = [0; LUA_IDSIZE as usize];
-      let chunkid = lua_o_chunkid(
-        chunkbuf.as_mut_ptr(),
-        chunkbuf.len(),
-        getstr(source),
-        (*source).len as usize,
-      );
+      // §10：chunkid 切片核心就地写栈上 `[u8; LUA_IDSIZE]`，观察面按旧 C 串
+      // 扫描读（首 NUL）等值截断，无指针垫片
+      let src = tstr_bytes(source);
+      let mut chunkbuf = [0u8; LUA_IDSIZE as usize];
+      let site = lua_o_chunkid_ref(&mut chunkbuf, src);
       let line = currentline(&*ci);
       if line > 0 {
-        let chunk = cstr_cow(chunkid);
+        let chunk = String::from_utf8_lossy(cut_at_nul(chunkid_slice(&chunkbuf, src, site)));
         lua_o_pushfstring(&mut *l, format_args!("{}:{}: ", chunk, line));
         return;
       }

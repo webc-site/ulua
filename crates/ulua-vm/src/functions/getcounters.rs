@@ -1,12 +1,13 @@
 use core::{
   ffi::c_void,
   mem::size_of,
-  ptr::{null, null_mut, read_unaligned},
+  ptr::{null_mut, read_unaligned},
 };
 
 use crate::{
-  functions::{c_slice, lua_g_getline::lua_g_getline},
-  macros::getstr::getstr,
+  functions::{
+    c_slice, lua_g_getline::lua_g_getline, tstr_bytes::{cut_at_nul, tstr_bytes},
+  },
   records::{lua_state::LuaState, proto::Proto},
   type_aliases::{lua_counter_function::LuaCounterFunction, lua_counter_value::LuaCounterValue},
 };
@@ -51,11 +52,12 @@ pub(crate) fn getcounters(
     };
 
     if !data.is_null() && count != 0 {
+      // §10：函数名收原生串体窗（同 `getcoverage`，interned TString 单点取窗 + 扫描读等值截断）
       let debugname = if p.debugname.is_null() {
-        null()
+        None
       } else {
-        // SAFETY: 契约保证 `debugname` 非空即指向存活 `tstring`，`getstr` 仅取串体首址（只读）。
-        unsafe { getstr(p.debugname) }
+        // SAFETY: 契约保证 `debugname` 非空即指向存活 `tstring`
+        Some(cut_at_nul(unsafe { tstr_bytes(p.debugname) }))
       };
       let linedefined = p.linedefined;
 

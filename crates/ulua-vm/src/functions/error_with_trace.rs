@@ -6,8 +6,6 @@
 
 use alloc::string::String;
 
-use ulua_common::functions::c_str::cstr_cow;
-
 use crate::{
   enums::lua_status::LuaStatus,
   functions::{lua_debugtrace::lua_debugtrace, lua_tolstring::lua_tolstring_ref},
@@ -31,9 +29,9 @@ pub unsafe fn error_with_trace(state: *mut LuaState, status: i32, trace_header: 
   };
 
   error.push_str(trace_header);
-  // SAFETY: state 为有效 VM 状态；lua_debugtrace 返回 NUL 结尾串或 null
-  //（后者由 cstr_cow 译成空串，等价原判空跳过分支）。
-  error.push_str(&unsafe { cstr_cow(lua_debugtrace(state)) });
+  // SAFETY: state 为有效 VM 状态；§10 后 `lua_debugtrace` 直接返回回溯字节窗
+  //（旧指针面按首 NUL 截读，窗内各帧字段写端已同点截断，lossy 渲染逐字节不变）
+  error.push_str(&String::from_utf8_lossy(unsafe { lua_debugtrace(state) }));
 
   // 错误对象的弹栈由调用方负责（run_loaded_chunk 弹 l 上的 thread，runFile 不弹）
   error

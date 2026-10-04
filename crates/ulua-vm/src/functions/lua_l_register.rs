@@ -3,9 +3,13 @@
 use alloc::string::String;
 
 use crate::{
-  functions::{libsize::libsize, lua_l_findtable::lua_l_findtable_bytes},
+  functions::{
+    libsize::libsize,
+    lua_l_findtable::lua_l_findtable_bytes,
+    tstr_bytes::{cut_at_nul, tstr_bytes},
+  },
   macros::{
-    getstr::getstr, lua_globalsindex::LUA_GLOBALSINDEX, lua_l_error::luaL_error,
+    lua_globalsindex::LUA_GLOBALSINDEX, lua_l_error::luaL_error,
     lua_registryindex::LUA_REGISTRYINDEX, lua_s_new::lua_s_new,
   },
   records::{lua_l_reg::LuaLReg, lua_state::LuaState},
@@ -37,7 +41,8 @@ pub unsafe fn lua_l_register_bytes(l: &mut LuaState, libname: Option<&[u8]>, lr:
 
     for reg in lr {
       let ts = lua_s_new(&mut *l, reg.name);
-      l.push_c_function(reg.func, getstr(ts));
+      // §10：debugname 收原生字节窗（interned TString 串体，闭包存活契约同旧指针面）
+      l.push_c_function(reg.func, Some(cut_at_nul(tstr_bytes(ts))));
       l.set_field_bytes(-2, reg.name);
     }
   }

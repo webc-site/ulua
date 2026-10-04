@@ -103,15 +103,10 @@ pub(crate) unsafe fn dumpthread(f: *mut c_void, th: &LuaState) {
             let cl = ci_func!(ci);
             if (*cl).is_c != 0 {
               let c = addr_of!((*cl).inner.c).cast::<CClosure>();
+              // §10：C 闭包 debugname 收形 `Option<&'static [u8]>`——空臂回退
+              // 短源名占位（cpp `"[C]"`），观察面为字节切片窗、无指针折转
               c_file_write_bytes(f, b"\"frame:");
-              c_file_write_str(
-                f,
-                if !(*c).debugname.is_null() {
-                  (*c).debugname
-                } else {
-                  SHORT_SRC_C.as_ptr().cast()
-                },
-              );
+              c_file_write_bytes(f, (*c).debugname.unwrap_or(SHORT_SRC_C));
               c_file_write_bytes(f, b"\"");
             } else {
               let lcl = addr_of!((*cl).inner.l).cast::<LClosure>();

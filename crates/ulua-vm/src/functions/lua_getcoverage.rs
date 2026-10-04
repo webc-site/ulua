@@ -9,8 +9,10 @@ use crate::{
 
 /// # Safety
 /// `l` 必须指向存活 `LuaState` 且 `funcindex` 处为 Lua（非 C）闭包 TValue（api_check 仅 debug 兜底）；
-/// `context` 与 `callback` 型别约定须匹配——callback 收到按本帧 `Vec` 分配的行缓冲首址裸指针，函数
-/// 返回前即随 `Vec` 释放，被调方不得留存该指针、不得在其返回前越权改写。对应 cpp ldebug.cpp:590。
+/// `context` 与 `callback` 型别约定须匹配——callback 收到按本帧 `Vec` 分配的行缓冲共享切片，函数
+/// 返回前即随 `Vec` 释放，被调方不得留存该借用、不得越权改写。对应 cpp ldebug.cpp:590。
+///
+/// review.md §10：回调 `function` 形参为原生 `Option<&[u8]>` 串体窗（见 `LuaCoverage`）。
 pub unsafe fn lua_getcoverage(
   l: *mut LuaState,
   funcindex: i32,

@@ -7,6 +7,7 @@ use crate::{
     enumedges::enumedges,
     enumnode::enumnode,
     fmt_cstr_buf::{cstr_display, fmt_cstr_buf},
+    tstr_bytes::cut_at_nul,
   },
   macros::{
     getstr::getstr, lua_idsize::LUA_IDSIZE, size_cclosure::size_cclosure,
@@ -29,12 +30,30 @@ pub(crate) unsafe fn enumclosure(ctx: *mut EnumContext, cl: &Closure) {
     let obj = (cl as *const Closure).cast::<GCObject>();
 
     if cl.is_c != 0 {
-      enumnode(
-        ctx,
-        obj,
-        size_cclosure(cl.nupvalues as i32),
-        cl.inner.c.debugname,
-      );
+      // §10：C 闭包 debugname 为原生字节窗；`enumnode`/`node` 回调属 lgcdebug C-ABI
+      // 枚举台账面（非本票边界），以 `fmt_cstr_buf` 就地物化 NUL 串交回（静态注册名
+      // 远短于 LUA_IDSIZE，截尾不可达；见报告可见输出注）
+      let mut buf = [0u8; LUA_IDSIZE as usize];
+      match cl.inner.c.debugname {
+        Some(name) => {
+          // 解码策略与 `cstr_display` 同点：lossy 面以 "?" 兜底（非 UTF-8 名仅
+          // 影响枚举日志、不影响可见 VM 输出）
+          let disp = core::str::from_utf8(cut_at_nul(name)).unwrap_or("?");
+          fmt_cstr_buf(&mut buf, format_args!("{disp}"));
+          enumnode(
+            ctx,
+            obj,
+            size_cclosure(cl.nupvalues as i32),
+            buf.as_ptr().cast::<c_char>(),
+          );
+        }
+        None => enumnode(
+          ctx,
+          obj,
+          size_cclosure(cl.nupvalues as i32),
+          core::ptr::null(),
+        ),
+      }
     } else {
       let p: *mut Proto = cl.inner.l.p;
       let mut buf = [0u8; LUA_IDSIZE as usize];

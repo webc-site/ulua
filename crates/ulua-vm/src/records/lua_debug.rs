@@ -27,12 +27,20 @@ pub const SHORT_SRC_CAP: usize = LUA_IDSIZE as usize;
 /// [`crate::functions::auxgetinfo::auxgetinfo`] 的截断核心
 /// （[`crate::functions::lua_o_chunkid::lua_o_chunkid_ref`]）落数据，
 /// 长度恒不超过缓冲，故读面无需再判 NUL/越界。
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, Copy, Debug)]
 pub struct ShortSrc {
   /// 定长存储；`buf[len..]` 恒未观察
   buf: [u8; SHORT_SRC_CAP],
   /// 有效字节数（不含 NUL 终止符语义位——本载体以长度取代终止符）
   len: usize,
+}
+
+// `[u8; SHORT_SRC_CAP]` 无 `Default`（std 仅 ≤32 数组实现），手写全零初值
+// （与旧 `ssbuf: [c_char; LUA_IDSIZE]` 零初始化观察等值）。
+impl core::default::Default for ShortSrc {
+  fn default() -> Self {
+    Self { buf: [0; SHORT_SRC_CAP], len: 0 }
+  }
 }
 
 impl ShortSrc {
@@ -49,14 +57,23 @@ impl ShortSrc {
     self.len = n;
   }
 
+  /// 外部字节窗写入 + C 串扫描读等值截断（`cut_at_nul` 语义：旧消费面对指针
+  /// 按首个 NUL 截读，这里把该截断收敛到写入单点，读面不再判 NUL）。
+  pub(crate) fn set_cut(&mut self, bytes: &[u8]) {
+    let end = memchr::memchr(0, bytes).unwrap_or(bytes.len());
+    self.set(&bytes[..end]);
+  }
+
   /// 截断核心所需的可写 scratch（与 `buf` 同一存储，避免二次拷贝）。
   pub(crate) fn scratch(&mut self) -> &mut [u8] {
     &mut self.buf
   }
 
-  /// 结果已就地写入 [`Self::scratch`] 时，仅提交长度。
-  pub(crate) fn commit_len(&mut self, n: usize) {
-    self.len = n.min(SHORT_SRC_CAP);
+  /// 结果已就地写入 [`Self::scratch`] 时，按扫描读等值点提交有效长度
+  /// （写窗 `[..n]` 内首个 NUL 前缀，与旧指针消费面 `cstr_bytes` 截读逐字节一致）。
+  pub(crate) fn commit_cut(&mut self, n: usize) {
+    let bytes = &self.buf[..n.min(SHORT_SRC_CAP)];
+    self.len = memchr::memchr(0, bytes).unwrap_or(bytes.len());
   }
 }
 
