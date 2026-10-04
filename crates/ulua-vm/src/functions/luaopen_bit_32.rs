@@ -29,15 +29,18 @@ static BITLIB: [LuaLReg; 15] = [
   LuaLReg::new(b"byteswap", b_swap_arm),
 ];
 
-/// # Safety
-/// `l` 须为存活 LuaState 且栈顶之上留 1 空槽（`lua_l_register_bytes` push 库表并作为返回值），处于可分配/GC 的受保护帧；
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
+/// 建库表/注册仍经 `lua_l_register_bytes` 一处不安全被调而落窄块（被调方自身保留 `# Safety`：
+/// 裸 C 函数指针与 `lua_s_new` 转手未清零），故本体降为安全 `fn`）：`l` 须为可分配、可抛错的
+/// 受保护帧且栈顶之上留 1 空槽（`lua_l_register_bytes` push 库表并作为返回值）；
 /// `BITLIB` 为编译期静态表，每项 `name` 为静态字节切片。cpp/VM/src/lbitlib.cpp:241 luaopen_bit32。
-pub unsafe fn luaopen_bit32(l: *mut LuaState) -> i32 {
-  unsafe {
-    lua_l_register_bytes(&mut *l, Some(b"bit32"), &BITLIB);
+pub fn luaopen_bit32(l: &mut LuaState) -> i32 {
+  // SAFETY: `BITLIB` 为本文件同卫生域生成的合法 `unsafe extern "C-unwind"` 臂静态表，
+  // 名字为不含尾部 `\0` 的静态字节切片，满足 `lua_l_register_bytes` 切片契约；
+  // `l` 的存活/独占由借用承载
+  unsafe { lua_l_register_bytes(l, Some(b"bit32"), &BITLIB) };
 
-    1
-  }
+  1
 }
 
-lua_lib_fn!(pub fn luaopen_bit32, luaopen_bit32_arm);
+lua_lib_fn!(pub fn luaopen_bit32 @ref, luaopen_bit32_arm);

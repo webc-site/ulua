@@ -39,7 +39,8 @@ unsafe extern "C-unwind" fn print_thunk(l: *mut lua_state::LuaState) -> i32 {
 /// 对应 C++ `void setTypeFunctionEnvironment(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:2094`）。
 ///
 /// 本函数是 safe fn：形参为 `&mut LuaState`，存活/独占由引用类型承载；体内 `unsafe`
-/// 块只因 `luaopen_*` 是 VM 侧 C-ABI 门面（收 `*mut`，经 `l.as_mut_ptr()` 就地派生），
+/// 块只因 `l.push_c_function` 仍是 VM 侧收 `*const c_char` debugname 的 C 形态不安全
+/// 门面（本票 `luaopen_*` 收形后皆引用形安全直调，不再是 unsafe 理由），
 /// 调用方无需承担任何内存安全前提。
 ///
 /// 调用序契约（正确性，非内存安全）：`l` 须是即将承载类型函数库、且尚未重复初始化的
@@ -48,19 +49,19 @@ unsafe extern "C-unwind" fn print_thunk(l: *mut lua_state::LuaState) -> i32 {
 pub(crate) fn set_type_function_environment(l: &mut LuaState) {
   unsafe {
     // Register math library
-    luaopen_math(l.as_mut_ptr());
+    luaopen_math(l);
     l.pop(1);
 
     // Register table library
-    luaopen_table(l.as_mut_ptr());
+    luaopen_table(l);
     l.pop(1);
 
     // Register string library
-    luaopen_string(l.as_mut_ptr());
+    luaopen_string(l);
     l.pop(1);
 
     // Register bit32 library
-    luaopen_bit32(l.as_mut_ptr());
+    luaopen_bit32(l);
     l.pop(1);
 
     // Register utf8 library
@@ -72,7 +73,7 @@ pub(crate) fn set_type_function_environment(l: &mut LuaState) {
     l.pop(1);
 
     // Register base library
-    luaopen_base(l.as_mut_ptr());
+    luaopen_base(l);
     l.pop(1);
 
     // Remove certain global functions from the base library

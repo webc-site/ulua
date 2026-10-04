@@ -46,50 +46,72 @@ static BASE_FUNCS: [LuaLReg; 19] = [
 const G_NAME: &[u8] = b"_G";
 const VERSION_NAME: &[u8] = b"_VERSION";
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn luaopen_base(l: *mut LuaState) -> i32 {
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
+/// push_value/set_global_bytes/set_field_bytes 皆安全门面直调，仅注册建表、压串、`auxopen` 与
+/// `lua_pushcclosurek` 四处 C 形态被调各自落窄块（被调方自身保留 `# Safety`：裸 C 函数指针与
+/// `lua_s_new` 转手未清零），故本体降为安全 `fn`）：`l` 须为可分配、可抛错的受保护帧且栈顶之上
+/// 留足空槽；`auxopen`/`lua_pushcclosurek` 的 debugname 为静态 NUL 结尾字面量，臂为本文件静态表
+/// 同款合法 `unsafe extern "C-unwind"` 函数。cpp/VM/src/lbaselib.cpp:438-489 luaopen_base。
+pub fn luaopen_base(l: &mut LuaState) -> i32 {
+  l.push_value(LUA_GLOBALSINDEX);
+  l.set_global_bytes(G_NAME);
+
+  // SAFETY: `BASE_FUNCS` 为本文件同卫生域生成的合法 `unsafe extern "C-unwind"` 臂静态表，
+  // 名字为不含尾部 `\0` 的静态字节切片，满足 `lua_l_register_bytes` 切片契约
+  unsafe { lua_l_register_bytes(l, Some(G_NAME), &BASE_FUNCS) };
+
+  // SAFETY: `lua_pushlstring_bytes` 切片核心契约自具（l 由 &mut 承载存活/独占，界内拷入
+  // 堆上 TString、不留借出窗）；b"Luau" 为本文件自有的界内静态切片
+  unsafe { lua_pushlstring_bytes(l, b"Luau") };
+  l.set_global_bytes(VERSION_NAME);
+
+  // SAFETY: `l.as_mut_ptr()` 为当前独占借用重建的裸句柄，借用窗止于本次调用；
+  // `cstr(b"ipairs\0")` 指向静态 NUL 结尾字面量，两臂为合法 `unsafe extern "C-unwind"`
+  // 静态表同款函数，满足 `auxopen` 的存活/有效前提
   unsafe {
-    (*l).push_value(LUA_GLOBALSINDEX);
-    (*l).set_global_bytes(G_NAME);
-
-    lua_l_register_bytes(&mut *l, Some(G_NAME), &BASE_FUNCS);
-    lua_pushlstring_bytes(&mut *l, b"Luau");
-    (*l).set_global_bytes(VERSION_NAME);
-
     auxopen(
-      l,
+      l.as_mut_ptr(),
       cstr(b"ipairs\0"),
       Some(lua_b_ipairs_arm),
       Some(lua_b_inext_arm),
     );
+  }
+  // SAFETY: 同上（`cstr(b"pairs\0")` 静态 NUL 字面量，pairs/next 两臂合法）
+  unsafe {
     auxopen(
-      l,
+      l.as_mut_ptr(),
       cstr(b"pairs\0"),
       Some(lua_b_pairs_arm),
       Some(lua_b_next_arm),
     );
+  }
 
+  // SAFETY: `l.as_mut_ptr()` 重建自当前独占借用、借用窗止于本次调用；pcally/pcallcont
+  // 为合法 C 臂且遵循 Lua C 函数约定，debugname 为静态 NUL 字面量，nup=0 无待捕获上值
+  unsafe {
     lua_pushcclosurek(
-      l,
+      l.as_mut_ptr(),
       Some(lua_b_pcally_arm),
       cstr(b"pcall\0"),
       0,
       Some(lua_b_pcallcont_arm),
     );
-    (*l).set_field_bytes(-2, b"pcall");
+  }
+  l.set_field_bytes(-2, b"pcall");
 
+  // SAFETY: 同上（xpcally/xpcallcont 为合法 C 臂，debugname 为静态 NUL 字面量，nup=0）
+  unsafe {
     lua_pushcclosurek(
-      l,
+      l.as_mut_ptr(),
       Some(lua_b_xpcally_arm),
       cstr(b"xpcall\0"),
       0,
       Some(lua_b_xpcallcont_arm),
     );
-    (*l).set_field_bytes(-2, b"xpcall");
-
-    1
   }
+  l.set_field_bytes(-2, b"xpcall");
+
+  1
 }
 
-lua_lib_fn!(pub fn luaopen_base, luaopen_base_arm);
+lua_lib_fn!(pub fn luaopen_base @ref, luaopen_base_arm);

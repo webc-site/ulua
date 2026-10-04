@@ -32,19 +32,22 @@ static TAB_FUNCS: [LuaLReg; 17] = [
   LuaLReg::new(b"clone", tclone_arm),
 ];
 
-/// # Safety
-/// `l` 须为存活 LuaState 且栈顶之上留足空槽（`lua_l_register_bytes` push 库表；`LUA_PUSHCFUNCTION` push cfunction 后
-/// `lua_setglobal` 消费之），须在可分配/GC 的受保护帧内调用。
-/// cpp/VM/src/ltablib.cpp:694 luaopen_table。
-pub unsafe fn luaopen_table(l: *mut LuaState) -> i32 {
-  unsafe {
-    lua_l_register_bytes(&mut *l, Some(b"table"), &TAB_FUNCS);
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
+/// 建库表/注册与 push cfunction 仍经 `lua_l_register_bytes`/`push_c_function` 两处不安全被调而落
+/// 窄块（被调方自身保留 `# Safety`：裸 C 函数指针与 `lua_s_new` 转手未清零），故本体降为安全
+/// `fn`）：`l` 须为可分配、可抛错的受保护帧且栈顶之上留足空槽（`lua_l_register_bytes` push 库表；
+/// push cfunction 后 `set_global_bytes` 消费之）。cpp/VM/src/ltablib.cpp:694 luaopen_table。
+pub fn luaopen_table(l: &mut LuaState) -> i32 {
+  // SAFETY: `TAB_FUNCS` 为本文件同卫生域生成的合法 `unsafe extern "C-unwind"` 臂静态表，
+  // 名字为不含尾部 `\0` 的静态字节切片，满足 `lua_l_register_bytes` 切片契约
+  unsafe { lua_l_register_bytes(l, Some(b"table"), &TAB_FUNCS) };
 
-    (*l).push_c_function(Some(tunpack_arm), cstr(b"unpack\0"));
-    (*l).set_global_bytes(b"unpack");
+  // SAFETY: `tunpack_arm` 为本文件静态表的合法 C 臂（与 TAB_FUNCS 同一注册面），
+  // `cstr(b"unpack\0")` 为静态 NUL 结尾字面量，满足 `push_c_function` 的 debugname 存活契约
+  unsafe { l.push_c_function(Some(tunpack_arm), cstr(b"unpack\0")) };
+  l.set_global_bytes(b"unpack");
 
-    1
-  }
+  1
 }
 
-lua_lib_fn!(pub fn luaopen_table, luaopen_table_arm);
+lua_lib_fn!(pub fn luaopen_table @ref, luaopen_table_arm);
