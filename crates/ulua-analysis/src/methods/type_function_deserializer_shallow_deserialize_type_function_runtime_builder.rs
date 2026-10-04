@@ -52,7 +52,7 @@ impl TypeFunctionDeserializer {
     // Safety: `self.state` 由 `type_function_deserializer` 装配步接线，本轮反序列化
     // 会话内恒已装配；`ctx.arena`/`builtins`/`ice` 为 NonNull
     // `as_ptr()` 取回的非空句柄：arena 写入
-    // （`add_type`/`add_tv`/`add_type_pack_t`）是 bump 追加、不移动既有节点；`get_type_function_type_id::<T>(ty).as_ref()`
+    // （`add_type`/`add_tv`/`add_type_pack_t`）是 bump 追加、不移动既有节点；`get_type_function_type_id::<T>(ty)`
     // 依 RTTI class-index 命中才返回 Some⇒类型正确、`(*builtins).x_type` 只读 Copy；单线程独占驱动
     // 下对这些 arena/上下文的可变借用不并存。
     unsafe {
@@ -61,7 +61,7 @@ impl TypeFunctionDeserializer {
       let builtins = ctx.builtins.as_ptr();
       let target: TypeId;
 
-      if let Some(p) = get_type_function_type_id::<TypeFunctionPrimitiveType>(ty).as_ref() {
+      if let Some(p) = get_type_function_type_id::<TypeFunctionPrimitiveType>(ty) {
         target = match p.r#type {
           TypeFunctionPrimitiveKind::NilType => (*builtins).nil_type,
           TypeFunctionPrimitiveKind::Boolean => (*builtins).boolean_type,
@@ -71,13 +71,13 @@ impl TypeFunctionDeserializer {
           TypeFunctionPrimitiveKind::Thread => (*builtins).thread_type,
           TypeFunctionPrimitiveKind::Buffer => (*builtins).buffer_type,
         };
-      } else if !get_type_function_type_id::<TypeFunctionUnknownType>(ty).is_null() {
+      } else if get_type_function_type_id::<TypeFunctionUnknownType>(ty).is_some() {
         target = (*builtins).unknown_type;
-      } else if !get_type_function_type_id::<TypeFunctionNeverType>(ty).is_null() {
+      } else if get_type_function_type_id::<TypeFunctionNeverType>(ty).is_some() {
         target = (*builtins).never_type;
-      } else if !get_type_function_type_id::<TypeFunctionAnyType>(ty).is_null() {
+      } else if get_type_function_type_id::<TypeFunctionAnyType>(ty).is_some() {
         target = (*builtins).any_type;
-      } else if let Some(s) = get_type_function_type_id::<TypeFunctionSingletonType>(ty).as_ref() {
+      } else if let Some(s) = get_type_function_type_id::<TypeFunctionSingletonType>(ty) {
         if let Some(bs) = s.variant.get_if_0() {
           target = (*arena).add_type(SingletonType {
             variant: SingletonVariant::V0(BooleanSingleton { value: bs.value }),
@@ -94,22 +94,22 @@ impl TypeFunctionDeserializer {
                     );
           return null();
         }
-      } else if !get_type_function_type_id::<TypeFunctionUnionType>(ty).is_null() {
+      } else if get_type_function_type_id::<TypeFunctionUnionType>(ty).is_some() {
         target = (*arena).add_tv(Type::from(UnionType {
           options: Vec::new(),
         }));
-      } else if !get_type_function_type_id::<TypeFunctionIntersectionType>(ty).is_null() {
+      } else if get_type_function_type_id::<TypeFunctionIntersectionType>(ty).is_some() {
         target = (*arena).add_tv(Type::from(IntersectionType { parts: Vec::new() }));
-      } else if !get_type_function_type_id::<TypeFunctionNegationType>(ty).is_null() {
+      } else if get_type_function_type_id::<TypeFunctionNegationType>(ty).is_some() {
         target = (*arena).add_type(NegationType::new((*builtins).unknown_type));
-      } else if let Some(table) = get_type_function_type_id::<TypeFunctionTableType>(ty).as_ref() {
+      } else if let Some(table) = get_type_function_type_id::<TypeFunctionTableType>(ty) {
         if table.metatable.is_none() {
           target = (*arena).add_type(make_empty_table());
         } else {
           let empty_table = (*arena).add_type(make_empty_table());
           target = (*arena).add_type(MetatableType::new(empty_table, empty_table));
         }
-      } else if !get_type_function_type_id::<TypeFunctionFunctionType>(ty).is_null() {
+      } else if get_type_function_type_id::<TypeFunctionFunctionType>(ty).is_some() {
         let empty_type_pack = (*arena).add_type_pack_t(TypePack::new(Vec::new(), None));
         target = (*arena).add_type(FunctionType::function_type_new(
           empty_type_pack,
@@ -117,9 +117,9 @@ impl TypeFunctionDeserializer {
           None,
           false,
         ));
-      } else if let Some(c) = get_type_function_type_id::<TypeFunctionExternType>(ty).as_ref() {
+      } else if let Some(c) = get_type_function_type_id::<TypeFunctionExternType>(ty) {
         target = c.extern_ty;
-      } else if let Some(g) = get_type_function_type_id::<TypeFunctionGenericType>(ty).as_ref() {
+      } else if let Some(g) = get_type_function_type_id::<TypeFunctionGenericType>(ty) {
         if g.is_pack() {
           self.push_runtime_error(format!(
             "Generic type pack '{}...' cannot be placed in a type position",
@@ -180,12 +180,11 @@ impl TypeFunctionDeserializer {
       let arena = ctx.arena.as_ptr();
       let target: TypePackId;
 
-      if !get_type_function_type_pack_id::<TypeFunctionTypePack>(tp).is_null() {
+      if get_type_function_type_pack_id::<TypeFunctionTypePack>(tp).is_some() {
         target = (*arena).add_type_pack_t(TypePack::new(Vec::new(), None));
-      } else if !get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tp).is_null() {
+      } else if get_type_function_type_pack_id::<TypeFunctionVariadicTypePack>(tp).is_some() {
         target = (*arena).add_type_pack_t(VariadicTypePack::default());
-      } else if let Some(g_pack) =
-        get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tp).as_ref()
+      } else if let Some(g_pack) = get_type_function_type_pack_id::<TypeFunctionGenericTypePack>(tp)
       {
         if let Some(mapping) = self
           .generic_packs

@@ -146,6 +146,7 @@ impl Subtyping {
         } else {
           // get_if<MappedGenericEnvironment::Unmapped>
           let ok = env
+            .current_mut()
             .mapped_generic_packs
             .bind_generic(sub_tail, super_tail_pack);
           let mut r = SubtypingResult::uncacheable(ok);

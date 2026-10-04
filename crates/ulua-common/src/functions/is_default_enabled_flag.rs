@@ -14,5 +14,9 @@ pub fn is_default_enabled_flag(name: &str) -> bool {
     && !matches!(
       name,
       "LuauBackedgeHeapCheck" | "LuauCallFeedback" | "LuauEmitCallFeedback"
+        // SETTABLE 哈希直插（GetHashNodeAddrNum 三 op）：nsieve 整负载证伪零收益，
+        // 且 x64 臂 SIGSEGV 未根除（CI bench/windows 双炸），回炉前默认关——
+        // 代码保留（LuauJitSettableHashInline 旗标可显式打开）。
+        | "LuauJitSettableHashInline"
     )
 }

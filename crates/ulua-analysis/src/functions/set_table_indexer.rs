@@ -24,22 +24,25 @@ pub(crate) fn set_table_indexer(l: &mut LuaState) -> i32 {
 
     lua_check_tag!(
       l,
-      tftt.is_null(),
+      tftt.is_none(),
       self_ty,
       "type.setindexer: expected self to be either a table, but got {} instead"
     );
 
     lua_check_not_frozen!(l, self_ty, "type.setindexer");
 
+    // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
+    let tftt = tftt.expect("上方 is_none 分支经 throw_type_error(-> !) 早退，至此必为 Some");
+
     let key = get_type_user_data(l, 2);
     let value = get_type_user_data(l, 3);
 
-    if !get_type_function_type_id::<TypeFunctionNeverType>(key).is_null() {
-      (*tftt).indexer = None;
+    if get_type_function_type_id::<TypeFunctionNeverType>(key).is_some() {
+      tftt.indexer = None;
       return 0;
     }
 
-    (*tftt).indexer = Some(TypeFunctionTableIndexer::new(key, value));
+    tftt.indexer = Some(TypeFunctionTableIndexer::new(key, value));
     0
   }
 }

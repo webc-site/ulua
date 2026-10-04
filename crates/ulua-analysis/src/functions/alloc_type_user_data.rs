@@ -10,7 +10,7 @@ use crate::{
     allocate_type_function_type::allocate_type_function_type,
     get_type_function_runtime::get_type_function_runtime, lua_names::TYPE,
   },
-  records::{arena_handle::Handle, type_function_type::TypeFunctionType},
+  records::type_function_type::TypeFunctionType,
   type_aliases::{
     type_function_type_id::TypeFunctionTypeId, type_function_type_variant::TypeFunctionTypeVariant,
   },
@@ -50,7 +50,7 @@ pub(crate) unsafe fn alloc_type_user_data(
     let ptr = lua_newuserdatatagged(lp, size_of::<TypeFunctionTypeId>(), K_TYPE_USERDATA_TAG)
       as *mut TypeFunctionTypeId;
 
-    let runtime = Handle::from_ptr(get_type_function_runtime(l));
+    let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
     let type_id = allocate_type_function_type(runtime, type_variant);
     *ptr = type_id;
 

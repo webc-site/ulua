@@ -211,6 +211,10 @@ impl IrValueLocationTracking {
       }
       IrCmd::GetUpvalue => {}
       IrCmd::CALL => self.invalidate_restore_vm_regs(vm_reg_op(op_a(inst)), -1),
+      // JIT setmetatable 快速通道：成功路径仅写 ra 一个寄存器
+      IrCmd::SetMetatableChecked => {
+        self.invalidate_restore_vm_regs(vm_reg_op(op_a(inst)), 1)
+      }
       IrCmd::FORGLOOP | IrCmd::ForgloopFallback => {
         self.invalidate_restore_vm_regs(vm_reg_op(op_a(inst)) + 2, -1)
       }
@@ -272,7 +276,12 @@ impl IrValueLocationTracking {
       | IrCmd::CeilNum
       | IrCmd::RoundNum
       | IrCmd::SqrtNum
-      | IrCmd::AbsNum => {}
+      | IrCmd::AbsNum
+      // SETTABLE 数字键哈希直插快路（本 fork 扩展）：只读寄存器键/表指针，
+      // 不写任何 VM 寄存器，无恢复位置可失效。
+      | IrCmd::GetHashNodeAddrNum
+      | IrCmd::JumpIfNodeKeyNotNum
+      | IrCmd::StoreNodeKeyNum => {}
 
       _ => {
         for op in inst.ops.as_slice() {
