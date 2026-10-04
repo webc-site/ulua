@@ -193,3 +193,7 @@ pub mod prelude {
   };
   // `LuaString` already carries the `Lua` prefix.
 }
+
+/// A raw `LuaState` pointer type alias, re-exported at the crate root for
+/// signature parity with `mlua::LuaState`.
+pub use ulua_vm::records::lua_state::LuaState;
