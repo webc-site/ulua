@@ -4371,6 +4371,15 @@ impl IrLoweringX64 {
           // （低 32 位 h1、高 32 位截符号位 h2，MurmurHash64B 收尾 8 步混合），
           // 再按 lsizenode 掩码取主位节点地址——与 rt `hashnum`/`mainposition`
           // 逐位一致（桶号一致是后续 GETTABLE 探测命中的前提，红线）。
+          // 自定义移位量只能放进 RegisterX64::CL：先占 RCX 再分配哈希临时——
+          // 临时经分配器空闲池（K_GPR_ALLOC_ORDER）取得，不会再落到 RCX；
+          // 若先 alloc 后 take，寄存器紧张时临时会占住 RCX（K_INVALID 占用），
+          // 同臂 take(RCX) 即撞上 free=false + users=K_INVALID 的坏状态
+          //（LUAU_ASSERT user != K_INVALID_INST_IDX，take_reg GPR 臂）。
+          // cpp: `ScopedRegX64 shiftTmp{regs, regs.takeReg(rcx, kInvalidInstIdx)};`（IrLoweringX64.cpp:179）
+          let mut shift_tmp = self.scoped_reg();
+          shift_tmp.take(RegisterX64::RCX);
+
           let bits = self.alloc_scoped_reg(SizeX64::Qword);
           let h2 = self.alloc_scoped_reg(SizeX64::Qword);
           let scratch = self.alloc_scoped_reg(SizeX64::Qword);
@@ -4447,9 +4456,7 @@ impl IrLoweringX64 {
             .build_mut()
             .imul_imm(OperandX64::reg(h2d), OperandX64::reg(h2d), MURMUR_MIX_CONST);
 
-          // index = h2 & ((1 << lsizenode) - 1)（自定义移位量只能进 CL）
-          let mut shift_tmp = self.scoped_reg();
-          shift_tmp.take(RegisterX64::RCX);
+          // index = h2 & ((1 << lsizenode) - 1)（CL 已在臂首前置占用）
 
           let table = self.reg_op(inst.op(0));
           self.build_mut().mov(
