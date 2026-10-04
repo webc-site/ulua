@@ -1,14 +1,10 @@
-use core::{
-  ffi::{c_char, c_int, c_void},
-  ptr::from_mut,
-};
+use core::{ffi::c_void, ptr::from_mut};
 use std::{
   fs::File,
   io::{BufWriter, Write},
 };
 
 use ulua_ast::functions::optional_node::opt_node;
-use ulua_common::functions::{c_slice::c_slice, c_str::cstr_cow};
 use ulua_vm::functions::lua_getcoverage::lua_getcoverage;
 
 use crate::functions::{
@@ -17,43 +13,36 @@ use crate::functions::{
   state_ref::state,
 };
 
-// lua_getcoverage 的 C 回调外壳：把泛型 `coverage_callback<W: Write>`（无法直接充当
-// C ABI）适配为 `LuaCoverage` 期望的 `unsafe extern "C-unwind" fn`，context 在此
-// 落回具体 `&mut BufWriter<File>`，VM 裸指针（function/hits）也在此单点转成 Rust
-// 借用（null function 以 `Option::None` 保留，供 cpp 的 `<anonymous>` 分支区分）。
-// FFI 外壳形式由 `functions/mod.rs` 的 `c_abi_cb!` 模板单源承包。
-// DELIBERATE DEVIATION（review.md §9.3）：本外壳经 `lua_getcoverage` 以 C ABI 被 VM
-// 回调，形参保留 `*mut c_void`/`*const c_char`/`*const c_int`/`c_int`，跨界裸指针仅
-// 在此单点收敛为 Rust 借用，业务核心 `coverage_callback` 为安全泛型签名。
-c_abi_cb! {
-  /// # Safety
-  ///
-  /// 作为 lua_getcoverage 的 C 回调安装，context/function/hits 的有效性由
-  /// coverage_dump 调用处的 Safety 契约保证：context 指向存活的 BufWriter，
-  /// function 为空指针或 NUL 结尾 C 串，hits 为空指针或指向 size 个可读
-  /// c_int，均在回调返回前保持有效。
-  fn coverage_callback_cb(
-    context: *mut c_void,
-    function: *const c_char,
-    linedefined: c_int,
-    depth: c_int,
-    hits: *const c_int,
-    size: usize,
-  ) {
-    // Safety: 上面 # Safety 契约逐条满足各门面前置——context 非空且独占可借用
-    // （回调窗口内无人别名该 BufWriter）；判空后的 function 指向 NUL 结尾串，
-    // 借用仅在本调用窗口内使用；hits/size 由 c_slice 收敛（null/零长为空切片）。
-    unsafe {
-      let out = &mut *(context.cast::<BufWriter<File>>());
-      let function = (!function.is_null()).then(|| cstr_cow(function));
-      coverage_callback(
-        out,
-        function.as_deref(),
-        linedefined,
-        depth,
-        c_slice(hits, size),
-      );
-    }
+// lua_getcoverage 的回调外壳：把泛型 `coverage_callback<W: Write>`（无法直接充当
+// 函数指针型）适配为 `LuaCoverage`，`context` 在此落回具体 `&mut BufWriter<File>`，
+// VM 侧的串体窗与行计数窗也在此单点转成 Rust 借用（`None` function 保留，供 cpp 的
+// `<anonymous>` 分支与空串区分）。
+// review.md §10 收形：`LuaCoverage` 已是 Rust ABI 的 `unsafe fn`——全仓无真实 C 消费者
+// （ulua-capi 不导出 getcoverage 面），`function: Option<&[u8]>`、`hits: &[i32]`
+// 均为原生窗，故本外壳不再有 `extern "C-unwind"`，也不再有 `cstr_cow`/`c_slice` 折转。
+// DELIBERATE DEVIATION（review.md §9.3）：`context` 仍是调用方裸指针（VM 透传 POD 柄），
+// 其解引用收口在本外壳单点，业务核心 `coverage_callback` 为安全泛型签名。
+
+/// # Safety
+///
+/// 作为 lua_getcoverage 的 `LuaCoverage` 回调安装，context/function/hits 的有效性由
+/// coverage_dump 调用处的 Safety 契约保证：context 指向存活的 BufWriter，function
+/// 为空或指向本次调用窗口内存活的 VM 串体字节窗，hits 为本次调用窗口内存活的
+/// 行计数窗（返回前有效，不得留存）。
+unsafe fn coverage_callback_cb(
+  context: *mut c_void,
+  function: Option<&[u8]>,
+  linedefined: i32,
+  depth: i32,
+  hits: &[i32],
+) {
+  // Safety: 上面 # Safety 契约逐条满足各门面前置——context 非空且独占可借用
+  // （回调窗口内无人别名该 BufWriter）；function 借窗仅在本调用窗口内使用（lossy
+  // 解码为就地读）；hits 已是 VM 交出的行计数窗，只读遍历。
+  unsafe {
+    let out = &mut *(context.cast::<BufWriter<File>>());
+    let function = function.map(String::from_utf8_lossy);
+    coverage_callback(out, function.as_deref(), linedefined, depth, hits);
   }
 }
 

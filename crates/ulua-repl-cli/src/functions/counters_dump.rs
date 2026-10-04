@@ -1,11 +1,7 @@
-use core::{
-  ffi::{c_char, c_int, c_void},
-  ptr::from_mut,
-};
+use core::{ffi::c_void, ptr::from_mut};
 use std::io::Write;
 
 use ulua_ast::functions::optional_node::opt_node;
-use ulua_common::functions::c_str::cstr_cow;
 use ulua_vm::functions::lua_getcounters::lua_getcounters;
 
 use crate::{
@@ -17,51 +13,53 @@ use crate::{
   records::{counters::Counters, module_counters::ModuleCounters},
 };
 
-// lua_getcounters 的 C 回调外壳：把同名 Rust fn 适配为 `LuaCounterFunction` /
-// `LuaCounterValue` 期望的 `unsafe extern "C-unwind" fn`，形式由 `functions/mod.rs`
-// 的 `c_abi_cb!` 模板单源承包；VM 裸指针（context/function）只在外壳内转成
-// Rust 借用（null function 以 `Option::None` 保留给 cpp 的 `<main>`/`<anonymous>`
-// 分支），核心函数为安全签名。
-// DELIBERATE DEVIATION（review.md §9.3）：两个外壳经 `lua_getcounters` 以 C ABI 被
-// VM 回调，形参保留 `*mut c_void`/`*const c_char`/`c_int`；跨界裸指针仅在外壳内单点
-// 收敛为 Rust 借用，业务核心 `counters_*_callback` 为安全签名。
-c_abi_cb! {
-  /// # Safety
-  ///
-  /// 作为 lua_getcounters 的 `LuaCounterFunction` 安装，参数契约由 counters_dump 的
-  /// lua_getcounters 调用处 Safety 说明保证：context 指向本次调用窗口内存活、可独占
-  /// 借用的 ModuleCounters，function 为空指针或 NUL 结尾 C 串。
-  fn function_callback_cb(
-    context: *mut c_void,
-    function: *const c_char,
-    line_defined: c_int,
-  ) {
-    // Safety: 上面 # Safety 契约——context 非空且回调窗口内无别名；判空后的
-    // function 指向 NUL 结尾串，借用仅在本调用窗口内使用（转调后立即失效）。
-    unsafe {
-      let counters = &mut *(context.cast::<ModuleCounters>());
-      let function = (!function.is_null()).then(|| cstr_cow(function));
-      counters_function_callback(counters, function.as_deref(), line_defined);
-    }
+// lua_getcounters 的两个回调外壳：把同名 Rust fn 适配为 VM 侧期望的函数指针型，
+// VM 裸指针（context）只在外壳内转成 Rust 借用。
+//
+// review.md §10 收形后的两副 ABI：
+// - `LuaCounterFunction` 已是 Rust ABI 的 `unsafe fn`，`function` 形参为原生
+//   `Option<&[u8]>` 串体窗（`None` 即 cpp 的 null，保留 `<main>`/`<anonymous>`
+//   分支），故本外壳不再有 `extern "C-unwind"`，也不再经 `cstr_cow` 折转；
+// - `LuaCounterValue` 仍按 cpp `extern "C-unwind"` 被 VM 回调（形参本就全是
+//   整数/裸指针，无 C 串面），保留 C ABI 声明。
+// 两个外壳的判空与转借都收口在壳内，业务核心 `counters_*_callback` 为安全签名。
+// DELIBERATE DEVIATION（review.md §9.3）：`value_callback_cb` 经 lua_getcounters
+// 以 C ABI 被回调，形参保留 `*mut c_void` 与整数 ABI 形参，跨界裸指针仅在外壳内
+// 单点收敛为 Rust 借用。
+
+/// # Safety
+///
+/// 作为 lua_getcounters 的 `LuaCounterFunction` 安装，参数契约由 counters_dump 的
+/// lua_getcounters 调用处 Safety 说明保证：context 指向本次调用窗口内存活、可独占
+/// 借用的 ModuleCounters，function 为空或指向该窗口内存活的 VM 串体字节窗。
+unsafe fn function_callback_cb(
+  context: *mut c_void,
+  function: Option<&[u8]>,
+  line_defined: i32,
+) {
+  // Safety: 上面 # Safety 契约——context 非空且回调窗口内无别名；function 借窗
+  // 仅在本调用窗口内使用（lossy 解码为就地读，转调后立即失效）。
+  unsafe {
+    let counters = &mut *(context.cast::<ModuleCounters>());
+    let function = function.map(String::from_utf8_lossy);
+    counters_function_callback(counters, function.as_deref(), line_defined);
   }
 }
 
-c_abi_cb! {
-  /// # Safety
-  ///
-  /// 同 `function_callback_cb`：作为 lua_getcounters 的 `LuaCounterValue` 安装，
-  /// context 指向 counters_dump 压入的存活、可独占借用的 ModuleCounters，
-  /// 契约由调用处保证。
-  fn value_callback_cb(
-    context: *mut c_void,
-    kind: c_int,
-    line: c_int,
-    hits: u64,
-  ) {
-    // Safety: context 指向本次调用窗口内存活、无别名的 ModuleCounters（上方
-    // # Safety 契约，由 VM 经 counters_dump 的调用处保证）。
-    unsafe { counters_value_callback(&mut *context.cast::<ModuleCounters>(), kind, line, hits) }
-  }
+/// # Safety
+///
+/// 同 `function_callback_cb`：作为 lua_getcounters 的 `LuaCounterValue` 安装，
+/// context 指向 counters_dump 压入的存活、可独占借用的 ModuleCounters，
+/// 契约由调用处保证。
+unsafe extern "C-unwind" fn value_callback_cb(
+  context: *mut c_void,
+  kind: i32,
+  line: i32,
+  hits: u64,
+) {
+  // Safety: context 指向本次调用窗口内存活、无别名的 ModuleCounters（上方
+  // # Safety 契约，由 VM 经 counters_dump 的调用处保证）。
+  unsafe { counters_value_callback(&mut *context.cast::<ModuleCounters>(), kind, line, hits) }
 }
 
 // Faithful port of `void countersDump(const char* path)`.

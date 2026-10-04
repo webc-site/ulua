@@ -24,8 +24,10 @@
 //!   句柄有效，safe 化会撤掉该契约强制并命中 `not_unsafe_ptr_arg_deref`）而保留
 //!   `pub unsafe fn` 签名，逐处 `DELIBERATE DEVIATION` 定性；
 //! - 装入 VM 的 C-ABI 回调（`extern "C-unwind"`：`lua_loadstring`、`sigint_callback`、
-//!   `profiler_interrupt`、`c_abi_cb!` 生成的 coverage/counters 外壳）——各自带
-//!   `DELIBERATE DEVIATION` 说明；
+//!   `profiler_interrupt`、`counters_dump` 的 `value_callback_cb`）——各自带
+//!   `DELIBERATE DEVIATION` 说明；`counters_dump`/`coverage_dump` 的另两个外壳随
+//!   `LuaCounterFunction`/`LuaCoverage` 收形为 Rust ABI 的 `unsafe fn`（VM 侧
+//!   实测无 C 消费者），裸指针只剩 `context` 一处；
 //! - 平台/进程原语：`sigint_setup` 门面的 OS 信号注册与 async-signal 共享的
 //!   `REPL_STATE` null 协议值。采样器的线程独占字段已改 `thread_local` 持有、
 //!   跨线程面只剩原子发布量（`profiler_trigger`），无 `UnsafeCell` 分区契约。

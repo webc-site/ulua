@@ -5,16 +5,12 @@ use core::{
 };
 
 use itoa::Buffer;
-use ulua_common::functions::c_str::{cstr, cstr_cow};
 use ulua_vm::{
   functions::{lua_callbacks::lua_callbacks, lua_getinfo::lua_getinfo},
-  records::lua_state::LuaState,
+  records::{lua_debug::LuaDebug, lua_state::LuaState},
 };
 
-use crate::{
-  functions::ZERO_DEBUG,
-  records::profiler::{GC_STATE_COUNT, ProfilerMain, ProfilerShared},
-};
+use crate::records::profiler::{GC_STATE_COUNT, ProfilerMain, ProfilerShared};
 
 /// cpp 文件静态量 `static Profiler gProfiler` 的跨线程共享发布面：`ticks`/`samples`
 /// 由采样线程唯一写入，`exit` 主线程落、采样线程读——纯原子字段，静态量普通放置
@@ -42,9 +38,9 @@ thread_local! {
   };
 }
 
-/// `lua_getinfo` 选项串「取 short_src+name」（NUL 结尾字节串，经 `cstr` 收口点
-/// 转 C 指针，review.md §10：不散落 `.as_ptr().cast()`）。
-const GETINFO_SN_OPT: &[u8] = b"sn\0";
+/// `lua_getinfo` 选项串「取 short_src+name」：review.md §10 后 `what` 形参为选项
+/// 字节窗（`auxgetinfo` 全窗迭代），故这里就是选项本身，不再补终止 `\0`。
+const GETINFO_SN_OPT: &[u8] = b"sn";
 
 /// 采样栈快照：`lua_getinfo` 逐级上爬拼 `src,line,linedefined;…` 串（真 FFI 边
 /// 界的遍历循环，(c) 保留）。拼好的串写入复用的 `stack_scratch`。
@@ -52,24 +48,24 @@ const GETINFO_SN_OPT: &[u8] = b"sn\0";
 /// `l` 为 VM 线程当前有效状态；`stack` 必须是 `G_PROFILER_MAIN` 的
 /// `stack_scratch` 字段在本帧的独占借用（thread_local 单线程所有），回调期间
 /// 无其它别名——两者均以借用类型表达，本函数体内只剩 `lua_getinfo` 导出一处
-/// `unsafe`（what 串经 `cstr` 门面收口）。
+/// `unsafe`（选项窗为静态切片，句柄由 `as_mut_ptr` 就地派生）。
 fn collect_stack(l: &mut LuaState, gc: i32, stack: &mut String) {
   stack.clear();
   if gc > 0 {
     stack.push_str("GC,GC,");
   }
 
-  // C++ `LuaDebug ar = {}`：编译期零初值（见 functions::ZERO_DEBUG）
-  let mut ar = ZERO_DEBUG;
+  // C++ `LuaDebug ar = {}`：`Default` 逐字段给出「未回填即空」初值（安全、可折叠）
+  let mut ar = LuaDebug::default();
   // 一枚复用的 itoa 栈缓冲（采样热路径，免 core::fmt 开销与逐级重初始化）
   let mut num = Buffer::new();
   // cpp `for (level = 0; lua_getinfo(...); level++)`：open-ended range 即同形，
   // getinfo 返回 0 即 break。
   for level in 0.. {
-    // Safety: `lua_getinfo` 为 unsafe 导出；`&mut ar` 以 `&mut T → *mut T` 隐式转换
-    // 交出本地独占出参，getinfo 成功时把 short_src/name 填为 NUL 结尾串（串缓冲由
-    // 调用帧持有，本循环窗口内有效）；what 为 NUL 结尾静态字节串（`cstr` 门面）。
-    if unsafe { lua_getinfo(l, level, cstr(GETINFO_SN_OPT), &mut ar) } == 0 {
+    // Safety: `lua_getinfo` 为 unsafe 导出；`l.as_mut_ptr()` 是本帧独占借用的地址
+    // （采样在 VM safepoint 窗口内、单线程驱动），`&mut ar` 是本地独占出参；选项窗
+    // 为静态只读切片且不含 `f`，不压栈。
+    if unsafe { lua_getinfo(l.as_mut_ptr(), level, GETINFO_SN_OPT, &mut ar) } == 0 {
       break;
     }
 
@@ -77,14 +73,12 @@ fn collect_stack(l: &mut LuaState, gc: i32, stack: &mut String) {
       stack.push(';');
     }
 
-    // 「判空 + NUL 截断解码」样板收敛到 cstr_cow 门面：null 译空串，push 空串
-    // 与原判空跳过的观察行为一致。
-    // Safety: `cstr_cow` 为 unsafe fn；short_src/name 为 null 或 NUL 结尾串（上一行
-    // getinfo 契约）。
-    stack.push_str(&unsafe { cstr_cow(ar.short_src) });
+    // 记录字段已是原生字节窗：`short_src` 为写端截断后的有效字节，`name` 的 `None`
+    // （旧 null 哨兵）→ `unwrap_or_default()` 空窗，push 空串与原判空跳过的观察
+    // 行为一致；lossy 解码与旧 `cstr_cow` 消费面同点。
+    stack.push_str(&String::from_utf8_lossy(ar.short_src.bytes()));
     stack.push(',');
-    // Safety: 同上。
-    stack.push_str(&unsafe { cstr_cow(ar.name) });
+    stack.push_str(&String::from_utf8_lossy(ar.name.unwrap_or_default()));
     stack.push(',');
     if ar.linedefined > 0 {
       stack.push_str(num.format(ar.linedefined));
