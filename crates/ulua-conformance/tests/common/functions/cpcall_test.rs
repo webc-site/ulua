@@ -16,7 +16,7 @@ pub unsafe extern "C-unwind" fn cpcall_test(l: *mut LuaState) -> c_int {
   if should_fail {
     // 按 cpp 抛 "Failed" Lua 错误，该调用不返回。
     // Safety: `l` 存活；`luaL_error` 以 long-jump 终止本回调。
-    unsafe { luaL_error!(l, "Failed") };
+    unsafe { luaL_error!(&mut *l, "Failed") };
   } else {
     // 把 123 写入全局 `cpcallvalue`。
     state_mut(l).push_integer(123);

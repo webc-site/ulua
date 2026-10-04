@@ -16,7 +16,7 @@ pub(crate) fn classend(ms: &mut MatchState, p: usize) -> usize {
     x if x == L_ESC as u8 => {
       if q == ms.pat.len() {
         // SAFETY: 对象不变式（`prepstate` 建立的存活 `lua_State`）保证 `ms.l` 可抛错
-        unsafe { luaL_error!(ms.l, "malformed pattern (ends with '%')") };
+        unsafe { luaL_error!(&mut *ms.l, "malformed pattern (ends with '%')") };
       }
       q + 1
     }
@@ -28,7 +28,7 @@ pub(crate) fn classend(ms: &mut MatchState, p: usize) -> usize {
         // cpp do-while：先判 `p == ms->p_end` 报错，再消费一字节
         if q == ms.pat.len() {
           // SAFETY: 同上，`ms.l` 为可抛错的存活 `lua_State`
-          unsafe { luaL_error!(ms.l, "malformed pattern (missing ']')") };
+          unsafe { luaL_error!(&mut *ms.l, "malformed pattern (missing ']')") };
         }
         let c = ms.pat_byte(q);
         q += 1;

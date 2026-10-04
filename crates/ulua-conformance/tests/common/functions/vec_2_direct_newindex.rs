@@ -48,7 +48,7 @@ pub unsafe extern "C-unwind" fn vec_2_direct_newindex(
       // Safety: `l` 存活；参数 2 为串时返回 UTF-8 切片（否则抛 Lua 错误）。
       let name = state_mut(l).check_str(2);
       // Safety: 按 cpp 抛「不可写成员」Lua 错误，该调用不返回。
-      unsafe { luaL_error!(l, "{name} is not a writable member of vec2") }
+      unsafe { luaL_error!(&mut *l, "{name} is not a writable member of vec2") }
     }
   }
 }

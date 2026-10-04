@@ -45,9 +45,7 @@ pub(crate) fn create_function(l: &mut LuaState) -> i32 {
 
     l.pop(2);
   } else if !l.is_none_or_nil(1) {
-    // Safety: `lua_l_typeerror_l` 是 vm 侧 C 形态门面，`l.as_mut_ptr()` 为 `&mut l`
-    // 同一对象的镜像透传；下标 1 由上方 `is_table`/`is_none_or_nil` 分支确证为已入栈实参。
-    unsafe { lua_l_typeerror_l(l.as_mut_ptr(), 1, "table") };
+    lua_l_typeerror_l(l, 1, "table");
   } else {
     arg_types = allocate_type_function_type_pack(
       runtime,
@@ -68,8 +66,7 @@ pub(crate) fn create_function(l: &mut LuaState) -> i32 {
 
     l.pop(2);
   } else if !l.is_none_or_nil(2) {
-    // Safety: 同上，`l.as_mut_ptr()` 为镜像透传；下标 2 是已校验范围内的实参位。
-    unsafe { lua_l_typeerror_l(l.as_mut_ptr(), 2, "table") };
+    lua_l_typeerror_l(l, 2, "table");
   } else {
     ret_types = allocate_type_function_type_pack(
       runtime,

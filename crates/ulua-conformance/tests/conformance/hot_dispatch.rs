@@ -110,7 +110,7 @@ unsafe extern "C-unwind" fn hot_dispatch_interrupt(l: *mut LuaState, gc: c_int) 
     }
     MODE_RAISE => {
       // Safety: `l` 为存活受保护帧；`luaL_error` 走本仓 longjmp 模拟（panic），不返回。
-      unsafe { luaL_error!(l, "timeout") };
+      unsafe { luaL_error!(&mut *l, "timeout") };
     }
     _ => {}
   }

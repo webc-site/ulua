@@ -4,8 +4,7 @@ use crate::functions::{lua_l_argerror_l::lua_l_argerror_l, lua_l_typeerror_l::lu
 impl LuaState {
   #[inline(always)]
   pub fn type_error(&mut self, narg: i32, tname: &str) -> ! {
-    // SAFETY: `self.as_mut_ptr()` 为存活 LuaState 有效指针，被调方 `# Safety` 其余前提由调用方按文档保证。
-    unsafe { lua_l_typeerror_l(self.as_mut_ptr(), narg, tname) }
+    lua_l_typeerror_l(self, narg, tname)
   }
 
   #[inline(always)]

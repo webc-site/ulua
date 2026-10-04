@@ -71,7 +71,7 @@ fn interrupt_hang(l: *mut LuaState) {
 
   if index >= 1_000 {
     // Safety: `l` 为存活受保护帧；`luaL_error` 经 long-jump 语义终止本 hook。
-    unsafe { luaL_error!(l, "timeout") };
+    unsafe { luaL_error!(&mut *l, "timeout") };
   }
 }
 
@@ -88,7 +88,7 @@ fn interrupt_hang_pcall(l: *mut LuaState) {
   if index == 1_000 {
     CONFORMANCE_INTERRUPT_STATE.index.store(0, Ordering::SeqCst);
     // Safety: 同 [`interrupt_hang`]——`luaL_error` 发散不返回。
-    unsafe { luaL_error!(l, "timeout") };
+    unsafe { luaL_error!(&mut *l, "timeout") };
   }
 }
 

@@ -8,9 +8,7 @@ use crate::{
 /// `l.stack`；失败时经 `luaL_error` 抛 "stack overflow"（可分配、unwind）。成功后调用方方可写 `l.top` 起的 space 槽。
 /// cpp VM/src/laux.cpp:158
 pub fn lua_l_checkstack(l: &mut LuaState, space: i32, mes: &str) {
-  unsafe {
-    if lua_checkstack(l, space) == 0 {
-      luaL_error!(l, "stack overflow ({})", mes);
-    }
+  if lua_checkstack(l, space) == 0 {
+    luaL_error!(l, "stack overflow ({})", mes);
   }
 }

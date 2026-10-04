@@ -36,8 +36,7 @@ pub(crate) unsafe fn coclose(l: &mut LuaState) -> i32 {
     && status != LuaCoStatus::CoSus as i32
   {
     let sname = LuaCoStatus::from_c_int(status).map_or("dead", LuaCoStatus::as_str);
-    // SAFETY: `l` 由接收者保证存活可抛错帧，`l.as_mut_ptr()` 借用于本次发散调用
-    unsafe { luaL_error!(l.as_mut_ptr(), "cannot close {} coroutine", sname) };
+    luaL_error!(l, "cannot close {} coroutine", sname);
   }
 
   // SAFETY: `co` 为存活协程，此处只读其 `status` 字段。本函数直到 `resetthread` 前不写 `co.status`，

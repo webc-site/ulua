@@ -19,8 +19,7 @@ pub(crate) fn fieldargs(l: &mut LuaState, farg: i32) -> (i32, i32) {
   // Widen the add: `f`/`w` are user-supplied and (with f>=0, w>0) `f + w`
   // overflows `int` for huge f (UB in C++; panic with overflow-checks).
   if f as i64 + w as i64 > 32 {
-    // SAFETY: `l` 为借用形式的存活调用帧（&mut 保证有效且独占），as_mut_ptr 由该借用重取裸指针，luaL_error 抛错不返回。
-    unsafe { luaL_error!(l.as_mut_ptr(), "trying to access non-existent bits") };
+    luaL_error!(l, "trying to access non-existent bits");
   }
 
   (f, w)

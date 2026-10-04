@@ -210,6 +210,8 @@ luau_flag_module! {
   LUAU_FASTFLAGVARIABLE!(LUAU_ITERATIVE_INSTANTIATION_QUEUER, LuauIterativeInstantiationQueuer);
   // Analysis/src/TypeChecker2.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_LVALUE_COMPOUND_ASSIGNMENT_VISIT_LHS, LuauLValueCompoundAssignmentVisitLhs);
+  // Analysis/src/TypeChecker2.cpp + TypePath.cpp（新式紧凑子类型原因渲染，cpp 默认 false）
+  LUAU_FASTFLAGVARIABLE!(LUAU_NEW_TYPE_PATH_ERROR_MESSAGES, LuauNewTypePathErrorMessages);
   // Analysis/src/Unifier2.cpp
   LUAU_FASTFLAGVARIABLE!(LUAU_LIMIT_UNIFICATION_RECURSION, LuauLimitUnificationRecursion);
   // CodeGen/src/CodeGenUtils.cpp

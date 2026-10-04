@@ -21,7 +21,7 @@ pub(crate) unsafe fn getnextbuffersize(
   // check for size overflow（cpp laux.cpp:434-436）
   if usize::MAX - desiredsize < currentsize {
     // SAFETY: 契约保证 `L` 为存活调用帧，尺寸溢出路径经 luaL_error! 抛错后不再返回
-    unsafe { luaL_error!(l, "buffer too large") }
+    unsafe { luaL_error!(&mut *l, "buffer too large") }
   }
 
   // growth factor might not be enough to satisfy the desired size

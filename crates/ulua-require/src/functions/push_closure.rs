@@ -59,7 +59,7 @@ pub(crate) unsafe fn push_closure<C: RequireHost + 'static>(
     let ud = lua_newuserdatadtor(l, size_of::<HostSlot<C>>(), Some(drop_require_host::<C>));
     if ud.is_null() {
       luaL_error!(
-        l,
+        &mut *l,
         "failed to allocate memory for require host configuration"
       );
     }

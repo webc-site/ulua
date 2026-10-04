@@ -430,6 +430,7 @@ pub mod relate_table_to_extern_type;
 pub mod relate_table_to_prop;
 pub mod relate_tables;
 pub mod remove_type;
+pub mod render_type_path;
 pub mod report_available_overloads;
 pub mod reset_print_line;
 pub mod reset_to_top;

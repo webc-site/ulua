@@ -40,9 +40,7 @@ pub(crate) fn pusherror_bytes(l: &mut LuaState, msg: &[u8]) {
     let site = lua_o_chunkid_ref(&mut chunkbuf, src);
     let chunk = String::from_utf8_lossy(cut_at_nul(chunkid_slice(&chunkbuf, src, site)));
     let msg_str = String::from_utf8_lossy(msg);
-    // SAFETY: `l` 为独占接收者引用；`lua_o_pushfstring` 仅经 `l` 压栈取副作用，
-    // format 临时（chunk/line/msg_str）全程存活至本调用语句结束。
-    unsafe { lua_o_pushfstring(l, format_args!("{}:{}: {}", chunk, line, msg_str)) };
+    lua_o_pushfstring(l, format_args!("{}:{}: {}", chunk, line, msg_str));
   } else {
     l.push_bytes(msg);
   }

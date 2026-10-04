@@ -31,5 +31,5 @@ pub unsafe extern "C-unwind" fn lua_vertex_namecall(l: *mut LuaState) -> i32 {
   // 末分支按 cpp 抛「非方法」Lua 错误（宏内为 C ABI `luaL_error`，格式串为已校验的
   // `arg1_str`）；该调用不返回。
   // Safety: `l` 存活；`luaL_error` 以 long-jump 终止本回调。
-  unsafe { luaL_error!(l, "{} is not a valid method of vertex", arg1_str) }
+  unsafe { luaL_error!(&mut *l, "{} is not a valid method of vertex", arg1_str) }
 }

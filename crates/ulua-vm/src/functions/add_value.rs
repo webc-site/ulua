@@ -60,7 +60,7 @@ pub(crate) unsafe fn add_value(
       lua_pushlstring_bytes(&mut *l, keep); // keep original text
     } else if lua_isstring(&*l, -1) == 0 {
       let tn = cstr_cow(lua_l_typename(&*l, -1));
-      luaL_error!(l, "invalid replacement value (a {})", tn);
+      luaL_error!(&mut *l, "invalid replacement value (a {})", tn);
     }
     lua_l_addvalue(b); // add result to accumulator
   }

@@ -12,7 +12,6 @@ use crate::{
 /// cpp VM/src/laux.cpp:170
 pub(crate) fn lua_l_checkany(l: &mut LuaState, narg: i32) {
   if lua_type(l, narg) == LuaType::None as i32 {
-    // SAFETY: `l` 为借用形式的存活调用帧（&mut 保证有效且独占），as_mut_ptr 由该借用重取裸指针，luaL_error 抛错不返回。
-    unsafe { luaL_error!(l.as_mut_ptr(), "missing argument #{}", narg) };
+    luaL_error!(l, "missing argument #{}", narg);
   }
 }

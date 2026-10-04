@@ -44,7 +44,7 @@ pub(crate) fn getoption(h: &mut Header, fmt: &mut FmtCursor) -> (i32, KOption) {
       let n = getnum(h, fmt, -1);
       if n == -1 {
         // SAFETY: 前置条件保证 `h.l` 为可抛错的存活 `lua_State`，报错后不返回
-        unsafe { luaL_error!(h.l, "missing size for format option 'c'") };
+        unsafe { luaL_error!(&mut *h.l, "missing size for format option 'c'") };
       }
       (n, KOption::Kchar)
     }
@@ -71,7 +71,7 @@ pub(crate) fn getoption(h: &mut Header, fmt: &mut FmtCursor) -> (i32, KOption) {
     }
     _ => {
       // SAFETY: 前置条件保证 `h.l` 为可抛错的存活 `lua_State`，报错后不返回
-      unsafe { luaL_error!(h.l, "invalid format option '{}'", opt as u8 as char) }
+      unsafe { luaL_error!(&mut *h.l, "invalid format option '{}'", opt as u8 as char) }
     }
   }
 }

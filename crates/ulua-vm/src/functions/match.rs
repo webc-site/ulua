@@ -23,7 +23,7 @@ use crate::{
 pub(crate) unsafe fn match_item(ms: &mut MatchState, s: usize, mut p: usize) -> Option<usize> {
   if ms.matchdepth == 0 {
     // SAFETY: 契约保证 `ms.l` 为可抛错的存活 `lua_State`
-    unsafe { luaL_error!(ms.l, "pattern too complex") };
+    unsafe { luaL_error!(&mut *ms.l, "pattern too complex") };
   }
   ms.matchdepth -= 1;
 
@@ -85,7 +85,7 @@ pub(crate) unsafe fn match_item(ms: &mut MatchState, s: usize, mut p: usize) -> 
           p += 2;
           if ms.pat_byte(p) != b'[' {
             // SAFETY: 契约保证 `ms.l` 为可抛错的存活 `lua_State`
-            unsafe { luaL_error!(ms.l, "missing '[' after '%f' in pattern") };
+            unsafe { luaL_error!(&mut *ms.l, "missing '[' after '%f' in pattern") };
           }
           let ep = classend(ms, p);
           let class = ms.pat_slice(p, ep - p); // 覆盖 p..=']'，转义分支会读 ec 字节

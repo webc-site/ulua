@@ -43,9 +43,7 @@ pub(crate) fn buffer_writestring(l: &mut LuaState) -> i32 {
   l.arg_check(count >= 0, 4, "count");
 
   if count as usize > vlen {
-    // SAFETY: `l.as_mut_ptr()` 为借用重建的存活调用帧裸参（有效与独占由 &mut 承载），
-    // `luaL_error` 抛错不返回；受保护帧前提属调用序契约（见函数文档）。
-    unsafe { luaL_error!(l.as_mut_ptr(), "string length overflow") };
+    luaL_error!(l, "string length overflow");
   }
 
   // 后置派生：全部取参/校验落定后才借出数据窗，窗直达写入点；count ≤ size 已由

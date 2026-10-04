@@ -38,7 +38,7 @@ pub unsafe fn lua_l_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a 
     if lua_l_callmeta_bytes(&mut *l, idx, b"__tostring") != 0 {
       let s = lua_tolstring_ref(l, -1);
       if s.is_none() {
-        luaL_error!(l, "'__tostring' must return a string");
+        luaL_error!(&mut *l, "'__tostring' must return a string");
       }
       return s;
     }

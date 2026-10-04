@@ -26,7 +26,7 @@ pub unsafe fn auxresumecont(l: *mut LuaState, co: *mut LuaState) -> i32 {
       // isize→i32 折形在现域无截差（协程栈槽距受 LUAI_MAXSTACK 约束、远小于 i32::MAX）
       let nres = (*co).get_top();
       if lua_checkstack(&mut *l, nres + 1) == 0 {
-        luaL_error!(l, "too many results to resume");
+        luaL_error!(&mut *l, "too many results to resume");
       }
       lua_xmove(&mut *co, &mut *l, nres);
       nres

@@ -36,7 +36,7 @@ pub(crate) unsafe fn add_s(ms: &mut MatchState, b: &mut LuaLStrbuf, s: usize, e:
       if !next.is_ascii_digit() {
         if next != L_ESC as u8 {
           luaL_error!(
-            ms.l,
+            &mut *ms.l,
             "invalid use of '{}' in replacement string",
             L_ESC as u8 as char
           );

@@ -54,17 +54,13 @@ const UNKNOWN_KEY: &str = "unknown";
 fn raise_cyclic_error(l: &mut LuaState, action: &str) -> ! {
   // r16-p28 锚定形：抛错文案先取 owned 快照解耦窗口借用，其后 `l.as_mut_ptr()` 重建可用
   let key = l.to_str(2).unwrap_or(UNKNOWN_KEY).to_owned();
-  // Safety: l 为存活 state 的独占借用；luaL_error! 把 key 格式化进错误消息后
-  // 抛错发散。
-  unsafe {
-    luaL_error!(
-      l.as_mut_ptr(),
-      "Cannot {} the exported field '{}'{}",
-      action,
-      key,
-      CYCLIC_TAIL
-    )
-  }
+  luaL_error!(
+    l,
+    "Cannot {} the exported field '{}'{}",
+    action,
+    key,
+    CYCLIC_TAIL
+  )
 }
 
 /// cpp `CyclicDependencyIndexError`：访问占位表字段即报错。
@@ -142,13 +138,12 @@ fn lock_placeholder(l: &mut LuaState, idx: i32) {
 /// 以栈 2 槽的 cacheKey 建占位表并写入 `_MODULES` 缓存。
 /// 由 CLI `load` 在模块字节码带 `LPF_USES_EXPORT` 时调用。
 ///
-/// # Safety
-/// `l` 必须指向存活的 `LuaState`，且栈 2 槽为 require 链路的 cacheKey 字符串。
-pub unsafe fn luarequire_createplaceholder(l: *mut LuaState) {
-  // Safety: 契约保证 l 为 CLI load 在 require 协程上调用时的存活 state，入口一次
-  // 重建独占借用；cacheKey 拷为本地 Vec 后即不再借出 VM 内存。
-  let l = unsafe { &mut *l };
-
+/// 调用序契约（正确性，非内存安全——`l` 的存活前提已由 `&mut` 接收者类型承载，
+/// review.md §2 诚实降级为安全 `fn`）：`l` 必须指向存活的 `LuaState`，且栈 2 槽为
+/// require 链路的 cacheKey 字符串。体内 `check_bytes`/`new_table`/`pop` 均为
+/// `LuaState` 安全方法，无裸指针操作。
+pub fn luarequire_createplaceholder(l: &mut LuaState) {
+  // cacheKey 拷为本地 Vec 后即不再借出 VM 内存。
   let cache_key = c_str_prefix_owned(l.check_bytes(2));
 
   l.new_table();

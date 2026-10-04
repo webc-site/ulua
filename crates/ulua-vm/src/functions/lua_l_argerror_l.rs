@@ -13,13 +13,13 @@ pub unsafe fn lua_l_argerror_l(l: *mut LuaState, narg: i32, extramsg: &str) -> !
   unsafe {
     match currfuncname(&*l) {
       Some(fname) => luaL_error!(
-        l,
+        &mut *l,
         "invalid argument #{} to '{}' ({})",
         narg,
         String::from_utf8_lossy(fname),
         extramsg
       ),
-      None => luaL_error!(l, "invalid argument #{} ({})", narg, extramsg),
+      None => luaL_error!(&mut *l, "invalid argument #{} ({})", narg, extramsg),
     }
   }
 }

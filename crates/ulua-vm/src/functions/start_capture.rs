@@ -15,7 +15,7 @@ pub(crate) fn start_capture(ms: &mut MatchState, s: usize, p: usize, what: i32) 
   let level = ms.level;
   if level >= LUA_MAXCAPTURES {
     // SAFETY: 对象不变式（`prepstate` 建立的存活 `lua_State`）保证 `ms.l` 可抛错
-    unsafe { luaL_error!(ms.l, "too many captures") };
+    unsafe { luaL_error!(&mut *ms.l, "too many captures") };
   }
   ms.capture[level as usize].init = s; // cpp: ms->capture[level].init = s（偏移化）
   ms.capture[level as usize].len = what as isize;

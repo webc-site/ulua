@@ -84,11 +84,7 @@ pub(crate) fn evaluate_type_alias_call(l: &mut LuaState) -> i32 {
         !runtime_builder.errors_deprecated.is_empty()
       };
       if has_errors {
-        ulua_vm::luaL_error!(
-          l as *mut lua_state::LuaState,
-          "failed to deserialize type at argument {}",
-          arg_index
-        );
+        ulua_vm::luaL_error!(l, "failed to deserialize type at argument {}", arg_index);
       }
 
       // rawTypeArguments.push_back(ty);
@@ -157,10 +153,7 @@ pub(crate) fn evaluate_type_alias_call(l: &mut LuaState) -> i32 {
     // if (typesProvided != typesRequired || packsProvided != packsRequired)
     //     luaL_error(l, "not enough arguments to call");
     if types_provided != types_required || packs_provided != packs_required {
-      ulua_vm::luaL_error!(
-        l as *mut lua_state::LuaState,
-        "not enough arguments to call"
-      );
+      ulua_vm::luaL_error!(l, "not enough arguments to call");
     }
 
     // Prepare final types and packs
@@ -201,10 +194,7 @@ pub(crate) fn evaluate_type_alias_call(l: &mut LuaState) -> i32 {
     let instantiated = match maybe_instantiated {
       Some(v) => v,
       None => {
-        ulua_vm::luaL_error!(
-          l as *mut lua_state::LuaState,
-          "failed to instantiate type alias"
-        );
+        ulua_vm::luaL_error!(l, "failed to instantiate type alias");
       }
     };
 
@@ -225,7 +215,7 @@ pub(crate) fn evaluate_type_alias_call(l: &mut LuaState) -> i32 {
     //     luaL_error(l, "failed to reduce type function with: %s", to_string(result.errors.front()).c_str());
     if !result.errors.is_empty() {
       ulua_vm::luaL_error!(
-        l as *mut lua_state::LuaState,
+        l,
         "failed to reduce type function with: {}",
         to_string_type_error(&result.errors[0])
       );
@@ -248,14 +238,14 @@ pub(crate) fn evaluate_type_alias_call(l: &mut LuaState) -> i32 {
       //     luaL_error(l, "%s", to_string(runtimeBuilder->errors.front()).c_str());
       let errors = &runtime_builder.errors;
       if !errors.is_empty() {
-        ulua_vm::luaL_error!(l as *mut lua_state::LuaState, "{}", to_string(&errors[0]));
+        ulua_vm::luaL_error!(l, "{}", to_string(&errors[0]));
       }
     } else {
       // if (!runtimeBuilder->errors_DEPRECATED.empty())
       //     luaL_error(l, "%s", runtimeBuilder->errors_DEPRECATED.front().c_str());
       let errors_deprecated = &runtime_builder.errors_deprecated;
       if !errors_deprecated.is_empty() {
-        ulua_vm::luaL_error!(l as *mut lua_state::LuaState, "{}", errors_deprecated[0]);
+        ulua_vm::luaL_error!(l, "{}", errors_deprecated[0]);
       }
     }
 
@@ -264,7 +254,7 @@ pub(crate) fn evaluate_type_alias_call(l: &mut LuaState) -> i32 {
       // if (!serializedTy) luaL_error(l, "Complexity limit reached when passing a type to a type alias");
       if serialized_ty.is_null() {
         ulua_vm::luaL_error!(
-          l as *mut lua_state::LuaState,
+          l,
           "Complexity limit reached when passing a type to a type alias"
         );
       }

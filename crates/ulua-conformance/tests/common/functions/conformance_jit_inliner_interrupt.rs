@@ -24,7 +24,7 @@ pub unsafe extern "C-unwind" fn conformance_jit_inliner_interrupt(l: *mut LuaSta
     }
 
     if JIT_INLINER_INDEX.fetch_add(1, Ordering::SeqCst) + 1 >= TIMEOUT_HITS {
-      luaL_error!(l, "timeout");
+      luaL_error!(&mut *l, "timeout");
     }
   }
 }

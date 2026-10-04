@@ -31,5 +31,5 @@ pub unsafe extern "C-unwind" fn lua_vector_namecall(l: *mut LuaState) -> i32 {
 
   // `luaL_error!` 恒发散，作为尾表达式即可。
   // Safety: `l` 存活；`luaL_error` 以 long-jump 终止本回调。
-  unsafe { luaL_error!(l, "{} is not a valid method of vector", arg1_str) }
+  unsafe { luaL_error!(&mut *l, "{} is not a valid method of vector", arg1_str) }
 }

@@ -382,8 +382,7 @@ impl RequireHost for MemHost {
     let chunkname = String::from_utf8_lossy(chunkname);
     let loadname = String::from_utf8_lossy(loadname);
     let Some(source) = self.tree.files.get(loadname.as_ref()).copied() else {
-      // Safety: `l` 为 require 同步执行窗口的活跃状态（RequireHost::load 契约）。
-      unsafe { luaL_error!(l, "could not read file '{}'", loadname) }
+      luaL_error!(l, "could not read file '{}'", loadname)
     };
 
     let bytecode = compile(

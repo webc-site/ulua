@@ -35,7 +35,7 @@ pub(crate) unsafe fn sort_less(
 
     // predicate call may resize the table, which is invalid
     if (*t).sizearray != n {
-      luaL_error!(l, "table modified during sorting");
+      luaL_error!(&mut *l, "table modified during sorting");
     }
 
     res

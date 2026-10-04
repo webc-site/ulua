@@ -63,5 +63,5 @@ pub unsafe extern "C-unwind" fn lua_vector_index(l: *mut LuaState) -> c_int {
   }
 
   // Safety: `l` 活跃；`luaL_error` 以 long-jump 终止本回调，`name` 为安全引用。
-  unsafe { luaL_error!(l, "{name} is not a valid member of vector") }
+  unsafe { luaL_error!(&mut *l, "{name} is not a valid member of vector") }
 }

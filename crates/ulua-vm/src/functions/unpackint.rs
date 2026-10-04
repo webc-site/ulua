@@ -45,7 +45,11 @@ pub(crate) unsafe fn unpackint(
       if byte != mask {
         // SAFETY: 契约保证 l 为存活调用帧，超界即经它抛错、不返回
         unsafe {
-          luaL_error!(l, "{}-byte integer does not fit into Lua Integer", size);
+          luaL_error!(
+            &mut *l,
+            "{}-byte integer does not fit into Lua Integer",
+            size
+          );
         }
       }
     }

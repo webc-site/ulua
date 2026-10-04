@@ -44,7 +44,7 @@ pub unsafe fn iter_aux(l: &mut LuaState) -> i32 {
       // 与原 `||` 短路同序）
       let code = match code {
         Some(code) if !is_cont_byte(bytes[n as usize + step]) => code,
-        _ => luaL_error!(l.as_mut_ptr(), "invalid UTF-8 code"),
+        _ => luaL_error!(l, "invalid UTF-8 code"),
       };
       l.push_integer(n + 1);
       l.push_integer(code as i32);

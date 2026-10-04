@@ -11,8 +11,7 @@ use crate::{macros::lua_l_error::luaL_error, records::lua_state::LuaState};
 #[inline]
 pub(crate) fn check_nonzero_divisor(l: &mut LuaState, b: u64) {
   if b == 0 {
-    // SAFETY: `l` 为借用形式的存活调用帧（&mut 保证有效且独占），luaL_error 抛错不返回。
-    unsafe { luaL_error!(l.as_mut_ptr(), "division by zero") };
+    luaL_error!(l, "division by zero");
   }
 }
 
@@ -22,7 +21,6 @@ pub(crate) fn check_nonzero_divisor(l: &mut LuaState, b: u64) {
 pub(crate) fn check_div_args_64(l: &mut LuaState, a: i64, b: i64) {
   check_nonzero_divisor(l, b as u64);
   if a == i64::MIN && b == -1 {
-    // SAFETY: 同 check_nonzero_divisor。
-    unsafe { luaL_error!(l.as_mut_ptr(), "integer overflow") };
+    luaL_error!(l, "integer overflow");
   }
 }

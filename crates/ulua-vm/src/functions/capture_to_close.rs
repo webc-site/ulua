@@ -24,6 +24,6 @@ pub(crate) fn capture_to_close(ms: &mut MatchState) -> i32 {
     Some(level) => level as i32,
     // cpp luaL_error 语义：报错后 longjmp，不返回
     // SAFETY: 对象不变式（`prepstate` 建立的存活 `lua_State`）保证 `ms.l` 可抛错
-    None => unsafe { luaL_error!(ms.l, "invalid pattern capture") },
+    None => unsafe { luaL_error!(&mut *ms.l, "invalid pattern capture") },
   }
 }

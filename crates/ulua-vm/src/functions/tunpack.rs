@@ -40,7 +40,7 @@ pub unsafe fn tunpack(l: &mut LuaState) -> i32 {
     // push loop overrun the stack into an api_incr_top assert (SIGTRAP).
     let n = (e as u32).wrapping_sub(i as u32); // number of elements minus 1 (avoid overflows)
     if n >= i32::MAX as u32 || lua_checkstack(&mut *lp, n.wrapping_add(1) as i32) == 0 {
-      luaL_error!(lp, "too many results to unpack");
+      luaL_error!(&mut *lp, "too many results to unpack");
     }
     let n = n + 1; // safe: guard above guarantees n (minus one) < INT_MAX
 

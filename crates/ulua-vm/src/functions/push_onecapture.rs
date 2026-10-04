@@ -30,12 +30,12 @@ pub(crate) unsafe fn push_onecapture(
           lua_pushlstring_bytes(&mut *ms.l, whole);
         }
       } else {
-        luaL_error!(ms.l, "invalid capture index");
+        luaL_error!(&mut *ms.l, "invalid capture index");
       }
     } else {
       let l = ms.capture[i as usize].len;
       if l == CAP_UNFINISHED as isize {
-        luaL_error!(ms.l, "unfinished capture");
+        luaL_error!(&mut *ms.l, "unfinished capture");
       } else if l == CAP_POSITION as isize {
         // cpp: lua_pushinteger(ms->l, (int)(ms->capture[i].init - ms->src_init) + 1);
         // —— 偏移化后 init 即指针差值

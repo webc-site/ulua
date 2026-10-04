@@ -12,7 +12,7 @@ pub(crate) fn matchbalance(ms: &mut MatchState, s: usize, p: usize) -> Option<us
   // cpp: if (p >= ms->p_end - 1) —— 指针差值判定等价为偏移 p + 1 >= pat.len()
   if p + 1 >= ms.pat.len() {
     // SAFETY: 对象不变式（`prepstate` 建立的存活 `lua_State`）保证 `ms.l` 可抛错
-    unsafe { luaL_error!(ms.l, "malformed pattern (missing arguments to '%b')") };
+    unsafe { luaL_error!(&mut *ms.l, "malformed pattern (missing arguments to '%b')") };
   }
   // s == src.len() 时读终止 NUL（cpp 在 src_end 处读串尾终止符同点位）
   if ms.src_byte(s) != ms.pat_byte(p) {

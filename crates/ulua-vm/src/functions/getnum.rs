@@ -116,6 +116,6 @@ pub(crate) fn getnum(h: &mut Header, fmt: &mut FmtCursor, df: i32) -> i32 {
       val
     }
     // SAFETY: 前置条件保证 h.l 存活可抛错；luaL_error 不返回（longjmp 语义）
-    Err(err) => unsafe { luaL_error!(h.l, "{}", err) },
+    Err(err) => unsafe { luaL_error!(&mut *h.l, "{}", err) },
   }
 }

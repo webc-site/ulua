@@ -16,7 +16,7 @@ pub(crate) fn getnumlimit(h: &mut Header, fmt: &mut FmtCursor, df: i32) -> i32 {
     // SAFETY: 前置条件保证 `h.l` 为可抛错的存活 `lua_State`，报错后不返回
     unsafe {
       luaL_error!(
-        h.l,
+        &mut *h.l,
         "integral size ({}) out of limits [1,{}]",
         sz,
         MAX_INT_SIZE,

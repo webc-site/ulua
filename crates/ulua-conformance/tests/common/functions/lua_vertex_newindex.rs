@@ -42,7 +42,7 @@ pub unsafe extern "C-unwind" fn lua_vertex_newindex(l: *mut LuaState) -> i32 {
   } else {
     // Safety: 按 cpp 抛「不可写成员」Lua 错误（`l` 存活、格式串为已校验的 `name`），
     // 该调用不返回。
-    unsafe { luaL_error!(l, "{name} is not a writable member of vertex") }
+    unsafe { luaL_error!(&mut *l, "{name} is not a writable member of vertex") }
   }
 
   0
