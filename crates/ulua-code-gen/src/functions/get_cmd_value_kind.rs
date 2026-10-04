@@ -13,6 +13,7 @@ pub const fn get_cmd_value_kind(cmd: IrCmd) -> IrValueKind {
     | IrCmd::GetArrAddr
     | IrCmd::GetSlotNodeAddr
     | IrCmd::GetHashNodeAddr
+    | IrCmd::GetHashNodeAddrNum
     | IrCmd::GetClosureUpvalAddr => IrValueKind::Pointer,
     IrCmd::StoreTag
     | IrCmd::StoreExtra
@@ -147,6 +148,9 @@ pub const fn get_cmd_value_kind(cmd: IrCmd) -> IrValueKind {
     | IrCmd::CheckNodeValue
     | IrCmd::CheckNodeInsertable
     | IrCmd::StoreNodeKey
+    | IrCmd::StoreNodeKeyNum
+    | IrCmd::JumpIfNodeKeyNotNum
+    | IrCmd::SetMetatableChecked
     | IrCmd::CheckBufferLen
     | IrCmd::CheckUserdataTag
     | IrCmd::CheckCmpNum

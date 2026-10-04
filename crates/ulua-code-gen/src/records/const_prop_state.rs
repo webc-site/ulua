@@ -309,11 +309,15 @@ impl ConstPropState {
         value: inst_idx,
       });
     } else {
-      // GET_HASH_NODE_ADDR 为 J4b 内联插入的 store 目标（cpp 无此场景）；与
+      // GET_HASH_NODE_ADDR/GET_HASH_NODE_ADDR_NUM 为内联插入的 store 目标（cpp
+      // 无此场景，后者为 SETTABLE 数字键哈希直插快路）；与
       // TABLE_SETNUM/GET_CLOSURE_UPVAL_ADDR 同待遇：不做 store→load 前向。
       CODEGEN_ASSERT!(matches!(
         target_addr.cmd,
-        IrCmd::TableSetnum | IrCmd::GetClosureUpvalAddr | IrCmd::GetHashNodeAddr
+        IrCmd::TableSetnum
+          | IrCmd::GetClosureUpvalAddr
+          | IrCmd::GetHashNodeAddr
+          | IrCmd::GetHashNodeAddrNum
       ));
     }
   }
@@ -745,10 +749,10 @@ impl ConstPropState {
       IrCmd::TableSetnum => {
         debug_assert!(self.array_value_cache.is_empty());
       }
-      IrCmd::GetHashNodeAddr => {
-        // SETTABLEKS 哈希节点写（Fallback 折叠后进入可发射域）：节点写入使任意
-        // 已知 hash 值与 slot 非空判定失效——GetHashNodeAddr 的操作数是 hash 而
-        // 非 key 指针，无法定点匹配，保守全清（对齐 cpp 对未知写目标的失效面）。
+      IrCmd::GetHashNodeAddr | IrCmd::GetHashNodeAddrNum => {
+        // SETTABLEKS/SETTABLE 哈希节点写（Fallback 折叠后进入可发射域）：节点写入使任意
+        // 已知 hash 值与 slot 非空判定失效——GetHashNodeAddr(Num) 的操作数是 hash/寄存器
+        // 而非 key 指针，无法定点匹配，保守全清（对齐 cpp 对未知写目标的失效面）。
         let mut cache = take(&mut self.hash_value_cache);
         let keys: Vec<u32> = cache.iter().map(|(&pointer_idx, _)| pointer_idx).collect();
         for pointer_idx in keys {
