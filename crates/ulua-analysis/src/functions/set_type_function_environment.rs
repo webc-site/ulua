@@ -60,7 +60,7 @@ pub(crate) unsafe fn set_type_function_environment(l: &mut LuaState) {
     l.pop(1);
 
     // Register utf8 library
-    luaopen_utf_8(l.as_mut_ptr());
+    luaopen_utf_8(&mut *l);
     l.pop(1);
 
     // Register Buffer library
