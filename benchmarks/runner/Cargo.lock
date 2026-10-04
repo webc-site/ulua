@@ -1100,6 +1100,7 @@ dependencies = [
  "ulua-analysis",
  "ulua-ast",
  "ulua-bytecode",
+ "ulua-code-gen",
  "ulua-common",
  "ulua-compiler",
  "ulua-config",

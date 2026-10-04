@@ -187,6 +187,23 @@ impl FValue<bool> {
       version: AtomicU32::new(0),
     }
   }
+
+  /// 收集当前值等于 `value` 的 bool 旗标名（升序）。诊断面：评测 runner 收尾
+  /// 打印生效旗标集，跨机（本地/CI）比对旗标点亮形态——集合逐名一致即
+  /// 「fflag 点亮链」平台无关；关键旗标（如 JIT 内联三旗标）缺席即点亮链在
+  /// 该机断裂。直读原子全局值（不经线程本地覆盖层）：调用点在启动期/收尾期
+  /// 的非测试线程，覆盖层不可能装填。
+  pub fn names_with_value(value: bool) -> Vec<&'static str> {
+    let mut names = with_flags::<bool, _>(|flags| {
+      flags
+        .iter()
+        .filter(|flag| flag.value.load(Ordering::Relaxed) == value)
+        .map(|flag| flag.name)
+        .collect::<Vec<_>>()
+    });
+    names.sort_unstable();
+    names
+  }
 }
 
 impl FValue<i32> {
