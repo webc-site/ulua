@@ -152,9 +152,8 @@ impl TypeChecker2 {
 
       let new_render = fflag::LuauNewTypePathErrorMessages.get();
 
-      let reason: String;
-
-      if fflag::LuauPropertyModifierMismatchErrors.get() && reasoning.is_property_modifier_violation
+      let reason: String = if fflag::LuauPropertyModifierMismatchErrors.get()
+        && reasoning.is_property_modifier_violation
       {
         // cpp 3547-3558：flags-on 下先探测末分量是否 IndexResult（读写索引器不符）。
         let mut rendered_indexer_mismatch = false;
@@ -198,7 +197,7 @@ impl TypeChecker2 {
             )
           };
         }
-        reason = body;
+        body
       } else if new_render {
         // cpp 3578-3643：renderTypePath 渲染 + 紧凑级联。`expectedReturnPack`/
         // 取反两枝依 metadata，本端口未采（见 render_type_path 模块文档），故略。
@@ -212,7 +211,7 @@ impl TypeChecker2 {
           _ => "",
         };
 
-        reason = if sub_rendered.prefix.is_empty() && super_rendered.prefix.is_empty() {
+        if sub_rendered.prefix.is_empty() && super_rendered.prefix.is_empty() {
           base_reason
         } else if !sub_rendered.subject.is_empty() && sub_rendered.subject == super_rendered.subject
         {
@@ -269,40 +268,40 @@ impl TypeChecker2 {
             super_leaf_as_string,
             base_reason
           )
-        };
+        }
       } else if reasoning.sub_path == reasoning.super_path {
-        reason = alloc::format!(
+        alloc::format!(
           "{}`{}` in the latter type and `{}` in the former type, and {}",
           to_string_human(&reasoning.sub_path),
           sub_leaf_as_string,
           super_leaf_as_string,
           base_reason
-        );
+        )
       } else if !reasoning.sub_path.path_empty() && !reasoning.super_path.path_empty() {
-        reason = alloc::format!(
+        alloc::format!(
           "{}`{}` and {}`{}`, and {}",
           to_string_human(&reasoning.sub_path),
           sub_leaf_as_string,
           to_string_human(&reasoning.super_path),
           super_leaf_as_string,
           base_reason
-        );
+        )
       } else if !reasoning.sub_path.path_empty() {
-        reason = alloc::format!(
+        alloc::format!(
           "{}`{}`, which is not {} `{}`",
           to_string_human(&reasoning.sub_path),
           sub_leaf_as_string,
           relation,
           super_leaf_as_string
-        );
+        )
       } else {
-        reason = alloc::format!(
+        alloc::format!(
           "{}`{}`, and {}",
           to_string_human(&reasoning.super_path),
           super_leaf_as_string,
           base_reason
-        );
-      }
+        )
+      };
 
       // cpp 3664-3672：flags-on 去重，只收录首次出现的原因以免重复诊断。
       if new_render {
