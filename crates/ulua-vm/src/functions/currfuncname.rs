@@ -15,7 +15,7 @@ use crate::{
 /// 参数收为引用后签名不再出现调用方裸指针，依判例（dev `SubtypingEnvironment::get_mapped_type_bounds`）
 /// 由 `unsafe fn` 降为 `fn`；体内对帧字段 `*mut CallInfo`/`*mut Closure` 与 `cstr_bytes`/`getstr`
 /// 的解引用皆源自 `l` 的自有字段而非调用方入参，包于单一 `unsafe` 块并附契约。
-pub(crate) fn currfuncname<'a>(l: &'a LuaState) -> Option<&'a [u8]> {
+pub(crate) fn currfuncname(l: &LuaState) -> Option<&[u8]> {
   // SAFETY: `l` 存活，`(*l).ci`/`(*l).base_ci` 同处一 CallInfo 数组且 `base_ci <= ci`
   // （`curr_func!` 读当前帧闭包）；C 闭包时 `inner.c.debugname` 为可读 C 串或 NULL，
   // `(*l).namecall` 若非空须为存活 TString（`getstr` 取字节，Lua 串恒 NUL 结尾）。
