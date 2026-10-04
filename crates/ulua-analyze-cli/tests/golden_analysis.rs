@@ -27,11 +27,13 @@
 //! - 1 例（`type-states/initialize_optional_with_nil`）夹具仅带 `--!golden ok`
 //!   指令、无快照：按 cpp golden 运行器语义（`expectations.py`：`ok` 要求全部
 //!   命令 returncode 0）断言双模式退出码 0 + stderr 空。
+//!
 //! 其余 5 例未移植：`keyof_basic`、`keyof_metatable`、`keyof_union_common_keys`、
 //! `rawkeyof_ignores_metatable`、`negation`——Rust CLI 默认输出与 cpp 现存任一
 //! 快照形态（on/off）都逐字节不同（union 子类型失败原因的措辞代际差异；
 //! `keyof_metatable` 连分量序号、`negation` 连被打印类型都不同），禁为凑绿
 //! 放宽断言，登记为渲染/排序面缺口。
+//!
 //! `cpp/tests/golden/meta`（10 例）是 cpp golden 运行器自身的框架自检，非语言
 //! 行为回归，不移植。
 
