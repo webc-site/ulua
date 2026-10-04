@@ -143,8 +143,9 @@ pub trait RequireHost {
 
   /// 执行模块并把结果压在 `l` 栈顶，返回压入的结果数；返回 `-1` 表示要求
   /// 本线程挂起（cpp `load`）。`path`/`chunkname`/`loadname` 为 require 链路
-  /// 解析出的字节串。
-  fn load(&self, l: *mut LuaState, path: &[u8], chunkname: &[u8], loadname: &[u8]) -> i32;
+  /// 解析出的字节串。`l` 为 require 同步执行窗口内由 `lua_requireinternal` 物化的
+  /// 借用（裸指针物化收在该 C 边界，本 trait 只以 `&mut` 句柄收发，review.md §2/§3）。
+  fn load(&self, l: &mut LuaState, path: &[u8], chunkname: &[u8], loadname: &[u8]) -> i32;
 }
 
 /// require 宿主机的**唯一**槽位类型：注入方在建立闭包时把宿主按值装箱移交，

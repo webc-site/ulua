@@ -152,10 +152,11 @@ impl RequireHost for ReplRequirer {
     self.vfs.borrow().get_config().map(String::into_bytes)
   }
 
-  fn load(&self, l: *mut LuaState, path: &[u8], chunkname: &[u8], loadname: &[u8]) -> i32 {
-    // `l` 是 ulua-require 在 require 同步执行窗口内交出的活跃状态（trait `load`
-    // 方法契约），`functions::load::load` 内部经 `state` 门面物化，VM c-API 边界
-    // 的 `unsafe` 全部由其带 `# Safety` 契约的私有封装承担，本调用点为安全调用。
+  fn load(&self, l: &mut LuaState, path: &[u8], chunkname: &[u8], loadname: &[u8]) -> i32 {
+    // `l` 是 ulua-require 在 require 同步执行窗口内经 `lua_requireinternal` 物化后
+    // 交出的借用（trait `load` 借用形契约），`functions::load::load` 承接同一借用，
+    // VM c-API 边界的 `unsafe` 全部由其带 `# Safety` 契约的私有封装与单步块承担，
+    // 本调用点为安全调用。
     load(self, l, path, chunkname, loadname)
   }
 }

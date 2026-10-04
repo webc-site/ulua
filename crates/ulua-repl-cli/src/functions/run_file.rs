@@ -96,9 +96,9 @@ pub(crate) fn run_file(
     }
 
     let nargs = program_args.len() as i32;
-    // Safety: `setup_arguments` 为 unsafe fn；l 存活，setup_arguments 把 program_args
-    // 借用的字符串压成 VM 实参，nargs 与压入个数一致（其 /// # Safety 前提）。
-    unsafe { setup_arguments(l, program_args) };
+    // setup_arguments 收形为借用后为安全 fn：l 存活，其把 program_args 借用的字符串
+    // 压成 VM 实参，nargs 与压入个数一致（其调用序契约）。
+    setup_arguments(l, program_args);
     // FFI: c-API 要求 NULL —— 主线程恢复的 `from == NULL` 合法形态已由 ulua-vm
     // `LuaState::resume_main` 门面收口（内部单次落 null），调用侧不再书写裸 null 哨兵。
     l.resume_main(nargs)

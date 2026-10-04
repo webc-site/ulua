@@ -9,28 +9,19 @@ use ulua_vm::{
   records::lua_state::LuaState,
 };
 
-use crate::functions::state_ref::state;
-
-// completePartialMatches finds keys that match the specified 'prefix'
-// Note: the table/object to be searched must be on the top of the Lua stack
-// DELIBERATE DEVIATION（review.md §9.3）：遍历栈顶表键并跟随 `__index` 元表链
-// （next/is_table/pop + `lua_tolstring_ref`，ulua-vm c-API）；按 §2 收口为
-// 「安全入口 + 入口单点物化 + 逐块 `// Safety:` 论证」形态。至多 MAX_TRAVERSAL_LIMIT
+// review.md §2/§3 收形：`l` 由裸 `*mut LuaState` 收编为借用 `&mut LuaState`（真实
+// 物化点上移到 get_completions 入口一次）。遍历栈顶表键并跟随 `__index` 元表链
+// （next/is_table/pop + `lua_tolstring_ref`，ulua-vm c-API）；至多 MAX_TRAVERSAL_LIMIT
 // 层的计数无数据含义，故用 range 迭代器而非手写累加。
 //
-// 前置条件（由调用方 complete_indexer 成立）：`l` 必须是有效的 `LuaState`，
-// 且待搜索的表位于栈顶。
+// 调用序契约（由调用方 complete_indexer 成立）：`l` 为活跃状态机，且待搜索的表位于栈顶。
 pub(crate) fn complete_partial_matches(
-  l: *mut LuaState,
+  l: &mut LuaState,
   complete_only_functions: bool,
   edit_buffer: &str,
   prefix: &str,
   add_completion_callback: &mut impl FnMut(&str, &str),
 ) {
-  // Safety: l 由调用方 complete_indexer 链保证有效、待搜索表在栈顶（前置条件见上），
-  // 经 `state` 门面物化后全走安全方法；unsafe 导出在各块内论证。
-  let l = state(l);
-
   // cpp `for (int i = 0; i < MAX_TRAVERSAL_LIMIT; i++)`：至多跟随 MAX_TRAVERSAL_LIMIT
   // 层 __index 链，防元表环；计数无数据含义，用 range 迭代器替代手写累加。
   for _ in 0..MAX_TRAVERSAL_LIMIT {
@@ -93,9 +84,9 @@ pub(crate) fn complete_partial_matches(
     }
 
     // Replace the current table being searched with an __index table if one exists
-    // Safety: `try_replace_top_with_index` 为 unsafe fn；-1 为遍历结束的表，
+    // try_replace_top_with_index 收形为借用后为安全 fn：-1 为遍历结束的表，
     // 命中元表 __index/_index 时单槽替换供下一轮。
-    let has_index = unsafe { try_replace_top_with_index(l) };
+    let has_index = try_replace_top_with_index(l);
     if !has_index {
       break;
     }

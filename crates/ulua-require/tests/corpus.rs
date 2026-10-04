@@ -376,7 +376,7 @@ impl RequireHost for MemHost {
     )
   }
 
-  fn load(&self, l: *mut LuaState, _path: &[u8], chunkname: &[u8], loadname: &[u8]) -> i32 {
+  fn load(&self, l: &mut LuaState, _path: &[u8], chunkname: &[u8], loadname: &[u8]) -> i32 {
     // 镜像 cpp ReplRequirer.cpp `load` 与 ulua-repl-cli 移植：新线程隔离执行，
     // 编译 → luau_load → resume → 结果移回调用线程。
     let chunkname = String::from_utf8_lossy(chunkname);
@@ -397,9 +397,9 @@ impl RequireHost for MemHost {
     // 主线程开新线程 → xmove 到 l → 沙箱化 → luau_load/resume → 结果移回。
     // 线程槽在本帧持有，`ml` 全程随 l 栈槽存活。
     unsafe {
-      let gl = lua_mainthread(&*l);
+      let gl = lua_mainthread(l);
       let ml = lua_newthread(gl);
-      lua_xmove(&mut *gl, &mut *l, 1);
+      lua_xmove(&mut *gl, l, 1);
       // new thread needs to have the globals sandboxed
       lua_l_sandboxthread(&mut *ml);
 
@@ -421,8 +421,8 @@ impl RequireHost for MemHost {
       }
 
       // add ML result to l stack, then remove the ML thread slot
-      lua_xmove(&mut *ml, &mut *l, 1);
-      (*l).remove(-2);
+      lua_xmove(&mut *ml, l, 1);
+      l.remove(-2);
       1
     }
   }
