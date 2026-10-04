@@ -16,11 +16,14 @@ pub fn tcreate(l: &mut LuaState) -> i32 {
     l.arg_error(1, "size out of range");
   }
 
+  // cpp 同序：先判 2 号位（此刻它仍在实参区/界外为 None——若先建表，压表会把
+  // 实参值抬进 2 号槽观测面，`table.create(n)` 无填充也将误走 fill）
+  let fill = !l.is_none_or_nil(2);
+
   l.create_table(size, 0);
 
-  // 2 号位为填充值时把整段数组铺成该值；`is_none_or_nil` 只读判型、不写栈，
-  // 与 cpp 先判后建表的次序逐位同观测。
-  if !l.is_none_or_nil(2) {
+  // 2 号位为填充值时把整段数组铺成该值。
+  if fill {
     let t = l.get_top(); // 新建表所在绝对槽（= 3：1=size、2=填充值已被占据）
     for i in 1..=size {
       l.push_value(2);
