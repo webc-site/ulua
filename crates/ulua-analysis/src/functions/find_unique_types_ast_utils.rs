@@ -1,7 +1,7 @@
 use ulua_ast::{
   records::{ast_expr::AstExpr, ast_expr_table::AstExprTable},
   rtti::ast_node_is,
-  visit::ast_expr_visit,
+  visit::ast_expr_visit_ref,
 };
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet};
 
@@ -18,25 +18,21 @@ use crate::{
 ///
 /// 降 safe 说明：集合/映射形参原为借用裸指针（调用点写的就是
 /// `&mut x as *mut _`），收窄为引用后由借用检查器承担全部前提；
-/// `expr` 的 `&mut` 已保证节点存活且独占，解引用只剩 `ast_expr_visit`
-/// 一处窄 `unsafe` 块（遍历器只读 AST、写集合，无并存别名）。
+/// `expr` 的 `&mut` 即节点存活且独占的类型系统证明，遍历经引用门面
+/// `ast_expr_visit_ref` 全链路 safe（遍历器只读 AST、写集合，无并存别名）。
 pub fn find_unique_types(
   unique_types: &mut DenseHashSet<TypeId>,
   expr: &mut AstExpr,
   ast_types: &DenseHashMap<*const AstExpr, TypeId>,
 ) {
   let mut finder = AstExprTableFinder::new(unique_types, ast_types);
-  // Safety: expr 由 &mut 借用保证为存活且独占的 AST 节点，遍历期间 finder 只读
-  // 节点字段、只写自己的集合，单线程无并存可变借用。
-  unsafe {
-    ast_expr_visit(expr, &mut finder);
-  }
+  ast_expr_visit_ref(expr, &mut finder);
 }
 
 /// 对应 C++ 迭代器版 `findUniqueTypes(uniqueTypes, begin, end, astTypes)`
 /// （`cpp/Analysis/src/AstUtils.cpp:77`）。降 safe：集合/映射形参收引用；
 /// `iter` 产出的每个 `*mut AstExpr` 是 parser arena 存活节点（地址不移动），
-/// 判型读取 `base` 首字段（repr(C) 同址）收进循环体内窄 `unsafe` 块。
+/// 判型与解引用统一经 `alias_ref`/`alias` 句柄门面收口，循环体无 `unsafe`。
 pub fn find_unique_types_iter<I>(
   unique_types: &mut DenseHashSet<TypeId>,
   iter: I,

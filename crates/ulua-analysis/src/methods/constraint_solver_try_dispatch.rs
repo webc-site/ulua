@@ -1181,10 +1181,10 @@ impl ConstraintSolver {
     if !fflag::LuauRelaxConstraintOrderingForFunctionCheck.get() {
       // cpp 在 tryDispatch(FunctionCheckConstraint) 中直接解引用 `c.callSite`
       // （ConstraintSolver.cpp:1915）——构造期保证非空的 AST 调用点；`c.ast_types`
-      // 同为建约束时携带的模块级映射，本调用内独占。解引用经 `alias`/`alias_ref`
+      // 同为建约束时携带的模块级映射，本调用内独占。解引用经 `alias`
       // 门面收口（契约集中在 arena_handle），借用止于本次调用。
       let blocked_types =
-        find_blocked_arg_types_in(alias_ref(c.call_site), alias(c.ast_types.cast_mut()));
+        find_blocked_arg_types_in(alias(c.call_site), alias(c.ast_types.cast_mut()));
       for ty in &blocked_types {
         self.block_type_id_not_null_constraint(*ty, constraint);
       }
