@@ -20,7 +20,7 @@ pub unsafe fn lua_l_typeerror_l(l: *mut LuaState, narg: i32, tname: &str) -> ! {
     let obj: *const TValue = lua_a_toobject(&*l, narg);
 
     if !obj.is_null() {
-      let objtypename = lua_t_objtypename(l, &*obj);
+      let objtypename = lua_t_objtypename(&*l, &*obj);
       let objtypename = cstr_cow(objtypename);
 
       match fname {
