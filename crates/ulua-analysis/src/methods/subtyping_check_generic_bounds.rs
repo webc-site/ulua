@@ -84,14 +84,17 @@ impl Subtyping {
     }
 
     // cpp `SubtypingEnvironment boundsEnv; boundsEnv.parent = &env;`
-    // （`Subtyping.cpp:3088-3089`）：栈形态即压入一帧新作用域，bounds 子求解
-    // 结束后弹栈销毁（cpp 子环境离开作用域析构）。
-    env.push_scope();
+    // （`Subtyping.cpp:3088-3089`）：栈形态即压入一帧新作用域；RAII 守卫在
+    // 函数退出（含任何提前 return 与展开路径）时弹栈销毁，等价 cpp 子环境
+    // 离开作用域析构。本函数体当前为直线流程，守卫防未来插入提前出口致栈失衡。
+    let bounds_guard = env.push_scope_guard();
     let mut bounds_result = self
       .is_covariant_with_subtyping_environment_type_id_type_id_not_null_scope(
-        env, lower_bound, upper_bound, scope,
+        &mut *bounds_guard.env,
+        lower_bound,
+        upper_bound,
+        scope,
       );
-    env.pop_scope();
     bounds_result.reasoning.clear();
 
     if res == NormalizationResult::False {

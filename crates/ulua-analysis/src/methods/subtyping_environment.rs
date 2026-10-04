@@ -69,6 +69,25 @@ impl SubtypingEnvironment {
     LUAU_ASSERT!(self.scopes.len() > 1);
     self.scopes.pop();
   }
+
+  /// 压入一帧并返回 RAII 守卫：守卫析构（含提前 return / panic 展开）时弹栈，
+  /// 对应 cpp `boundsEnv` 离开函数作用域即析构（`Subtyping.cpp:3088-3117`）。
+  pub(crate) fn push_scope_guard(&mut self) -> SubtypingScopeGuard<'_> {
+    self.push_scope();
+    SubtypingScopeGuard { env: self }
+  }
+}
+
+/// [`SubtypingEnvironment::push_scope_guard`] 的弹栈守卫。
+pub(crate) struct SubtypingScopeGuard<'a> {
+  /// 守卫持有的环境可变借用；作用域内调用方经 `&mut *env` 再借用传入。
+  pub(crate) env: &'a mut SubtypingEnvironment,
+}
+
+impl Drop for SubtypingScopeGuard<'_> {
+  fn drop(&mut self) {
+    self.env.pop_scope();
+  }
 }
 
 impl SubtypingEnvironment {
