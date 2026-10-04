@@ -93,20 +93,20 @@ pub(crate) fn translate_table_access(
   let const_int_one = build.const_int(1);
   let index = build.inst_ir_cmd_ir_op_ir_op(IrCmd::SubInt, index, const_int_one);
 
-  // 守卫次序说明：NoMetatable/Readonly 先于 CheckArraySize（纯守卫无副作用，
-  // 失败去向同为 helper 块，行为不变），使数组路与哈希直插路共享这两道守卫。
-  // CheckArraySize 越界去向：SET 走哈希直插块（数组段外落哈希段），GET 仍落 helper。
+  // CheckArraySize 越界去向：SET 且旗标开时走哈希直插块（数组段外落哈希段），
+  // 其余仍落 helper。主链守卫次序与原版逐位一致（golden IR 依赖）；元表/只读
+  // 守卫由数组路与哈希直插路各自持有（每写恰好各查一次，无重复付）。
   let oob_target = match hash_blocks {
     Some((hash_block, _)) => hash_block,
     None => fallback,
   };
-  build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckNoMetatable, vb, fallback);
   build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CheckArraySize, vb, index, oob_target);
 
   let reg_ra = build.vm_reg(ra);
 
   if is_set {
     // SET：写方向先挡掉只读表，再取数组槽写回；末尾补前向 barrier，防旧值所在表逃逸
+    build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckNoMetatable, vb, fallback);
     build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckReadonly, vb, fallback);
     let arr_el = build.inst_ir_cmd_ir_op_ir_op(IrCmd::GetArrAddr, vb, index);
     let tva = build.inst_ir_cmd_ir_op(IrCmd::LoadTvalue, reg_ra);
@@ -115,6 +115,7 @@ pub(crate) fn translate_table_access(
     build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::BarrierTableForward, vb, reg_ra, undef);
   } else {
     // GET：读方向，数组槽 TValue 直入 RAr
+    build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckNoMetatable, vb, fallback);
     let arr_el = build.inst_ir_cmd_ir_op_ir_op(IrCmd::GetArrAddr, vb, index);
     let arr_el_tval = build.inst_ir_cmd_ir_op(IrCmd::LoadTvalue, arr_el);
     build.inst_ir_cmd_ir_op_ir_op(IrCmd::StoreTvalue, reg_ra, arr_el_tval);
@@ -145,13 +146,17 @@ pub(crate) fn translate_table_access(
       build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
     }
     Some((_, occupied_block)) => {
-    // 哈希直插块：主位空 → 直插新键（setnodekey 数字版含 tmcache 作废）+ 值落位
-    // + 前向屏障。键为数字（非 collectable），键侧屏障空操作，不再补
-    // BarrierTableForward（对齐 cpp luaC_barriert 对非收集对象的零动作语义）。
+    // 哈希直插块：元表/只读守卫自含（与主链数组路同序同数，无重复付），主位空 →
+    // 直插新键（setnodekey 数字版含 tmcache 作废）+ 值落位 + 前向屏障。键为数字
+    // （非 collectable），键侧屏障空操作，不再补 BarrierTableForward（对齐 cpp
+    // luaC_barriert 对非收集对象的零动作语义）。
     let reg_rb = build.vm_reg(rb);
     let vb = build.inst_ir_cmd_ir_op(IrCmd::LoadPointer, reg_rb);
     let reg_rc = build.vm_reg(rc);
     let node = build.inst_ir_cmd_ir_op_ir_op(IrCmd::GetHashNodeAddrNum, vb, reg_rc);
+
+    build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckNoMetatable, vb, fallback);
+    build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckReadonly, vb, fallback);
 
     // 主位可插判定（哨兵表 node==dummynode 或 val 非空 → 覆写检查分支）
     build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CheckNodeInsertable, node, vb, occupied_block);

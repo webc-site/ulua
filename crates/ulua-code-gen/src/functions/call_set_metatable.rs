@@ -9,7 +9,6 @@ use crate::{
     ir_op::IrOp,
     ir_reg_alloc_x_64::IrRegAllocX64,
     native_context::NativeContext,
-    operand_x_64::OperandX64,
   },
 };
 
