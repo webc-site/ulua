@@ -47,22 +47,23 @@ const G_NAME: &[u8] = b"_G";
 const VERSION_NAME: &[u8] = b"_VERSION";
 
 /// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
-/// push_value/set_global_bytes/set_field_bytes 皆安全门面直调，仅注册建表、压串、`auxopen` 与
-/// `lua_pushcclosurek` 四处 C 形态被调各自落窄块（被调方自身保留 `# Safety`：裸 C 函数指针与
-/// `lua_s_new` 转手未清零），故本体降为安全 `fn`）：`l` 须为可分配、可抛错的受保护帧且栈顶之上
+/// push_value/set_global_bytes/set_field_bytes 皆安全门面直调，注册建表与压串所经
+/// `lua_l_register_bytes`/`lua_pushlstring_bytes` 亦已降为安全 `fn`（r12-w6d，裸操作屏障下沉
+/// 被调内部），仅 `auxopen` 与 `lua_pushcclosurek` 两处 C 形态被调各自落窄块（被调方自身保留
+/// `# Safety`：裸 C 函数指针与 `lua_s_new` 转手未清零），故本体维持安全 `fn`）：`l` 须为可分配、可抛错的受保护帧且栈顶之上
 /// 留足空槽；`auxopen`/`lua_pushcclosurek` 的 debugname 为静态 NUL 结尾字面量，臂为本文件静态表
 /// 同款合法 `unsafe extern "C-unwind"` 函数。cpp/VM/src/lbaselib.cpp:438-489 luaopen_base。
 pub fn luaopen_base(l: &mut LuaState) -> i32 {
   l.push_value(LUA_GLOBALSINDEX);
   l.set_global_bytes(G_NAME);
 
-  // SAFETY: `BASE_FUNCS` 为本文件同卫生域生成的合法 `unsafe extern "C-unwind"` 臂静态表，
-  // 名字为不含尾部 `\0` 的静态字节切片，满足 `lua_l_register_bytes` 切片契约
-  unsafe { lua_l_register_bytes(l, Some(G_NAME), &BASE_FUNCS) };
+  // BASE_FUNCS 为本文件同卫生域生成的合法 `unsafe extern "C-unwind"` 臂静态表，名字为
+  // 不含尾部 `\0` 的静态字节切片，满足 `lua_l_register_bytes` 切片契约（被调已降为安全
+  // `fn`，r12-w6d）
+  lua_l_register_bytes(l, Some(G_NAME), &BASE_FUNCS);
 
-  // SAFETY: `lua_pushlstring_bytes` 切片核心契约自具（l 由 &mut 承载存活/独占，界内拷入
-  // 堆上 TString、不留借出窗）；b"Luau" 为本文件自有的界内静态切片
-  unsafe { lua_pushlstring_bytes(l, b"Luau") };
+  // b"Luau" 为本文件自有的界内静态切片；切片核心已降为安全 `fn`（r12-w6d）
+  lua_pushlstring_bytes(l, b"Luau");
   l.set_global_bytes(VERSION_NAME);
 
   // SAFETY: `l.as_mut_ptr()` 为当前独占借用重建的裸句柄，借用窗止于本次调用；
