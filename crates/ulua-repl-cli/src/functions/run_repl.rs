@@ -34,9 +34,9 @@ pub(crate) fn run_repl() {
   // setup Ctrl+C handling: replState = l; signal(SIGINT, sigintHandler);
   // 状态发布与 libc handler 注册（含与信号上下文交换的 null 协议值）收在
   // sigint_setup 门面里，这里只保留调用时机与存活契约。
-  // Safety: l 为本帧新建、在整个交互式循环期间存活且单线程驱动（install 的
-  // /// # Safety 前提）；循环结束后由下方 withdraw 先摘状态再 close。
-  unsafe { sigint_setup::install(l) };
+  // `install` 现降级为安全 fn（仅原子存入句柄、不解引用），其调用序契约——l 为本帧
+  // 新建、在整个交互式循环期间存活且单线程驱动——由本入口保证；循环结束后由 withdraw 先摘状态再 close。
+  sigint_setup::install(l);
 
   // 冻结线程全局表：`lua_l_sandboxthread` 为 ulua-vm 安全引用形，经 `state` 门面一次
   // 物化后直调，本点不再裸解引用 `l`（review.md §2 收口）。
