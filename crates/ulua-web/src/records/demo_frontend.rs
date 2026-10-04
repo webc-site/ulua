@@ -100,13 +100,14 @@ impl DemoFrontend {
   pub(crate) fn check_source(&mut self, module: &str, source: &str) -> String {
     // frontend.clear(); fileResolver.source.clear();
     self.frontend.clear();
-    self.file_resolver.source.clear();
+    self.file_resolver.source.borrow_mut().clear();
 
     // fileResolver.source[module] = source;
     let name: ModuleName = module.into();
     self
       .file_resolver
       .source
+      .borrow_mut()
       .insert(name.clone(), source.to_string());
 
     // Luau::CheckResult checkResult = frontend.check("main");

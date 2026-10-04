@@ -1742,6 +1742,7 @@ fn frontend_environments() {
     .base
     .file_resolver
     .environments
+    .borrow_mut()
     .insert(ModuleName::from("A"), String::from("test"));
 
   let result_a = fixture

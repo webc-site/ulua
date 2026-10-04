@@ -25,7 +25,9 @@
 /// [`Error::TypeError`](crate::Error::TypeError). Unlike a flat error string,
 /// the location fields let an editor / build tool point at the exact span.
 use core::{fmt, result::Result};
+use std::cell::RefCell;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::rc::Rc;
 
 use ulua_analysis::{
   enums::solver_mode::SolverMode,
@@ -102,15 +104,17 @@ const MAIN_MODULE: &str = "main";
 
 /// Minimal single-source in-memory [`FileResolver`] for a string check.
 ///
-/// Holds exactly one module's source ("main").
+/// Holds exactly one module's source ("main"). `source` 经 `Rc<RefCell>` 共享：
+/// 每次改写后 frontend 内独占实例与宿主句柄读到同一槽（cpp 宿主直写字段的
+/// 等价形态），`Checker` 复用会话时无需第二把可变别名。
 struct CheckFileResolver {
-  source: String,
+  source: Rc<RefCell<String>>,
 }
 
 impl CheckFileResolver {
   fn new(source: &str) -> Self {
     CheckFileResolver {
-      source: source.to_string(),
+      source: Rc::new(RefCell::new(source.to_string())),
     }
   }
 }
@@ -121,8 +125,9 @@ impl FileResolver for CheckFileResolver {
     if name != MAIN_MODULE {
       return None;
     }
+    let source = self.source.borrow().clone();
     Some(SourceCode {
-      source: self.source.clone(),
+      source,
       r#type: SourceCode::MODULE,
     })
   }
@@ -755,7 +760,7 @@ impl Checker {
   /// (the checker returns errors).
   pub fn check(&mut self, source: &str) -> Result<(), Vec<TypeDiagnostic>> {
     // Point the single "main" module at the new source and force a re-check.
-    self.file_resolver.source = source.to_string();
+    *self.file_resolver.source.borrow_mut() = source.to_string();
     self.frontend.mark_dirty(&main_module(), None);
 
     let check_result = self
