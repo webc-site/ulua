@@ -14,7 +14,7 @@ use crate::{
 /// （方法名，`getstr` 读其 NUL 结尾 payload），`luaG_runerror` 抛错且永不返回，须受保护帧。cpp `ldebug.cpp:339`。
 pub unsafe fn lua_g_methoderror(l: *mut LuaState, p1: *const TValue, p2: *const tstring) -> ! {
   unsafe {
-    let t1: *const c_char = lua_t_objtypename(l, &*p1);
+    let t1: *const c_char = lua_t_objtypename(&*l, &*p1);
 
     lua_g_runerror!(
       l,

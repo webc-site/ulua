@@ -16,11 +16,11 @@ pub unsafe fn lua_l_typeerror_l(l: *mut LuaState, narg: i32, tname: &str) -> ! {
   // SAFETY: 契约保证 l 为存活受保护帧；fname 为切片化的帧名字节（None 即原 NULL 哨兵），
   // lua_a_toobject/lua_t_objtypename 按各自 C-API 契约读槽，luaL_error 抛错不返回
   unsafe {
-    let fname = currfuncname(l);
+    let fname = currfuncname(&*l);
     let obj: *const TValue = lua_a_toobject(&*l, narg);
 
     if !obj.is_null() {
-      let objtypename = lua_t_objtypename(l, &*obj);
+      let objtypename = lua_t_objtypename(&*l, &*obj);
       let objtypename = cstr_cow(objtypename);
 
       match fname {
