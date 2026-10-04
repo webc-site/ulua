@@ -1,4 +1,3 @@
-/// NUL 结尾字节串（`*const c_char` 契约调用点 `.as_ptr().cast()`；§10 不引入 C 字符串类型）。
 use core::ptr::addr_of_mut;
 
 use crate::{
@@ -7,8 +6,10 @@ use crate::{
   macros::{api_check::api_check, isblack::isblack, luai_maxccalls::LUAI_MAXCCALLS},
   records::{gc_object::GCObject, lua_state::LuaState},
 };
-const ERR_NOT_SUSPENDED: &[u8] = b"cannot resume non-suspended coroutine\0";
-const ERR_C_STACK_OVERFLOW: &[u8] = b"C stack overflow\0";
+// 错误消息字节串（§10 C 串消灭：直接以 `&[u8]` 切片交 `resume_error`，
+// 无 NUL 终止、无 `.as_ptr().cast()`）。
+const ERR_NOT_SUSPENDED: &[u8] = b"cannot resume non-suspended coroutine";
+const ERR_C_STACK_OVERFLOW: &[u8] = b"C stack overflow";
 
 /// 协程恢复的入口校验与 ccount 建档（cpp `resume_start`，与 `resume_finish` 成对）。
 ///
@@ -41,12 +42,12 @@ pub(crate) unsafe fn resume_start(l: *mut LuaState, from: *mut LuaState, nargs: 
       && (*l).status() != LuaStatus::Break
       && ((*l).status != 0 || (*l).ci != (*l).base_ci)
     {
-      return resume_error(l, ERR_NOT_SUSPENDED.as_ptr().cast(), nargs);
+      return resume_error(l, ERR_NOT_SUSPENDED, nargs);
     }
 
     (*l).n_ccalls = if !from.is_null() { (*from).n_ccalls } else { 0 };
     if (*l).n_ccalls as i32 >= LUAI_MAXCCALLS {
-      return resume_error(l, ERR_C_STACK_OVERFLOW.as_ptr().cast(), nargs);
+      return resume_error(l, ERR_C_STACK_OVERFLOW, nargs);
     }
 
     (*l).n_ccalls = (*l).n_ccalls.wrapping_add(1);

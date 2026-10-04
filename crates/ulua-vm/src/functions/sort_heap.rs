@@ -27,17 +27,16 @@ pub(crate) unsafe fn sort_heap(
     LUAU_ASSERT!(low <= u);
     let count = u - low + 1;
 
-    let mut i = count / 2 - 1;
-    while i >= 0 {
+    // 索引型 while 计数改迭代器降序窗（判定准绳「索引 for 循环改迭代器」）：
+    // 访问序与原 `i = 起..=0` 逐位一致，count==1 时 `0..=-1` 空区间不迭代，
+    // count>=2 时降序覆盖 count/2-1..=0，与原循环等真值（含末次后 `i-=1` 出界）。
+    for i in (0..=count / 2 - 1).rev() {
       sort_siftheap(l, t, low, u, pred, i);
-      i -= 1;
     }
 
-    let mut i = count - 1;
-    while i > 0 {
+    for i in (1..=count - 1).rev() {
       sort_swap(l, t, low, low + i);
       sort_siftheap(l, t, low, low + i - 1, pred, 0);
-      i -= 1;
     }
   }
 }

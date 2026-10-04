@@ -1,8 +1,8 @@
-use core::{ffi::c_char, mem::size_of};
+use core::mem::size_of;
 
 use crate::{
   enums::lua_status::LuaStatus,
-  functions::{cstr_bytes, lua_d_growstack::lua_d_growstack},
+  functions::lua_d_growstack::lua_d_growstack,
   macros::{lua_s_new::lua_s_new, setsvalue::setsvalue},
   records::lua_state::LuaState,
   type_aliases::t_value::TValue,
@@ -12,10 +12,13 @@ use crate::{
 ///
 /// # Safety
 ///
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-/// `l` 须为正在恢复的协程状态；`msg` 须为有效终止 C 串指针；`narg` 不得超过
-/// 当前栈内实参个数（与 `resume_start` 的 `api_check!` 同一前提）。
-pub(crate) unsafe fn resume_error(l: *mut LuaState, msg: *const c_char, narg: i32) -> i32 {
+/// `l` 为调用方传入的裸协程状态指针且函数体直接解引用它：`rewind_top`/`top` 回退、
+/// `lua_s_new` 建串、`stack_last` 顶界现读，末尾 `lua_d_growstack` 可触发 GC 与栈重分配
+/// 搬移 `top`/栈基——故本函数保留 `unsafe`。`l` 须为正在恢复的存活协程状态；`narg` 不得
+/// 超过当前栈内实参个数（与 `resume_start` 的 `api_check!` 同一前提）。
+/// `msg` 为安全 `&[u8]` 错误消息字节切片（§10 C 串消灭：原 `*const c_char`+`cstr_bytes`
+/// 收口为字节切片形，须覆盖到 `lua_s_new` 建串调用为止）。
+pub(crate) unsafe fn resume_error(l: *mut LuaState, msg: &[u8], narg: i32) -> i32 {
   // SAFETY: 契约保证 `l` 为正在 resume 的协程存活状态、narg 不超过当前栈内实参数，top 回退不越过 base
   unsafe {
     // l->top -= narg;
@@ -26,8 +29,8 @@ pub(crate) unsafe fn resume_error(l: *mut LuaState, msg: *const c_char, narg: i3
     // setsvalue(l, l->top, lua_s_new(l, msg));
     // setsvalue! 宏接收 TValue 指针
     // (*l).top is a StkId (which is a *mut TValue).
-    // msg 为 NUL 结尾 C 串，经 cstr_bytes 扫首个 NUL 得字节切片（保持原 lua_s_new 的 strlen 语义）
-    setsvalue!(l, (*l).top, lua_s_new(l, cstr_bytes(msg)));
+    // msg 已是错误消息字节切片，直接交 lua_s_new 建串（原 cstr_bytes 的 strlen 收口下沉到调用方的 `&[u8]` 切片形）
+    setsvalue!(l, (*l).top, lua_s_new(l, msg));
 
     // incr_top(l) expands to: { luaD_checkstack(l, 1); l->top++; }
     // We manually perform the incr_top logic here to match the C++ source.
