@@ -7,7 +7,7 @@ use ulua_ast::{
     ast_expr_constant_string::AstExprConstantString, ast_expr_global::AstExprGlobal,
     ast_visitor::AstVisitor, node_handle::OptNode,
   },
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_config::enums::code::Code;
 

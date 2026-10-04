@@ -8,9 +8,9 @@ use ulua_ast::{
     ast_expr_local::AstExprLocal, ast_local::AstLocal, ast_name::AstName,
     ast_stat_assign::AstStatAssign, ast_stat_local::AstStatLocal,
     ast_stat_local_function::AstStatLocalFunction, ast_type::AstType, ast_type_pack::AstTypePack,
-    ast_type_reference::AstTypeReference, ast_visitor::AstVisitor,
+    ast_type_reference::AstTypeReference, ast_visitor::AstVisitor, node_handle::OptNode,
   },
-  visit::{ast_expr_visit, ast_stat_visit},
+  visit::{ast_expr_visit_ref, ast_stat_visit_ref},
 };
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_table::DenseDefault};
 use ulua_config::enums::code::Code;
@@ -18,7 +18,7 @@ use ulua_config::enums::code::Code;
 use crate::{
   functions::emit_warning::emit_warning,
   records::{
-    arena_handle::{alias_opt, alias_ref},
+    arena_handle::{alias_opt, alias_opt_mut, alias_ref},
     lint_context::LintContext,
     lint_context_handle::LintContextHandle,
     local_linter::Local,
@@ -122,9 +122,12 @@ impl<'ctx> LintLocalHygiene<'ctx> {
       };
       pass.globals.try_insert(*global_name, g);
     }
-    // SAFETY: root 为 null 或贯穿整趟 lint pass 存活的 arena AstStat；遍历为
-    // 单线程串行，宿主 LintContext 的写句柄由本 pass 独占。
-    unsafe { ast_stat_visit(root, &mut pass) };
+    // root 为 null 或贯穿整趟 lint pass 存活的 arena AstStat；`alias_opt_mut`
+    // 句柄边界折叠 null（与旧指针门面同语义）后交引用门面递归，遍历为单线程
+    // 串行，宿主 LintContext 的写句柄由本 pass 独占。
+    if let Some(root) = alias_opt_mut(root) {
+      ast_stat_visit_ref(root, &mut pass);
+    }
     pass.report();
   }
 }
@@ -259,14 +262,16 @@ impl<'ctx> LintLocalHygiene<'ctx> {
         continue;
       };
       if !matches!(var_ref.as_expr_ref(), AstExprRef::Local(_)) {
-        unsafe {
-          ast_expr_visit(var, self);
+        // 非 Local 赋值变量裸槽经 `OptNode` 句柄边界出借独占借用喂引用门面。
+        if let Some(var) = OptNode::from_ptr(var).get_mut() {
+          ast_expr_visit_ref(var, self);
         }
       }
     }
     for &val in node_ref.values.as_slice() {
-      unsafe {
-        ast_expr_visit(val, self);
+      // values 裸槽同上经句柄边界物化独占借用，null 折叠同旧门面。
+      if let Some(val) = OptNode::from_ptr(val).get_mut() {
+        ast_expr_visit_ref(val, self);
       }
     }
     false

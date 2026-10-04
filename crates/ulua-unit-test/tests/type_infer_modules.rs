@@ -2067,6 +2067,7 @@ fn type_infer_modules_warn_if_you_try_to_require_a_non_modulescript() {
     .base
     .file_resolver
     .source_types
+    .borrow_mut()
     .insert(ModuleName::from("Modules/A"), SourceCodeType::Script);
   fixture.base.file_resolver.source.insert(
     "Modules/B",

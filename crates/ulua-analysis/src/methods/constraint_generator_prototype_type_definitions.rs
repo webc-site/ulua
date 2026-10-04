@@ -10,7 +10,7 @@ use ulua_ast::{
     ast_stat_type_function::AstStatTypeFunction, location::Location,
   },
   rtti::ast_node_try_as,
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_common::{fflag, records::dense_hash_map::DenseHashMap};
 
@@ -725,10 +725,11 @@ impl ConstraintGenerator {
         created_type_functions.push(mtf as *mut TypeFunctionInstanceType);
 
         let mut global_name_collector = GlobalNameCollector::new();
-        // SAFETY: stat 为解析器 arena 持有的活语句，且本循环内 node_ref/function_ref
-        // 均为只读借用、未与 visit 的可变访问并存；collector 仅收集全局名集合。
-        // 对照 C++:1225 `stat->visit(&globalNameCollector)`。
-        unsafe { ast_stat_visit(stat_node.as_ptr(), &mut global_name_collector) };
+        // 对照 C++:1225 `stat->visit(&globalNameCollector)`：Copy 句柄落地为本地
+        // 可变放置，`get_mut()` 出借独占借用喂 `_ref` 门面，解引用收口同旧门面；
+        // collector 仅收集全局名集合。
+        let mut stat_handle = *stat_node;
+        ast_stat_visit_ref(stat_handle.get_mut(), &mut global_name_collector);
 
         // Go up the scopes to register type functions and aliases, but without reaching
         // into the global scope.

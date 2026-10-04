@@ -3,7 +3,7 @@ use core::ptr::from_mut;
 use ulua_ast::{
   enums::ast_stat_ref::AstStatRef,
   records::{ast_stat_block::AstStatBlock, ast_visitor::AstVisitor},
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_config::enums::code::Code;
 

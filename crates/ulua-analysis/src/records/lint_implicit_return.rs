@@ -10,7 +10,7 @@ use ulua_ast::{
     ast_stat_return::AstStatReturn, ast_visitor::AstVisitor, location::Location,
     position::Position,
   },
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_config::enums::code::Code;
 
@@ -32,8 +32,8 @@ impl<'ctx> LintImplicitReturn<'ctx> {
     lint_implicit_return_get_end_location(self, node)
   }
 
-  pub fn get_value_return(&mut self, node: *mut ()) -> *mut AstStatReturn {
-    lint_implicit_return_get_value_return(self, node)
+  pub fn get_value_return(&mut self, block: &mut AstStat) -> *mut AstStatReturn {
+    lint_implicit_return_get_value_return(self, block)
   }
 }
 
@@ -67,7 +67,7 @@ pub fn lint_implicit_return_get_end_location(
 // —— 原 methods/lint_implicit_return_get_value_return.rs ——
 pub fn lint_implicit_return_get_value_return(
   _this: &mut LintImplicitReturn,
-  node: *mut (),
+  block: &mut AstStat,
 ) -> *mut AstStatReturn {
   struct Visitor {
     result: *mut AstStatReturn,
@@ -87,14 +87,10 @@ pub fn lint_implicit_return_get_value_return(
   // 既有约定（review.md §2）：result 空 = 未命中值返回，指针身份面即下方 `is_null` 判读点，
   // 与 records/visitor.rs `result` 同族保留。
   let mut visitor = Visitor { result: null_mut() };
-  // Safety: node 来自 lint_implicit_return_visit 的 `node.body as *mut ()`，
-  // 解析器保证 AstExprFunction.body 为非空 AstStatBlock arena 节点；AstStatBlock
-  // 首字段即 AstStat 基座（repr(C) 基址重合），`as *mut AstStat` 是合法基类视图，
-  // 满足 ast_stat_visit 的 "null 或存活前缀节点" 契约；visitor 为栈上局部值的
-  // 独占可变借用，遍历在语句结束前完成。
-  unsafe {
-    ast_stat_visit(node.cast::<AstStat>(), &mut visitor);
-  }
+  // block 由调用方的 `Node::get_mut()` 物化：解析器保证 AstExprFunction.body 为非空
+  // AstStatBlock，`cast::<AstStat>` 依 repr(C) 基址重合上转，`&mut` 借用即存活且独占
+  // 证明，`_ref` 门面全链路 safe；visitor 为栈上局部值，遍历在语句结束前完成。
+  ast_stat_visit_ref(block, &mut visitor);
   visitor.result
 }
 
@@ -106,11 +102,11 @@ impl<'ctx> LintImplicitReturn<'ctx> {
 // —— 原 methods/lint_implicit_return_visit.rs ——
 impl<'ctx> LintImplicitReturn<'ctx> {
   /// cpp `visit(AstExprFunction*)`：`node` 为分析期存活、由 arena 持有的函数节点
-  /// 共享借用（cpp 裸指针形参的 Rust 对应）；其 `body` 字段仍是裸指针，交由
-  /// `get_fallthrough`/`get_value_return` 按各自契约处理。
-  pub fn visit(&mut self, node: &AstExprFunction) -> bool {
+  /// 独占借用（cpp 裸指针形参的 Rust 收窄形态）；其 `body` 句柄经 `cast`+`get_mut`
+  /// 出借基类视图：`get_fallthrough` 仍按指针身份消费，`get_value_return` 收引用。
+  pub fn visit(&mut self, node: &mut AstExprFunction) -> bool {
     let bodyf = get_fallthrough(node.body.cast::<AstStat>().as_ptr());
-    let vret = self.get_value_return(node.body.as_ptr().cast::<()>());
+    let vret = self.get_value_return(node.body.cast::<AstStat>().get_mut());
     if !bodyf.is_null() && !vret.is_null() {
       let location = self.get_end_location(bodyf as *const ());
       let return_line = alias_ref(vret).base.base.location.begin.line + 1;

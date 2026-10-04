@@ -3855,6 +3855,7 @@ fn linter_use_all_parent_scopes_for_globals() {
     .base
     .file_resolver
     .environments
+    .borrow_mut()
     .insert(ModuleName::from("A"), String::from("Test"));
   fixture.base.file_resolver.source.insert(
     "A",

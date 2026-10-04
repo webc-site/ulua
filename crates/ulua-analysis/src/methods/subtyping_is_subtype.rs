@@ -1,14 +1,12 @@
 use alloc::vec::Vec;
-use core::ptr::null_mut;
 
-use ulua_common::{macros::luau_assert::LUAU_ASSERT, records::dense_hash_map::DenseHashMap};
+use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   enums::subtyping_suppression_policy::SubtypingSuppressionPolicy,
   functions::{follow_type, get_type},
   records::{
-    generic_bounds::GenericBounds, generic_type::GenericType,
-    mapped_generic_environment::MappedGenericEnvironment, scope::Scope, subtyping::Subtyping,
+    generic_bounds::GenericBounds, generic_type::GenericType, scope::Scope, subtyping::Subtyping,
     subtyping_environment::SubtypingEnvironment, subtyping_result::SubtypingResult,
   },
   type_aliases::{type_id::TypeId, type_pack_id::TypePackId},
@@ -21,17 +19,7 @@ impl Subtyping {
     super_ty: TypeId,
     scope: &Scope,
   ) -> SubtypingResult {
-    let mut env = SubtypingEnvironment {
-      parent: null_mut(),
-      mapped_generics: DenseHashMap::default(),
-      mapped_generic_packs: MappedGenericEnvironment {
-        frames: Vec::new(),
-        current_scope_index: None,
-      },
-      substitutions: DenseHashMap::default(),
-      seen_set_cache: DenseHashMap::default(),
-      iteration_count: 0,
-    };
+    let mut env = SubtypingEnvironment::new();
 
     let result = self.is_covariant_with_subtyping_environment_type_id_type_id_not_null_scope(
       &mut env, sub_ty, super_ty, scope,
@@ -47,7 +35,7 @@ impl Subtyping {
 
     // cpp: 协变求解结束后所有 mapped generic 的 bounds 必须已弹空，否则说明
     // 有泛型环境泄漏到了外层，缓存结果就不再成立。
-    for (_, bounds) in env.mapped_generics.iter() {
+    for (_, bounds) in env.current().mapped_generics.iter() {
       LUAU_ASSERT!(bounds.is_empty());
     }
 
@@ -117,24 +105,19 @@ impl Subtyping {
     bindable_generics: &[TypeId],
     bindable_generic_packs: &[TypePackId],
   ) -> SubtypingResult {
-    let mut env = SubtypingEnvironment {
-      parent: null_mut(),
-      mapped_generics: DenseHashMap::default(),
-      mapped_generic_packs: MappedGenericEnvironment {
-        frames: Vec::new(),
-        current_scope_index: None,
-      },
-      substitutions: DenseHashMap::default(),
-      seen_set_cache: DenseHashMap::default(),
-      iteration_count: 0,
-    };
+    let mut env = SubtypingEnvironment::new();
 
     for &g in bindable_generics.iter() {
-      *env.mapped_generics.get_or_insert(follow_type::follow(g)) =
-        alloc::vec![GenericBounds::default()];
+      *env
+        .current_mut()
+        .mapped_generics
+        .get_or_insert(follow_type::follow(g)) = alloc::vec![GenericBounds::default()];
     }
 
-    env.mapped_generic_packs.push_frame(bindable_generic_packs);
+    env
+      .current_mut()
+      .mapped_generic_packs
+      .push_frame(bindable_generic_packs);
 
     let mut result = self
       .is_covariant_with_subtyping_environment_type_pack_id_type_pack_id_not_null_scope(
@@ -144,11 +127,11 @@ impl Subtyping {
     for &bg in bindable_generics.iter() {
       let bg = follow_type::follow(bg);
 
-      LUAU_ASSERT!(env.mapped_generics.contains(&bg));
+      LUAU_ASSERT!(env.current().mapped_generics.contains(&bg));
 
       // Clone the bounds out so the immutable borrow of `env` is released
       // before the `&mut env` call to `checkGenericBounds`.
-      let last_bounds = match env.mapped_generics.find(&bg) {
+      let last_bounds = match env.current().mapped_generics.find(&bg) {
         Some(bounds) => {
           // Bounds should have exactly one entry
           LUAU_ASSERT!(bounds.len() == 1);

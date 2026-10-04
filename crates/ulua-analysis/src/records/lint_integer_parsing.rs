@@ -1,7 +1,7 @@
 use ulua_ast::{
   enums::constant_number_parse_result::ConstantNumberParseResult,
   records::{ast_expr_constant_number::AstExprConstantNumber, ast_visitor::AstVisitor},
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_config::enums::code::Code;
 

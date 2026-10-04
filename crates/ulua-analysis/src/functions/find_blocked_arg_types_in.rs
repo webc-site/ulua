@@ -4,13 +4,16 @@ use ulua_ast::{
     ast_visitor::AstVisitor,
   },
   rtti::ast_node_is,
-  visit::ast_expr_visit,
+  visit::ast_expr_visit_ref,
 };
 use ulua_common::records::dense_hash_map::DenseHashMap;
 
 use crate::{
   functions::is_literal::is_literal,
-  records::blocked_type_in_literal_visitor::BlockedTypeInLiteralVisitor,
+  records::{
+    arena_handle::{alias, alias_ref},
+    blocked_type_in_literal_visitor::BlockedTypeInLiteralVisitor,
+  },
   type_aliases::type_id::TypeId,
 };
 impl AstVisitor for BlockedTypeInLiteralVisitor<'_> {
@@ -23,11 +26,12 @@ impl AstVisitor for BlockedTypeInLiteralVisitor<'_> {
   }
 }
 
-/// 形参全为受检引用（`expr` 为约束构造期携带的 AST 调用点、`ast_types` 为模块级
-/// 映射的独占借用），契约由类型承载；函数体内 `unsafe` 仅为 args 元素的
-/// parse-arena 裸指针判型，见对应 `// SAFETY` 注释。
+/// 形参全为受检引用（`expr` 为约束构造期携带的 AST 调用点的独占借用、
+/// `ast_types` 为模块级映射），契约由类型承载；函数体内 args 元素的
+/// parse-arena 裸指针判型与出借统一经 `alias_ref`/`alias` 句柄门面收口，
+/// 不再有 `unsafe` 块。
 pub fn find_blocked_arg_types_in(
-  expr: &AstExprCall,
+  expr: &mut AstExprCall,
   ast_types: &mut DenseHashMap<*const AstExpr, TypeId>,
 ) -> Vec<TypeId> {
   let mut to_block: Vec<TypeId> = Vec::new();
@@ -35,15 +39,14 @@ pub fn find_blocked_arg_types_in(
     ast_types,
     to_block: &mut to_block,
   };
-  // Safety: expr 是约束（FunctionCheckConstraint.callSite）构造期携带的 AstExprCall
-  // 引用（cpp ConstraintSolver.cpp:1915 同款直解引用），指向 parser arena 存活节点，
-  // args 元素同为 arena 存活 AstExpr 指针（地址不移动）；is_literal/ast_node_is 仅做
-  // class index 只读判别；遍历期间访客是 to_block 的唯一写者，单线程无别名冲突。
-  unsafe {
-    for &arg in expr.args.iter() {
-      if is_literal(arg) || ast_node_is::<AstExprGroup>(&(*arg).base) {
-        ast_expr_visit(arg, &mut v);
-      }
+  // cpp: tryDispatch(FunctionCheckConstraint) 直接解引用 `c.callSite`
+  // （ConstraintSolver.cpp:1915）——args 元素为构造期保证非空存活的
+  // AstExpr 槽位；is_literal/ast_node_is 仅做 class index 只读判别，
+  // alias 出借的 `&mut` 喂引用门面全链路 safe；遍历期间访客是 to_block
+  // 的唯一写者，单线程无别名冲突。
+  for &arg in expr.args.iter() {
+    if is_literal(arg) || ast_node_is::<AstExprGroup>(&alias_ref(arg).base) {
+      ast_expr_visit_ref(alias(arg), &mut v);
     }
   }
   to_block

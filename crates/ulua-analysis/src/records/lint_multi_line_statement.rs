@@ -3,7 +3,7 @@ use ulua_ast::{
     ast_expr::AstExpr, ast_expr_table::AstExprTable, ast_stat_block::AstStatBlock,
     ast_stat_repeat::AstStatRepeat, ast_visitor::AstVisitor,
   },
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_config::enums::code::Code;
 
@@ -11,8 +11,7 @@ use crate::{
   functions::emit_warning::emit_warning,
   macros::lint_stat_process,
   records::{
-    arena_handle::alias_ref, lint_context::LintContext, lint_context_handle::LintContextHandle,
-    statement::Statement,
+    lint_context::LintContext, lint_context_handle::LintContextHandle, statement::Statement,
   },
 };
 
@@ -78,14 +77,16 @@ impl<'ctx> LintMultiLineStatement<'ctx> {
 // 已并入上方 AstVisitor::visit_expr 覆写） ——
 impl<'ctx> LintMultiLineStatement<'ctx> {
   pub(crate) fn visit_ast_stat_repeat(&mut self, node: &mut AstStatRepeat) -> bool {
-    // body 已句柄化为 Node（parser 非空由类型层承载），as_ptr 桥交仍以指针
-    // 形态消费的 visit_ast_stat_block。
-    self.visit_ast_stat_block(node.body.as_ptr());
+    // body 已句柄化为 Node（parser 非空由类型层承载）：`get_mut()` 物化独占借用，
+    // visit_ast_stat_block 随之收窄为引用形参，`as_ptr` 裸指针桥退役。
+    self.visit_ast_stat_block(node.body.get_mut());
     false
   }
-  pub(crate) fn visit_ast_stat_block(&mut self, node: *mut AstStatBlock) -> bool {
-    let node_ref = alias_ref(node);
-    for stmt in node_ref.body.iter_nodes() {
+  pub(crate) fn visit_ast_stat_block(&mut self, node: &mut AstStatBlock) -> bool {
+    // body 槽位经 `iter_nodes_mut` 沿 `&mut self` 传递独占，逐槽 `get_mut()` 交出
+    // `&mut AstStat` 喂 `ast_stat_visit_ref` 引用门面（同 cpp `stmt->visit(this)`），
+    // 全链路无裸指针，本函数不再需要 `unsafe`。
+    for stmt in node.body.iter_nodes_mut() {
       let stmt_ref = stmt.get();
       let s = Statement {
         start: stmt_ref.base.location,
@@ -93,9 +94,7 @@ impl<'ctx> LintMultiLineStatement<'ctx> {
         flagged: false,
       };
       self.stack.push(s);
-      unsafe {
-        ast_stat_visit(stmt.as_ptr(), self);
-      }
+      ast_stat_visit_ref(stmt.get_mut(), self);
       self.stack.pop();
     }
     false

@@ -13,5 +13,9 @@ pub struct ApplyMappedGenerics {
   pub(crate) builtin_types: Handle<BuiltinTypes>,
   pub(crate) arena: Handle<TypeArena>,
   pub(crate) ice_reporter: Handle<InternalErrorReporter>,
-  pub(crate) env: *mut SubtypingEnvironment,
+  /// 宿主环境句柄：对应 cpp `NotNull<SubtypingEnvironment>` 构造参数。
+  /// 借用契约：遍历期内宿主调用方不得再使用其 `&mut SubtypingEnvironment`
+  /// 借用（原裸指针形态的隐含前提，现由 [`Handle`] 模块级契约显式承载，
+  /// `get`/`get_mut` 解引用收口在 arena_handle 单点）。
+  pub(crate) env: Handle<SubtypingEnvironment>,
 }

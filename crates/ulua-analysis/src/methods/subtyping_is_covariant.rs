@@ -116,9 +116,9 @@ impl Subtyping {
       return SubtypingResult::too_complex();
     }
 
-    env.iteration_count += 1;
+    env.current_mut().iteration_count += 1;
     let iteration_limit = fint::LuauSubtypingIterationLimit.get();
-    if iteration_limit > 0 && env.iteration_count >= iteration_limit {
+    if iteration_limit > 0 && env.current().iteration_count >= iteration_limit {
       return SubtypingResult::too_complex();
     }
 
@@ -167,7 +167,7 @@ impl Subtyping {
       // cache anything that touches the cycle.
       let res = SubtypingResult::uncacheable_ok();
 
-      *env.seen_set_cache.get_or_insert(type_pair) = res.clone();
+      *env.current_mut().seen_set_cache.get_or_insert(type_pair) = res.clone();
 
       return res;
     }
@@ -341,9 +341,9 @@ impl Subtyping {
     } else if get_type::get::<GenericType>(sub_ty).is_some()
       || get_type::get::<GenericType>(super_ty).is_some()
     {
-      let sub_has_bounds = dense_hash_map_find_no_default(&env.mapped_generics, &sub_ty)
+      let sub_has_bounds = dense_hash_map_find_no_default(&env.current().mapped_generics, &sub_ty)
         .is_some_and(|b| !b.is_empty());
-      let super_has_bounds = dense_hash_map_find_no_default(&env.mapped_generics, &super_ty)
+      let super_has_bounds = dense_hash_map_find_no_default(&env.current().mapped_generics, &super_ty)
         .is_some_and(|b| !b.is_empty());
       if sub_has_bounds || super_has_bounds {
         let ok = self.bind_generic(env, sub_ty, super_ty);
@@ -1822,7 +1822,7 @@ impl Subtyping {
   ) -> SubtypingResult {
     let mut result = SubtypingResult::ok();
 
-    *env.substitutions.get_or_insert(super_ty) = sub_ty;
+    *env.current_mut().substitutions.get_or_insert(super_ty) = sub_ty;
 
     for (name, prop) in &super_table.props {
       if let Some(prop_ref) = lookup_extern_type_prop(sub_extern_type, name) {
@@ -1861,7 +1861,7 @@ impl Subtyping {
       result.is_subtype = false;
     }
 
-    *env.substitutions.get_or_insert(super_ty) = null();
+    *env.current_mut().substitutions.get_or_insert(super_ty) = null();
 
     result
   }
@@ -1930,11 +1930,11 @@ impl Subtyping {
       for &g in sub_function.generics.iter() {
         let g = follow_type::follow(g);
         if get_type::get::<GenericType>(g).is_some() {
-          if let Some(bounds) = env.mapped_generics.find_mut(&g) {
+          if let Some(bounds) = env.current_mut().mapped_generics.find_mut(&g) {
             // g may shadow an existing generic, so push a fresh set of bounds
             bounds.push(GenericBounds::default());
           } else {
-            *env.mapped_generics.get_or_insert(g) = alloc::vec![GenericBounds::default()];
+            *env.current_mut().mapped_generics.get_or_insert(g) = alloc::vec![GenericBounds::default()];
           }
         }
       }
@@ -1950,7 +1950,7 @@ impl Subtyping {
         }
       }
 
-      env.mapped_generic_packs.push_frame(&packs);
+      env.current_mut().mapped_generic_packs.push_frame(&packs);
     }
 
     {
@@ -2042,7 +2042,7 @@ impl Subtyping {
           let generic_name = r#gen.name.clone();
 
           let last_bounds = {
-            let bounds = env.mapped_generics.find(&g).expect(
+            let bounds = env.current().mapped_generics.find(&g).expect(
               "cpp LUAU_ASSERT 判据：generic 帧由 bind_generic 在派发前压入 mapped_generics，find 必命中",
             );
             LUAU_ASSERT!(!bounds.is_empty());
@@ -2057,6 +2057,7 @@ impl Subtyping {
           result.and_also(bounds_result, SubtypingSuppressionPolicy::Any);
 
           env
+            .current_mut()
             .mapped_generics
             .find_mut(&g)
             .expect("上方同键 find 已命中且帧未被改写，find_mut 必命中")
@@ -2066,7 +2067,7 @@ impl Subtyping {
     }
 
     if !sub_function.generic_packs.is_empty() {
-      env.mapped_generic_packs.pop_frame();
+      env.current_mut().mapped_generic_packs.pop_frame();
       // This result isn't cacheable, because we may need it to populate the generic pack mapping environment again later
       result.is_cacheable = false;
     }
