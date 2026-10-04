@@ -39,7 +39,10 @@ pub struct ShortSrc {
 // （与旧 `ssbuf: [c_char; LUA_IDSIZE]` 零初始化观察等值）。
 impl core::default::Default for ShortSrc {
   fn default() -> Self {
-    Self { buf: [0; SHORT_SRC_CAP], len: 0 }
+    Self {
+      buf: [0; SHORT_SRC_CAP],
+      len: 0,
+    }
   }
 }
 

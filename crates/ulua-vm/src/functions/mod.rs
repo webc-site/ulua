@@ -795,8 +795,8 @@ pub mod traversetable;
 pub mod tremove;
 pub mod trimzero;
 // review.md §10：tstring 串体 → `&[u8]` 的原生读取单点（debug/info 面共用）。
-pub(crate) mod tstr_bytes;
 pub mod tsort;
+pub(crate) mod tstr_bytes;
 pub mod tunpack;
 pub mod type_feedback;
 pub mod u_posrelat;

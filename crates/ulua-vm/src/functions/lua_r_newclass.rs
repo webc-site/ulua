@@ -5,9 +5,9 @@ use ulua_common::macros::luau_assert::LUAU_ASSERT;
 use crate::{
   enums::{lua_type::LuaType, value_view::ValueView},
   functions::{
-    c_slice, c_slice_mut, cstr_cow, lua_d_call::lua_d_call,
-    lua_f_new_cclosure::lua_f_new_cclosure, lua_h_getstr::lua_h_getstr, lua_m_newgco::lua_m_newgco,
-    lua_s_newlstr::lua_s_newlstr, lua_v_gettable::lua_v_gettable,
+    c_slice, c_slice_mut, cstr_cow, lua_d_call::lua_d_call, lua_f_new_cclosure::lua_f_new_cclosure,
+    lua_h_getstr::lua_h_getstr, lua_m_newgco::lua_m_newgco, lua_s_newlstr::lua_s_newlstr,
+    lua_v_gettable::lua_v_gettable,
   },
   macros::{
     classvalue::classvalue, getstr::getstr, lua_c_barrier::lua_c_barrier, lua_c_init::luaC_init,

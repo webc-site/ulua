@@ -10,7 +10,9 @@ use ulua_common::{
 
 use crate::{
   functions::{
-    c_slice, lua_g_getline::lua_g_getline, tstr_bytes::{cut_at_nul, tstr_bytes},
+    c_slice,
+    lua_g_getline::lua_g_getline,
+    tstr_bytes::{cut_at_nul, tstr_bytes},
   },
   records::proto::Proto,
   type_aliases::lua_coverage::LuaCoverage,

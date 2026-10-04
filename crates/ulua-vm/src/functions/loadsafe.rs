@@ -28,11 +28,11 @@ use crate::{
     lua_r_newclass::lua_r_newclass,
     lua_s_newlstr::lua_s_newlstr,
     read::read,
-    tstr_bytes::cut_at_nul,
     read_string::{ReadStringError, read_string},
     read_var_int::read_var_int,
     remap_userdata_types::remap_userdata_types,
     resolve_import_safe::resolve_import_safe,
+    tstr_bytes::cut_at_nul,
   },
   macros::{
     getstr::getstr, incr_top::incr_top, isblack::isblack, lua_c_barriert::luaC_barriert,

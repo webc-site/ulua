@@ -20,7 +20,9 @@ use crate::{
     iswhite::iswhite, lua_c_check_gc::lua_c_check_gc, setclvalue::setclvalue, setobj_2_n::setobj2n,
   },
   records::{gc_object::GCObject, lua_state::LuaState},
-  type_aliases::{lua_c_function::LuaCFunction, lua_continuation::LuaContinuation, t_value::TValue},
+  type_aliases::{
+    lua_c_function::LuaCFunction, lua_continuation::LuaContinuation, t_value::TValue,
+  },
 };
 
 /// 压入 C 闭包并登记 `nup` 个待捕获上值（cpp `lua_pushcclosurek` 唯一实现面）。

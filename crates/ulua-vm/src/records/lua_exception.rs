@@ -1,11 +1,11 @@
 use alloc::borrow::Cow;
 
+use memchr::memchr;
+
 use crate::{
   enums::lua_status::LuaStatus, functions::lua_tolstring::lua_tolstring_ref,
   records::lua_state::LuaState,
 };
-
-use memchr::memchr;
 
 // review.md §10 收形：what 消息模板为无终止 NUL 的原生字节窗。旧 `*const c_char`
 // 消费面（`cstr_cow`/`cstr_bytes`）按首 NUL 截读，与这里的全窗等值（模板无内部

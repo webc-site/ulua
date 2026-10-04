@@ -4,9 +4,12 @@ use alloc::string::String;
 
 use crate::{
   functions::{
-    currentline::currentline, getluaproto::get_lua_proto,
-    lua_o_chunkid::{chunkid_slice, lua_o_chunkid_ref}, lua_o_pushfstring::lua_o_pushfstring,
-    lua_pushlstring::lua_pushlstring_bytes, lua_rawcheckstack::lua_rawcheckstack,
+    currentline::currentline,
+    getluaproto::get_lua_proto,
+    lua_o_chunkid::{chunkid_slice, lua_o_chunkid_ref},
+    lua_o_pushfstring::lua_o_pushfstring,
+    lua_pushlstring::lua_pushlstring_bytes,
+    lua_rawcheckstack::lua_rawcheckstack,
     tstr_bytes::{cut_at_nul, tstr_bytes},
   },
   macros::{is_lua::isLua, lua_idsize::LUA_IDSIZE},

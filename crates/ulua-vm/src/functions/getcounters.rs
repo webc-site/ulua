@@ -6,7 +6,9 @@ use core::{
 
 use crate::{
   functions::{
-    c_slice, lua_g_getline::lua_g_getline, tstr_bytes::{cut_at_nul, tstr_bytes},
+    c_slice,
+    lua_g_getline::lua_g_getline,
+    tstr_bytes::{cut_at_nul, tstr_bytes},
   },
   records::{lua_state::LuaState, proto::Proto},
   type_aliases::{lua_counter_function::LuaCounterFunction, lua_counter_value::LuaCounterValue},

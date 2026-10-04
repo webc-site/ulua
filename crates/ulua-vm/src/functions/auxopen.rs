@@ -1,6 +1,5 @@
 use crate::{
-  functions::tstr_bytes::cut_at_nul,
-  records::lua_state::LuaState,
+  functions::tstr_bytes::cut_at_nul, records::lua_state::LuaState,
   type_aliases::lua_c_function::LuaCFunction,
 };
 
