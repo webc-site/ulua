@@ -13,7 +13,7 @@ use ulua_ast::{
     ast_visitor::AstVisitor,
     location::Location,
   },
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_config::enums::code::Code;
 
@@ -24,7 +24,7 @@ use crate::{
     size_type_pack::size,
   },
   records::{
-    arena_handle::{alias_opt, alias_ref},
+    arena_handle::{alias_opt, alias_opt_mut, alias_ref},
     function_type::FunctionType,
     intersection_type::IntersectionType,
     lint_context::LintContext,
@@ -303,10 +303,11 @@ impl<'ctx> LintTableOperations<'ctx> {
     let mut pass = LintTableOperations {
       context: LintContextHandle::from_ref(context),
     };
-    // SAFETY: root 为 null 或贯穿整趟 lint pass 存活的 arena AstStat；遍历为
-    // 单线程串行，宿主 LintContext 的写句柄由本 pass 独占。
-    unsafe {
-      ast_stat_visit(root, &mut pass);
+    // root 为 null 或贯穿整趟 lint pass 存活的 arena AstStat；`alias_opt_mut`
+    // 句柄边界折叠 null（与旧指针门面同语义）后交引用门面递归，遍历为单线程
+    // 串行，宿主 LintContext 的写句柄由本 pass 独占。
+    if let Some(root) = alias_opt_mut(root) {
+      ast_stat_visit_ref(root, &mut pass);
     }
   }
 }

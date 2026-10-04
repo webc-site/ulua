@@ -4,14 +4,16 @@ use ulua_ast::{
     ast_expr::AstExpr, ast_expr_global::AstExprGlobal, ast_name::AstName,
     ast_stat_function::AstStatFunction, ast_visitor::AstVisitor, location::Location,
   },
-  visit::{ast_expr_visit, ast_stat_visit},
+  visit::{ast_expr_visit_ref, ast_stat_visit_ref},
 };
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_table::DenseDefault};
 use ulua_config::enums::code::Code;
 
 use crate::{
   functions::emit_warning::emit_warning,
-  records::{lint_context::LintContext, lint_context_handle::LintContextHandle},
+  records::{
+    arena_handle::alias_opt_mut, lint_context::LintContext, lint_context_handle::LintContextHandle,
+  },
 };
 #[derive(Debug, Clone, Default)]
 pub struct Global {
@@ -39,9 +41,12 @@ impl<'ctx> LintUnusedFunction<'ctx> {
       context: LintContextHandle::from_ref(context),
       globals: DenseHashMap::default(),
     };
-    // SAFETY: root 为 null 或贯穿整趟 lint pass 存活的 arena AstStat；遍历为
-    // 单线程串行，宿主 LintContext 的写句柄由本 pass 独占。
-    unsafe { ast_stat_visit(root, &mut pass) };
+    // root 为 null 或贯穿整趟 lint pass 存活的 arena AstStat；`alias_opt_mut`
+    // 句柄边界折叠 null（与旧指针门面同语义）后交引用门面递归，遍历为单线程
+    // 串行，宿主 LintContext 的写句柄由本 pass 独占。
+    if let Some(root) = alias_opt_mut(root) {
+      ast_stat_visit_ref(root, &mut pass);
+    }
     pass.report();
   }
 
@@ -71,9 +76,9 @@ impl<'ctx> LintUnusedFunction<'ctx> {
       let g = self.globals.get_or_insert(expr.name);
       g.function = true;
       g.location = expr.base.base.location;
-      unsafe {
-        ast_expr_visit(node.func.cast::<AstExpr>().as_ptr(), self);
-      }
+      // `func` 已句柄化为 Node（非空由句柄契约承载），基类视图 `cast::<AstExpr>`
+      // 后 `get_mut()` 出借独占借用喂引用门面，全链路 safe。
+      ast_expr_visit_ref(node.func.cast::<AstExpr>().get_mut(), self);
       return false;
     }
     true

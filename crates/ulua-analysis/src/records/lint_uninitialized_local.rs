@@ -5,9 +5,9 @@ use ulua_ast::{
   records::{
     ast_expr::AstExpr, ast_expr_local::AstExprLocal, ast_local::AstLocal,
     ast_stat_assign::AstStatAssign, ast_stat_function::AstStatFunction,
-    ast_stat_local::AstStatLocal, ast_visitor::AstVisitor,
+    ast_stat_local::AstStatLocal, ast_visitor::AstVisitor, node_handle::OptNode,
   },
-  visit::{ast_expr_visit, ast_stat_visit},
+  visit::{ast_expr_visit_ref, ast_stat_visit_ref},
 };
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_table::DenseDefault};
 use ulua_config::enums::code::Code;
@@ -15,7 +15,7 @@ use ulua_config::enums::code::Code;
 use crate::{
   functions::emit_warning::emit_warning,
   records::{
-    arena_handle::{alias_opt, alias_ref},
+    arena_handle::{alias, alias_opt, alias_opt_mut, alias_ref},
     lint_context::LintContext,
     lint_context_handle::LintContextHandle,
   },
@@ -90,10 +90,11 @@ impl<'ctx> LintUninitializedLocal<'ctx> {
       context: LintContextHandle::from_ref(context),
       locals: DenseHashMap::default(),
     };
-    // SAFETY: root 为 null 或贯穿整趟 lint pass 存活的 arena AstStat；遍历为
-    // 单线程串行，宿主 LintContext 的写句柄由本 pass 独占。
-    unsafe {
-      ast_stat_visit(root, &mut pass);
+    // root 为 null 或贯穿整趟 lint pass 存活的 arena AstStat；`alias_opt_mut`
+    // 句柄边界折叠 null（与旧指针门面同语义）后交引用门面递归，遍历为单线程
+    // 串行，宿主 LintContext 的写句柄由本 pass 独占。
+    if let Some(root) = alias_opt_mut(root) {
+      ast_stat_visit_ref(root, &mut pass);
     }
     lint_uninitialized_local_report(&mut pass);
   }
@@ -120,16 +121,19 @@ pub fn lint_uninitialized_local_report(pass: &mut LintUninitializedLocal<'_>) {
 }
 
 // —— 原 methods/lint_uninitialized_local_visit_assign.rs：C++ `LintUninitializedLocal::visitAssign` (`Analysis/src/Linter.cpp:2184`). ——
-pub fn lint_uninitialized_local_visit_assign(pass: &mut LintUninitializedLocal, node: &AstExpr) {
+/// `node` 的 `&mut` 借用即「节点非空、存活且本帧可独占」的类型系统证明（原
+/// `&AstExpr`+const→mut 回灌指针门面的形态退役）：非 Local 目标经引用门面
+/// 递归遍历子树，写穿语义与 cpp `expr->visit(this)` 一致。
+pub fn lint_uninitialized_local_visit_assign(
+  pass: &mut LintUninitializedLocal,
+  node: &mut AstExpr,
+) {
   if let AstExprRef::Local(lv) = node.as_expr_ref() {
     // local 槽已句柄化恒非空；locals 键值为既有裸指针形态，经 as_ptr 桥接。
     let l = pass.locals.get_or_insert(lv.local.as_ptr());
     l.assigned = true;
   } else {
-    // Safety: node 由调用方自 C++ 遍历传入的 `*mut AstExpr` 借出，指回 arena
-    // 中存活的表达式；此处仅把同一地址转回裸指针交给表达式分发器递归只读遍历，
-    // 传入的 `pass` 是 linter 状态、与 AST arena 不相交，无别名冲突。
-    unsafe { ast_expr_visit((node as *const AstExpr).cast_mut(), pass) };
+    ast_expr_visit_ref(node, pass);
   }
 }
 
@@ -156,31 +160,28 @@ impl<'ctx> LintUninitializedLocal<'ctx> {
     true
   }
   pub(crate) fn visit_ast_stat_assign(&mut self, node: *mut AstStatAssign) -> bool {
-    // Safety: node 由 `AstVisitor::visit_stat_assign` 的 `from_mut(&mut ..)`
-    // 传入——非空、对齐且指向 parser arena 存活的本类型节点；块内仅只读
-    // vars/values 的 `*mut AstExpr` 元素指针并交给 visit/分发器，它们写入的
-    // `self` 是 linter 状态、与 AST arena 不相交，无别名冲突。
-    unsafe {
-      let node_ref = &*node;
-      for &var in node_ref.vars.as_slice() {
-        lint_uninitialized_local_visit_assign(self, &*var);
+    // node 由 `AstVisitor::visit_stat_assign` 的 `from_mut(&mut ..)` 传入——非空
+    // 且指向 parser arena 存活节点；`alias` 门面物化独占借用，vars/values 裸槽
+    // 经 `OptNode` 句柄边界出借 `&mut AstExpr` 喂引用门面，整链无 unsafe。
+    let node_ref = alias(node);
+    for &var in node_ref.vars.as_slice() {
+      if let Some(var) = OptNode::from_ptr(var).get_mut() {
+        lint_uninitialized_local_visit_assign(self, var);
       }
-      for &value in node_ref.values.as_slice() {
-        ast_expr_visit(value, self);
+    }
+    for &value in node_ref.values.as_slice() {
+      if let Some(value) = OptNode::from_ptr(value).get_mut() {
+        ast_expr_visit_ref(value, self);
       }
     }
     false
   }
   pub(crate) fn visit_ast_stat_function(&mut self, node: *mut AstStatFunction) -> bool {
-    // Safety: 入口同 stat_assign——`from_mut(&mut AstStatFunction)` 保证 node
-    // 非空且指向 arena 存活节点；`name`/`func` 已句柄化为 Node（非空由类型层
-    // 承载），`.get()`/`as_ptr` 桥交只读遍历门面，不与 `&mut self`（linter
-    // 状态）产生别名交集。
-    unsafe {
-      let node_ref = &*node;
-      lint_uninitialized_local_visit_assign(self, node_ref.name.get());
-      ast_expr_visit(node_ref.func.cast::<AstExpr>().as_ptr(), self);
-    }
+    // 入口同上：`alias` 物化本帧独占借用，`name`/`func` 句柄经 `get_mut()`
+    // 逐级出借子节点独占借用喂引用门面，全链路 safe。
+    let node_ref = alias(node);
+    lint_uninitialized_local_visit_assign(self, node_ref.name.get_mut());
+    ast_expr_visit_ref(node_ref.func.cast::<AstExpr>().get_mut(), self);
     false
   }
   pub(crate) fn visit_ast_expr_local(&mut self, node: *mut AstExprLocal) -> bool {
