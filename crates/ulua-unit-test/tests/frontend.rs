@@ -485,7 +485,7 @@ fn frontend_check_without_builtin_next() {
   let file_resolver = TestFileResolver::default();
   // source 表经 `Rc` 共享槽互通：所有权移交后测试仍可直写、frontend 读到的同一份表。
   let source = file_resolver.source.clone();
-  let mut config_resolver = TestConfigResolver::default();
+  let config_resolver = TestConfigResolver::default();
   let mode = if fflag::DebugLuauForceOldSolver.get() {
     SolverMode::Old
   } else {
@@ -1545,7 +1545,7 @@ fn frontend_discard_type_graphs() {
   let file_resolver = TestFileResolver::default();
   // source 表经 `Rc` 共享槽互通：所有权移交后测试仍可直写、frontend 读到的同一份表。
   let source = file_resolver.source.clone();
-  let mut config_resolver = TestConfigResolver::default();
+  let config_resolver = TestConfigResolver::default();
   let mode = if fflag::DebugLuauForceOldSolver.get() {
     SolverMode::Old
   } else {
@@ -2217,7 +2217,7 @@ fn frontend_it_should_be_safe_to_stringify_errors_when_full_type_graph_is_discar
   let file_resolver = TestFileResolver::default();
   // source 表经 `Rc` 共享槽互通：所有权移交后测试仍可直写、frontend 读到的同一份表。
   let source = file_resolver.source.clone();
-  let mut config_resolver = TestConfigResolver::default();
+  let config_resolver = TestConfigResolver::default();
   let mode = if fflag::DebugLuauForceOldSolver.get() {
     SolverMode::Old
   } else {
