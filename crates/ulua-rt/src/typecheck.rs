@@ -297,36 +297,24 @@ fn constant_string_to_string(expr: &AstExprConstantString) -> String {
 
 /// Minimal [`ConfigResolver`] returning a default [`Config`].
 ///
-/// `#[repr(C)]` with `base` first so the `getConfig` thunk can cast the
-/// `*const ConfigResolver` receiver back to `*const CheckConfigResolver`.
-#[repr(C)]
+/// 单字符串检查会话用的常量配置：`get_config` 恒返回 `default_config`，所有权
+/// 经 `Box<dyn ConfigResolver>` 移交 `Frontend` 独占持有。
 struct CheckConfigResolver {
-  base: ConfigResolver,
   default_config: Config,
-}
-
-/// `getConfig` thunk — returns the single default config.
-///
-/// # Safety
-/// `this` must point at the `base` subobject of a live `CheckConfigResolver`.
-unsafe fn check_config_resolver_get_config_thunk(
-  this: *const ConfigResolver,
-  _name: *const ModuleName,
-  _limits: *const TypeCheckLimits,
-) -> *const Config {
-  let this = this.cast::<CheckConfigResolver>();
-  // Safety: per this fn's contract, `this` points at a live `CheckConfigResolver`.
-  unsafe { &(*this).default_config as *const Config }
 }
 
 impl CheckConfigResolver {
   fn new() -> Self {
     CheckConfigResolver {
-      base: ConfigResolver {
-        get_config: Some(check_config_resolver_get_config_thunk),
-      },
       default_config: Config::default(),
     }
+  }
+}
+
+impl ConfigResolver for CheckConfigResolver {
+  /// 恒返回单一默认配置（cpp `getConfig` 忽略两实参、返回成员 `defaultConfig`）。
+  fn get_config(&self, _name: &ModuleName, _limits: &TypeCheckLimits) -> &Config {
+    &self.default_config
   }
 }
 
@@ -450,16 +438,15 @@ fn fold(diagnostics: Vec<TypeDiagnostic>) -> Result<(), Vec<TypeDiagnostic>> {
 /// `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」全序列，
 /// 调用点不再有 unsafe 构造/`wire_self_pointers` 两步手写；返回的 `Box<Frontend>`
 /// 只被按指针移动（pointee 留在堆上），自指针在其整个生命周期内恒有效。
-/// `file_resolver` 所有权移交 `Frontend` 独占；`config` 必须存活至 frontend
-/// 使用结束（构造函数按 cpp 语义把它以裸句柄存入 frontend）。
+/// `file_resolver` / `config` 所有权均移交 `Frontend` 独占。
 fn make_wired_frontend(
   file_resolver: Box<dyn FileResolver>,
-  config: &mut ConfigResolver,
+  config: Box<dyn ConfigResolver>,
 ) -> Box<Frontend> {
   let options = FrontendOptions::default();
   // 原三调用点均在构造后立刻 `set_luau_solver_mode(Old)` 覆写掉 fflag 派生值，
   // 故收口为构造期直接定 Old：可达状态等价。
-  Frontend::new_boxed(SolverMode::Old, file_resolver, Some(config), options)
+  Frontend::new_boxed(SolverMode::Old, file_resolver, config, options)
 }
 
 /// The fallible body, run under `catch_unwind` so a panic in the type checker
@@ -472,14 +459,12 @@ fn make_wired_frontend(
 /// surface; it is registered into the global scope *after* the builtins (so it
 /// may reference them) and *before* the script is checked.
 fn run_check(source: &str, definitions: Option<&str>) -> Vec<TypeDiagnostic> {
-  let mut config_resolver = CheckConfigResolver::new();
-  // make_wired_frontend 经 Frontend::new_boxed 安全构造：解析器所有权移交
-  // frontend 独占（其状态经 `source` 的 Rc 槽共享）；config resolver 是本函数
-  // 局部（frontend 声明在其后、按逆序先析构），存入的裸句柄覆盖 frontend 使用期；
-  // Box 使 Frontend 地址恒定。
+  // make_wired_frontend 经 Frontend::new_boxed 安全构造：两解析器所有权均移交
+  // frontend 独占（file resolver 状态经 `source` 的 Rc 槽共享）；Box 使 Frontend
+  // 地址恒定。
   let mut frontend = make_wired_frontend(
     Box::new(CheckFileResolver::new(source)),
-    &mut config_resolver.base,
+    Box::new(CheckConfigResolver::new()),
   );
 
   // Register builtins + host definitions, then type-check the script.
@@ -691,13 +676,11 @@ fn run_check_modules(
     )];
   }
 
-  let mut config_resolver = CheckConfigResolver::new();
-  // 同 run_check——解析器所有权移交 frontend 独占（内部持克隆的 owned String，
-  // 不借用 `modules`）；config resolver 是本函数局部，frontend 声明在其后、
-  // 按逆序先析构，存入的裸句柄覆盖 frontend 使用期；Box 固定 Frontend 堆地址。
+  // 同 run_check——两解析器所有权均移交 frontend 独占（file resolver 内部持克隆
+  // 的 owned String，不借用 `modules`）；Box 固定 Frontend 堆地址。
   let mut frontend = make_wired_frontend(
     Box::new(CheckModuleFileResolver::new(modules)),
-    &mut config_resolver.base,
+    Box::new(CheckConfigResolver::new()),
   );
 
   if let Err(diagnostics) = register_builtins_and_defs(&mut frontend, definitions) {
@@ -730,13 +713,9 @@ pub struct Checker {
   // 解析器本体后，[`Checker::check`] 经本槽改写 "main" 源码仍对读方可见
   // （等价 cpp 宿主直写 `fileResolver->source`）。
   source_slot: Rc<RefCell<String>>,
-  // Boxed so its address is stable for the checker's whole lifetime:
-  // `Frontend` stores a raw alias of the config resolver and
-  // `wire_self_pointers` makes the frontend self-referential. Moving the
-  // `Checker` moves only the `Box` pointers; the pointees stay put on the heap,
-  // so every stored pointer stays valid. `_config_resolver` is kept alive
-  // solely because the frontend points into it.
-  _config_resolver: Box<CheckConfigResolver>,
+  // `Frontend` 独占持有 config resolver（`Box<dyn ConfigResolver>` 所有权已移交），
+  // 且 `wire_self_pointers` 使 frontend 自引用；`Checker` 移动只搬 `Box` 句柄，
+  // pointee 恒留堆上，自指针在其整个生命周期内恒有效。
   frontend: Box<Frontend>,
 }
 
@@ -746,11 +725,13 @@ impl Checker {
   pub fn new() -> Self {
     let file_resolver = CheckFileResolver::new("");
     let source_slot = file_resolver.source.clone();
-    let mut config_resolver = Box::new(CheckConfigResolver::new());
-    // 入 Box（地址稳定）后经 [`make_wired_frontend`]（→ Frontend::new_boxed）安全构造：
-    // 解析器所有权随 Box 移交 frontend 独占；config resolver 的 Box 只被按指针
-    // 移动，pointee 留在堆上，自指针与裸句柄在 checker 整个生命周期内恒有效。
-    let mut frontend = make_wired_frontend(Box::new(file_resolver), &mut config_resolver.base);
+    // 经 [`make_wired_frontend`]（→ Frontend::new_boxed）安全构造：两解析器所有权
+    // 随 Box 移交 frontend 独占；Box 使 Frontend 堆地址恒定，自指针在 checker
+    // 整个生命周期内恒有效。
+    let mut frontend = make_wired_frontend(
+      Box::new(file_resolver),
+      Box::new(CheckConfigResolver::new()),
+    );
 
     // Register the Luau builtins into the global scope once (the cost we're
     // amortizing). `definitions == None` 时 [`register_builtins_and_defs`]
@@ -760,7 +741,6 @@ impl Checker {
 
     Checker {
       source_slot,
-      _config_resolver: config_resolver,
       frontend,
     }
   }

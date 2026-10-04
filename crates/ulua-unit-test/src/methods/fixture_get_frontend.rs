@@ -33,20 +33,22 @@ impl Fixture {
         // `self.file_resolver` 互通（见 `TestFileResolver` 结构体注），测试侧
         // 后续读写照旧可见，无需第二把可变别名。
         Box::new(self.file_resolver.clone()),
-        // `config_resolver` 仍按 cpp 语义以裸句柄别名共享：`Box` 钉堆保证
-        // 构造期一次布线的地址恒有效。
-        Some(&mut self.config_resolver.base),
+        // 移交配置解析器所有权：`Frontend` 独占 `Box<dyn ConfigResolver>`，夹具侧
+        // 另持一份克隆；两者的 `default_config` / `config_files` 是同一 `Rc` 共享槽，
+        // 故移交后夹具继续改写仍对 frontend 可见（等价 cpp 裸句柄别名的可见性，
+        // 借用窗不重叠的单线程契约见 `TestConfigResolver` 类型注）。
+        self.config_resolver.clone(),
         options,
       ));
-      self.config_resolver.default_config.mode = Mode::Strict;
+      self.config_resolver.default_config_mut().mode = Mode::Strict;
       self
         .config_resolver
-        .default_config
+        .default_config_mut()
         .enabled_lint
         .warning_mask = !0u64;
       self
         .config_resolver
-        .default_config
+        .default_config_mut()
         .parse_options
         .capture_comments = true;
     }

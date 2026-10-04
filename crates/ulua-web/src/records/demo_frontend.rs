@@ -1,7 +1,7 @@
-//! demo `Frontend` 会话：移交解析器所有权给自引用的 `Frontend`（宿主侧只留
-//! `source` 共享槽），保留 config resolver 的长寿 Box，把 C++ `Web.cpp` 里
-//! 「构造 → 落位 → `wireSelfPointers` → 注册内置全局」的裸指针布线契约
-//! 收敛进本类型，令 `check_script` 等入口保持纯安全代码。
+//! demo `Frontend` 会话：移交两解析器所有权给自引用的 `Frontend`（宿主侧只留
+//! `source` 共享槽），把 C++ `Web.cpp` 里「构造 → 落位 → `wireSelfPointers` →
+//! 注册内置全局」的裸指针布线契约收敛进本类型，令 `check_script` 等入口保持
+//! 纯安全代码。
 
 use std::string::{String, ToString};
 
@@ -9,15 +9,13 @@ use itoa::Buffer;
 use ulua_analysis::{
   enums::solver_mode::SolverMode,
   functions::{freeze::freeze, to_string_error::to_string_type_error, unfreeze::unfreeze},
-  records::{
-    config_resolver::ConfigResolver, frontend::Frontend, frontend_options::FrontendOptions,
-  },
+  records::{frontend::Frontend, frontend_options::FrontendOptions},
   type_aliases::module_name_type::ModuleName,
 };
 use ulua_common::fflag;
 
 use crate::records::{
-  demo_config_resolver::demo_config_resolver,
+  demo_config_resolver::DemoConfigResolver,
   demo_file_resolver::{DemoFileResolver, SourceSlot},
 };
 
@@ -27,19 +25,13 @@ use crate::records::{
 /// 均指向自身），契约要求「落位后不得移动」。这里用 `Box` 把 frontend 固定堆上
 /// （Box 句柄可自由移动，堆内容地址恒定），从类型结构上消灭栈上落位假设。
 pub(crate) struct DemoFrontend {
-  /// Drop 按字段声明序：frontend 先析构、resolver 随 frontend 的 Box 字段一并
-  /// 释放（所有权已移交），与原实现「栈局部逆序析构、frontend 先亡」一致。
-  /// `frontend` 与 `_config_resolver` 以 `Box` 固定堆地址：`Frontend` 内存的
-  /// config 裸指针是构造期布线，移动 Box 句柄不悬垂；解析器则已由 `Frontend`
-  /// 独占持有（无别名），宿主侧只剩 [`Self::source`] 共享槽做源码改写。
+  /// Drop 按字段声明序：frontend 先析构、两解析器随 frontend 的 `Box` 字段一并
+  /// 释放（所有权已移交 `Frontend` 独占），与原实现「栈局部逆序析构、frontend
+  /// 先亡」一致。config resolver 无接收者状态（`'static` 单例，见
+  /// [`DemoConfigResolver`]），宿主侧无存活别名，故不再单独留字段。
   frontend: Box<Frontend>,
-  /// 被 `frontend` 以裸指针引用，须与其同生共死；本类型不再直接读它
-  /// （读取全部经 frontend 内部的 `*mut ConfigResolver`），前缀 `_` 声明该意图。
-  /// demo 配置无接收者状态（`'static` 单例，见 `demo_config_resolver`），此 Box
-  /// 只为维持 frontend 槽位指针的存续期契约。
-  _config_resolver: Box<ConfigResolver>,
-  /// 同 [`Self::_config_resolver`] 的「共享状态」位；`source` 表在每次检查前被
-  /// 清空重写。所有权移交 frontend 后仍经此 `Rc` 槽互通（见 `DemoFileResolver` 注）。
+  /// `source` 表在每次检查前被清空重写。所有权移交 frontend 后仍经此 `Rc` 槽
+  /// 互通（见 `DemoFileResolver` 注）。
   source: SourceSlot,
 }
 
@@ -49,13 +41,12 @@ impl DemoFrontend {
   pub(crate) fn new(use_new_solver: bool) -> Self {
     let file_resolver = DemoFileResolver::default();
     let source = file_resolver.source.clone();
-    // cpp `DemoConfigResolver()` 构造即默认配置，故安全构造器直接对应；
-    // 配置是 `'static` 单例，无 `base` 子对象回cast、无调用点 unsafe。
-    let mut config_resolver = Box::new(demo_config_resolver());
+    // cpp `DemoConfigResolver()` 构造即默认配置：配置为 `'static` 单例，
+    // DemoConfigResolver 是无状态单元，所有权移交 frontend 独占。
     let options = FrontendOptions::default();
 
-    // 构造入参为移交所有权的 `Box<dyn FileResolver>`：本类型不再持第二把可变
-    // 别名，后续源码改写一律经 `source` 共享槽。
+    // 构造入参为移交所有权的 `Box<dyn FileResolver>` / `Box<dyn ConfigResolver>`：
+    // 本类型不再持第二把可变别名，后续源码改写一律经 `source` 共享槽。
     // `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」全序列，
     // 调用点免手写 unsafe ctor + `wire_self_pointers`。
     // solver mode 由 `LuauSolverV2` 快标志派生（该模式在构造期决定 `GlobalTypes` 建法）。
@@ -67,15 +58,11 @@ impl DemoFrontend {
     let frontend = Frontend::new_boxed(
       mode,
       Box::new(file_resolver),
-      Some(&mut *config_resolver),
+      Box::new(DemoConfigResolver),
       options,
     );
 
-    let mut this = Self {
-      frontend,
-      _config_resolver: config_resolver,
-      source,
-    };
+    let mut this = Self { frontend, source };
     this.frontend.set_luau_solver_mode(if use_new_solver {
       SolverMode::New
     } else {

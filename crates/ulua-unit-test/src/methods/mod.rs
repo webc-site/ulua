@@ -160,7 +160,6 @@ pub mod subtype_fixture_tbl;
 pub mod subtype_fixture_tbl_with_indexer;
 pub mod table_skipping_visitor_table_skipping_visitor;
 pub mod table_skipping_visitor_visit_visit_type_test;
-pub mod test_config_resolver_get_config;
 pub mod test_file_resolver_get_environment_for_module;
 pub mod test_file_resolver_get_human_readable_module_name;
 pub mod test_file_resolver_read_source;

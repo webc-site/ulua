@@ -1,8 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
-use core::{
-  ptr::{NonNull, null_mut},
-  sync::atomic::AtomicI32,
-};
+use core::{ptr::NonNull, sync::atomic::AtomicI32};
 
 use crate::{
   enums::solver_mode::SolverMode,
@@ -19,13 +16,14 @@ impl Frontend {
   /// Owned constructor for `Frontend::Frontend(SolverMode, FileResolver*,
   /// ConfigResolver*, FrontendOptions)`（`cpp/Analysis/src/Frontend.cpp:461`）。
   ///
-  /// 前置契约：与 [`Frontend::wire_self_pointers`] 同契约：`config_resolver`
-  /// 允许空（同 C++ nullptr 语义），且 `Frontend` 落位后不得移动，直至
-  /// `wire_self_pointers` 完成自引用布线。函数体只由引用经 `NonNull::from`/`NonNull::new`
-  /// 记录裸地址，无 unsafe 操作，故上述契约是文档约定而非语言强制。
-  /// `file_resolver` 为移交所有权的 `Box<dyn FileResolver>`（cpp 的
-  /// `FileResolver*` 借用形态在此收窄为独占所有权，见
-  /// [`Frontend::file_resolver`] 字段注），构造侧仅 move、无地址布线。
+  /// 前置契约：与 [`Frontend::wire_self_pointers`] 同契约：`Frontend` 落位后
+  /// 不得移动，直至 `wire_self_pointers` 完成自引用布线。函数体只由引用经
+  /// `NonNull::from` 记录裸地址，无 unsafe 操作，故上述契约是文档约定而非语言
+  /// 强制。`file_resolver` / `config_resolver` 均为移交所有权的 `Box<dyn …>`
+  /// （cpp 的 `FileResolver*` / `ConfigResolver*` 借用形态在此收窄为独占所有权，
+  /// 见 [`Frontend::file_resolver`] / [`Frontend::config_resolver`] 字段注），
+  /// 构造侧仅 move、无地址布线；cpp nullptr 缺位由宿主传入
+  /// [`crate::records::null_config_resolver::NullConfigResolver`] 活实例表达。
   ///
   /// The C++ member-init list wires several self-referential pointers:
   /// `builtinTypes(NotNull{&builtinTypes_})`, `moduleResolver(this)`,
@@ -42,7 +40,7 @@ impl Frontend {
   pub(crate) fn frontend_solver_mode_file_resolver_config_resolver_frontend_options(
     mode: SolverMode,
     file_resolver: Box<dyn FileResolver>,
-    config_resolver: *mut ConfigResolver,
+    config_resolver: Box<dyn ConfigResolver>,
     options: FrontendOptions,
   ) -> Self {
     // useNewLuauSolver(mode)
@@ -62,11 +60,8 @@ impl Frontend {
     let globals = GlobalTypes::new(&mut builtin_types_, solver_mode);
     let globals_for_autocomplete = GlobalTypes::new(&mut builtin_types_, solver_mode);
 
-    // config_resolver 为 Sized，可安全构造：C++ 契约下允许 nullptr（仅在从不
-    // 查询 getConfig 时安全），空入参以对齐 dangling 占位，占位值绝不可解引用。
-    let config_resolver = NonNull::new(config_resolver).unwrap_or_else(NonNull::dangling);
-    // file_resolver 为移交所有权的 `Box<dyn FileResolver>`：直接 move 进字段，
-    // 无地址布线、无 Drop 守卫与之对偶（Frontend 析构即释放解析器）。
+    // file_resolver / config_resolver 均为移交所有权的 `Box<dyn …>`：直接 move 进
+    // 字段，无地址布线、无 Drop 守卫与之对偶（Frontend 析构即释放解析器）。
 
     Frontend {
       use_new_luau_solver,
@@ -103,18 +98,15 @@ impl Frontend {
   pub fn new_boxed(
     mode: SolverMode,
     file_resolver: Box<dyn FileResolver>,
-    config_resolver: Option<&mut ConfigResolver>,
+    config_resolver: Box<dyn ConfigResolver>,
     options: FrontendOptions,
   ) -> Box<Frontend> {
-    // 入参为受检引用/Option 引用与移交所有权的 Box，本函数无裸指针形参；
-    // C++ nullptr 语义（允许从不查询 getConfig）由 `None` 显式承载。
-    let config_resolver = config_resolver.map_or(null_mut(), |c| NonNull::from(c).as_ptr());
+    // 入参全部为移交所有权的 `Box`，本函数无裸指针形参；cpp nullptr 缺位场景
+    // （从不查询 getConfig）由宿主传入 NullConfigResolver 活实例承载。
     let mut frontend = Box::new(
-      // 说明：透传构造器契约——`file_resolver` 所有权随参数移交，由 `Box`
-      // 字段独占（无长寿契约、无半截句柄布线路径）；`config_resolver` 为
-      // 存活指针或 null（C++ nullptr 语义，上方 `Option` 直译）；`Box::new`
-      // 把返回值按 move 落入堆槽后即钉死地址，栈临时量携带的占位/旧地址自
-      // 指针从未被解引用。
+      // 说明：透传构造器契约——两解析器所有权随参数移交，由 `Box` 字段独占
+      //（无长寿契约、无半截句柄布线路径）；`Box::new` 把返回值按 move 落入堆槽
+      // 后即钉死地址，栈临时量携带的旧地址自指针从未被解引用。
       Frontend::frontend_solver_mode_file_resolver_config_resolver_frontend_options(
         mode,
         file_resolver,

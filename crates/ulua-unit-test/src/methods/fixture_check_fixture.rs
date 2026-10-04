@@ -18,7 +18,7 @@ impl Fixture {
     self.get_frontend();
 
     let module_name = ModuleName::from(MAIN_MODULE_NAME);
-    self.config_resolver.default_config.mode = mode;
+    self.config_resolver.default_config_mut().mode = mode;
     self
       .file_resolver
       .source

@@ -81,11 +81,23 @@ pub struct Frontend {
   pub module_resolver_for_autocomplete: FrontendModuleResolver,
   pub globals: GlobalTypes,
   pub globals_for_autocomplete: GlobalTypes,
-  /// C++ `ConfigResolver* configResolver`：恒非空建模的外部对象句柄
-  /// （null 入参以 dangling 占位、契约为从不查询 getConfig），
-  /// 构造时布线；读取一律经 [`Frontend::config_resolver_ref`] chokepoint。
-  /// （后续批收口目标：对齐 `file_resolver` 的所有权形态。）
-  pub config_resolver: NonNull<ConfigResolver>,
+  /// C++ `ConfigResolver* configResolver`。Rust 侧改为 **独占所有权** 形态
+  /// `Box<dyn ConfigResolver>`（review.md §2 裸句柄收口，与 `file_resolver`
+  /// 同形）：cpp 构造收 `ConfigResolver*` 成员裸指针、要求宿主保证其长寿，
+  /// 缺位（cpp nullptr、从不查询 `getConfig`）场景改由
+  /// [`crate::records::null_config_resolver::NullConfigResolver`] 活实例表达。
+  /// 移交即唯一所有者，读取一律经 [`Frontend::config_resolver_ref`] chokepoint，
+  /// 不存在并存可变别名，解引用零 unsafe。宿主需继续读写同一份配置状态时，与
+  /// 实现方约定共享槽（如 `Rc<UnsafeCell<_>>`）而非第二把可变借用，行为可见性
+  /// 与 cpp 直写字段等价。
+  ///
+  /// 此处 `dyn` 保留（review.md §4「类型集合运行期开放、泛型导致编译期成本
+  /// 不合理」条款）：`ConfigResolver` 由宿主注入实现，横跨本 crate
+  /// （NullConfigResolver）、ulua-unit-test（TestConfigResolver）、ulua-web
+  /// （DemoConfigResolver）、ulua-rt（CheckConfigResolver）、ulua-analyze-cli
+  /// （CliConfigResolver）与游离 workspace benchmarks（BenchConfigResolver），
+  /// 集合运行期开放，无法 enum_dispatch 穷举。
+  pub config_resolver: Box<dyn ConfigResolver>,
   pub options: FrontendOptions,
   pub ice_handler: InternalErrorReporter,
   pub prepare_module_scope: Option<ModuleScopeBoolCallback>,
@@ -115,15 +127,14 @@ impl Frontend {
     self.file_resolver.as_mut()
   }
 
-  /// C++ `configResolver` 成员的唯一解引用 chokepoint。入参为 null 时以
-  /// dangling 占位布线（同 C++ nullptr 语义：仅当从不查询 `getConfig` 才
-  /// 合法），故查询路径经本方法读取即隐含「构造方接了活对象」的调用序契约。
-  pub fn config_resolver_ref<'a>(&self) -> &'a ConfigResolver {
-    // Safety: `config_resolver` 由构造方（`frontend_*` ctor / `new_boxed`）以
-    // 调用方提供的 `&mut` 引用布线为存活对象，比本 `Frontend` 长寿；读取
-    // 借用期内单线程序列化驱动（lib.rs 不变量 1）、无并存可变别名，与原
-    // 各调用点 `unsafe { self.config_resolver.as_ref() }` 语义逐项同构。
-    unsafe { self.config_resolver.as_ref() }
+  /// C++ `configResolver` 成员的唯一读取 chokepoint。所有权归本结构
+  /// （`Box<dyn ConfigResolver>` 独占），借用直出、零 unsafe；`dyn` 保留理由见
+  /// [`Frontend::config_resolver`] 字段注（宿主注入、集合运行期开放，review.md §4）。
+  /// cpp 侧 nullptr（从不查询 `getConfig`）的缺位场景在本仓库以
+  /// [`crate::records::null_config_resolver::NullConfigResolver`] 活实例承载，
+  /// 故本口恒可取到解析器，无需判空分支。
+  pub fn config_resolver_ref(&self) -> &dyn ConfigResolver {
+    self.config_resolver.as_ref()
   }
 
   /// 自指针 `builtin_types`（C++ `NotNull<BuiltinTypes>{&builtinTypes_}`）的
@@ -175,7 +186,7 @@ impl Debug for Frontend {
       )
       .field("globals", &self.globals)
       .field("globals_for_autocomplete", &self.globals_for_autocomplete)
-      .field("config_resolver", &self.config_resolver)
+      .field("config_resolver", &"...")
       .field("options", &self.options)
       .field("ice_handler", &self.ice_handler)
       .field(

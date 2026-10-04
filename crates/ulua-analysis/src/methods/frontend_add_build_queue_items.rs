@@ -54,19 +54,12 @@ impl Frontend {
         .get_human_readable_module_name(module_name);
 
       let limits = make_type_check_limits(frontend_options);
-      let config = unsafe {
-        // Safety: `self.config_resolver` 的非空解引用收敛于 `config_resolver_ref`
-        // chokepoint（构造期接线的非空 `NonNull<ConfigResolver>`，比本 Frontend
-        // 长寿，此处仅读 `get_config` 槽位）。`get_config` 是静态无捕获
-        // 的 `unsafe fn`，以 `expect` 兜住 `None`；调用按 C++ 虚 `getConfig` ABI 传入 resolver 自身
-        // 基址作 `this` 及存活的 name/limits 借用地址。返回的 `*const Config` 指向本次语句内有效的
-        // 配置对象，立即 `.clone()` 为拥有值。全程单线程，无并发别名。
-        let resolver = self.config_resolver_ref();
-        let get_config = resolver
-          .get_config
-          .expect("ConfigResolver::getConfig is not set");
-        (*get_config(self.config_resolver.as_ptr(), module_name, &limits)).clone()
-      };
+      // 配置读取收敛于 `config_resolver_ref` chokepoint（`Box<dyn ConfigResolver>`
+      // 独占、借用直出，零 unsafe），立即 `.clone()` 为拥有值以释放对 `self` 的借用。
+      let config = self
+        .config_resolver_ref()
+        .get_config(module_name, &limits)
+        .clone();
 
       let environment_scope = self.get_module_environment(
         source_module.as_ref(),
