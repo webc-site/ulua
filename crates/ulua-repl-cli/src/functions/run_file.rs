@@ -41,24 +41,22 @@ unsafe fn sandboxed_thread(gl: &mut LuaState) -> *mut LuaState {
 }
 
 /// 调用契约（本 fn 为 `pub(crate)` 安全 fn，crate 内唯一调用方 repl_main 保证）：`gl`
-/// 必须指向存活、有效的 `LuaState` 主状态。
-// DELIBERATE DEVIATION（review.md §9.3）：在新线程上编译并运行脚本的 VM 驱动
+/// 为 repl_main 经 `state` 门面物化后交出的存活、有效 `LuaState` 主状态借用。
+// review.md §2/§3 收形：`gl` 由裸 `*mut LuaState` 收编为借用 `&mut LuaState`，真实物化
+// 点上移到 repl_main 入口一次。新线程上编译并运行脚本的 VM 驱动
 // （newthread/sandboxthread/luau_load/codegen/coverage/counters/resume 全为 ulua-vm
 // c-API）；不可拆的 newthread+sandboxthread 两步收在私有 `# Safety` 封装
 // `sandboxed_thread`，单步 c-API 调用以带 `// Safety:` 论证的最小 `unsafe` 块就地使用，
-// `gl`/线程句柄的解引用关在 `state` 门面内，故本编排入口自身收编为安全 fn。主线程恢复
-// 的 `from == NULL` 已由 `resume_main` 门面收口，本处不留裸 null。
+// 线程句柄的解引用关在 `state` 门面内。主线程恢复的 `from == NULL` 已由 `resume_main`
+// 门面收口，本处不留裸 null。
 // `repl` is used to indicate if a repl should be started after executing the file.
 // `program_args` 是 `--program-args` 之后的原样参数（cpp 的 `program_argv/argc`）。
 pub(crate) fn run_file(
   name: &str,
-  gl: *mut LuaState,
+  gl: &mut LuaState,
   repl: bool,
   program_args: &[impl AsRef<str>],
 ) -> bool {
-  // Safety: 调用契约保证 `gl` 非空、活跃，经 `state` 门面物化后全走安全方法
-  // （单步 unsafe c-API 导出在各块内论证）。
-  let gl = state(gl);
   // cpp `readFile(getFilePath(name))`：读文件走 getFilePath 的 .luau/.lua 回退，
   // 失败信息仍打印用户给定的原始名字（chunkname 同样基于它）。
   let Some(source) = get_file_path(name).and_then(|path| read_file(&path)) else {
