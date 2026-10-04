@@ -11,7 +11,7 @@ use crate::{
 pub fn lua_settop(l: &mut LuaState, idx: i32) {
   unsafe {
     if idx >= 0 {
-      api_check!(l, idx as isize <= l.stack_last.offset_from(l.base));
+      api_check!(l, idx as isize <= LuaState::slot_distance(l.base, l.stack_last) as isize);
       // cpp `ensure_stack(L, idx - (L->top - L->base))`：把栈顶抬高到 idx 之
       // 前必须保证 idx 落在 ci->top 之内，否则下面的 setnilvalue 会写出栈数组。
       // r16-b2 收编：顶-基槽距读数落既有 get_top 门面——其本体 slot_distance(base, top)
@@ -21,14 +21,21 @@ pub fn lua_settop(l: &mut LuaState, idx: i32) {
       ensure_stack(l, idx - l.get_top());
       // 栈窗口 top..target 补空：原 `while top < target { setnilvalue; top += 1 }`
       // 逐格走查收为一次预留槽窗填充；top 已越过 target 时切片取 0 长、
-      // 直落 `reanchor_top(target)` 截断，与原循环空转分支逐指令等价
-      let target = l.base.add(idx as usize);
-      let fill = target.offset_from(l.top).max(0) as usize;
+      // 直落 `reanchor_top(target)` 截断，与原循环空转分支逐指令等价。
+      // r16-w5 收编：补空格数与重锚目标均改经 top 相对读数表达——cpp `L->base + idx`
+      // 恒等于 `L->top + (idx - (top - base))`，前者消去 `base.add` 裸下标算术、
+      // `top.offset_from` 距离算术，改用 `get_top` 门面的 i32 槽距减法（ensure_stack
+      // 后 top-base 不变，两处 get_top 现读同值）；top 越界下界的界内前提由上方
+      // api_check 与 `idx - get_top <= 0` 的截断语义共同保证
+      let delta = idx - l.get_top();
       // SAFETY: ensure_stack 已把可写界抬到覆盖 target（api_check 保证在 stack_last
       // 内），预留窗 [top, top+fill) 可独占写入——契约见 `reserved_slots_mut`
-      for slot in l.reserved_slots_mut(fill) {
+      for slot in l.reserved_slots_mut(delta.max(0) as usize) {
         setnilvalue!(slot);
       }
+      // SAFETY: `top_slot` 界内契约——target = base + idx 由上方 api_check 保证落在
+      // 栈数组内，delta 现读 top 派生（扩容先行、借用后派生），与原 `base.add(idx)` 同址。
+      let target = l.top_slot(delta as isize);
       l.reanchor_top(target);
     } else {
       // r16-b2 收编：顶-基槽距读数落既有 get_top 门面（镜像论证见上方 :17 点位注）。
