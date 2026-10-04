@@ -34,7 +34,7 @@ use core::{
   ffi::c_void,
   marker::PhantomData,
   ops::{Deref, DerefMut},
-  ptr::{NonNull, null, null_mut},
+  ptr::{NonNull, null_mut},
 };
 use std::{cell::Cell, sync::Arc};
 
@@ -625,28 +625,24 @@ pub(crate) fn allocate_userdata(
   NonNull::new(unsafe { lua_newuserdatadtor(state.as_mut_ptr(), size, dtor) })
 }
 
-/// 压出带调试名、无 continuation 的 C 闭包（`lua_pushcclosurek` 收口点）。
+/// 压出带调试名、无 continuation 的 C 闭包（`LuaState::push_c_closure` 收口点）。
 ///
 /// 调用序契约：`f` 为符合 `lua_CFunction` 约定的本 crate trampoline；`nup` 个
 /// 上值已由调用点压在栈顶（`nup` 为 0 时无此要求）。
 ///
-/// 名契约：`name` 必须以 NUL 结尾且 `'static`——VM 在闭包整个存活期内保留该
-/// 指针并按 C 串读取（debug 信息），故禁止传入临时缓冲或无结尾 NUL 的切片。
+/// 名契约（review.md §10 收形）：`name` 为闭包存活期有效的 `'static` 原生字节窗
+/// （不含终止 NUL——VM 只存引用不复制，读取面为整窗，调用点以 `b"…"` 字面量给出）。
 #[inline]
 pub(crate) fn push_named_closure(
-  state: StateView<'_>,
+  mut state: StateView<'_>,
   f: LuaCFunction,
   name: &'static [u8],
   nup: i32,
 ) {
-  debug_assert!(
-    name.last() == Some(&0),
-    "closure debug name must be NUL-terminated"
-  );
-  // Safety: 族级契约;`name` 是 'static NUL 串(上面 debug_assert 兜底开发期,
-  // release 下由调用点的 `b"…\\0"` 静态字面量构造性满足),满足 `debugname`
-  // 存续期契约;`cont` 传 `None` 表示不可 yield 路径无续体。
-  unsafe { lua_pushcclosurek(state.as_mut_ptr(), f, name.as_ptr().cast(), nup, None) }
+  // `push_c_closure` 是 safe fn（ulua-vm 收形：`&mut self` + `Option<&'static [u8]>`
+  // 原生字节窗），`StateView` 经 DerefMut 直达固有方法，无指针折转、无 `unsafe`；
+  // `cont` 传 `None` 表示不可 yield 路径无续体。
+  state.push_c_closure(f, Some(name), nup);
 }
 
 /// 把 `fidx` 处闭包的第 `n` 个 upvalue **值**压栈（`lua_getupvalue` 收口点，
@@ -823,14 +819,14 @@ pub(crate) fn set_safeenv_flag(state: StateView<'_>, idx: i32, enabled: bool) {
   unsafe { lua_setsafeenv(state.as_mut_ptr(), idx, enabled as i32) }
 }
 
-/// 压出无调试名的 C 闭包（`lua_pushcclosurek` 的 null-name 特化，供类型代表值使用）。
+/// 压出无调试名的 C 闭包（`push_c_closure` 的 null-name 特化，供类型代表值使用）。
 ///
 /// 调用序契约：`f` 为合法 `lua_CFunction`，`nup` 个 upvalue 已按序压在栈顶（0 时无此要求）。
 #[inline]
-pub(crate) fn push_anonymous_closure(state: StateView<'_>, f: LuaCFunction, nup: i32) {
-  // Safety: 同 [`push_named_closure`];`name` 传 `null` 表示无调试名(VM 容忍空
-  // debugname),`cont` `None` = 无续体,`nup` 个 upvalue 由调用点按契约压在栈顶。
-  unsafe { lua_pushcclosurek(state.as_mut_ptr(), f, null(), nup, None) }
+pub(crate) fn push_anonymous_closure(mut state: StateView<'_>, f: LuaCFunction, nup: i32) {
+  // `None` 即原 null debugname 契约位（VM 容忍空调试名）；`push_c_closure` 为
+  // safe fn，经 DerefMut 直达，`nup` 个 upvalue 由调用点按契约压在栈顶。
+  state.push_c_closure(f, None, nup);
 }
 
 /// 压出 null 载荷、tag 0 的 tagged light userdata（类型代表值；VM 从不解引用该 token）。
