@@ -55,7 +55,7 @@ pub(crate) fn tmove(l: &mut LuaState) -> i32 {
         lua_h_resizearray(l.as_mut_ptr(), dst, t - 1 + n);
       }
 
-      moveelements(l.as_mut_ptr(), 1, tt, f, e, t, sparsemove);
+      moveelements(l, 1, tt, f, e, t, sparsemove);
     }
   }
 

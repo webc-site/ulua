@@ -22,7 +22,9 @@ use crate::{
 ///
 /// `l` 必须是正在执行的 C 函数帧的存活 `LuaState`，`idx` 为其合法栈索引（越界读错槽）；
 /// 返回切片指向栈槽串内部字节，下一次操作 `l` 前有效（寿命 `'a` 与 [`lua_touserdata`]
-/// 等既有收口同形，由调用方保证不跨 VM 操作持有）。cpp lapi.cpp:497。
+/// 等既有收口同形，由调用方保证不跨 VM 操作持有）。r12-w6 保留判据（判例 1）：签名携带
+/// 调用方 supplied 的裸 `l` 且体内解引用；ulua-rt/ulua-require/ulua-repl-cli 越界消费面
+/// 现以裸形转手，收形同步点已登记交主代理。cpp lapi.cpp:497。
 pub unsafe fn lua_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a [u8]> {
   unsafe {
     let mut o: StkId = index_2_addr(&*l, idx);
@@ -45,7 +47,7 @@ pub unsafe fn lua_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a [u
 
 /// C-ABI 出参收口共享核心：把 `Option<&[u8]>` 切片折算回 lua.h 约定的
 /// `(const char*, size_t* len)` 形态——`Some` 写串长并返回首字节，`None` 写 0 并
-/// 返回 NULL（与 cpp 失败路径逐位一致）。[`lua_tolstring`] 与 [`lua_l_tolstring_ref`]
+/// 返回 NULL（与 cpp 失败路径逐位一致）。[`lua_tolstring`] 与 `lua_l_checklstring`
 /// 的 C-ABI 垫片共用，消除双份硬编码折算。
 ///
 /// # Safety

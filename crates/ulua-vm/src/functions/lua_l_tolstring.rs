@@ -20,15 +20,18 @@ use crate::{
 /// `__tostring` 元方法/内建规则把 `idx` 槽值串化并**压栈**，返回结果串的全部字节
 /// （含内嵌 `\0`，长度即切片长度）。
 ///
-/// C 形 `size_t* len` 出参收口为 `Option<&'a [u8]>`：垫片 [`lua_l_tolstring`] 独家承接
-/// 出参写入。栈语义与 cpp 逐字保持：结果串留在栈顶（由调用方弹出），`__tostring` 返回
-/// 非串时经 `luaL_error` 抛错发散。
+/// C 形 `size_t* len` 出参收口为 `Option<&'a [u8]>`，全消费面（含 C-ABI 侧）实测直用
+/// 本切片形，旧出参垫片已随零消费删除（r12-w6 §7 复核）。栈语义与 cpp 逐字保持：结果串
+/// 留在栈顶（由调用方弹出），`__tostring` 返回非串时经 `luaL_error` 抛错发散。
 ///
 /// # Safety
 ///
 /// `l` 必须是正在执行的 C 函数帧的存活 `LuaState`，`idx` 为其合法栈索引；`__tostring`
 /// 元方法回跑可改栈、可抛错，返回后不得继续持旧栈槽指针；返回切片指向压入栈顶的转换
 /// 结果串内部，再次操作该栈前有效（寿命 `'a` 与 [`lua_tolstring_ref`] 同形）。
+/// r12-w6 保留判据（判例 1）：签名携带调用方 supplied 的裸 `l` 且体内经 `&mut *l` 重建
+/// 解引用；ulua-analysis/ulua-web/ulua-rt 三个越界消费 crate 现均以 `as_mut_ptr()` 裸形
+/// 转手——收形 `&mut` 的消费面同步已登记交主代理。
 /// cpp laux.cpp:612。
 pub unsafe fn lua_l_tolstring_ref<'a>(l: *mut LuaState, idx: i32) -> Option<&'a [u8]> {
   unsafe {
