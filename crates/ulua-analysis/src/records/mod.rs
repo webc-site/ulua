@@ -289,6 +289,7 @@ pub mod not_bindable;
 pub mod not_null;
 pub mod not_predicate;
 pub mod nothing;
+pub mod null_config_resolver;
 pub mod null_file_resolver;
 pub mod null_module_resolver;
 pub mod obj;

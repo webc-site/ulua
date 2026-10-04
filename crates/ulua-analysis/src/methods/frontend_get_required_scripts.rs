@@ -1,7 +1,6 @@
 use alloc::vec::Vec;
 
 use ulua_common::records::dense_hash_map::DenseHashMap;
-use ulua_config::records::config::Config;
 
 use crate::{
   functions::trace_requires::trace_requires,
@@ -33,17 +32,9 @@ impl Frontend {
         return Vec::new();
       };
 
-      let config: &Config = unsafe {
-        // Safety: 解引用收敛于 `config_resolver_ref` chokepoint；`get_config` 是
-        // 静态无捕获的 `unsafe fn`，以 `expect` 兜住 `None`；调用按 C++ 虚
-        // `getConfig` ABI 以 resolver 基址作 `this`。返回的 `*const Config`
-        // 指向本次语句内有效的配置对象。全程单线程，无并发别名。
-        let resolver = self.config_resolver_ref();
-        let get_config = resolver
-          .get_config
-          .expect("ConfigResolver::getConfig is not set");
-        &*get_config(self.config_resolver.as_ptr(), name, limits)
-      };
+      // 配置读取收敛于 `config_resolver_ref` chokepoint（`Box<dyn ConfigResolver>`
+      // 独占、借用直出，零 unsafe）；`.clone()` 后即释放对 `self` 的借用。
+      let config = self.config_resolver_ref().get_config(name, limits);
       let mut opts = config.parse_options.clone();
       opts.capture_comments = true;
       let mut result =

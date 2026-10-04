@@ -4,7 +4,6 @@ use ulua_common::{
   fflag,
   macros::luau_timetrace_scope::{LUAU_TIMETRACE_ARGUMENT, LUAU_TIMETRACE_SCOPE},
 };
-use ulua_config::records::config::Config;
 
 use crate::{
   functions::{
@@ -78,20 +77,9 @@ impl Frontend {
     };
 
     let mut opts = {
-      // Safety: `self.config_resolver` 的非空解引用收敛于 `config_resolver_ref`
-      // chokepoint，返回的借用指向与 Frontend 同存亡的解析器。`.get_config`
-      // 是经 `.expect` 校验
-      // 已设置（None 即 panic）的宿主回调函数指针。以 `as_ptr()` 作 self 参数同步调用它符合
-      // C++ `ConfigResolver::getConfig` 返回 `const Config&` 的约定——返回的 `*const Config`
-      // 指向解析器持有、在本次同步调用期间存活的配置对象，且我们只在下一语句 `clone` 其
-      // `parse_options`，借用不超出该表达式。
-      let config: &Config = unsafe {
-        let resolver = self.config_resolver_ref();
-        let get_config = resolver
-          .get_config
-          .expect("ConfigResolver::getConfig is not set");
-        &*get_config(self.config_resolver.as_ptr(), name, limits)
-      };
+      // 配置读取收敛于 `config_resolver_ref` chokepoint（`Box<dyn ConfigResolver>`
+      // 独占、借用直出，零 unsafe）；`.clone()` 为拥有值后即释放对 `self` 的借用。
+      let config = self.config_resolver_ref().get_config(name, limits);
       config.parse_options.clone()
     };
     opts.capture_comments = true;
