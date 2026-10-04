@@ -1,7 +1,4 @@
-use core::{
-  ffi::c_char,
-  fmt::{Debug, Formatter, Result},
-};
+use core::fmt::{Debug, Formatter, Result};
 
 use crate::{
   records::{g_cheader::GCheader, gc_object::GcObject, lua_table::LuaTable, proto::Proto},
@@ -14,7 +11,10 @@ use crate::{
 pub struct CClosure {
   pub f: LuaCFunction,
   pub cont: LuaContinuation,
-  pub debugname: *const c_char,
+  /// 调试名（review.md §10 收形）：`'static` 字节串（不含终止 NUL），`None` = 无调试名
+  /// （原 null 哨兵）。VM 只存引用不复制——与原 `*const c_char` 的「须随闭包存活」
+  /// 契约同一，`'static` 即该契约的类型表达（全仓注入点均为静态字面量）。
+  pub debugname: Option<&'static [u8]>,
   pub upvals: [TValue; 1],
 }
 
