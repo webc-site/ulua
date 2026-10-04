@@ -1,7 +1,6 @@
 use core::ptr::NonNull;
 
 use ulua_vm::{
-  enums::lua_status::LuaStatus,
   functions::{
     lua_error::lua_error, lua_tolstring::lua_tolstring_ref, lua_touserdata::lua_touserdata,
   },
@@ -13,7 +12,7 @@ use crate::{
   enums::status_require_impl::Status,
   functions::{
     check_registered_modules::check_registered_modules,
-    lua_requirecont::{REQUIRE_STACK_VALUES, lua_requirecont},
+    lua_requirecont::{REQUIRE_STACK_VALUES, require_cont},
     push_str::push_c_str,
     resolve_require::resolve_require,
   },
@@ -61,8 +60,9 @@ unsafe fn borrowed_host<'ctx, C: RequireHost>(l: &mut LuaState, idx: i32) -> Opt
 /// 存活与独占前提由类型承载，故降为安全 `fn`；两个调用点（`lua_require::<C>` /
 /// `lua_proxyrequire::<C>` 这两个真 Lua/C 闭包）本就已物化好借用，直传即可，不再
 /// 在边界上折回裸指针。体内残余的裸操作只落在两处 ulua-vm c-API
-/// （`borrowed_host` 的 upvalue 读回、`lua_tolstring_ref` 的锚定视图）与本 crate 的
-/// Lua/C 回调 `lua_requirecont` 上，各自下沉为带 `// SAFETY:` 论证的最小 `unsafe` 块。
+/// （`borrowed_host` 的 upvalue 读回、`lua_tolstring_ref` 的锚定视图）上，各自下沉
+/// 为带 `// SAFETY:` 论证的最小 `unsafe` 块；continuation 收尾走其安全本体
+/// [`require_cont`]，Lua/C 裸句柄形态只由 `lua_requirecont` 垫片服务 VM 自己。
 ///
 /// 调用序契约（正确性，非内存安全）：`l` 为 require 闭包帧的当前状态，upvalue(1)
 /// 须由 `push_closure::<C>` 以同一个 `C` 装箱宿主（由注入点与闭包体同源单态化保证），
@@ -138,9 +138,8 @@ pub(crate) fn lua_requireinternal<C: RequireHost>(
     // `yield_thread` 为 `LuaState` 安全门面（本体 lua_yield 的裸指针折形收在方法内）
     l.yield_thread(0)
   } else {
-    // 同步装载完成，continuation 按自身契约收尾本帧栈
-    // SAFETY: `lua_requirecont` 是 Lua/C continuation 回调体，其 `# Safety` 只要求
-    // `l` 为存活状态；本帧即该状态的当前协程，且 `_status` 形参按其契约忽略。
-    unsafe { lua_requirecont(l.as_mut_ptr(), LuaStatus::Ok as i32) }
+    // 同步装载完成，直接调用 continuation 的安全本体收尾本帧栈（与 Lua/C 回调
+    // `lua_requirecont` 同一实现，此处已有独占借用，不再折回裸指针）
+    require_cont(l)
   }
 }
