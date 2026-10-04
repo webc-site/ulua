@@ -800,10 +800,10 @@ pub(crate) fn push_own_thread(mut state: StateView<'_>) -> i32 {
 /// 对 main state 施加 Luau 沙箱（把库表与基元 metatable 设只读、置 safeenv；
 /// `lua_l_sandbox` 收口点）。
 #[inline]
-pub(crate) fn sandbox_main(state: StateView<'_>) {
+pub(crate) fn sandbox_main(mut state: StateView<'_>) {
   // Safety: 族级契约;`lua_l_sandbox` 内部压弹的临时值全自平衡,不跨入任何
-  // Rust 借用指针。
-  unsafe { lua_l_sandbox(&mut *state.as_mut_ptr()) }
+  // Rust 借用指针；`&mut state` 经 `StateView` 的 DerefMut 只覆盖本次调用。
+  unsafe { lua_l_sandbox(&mut state) }
 }
 
 /// 对 `state` 的 `LUA_GLOBALSINDEX` 安装代理全局表，使全局写入留在本线程
