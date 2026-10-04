@@ -108,19 +108,17 @@ impl TypeFunctionReducer {
       }
 
       // C++: `tfit->function->reducer(subject, tfit->typeArguments, tfit->packArguments, ctx)`
-      // unsafe 只覆盖 reducer（`unsafe fn` 指针）的调用本身；`get_mut()` 从构造期
-      // 接线的 Handle（非空由类型编码，构造点为真实 `&mut` 借用）物化本次调用的
-      // 独占会话借用（上下文为驱动栈帧局物，存活覆盖整条归约队列），句柄有效性
-      // 与 C++ 同契约。
+      // reducer 为 safe `fn` 指针（契约见 `ReducerFunction` 文档的调用序段）；
+      // `get_mut()` 从构造期接线的 Handle（非空由类型编码，构造点为真实 `&mut`
+      // 借用）物化本次调用的独占会话借用（上下文为驱动栈帧局物，存活覆盖整条
+      // 归约队列），句柄有效性与 C++ 同契约。
       let reducer = tfit.function().reducer;
-      let result: TypeFunctionReductionResult<_> = unsafe {
-        reducer(
-          subject,
-          &tfit.type_arguments,
-          &tfit.pack_arguments,
-          self.ctx.get_mut(),
-        )
-      };
+      let result: TypeFunctionReductionResult<_> = reducer(
+        subject,
+        &tfit.type_arguments,
+        &tfit.pack_arguments,
+        self.ctx.get_mut(),
+      );
       self.handle_type_function_reduction_type_pack_id(subject, result);
     }
   }
