@@ -10,6 +10,7 @@ ulua-ast = { path = "../../crates/ulua-ast" }
 ulua-analysis = { path = "../../crates/ulua-analysis" }
 ulua-bytecode = { path = "../../crates/ulua-bytecode" }
 ulua-compiler = { path = "../../crates/ulua-compiler" }
+ulua-code-gen = { path = "../../crates/ulua-code-gen" }
 ulua-common = { path = "../../crates/ulua-common" }
 ulua-config = { path = "../../crates/ulua-config" }
 # 引擎后端三选一（互斥，见 src/main.rs 顶部的 compile_error 守卫）。mlua 0.12

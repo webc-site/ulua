@@ -44,7 +44,10 @@
 //! 发射前经 `proto_k_intern_string` 物化进 caller 常量表（复用既有同指针项或
 //! 追加新槽），`VmConst` 下标重写到 caller 表——失败即整体放弃内联。
 
-use core::ptr::{from_ref, null_mut};
+use core::{
+  ptr::{from_ref, null_mut},
+  sync::atomic::{AtomicU32, Ordering},
+};
 
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
@@ -78,6 +81,13 @@ use crate::{
 const K_MAX_INLINE_INSNS: usize = 100;
 /// `MOVE` 定义链最大跳数
 const K_MAX_DEF_CHAIN: usize = 2;
+
+/// 进程级内联发射计数（诊断面，非热路径）：每次 [`try_translate_call_inline`]
+/// 成功发射（静态直通 + 观测守卫两路合并）自增一。评测 runner 收尾读取打一行
+/// `[jit-diag]` 汇总进 CI 日志，供「观测→暖重编译→funid 守卫内联」全链在任意
+/// runner 机器（本地/CI）上是否工作给出永久可见的判据——发射序列逐机一致即链
+/// 存活。只增不清零；编译期单次路径上的 Relaxed 自增，对测量窗口零扰动。
+pub static CALL_INLINE_EMITTED: AtomicU32 = AtomicU32::new(0);
 
 /// callee 槽寄存器的静态定义形态
 #[derive(Clone, Copy)]
@@ -181,7 +191,9 @@ pub(crate) fn try_translate_call_inline(
     string_map: &string_map,
   };
   emit_inline(build, &trial_function, &plan);
-  // 内联发射证据：编译期单次打印（compile-once，不进热路径）
+  // 内联发射证据：编译期单次打印（compile-once，不进热路径）+ 进程级计数
+  // （runner 收尾的 `[jit-diag]` 汇总行读取，见 [`CALL_INLINE_EMITTED`]）。
+  CALL_INLINE_EMITTED.fetch_add(1, Ordering::Relaxed);
   match guard {
     Some((funid, _)) => eprintln!(
       "[call-inline] hit caller_pc={i} ra={ra} nresults={nresults} callee_insns={callee_insns} observed funid={funid} relocated_strings={}",
