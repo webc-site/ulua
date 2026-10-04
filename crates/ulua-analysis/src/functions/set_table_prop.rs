@@ -39,12 +39,16 @@ pub(crate) fn set_table_prop(l: &mut LuaState) -> i32 {
     let tfst = get_type_function_type_id::<TypeFunctionSingletonType>(key);
     lua_check_tag!(
       l,
-      tfst.is_null(),
+      tfst.is_none(),
       key,
       "type.setproperty: expected to be given a singleton type, but got {} instead"
     );
 
-    let tfsst = (*tfst).variant.get_if_1();
+    // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
+    let tfsst = tfst
+      .expect("上方 is_none 分支经 throw_type_error(-> !) 早退，至此必为 Some")
+      .variant
+      .get_if_1();
     lua_check_tag!(
       l,
       tfsst.is_none(),

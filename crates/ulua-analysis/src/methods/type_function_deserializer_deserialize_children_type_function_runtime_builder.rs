@@ -116,21 +116,19 @@ fn tf_source_mut<T: TypeFunctionTypeVariantMember>(
   unsafe { get_mutable_type_function_type_id::<T>(tfti).as_mut() }
 }
 
-/// runtime 侧只读探测：cpp `get<TypeFunctionT>(ty)`，空句柄以 `None` 表达。
+/// runtime 侧只读探测：cpp `get<TypeFunctionT>(ty)`，未命中（含空句柄契约违例兜底）
+/// 以 `None` 表达；存活/独占前提见 [`get_type_function_type_id`] 的函数头。
 #[inline]
 fn tf_read<T: TypeFunctionTypeVariantMember>(ty: TypeFunctionTypeId) -> Option<&'static T> {
-  // SAFETY: `ty` 是队列里 `TypeFunctionTypeId`（`*const TypeFunctionType`）句柄，
-  // 由 runtime bump arena 分配、本轮存活；helper 内部已先判空，未命中返回 null。
-  unsafe { get_type_function_type_id::<T>(ty).as_ref() }
+  get_type_function_type_id::<T>(ty)
 }
 
-/// 类型包侧的 [`tf_read`]。
+/// 类型包侧的 [`tf_read`]，arena 为 `type_pack_arena`。
 #[inline]
 fn tf_pack_read<T: TypeFunctionTypePackVariantMember>(
   tp: TypeFunctionTypePackId,
 ) -> Option<&'static T> {
-  // SAFETY: 同 `tf_read`，句柄指向 runtime `type_pack_arena` 存活节点。
-  unsafe { get_type_function_type_pack_id::<T>(tp).as_ref() }
+  get_type_function_type_pack_id::<T>(tp)
 }
 
 impl TypeFunctionDeserializer {

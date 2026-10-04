@@ -34,7 +34,7 @@ pub(crate) fn set_table_indexer(l: &mut LuaState) -> i32 {
     let key = get_type_user_data(l, 2);
     let value = get_type_user_data(l, 3);
 
-    if !get_type_function_type_id::<TypeFunctionNeverType>(key).is_null() {
+    if get_type_function_type_id::<TypeFunctionNeverType>(key).is_some() {
       (*tftt).indexer = None;
       return 0;
     }

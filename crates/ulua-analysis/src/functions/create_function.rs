@@ -19,7 +19,7 @@ use crate::{
   },
   macros::lua_check_args,
   records::{
-    arena_handle::Handle, type_function_function_type::TypeFunctionFunctionType,
+    type_function_function_type::TypeFunctionFunctionType,
     type_function_generic_type::TypeFunctionGenericType,
     type_function_generic_type_pack::TypeFunctionGenericTypePack,
     type_function_type_pack::TypeFunctionTypePack,
@@ -36,9 +36,9 @@ pub(crate) fn create_function(l: &mut LuaState) -> i32 {
   // LuaState`，故 `l as *mut lua_state::LuaState` 为同一对象的合法重解释；块内所有
   // lua_* C-API 调用仅在该 state 上读写其自身的栈槽（下标 1..=3 与 push 后负索引
   // -1/-2 均在已校验的 argument_count 范围内），不构造悬垂/别名引用；runtime 句柄是注册期写入
-  // 主线程 thread data 的非空 TypeFunctionRuntime（null 由 Handle::from_ptr 收敛为 panic）。
+  // 主线程 thread data 的非空 TypeFunctionRuntime（未挂载属契约违例，expect 收敛为 panic）。
   unsafe {
-    let runtime = Handle::from_ptr(get_type_function_runtime(&mut *l));
+    let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
     lua_check_args!(l, > 3, "types.newfunction: expected 0-3 arguments, but got {}");
 
     let arg_types: TypeFunctionTypePackId;
@@ -113,60 +113,60 @@ pub(crate) unsafe fn get_type_pack_runtime(
   head_idx: i32,
   tail_idx: i32,
 ) -> TypeFunctionTypePackId {
-  // Safety: 依 fn 文档契约，`l` 为存活非空 LuaState，`head_idx`/`tail_idx` 是其栈上
-  // 有效索引；`l as *mut lua_state::LuaState` 为同一对象重解释。lua_* C-API 只操作该
-  // state 栈；get_type_user_data/optional_type_user_data 仅识别 alloc_type_user_data
-  // 登记的 userdata，(*gty) 解引用前已判 gty 非 null 且 RTTI 命中即 repr(C) 基址重合；
-  // runtime 句柄同 create_function：注册期接线、非空由 Handle::from_ptr 兜底 panic。
-  unsafe {
-    let runtime = Handle::from_ptr(get_type_function_runtime(&mut *l));
-    let mut head = Vec::new();
+  // 前提依 fn 文档契约：`l` 为存活独占状态、`head_idx`/`tail_idx` 是其栈上有效
+  // 索引；get_type_user_data/optional_type_user_data 仅识别 alloc_type_user_data
+  // 登记的 userdata；gty 命中 Some 后仅读取 is_pack/is_named/name（arena 块地址不
+  // 移动）；runtime 句柄同 create_function：注册期接线、非空由 expect 兜底 panic。
+  // 本体已无原生 unsafe 操作，`unsafe fn` 形态属未批次遗留。
+  let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
+  let mut head = Vec::new();
 
-    if l.is_table(head_idx) {
-      l.push_value(head_idx);
+  if l.is_table(head_idx) {
+    l.push_value(head_idx);
 
-      for i in 1..=l.obj_len(-1) as i32 {
-        l.push_integer(i);
-        lua_gettable(&mut *l, -2);
+    for i in 1..=l.obj_len(-1) as i32 {
+      l.push_integer(i);
+      lua_gettable(&mut *l, -2);
 
-        if l.is_nil(-1) {
-          l.pop(1);
-          break;
-        }
-
-        head.push(get_type_user_data(&mut *l, -1));
+      if l.is_nil(-1) {
         l.pop(1);
+        break;
       }
 
+      head.push(get_type_user_data(&mut *l, -1));
       l.pop(1);
     }
 
-    let mut tail: Option<TypeFunctionTypePackId> = None;
+    l.pop(1);
+  }
 
-    if let Some(type_id) = optional_type_user_data(&mut *l, tail_idx) {
-      let gty = get_type_function_type_id::<TypeFunctionGenericType>(type_id);
-      if !gty.is_null() && (*gty).is_pack {
+  let mut tail: Option<TypeFunctionTypePackId> = None;
+
+  if let Some(type_id) = optional_type_user_data(&mut *l, tail_idx) {
+    match get_type_function_type_id::<TypeFunctionGenericType>(type_id) {
+      Some(gty) if gty.is_pack => {
         tail = Some(allocate_type_function_type_pack(
           runtime,
           TypeFunctionTypePackVariant::V2(TypeFunctionGenericTypePack {
-            is_named: (*gty).is_named,
-            name: (*gty).name.clone(),
+            is_named: gty.is_named,
+            name: gty.name.clone(),
           }),
         ));
-      } else {
+      }
+      _ => {
         tail = Some(allocate_type_function_type_pack(
           runtime,
           TypeFunctionTypePackVariant::V1(TypeFunctionVariadicTypePack { type_id }),
         ));
       }
     }
+  }
 
-    match tail {
-      Some(t) if head.is_empty() => t,
-      tail => allocate_type_function_type_pack(
-        runtime,
-        TypeFunctionTypePackVariant::V0(TypeFunctionTypePack { head, tail }),
-      ),
-    }
+  match tail {
+    Some(t) if head.is_empty() => t,
+    tail => allocate_type_function_type_pack(
+      runtime,
+      TypeFunctionTypePackVariant::V0(TypeFunctionTypePack { head, tail }),
+    ),
   }
 }

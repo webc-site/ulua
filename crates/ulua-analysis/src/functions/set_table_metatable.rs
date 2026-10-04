@@ -28,7 +28,7 @@ pub(crate) fn set_table_metatable(l: &mut LuaState) -> i32 {
     lua_check_not_frozen!(l, self_ty, "type.setmetatable");
 
     let arg = get_type_user_data(l, 2);
-    if get_type_function_type_id::<TypeFunctionTableType>(arg).is_null() {
+    if get_type_function_type_id::<TypeFunctionTableType>(arg).is_none() {
       let tag_ty = if fflag::LuauTypeFunctionRobustness.get() {
         arg
       } else {

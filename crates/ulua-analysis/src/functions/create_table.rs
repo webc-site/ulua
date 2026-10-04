@@ -29,9 +29,9 @@ pub(crate) fn create_table(l: &mut LuaState) -> i32 {
   // Safety: l 为 VM 调注册闭包传入的存活 lua_State；参数先经 lua_istable/lua_isnoneornil/
   // luaL_typeerror/throw_type_error 校验（格式串收敛在 throw_type_error 一处）；
   // lua_next 循环保守 -2 键/-1 值的栈序且每轮成对 lua_pop，getfield/pop 配平；
-  // get_type_user_data 对非 type 栈槽先抛错，tfst/mt_table 判 is_null 后才解引用，指向
-  // type_arena 存活节点（bump 块地址不移动）；(*tfst).variant.get_if 是 tag 判别只读，
-  // unwrap 前已排除 None；optional_type_user_data/alloc_type_user_data 同族闭包前置满足。
+  // get_type_user_data 对非 type 栈槽先抛错，tfst/mt_table 命中 Some 后才读取，指向
+  // type_arena 存活节点（bump 块地址不移动）；tfst.variant.get_if 是 tag 判别只读，
+  // expect 前经 lua_check_tag 排除 None；optional_type_user_data/alloc_type_user_data 同族闭包前置满足。
   unsafe {
     lua_check_args!(l, > 3, "types.newtable: expected 0-3 arguments, but got {}");
 
@@ -45,12 +45,13 @@ pub(crate) fn create_table(l: &mut LuaState) -> i32 {
         let tfst = get_type_function_type_id::<TypeFunctionSingletonType>(key);
         lua_check_tag!(
           l,
-          tfst.is_null(),
+          tfst.is_none(),
           key,
           "types.newtable: expected to be given a singleton type, but got {} instead"
         );
 
-        let tfsst = (*tfst).variant.get_if::<TypeFunctionStringSingleton>();
+        let tfst = tfst.expect("上方 is_none 分支经 throw_type_error(-> !) 早退，至此必为 Some");
+        let tfsst = tfst.variant.get_if::<TypeFunctionStringSingleton>();
         lua_check_tag!(
           l,
           tfsst.is_none(),
@@ -115,7 +116,7 @@ pub(crate) fn create_table(l: &mut LuaState) -> i32 {
       let mt_table = get_type_function_type_id::<TypeFunctionTableType>(mt);
       lua_check_tag!(
         l,
-        mt_table.is_null(),
+        mt_table.is_none(),
         mt,
         "types.newtable: expected to be given a table type as a metatable, but got {} instead"
       );

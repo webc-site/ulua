@@ -9,7 +9,6 @@ use crate::{
     throw_type_error::throw_type_error,
   },
   macros::lua_check_args,
-  records::arena_handle::Handle,
 };
 pub(crate) fn deep_copy(l: &mut LuaState) -> i32 {
   unsafe {
@@ -17,8 +16,8 @@ pub(crate) fn deep_copy(l: &mut LuaState) -> i32 {
 
     let arg = get_type_user_data(l, 1);
     // runtime 由注册阶段挂在本线程 userdatum 上，deepCopy 只在已接线的类型函数环境里被
-    // 调用，故恒非空；`Handle::from_ptr` 把该契约从「解引用即 UB」收为「违例即确定性 panic」。
-    let runtime = Handle::from_ptr(get_type_function_runtime(l));
+    // 调用，故恒非空；`expect` 把该契约从「解引用即 UB」收为「违例即确定性 panic」。
+    let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
     let copy = deep_clone(runtime, arg);
 
     if fflag::LuauTypeFunctionRobustness.get() && copy.is_null() {
