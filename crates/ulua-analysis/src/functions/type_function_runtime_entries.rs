@@ -134,28 +134,28 @@ pub(crate) fn get_table_prop(l: &mut LuaState, prefix: &str, read: bool) -> i32 
 /// `setReadTableProp`/`setWriteTableProp` 共用骨架）。`read` 决定改写
 /// `read_ty` 还是 `write_ty`（含清空与「仅此一侧时整项移除/插入」分支）。
 ///
-/// # Safety
-/// `l` 必须是 Lua VM 在本次原生函数调用中传入、且在该调用全程有效的 `lua_State*`；
-/// 调用期间单线程独占 VM 栈与类型运行期数据；`tftt`/`tfst` 按 class-index 下转，
-/// `is_null()`/`is_none()` 分支内 `throw_type_error` 返回 `!` 不返回。本函数还经
-/// `get_mutable_type_function_type_id` 取可变指针改写 `props`，写只经本次调用独占
-/// 的 userdata 指针发生，无并存可变别名。
-pub(crate) unsafe fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: bool) -> i32 {
-  // Safety: 同上；`(*self_ty).frozen` 与 props 的 get/get_mut/remove 都在
-  // `tftt` 非空守卫之后，指向本次调用内存活的 userdata。
-  unsafe {
-    let argument_count = l.get_top();
-    if !(2..=3).contains(&argument_count) {
+/// 内存安全前提：`l` 由 `&mut` 承载存活/独占；`tftt`/`tfst` 为 class-index 命中的
+/// arena 存活节点借用（判据见 [`get_mutable_type_function_type_id`] 与
+/// [`get_type_function_type_id`] 的函数头），`frozen` 标志经 `alias_ref` 只读；
+/// 仅未批次 `throw_type_error` 调用点保留 `unsafe` 块。
+pub(crate) fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: bool) -> i32 {
+  let argument_count = l.get_top();
+  if !(2..=3).contains(&argument_count) {
+    // Safety: 未批次 `throw_type_error` 的会话调用，`l` 存活独占。
+    unsafe {
       throw_type_error(
         l,
         format_args!("{prefix}: expected 2-3 arguments, but got {argument_count}"),
       );
     }
+  }
 
-    let self_ty = get_type_user_data(l, 1);
-    let tftt = get_mutable_type_function_type_id::<TypeFunctionTableType>(self_ty);
-    if tftt.is_null() {
-      let tag = get_tag(l, self_ty);
+  let self_ty = get_type_user_data(l, 1);
+  let tftt = get_mutable_type_function_type_id::<TypeFunctionTableType>(self_ty);
+  if tftt.is_none() {
+    let tag = get_tag(l, self_ty);
+    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
+    unsafe {
       throw_type_error(
         l,
         format_args!(
@@ -164,8 +164,11 @@ pub(crate) unsafe fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: boo
         ),
       );
     }
+  }
 
-    if fflag::LuauTypeFunctionSupportsFrozen.get() && (*self_ty).frozen {
+  if fflag::LuauTypeFunctionSupportsFrozen.get() && alias_ref(self_ty).frozen {
+    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
+    unsafe {
       throw_type_error(
         l,
         format_args!(
@@ -173,11 +176,14 @@ pub(crate) unsafe fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: boo
         ),
       );
     }
+  }
 
-    let key = get_type_user_data(l, 2);
-    let tfst = get_type_function_type_id::<TypeFunctionSingletonType>(key);
-    if tfst.is_none() {
-      let tag = get_tag(l, key);
+  let key = get_type_user_data(l, 2);
+  let tfst = get_type_function_type_id::<TypeFunctionSingletonType>(key);
+  if tfst.is_none() {
+    let tag = get_tag(l, key);
+    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
+    unsafe {
       throw_type_error(
         l,
         format_args!(
@@ -186,14 +192,17 @@ pub(crate) unsafe fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: boo
         ),
       );
     }
+  }
 
-    // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
-    let tfsst = tfst
-      .expect("上方 is_none 分支经 throw_type_error(-> !) 早退，至此必为 Some")
-      .variant
-      .get_if_1();
-    if tfsst.is_none() {
-      let tag = get_tag(l, key);
+  // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
+  let tfsst = tfst
+    .expect("上方 is_none 分支经 throw_type_error(-> !) 早退，至此必为 Some")
+    .variant
+    .get_if_1();
+  if tfsst.is_none() {
+    let tag = get_tag(l, key);
+    // Safety: 同上，未批次 `throw_type_error` 的会话调用。
+    unsafe {
       throw_type_error(
         l,
         format_args!(
@@ -202,51 +211,53 @@ pub(crate) unsafe fn set_table_prop_rw(l: &mut LuaState, prefix: &str, read: boo
         ),
       );
     }
+  }
 
-    let key_name = tfsst
-      .expect("上方 throw_type_error(-> !) 已拦截 None 分支")
-      .value
-      .clone();
+  // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
+  let tftt = tftt.expect("上方 is_none 分支经 throw_type_error(-> !) 早退，至此必为 Some");
+  let key_name = tfsst
+    .expect("上方 throw_type_error(-> !) 已拦截 None 分支")
+    .value
+    .clone();
 
-    if argument_count == 2 || l.is_nil(3) {
-      if let Some(existing) = (*tftt).props.get(&key_name) {
-        let sole = if read {
-          existing.is_read_only()
+  if argument_count == 2 || l.is_nil(3) {
+    if let Some(existing) = tftt.props.get(&key_name) {
+      let sole = if read {
+        existing.is_read_only()
+      } else {
+        existing.is_write_only()
+      };
+      if sole {
+        tftt.props.remove(&key_name);
+      } else if let Some(prop) = tftt.props.get_mut(&key_name) {
+        if read {
+          prop.read_ty = None;
         } else {
-          existing.is_write_only()
-        };
-        if sole {
-          (*tftt).props.remove(&key_name);
-        } else if let Some(prop) = (*tftt).props.get_mut(&key_name) {
-          if read {
-            prop.read_ty = None;
-          } else {
-            prop.write_ty = None;
-          }
+          prop.write_ty = None;
         }
       }
-
-      return 0;
     }
 
-    let value = get_type_user_data(l, 3);
-    if let Some(prop) = (*tftt).props.get_mut(&key_name) {
-      if read {
-        prop.read_ty = Some(value);
-      } else {
-        prop.write_ty = Some(value);
-      }
-    } else {
-      let prop = if read {
-        TypeFunctionProperty::readonly(value)
-      } else {
-        TypeFunctionProperty::writeonly(value)
-      };
-      (*tftt).props.insert(key_name, prop);
-    }
-
-    0
+    return 0;
   }
+
+  let value = get_type_user_data(l, 3);
+  if let Some(prop) = tftt.props.get_mut(&key_name) {
+    if read {
+      prop.read_ty = Some(value);
+    } else {
+      prop.write_ty = Some(value);
+    }
+  } else {
+    let prop = if read {
+      TypeFunctionProperty::readonly(value)
+    } else {
+      TypeFunctionProperty::writeonly(value)
+    };
+    tftt.props.insert(key_name, prop);
+  }
+
+  0
 }
 
 /// 取 `type.parent`（C++ `getReadParent`/`getWriteParent` 共用骨架，消息无分叉，

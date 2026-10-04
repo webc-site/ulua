@@ -28,12 +28,15 @@ pub(crate) fn set_table_prop(l: &mut LuaState) -> i32 {
     let tftt = get_mutable_type_function_type_id::<TypeFunctionTableType>(self_ty);
     lua_check_tag!(
       l,
-      tftt.is_null(),
+      tftt.is_none(),
       self_ty,
       "type.setproperty: expected self to be a table, but got {} instead"
     );
 
     lua_check_not_frozen!(l, self_ty, "type.setproperty");
+
+    // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
+    let tftt = tftt.expect("上方 is_none 分支经 throw_type_error(-> !) 早退，至此必为 Some");
 
     let key = get_type_user_data(l, 2);
     let tfst = get_type_function_type_id::<TypeFunctionSingletonType>(key);
@@ -63,12 +66,12 @@ pub(crate) fn set_table_prop(l: &mut LuaState) -> i32 {
       .clone();
 
     if argument_count == 2 || l.is_nil(3) {
-      (*tftt).props.remove(&key_name);
+      tftt.props.remove(&key_name);
       return 0;
     }
 
     let value = get_type_user_data(l, 3);
-    (*tftt).props.insert(
+    tftt.props.insert(
       key_name,
       TypeFunctionProperty {
         read_ty: Some(value),

@@ -20,12 +20,15 @@ pub(crate) fn set_table_metatable(l: &mut LuaState) -> i32 {
     let tftt = get_mutable_type_function_type_id::<TypeFunctionTableType>(self_ty);
     lua_check_tag!(
       l,
-      tftt.is_null(),
+      tftt.is_none(),
       self_ty,
       "type.setmetatable: expected self to be a table, but got {} instead"
     );
 
     lua_check_not_frozen!(l, self_ty, "type.setmetatable");
+
+    // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
+    let tftt = tftt.expect("上方 is_none 分支经 throw_type_error(-> !) 早退，至此必为 Some");
 
     let arg = get_type_user_data(l, 2);
     if get_type_function_type_id::<TypeFunctionTableType>(arg).is_none() {
@@ -44,7 +47,7 @@ pub(crate) fn set_table_metatable(l: &mut LuaState) -> i32 {
       );
     }
 
-    (*tftt).metatable = Some(arg);
+    tftt.metatable = Some(arg);
 
     0
   }

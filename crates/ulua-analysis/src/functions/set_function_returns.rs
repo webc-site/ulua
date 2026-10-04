@@ -24,14 +24,16 @@ pub(crate) fn set_function_returns(l: &mut LuaState) -> i32 {
     let tfft = get_mutable_type_function_type_id::<TypeFunctionFunctionType>(self_ty);
     lua_check_tag!(
       l,
-      tfft.is_null(),
+      tfft.is_none(),
       self_ty,
       "type.setreturns: expected self to be a function, but got {} instead"
     );
 
     lua_check_not_frozen!(l, self_ty, "type.setreturns");
 
-    (*tfft).ret_types = get_type_pack_runtime(l, 2, 3);
+    // `throw_type_error` 静态类型 `-> !`：is_none 分支必不返回，块后 Some 由其蕴含。
+    let tfft = tfft.expect("上方 is_none 分支经 throw_type_error(-> !) 早退，至此必为 Some");
+    tfft.ret_types = get_type_pack_runtime(l, 2, 3);
 
     0
   }
