@@ -188,9 +188,9 @@ impl LuaState {
 
   #[inline(always)]
   pub fn push_bytes(&mut self, s: &[u8]) {
-    // SAFETY: `self` 为存活 `&mut LuaState`（接收者类型承载）；`s` 为借用切片，
-    // 核心界内拷入堆串不留存，契约见 `lua_pushlstring_bytes`。
-    unsafe { lua_pushlstring_bytes(self, s) }
+    // lua_pushlstring_bytes 已降为安全切片核心（r12-w6d）：self 为存活 &mut LuaState，
+    // s 为借用切片，核心界内拷入堆串不留存
+    lua_pushlstring_bytes(self, s)
   }
 
   #[inline(always)]

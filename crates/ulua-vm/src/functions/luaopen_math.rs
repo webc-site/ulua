@@ -62,8 +62,8 @@ static MATH_FUNCS: [LuaLReg; 37] = [
 ];
 
 /// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载；本票收形后
-/// 体内不安全仅剩 `lua_l_register_bytes` 一处窄块（被调方自身保留 `# Safety`：裸 C 函数指针与
-/// `lua_s_new` 转手未清零），其余皆安全门面直调，故本体降为安全 `fn`）：`l` 须为可分配、可抛错
+/// 注册所经 `lua_l_register_bytes` 已降为安全 `fn`（r12-w6d，裸 C 函数指针与 `lua_s_new`
+/// 转手屏障下沉被调内部窄块），体内无残留窄块，其余皆安全门面直调，故本体为安全 `fn`）：`l` 须为可分配、可抛错
 /// 的受保护帧且栈顶之上留足空槽（注册表 push 库表并作为返回值）。
 /// 种子落笔序逐点定性（w6d 口径保留面）：push_number/set_field_bytes 七对皆
 /// records/lua_state/{stack,table}.rs 既有门面收编形态，零翻案；经 `gs_mut().rngstate` 的 pcg
@@ -76,10 +76,9 @@ pub fn luaopen_math(l: &mut LuaState) -> i32 {
   seed ^= 0;
   pcg_32_seed(&mut l.gs_mut().rngstate, seed);
 
-  // SAFETY: `MATH_FUNCS` 为本文件同卫生域生成的合法 `unsafe extern "C-unwind"` 臂静态表，
-  // 名字为不含尾部 `\0` 的静态字节切片，满足 `lua_l_register_bytes` 切片契约；
-  // `l` 的存活/独占由借用承载
-  unsafe { lua_l_register_bytes(l, Some(b"math"), &MATH_FUNCS) };
+  // `MATH_FUNCS` 为本文件同卫生域生成的合法 `unsafe extern "C-unwind"` 臂静态表，名字为
+  // 不含尾部 `\0` 的静态字节切片，满足 `lua_l_register_bytes` 切片契约
+  lua_l_register_bytes(l, Some(b"math"), &MATH_FUNCS);
 
   l.push_number(LUAU_PI);
   l.set_field_bytes(-2, b"pi");

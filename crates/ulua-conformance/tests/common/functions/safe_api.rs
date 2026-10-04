@@ -312,9 +312,10 @@ pub fn open_base(l: L) -> c_int {
 /// `luaL_register(l, NULL, funcs)` 的 bytes 核心形：`libname` 以 `None` 表达
 /// 「注册到当前栈顶」。
 pub fn l_register(l: L, funcs: &[LuaLReg]) {
-  // Safety: `l` 存活（模块级契约）；被调仍为 unsafe fn（`lr` 裸 C 函数指针与 `lua_s_new`
-  // 裸形转手的屏障），`&mut *l` 引用重建借用窗止于当次调用；`funcs` 为借用切片，
-  // 各项 name/func 仅在本调用期内被读取。
+  // Safety: `l` 存活（模块级契约）；`&mut *l` 一次性裸指针重借用是本块唯一不安全面，
+  // 借用窗止于当次调用；被调 `lua_l_register_bytes` 已降为安全 fn（r12-w6d，`lr` 裸 C
+  // 函数指针与 intern 转手屏障下沉被调内部）；`funcs` 为借用切片，各项 name/func
+  // 仅在本调用期内被读取。
   unsafe { lua_l_register_bytes(&mut *l, None, funcs) }
 }
 
