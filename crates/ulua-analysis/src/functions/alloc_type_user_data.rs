@@ -36,30 +36,32 @@ pub(crate) fn alloc_type_user_data(
   type_variant: TypeFunctionTypeVariant,
   frozen: bool,
 ) {
-  // Safety: `l` 由 `&mut` 保证存活且本次调用独占，转手后的 `lp` 即同一地址在 vm 侧镜像类型上的
-  // 裸形；lua_l_checkstack 先保证栈可增 2 槽；
-  // lua_newuserdatatagged 分配失败走 VM 错误路径、成功返回按最大对齐的 K_TYPE_USERDATA_TAG
-  // 用户数据体，容量恰为 size_of::<TypeFunctionTypeId>()；get_type_function_runtime 取回注册期
-  // 写入主线程 thread data 的非空 TypeFunctionRuntime（null 时 Handle::from_ptr 直接 panic），
-  // type_id 由其 type_arena（TypedAllocator bump 块）分配、地址不移动且比 l 长寿；
-  // TypeFunctionTypeId 即 *const TypeFunctionType 裸值，转 *mut 后写 frozen 指向的是该 arena
-  // 可变内存；TYPE 为 NUL 结尾字节串，元表缺失时 lua_setmetatable 为无操作。
+  lua_l_checkstack(l, 2, "allocating type");
+
+  // Safety: `l.as_mut_ptr()` 是 `&mut l` 同一对象的镜像透传（存活与独占由引用承载）；
+  // `lua_newuserdatatagged` 是 vm 侧 C 形态门面，分配失败走 VM 错误路径，成功返回按最大
+  // 对齐的 `K_TYPE_USERDATA_TAG` 用户数据体，容量恰为 `size_of::<TypeFunctionTypeId>()`，
+  // 故其后的 `*ptr = type_id` 写入界内且存活。前置由上方 `lua_l_checkstack` 保证栈可增 2 槽。
+  let ptr = unsafe {
+    lua_newuserdatatagged(
+      l.as_mut_ptr(),
+      size_of::<TypeFunctionTypeId>(),
+      K_TYPE_USERDATA_TAG,
+    )
+  } as *mut TypeFunctionTypeId;
+
+  let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
+  let type_id = allocate_type_function_type(runtime, type_variant);
+
+  // Safety: `type_id` 由 runtime 的 type_arena（TypedAllocator bump 块）分配，地址不移动
+  // 且比 `l` 长寿；`TypeFunctionTypeId` 即 `*const TypeFunctionType` 裸值，转 `*mut` 后写
+  // `frozen` 指向的正是该 arena 的可变内存。
   unsafe {
-    let lp = l.as_mut_ptr();
-
-    lua_l_checkstack(&mut *lp, 2, "allocating type");
-
-    let ptr = lua_newuserdatatagged(lp, size_of::<TypeFunctionTypeId>(), K_TYPE_USERDATA_TAG)
-      as *mut TypeFunctionTypeId;
-
-    let runtime = get_type_function_runtime(l).expect("runtime 于注册阶段挂载，会话内恒非空");
-    let type_id = allocate_type_function_type(runtime, type_variant);
     *ptr = type_id;
-
-    let type_ptr = *ptr as *mut TypeFunctionType;
-    (*type_ptr).frozen = frozen;
-
-    (*lp).get_metatable_by_bytes(TYPE);
-    (*lp).set_metatable(-2);
+    (*(*ptr as *mut TypeFunctionType)).frozen = frozen;
   }
+
+  // TYPE 为 NUL 结尾字节串；元表缺失时 set_metatable 为无操作。
+  l.get_metatable_by_bytes(TYPE);
+  l.set_metatable(-2);
 }

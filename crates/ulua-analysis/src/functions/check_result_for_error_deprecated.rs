@@ -25,7 +25,7 @@ pub fn check_result_for_error_deprecated(
       } else if
       // `lua_isstring` 为安全只读入口：gettop != 0 保证 -1 为合法栈索引，
       // 其实现只做 lua_type 分类读取，不写栈。
-      lua_isstring(&*l, -1) != 0 {
+      lua_isstring(l, -1) != 0 {
         let err_str = l.to_str(-1).unwrap_or_default();
         Some(format(format_args!(
           "'{}' type function errored at runtime: {}",
