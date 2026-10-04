@@ -5,11 +5,9 @@
 //! 回铸成 `*const DemoConfigResolver` 再解引用读 `default_config`。该形态的唯一
 //! 存在理由是「配置挂在具体 receiver 上」；而 demo 配置恒为同一份默认值（cpp
 //! `getConfig` 忽略两个实参、返回成员 `defaultConfig`），故把配置升格为进程级
-//! 冻结单例：适配器不再解引用/回铸任何指针，`this` 形态的 vtable 布线随之消失。
-//!
-//! 剩余的唯一边界形状是槽位类型本身：`ConfigResolver::get_config` 是
-//! ulua-analysis（本任务范围外）建模 C++ 纯虚类的函数指针替身，签名即其契约。
-//! 本模块以安全构造器 [`demo_config_resolver`] 收口，调用点零 unsafe。
+//! 冻结单例，并把 `ConfigResolver` 建模为真 trait（对齐 ulua-analysis 侧收口）：
+//! [`DemoConfigResolver`] 为无状态单元类型，`get_config` 直接返回单例地址，
+//! 不再有 `this` 形态的 vtable 布线、回cast或调用点 unsafe。
 
 use std::sync::OnceLock;
 
@@ -64,26 +62,15 @@ fn demo_default_config() -> &'static Config {
   &frozen.0
 }
 
-/// demo resolver 的安全构造器（cpp `DemoConfigResolver()` 构造的对应物）：
-/// 返回的 `ConfigResolver` 无接收者状态——配置在 [`demo_default_config`] 冻结
-/// 单例上，因此不再有 `#[repr(C)]` 的 `base` 子对象与回cast。
-pub(crate) fn demo_config_resolver() -> ConfigResolver {
-  ConfigResolver {
-    get_config: Some(demo_get_config),
-  }
-}
+/// demo 配置解析器：无接收者状态（cpp `DemoConfigResolver` 的对应物）。
+/// 配置在 [`demo_default_config`] 冻结单例上，`get_config` 恒返回该地址，故本
+/// 类型为单元 struct，所有权经 `Box<dyn ConfigResolver>` 移交 `Frontend` 独占。
+pub(crate) struct DemoConfigResolver;
 
-/// `getConfig` 槽（vtable 替身）的适配器：三枚指针实参一律忽略（demo 配置不随
-/// 模块名/预算/接收者变化），返回进程级冻结配置的地址。
-///
-/// # Safety
-/// 仅履行 [`ConfigResolver::get_config`] 的槽位契约：返回指针在任意请求寿命内
-/// 有效（`OnceLock` 冻结单例，只读共享）；不解引用 `this`/`name`/`limits`，
-/// 故对其存续期无假设。
-unsafe fn demo_get_config(
-  _this: *const ConfigResolver,
-  _name: *const ModuleName,
-  _limits: *const TypeCheckLimits,
-) -> *const Config {
-  demo_default_config()
+impl ConfigResolver for DemoConfigResolver {
+  /// cpp `getConfig` 忽略两个实参、恒返回成员 `defaultConfig`：此处返回进程级
+  /// 冻结单例的 `&'static Config`（`'static: '_` 故可满足借用生命周期）。
+  fn get_config(&self, _name: &ModuleName, _limits: &TypeCheckLimits) -> &Config {
+    demo_default_config()
+  }
 }
