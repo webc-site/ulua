@@ -158,9 +158,9 @@ pub(crate) fn os_date(l: &mut LuaState) -> i32 {
           _ => unsafe { lua_l_addchar!(&mut b, c) },
         }
       }
-      // SAFETY: `b` 仍绑定本帧存活 `l` 且自此不再另有对 `l` 的借用窗（arg_error 分支已发散），
-      // 结果串压入 top 之上的空槽
-      unsafe { lua_l_pushresult(&mut b) };
+      // w6e 降级消费点：`lua_l_pushresult` 已降为安全 fn，包裹消亡；`b` 仍绑定本帧
+      // 存活 `l`（arg_error 分支已发散），结果串压入 top 之上的空槽
+      lua_l_pushresult(&mut b);
     }
   }
 

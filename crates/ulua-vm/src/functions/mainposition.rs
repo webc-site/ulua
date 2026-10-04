@@ -20,8 +20,8 @@ pub(crate) unsafe fn mainposition(t: *const LuaTable, key: &TValue) -> *mut LuaN
   unsafe {
     match ttype!(key) {
       x if x == LuaType::Number as u32 => hashnum(&*t, key.as_number()),
-      x if x == LuaType::Integer as u32 => hashint(t, lvalue!(key)),
-      x if x == LuaType::Vector as u32 => hashvec(t, key.as_vector_ref().as_ptr()),
+      x if x == LuaType::Integer as u32 => hashint(&*t, lvalue!(key)),
+      x if x == LuaType::Vector as u32 => hashvec(&*t, key.as_vector_ref()),
       x if x == LuaType::String as u32 => hashstr!(t, key.as_string()),
       x if x == LuaType::Boolean as u32 => hashboolean!(t, key.as_boolean_raw()),
       x if x == LuaType::LightUserData as u32 => hashpointer(t, pvalue!(key)),

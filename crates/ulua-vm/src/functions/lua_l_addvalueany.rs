@@ -66,7 +66,9 @@ pub(crate) unsafe fn lua_l_addvalueany(b: &mut LuaLStrbuf, idx: i32) {
         // note: luaL_addlstring assumes box is stored at top of stack, so we can't call it here
         // instead we use luaL_addvalue which will take the string from the top of the stack and add that
         // 结果串留在栈顶即目的（`lua_l_addvalue` 负责弹出并追加），切片引用不外传
-        let _ = lua_l_tolstring_ref(l, idx);
+        // w6e 收形消费点：`lua_l_tolstring_ref` 首参已折 `&mut LuaState`，本句就地重建
+        // 借用窗（裸 `l` 仍为句柄契约边界转呈，原位不动）
+        let _ = lua_l_tolstring_ref(&mut *l, idx);
         lua_l_addvalue(b);
       }
     }

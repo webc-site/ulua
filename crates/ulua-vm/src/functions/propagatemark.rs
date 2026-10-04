@@ -82,8 +82,10 @@ pub(crate) unsafe fn propagatemark(g: *mut global_State) -> usize {
 
         // the stack needs to be cleared after the last modification of the thread state before sweep begins
         // if the thread is inactive, we might not see the thread in this cycle so we must clear it now
+        // w6e 收形消费点：`clearstack` 首参已折 `&mut LuaState`（安全 fn），本句直接透传
+        // 手中 `th`，不再经 `th_ptr` 裸形重建（借用窗止于当句）。
         if !active || (*g).gcstate as i32 == GCSATOMIC {
-          clearstack(th_ptr);
+          clearstack(th);
         }
 
         // we could shrink stack at any time but we opt to do it during initial mark to do that just once per cycle

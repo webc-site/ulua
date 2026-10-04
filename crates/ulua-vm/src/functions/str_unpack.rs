@@ -29,102 +29,120 @@ use crate::{
 /// 串体（Lua 串不可变且不被移动，本次调用内存活——同 `lua_l_checklstring_ref`
 /// 切片契约）；结果逐项压栈经 `lua_l_checkstack` 保余量。
 ///
-/// # Safety
-/// `l` 须为可抛错受保护帧内存活的 `LuaState`：`initheader` 接线 `h.l` 与传入
-/// `l` 的 `unpackint` 报错内核经裸指针解引用抛出并 unwind（不返回）。
-unsafe fn str_unpack_ref(l: &mut LuaState, fmt_bytes: &[u8], data: &[u8]) -> i32 {
-  unsafe {
-    let mut h = Header::default();
-    let mut fmt = FmtCursor::from_slice(fmt_bytes);
+/// w6e 诚实降级：形参已全为引用形（`l: &mut LuaState`/两 payload `&[u8]`），真实裸
+/// 操作内核（`initheader`/`getdetails`/`unpackint`，各自 `# Safety` 契约）落逐句窄
+/// `unsafe` 块；整块 `unsafe` 包裹消亡。
+///
+/// 调用序契约（正确性，非内存安全）：`l` 须为可抛错受保护帧内存活的 `LuaState`：
+/// `initheader` 接线 `h.l` 与传入 `l` 的 `unpackint` 报错内核经其抛出并 unwind（不返回）。
+fn str_unpack_ref(l: &mut LuaState, fmt_bytes: &[u8], data: &[u8]) -> i32 {
+  let mut h = Header::default();
+  let mut fmt = FmtCursor::from_slice(fmt_bytes);
 
-    let ld = data.len();
-    let mut pos = posrelat(lua_l_optinteger(l, 3, 1), ld) - 1;
-    if pos < 0 {
-      pos = 0;
-    }
+  let ld = data.len();
+  let mut pos = posrelat(lua_l_optinteger(l, 3, 1), ld) - 1;
+  if pos < 0 {
+    pos = 0;
+  }
 
-    let mut n = 0;
-    l.arg_check(pos as usize <= ld, 3, "initial position out of string");
-    initheader(l, &mut h);
+  let mut n = 0;
+  l.arg_check(pos as usize <= ld, 3, "initial position out of string");
+  // SAFETY: `l` 由垫片契约保证存活独占驱动（`&mut` 形就地折裸转手，借用窗止于当句）；
+  // `h` 为本地待初始化表头，`initheader` 接线 `h.l` 至同一存活帧
+  unsafe { initheader(l, &mut h) };
 
-    while fmt.cur() != 0 {
-      let (opt, size, ntoalign) = getdetails(&mut h, pos as usize, &mut fmt);
-      l.arg_check(
-        (ntoalign as usize).wrapping_add(size as usize) <= ld - pos as usize,
-        2,
-        "data string too short",
-      );
+  while fmt.cur() != 0 {
+    // SAFETY: `h` 已按 initheader 契约初始化、`fmt` 为本地游标、`pos` 为钳位后界内
+    // 偏移；报错内核经接线 `h.l` 解引用（上方调用序契约），发散不返回
+    let (opt, size, ntoalign) = unsafe { getdetails(&mut h, pos as usize, &mut fmt) };
+    l.arg_check(
+      (ntoalign as usize).wrapping_add(size as usize) <= ld - pos as usize,
+      2,
+      "data string too short",
+    );
 
-      pos += ntoalign;
-      // 钳位保证 p ∈ [0, ld]，各读取窗口 data[p..p+size] 恒落在 payload 界内
-      let p = pos as usize;
-      lua_l_checkstack(l, 2, "too many results");
-      n += 1;
+    pos += ntoalign;
+    // 钳位保证 p ∈ [0, ld]，各读取窗口 data[p..p+size] 恒落在 payload 界内
+    let p = pos as usize;
+    lua_l_checkstack(l, 2, "too many results");
+    n += 1;
 
-      match opt {
-        KOption::Kint | KOption::Kuint => {
-          // 有/无符号双臂仅差 unpackint 符号扩展位与回推路径（i64 直转 vs 位重解读 u64）
-          let signed = opt == KOption::Kint;
-          let res = unpackint(
+    match opt {
+      KOption::Kint | KOption::Kuint => {
+        // 有/无符号双臂仅差 unpackint 符号扩展位与回推路径（i64 直转 vs 位重解读 u64）
+        let signed = opt == KOption::Kint;
+        // SAFETY: 读窗 `data[p..p+size]` 由上方 arg_check 钳位保证界内；`l` 存活帧
+        // 句柄折裸转手，报错内核经其抛出（调用序契约）
+        let res = unsafe {
+          unpackint(
             l,
             &data[p..p + size as usize],
             h.islittle,
             size,
             signed as i32,
-          );
-          l.push_number(if signed {
-            res as f64
-          } else {
-            res as u64 as f64
-          });
-        }
-        KOption::Kfloat => {
-          let mut u = Ftypes { n: 0.0 };
+          )
+        };
+        l.push_number(if signed {
+          res as f64
+        } else {
+          res as u64 as f64
+        });
+      }
+      KOption::Kfloat => {
+        let mut u = Ftypes { n: 0.0 };
+        // SAFETY: union 字节窗单写——`copywithendian` 按 `size` 整窗覆盖 `u.buff`
+        // 活跃变体（cpp 同形 union 用法），随后按同一 `size` 读回无陈旧活跃态歧义
+        unsafe {
           copywithendian(
             &mut u.buff[..size as usize],
             &data[p..p + size as usize],
             h.islittle,
           );
-          let num = if size as usize == size_of::<c_float>() {
+        }
+        // SAFETY: 上句单写即本句读源的活跃字段（size 判定与写入侧同值）
+        let num = unsafe {
+          if size as usize == size_of::<c_float>() {
             u.f as f64
           } else if size as usize == size_of::<c_double>() {
             u.d
           } else {
             u.n
-          };
-          l.push_number(num);
-        }
-        KOption::Kchar => {
-          lua_pushlstring_bytes(l, &data[p..p + size as usize]);
-        }
-        KOption::Kstring => {
-          let len = unpackint(l, &data[p..p + size as usize], h.islittle, size, 0) as usize;
-          l.arg_check(len <= ld - p - size as usize, 2, "data string too short");
-          let q = p + size as usize;
-          lua_pushlstring_bytes(l, &data[q..q + len]);
-          pos += len as i32;
-        }
-        KOption::Kzstr => {
-          // 从当前偏移单遍扫描首个 NUL 求 strlen（cpp lstrlib.cpp:1705
-          // `strlen(data + pos)`）：payload 脱靶 ⟺ cpp 扫至串尾终止 NUL，len 取
-          // 尾距 `ld - p`（越界 `get` 归一，入约见文件头），后续尾界判定两端
-          // 同失败、同抛出
-          let len = memchr(0, &data[p..]).unwrap_or(ld - p);
-          l.arg_check(p + len < ld, 2, "unfinished string for format 'z'");
-          lua_pushlstring_bytes(l, &data[p..p + len]);
-          pos += len as i32 + 1;
-        }
-        KOption::Kpaddalign | KOption::Kpadding | KOption::Knop => {
-          n -= 1;
-        }
+          }
+        };
+        l.push_number(num);
       }
-
-      pos += size;
+      KOption::Kchar => {
+        lua_pushlstring_bytes(l, &data[p..p + size as usize]);
+      }
+      KOption::Kstring => {
+        // SAFETY: 同 Kint 读窗钳位与存活帧句柄转手契约
+        let len =
+          unsafe { unpackint(l, &data[p..p + size as usize], h.islittle, size, 0) } as usize;
+        l.arg_check(len <= ld - p - size as usize, 2, "data string too short");
+        let q = p + size as usize;
+        lua_pushlstring_bytes(l, &data[q..q + len]);
+        pos += len as i32;
+      }
+      KOption::Kzstr => {
+        // 从当前偏移单遍扫描首个 NUL 求 strlen（cpp lstrlib.cpp:1705
+        // `strlen(data + pos)`）：payload 脱靶 ⟺ cpp 扫至串尾终止 NUL，len 取
+        // 尾距 `ld - p`（越界 `get` 归一，入约见文件头），后续尾界判定两端
+        // 同失败、同抛出
+        let len = memchr(0, &data[p..]).unwrap_or(ld - p);
+        l.arg_check(p + len < ld, 2, "unfinished string for format 'z'");
+        lua_pushlstring_bytes(l, &data[p..p + len]);
+        pos += len as i32 + 1;
+      }
+      KOption::Kpaddalign | KOption::Kpadding | KOption::Knop => {
+        n -= 1;
+      }
     }
 
-    l.push_integer(pos + 1);
-    n + 1
+    pos += size;
   }
+
+  l.push_integer(pos + 1);
+  n + 1
 }
 
 /// 核心转发垫片（一行委托 [`str_unpack_ref`]）：本面消费点仅 `lua_lib_fn!`

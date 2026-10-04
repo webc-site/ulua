@@ -19,12 +19,15 @@ use crate::{
 ///
 /// 结果落点均为预留结果槽 `(*l).top - 1`（与 cpp `L->top - 1` 同形）。
 ///
-/// # Safety
-/// `b` 须指向存活 `LuaLStrbuf`，且处于 `lua_l_buffinit`/`lua_l_buffinitsize` 之后、
-/// `pushresult` 之前的有效状态：`b.l` 为 `Some` 且指向处于可 GC 受保护帧的 lua_State
-/// （未接线误用在本次收窄中暴露为 `expect` 级契约违约，相对旧形 null 解引用的 UB 是
-/// 严格改善面）、`(*l).top - 1` 为预留结果槽；游标 `b.p` 落在当前缓冲（内联 `buffer` 或
-/// `storage` 数据区）同一分配内，故 `offset_from` 求长度合法。
+/// w6e 诚实降级：`b` 已是 `&mut LuaLStrbuf` 引用形参，`b.l`/`b.storage` 为
+/// `Option<NonNull>` 句柄字段（record 自持不变量），真实裸操作全部收在下方两处逐句
+/// 窄 `unsafe` 块内（review.md §2；判例同 `lua_pushlstring_bytes`）。
+///
+/// 调用序契约（正确性，非内存安全）：`b` 须处于 `lua_l_buffinit`/`lua_l_buffinitsize`
+/// 之后、`pushresult` 之前的有效状态：`b.l` 为 `Some` 且指向处于可 GC 受保护帧的
+/// lua_State（未接线误用暴露为 `expect` 级契约违约 panic，相对旧形 null 解引用的 UB
+/// 是严格改善面）、`(*l).top - 1` 为预留结果槽；游标 `b.p` 落在当前缓冲（内联
+/// `buffer` 或 `storage` 数据区）同一分配内，故 `offset_from` 求长度合法。
 /// `lua_c_check_gc`/`lua_s_newlstr`/`lua_pushlstring_bytes` 可分配、可 GC。
 /// cpp/VM/src/laux.cpp:580 luaL_pushresult。
 ///
@@ -35,7 +38,7 @@ use crate::{
 /// 面实测零消费（符号未导出，跨 crate 不可见），故本轮**不添加 C 导出垫**（§7 零死代码）。
 /// 若将来按 cpp `luaL_pushresult` 开 `ulua_lua_l_pushresult` 导出，循 `lua_l_buffinit`
 /// 的显式壳先例在 capi 侧一行折形（`&mut *b`）即可。
-pub(crate) unsafe fn lua_l_pushresult(b: &mut LuaLStrbuf) {
+pub(crate) fn lua_l_pushresult(b: &mut LuaLStrbuf) {
   // 句柄直读：`Option::expect`/`NonNull::as_ptr` 均安全，无 null 折回
   let l = b
     .l

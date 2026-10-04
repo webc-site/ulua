@@ -14,7 +14,7 @@ pub fn lua_b_print(l: &mut LuaState) -> i32 {
     // `None`（`__tostring` 发散前的不可达形态）与旧 null 指针同为空串输出。
     // SAFETY: `l` 存活（引用形保证）；`lua_l_tolstring_ref` 的 `# Safety` 其余前提
     // （i 为 1..=n 的合法正索引、受保护帧）由循环界与库函数约定成立。
-    let s = unsafe { lua_l_tolstring_ref(l.as_mut_ptr(), i) }.unwrap_or_default();
+    let s = unsafe { lua_l_tolstring_ref(l, i) }.unwrap_or_default();
     if i > 1 {
       writestring(b"\t");
     }

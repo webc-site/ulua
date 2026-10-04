@@ -57,8 +57,9 @@ pub fn tconcat(l: &mut LuaState) -> i32 {
     // SAFETY: 同环内调用点，末元素补写一次（区间非空时 cpp `i == last` 判定同真）。
     unsafe { addfield(l.as_mut_ptr(), &mut b, last, t) };
   }
-  // SAFETY: `b` 为本函数独占缓冲且已 init；提交即写结果串并复位其栈位。
-  unsafe { lua_l_pushresult(&mut b) };
+  // w6e 降级消费点：`lua_l_pushresult` 已降为安全 fn，外层包裹消亡；`b` 为本函数
+  // 独占缓冲且已 init，提交即写结果串并复位其栈位。
+  lua_l_pushresult(&mut b);
 
   1
 }

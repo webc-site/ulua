@@ -523,8 +523,9 @@ fn push_traceback(state: StateView<'_>, msg: Option<&str>, level: i32) {
 unsafe fn tolstring_at<'a>(state: StateView<'_>, idx: i32) -> Option<&'a [u8]> {
   // Safety: `state` 指针位存活由句柄锚定（[`StateView`] 驱动契约）；`idx` 合法
   // 性与窗口前提由本函数 `# Safety` 交给调用方；转换在 VM 内完成（可触发
-  // `__tostring` 并压入结果串）。
-  unsafe { lua_l_tolstring_ref(state.as_mut_ptr(), idx) }
+  // `__tostring` 并压入结果串）。w6e 收形消费点：`lua_l_tolstring_ref` 首参已折
+  // `&mut LuaState`，借用窗止于当句，经句柄裸形就地重建。
+  unsafe { lua_l_tolstring_ref(&mut *state.as_mut_ptr(), idx) }
 }
 
 /// 读 `idx` 处值的对象地址（`lua_topointer` 收口点；仅作身份比较、从不解引用，
