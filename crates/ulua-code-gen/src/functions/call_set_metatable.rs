@@ -4,11 +4,8 @@ use crate::{
   enums::size_x_64::SizeX64,
   functions::{call_vm_helper::call_vm_helper, emit::x_64::luau_reg_address},
   records::{
-    assembly_builder_x_64::AssemblyBuilderX64,
-    ir_data::K_INVALID_INST_IDX,
-    ir_op::IrOp,
-    ir_reg_alloc_x_64::IrRegAllocX64,
-    native_context::NativeContext,
+    assembly_builder_x_64::AssemblyBuilderX64, ir_data::K_INVALID_INST_IDX, ir_op::IrOp,
+    ir_reg_alloc_x_64::IrRegAllocX64, native_context::NativeContext,
   },
 };
 

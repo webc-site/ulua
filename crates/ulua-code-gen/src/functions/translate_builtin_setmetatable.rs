@@ -9,11 +9,7 @@
 use ulua_common::fflag;
 
 use crate::{
-  enums::{
-    ir_cmd::IrCmd,
-    ir_op_kind::IrOpKind,
-    lowering::BuiltinImplType,
-  },
+  enums::{ir_cmd::IrCmd, ir_op_kind::IrOpKind, lowering::BuiltinImplType},
   records::{builtin_impl_result::BuiltinImplResult, ir_builder::IrBuilder, ir_op::IrOp},
 };
 
@@ -45,7 +41,7 @@ pub fn translate_builtin_setmetatable(
   // 赋值段直调（含 obj/mt 类型守卫、__metatable 保护检查、readonly 抛错、
   // 字段写 + objbarrier）；返回 0 → fallback。
   let reg_ra = build.vm_reg(ra as u8);
-    build.inst_ir_cmd_ir_op_ir_op_ir_op_ir_op(
+  build.inst_ir_cmd_ir_op_ir_op_ir_op_ir_op(
     IrCmd::SetMetatableChecked,
     reg_ra,
     obj_reg,

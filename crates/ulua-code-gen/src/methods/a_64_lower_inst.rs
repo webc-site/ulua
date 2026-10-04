@@ -3327,7 +3327,9 @@ impl IrLoweringA64 {
           );
           self.build_mut().cmp(temp2, LUA_TNUMBER as u16);
           let target = self.get_target_label(inst.op(2), index, &mut fresh);
-          self.with_target_label(target, |s, l| s.build_mut().b_cond(ConditionA64::NotEqual, l));
+          self.with_target_label(target, |s, l| {
+            s.build_mut().b_cond(ConditionA64::NotEqual, l)
+          });
 
           // 键值浮点等值比较（luai_numeq 口径，fmov X→D 后 fcmp）
           let key_addr = self.temp_addr(
@@ -3342,7 +3344,9 @@ impl IrLoweringA64 {
           self.build_mut().fmov_rr(d_node, temp1);
           self.build_mut().fmov_rr(d_key, temp2);
           self.build_mut().fcmp(d_node, d_key);
-          self.with_target_label(target, |s, l| s.build_mut().b_cond(ConditionA64::NotEqual, l));
+          self.with_target_label(target, |s, l| {
+            s.build_mut().b_cond(ConditionA64::NotEqual, l)
+          });
           self.finalize_target_label(inst.op(2), index, &mut fresh);
         }
       }

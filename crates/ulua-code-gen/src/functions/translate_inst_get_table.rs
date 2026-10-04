@@ -146,58 +146,58 @@ pub(crate) fn translate_table_access(
       build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
     }
     Some((_, occupied_block)) => {
-    // 哈希直插块：元表/只读守卫自含（与主链数组路同序同数，无重复付），主位空 →
-    // 直插新键（setnodekey 数字版含 tmcache 作废）+ 值落位 + 前向屏障。键为数字
-    // （非 collectable），键侧屏障空操作，不再补 BarrierTableForward（对齐 cpp
-    // luaC_barriert 对非收集对象的零动作语义）。
-    let reg_rb = build.vm_reg(rb);
-    let vb = build.inst_ir_cmd_ir_op(IrCmd::LoadPointer, reg_rb);
-    let reg_rc = build.vm_reg(rc);
-    let node = build.inst_ir_cmd_ir_op_ir_op(IrCmd::GetHashNodeAddrNum, vb, reg_rc);
+      // 哈希直插块：元表/只读守卫自含（与主链数组路同序同数，无重复付），主位空 →
+      // 直插新键（setnodekey 数字版含 tmcache 作废）+ 值落位 + 前向屏障。键为数字
+      // （非 collectable），键侧屏障空操作，不再补 BarrierTableForward（对齐 cpp
+      // luaC_barriert 对非收集对象的零动作语义）。
+      let reg_rb = build.vm_reg(rb);
+      let vb = build.inst_ir_cmd_ir_op(IrCmd::LoadPointer, reg_rb);
+      let reg_rc = build.vm_reg(rc);
+      let node = build.inst_ir_cmd_ir_op_ir_op(IrCmd::GetHashNodeAddrNum, vb, reg_rc);
 
-    build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckNoMetatable, vb, fallback);
-    build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckReadonly, vb, fallback);
+      build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckNoMetatable, vb, fallback);
+      build.inst_ir_cmd_ir_op_ir_op(IrCmd::CheckReadonly, vb, fallback);
 
-    // 主位可插判定（哨兵表 node==dummynode 或 val 非空 → 覆写检查分支）
-    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CheckNodeInsertable, node, vb, occupied_block);
+      // 主位可插判定（哨兵表 node==dummynode 或 val 非空 → 覆写检查分支）
+      build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::CheckNodeInsertable, node, vb, occupied_block);
 
-    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::StoreNodeKeyNum, node, reg_rc, vb);
-    let reg_ra = build.vm_reg(ra);
-    let tva = build.inst_ir_cmd_ir_op(IrCmd::LoadTvalue, reg_ra);
-    let offset = build.const_int(0);
-    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::StoreTvalue, node, tva, offset);
-    let undef = build.undef();
-    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::BarrierTableForward, vb, reg_ra, undef);
-    build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
+      build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::StoreNodeKeyNum, node, reg_rc, vb);
+      let reg_ra = build.vm_reg(ra);
+      let tva = build.inst_ir_cmd_ir_op(IrCmd::LoadTvalue, reg_ra);
+      let offset = build.const_int(0);
+      build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::StoreTvalue, node, tva, offset);
+      let undef = build.undef();
+      build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::BarrierTableForward, vb, reg_ra, undef);
+      build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
 
-    // 覆写检查分支：node 键为等值数字 → 直接覆写值（probe 命中口径）；
-    // 否则（碰撞/他型键）→ helper 全路径。
-    build.begin_block(occupied_block);
+      // 覆写检查分支：node 键为等值数字 → 直接覆写值（probe 命中口径）；
+      // 否则（碰撞/他型键）→ helper 全路径。
+      build.begin_block(occupied_block);
 
-    let reg_rb = build.vm_reg(rb);
-    let vb = build.inst_ir_cmd_ir_op(IrCmd::LoadPointer, reg_rb);
-    let reg_rc = build.vm_reg(rc);
-    let node = build.inst_ir_cmd_ir_op_ir_op(IrCmd::GetHashNodeAddrNum, vb, reg_rc);
-    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::JumpIfNodeKeyNotNum, node, reg_rc, fallback);
+      let reg_rb = build.vm_reg(rb);
+      let vb = build.inst_ir_cmd_ir_op(IrCmd::LoadPointer, reg_rb);
+      let reg_rc = build.vm_reg(rc);
+      let node = build.inst_ir_cmd_ir_op_ir_op(IrCmd::GetHashNodeAddrNum, vb, reg_rc);
+      build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::JumpIfNodeKeyNotNum, node, reg_rc, fallback);
 
-    let reg_ra = build.vm_reg(ra);
-    let tva = build.inst_ir_cmd_ir_op(IrCmd::LoadTvalue, reg_ra);
-    let offset = build.const_int(0);
-    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::StoreTvalue, node, tva, offset);
-    let undef = build.undef();
-    build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::BarrierTableForward, vb, reg_ra, undef);
-    build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
+      let reg_ra = build.vm_reg(ra);
+      let tva = build.inst_ir_cmd_ir_op(IrCmd::LoadTvalue, reg_ra);
+      let offset = build.const_int(0);
+      build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::StoreTvalue, node, tva, offset);
+      let undef = build.undef();
+      build.inst_ir_cmd_ir_op_ir_op_ir_op(IrCmd::BarrierTableForward, vb, reg_ra, undef);
+      build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
 
-    // helper 块：SetSavedpc + 全路径 helper 调用（快路未吞的形态一律到此）
-    build.begin_block(fallback);
+      // helper 块：SetSavedpc + 全路径 helper 调用（快路未吞的形态一律到此）
+      build.begin_block(fallback);
 
-    let savedpc_arg = build.const_uint((pcpos + 1) as u32);
-    build.inst_ir_cmd_ir_op(IrCmd::SetSavedpc, savedpc_arg);
-    let reg_ra = build.vm_reg(ra);
-    let reg_rb = build.vm_reg(rb);
-    let reg_rc = build.vm_reg(rc);
-    build.inst_ir_cmd_ir_op_ir_op_ir_op(cmd, reg_ra, reg_rb, reg_rc);
-    build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
+      let savedpc_arg = build.const_uint((pcpos + 1) as u32);
+      build.inst_ir_cmd_ir_op(IrCmd::SetSavedpc, savedpc_arg);
+      let reg_ra = build.vm_reg(ra);
+      let reg_rb = build.vm_reg(rb);
+      let reg_rc = build.vm_reg(rc);
+      build.inst_ir_cmd_ir_op_ir_op_ir_op(cmd, reg_ra, reg_rb, reg_rc);
+      build.inst_ir_cmd_ir_op(IrCmd::JUMP, next);
     }
   }
 }
