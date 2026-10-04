@@ -7,13 +7,10 @@ use ulua_vm::macros::lua_memerrmsg::LUA_MEMERRMSG_STR;
 
 /// VM 全局 `print` 的 C 名称（wasm 捕获版的注册与解注册共用；`run_code` 的
 /// 结果打印已下沉 `ulua_vm::functions::run_loaded_chunk`，其内同名常量随迁）。
+/// 同一字面量一物两用：`set_global_str` 的键与 `push_c_function` 的 debugname
+/// 字节窗（`PRINT_NAME.as_bytes()`，review.md §10 原生形态、无终止 NUL）。
 #[cfg(feature = "wasm")]
 pub(crate) const PRINT_NAME: &str = "print";
-
-/// [`PRINT_NAME`] 的 NUL 结尾形态（`lua_pushcclosurek` 的 `debugname: *const
-/// c_char` 入参经 `cstr` 收口点转换，review.md §10）。
-#[cfg(feature = "wasm")]
-pub(crate) const PRINT_NAME_NUL: &[u8] = b"print\0";
 
 /// `luaL_newstate` / `lua_newthread` 分配失败（内存耗尽）时回报宿主的错误文本；
 /// VM 状态为 null 时不得继续解引用。直接复用 VM 的内存错误常量，避免同一字面量

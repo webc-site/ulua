@@ -6,49 +6,21 @@
 //! `pretty_print_fallback = false`），仅在失败出口拼接 cpp 同款
 //! `short_src:line` 错误前缀。
 
-use core::ptr::{from_mut, null, null_mut};
+use core::ptr::from_mut;
 use std::string::String;
 
 use itoa::Buffer;
 use ulua_ast::records::parse_options::ParseOptions;
 use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
-use ulua_common::functions::c_str::{cstr, cstr_cow};
 use ulua_compiler::{functions::compile::compile, records::compile_options::CompileOptions};
 use ulua_vm::{
   functions::{lua_getinfo::lua_getinfo, run_loaded_chunk::run_loaded_chunk},
-  macros::lua_idsize::LUA_IDSIZE,
   records::{lua_debug::LuaDebug, lua_state::LuaState},
 };
 
-/// `lua_getinfo` 选项串：source/short_src/line（NUL 结尾字节串，收口点转 C 指针）。
-const GETINFO_SLN_OPT: &[u8] = b"sln\0";
-
-/// cpp `LuaDebug ar;` 的零初值（`Web.cpp:116`）：整块在编译期成形，
-/// 免 `mem::zeroed()` 的 unsafe 与「POD 全零合法」的口头论证。
-/// `ssbuf` 长度取 VM 的 `LUA_IDSIZE`（`luaconf.h:71` = 256），不重复字面量。
-///
-/// FFI: c-API 要求 NULL —— `LuaDebug` 是 VM 的 C ABI 镜像结构
-/// （`ulua_vm::records::lua_debug::LuaDebug`，`#[repr(C)]`，出处
-/// `VM/include/lua.h:488-502`），指针字段的本体即 C 侧 `char*`/`void*`，
-/// 全零初值是「出参未填即空」的 cpp 观察语义（`name/what/source/short_src`
-/// 判 null、`userdata` 宿主回调判 nullptr）。该结构声明与 `luau_callhook` 写端
-/// 均在 ulua-vm（本 crate 外），单端改「可空借用指针」形态不成立；此处
-/// `null()`/`null_mut()` 仅作 const POD 初值，从不被本侧解引用。
-const ZERO_DEBUG: LuaDebug = LuaDebug {
-  name: null(),
-  what: null(),
-  source: null(),
-  short_src: null(),
-  linedefined: 0,
-  currentline: 0,
-  protoid: 0,
-  bytecodeid: 0,
-  nupvals: 0,
-  nparams: 0,
-  isvararg: 0,
-  userdata: null_mut(),
-  ssbuf: [0; LUA_IDSIZE as usize],
-};
+/// `lua_getinfo` 选项串：source/short_src/line。review.md §10 后为原生选项
+/// 字节窗（无终止 NUL），整窗即模板。
+const GETINFO_SLN_OPT: &[u8] = b"sln";
 
 /// 运行 `source`，返回装配后的结果/错误文本（成功为空串，cpp 同形）。
 ///
@@ -79,13 +51,16 @@ pub fn run_code(l: &mut LuaState, source: &str) -> String {
     Err(error) => {
       // LuaDebug ar;
       // if (lua_getinfo(l, 0, "sln", &ar))
-      let mut ar = ZERO_DEBUG;
+      // cpp 零初值的原生对应：`Default` 逐字段给出「未回填即空」形态
+      // （串窗 `None`、`ShortSrc` 零长），无 unsafe 初值折转。
+      let mut ar = LuaDebug::default();
       // Safety: `l` 由参数借用保证为活跃状态机（指针就地派生，不越过借用窗口）；
-      // `ar` 是可写局部 POD，`"sln"` 选项只写字段、不压栈。
-      if unsafe { lua_getinfo(from_mut(l), 0, cstr(GETINFO_SLN_OPT), &mut ar) } != 0 {
+      // `ar` 是本帧独占可写的原生记录，`"sln"` 选项只写字段、不压栈。
+      if unsafe { lua_getinfo(from_mut(l), 0, GETINFO_SLN_OPT, &mut ar) } != 0 {
         // 前缀拼在 run_loaded_chunk 返回的消息之前，与 cpp 同序。
-        // Safety: getinfo 成功时 short_src 是 ar 内拥有的 NUL 结尾缓冲。
-        let short_src = unsafe { cstr_cow(ar.short_src) };
+        // `short_src.bytes()` 由写端一处截断（长度即观察值），lossy 解码与
+        // 旧 `cstr_cow` 读面逐字节等值。
+        let short_src = String::from_utf8_lossy(ar.short_src.bytes());
         let mut itoa_buf = Buffer::new();
         let line = itoa_buf.format(ar.currentline);
         // 按前缀与错误消息实际长度精确预分配，免二次扩容；

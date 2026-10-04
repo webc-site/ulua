@@ -22,22 +22,19 @@
 //! 行为与 `lua_b_print` 完全一致（制表符分隔参数、结尾换行、`luaL_tolstring`
 //! 强转），可观察行为不变。
 
-use core::{cell::RefCell, ffi::c_int, mem, ptr::from_mut};
+use core::{cell::RefCell, ffi::c_int, mem};
 use std::{panic, string::String};
 
-use ulua_common::functions::c_str::{cstr, cstr_cow};
+use ulua_vm::functions::install_lua_exception_panic_hook::install_lua_exception_panic_hook;
+use ulua_vm::records::lua_exception::lua_exception;
 use ulua_vm::{
-  functions::{
-    install_lua_exception_panic_hook::install_lua_exception_panic_hook,
-    lua_l_tolstring::lua_l_tolstring_ref, lua_pushcclosurek::lua_pushcclosurek,
-  },
-  records::{lua_exception::lua_exception, lua_state::LuaState},
+  functions::lua_l_tolstring::lua_l_tolstring_ref, records::lua_state::LuaState,
 };
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::{
   functions::{check_script::run_check, run_in_sandbox::run_in_sandbox},
-  util::{PRINT_NAME, PRINT_NAME_NUL},
+  util::PRINT_NAME,
 };
 
 /// 无诊断时回给 JavaScript 的文案。
@@ -100,9 +97,11 @@ pub fn wasm_start() {
   let previous = panic::take_hook();
   panic::set_hook(Box::new(move |info| {
     if let Some(exc) = info.payload().downcast_ref::<lua_exception>() {
-      // Safety: what() 返回的指针指向 VM 栈上仍存活的错误对象（panic=abort
-      // 不做 unwind，栈保持完整）；null 时 cstr_cow 返回空串。
-      let msg = unsafe { cstr_cow(exc.what()) };
+      // SAFETY: `what()` 契约——`exc` 锚定抛出点存活的 LuaState，panic=abort 不做
+      // unwind，VM 栈上错误对象在此仍存活；原 null 返回语义已由 VM 侧收为
+      // 空字节窗，首个 NUL 截断也在 VM 读面同点完成。
+      let what = unsafe { exc.what() };
+      let msg = String::from_utf8_lossy(&what);
       on_runtime_error(&msg);
     } else {
       previous(info);
@@ -122,11 +121,11 @@ thread_local! {
 /// of `stdout`.
 ///
 /// # Safety
-/// 仅由 VM 经 `lua_pushcclosurek` 注册为 Lua 闭包后调用，故 `l` 必是调用它的
+/// 仅由 VM 经 `push_c_function` 注册为 Lua 闭包后调用，故 `l` 必是调用它的
 /// 那个合法、活跃、单线程驱动的 `LuaState`；其栈顶与 `1..=lua_gettop(l)` 实参区
 /// 由 VM 按闭包调用约定布置，本函数只在本次调用期内读写该区、栈自平衡。
 unsafe extern "C-unwind" fn capturing_print(l: *mut LuaState) -> c_int {
-  // Safety: 本函数只由 VM 经 `lua_pushcclosurek` 作为 Lua 闭包调用，故 `l` 必是
+  // Safety: 本函数只由 VM 经 `push_c_function` 作为 Lua 闭包调用，故 `l` 必是
   // 调用它的那个合法、活跃、单线程驱动的 `LuaState`；其栈顶与 `1..=lua_gettop(l)` 实参区
   // 由 VM 按闭包调用约定布置，本函数只在本次调用期内读写该区、栈自平衡。
   // 入口一次解引用物化为 `&mut`，后续全走安全方法。
@@ -206,14 +205,14 @@ pub fn run(source: &str) -> RunResult {
   // debugname 经 `cstr` 收口转 C 指针（§10：不散落 `.as_ptr().cast()`）；
   // `capturing_print` 与 `set_global_str` 各自压/弹平衡，故交给 run_code 的栈
   // 与 cpp `executeScript` 一致。
-  let error = run_in_sandbox(source, |l| unsafe {
-    lua_pushcclosurek(
-      from_mut(l),
-      Some(capturing_print),
-      cstr(PRINT_NAME_NUL),
-      0,
-      None,
-    );
+  let error = run_in_sandbox(source, |l| {
+    // 调用序契约：钩子只在 [`run_in_sandbox`] 契约给出的「openlibs 之后、
+    // luaL_sandbox 冻结全局表之前」窗口内借用该状态（此刻全局表仍可写）；
+    // `push_c_function` 为 safe fn，debugname 直投 `PRINT_NAME` 的静态字节窗
+    // （review.md §10：VM 只存引用不复制，无终止 NUL）；`capturing_print` 与
+    // `set_global_str` 各自压/弹平衡，故交给 run_code 的栈与 cpp
+    // `executeScript` 一致。
+    l.push_c_function(Some(capturing_print), Some(PRINT_NAME.as_bytes()));
     l.set_global_str(PRINT_NAME);
   });
 
