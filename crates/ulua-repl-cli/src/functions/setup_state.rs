@@ -61,9 +61,10 @@ pub unsafe fn setup_state(l: *mut LuaState) {
   // push/pop 配平收回 LUA_GLOBALSINDEX。
   l.pop(1);
 
-  // Safety: `luaopen_require` 为 unsafe 导出；宿主随 require 闭包的 userdata 由 GC
-  // 持有（luaopen_require 内部 lua_newuserdatadtor 装箱），与状态同生命周期。
-  unsafe { luaopen_require(l, create_cli_require_context()) };
+  // luaopen_require 已收形为安全 fn（`l` 以 `&mut LuaState` 直传，免在边界折回裸
+  // 指针，review.md §2/§3）；其调用序契约在本处成立：宿主随 require 闭包的 userdata
+  // 由 GC 持有（内部 lua_newuserdatadtor 装箱），与状态同生命周期。
+  luaopen_require(l, create_cli_require_context());
 
   // Safety: `lua_l_sandbox` 仍为 unsafe 导出（`lua_setsafeenv` 裸形屏障）；只原地冻结全局表。
   unsafe { lua_l_sandbox(l) };

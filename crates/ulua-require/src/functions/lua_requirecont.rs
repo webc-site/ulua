@@ -58,15 +58,17 @@ fn cache_required_result(l: &mut LuaState, cache_key: &[u8]) {
   }
 }
 
-/// # Safety
+/// require 同步装载的收尾本体（cpp `luaRequireCont` 实体）：按 4 个固定槽之外的
+/// 结果数把唯一结果写进 `_MODULES` 缓存，返回结果数。
 ///
-/// `l` must be a valid pointer to a live `LuaState` (VM 交给 continuation 的协程
-/// 状态)；本函数只操作本协程帧栈与注册表，不触发宿主回调，故各步独占借用安全。
-pub(crate) unsafe extern "C-unwind" fn lua_requirecont(l: *mut LuaState, _status: i32) -> i32 {
-  // Safety: 契约保证 l 为 VM continuation 交给的存活协程 state，入口一次重建
-  // 独占借用（不与其他别名冲突）；后续均为本协程帧上的栈/注册表操作。
-  let l: &mut LuaState = unsafe { &mut *l };
-
+/// 收形（review.md §2/§3）：`l` 的存活与独占前提由 `&mut LuaState` 引用形承载，
+/// 本函数无裸操作（全程 `LuaState` 安全方法与注册表栈门面），故为安全 `fn`；
+/// Lua/C continuation 的裸句柄形态只由 [`lua_requirecont`] 一层垫片承接。
+///
+/// 调用序契约（正确性，非内存安全）：`l` 须为本 require 协程帧的当前状态、栈高
+/// ≥ [`REQUIRE_STACK_VALUES`]（固定槽 cacheKey/chunkname/loadname + 路径），且
+/// 栈 2 为 cacheKey 字符串；多结果时经 `luaL_error` 抛错发散。
+pub(crate) fn require_cont(l: &mut LuaState) -> i32 {
   ulua_common::LUAU_ASSERT!(l.get_top() >= REQUIRE_STACK_VALUES);
   let num_results = l.get_top() - REQUIRE_STACK_VALUES;
   // cacheKey 视图取栈 2 固定槽（Lua 串非 GC 搬迁对象，指针调用窗内恒有效）。
@@ -86,4 +88,16 @@ pub(crate) unsafe extern "C-unwind" fn lua_requirecont(l: *mut LuaState, _status
   }
 
   num_results
+}
+
+/// # Safety
+///
+/// `l` must be a valid pointer to a live `LuaState` (VM 交给 continuation 的协程
+/// 状态)；`_status` 按 Lua/C continuation 约定恒可忽略。本函数只操作本协程帧栈与
+/// 注册表，不触发宿主回调，故各步独占借用安全。
+pub(crate) unsafe extern "C-unwind" fn lua_requirecont(l: *mut LuaState, _status: i32) -> i32 {
+  // Safety: 契约保证 l 为 VM continuation 交给的存活协程 state，入口一次重建
+  // 独占借用（不与其他别名冲突）；require_cont 为安全本体，其栈布局前提即本函数
+  // 契约（continuation 调用约定保证）。
+  require_cont(unsafe { &mut *l })
 }

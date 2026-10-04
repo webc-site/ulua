@@ -154,27 +154,38 @@ impl<H: RequireHost> NavigationContext for RuntimeNavigationContext<'_, H> {
 /// 计时器启动（原 `Rc<dyn Fn>` 闭包体，逐字保留语义；`H` 由交出回调的
 /// `luau_config_init` 与本体同一单态化实例，读回类型必然一致）。
 ///
+/// 保留 `unsafe fn` 的裁定（review.md §2 判定 1）：两枚形参都由 VM 以裸指针交回且
+/// 函数体解引用，且其类型被 ulua-config 的 `ConfigInitFn`（`unsafe fn(*mut LuaState,
+/// *mut c_void)`）钉死——降级需同步该禁区签名，故 `unsafe` 留在签名而非虚假消除。
+///
 /// # Safety
-/// `l` 必须指向执行配置的 VM 提供的存活 `LuaState`；`userdata` 必须是
-/// [`RuntimeNavigationContext`] 的 `luau_config_init` 交出的本上下文地址（即
-/// `RuntimeNavigationContext<'_, H>` 本体，`H` 与本实例化一致），且仅在配置执行的
-/// 同步窗口内被调用（上下文由 `resolve_require` 的调用栈保活）。
+/// - `l`：必须指向执行配置的那个 VM 提供的存活 `LuaState`，且本次调用窗口内无人
+///   并发可变借用（VM 在配置线程执行期串行调用本回调）。
+/// - `userdata`：必须是 [`RuntimeNavigationContext::luau_config_init`] 交出的本
+///   上下文地址（即 `RuntimeNavigationContext<'_, H>` 本体，`H` 与本实例化一致，
+///   读写类型同源单态化），并仅在配置执行的同步窗口内被调用一次——该窗口由
+///   `resolve_require` 的调用栈保证上下文存活，且窗口内无人可变借用本上下文
+///   （host/timer 只共享读取，timer 可变字段由 `Cell` 承载）。
 unsafe fn runtime_luau_config_init<H: RequireHost>(l: *mut LuaState, userdata: *mut c_void) {
   // Safety: 契约保证 userdata 指向存活的本体，且无人并发可变借用
   // （host/timer 仅共享读取，timer 可变字段由 Cell 承载）。
   let nav = unsafe { &*userdata.cast::<RuntimeNavigationContext<'_, H>>() };
-  // Safety: l 与本次配置执行窗口同存活（fn 契约），重建独占借用。
+  // Safety: l 与本次配置执行窗口同存活（fn 契约第一条），重建独占借用。
   let l = unsafe { &mut *l };
   nav.start_config_timer(l);
 }
 
 /// 配置执行中断回调：超时则报错（对应 C++ `luauConfigInterrupt`）。
 ///
+/// 保留 `unsafe extern "C-unwind"`：本函数是 VM 中断钩子的 Lua/C 回调形态（签名由
+/// ulua-vm 的 `lua_CInterrupt` 约定钉死），`l` 由 VM 交回且被解引用（判定 1）。
+///
 /// # Safety
-/// `l` 必须指向存活的 `LuaState`：本函数只应作为 VM 的中断回调，由 VM 在
-/// 配置线程执行期间以当前状态调用；线程数据槽内容只可能为 null，或
-/// `luau_config_init` 在本次配置执行期间写入的存活 `RuntimeLuauConfigTimer`
-/// 地址（上下文由 `resolve_require` 的调用栈保活）。
+/// - `l`：必须指向存活的 `LuaState`，本函数只应作为 VM 的中断回调，由 VM 在配置
+///   线程执行期间以当前状态调用；
+/// - 线程数据槽：内容只可能为 null，或 `luau_config_init` 在本次配置执行期间写入的
+///   存活 `RuntimeLuauConfigTimer` 地址（上下文由 `resolve_require` 的调用栈保活）；
+/// - `_gc`：仅按 Lua/C 中断约定占位，不被读。
 unsafe extern "C-unwind" fn runtime_luau_config_interrupt(l: *mut LuaState, _gc: i32) {
   // Safety: 中断回调入口，l 由 VM 在配置线程仍在执行时以当前 LuaState* 调用
   // （Lua/C API 中断约定），重建只读驱动的借用。
