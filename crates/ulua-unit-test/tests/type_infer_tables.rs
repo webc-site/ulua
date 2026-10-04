@@ -6728,6 +6728,34 @@ fn type_infer_tables_read_only_property_reads() {
   assert_eq!(0, result.errors.len(), "{:?}", result.errors);
 }
 
+// Source: `tests/TypeInfer.tables.test.cpp` `read_only_indexer_mismatch`（:7631）
+// —— 依赖 `LuauNewTypePathErrorMessages`（w6d 落地 `render_type_path` 后补齐）：
+// 只读索引器不满足读写索引器时，flags-on 专枝渲染 "the indexer is read-only…"
+// （cpp `TypeChecker2.cpp:3551-3556`），生成面 violation 标记见 cpp
+// `Subtyping.cpp:2637` 双旗标判定。
+#[test]
+fn type_infer_tables_read_only_indexer_mismatch_error_message() {
+  ulua_unit_test::DOES_NOT_PASS_OLD_SOLVER_GUARD!();
+  let _read_only_indexers = ScopedFastFlag::new(&fflag::LuauReadOnlyIndexers, true);
+  let _new_type_path_error_messages =
+    ScopedFastFlag::new(&fflag::LuauNewTypePathErrorMessages, true);
+  let _property_modifier_mismatch_errors =
+    ScopedFastFlag::new(&fflag::LuauPropertyModifierMismatchErrors, true);
+
+  let (_fixture, result) = fx_check!(
+    r#"
+        local x: { read string } = {}
+        local y: { string } = x
+    "#
+  );
+
+  assert_eq!(1, result.errors.len(), "{:?}", result.errors);
+  assert_eq!(
+    "Expected this to be '{string}', but got '{read string}'; \nthe indexer is read-only in the latter type, but the former type requires a read-write indexer",
+    to_string_type_error(&result.errors[0])
+  );
+}
+
 // Source: `tests/TypeInfer.tables.test.cpp`
 #[test]
 fn type_infer_tables_read_only_property_subtype_mismatch_error_message() {
@@ -9044,7 +9072,8 @@ fn type_infer_tables_wrong_assign_does_hit_indexer() {
 
 // 缺口（flag 未同步，tst-r06 对照留证，对照 `tests/TypeInfer.tables.test.cpp`）：
 // - basic_data_like_array_1..5（:6930-7001）——依赖 LuauRelateIndexersTypo。
-// - read_only_indexer_mismatch（:7542）——依赖 LuauNewTypePathErrorMessages。
+// - read_only_indexer_mismatch —— w6d 已随 `LuauNewTypePathErrorMessages` 落地补齐
+//   （见 `type_infer_tables_read_only_indexer_mismatch_error_message`）。
 // - oss_2669_infer_read_only_indexers_1..5（:7743-7823）——依赖 LuauInferReadOnlyIndexers。
 // - normalization_always_intersects_table（:7601）——依赖 LuauAlwaysIntersectTablesWithTables。
 // - oss_2597_constraint_forcing_bad_refinement（:7622）——依赖
