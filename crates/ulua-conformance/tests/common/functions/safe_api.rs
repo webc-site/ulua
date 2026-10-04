@@ -200,12 +200,9 @@ pub fn callbacks_mut<'a>(l: L) -> &'a mut LuaCallbacks {
   unsafe { &mut *lua_callbacks(l) }
 }
 
-/// `lua_newuserdatadtor` 的内联析构类型（与 `LuaDestructor` 一致）。
-pub type UserdataDtorRaw = LuaDestructor;
-
-/// `lua_newthread` 的返回值同样是存活线程栈，归父状态持有；用例经门面取得后
-/// 可安全作为后续 [`L`] 参数。
-pub type AtomAssignFn = Option<unsafe extern "C-unwind" fn(L, *const c_char, usize) -> i16>;
+/// `lua_callbacks.useratom` 的签名：`(L, *const c_char, usize) -> i16` 的可空形态
+/// （`None` 表示未挂 atom 分配钩子）。
+pub(crate) type AtomAssignFn = Option<unsafe extern "C-unwind" fn(L, *const c_char, usize) -> i16>;
 
 // ---------------------------------------------------------------------------
 // 栈管理
@@ -678,7 +675,7 @@ pub fn newuserdatatagged(l: L, sz: usize, tag: c_int) -> *mut c_void {
 }
 
 /// `lua_newuserdatadtor(l, sz, dtor)`：带内联析构的 userdata。
-pub fn newuserdatadtor(l: L, sz: usize, dtor: UserdataDtorRaw) -> *mut c_void {
+pub fn newuserdatadtor(l: L, sz: usize, dtor: LuaDestructor) -> *mut c_void {
   // Safety: `l` 存活；`dtor` 遵循 Lua 析构 C 约定（用例桩函数自带）。
   unsafe { lua_newuserdatadtor(l, sz, dtor) }
 }

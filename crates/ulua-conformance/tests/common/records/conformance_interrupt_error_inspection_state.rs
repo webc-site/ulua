@@ -1,6 +1,6 @@
 use core::sync::atomic::{AtomicI32, Ordering};
 
-pub struct ConformanceInterruptErrorInspectionState {
+pub(crate) struct ConformanceInterruptErrorInspectionState {
   pub target: AtomicI32,
   pub step: AtomicI32,
 }
@@ -25,5 +25,5 @@ impl Default for ConformanceInterruptErrorInspectionState {
   }
 }
 
-pub static CONFORMANCE_INTERRUPT_ERROR_INSPECTION_STATE: ConformanceInterruptErrorInspectionState =
-  ConformanceInterruptErrorInspectionState::new();
+pub(crate) static CONFORMANCE_INTERRUPT_ERROR_INSPECTION_STATE:
+  ConformanceInterruptErrorInspectionState = ConformanceInterruptErrorInspectionState::new();
