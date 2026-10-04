@@ -104,14 +104,13 @@ fn read_prop(ty: TypeId) -> Property {
 
 pub fn make_string_metatable(builtin_types: NonNull<BuiltinTypes>, mode: SolverMode) -> TypeId {
   // C++ `NotNull<TypeArena> arena{builtinTypes->arena.get()}` — a mutable handle into the Box's contents.
-  // Safety: builtin_types 是调用方（GlobalTypes 构造序列）拥有的活 BuiltinTypes
-  // 的 NonNull 句柄，恒非空且比本次调用长寿；其 arena 字段为 Box 独占堆分配，
-  // 地址稳定。句柄物化的 `&mut TypeArena` 借用只覆盖 TypeArena 堆块的字节；
-  // 其后下方 as_ref 共享引用只读 BuiltinTypes 结构体内其他 Copy 字段（地址
-  // 区间与 arena 堆块不相交，读取不触碰 arena 字节），构造序列单线程执行、
-  // 无第三方借用指向同一 arena，满足 `BuiltinTypes::arena_handle` 的
-  // `# Safety` 契约。
-  let arena: &mut TypeArena = unsafe { BuiltinTypes::arena_handle(builtin_types) }.get_mut();
+  // 调用序前提（见 `BuiltinTypes::arena_handle` 文档）：builtin_types 是调用方
+  // （GlobalTypes 构造序列）拥有的活 BuiltinTypes 会话句柄，恒非空且比本次调用长寿；
+  // 其 arena 字段为 Box 独占堆分配、地址稳定。句柄物化的 `&mut TypeArena` 借用只覆盖
+  // TypeArena 堆块的字节；其后下方 as_ref 共享引用只读 BuiltinTypes 结构体内其他 Copy
+  // 字段（地址区间与 arena 堆块不相交，读取不触碰 arena 字节），构造序列单线程执行、
+  // 无第三方借用指向同一 arena。
+  let arena: &mut TypeArena = BuiltinTypes::arena_handle(builtin_types).get_mut();
   let builtin_types = alias_ref(builtin_types.as_ptr());
 
   let nil_type = builtin_types.nil_type;

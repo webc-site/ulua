@@ -44,11 +44,12 @@ impl TxnLog {
     new_ty
   }
 
-  /// # Safety
-  /// 调用方须保证 `tp` 为本 log 所属 types arena 中存活、对齐的 `FreeTypePack` 节点（函数内 LUAU_ASSERT
-  /// 以 `txn_log_is::<FreeTypePack>` 校验），且本 `TxnLog` 处于独占可写状态。
-  /// `queue_type_pack_id` 返回的 pending 槽由本 log 堆上 Box 独占、地址稳定。cpp `Analysis/src/TxnLog.cpp:430`。单线程串行。
-  pub(crate) unsafe fn change_level_type_pack_id_type_level(
+  /// 调用序契约（正确性，非内存安全）：`tp` 须为本 log 所属 types arena 中
+  /// `FreeTypePack` 节点的句柄（函数内 LUAU_ASSERT 以 safe 门面 `txn_log_is` 校验），
+  /// 且本 `TxnLog` 处于独占可写状态；体内解引用全部经 safe 门面（`queue_type_pack_id`/
+  /// `get_mutable_pending_type_pack`，pending 槽由本 log 堆上 Box 独占、地址稳定），
+  /// 违约仅 LUAU_ASSERT 拦断或改错节点，不引入未定义行为。cpp `Analysis/src/TxnLog.cpp:430`。单线程串行。
+  pub(crate) fn change_level_type_pack_id_type_level(
     &mut self,
     tp: TypePackId,
     new_level: TypeLevel,

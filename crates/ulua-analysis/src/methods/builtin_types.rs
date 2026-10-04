@@ -26,15 +26,16 @@ impl BuiltinTypes {
   /// GlobalTypes 构造序列（`make_string_metatable`、本构造器的
   /// unfreeze/freeze 两点）的双重转铸 shim
   /// `&mut *(&mut *NonNull<BuiltinTypes>.as_mut().arena as *mut TypeArena)`，
-  /// 把该族的解引用 unsafe 收拢到本函数单点。
+  /// 把该族的解引用收拢到本函数单点。
   ///
-  /// # Safety
-  /// `builtin_types` 须满足 C++ `NotNull<BuiltinTypes>` 接线契约：恒非空、
-  /// 对齐，指向比经返回句柄物化的任何借用长寿的活 BuiltinTypes 单例；其
-  /// `arena` 字段为 Box 独占堆分配、地址稳定；返回句柄物化的借用存续期间
-  /// 不得另有存活可变别名指向同一 arena（构造序列单线程执行）。
-  pub(crate) unsafe fn arena_handle(builtin_types: NonNull<BuiltinTypes>) -> Handle<TypeArena> {
-    // Safety: 非空与存活契约即本函数 `# Safety` 前提；经裸指针 place 直取
+  /// 调用序契约（正确性，非内存安全）：`builtin_types` 须为 C++ `NotNull<BuiltinTypes>`
+  /// 接线语义下的会话句柄——由 GlobalTypes/Frontend 布线指向存活 BuiltinTypes 单例、
+  /// 比返回句柄物化的任何借用长寿；其 `arena` 字段为 Box 独占堆分配、地址稳定；
+  /// 返回句柄物化的借用存续期间不得另有存活可变别名指向同一 arena（构造序列
+  /// 单线程执行）。句柄形态的存活前提由本 crate 的 `NonNull`/`Handle` 会话接线
+  /// 不变量承载（同 `alias_nn*` safe 门面族），解引用 unsafe 收口在体内窄块。
+  pub(crate) fn arena_handle(builtin_types: NonNull<BuiltinTypes>) -> Handle<TypeArena> {
+    // Safety: 非空与存活契约即函数头的会话接线不变量；经裸指针 place 直取
     // `arena` 字段，可变借用只覆盖 Box 独占的 TypeArena 堆块字节，与原调用点
     // `&mut *builtin_types.as_mut().arena` 的转铸形态逐项同构。
     unsafe { Handle::from_mut(&mut (*builtin_types.as_ptr()).arena) }

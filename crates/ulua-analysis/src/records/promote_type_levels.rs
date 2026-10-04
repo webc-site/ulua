@@ -44,12 +44,10 @@ impl PromoteTypeLevels {
   }
 
   pub(crate) fn promote_pack(&mut self, tp: TypePackId, level: TypeLevel) {
-    if self.min_level.subsumes_strict(&level) {
-      unsafe {
-        if let Some(log) = self.log.as_mut() {
-          log.change_level_type_pack_id_type_level(tp, self.min_level);
-        }
-      }
+    if self.min_level.subsumes_strict(&level)
+      && let Some(log) = alias_opt_mut(self.log)
+    {
+      log.change_level_type_pack_id_type_level(tp, self.min_level);
     }
   }
 }
