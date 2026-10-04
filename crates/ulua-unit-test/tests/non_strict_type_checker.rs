@@ -893,6 +893,7 @@ return e
     .base
     .file_resolver
     .source_types
+    .borrow_mut()
     .insert(String::from("Modules/A").into(), Type::Module);
 
   fixture.base.file_resolver.source.insert(

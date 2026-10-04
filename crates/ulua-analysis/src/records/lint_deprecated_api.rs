@@ -3,15 +3,24 @@ use core::ptr::{from_mut, from_ref, null};
 
 use ulua_ast::{
   records::{
-    ast_attr::AstAttr, ast_expr::AstExpr, ast_expr_call::AstExprCall,
-    ast_expr_constant_number::AstExprConstantNumber, ast_expr_function::AstExprFunction,
-    ast_expr_global::AstExprGlobal, ast_expr_index_name::AstExprIndexName,
-    ast_expr_local::AstExprLocal, ast_name::AstName, ast_stat_function::AstStatFunction,
-    ast_stat_local_function::AstStatLocalFunction, ast_visitor::AstVisitor,
-    deprecated_info::DeprecatedInfo, location::Location, node_handle::OptNode,
+    ast_attr::AstAttr,
+    ast_expr::AstExpr,
+    ast_expr_call::AstExprCall,
+    ast_expr_constant_number::AstExprConstantNumber,
+    ast_expr_function::AstExprFunction,
+    ast_expr_global::AstExprGlobal,
+    ast_expr_index_name::AstExprIndexName,
+    ast_expr_local::AstExprLocal,
+    ast_name::AstName,
+    ast_stat_function::AstStatFunction,
+    ast_stat_local_function::AstStatLocalFunction,
+    ast_visitor::AstVisitor,
+    deprecated_info::DeprecatedInfo,
+    location::Location,
+    node_handle::{Node, OptNode},
   },
   rtti::ast_node_try_as,
-  visit::{ast_expr_visit, ast_stat_visit},
+  visit::{ast_expr_visit_ref, ast_stat_visit_ref},
 };
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 use ulua_config::enums::code::Code;
@@ -146,18 +155,17 @@ impl<'ctx> LintDeprecatedApi<'ctx> {
       self.report_property(location, prop, global.as_str(), index_name);
     }
   }
-  pub fn check_ast_expr_function(&mut self, func: *mut AstExprFunction) {
-    LUAU_ASSERT!(!func.is_null());
-    let fty = self.get_function_type(func.cast::<AstExpr>());
+  pub fn check_ast_expr_function(&mut self, func: &mut AstExprFunction) {
+    // func 的 `&mut` 借用即「节点非空、存活且遍历窗口内可独占」的类型系统证明，
+    // 原首行 `LUAU_ASSERT!(!func.is_null())` 指针判空随形参收窄一并退役。
+    let fty = self.get_function_type(Node::from_mut(&mut *func).cast::<AstExpr>().as_ptr());
     let is_deprecated = !fty.is_null() && alias_ref(fty).is_deprecated_function;
     if is_deprecated {
       self.push_scope(fty);
     }
-    unsafe {
-      // Safety: func 由方法起始 LUAU_ASSERT 保证非空、指向 arena 存活 AstExprFunction；作为基类
-      // *mut AstExpr（repr(C) 首字段同址）遍历，单线程内 &mut self 作 visitor 独占、无别名。
-      ast_expr_visit(func.cast::<AstExpr>(), self);
-    }
+    // 分发经引用门面：句柄 `cast::<AstExpr>`（repr(C) 基类同址）后 `get_mut()`
+    // 出借独占借用，全链路 safe；单线程内 &mut self 作 visitor 独占、无别名。
+    ast_expr_visit_ref(Node::from_mut(&mut *func).cast::<AstExpr>().get_mut(), self);
     if is_deprecated {
       self.pop_scope(fty);
     }
@@ -392,15 +400,18 @@ impl<'ctx> LintDeprecatedApi<'ctx> {
     true
   }
   pub(crate) fn visit_ast_stat_local_function(&mut self, node: *mut AstStatLocalFunction) -> bool {
-    // `(*node).func` 已句柄化为 Node（parser 保证非空），`as_ptr`
-    // 桥交仍以指针形态消费的 check_ast_expr_function。
-    self.check_ast_expr_function(alias_ref(node).func.as_ptr());
+    // `(*node).func` 已句柄化为 Node（parser 保证非空）：`OptNode` 句柄边界物化
+    // 独占借用后直交 `check_ast_expr_function` 的引用形态，`as_ptr` 桥退役。
+    if let Some(node) = OptNode::from_ptr(node).get_mut() {
+      self.check_ast_expr_function(node.func.get_mut());
+    }
     false
   }
   pub(crate) fn visit_ast_stat_function(&mut self, node: *mut AstStatFunction) -> bool {
-    // `(*node).func` 已句柄化为 Node（parser 保证非空），`as_ptr` 桥交
-    // 仍以指针形态消费的 check_ast_expr_function。
-    self.check_ast_expr_function(alias_ref(node).func.as_ptr());
+    // 同上：`func` 句柄经 `get_mut()` 出借独占借用，check 不再消费裸指针。
+    if let Some(node) = OptNode::from_ptr(node).get_mut() {
+      self.check_ast_expr_function(node.func.get_mut());
+    }
     false
   }
   pub(crate) fn visit_ast_expr_index_name(&mut self, node: *mut AstExprIndexName) -> bool {

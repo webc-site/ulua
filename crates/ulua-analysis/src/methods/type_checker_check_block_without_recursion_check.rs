@@ -51,9 +51,14 @@ impl TypeChecker {
     let mut first_flow: Option<ControlFlow> = None;
 
     for (proto_iter, &proto_stat) in sorted.iter().enumerate() {
+      // 遍历侧收窄为 `&mut AstStat`：句柄 Copy 出本地可变槽后 `get_mut()` 物化
+      // 独占借用（同 toposort `elements` 先例），调用结束借用即止；共享借用
+      // `proto_ref` 在独占借用结束之后才再出借，与原 cpp 顺序裸指针透传同构。
+      let mut proto_stat = proto_stat;
+      let contains_call_or_return = contains_function_call_or_return(proto_stat.get_mut());
       let proto_ref = proto_stat.get();
 
-      if contains_function_call_or_return(proto_ref) {
+      if contains_call_or_return {
         // 补齐 [check_iter, proto_iter) 的滞后区段，切片迭代与原逐个推进同序。
         for &stat in &sorted[check_iter..proto_iter] {
           self.check_body(scope, stat, &function_decls);

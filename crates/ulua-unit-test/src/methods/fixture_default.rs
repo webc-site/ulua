@@ -51,7 +51,7 @@ impl Default for Fixture {
         &fflag::LuauBetterMetatableStringification,
         true,
       ),
-      file_resolver: Box::new(TestFileResolver::default()),
+      file_resolver: TestFileResolver::default(),
       config_resolver: Box::new(TestConfigResolver::default()),
       module_resolver: NullModuleResolver,
       source_module: None,

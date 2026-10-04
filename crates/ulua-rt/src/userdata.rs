@@ -139,13 +139,6 @@ pub trait UserDataFields<T> {
   where
     F: Fn(&Lua, AnyUserData) -> Result<R> + MaybeSend + 'static,
     R: IntoLua;
-
-  /// Register a field whose setter receives the [`AnyUserData`] handle and
-  /// the assigned value.
-  fn add_field_function_set<F, A>(&mut self, name: impl Into<String>, function: F)
-  where
-    F: Fn(&Lua, AnyUserData, A) -> Result<()> + MaybeSend + 'static,
-    A: FromLua;
 }
 
 /// A handle to an arbitrary Lua userdata value.
@@ -795,21 +788,6 @@ impl<T> UserDataFields<T> for Collector<'_, T> {
       r.into_lua_multi(lua)
     });
     self.push_field(name, true, res);
-  }
-
-  fn add_field_function_set<F, A>(&mut self, name: impl Into<String>, function: F)
-  where
-    F: Fn(&Lua, AnyUserData, A) -> Result<()> + MaybeSend + 'static,
-    A: FromLua,
-  {
-    let res = self.lua.create_function(move |lua, mut args: MultiValue| {
-      let this = args.pop_front().unwrap_or(Value::Nil);
-      let ud = AnyUserData::from_lua(this, lua)?;
-      let val = A::from_lua(args.pop_front().unwrap_or(Value::Nil), lua)?;
-      function(lua, ud, val)?;
-      ().into_lua_multi(lua)
-    });
-    self.push_field(name, false, res);
   }
 }
 

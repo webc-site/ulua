@@ -12,7 +12,7 @@ use ulua_ast::{
     ast_visitor::AstVisitor,
     location::Location,
   },
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_config::enums::code::Code;
 

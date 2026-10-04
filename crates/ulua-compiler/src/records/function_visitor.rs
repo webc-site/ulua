@@ -3,7 +3,7 @@ use ulua_ast::{
     ast_expr_function::AstExprFunction, ast_stat::AstStat,
     ast_stat_type_function::AstStatTypeFunction, ast_visitor::AstVisitor,
   },
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
@@ -29,11 +29,10 @@ impl<'a> FunctionVisitor<'a> {
 
 impl<'a> AstVisitor for FunctionVisitor<'a> {
   fn visit_expr_function(&mut self, node: &mut AstExprFunction) -> bool {
-    // Safety: node.body 为 parser 保证非空存活的函数体 AstStatBlock，向上转
-    // AstStat 依 repr(C) 前缀重合合法；FunctionVisitor 只收集指针、不写 AST。
-    unsafe {
-      ast_stat_visit(node.body.as_ptr().cast::<AstStat>(), self);
-    }
+    // node.body 为 parser 保证非空存活的函数体 AstStatBlock 句柄：`cast::<AstStat>`
+    // 依 repr(C) 前缀重合上转，`get_mut()` 交出独占借用，`_ref` 门面全链路 safe。
+    // FunctionVisitor 只收集指针、不写 AST。
+    ast_stat_visit_ref(node.body.cast::<AstStat>().get_mut(), self);
 
     self.has_types |= node.args.iter_nodes().any(|arg| !arg.annotation.is_null());
 

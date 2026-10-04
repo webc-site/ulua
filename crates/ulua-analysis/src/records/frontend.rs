@@ -1,6 +1,6 @@
 //! Source: `Analysis/include/Luau/Frontend.h` (hand-ported; fields only)
 
-use alloc::{string::String, sync::Arc, vec::Vec};
+use alloc::{boxed::Box, string::String, sync::Arc, vec::Vec};
 /// Frontend::Stats (nested struct)
 use core::fmt::Debug;
 use core::{
@@ -57,15 +57,16 @@ pub struct Frontend {
   /// 与「NotNull 恒非空」的 null 判分支一一对应），调用点免 unsafe。
   pub builtin_types: Option<NonNull<BuiltinTypes>>,
 
-  /// C++ `FileResolver* fileResolver`。以 [`NonNull`] 建模（恒非空）：
-  /// Frontend 本就是自引用指针结构（`builtin_types` / `config_resolver` 同款，
-  /// 由 `wire_self_pointers` 布线），且该句柄被 RequireTracer 等按 C++ 语义以
-  /// 裸别名共享（`&mut dyn` 双可变借用无法过借用检查），改 `Arc` 需横跨 5 个
-  /// crate 的 30+ 处调用点重构。地址在构造时由调用方以 `&mut dyn FileResolver`
-  /// 引用布线（构造函数内 `NonNull::from` 免 unsafe 记录），下游读取统一走
-  /// [`Frontend::file_resolver_ref`] / [`Frontend::file_resolver_mut`]，
-  /// ErrorConverter / autocomplete / TypeErrorToStringOptions 均已改为受命
-  /// 周期引用的安全消费方。
+  /// C++ `FileResolver* fileResolver`。Rust 侧改为 **独占所有权** 形态
+  /// `Box<dyn FileResolver>`（review.md §2 裸句柄收口）：cpp 构造收
+  /// `FileResolver*` 成员裸指针、要求宿主保证其长寿，本仓库全部构造点
+  /// 实参恒为存活解析器（缺位场景由宿主显式传 [`crate::records::null_file_resolver::NullFileResolver`]
+  /// 实例表达，见 conformance），故 Rust 把「恒非空且存活」收窄为类型级
+  /// 所有权——移交即唯一所有者，宿主改写一律经
+  /// [`Frontend::file_resolver_ref`] / [`Frontend::file_resolver_mut`]
+  /// chokepoint，不存在并存可变别名，解引用零 unsafe。
+  /// 宿主需继续读写同一份状态时，与实现方约定共享槽（如 `Rc` 句柄）而非
+  /// 第二把可变借用，行为可见性与 cpp 直写字段等价。
   ///
   /// 此处 `dyn` 保留（review.md §4「类型集合运行期开放、泛型导致编译期成本
   /// 不合理」条款，r13-w1c 逐处复核）：`FileResolver` 由宿主注入实现，rg 交叉
@@ -74,15 +75,16 @@ pub struct Frontend {
   /// CheckModuleFileResolver）、ulua-analyze-cli（CliFileResolver）与游离
   /// workspace benchmarks（BenchFileResolver），集合运行期开放，无法
   /// enum_dispatch 穷举；Frontend 泛型化 `FR: FileResolver` 会波及上述 30+
-  /// 调用点与自引用布线，编译期成本不合理。
-  pub file_resolver: NonNull<dyn FileResolver>,
+  /// 调用点，编译期成本不合理。
+  pub file_resolver: Box<dyn FileResolver>,
   pub module_resolver: FrontendModuleResolver,
   pub module_resolver_for_autocomplete: FrontendModuleResolver,
   pub globals: GlobalTypes,
   pub globals_for_autocomplete: GlobalTypes,
-  /// C++ `ConfigResolver* configResolver`，同 `file_resolver`：恒非空建模的
-  /// 外部对象句柄（null 入参以 dangling 占位、契约为从不查询 getConfig），
+  /// C++ `ConfigResolver* configResolver`：恒非空建模的外部对象句柄
+  /// （null 入参以 dangling 占位、契约为从不查询 getConfig），
   /// 构造时布线；读取一律经 [`Frontend::config_resolver_ref`] chokepoint。
+  /// （后续批收口目标：对齐 `file_resolver` 的所有权形态。）
   pub config_resolver: NonNull<ConfigResolver>,
   pub options: FrontendOptions,
   pub ice_handler: InternalErrorReporter,
@@ -99,21 +101,18 @@ pub struct Frontend {
 }
 
 impl Frontend {
-  /// C++ `fileResolver` 成员的受控读取。构造方布线后指针恒非空且指向存活
-  /// 对象（与 `Frontend` 同生命周期约定），此处集中解引用，调用点免 unsafe。
-  /// `dyn` 保留理由见 [`Frontend::file_resolver`] 字段注（宿主注入、集合运行期
-  /// 开放，review.md §4）。
+  /// C++ `fileResolver` 成员的受控读取 chokepoint。所有权归本结构
+  /// （`Box<dyn FileResolver>` 独占），借用直出、零 unsafe；`dyn` 保留理由见
+  /// [`Frontend::file_resolver`] 字段注（宿主注入、集合运行期开放，
+  /// review.md §4）。
   pub fn file_resolver_ref(&self) -> &dyn FileResolver {
-    // SAFETY: 见上；`file_resolver` 由构造方布线为有效对象，未被置空。
-    unsafe { self.file_resolver.as_ref() }
+    self.file_resolver.as_ref()
   }
 
   /// 同 [`Frontend::file_resolver_ref`]，可变版（`readSource` / `resolveModule`
-  /// 契约为 `&mut self`）；`dyn` 保留理由亦同（借出同一 trait object 的可变别名，
-  /// review.md §4 运行期开放集条款）。
+  /// 契约为 `&mut self`）；宿主对解析器状态的一切改写走本口。
   pub fn file_resolver_mut(&mut self) -> &mut dyn FileResolver {
-    // SAFETY: 见上。
-    unsafe { self.file_resolver.as_mut() }
+    self.file_resolver.as_mut()
   }
 
   /// C++ `configResolver` 成员的唯一解引用 chokepoint。入参为 null 时以
@@ -168,7 +167,7 @@ impl Debug for Frontend {
       .field("environments", &self.environments)
       .field("builtin_types_", &self.builtin_types_)
       .field("builtin_types", &self.builtin_types)
-      .field("file_resolver", &self.file_resolver)
+      .field("file_resolver", &"...")
       .field("module_resolver", &self.module_resolver)
       .field(
         "module_resolver_for_autocomplete",

@@ -6,7 +6,7 @@ use ulua_ast::{
     ast_array::AstArray, ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_name::AstName,
     ast_visitor::AstVisitor,
   },
-  visit::ast_stat_visit,
+  visit::ast_stat_visit_ref,
 };
 use ulua_config::enums::code::Code;
 

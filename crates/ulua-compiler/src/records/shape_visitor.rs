@@ -7,7 +7,7 @@ use ulua_ast::{
     ast_stat_assign::AstStatAssign, ast_stat_for::AstStatFor, ast_stat_function::AstStatFunction,
     ast_stat_local::AstStatLocal, ast_visitor::AstVisitor,
   },
-  visit::ast_expr_visit,
+  visit::ast_expr_visit_ref,
 };
 use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_set::DenseHashSet};
 
@@ -130,9 +130,10 @@ impl<'a> AstVisitor for ShapeVisitor<'a> {
     }
 
     for value in node.values.iter().map(|v| Node::from(*v)) {
-      // values 元素为 parser 保证非空存活的 AstExpr（`Node` 契约）；ShapeVisitor
+      // values 元素为 parser 保证非空存活的 AstExpr（`Node` 契约）；`borrow_mut()`
+      // 交出的独占借用即存活+可独占证明，`_ref` 门面全链路 safe。ShapeVisitor
       // 只写自身 tables/shapes/loops map，不写 AST，arena 独占成立。
-      unsafe { ast_expr_visit(value.as_ptr(), self) };
+      ast_expr_visit_ref(value.borrow_mut(), self);
     }
 
     false
@@ -141,9 +142,10 @@ impl<'a> AstVisitor for ShapeVisitor<'a> {
   fn visit_stat_function(&mut self, node: &mut AstStatFunction) -> bool {
     self.assign(node.name.into());
 
-    // node.func 为 parser 保证非空存活的 AstExprFunction（`Node` 契约），向上转
-    // AstExpr 依 repr(C) 前缀重合合法；visitor 不写 AST。
-    unsafe { ast_expr_visit(Node::from(node.func).cast::<AstExpr>().as_ptr(), self) };
+    // node.func 为 parser 保证非空存活的 AstExprFunction 句柄：`cast::<AstExpr>`
+    // 依 repr(C) 前缀重合上转，`get_mut()` 交出独占借用，`_ref` 门面全链路 safe；
+    // visitor 不写 AST。
+    ast_expr_visit_ref(node.func.cast::<AstExpr>().get_mut(), self);
 
     false
   }
