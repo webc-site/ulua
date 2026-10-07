@@ -11,15 +11,15 @@ use crate::{
 /// # Safety
 /// VM 回调 ABI 约定：`l` 为存活 `LuaState`，`pc` 指向本帧 code 内一条 PREPVARARGS
 /// 指令（`base`/`k` 在扩栈前不使用）。边界契约集中于 [`VmFrame::new`]，其余为安全逻辑。
-pub unsafe fn execute_prepvarargs(
+pub unsafe extern "C-unwind" fn execute_prepvarargs(
   l: *mut LuaState,
   pc: *const Instruction,
-  // FFI 签名参数:传入的 base 值在 protect 同步扩栈前不使用,故命名带下划线
-  _base: StkId,
+  // 传入的 base 在 protect 同步扩栈前不使用；扩栈后由下方 `let base` 遮蔽为重取的新栈基。
+  base: StkId,
   _k: *mut TValue,
 ) -> *const Instruction {
   // Safety: 本函数头 ABI 契约保证 `l`/`base` 为存活 LuaState 与活动帧基址；VmFrame::new 仅收编地址对、不解引用。
-  let mut frame = unsafe { VmFrame::new(l, _base) };
+  let mut frame = unsafe { VmFrame::new(l, base) };
 
   let cl = frame.current_closure();
   let insn = frame.insns(pc, 1)[0];
@@ -57,18 +57,4 @@ pub unsafe fn execute_prepvarargs(
   frame.rebind_frame(new_base, stacksize);
 
   pc_ptr
-}
-
-/// # Safety
-/// C-ABI 导出边界：由生成码/VM 按 codegen 回调约定调用，`l`/`pc`/`base`/`k` 的合法性与
-/// 存活性与 [`execute_prepvarargs`] 的契约一致（本函数仅原样透传）。
-pub unsafe extern "C-unwind" fn execute_prepvarargs_export(
-  l: *mut LuaState,
-  pc: *const Instruction,
-  base: StkId,
-  k: *mut TValue,
-) -> *const Instruction {
-  // Safety: 导出 C ABI 入口原样转发 l/pc/base/k 给同契约 unsafe fn execute_prepvarargs;
-  // 由 VM/原生代码保证 l 活、pc 为本帧 code 内合法指令边界, 满足被调前置条件。
-  unsafe { execute_prepvarargs(l, pc, base, k) }
 }

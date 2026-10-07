@@ -16,7 +16,7 @@ use crate::{
 /// # Safety
 /// VM 回调 ABI 约定：`l` 为存活 `LuaState`，`pc` 指向本帧 code 内一条 FORGPREP 指令，
 /// `base` 为本帧活动栈基址（`k` 未用）。边界契约集中于 [`VmFrame::new`]，其余为安全逻辑。
-pub unsafe fn execute_forgprep(
+pub unsafe extern "C-unwind" fn execute_forgprep(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -73,19 +73,4 @@ pub unsafe fn execute_forgprep(
 
   // insn_d 编码跳距落在本字节码数组界内(offset 仅算不读)。
   frame.insn_jump(pc, luau_insn_d(insn) as isize)
-}
-
-/// # Safety
-/// C-ABI 导出边界：由生成码/VM 按 codegen 回调约定调用，`l`/`pc`/`base`/`k` 的合法性与
-/// 存活性与 [`execute_forgprep`] 的契约一致（本函数仅原样透传）。
-pub unsafe extern "C-unwind" fn execute_forgprep_export(
-  l: *mut LuaState,
-  pc: *const Instruction,
-  base: StkId,
-  k: *mut TValue,
-) -> *const Instruction {
-  // Safety: `extern "C-unwind"` FFI 壳，按 Lua/C API 与 codegen 约定由 VM 宿主传入存活的 `LuaState`、
-  // 合法字节码 `pc`、栈 `base` 与常量表 `k`；本行原样转发给 `execute_forgprep`，其 unsafe 前置条件
-  // 即由上述宿主调用协议满足。
-  unsafe { execute_forgprep(l, pc, base, k) }
 }
