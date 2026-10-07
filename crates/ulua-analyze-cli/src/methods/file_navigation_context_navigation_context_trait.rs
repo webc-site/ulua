@@ -3,8 +3,8 @@
 //! relationship is realized here, in lieu of struct embedding.
 
 use alloc::vec::Vec;
+use core::ffi::c_void;
 
-use ulua_config::records::interrupt_callbacks::{ConfigInitCallback, attach_threaddata_init};
 use ulua_require::{
   enums::{
     config_behavior::ConfigBehavior, config_status::ConfigStatus, navigate_result::NavigateResult,
@@ -33,20 +33,15 @@ impl NavigationContext for FileNavigationContext {
   ulua_require::forward_nav_trait!(get_config() -> Option<Vec<u8>>);
 
   /// C++ `navigationContext.luauConfigInit = [&info](LuaState* l) { lua_setthreaddata(l, &info); };`
-  /// (`CLI/src/Analyze.cpp:194-197`) — 以 `attach_threaddata_init` 具名函数指针
-  /// + info 地址的静态分派对实现（原 `Rc<dyn Fn>` 闭包捕获即此一枚指针）。
-  fn luau_config_init(&self) -> Option<ConfigInitCallback> {
+  /// (`CLI/src/Analyze.cpp:194-197`) — 原闭包捕获即此一枚 info 指针；Rust 侧
+  /// 直接交出该地址，由 `extract_config` 在配置执行窗口前单点挂接。
+  fn luau_config_thread_data(&self) -> Option<*mut c_void> {
+    // 真边界：返回的 `*mut c_void` 是 VM lightuserdata 线程数据槽
+    // （`InterruptCallbacks::thread_data`）的转手地址形态，只挂接、不解引用；
+    // 该槽仅在 `resolve_module` 的 navigate 窗口内被读写，此窗口由同一
+    // `FileNavigationContext` 对 Box 的借用维持存活。
     let info_ptr = self.interrupt_info.as_ref()?.as_ref() as *const LuauConfigInterruptInfo;
-    Some(ConfigInitCallback {
-      callback: attach_threaddata_init,
-      // Safety 契约随 [`attach_threaddata_init`]：info 指针只作转手存储进 VM
-      // 线程数据槽、不解引用；该槽仅在 `resolve_module` 的 navigate 窗口内被
-      // 读写，此窗口由同一 `FileNavigationContext` 对 Box 的借用维持存活。
-      // 真边界：`ConfigInitCallback::userdata` 字段形态 `*mut c_void` 由
-      // `ulua-config` 固定（lightuserdata 转手槽），本枚 cast 是指针跨界唯一
-      // 落点，目标类型由字段推断、不在 CLI 侧书写 `core::ffi`。
-      userdata: info_ptr.cast_mut().cast(),
-    })
+    Some(info_ptr.cast_mut().cast())
   }
 
   /// C++ `navigationContext.luauConfigInterrupt = [](LuaState* l, int gc) { ... };`
