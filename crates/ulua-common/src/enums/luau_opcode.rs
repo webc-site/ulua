@@ -1,5 +1,3 @@
-use core::mem::transmute;
-
 use strum::FromRepr;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, FromRepr)]
@@ -197,8 +195,7 @@ impl LuauOpcode {
   #[inline(always)]
   pub const fn try_from_u8(v: u8) -> Option<Self> {
     if v < Self::LopCount as u8 {
-      // SAFETY: repr(u8) 且 0..LopCount 连续递增，值逐字节合法。
-      Some(unsafe { transmute::<u8, LuauOpcode>(v) })
+      Self::from_repr(v)
     } else {
       None
     }
@@ -214,12 +211,11 @@ const _: () = {
 impl From<u8> for LuauOpcode {
   #[inline(always)]
   fn from(v: u8) -> Self {
-    // 枚举为 #[repr(u8)]、0..=LopCount 连续定义且 `LopCount` 为最大哨兵判别值。
-    // v < LopCount 保证 v 必为合法变体之一，越界字节安全回退到 LopNop。
+    // `LopCount` 是计数哨兵而非可执行 opcode，连同越界值一律回退 LopNop。
+    // 判别值→变体的映射由 `FromRepr` 生成的 match 承担，不再逐字节 transmute
+    // （review.md §2：纯逻辑层不留 `unsafe`）。
     if v < LuauOpcode::LopCount as u8 {
-      // SAFETY: LuauOpcode 为 #[repr(u8)]，变体判别值为 0..LopCount 连续递增，
-      // v < LopCount 保证内存表示与目标变体逐字节合法。
-      unsafe { transmute::<u8, LuauOpcode>(v) }
+      LuauOpcode::from_repr(v).unwrap_or(LuauOpcode::LopNop)
     } else {
       LuauOpcode::LopNop
     }
