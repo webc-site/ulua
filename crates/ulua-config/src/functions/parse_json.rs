@@ -10,7 +10,7 @@ use ulua_ast::{
     position::Position,
   },
 };
-use ulua_common::{functions::c_slice::c_slice, macros::luau_assert::LUAU_ASSERT};
+use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   error::ConfigError,
@@ -34,13 +34,13 @@ const RBRACKET: Type = Type(b']' as i32);
 const COMMA: Type = Type(b',' as i32);
 
 /// 取引号字符串负载（对应 C++ `std::string(lexer.current().data, getLength())`）。
+///
+/// 读取走 [`Lexeme::data_bytes`]——ulua-ast 对「指针 + `length` 裸字节区间」的唯一收口，
+/// 变体判定与存活契约都在门面内，本函数零 `unsafe`；QUOTED_STRING 恒有非空负载
+/// （cpp 同款），`None` 只可能是被绕过的异常词素，按「空负载即空串」折叠。
+/// 负载按字节保真、不保证 UTF-8，故与原实现同为 lossy 解码后取owned。
 fn quoted_string(lex: &Lexeme) -> String {
-  // Safety: 仅对 QUOTED_STRING 词元调用（调用点均已按类型分支过滤，此类词元恒有
-  // 非空负载）；`data` 指针臂（身份桥透出）指向宿主 Lexer 借用的 `contents` 缓冲区中
-  // 该词元的负载，长度为 `get_length()` 字节，两者在本函数帧内均保持存活。判空/零长
-  // 守卫收口在 ulua-common 的 `c_slice` 门面（null 配 0 长译空切片，与「空负载即空串」同义）。
-  let payload = unsafe { c_slice(lex.data.as_ptr(), lex.get_length() as usize) };
-  String::from_utf8_lossy(payload).into_owned()
+  String::from_utf8_lossy(lex.data_bytes().unwrap_or_default()).into_owned()
 }
 
 /// `Expected <message> at line <line>, got <lexeme> instead`（对应 C++ `fail`）。

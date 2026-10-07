@@ -6,8 +6,13 @@ use crate::{
 };
 // §4 本文件的 dyn 均为 C++ `std::function` 成员/参数的直译：回调由宿主（含
 // 其他 crate，如 ulua-unit-test 注入 prepare_module_scope、ulua-analyze-cli
-// 注入 TaskQueue）在运行期闭盒构造，实现方无法穷举，泛型化会破坏跨 crate
+// 注入 TaskQueue 与 write_json_log）在运行期闭盒构造，实现方无法穷举，泛型化会破坏跨 crate
 // 公共 API，enum_dispatch 无适用空间，故 dyn 保留。
+// 前四个别名另有硬约束：它们落在 `Frontend::prepare_module_scope` /
+// `Frontend::write_json_log` / `InternalErrorReporter::on_internal_error` /
+// `TypeChecker::prepare_module_scope` / `ConstraintGenerator::prepare_module_scope`
+// 这些**结构体字段**（且被 `clone` 后跨帧共享，故用 `Rc`）上，而 `impl Trait`
+// 与 `-> impl` 都无法作为字段类型存在，单态化在此不可表达。
 // 原 `BuiltinDefinitionsMap`（Frontend::builtin_definitions）已删：cpp
 // Frontend 无此成员（BuiltinDefinitions 是 BuiltinDefinitions.h 的静态注册
 // 表，Rust 侧由 add_global_binding_builtin_definitions* 函数承担），字段在

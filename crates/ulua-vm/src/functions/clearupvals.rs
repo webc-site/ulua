@@ -41,20 +41,20 @@ pub(crate) fn clearupvals(l: &mut LuaState) -> usize {
         (*(*uv).u.open.next).u.open.prev == uv && (*(*uv).u.open.prev).u.open.next == uv
       );
       // open upvalues are never black
-      LUAU_ASSERT!(!isblack!(uv as *mut GCObject));
+      LUAU_ASSERT!(!isblack!(uv.cast::<GCObject>()));
       LUAU_ASSERT!(
-        iswhite!(uv as *mut GCObject) || !iscollectable!((*uv).v) || !iswhite!(gcvalue!((*uv).v))
+        iswhite!(uv.cast::<GCObject>()) || !iscollectable!((*uv).v) || !iswhite!(gcvalue!((*uv).v))
       );
 
       if (*uv).markedopen != 0 {
         // upvalue is still open (belongs to alive thread)
-        LUAU_ASSERT!(isgray!(uv as *mut GCObject));
+        LUAU_ASSERT!(isgray!(uv.cast::<GCObject>()));
         (*uv).markedopen = 0; // for next cycle
         uv = (*uv).u.open.next;
       } else {
         // upvalue is either dead, or alive but the thread is dead; unlink and close
         let next = (*uv).u.open.next;
-        lua_f_closeupval(l, uv, /* dead= */ iswhite!(uv as *mut GCObject));
+        lua_f_closeupval(l, uv, /* dead= */ iswhite!(uv.cast::<GCObject>()));
         uv = next;
       }
     }

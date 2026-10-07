@@ -50,14 +50,14 @@ impl Frontend {
         .clone();
 
       let human_readable_name = self
-        .file_resolver_ref()
+        .file_resolver
         .get_human_readable_module_name(module_name);
 
       let limits = make_type_check_limits(frontend_options);
-      // 配置读取收敛于 `config_resolver_ref` chokepoint（`Box<dyn ConfigResolver>`
-      // 独占、借用直出，零 unsafe），立即 `.clone()` 为拥有值以释放对 `self` 的借用。
+      // 配置读取直接用 `config_resolver` 字段（`Box<dyn ConfigResolver>` 独占、
+      // 自动 deref，零 unsafe），立即 `.clone()` 为拥有值以释放对 `self` 的借用。
       let config = self
-        .config_resolver_ref()
+        .config_resolver
         .get_config(module_name, &limits)
         .clone();
 

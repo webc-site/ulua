@@ -20,6 +20,6 @@ impl Parser {
       self.parse_attribute(&mut attributes);
     }
 
-    self.copy_temp_vector_t(&attributes)
+    self.copy_temp_vector_ptrs(&attributes)
   }
 }

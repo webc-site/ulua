@@ -24,16 +24,17 @@ pub(crate) fn pusherror_bytes(l: &mut LuaState, msg: &[u8]) {
   // SAFETY: `ci` 为刚自存活 `l` 取出的当前帧；`isLua!` 帧宏读 `(*ci).func` 及函数
   // 对象型字段，系纯读谓词，不留存引用。
   if unsafe { isLua!(ci) } {
-    let mut chunkbuf: [c_char; LUA_IDSIZE as usize] = [0; LUA_IDSIZE as usize];
+    let mut chunkbuf = [0u8; LUA_IDSIZE as usize];
     // SAFETY: `isLua!` 谓词真值确立本帧为 Lua 闭包存活帧：`get_lua_proto` 帧面取
     // proto、`(*proto).source`/`(*source).len` 对象面裸读与 `getstr`/`lua_o_chunkid`
-    // 裸指针垫片均在帧-对象存活界内成立；`chunkbuf` 写窗落点由本函数局部缓冲承载，
-    // 返回指针寿命随 `chunkbuf`/`source`（`lua_o_chunkid` 契约），出窗仅透传该指针。
+    // 裸指针垫片均在帧-对象存活界内成立；`chunkbuf` 写窗落点由本函数局部缓冲承载（局部
+    // 缓冲取 Rust 原生 `u8` 形，仅经 `.cast()` 折算交 `lua_o_chunkid` 的 C 缓冲契约参，
+    // §10），返回指针寿命随 `chunkbuf`/`source`（`lua_o_chunkid` 契约），出窗仅透传该指针。
     let chunkid = unsafe {
       let proto = get_lua_proto(ci);
       let source = (*proto).source;
       lua_o_chunkid(
-        chunkbuf.as_mut_ptr(),
+        chunkbuf.as_mut_ptr().cast(),
         chunkbuf.len(),
         getstr(source),
         (*source).len as usize,

@@ -15,6 +15,8 @@ pub fn to_string_type_error_type_error_to_string_options(
   error: &TypeError,
   options: TypeErrorToStringOptions<'_>,
 ) -> String {
-  let converter = ErrorConverter::new(options.file_resolver);
+  let converter = ErrorConverter {
+    file_resolver: options.file_resolver,
+  };
   converter.convert(&error.data)
 }

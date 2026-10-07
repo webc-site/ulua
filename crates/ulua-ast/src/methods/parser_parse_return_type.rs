@@ -53,7 +53,7 @@ impl Parser {
     self.next_lexeme();
     self.match_recovery_stop_on_token[Type::SKINNY_ARROW.0 as usize] += 1;
 
-    let mut result: TempVector<'_, *mut AstType> = TempVector::new(&mut self.scratch_type);
+    let mut result: TempVector<'_, Node<AstType>> = TempVector::new(&mut self.scratch_type);
     let mut result_names: TempVector<'_, Option<AstArgumentName>> =
       TempVector::new(&mut self.scratch_opt_arg_name);
     let mut comma_positions: TempVector<'_, Position> = TempVector::new(&mut self.scratch_position);
@@ -81,7 +81,7 @@ impl Parser {
 
     if self.lexer.current().r#type != Type::SKINNY_ARROW && result_names.is_empty() {
       if result.len() == 1 {
-        let inner: *mut AstType;
+        let inner: Node<AstType>;
         let mut parens_belong_to_inner_group = false;
 
         if LuauSingleTypeOptionalPackReturnsAttributeParens.get() {
@@ -89,10 +89,10 @@ impl Parser {
           let is_type_follow =
             curr_type == Type::PIPE || curr_type == Type::QUESTION || curr_type == Type::AMPERSAND;
           if vararg_annotation.is_none() && is_type_follow {
-            inner = self.alloc_type(AstTypeGroup::new(location, Node::from_raw(result[0])));
+            inner = Node::from_raw(self.alloc_type(AstTypeGroup::new(location, result[0])));
             parens_belong_to_inner_group = true;
             if self.options.store_cst_data {
-              self.attach_cst(inner, |alloc| {
+              self.attach_cst(inner.as_ptr(), |alloc| {
                 // close_parentheses_position 未命中时即 missing，无需再按
                 // found 标志二选一（与被收敛的旧 if/else 逐值相等）。
                 alloc.alloc(CstTypeGroup::new(close_parentheses_position))
@@ -103,19 +103,19 @@ impl Parser {
           }
         } else {
           inner = if vararg_annotation.is_none() {
-            self.alloc_type(AstTypeGroup::new(location, Node::from_raw(result[0])))
+            Node::from_raw(self.alloc_type(AstTypeGroup::new(location, result[0])))
           } else {
             result[0]
           };
           if vararg_annotation.is_none() && self.options.store_cst_data {
-            self.attach_cst(inner, |alloc| {
+            self.attach_cst(inner.as_ptr(), |alloc| {
               // 契约同上：未命中即 missing，直接用位置值。
               alloc.alloc(CstTypeGroup::new(close_parentheses_position))
             });
           }
         }
 
-        let return_type = self.parse_type_suffix(NonNull::new(inner), &begin.location);
+        let return_type = self.parse_type_suffix(NonNull::new(inner.as_ptr()), &begin.location);
         let return_type_ref = slot_ref(return_type);
 
         if DebugLuauReportReturnTypeVariadicWithTypeSuffix.get()
@@ -160,7 +160,8 @@ impl Parser {
         return node_opt(node);
       }
 
-      let types_array = self.copy_temp_vector_t(&result);
+      // 记录边界单点折算：句柄窗口 → `AstTypeList::types` 的 `AstArray<*mut AstType>`。
+      let types_array = self.copy_temp_vector_ptrs(&result);
       let node = self.alloc_type_pack(AstTypePackExplicit::new(
         location,
         AstTypeList::new(types_array, vararg_annotation),
@@ -184,7 +185,8 @@ impl Parser {
     // passed raw pointers into the scratch TempVectors, but parse_function_type_tail
     // recursively parses the `-> ret` which CLEARS scratch_opt_arg_name (and
     // scratch_type), corrupting the names to None. Copy before the recursion.
-    let params_copy = self.copy_temp_vector_t(&result);
+    // 记录边界单点折算：句柄窗口 → `parse_function_type_tail` 的 `AstArray<*mut AstType>` 入参。
+    let params_copy = self.copy_temp_vector_ptrs(&result);
     let param_names_copy = self.copy_temp_vector_t(&result_names);
     let tail = self.parse_function_type_tail(
       &begin,

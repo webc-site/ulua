@@ -144,7 +144,7 @@ pub(crate) fn index_chain_write(t: *const LuaTable) {
 /// （可内联时随 crate 内其他函数体积变化反复翻转内联决策，inherit3 复测 ±15% 级
 /// 布局漂移，见 perf 提交 08428b58 前后的治理记录）。
 #[inline(never)]
-pub(crate) unsafe fn index_chain_probe(
+pub(crate) fn index_chain_probe(
   l: *mut LuaState,
   t0: *mut LuaTable,
   key: *mut tstring,
@@ -249,7 +249,7 @@ pub(crate) unsafe fn index_chain_probe(
 /// `t0`/`mt0`/`key`/`chain` 各表指针均为本次慢路走查实际解析到的存活对象（调用点
 /// 契约）；`chain` 非空且长 ≤ [`INDEX_CHAIN_MAX`]。
 #[inline]
-pub(crate) unsafe fn index_chain_fill(
+pub(crate) fn index_chain_fill(
   t0: *mut LuaTable,
   mt0: *mut LuaTable,
   key: *mut tstring,

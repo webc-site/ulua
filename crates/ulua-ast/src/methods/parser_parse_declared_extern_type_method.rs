@@ -89,14 +89,14 @@ impl Parser {
 
       let annotation = arg.annotation;
       if let Some(annotation) = node_opt(annotation) {
-        vars.push_back(annotation.as_ptr());
+        vars.push_back(Node::from_non_null(annotation));
       } else {
         let err = self.report_type_error(
           Location::new(start.begin, end.end),
           AstArray::EMPTY,
           format_args!("All declaration parameters aside from 'self' must be annotated"),
         );
-        vars.push_back(err);
+        vars.push_back(Node::from_raw(err));
       }
     }
 
@@ -107,7 +107,7 @@ impl Parser {
       );
     }
 
-    let arg_types = AstTypeList::new(self.copy_temp_vector_t(&vars), vararg_annotation);
+    let arg_types = AstTypeList::new(self.copy_temp_vector_ptrs(&vars), vararg_annotation);
     let arg_names = self.copy_temp_vector_t(&var_names);
 
     let fn_type = self.alloc_type(AstTypeFunction::ast_type_function_location_ast_array_ast_attr_ast_array_ast_generic_type_ast_array_ast_generic_type_pack_ast_type_list_ast_array_optional_ast_argument_name_ast_type_pack(

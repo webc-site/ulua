@@ -28,13 +28,13 @@ impl Frontend {
       .clone();
 
     if self.is_dirty(name, false) {
-      let Some(source_code) = self.file_resolver_mut().read_source(name) else {
+      let Some(source_code) = self.file_resolver.read_source(name) else {
         return Vec::new();
       };
 
-      // 配置读取收敛于 `config_resolver_ref` chokepoint（`Box<dyn ConfigResolver>`
-      // 独占、借用直出，零 unsafe）；`.clone()` 后即释放对 `self` 的借用。
-      let config = self.config_resolver_ref().get_config(name, limits);
+      // 配置读取直接用 `config_resolver` 字段（`Box<dyn ConfigResolver>` 独占、
+      // 自动 deref，零 unsafe）；`.clone()` 后即释放对 `self` 的借用。
+      let config = self.config_resolver.get_config(name, limits);
       let mut opts = config.parse_options.clone();
       opts.capture_comments = true;
       let mut result =
@@ -47,7 +47,7 @@ impl Frontend {
         .root
         .expect("getRequiredModules: 解析后根块应在场（cpp 直取 result.root）");
       require = trace_requires(
-        self.file_resolver_mut(),
+        &mut *self.file_resolver,
         root.get_mut(),
         name.clone(),
         limits,

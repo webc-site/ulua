@@ -79,7 +79,7 @@ impl FrontendModuleResolver {
     // `frontend_ref` chokepoint。
     match self.frontend_ref() {
       Some(frontend) => frontend
-        .file_resolver_ref()
+        .file_resolver
         .get_human_readable_module_name(module_name),
       None => module_name.to_string(),
     }

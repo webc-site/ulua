@@ -40,9 +40,7 @@ pub(crate) fn report_module_result(
   }
 
   // std::string humanReadableName = frontend.fileResolver->getHumanReadableModuleName(name);
-  let human_readable_name = frontend
-    .file_resolver_ref()
-    .get_human_readable_module_name(name);
+  let human_readable_name = frontend.file_resolver.get_human_readable_module_name(name);
 
   // for (auto& error : cr->lintResult.errors) reportWarning(format, humanReadableName.c_str(), error);
   for error in &cr.lint_result.errors {

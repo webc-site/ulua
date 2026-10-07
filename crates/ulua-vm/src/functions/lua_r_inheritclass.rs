@@ -113,6 +113,12 @@ pub(crate) unsafe fn lua_r_inheritclass(
     let mut child_static_members = (*child).staticmembers;
     let mut child_offset_to_member = (*child).offsettomember;
 
+    // 既有约定（review.md §2「所有权转手要有显式动作」）：成员数组指针先 stash 进局部、
+    // 字段置 null 是显式转手哨兵——中途 lua_h_setstr/luaM 抛错解绕时，LClass 字段保持
+    // null 使 GC 不在半搬迁的怪状态下触到旧数组（cpp lclass.cpp `lua_inheritclass` 原注
+    // “Set staticmembers and offsettomember to NULL so GC doesn't try to free them in a
+    // weird state”）；正常路径末尾统一回写。字段本体为 repr(C) LClass 数组基址（指针算式
+    // 起点），非缺席语义
     (*child).staticmembers = null_mut();
     (*child).offsettomember = null_mut();
 

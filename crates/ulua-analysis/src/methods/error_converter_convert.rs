@@ -244,7 +244,7 @@ impl<'a> ErrorConverter<'a> {
       if let (Some(ref given_mod), Some(ref wanted_mod)) =
         (given_definition_module, wanted_definition_module)
       {
-        if let Some(file_resolver) = self.file_resolver_ref() {
+        if let Some(file_resolver) = self.file_resolver {
           let given_module_name = file_resolver.get_human_readable_module_name(given_mod);
           let wanted_module_name = file_resolver.get_human_readable_module_name(wanted_mod);
 
@@ -1250,7 +1250,7 @@ impl<'a> ErrorConverter<'a> {
       let mut writer = SepWriter::new(&mut s, " -> ");
       for name in e.cycle() {
         let readable = self
-          .file_resolver_ref()
+          .file_resolver
           .map(|r| r.get_human_readable_module_name(name));
         writer.push(readable.as_deref().unwrap_or(name));
       }

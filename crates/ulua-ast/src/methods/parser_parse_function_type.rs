@@ -9,7 +9,7 @@ use crate::{
     ast_type_pack::AstTypePack, ast_type_pack_explicit::AstTypePackExplicit,
     cst_type_function::CstTypeFunction, cst_type_group::CstTypeGroup,
     cst_type_pack_explicit::CstTypePackExplicit, location::Location, match_lexeme::MatchLexeme,
-    node_handle::Node, parser::Parser, position::Position, temp_vector::TempVector,
+    parser::Parser, position::Position, temp_vector::TempVector,
   },
   rtti::ast_node_is,
 };
@@ -76,7 +76,9 @@ impl Parser {
 
     self.match_recovery_stop_on_token[Type::SKINNY_ARROW.0 as usize] -= 1;
 
-    let param_types = self.copy_temp_vector_t(&params);
+    // 记录边界单点折算：句柄窗口 → `AstArray<*mut AstType>`（param_types 后续
+    // 进 AstTypeList::types 与 parse_function_type_tail 的指针面）。
+    let param_types = self.copy_temp_vector_ptrs(&params);
 
     if !names.is_empty() {
       force_function_type = true;
@@ -120,7 +122,7 @@ impl Parser {
       } else {
         let node = self.alloc_type(AstTypeGroup::new(
           Location::new(parameter_start.location.begin, close_args_location.end),
-          Node::from_raw(params[0]),
+          params[0],
         ));
         if self.options.store_cst_data {
           let close_pos = if close_args_found {

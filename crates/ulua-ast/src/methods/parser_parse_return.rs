@@ -28,15 +28,15 @@ impl Parser {
       );
     }
 
-    let end = if let Some(&expr) = list.last() {
-      // expr 是 parse_expr_list 收集的非空 arena 存活节点（alloc 恒非空）；
-      // slot_ref 把槽位一步读成共享引用（null 由 expect 拦截）。
-      slot_ref(expr).base.location
+    let end = if let Some(expr) = list.last() {
+      // list 的元素是 scratch 中的 arena 句柄（parse_expr_list 收集，类型层即恒非空），
+      // 经 `Node` 的 Deref 直读基类 location，不再需要槽位解引用门面。
+      expr.base.location
     } else {
       start
     };
 
-    let list_array = self.copy_temp_vector_t(&list);
+    let list_array = self.copy_temp_vector_ptrs(&list);
     let node = self.alloc_stat(AstStatReturn::new(
       Location::new(start.begin, end.end),
       list_array,

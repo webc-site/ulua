@@ -4,8 +4,8 @@ use crate::{
   records::{
     ast_array::AstArray, ast_generic_type::AstGenericType,
     ast_generic_type_pack::AstGenericTypePack, cst_generic_type::CstGenericType,
-    cst_generic_type_pack::CstGenericTypePack, match_lexeme::MatchLexeme, parser::Parser,
-    position::Position, temp_vector::TempVector,
+    cst_generic_type_pack::CstGenericTypePack, match_lexeme::MatchLexeme, node_handle::Node,
+    parser::Parser, position::Position, temp_vector::TempVector,
   },
 };
 
@@ -21,10 +21,9 @@ impl Parser {
     AstArray<*mut AstGenericTypePack>,
   ) {
     let mut comma_positions = comma_positions;
-    let mut names: TempVector<'_, *mut AstGenericType> =
-      TempVector::new(&mut self.scratch_generic_types);
-    let mut name_packs: TempVector<'_, *mut AstGenericTypePack> =
-      TempVector::new(&mut self.scratch_generic_type_packs);
+    // scratch 窗口恒句柄化：暂存面元素出自 arena 分配（alloc 恒非空），`Node` 即其类型形态。
+    let mut names = TempVector::new(&mut self.scratch_generic_types);
+    let mut name_packs = TempVector::new(&mut self.scratch_generic_type_packs);
 
     if self.lexer.current().r#type == Type::LESS {
       let begin = self.lexer.current();
@@ -71,7 +70,7 @@ impl Parser {
               self.attach_cst(node, |alloc| {
                 alloc.alloc(CstGenericTypePack::new(ellipsis_position, equals_position))
               });
-              name_packs.push_back(node);
+              name_packs.push_back(Node::from_raw(node));
             } else {
               let type_or_pack = self.parse_simple_type_or_pack();
 
@@ -92,7 +91,7 @@ impl Parser {
               self.attach_cst(node, |alloc| {
                 alloc.alloc(CstGenericTypePack::new(ellipsis_position, equals_position))
               });
-              name_packs.push_back(node);
+              name_packs.push_back(Node::from_raw(node));
             }
           } else {
             if seen_default {
@@ -109,7 +108,7 @@ impl Parser {
                 Position::missing(),
               ))
             });
-            name_packs.push_back(node);
+            name_packs.push_back(Node::from_raw(node));
           }
         } else {
           if with_default_values && self.lexer.current().r#type == Type::EQUAL_SIGN {
@@ -129,7 +128,7 @@ impl Parser {
                 alloc.alloc(CstGenericType::new(equals_position))
               });
             }
-            names.push_back(node);
+            names.push_back(Node::from_raw(node));
           } else {
             if seen_default {
               self.report(
@@ -144,7 +143,7 @@ impl Parser {
                 alloc.alloc(CstGenericType::new(Position::missing()))
               });
             }
-            names.push_back(node);
+            names.push_back(Node::from_raw(node));
           }
         }
 
@@ -174,8 +173,8 @@ impl Parser {
       }
     }
 
-    let generics: AstArray<*mut AstGenericType> = self.copy_temp_vector_t(&names);
-    let generic_packs: AstArray<*mut AstGenericTypePack> = self.copy_temp_vector_t(&name_packs);
+    let generics: AstArray<*mut AstGenericType> = self.copy_temp_vector_ptrs(&names);
+    let generic_packs: AstArray<*mut AstGenericTypePack> = self.copy_temp_vector_ptrs(&name_packs);
     (generics, generic_packs)
   }
 }

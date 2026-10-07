@@ -15,6 +15,12 @@
 //! `&mut` 期间单线程独占」的既有纪律(见 `visit.rs` 总说明)——该契约即以下全部
 //! `// Safety:` 块的公共前提。字段引用化是渐进式:`AstStatBlock`/`AstExprFunction`
 //! 主干已迁,其余 records 按消费方矩阵在后续波次跟进。
+//!
+//! parser 侧的暂存面同属本模块消费者:`Parser` 的 `scratch_*` 栈一律
+//! `Vec<Node<T>>`(暂存队列的元素出自 arena 分配、恒非空),符号表
+//! `local_map`/`classes_within_module` 的值列为 `OptNode<T>`(cpp `operator[]`
+//! 先落 null 槽、遮蔽链回退即 `nullptr`),`local_stack` 为 `Vec<Node<AstLocal>>`
+//! (`pushLocal` 产物恒非空)。
 
 use alloc::{boxed::Box, vec::Vec};
 use core::{
@@ -24,6 +30,8 @@ use core::{
   ptr::NonNull,
   slice::{Iter, IterMut},
 };
+
+use ulua_common::records::dense_hash_table::DenseDefault;
 
 use crate::{
   functions::optional_node::opt_node,
@@ -341,6 +349,17 @@ impl<T: Debug> Debug for OptNode<T> {
   }
 }
 
+/// `DenseHashMap` 值列的 cpp 值初始化占位：空槽即 cpp `operator[]` 落下的
+/// `nullptr`。parser 符号表（`localMap` 的遮蔽链、`classesWithinModule` 的
+/// 先建槽后接线）全部以本形态表达「槽位在场但尚未指向节点」，`null_mut()`
+/// 哨兵不再出现在值类型面。
+impl<T> DenseDefault for OptNode<T> {
+  #[inline]
+  fn dense_default() -> Self {
+    Self::default()
+  }
+}
+
 /// 子节点句柄数组:`Vec<T>` 式所有权字段,替代 cpp「arena 指针数组 + 长度」。
 /// 数组本体堆分配(不再占 arena),元素仍是指向 arena 节点的 [`Node`] 句柄。
 pub struct Nodes<T> {
@@ -371,12 +390,13 @@ impl<T> Nodes<T> {
   }
 
   /// cpp `Parser::copy(const TempVector<T*>&)` 的句柄化形态:把 parser scratch
-  /// 窗口 `[offset, offset + size_)` 里的 arena 节点槽**复制**为堆持有句柄数组
+  /// 窗口 `[offset, offset + size_)` 里的 arena 节点句柄**复制**为堆持有句柄数组
   /// (TempVector 在 Drop 时截回 scratch,本构造在截断前取走元素,所有权即完成
   /// 转移;空 scratch 窗口落 [`Nodes::empty`],对应 cpp `{null, 0}`)。
+  /// scratch 已是句柄形态(parser 的 `scratch_*` 字段),故此处无指针→句柄折算。
   #[inline]
-  pub fn from_temp_vector(data: &TempVector<'_, *mut T>) -> Self {
-    Self::from_raw_slice(data.as_slice())
+  pub fn from_temp_vector(data: &TempVector<'_, Node<T>>) -> Self {
+    Self::from_vec(data.as_slice().to_vec())
   }
 
   #[inline]

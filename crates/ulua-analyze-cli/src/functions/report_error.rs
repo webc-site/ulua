@@ -14,7 +14,7 @@ use crate::{enums::report_format::ReportFormat, functions::report::report};
 pub fn report_error(frontend: &Frontend, format: ReportFormat, error: &TypeError) {
   // std::string humanReadableName = frontend.fileResolver->getHumanReadableModuleName(error.module_name);
   let human_readable_name = frontend
-    .file_resolver_ref()
+    .file_resolver
     .get_human_readable_module_name(&error.module_name);
 
   // if (const SyntaxError* syntaxError = get_if<SyntaxError>(&error.data))
@@ -30,7 +30,7 @@ pub fn report_error(frontend: &Frontend, format: ReportFormat, error: &TypeError
     let message = to_string_type_error_type_error_to_string_options(
       error,
       TypeErrorToStringOptions {
-        file_resolver: Some(frontend.file_resolver_ref()),
+        file_resolver: Some(&*frontend.file_resolver),
       },
     );
     report(

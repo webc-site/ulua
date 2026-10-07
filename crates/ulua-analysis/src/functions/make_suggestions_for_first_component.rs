@@ -1,5 +1,3 @@
-extern crate alloc;
-
 use alloc::{string::ToString, vec::Vec};
 
 use crate::{
@@ -8,12 +6,13 @@ use crate::{
   type_aliases::require_suggestions::RequireSuggestions,
 };
 
-// `dyn` 保留：`RequireNode` 实现方（测试替身等）跨 crate、运行期开放。
-pub(crate) fn make_suggestions_for_first_component(node: &dyn RequireNode) -> RequireSuggestions {
-  let mut result = make_suggestions_from_aliases(node.get_available_aliases());
+/// C++ `makeSuggestionsForFirstComponent`：路径首段（尚无 `/`）时给出可用别名与
+/// 两个相对路径入口。节点是具体数据（见 [`RequireNode`]），无虚分派。
+pub(crate) fn make_suggestions_for_first_component(node: &RequireNode) -> RequireSuggestions {
+  let mut result = make_suggestions_from_aliases(node.aliases.clone());
 
   // cpp makeSuggestionsForFirstComponent：仅当节点允许相对路径时补 ./ 与 ../
-  if node.permits_relative_require_paths() {
+  if node.permits_relative_require_paths {
     result.push(RequireSuggestion {
       label: "./".to_string(),
       full_path: "./".to_string(),

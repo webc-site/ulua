@@ -68,19 +68,23 @@ fn new_sandbox() -> Option<StateGuard> {
 /// 对应 C++ `executeAndExtractConfig`：跑中断回调、resume 并校验返回表，
 /// 错误经 `Result` 传播（`?`）。
 ///
-/// `l` 契约：须是 [`StateGuard`] 持有的有效 VM 状态且已加载配置脚本；
-/// `unsafe` 仅存于回调对/中断槽两处 FFI 形态调用点，栈操作全部走安全 API。
+/// `l` 契约：须是 [`StateGuard`] 持有的有效 VM 状态且已加载配置脚本。
+///
+/// 线程数据载荷经 `LuaState::set_thread_data` 在本函数单点挂接（安全 API，
+/// lightuserdata 转手槽），`unsafe` 仅存于中断槽一处 FFI 形态调用点。
 ///
 /// 唯一调用方是本模块的 [`run_in_sandbox`]（沙箱生命周期由它持有）。
 fn execute_and_extract(
   l: &mut LuaState,
   callbacks: &InterruptCallbacks,
 ) -> Result<ConfigTable, ConfigError> {
-  if let Some(init) = callbacks.init_callback {
-    // Safety: `ConfigInitCallback` 契约——`userdata` 指向配置执行同步窗口内
-    // 存活的数据，VM 状态是本函数调用方（run_in_sandbox）守卫持有的有效状态；
-    // 回调仅在本调用点使用指针，返回后不再保留。
-    unsafe { (init.callback)(l.as_mut_ptr(), init.userdata) };
+  // 真边界：`thread_data` 是 VM lightuserdata 线程数据槽（cpp
+  // `lua_setthreaddata(l, &info)` 的等价单点）的转手地址，只挂接、不解引用。
+  // 契约（InterruptCallbacks::thread_data）：载荷指向本配置执行同步窗口内
+  // 存活的数据——窗口由 `run_in_sandbox` 的 StateGuard 与调用栈界定，各构造
+  // 点注释注明指向对象；挂接后指针不再被本模块读写。
+  if let Some(thread_data) = callbacks.thread_data {
+    l.set_thread_data(thread_data);
   }
 
   // Safety: l 为 new_sandbox 返回的有效 VM 状态；

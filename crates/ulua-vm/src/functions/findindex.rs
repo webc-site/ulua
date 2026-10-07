@@ -1,5 +1,3 @@
-use core::ptr::null;
-
 use crate::{
   enums::{t_key_view::TKeyView, value_view::ValueView},
   functions::{
@@ -60,7 +58,7 @@ pub(crate) fn findindex(l: &mut LuaState, t: &LuaTable, key: &TValue) -> i32 {
           None
         }
       })
-      .unwrap_or_else(|| lua_g_runerror_l(l, null(), format_args!("invalid key to 'next'")))
+      .unwrap_or_else(|| lua_g_runerror_l(l, format_args!("invalid key to 'next'")))
     }
   }
 }

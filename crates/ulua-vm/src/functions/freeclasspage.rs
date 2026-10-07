@@ -9,7 +9,7 @@ use crate::{
 /// `l` 须存活（`freepage` 经其 `global` 归还内存）；`page` 必须是确属 `size_class` 对应 size 类、
 /// 仍在 `freepageset`/`pageset` 双向链表协议内的存活页，两个链表头指针槽可写。
 /// 违反（size_class 与页实际类别不符等）会把页挂错/摘错链表，破坏页分配器元数据。cpp lmem.cpp:358。
-pub(crate) unsafe fn freeclasspage(
+pub(crate) fn freeclasspage(
   l: *mut LuaState,
   freepageset: *mut *mut lua_Page,
   pageset: *mut *mut lua_Page,

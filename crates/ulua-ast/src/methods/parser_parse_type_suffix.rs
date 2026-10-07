@@ -4,12 +4,12 @@ use ulua_common::{fint::LuauTypeLengthLimit, macros::luau_assert::LUAU_ASSERT};
 
 use crate::{
   enums::type_lexer::Type,
-  functions::optional_node::slot_ref,
   records::{
     ast_type::AstType, ast_type_intersection::AstTypeIntersection,
     ast_type_optional::AstTypeOptional, ast_type_union::AstTypeUnion,
     cst_type_intersection::CstTypeIntersection, cst_type_union::CstTypeUnion, location::Location,
-    parse_error::ParseError, parser::Parser, position::Position, temp_vector::TempVector,
+    node_handle::Node, parse_error::ParseError, parser::Parser, position::Position,
+    temp_vector::TempVector,
   },
 };
 
@@ -26,7 +26,8 @@ impl Parser {
     let mut leading_position = Position::missing();
 
     if let Some(t) = type_ {
-      parts.push_back(t.as_ptr());
+      // 前导类型的 NonNull 即已证非空：升格为 scratch 句柄形态，不落 as_ptr。
+      parts.push_back(Node::from_non_null(t));
     }
 
     self.increment_recursion_counter("type annotation");
@@ -57,7 +58,7 @@ impl Parser {
         let ty = part
           .as_type()
           .expect("allowPack=false 时 parse_simple_type 恒产出 Type 变体");
-        parts.push_back(NonNull::from(ty).as_ptr());
+        parts.push_back(Node::from_ref(ty));
         if is_pipe {
           is_union = true;
         } else {
@@ -78,7 +79,7 @@ impl Parser {
         let loc = self.lexer.current().location;
         self.next_lexeme();
 
-        parts.push_back(self.alloc_type(AstTypeOptional::new(loc)));
+        parts.push_back(Node::from_raw(self.alloc_type(AstTypeOptional::new(loc))));
         optional_count += 1;
 
         is_union = true;
@@ -95,7 +96,7 @@ impl Parser {
       let limit = LuauTypeLengthLimit.get() as u32;
       if parts.len() as u32 > limit + optional_count {
         ParseError::raise(
-          slot_ref(*parts.last().expect("parts 非空")).base.location,
+          parts.last().expect("parts 非空").get().base.location,
           format_args!(
             "Exceeded allowed type length; simplify your type annotation to make the code compile"
           ),
@@ -104,16 +105,18 @@ impl Parser {
     }
 
     if parts.len() == 1 && !is_union && !is_intersection {
-      return parts[0];
+      // 记录面返回形态（parse_type_suffix 的产物直供 AstArray<*mut AstType> 字段）：
+      // 句柄在唯一的出参边界折回地址。
+      return parts[0].as_ptr();
     }
 
     if is_union && is_intersection {
       // is_union/is_intersection 均为真 ⇒ 循环至少 push 过一次，parts 非空。
       let error_location = Location::between(
         *begin,
-        slot_ref(*parts.last().expect("parts 非空")).base.location,
+        parts.last().expect("parts 非空").get().base.location,
       );
-      let error_types = self.copy_temp_vector_t(&parts);
+      let error_types = self.copy_temp_vector_ptrs(&parts);
       return self.report_type_error(
         error_location,
         error_types,
@@ -124,11 +127,8 @@ impl Parser {
     }
 
     // 抵达此处说明循环内至少 push 过一个 part（否则前面 len==1 分支已返回）。
-    location.end = slot_ref(*parts.last().expect("parts 非空"))
-      .base
-      .location
-      .end;
-    let parts_array = self.copy_temp_vector_t(&parts);
+    location.end = parts.last().expect("parts 非空").get().base.location.end;
+    let parts_array = self.copy_temp_vector_ptrs(&parts);
 
     if is_union {
       let node = self.alloc_type(AstTypeUnion::new(location, parts_array));

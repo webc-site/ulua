@@ -10,10 +10,15 @@ use crate::{
 
 /// `func_expr` 为 parse-arena 节点句柄（cpp 原样指针身份）；解引用统一收口
 /// 至 `alias_opt`，本函数对业务侧为 safe 调用。
+///
+/// 返回引用沿用本 crate 的类型 arena 只读约定（同 [`get_type::get`] 的
+/// `&'static`）：类型节点在 arena 内地址稳定，宿主只读不持有越界。cpp 侧这里
+/// 交出 `const ExternType*`（宿主按 `const void*` 透传），Rust 侧不再退化为裸
+/// 指针——引用本身就是 cpp 指针的 analog。
 pub fn get_method_containing_extern_type(
   module: &ModulePtr,
   func_expr: *mut AstExpr,
-) -> Option<*const ExternType> {
+) -> Option<&'static ExternType> {
   let parent_expr = match alias_opt(func_expr)?.as_expr_ref() {
     AstExprRef::IndexName(index_name) => index_name.expr.as_ptr(),
     AstExprRef::IndexExpr(index_expr) => index_expr.expr.as_ptr(),
@@ -26,13 +31,11 @@ pub fn get_method_containing_extern_type(
   let parent_type = follow_type::follow(parent_it);
 
   if let Some(extern_ty) = get_type::get::<ExternType>(parent_type) {
-    return Some(extern_ty as *const ExternType);
+    return Some(extern_ty);
   }
 
   if let Some(union_ty) = get_type::get::<UnionType>(parent_type) {
-    // 引用 → 裸指针 upcast（安全转换，语义与 C++ 返回指针一致）。
-    return return_first_nonnull_option_of_type::<ExternType>(union_ty)
-      .map(|ty| ty as *const ExternType);
+    return return_first_nonnull_option_of_type::<ExternType>(union_ty);
   }
 
   None
