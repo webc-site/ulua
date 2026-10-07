@@ -192,7 +192,11 @@ pub(crate) fn register_type_user_data(l: &mut LuaState) {
     // lua_setreadonly(l, -1, true);
     l.set_readonly(-1, true);
     // LUA_PUSHCCLOSURE(l, typeUserdataIndex, "__index", 1);
-    l.push_c_closure(Some(type_userdata_index_thunk), Some(FIELD_INDEX_CLOSURE), 1);
+    l.push_c_closure(
+      Some(type_userdata_index_thunk),
+      Some(FIELD_INDEX_CLOSURE),
+      1,
+    );
     // lua_setfield(l, -2, "__index");
     l.set_field_bytes(-2, FIELD_INDEX_CLOSURE);
 

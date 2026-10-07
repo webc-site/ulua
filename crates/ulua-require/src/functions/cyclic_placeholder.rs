@@ -89,7 +89,10 @@ unsafe extern "C-unwind" fn cyclic_dependency_new_index_error(l: *mut LuaState) 
 fn set_meta_method(l: &mut LuaState, field: &[u8], func: LuaCFunction, debug_name: &'static [u8]) {
   // `func` 静态存活（仅登记函数指针）；debug_name 剥终止符后经 `push_c_function`
   // 的 intern 收口当场复制（净压一值，set_field_bytes 随后消费）。
-  l.push_c_function(func, Some(debug_name.strip_suffix(b"\0").unwrap_or(debug_name)));
+  l.push_c_function(
+    func,
+    Some(debug_name.strip_suffix(b"\0").unwrap_or(debug_name)),
+  );
   l.set_field_bytes(-2, field);
 }
 

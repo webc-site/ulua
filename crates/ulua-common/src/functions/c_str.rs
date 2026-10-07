@@ -108,4 +108,3 @@ pub unsafe fn cstr_bytes<'a>(p: *const c_char) -> &'a [u8] {
 pub fn cstr(bytes: &'static [u8]) -> *const c_char {
   bytes.as_ptr().cast()
 }
-

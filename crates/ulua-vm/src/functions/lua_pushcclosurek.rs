@@ -1,6 +1,9 @@
 //! Source: `VM/src/lapi.cpp:742-760` (hand-ported)
 
-use core::{ffi::c_char, ptr::{addr_of_mut, null_mut}};
+use core::{
+  ffi::c_char,
+  ptr::{addr_of_mut, null_mut},
+};
 
 use crate::{
   functions::{

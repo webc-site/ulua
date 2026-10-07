@@ -432,7 +432,11 @@ pub fn user_defined_type_function(
           // debugname 直传载荷：push_c_closure 经 intern 当场复制为 TString 锚入闭包
           // （cpp lapi.cpp:752 `debugname ? luaS_new(L, debugname) : nullptr`），
           // name 仅本次调用期借用，不存在指针外存
-          l_vm.push_c_closure(Some(evaluate_type_alias_call_thunk), Some(name.as_bytes()), 1);
+          l_vm.push_c_closure(
+            Some(evaluate_type_alias_call_thunk),
+            Some(name.as_bytes()),
+            1,
+          );
           l_vm.set_field_str(-2, name);
         }
       }
