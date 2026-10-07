@@ -939,16 +939,23 @@ fn fuse_ok(l: *mut LuaState) -> bool {
 /// `Option` 承载（review.md §2 规则 1），调用点直接 `if let`/`let Some` 分派，
 /// 不再折回裸 null 哨兵判空。
 ///
-/// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的派发 handler）
-/// `h` 须指向存活的 `LuaTable`。
+/// 签名安全（同 [`hashnum`] w6e 先例）：`h` 以 `&LuaTable` 传入，表存活由 `&`
+/// 承载；体内仅存的 `unsafe` 是哈希节点链的裸指针游走——`LuaNode` 数组是表
+/// 分配的 arena 柔性成员（review.md §2「自引用图 + 有契约最小 unsafe 边界」
+/// 形态），收进这一个带契约的块，不外渗到调用臂。
+///
+/// # 调用序契约（正确性，非内存安全——`h` 的存活已由 `&` 承载）
+/// `h.node` 非空且哈希数组长度恰为 `(*h).lsizenode` 折算的 2 的幂（rehash/新建
+/// 保证）；节点链 `next` 偏移自洽（哈希部分不变量，循环依赖它终止）。`n` 为已
+/// 判别的数字键值。无副作用、不分配、不抛错。cpp `VM/src/ltable.cpp` `luaH_getnum`。
 #[inline(always)]
-unsafe fn table_hash_find_num(h: *mut LuaTable, n: f64) -> Option<NonNull<TValue>> {
-  // SAFETY: 契约由调用方保证，h 指向存活表且其 node 数组在界内
+fn table_hash_find_num(h: &LuaTable, n: f64) -> Option<NonNull<TValue>> {
+  // SAFETY: 节点链游走按上方调用序契约；`hashnum(h, n)` 的桶号经 `lmod` 恒在界内
   unsafe {
-    if eq((*h).node, dummynode) {
+    if eq(h.node, dummynode) {
       return None;
     }
-    let mut node = hashnum(&*h, n);
+    let mut node = hashnum(h, n);
     loop {
       if (*node).key.is_number() && luai_numeq((*node).key.as_number(), n) {
         return NonNull::new(gval!(node));
@@ -1058,7 +1065,7 @@ fn fuse_succ_gettable(
       if (*h).metatable.is_null() && index as f64 == indexd {
         if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32 {
           setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
-        } else if let Some(val) = table_hash_find_num(h, indexd) {
+        } else if let Some(val) = table_hash_find_num(&*h, indexd) {
           setobj_2_s!(l, ra, val.as_ptr());
         } else {
           setnilvalue!(ra);
@@ -1259,7 +1266,7 @@ fn fuse_succ_settable(
     let slot = if (index as u32).wrapping_sub(1) < (*h).sizearray as u32 {
       NonNull::new((*h).array.add((index - 1) as u32 as usize))
     } else {
-      table_hash_find_num(h, indexd)
+      table_hash_find_num(&*h, indexd)
     };
     if let Some(slot) = slot {
       setobj2t!(l, slot.as_ptr(), ra);
@@ -1502,14 +1509,21 @@ fn fuse_succ_jumpifnotlt(
 /// 单返回值热后继 `LOP_RETURN` 的尾融合：
 /// 在单返回值递归/求值返回热路径上（如 fib），避免重新进入外层派发环与通用 pop_frame。
 /// 仅当返回 1 个值且父帧恰需要 1 个值、非退出帧时触发。
+///
+/// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的派发 handler）
+///
+/// `l` 为执行中的存活 `LuaState`，`pc` 指向**下一条待执行指令**且落在 `cl` 的 proto
+/// code 段内，`base` 为该指令可寻址的栈槽基，`k`/`cl` 为同一帧的常量数组与闭包，
+/// 单线程独占。
 #[inline(always)]
-unsafe fn try_fuse_return_fast(
+fn try_fuse_return_fast(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
   k: *mut TValue,
   cl: *mut Closure,
 ) -> Option<VmSt> {
+  // SAFETY: 契约由调用方（本模块派发 handler，均在 unsafe 上下文）保证
   unsafe {
     let insn = *pc;
     if luau_insn_op(insn) != LuauOpcode::LOP_RETURN as u32 {
@@ -1648,7 +1662,7 @@ fn h_gettable(
       if (*h).metatable.is_null() && index as f64 == indexd {
         if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32 {
           setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
-        } else if let Some(val) = table_hash_find_num(h, indexd) {
+        } else if let Some(val) = table_hash_find_num(&*h, indexd) {
           setobj_2_s!(l, ra, val.as_ptr());
         } else {
           setnilvalue!(ra);
@@ -1703,7 +1717,7 @@ fn h_gettable(
                   let dst_slot = if array_idx < dst_sizearray {
                     NonNull::new(dst_array.add(array_idx as usize))
                   } else {
-                    table_hash_find_num(dst_h, idx)
+                    table_hash_find_num(&*dst_h, idx)
                   };
                   let Some(mut dst_slot) = dst_slot else {
                     break;
@@ -1743,7 +1757,7 @@ fn h_gettable(
                   let next_array_idx = (next_cur as u32).wrapping_sub(1);
                   if next_array_idx < src_sizearray {
                     *ra = *src_array.add(next_array_idx as usize);
-                  } else if let Some(val) = table_hash_find_num(h, idx) {
+                  } else if let Some(val) = table_hash_find_num(&*h, idx) {
                     *ra = *val.as_ref();
                   } else {
                     setnilvalue!(ra);
@@ -2052,7 +2066,7 @@ fn h_loadb(
               let slot = if array_idx < sizearray {
                 NonNull::new(array.add(array_idx as usize))
               } else {
-                table_hash_find_num(h, idx)
+                table_hash_find_num(&*h, idx)
               };
               let Some(slot) = slot else {
                 break;
@@ -2352,7 +2366,7 @@ fn h_settable(
         let slot = if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32 {
           NonNull::new((*h).array.add((index - 1) as u32 as usize))
         } else {
-          table_hash_find_num(h, indexd)
+          table_hash_find_num(&*h, indexd)
         };
         if let Some(slot) = slot {
           setobj2t!(l, slot.as_ptr(), ra);
