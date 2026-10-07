@@ -2,7 +2,6 @@ use core::ptr::{NonNull, from_mut};
 
 use crate::{
   enums::type_lexer::Type,
-  functions::optional_node::node_opt,
   methods::ast_expr_function_ast_expr_function::AstExprFunctionArgs,
   records::{
     ast_array::AstArray,
@@ -32,7 +31,7 @@ impl Parser {
   ///
   /// 元组第二项是 `local function` 形态下为函数名建的控制变量：cpp 仅在传入
   /// `localName` 时 `pushLocal`，否则保持 `nullptr`（`Parser.cpp:2341-2346`），
-  /// 故用 `Option<NonNull<AstLocal>>`；匿名函数即 `None`。
+  /// 故用 `Option<Node<AstLocal>>`；匿名函数即 `None`。
   pub fn parse_function_body(
     &mut self,
     hasself: bool,
@@ -41,7 +40,7 @@ impl Parser {
     local_name: Option<&Name>,
     attributes: &AstArray<*mut AstAttr>,
     is_const: bool,
-  ) -> (*mut AstExprFunction, Option<NonNull<AstLocal>>) {
+  ) -> (*mut AstExprFunction, Option<Node<AstLocal>>) {
     let mut start = match_function.location;
     start = self.first_attr_location(attributes, start);
 
@@ -122,12 +121,14 @@ impl Parser {
       Some(cst) => Some(&mut cst.return_specifier_position),
       None => None,
     });
-    let mut fun_local: Option<NonNull<AstLocal>> = None;
+    let mut fun_local: Option<Node<AstLocal>> = None;
     if let Some(local_name) = local_name {
       // cpp `Binding(*localName, nullptr, {0, 0}, isConst)`（Parser.cpp:2345）：
       // `local function f()` 的名字绑定没有类型标注，`None` 即那个 `nullptr`。
       let binding = Binding::new(*local_name, None, Position::new(0, 0), is_const);
-      fun_local = node_opt(self.push_local(&binding));
+      // push_local 交回恒非空 arena 句柄（alloc 失败即中止），Some 仅表达
+      // 「local function 形态」这一有/无维度。
+      fun_local = Some(self.push_local(&binding));
     }
 
     let locals_begin = self.save_locals();
@@ -160,8 +161,9 @@ impl Parser {
       attributes: Nodes::from_raw_slice(attributes.as_slice()),
       generics: Nodes::from_raw_slice(generics.as_slice()),
       generic_packs: Nodes::from_raw_slice(generic_packs.as_slice()),
-      self_: OptNode::from_non_null(self_),
-      args: Nodes::from_raw_slice(vars.as_slice()),
+      self_,
+      // prepare_function_arguments 全程句柄形态：暂存 Vec 直交 `Nodes::from_vec`，无指针折算。
+      args: Nodes::from_vec(vars),
       vararg,
       vararg_location,
       body,
