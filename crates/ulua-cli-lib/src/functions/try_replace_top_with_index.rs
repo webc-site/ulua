@@ -9,7 +9,7 @@ use crate::functions::safe_get_table::META_INDEX_FIELD;
 // review.md §2/§3 收形：`l` 由裸 `*mut LuaState` 收编为借用 `&mut LuaState`——
 // 栈顶元表 `__index` 单槽替换（get_metafield_bytes/remove）在引用接收者上均为
 // ulua-vm 安全面，解引用对象是调用方交出的存活借用，故降为安全 `fn`，原 `# Safety`
-// 契约降级为下述「调用序契约」；`state` 门面随之消亡。
+// 契约降级为下述「调用序契约」（正确性，非内存安全）。
 //
 // 调用序契约（由调用方成立）：`l` 为活跃状态机且栈上至少有一个元素（`-1` 即栈顶）。
 pub fn try_replace_top_with_index(l: &mut LuaState) -> bool {

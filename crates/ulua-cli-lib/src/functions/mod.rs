@@ -44,8 +44,6 @@ pub mod set_luau_flags_default;
 pub mod set_luau_flags_flags;
 pub mod setup_arguments;
 pub mod split_path;
-/// `*mut LuaState` 入口解引用门面（各 C ABI 入口共用，契约见模块头）
-pub(crate) mod state_ref;
 pub mod time_trace_unsupported;
 pub mod traverse_directory;
 pub mod try_replace_top_with_index;

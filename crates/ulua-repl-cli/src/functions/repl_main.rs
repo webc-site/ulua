@@ -27,7 +27,6 @@ use crate::functions::{
   counters_dump::counters_dump, counters_init::counters_init, coverage_dump::coverage_dump,
   coverage_init::coverage_init, profiler_dump::profiler_dump, profiler_start::profiler_start,
   profiler_stop::profiler_stop, run_file::run_file, run_repl::run_repl, setup_state::setup_state,
-  state_ref::state,
 };
 
 // CLI-level static from Repl.cpp: `static bool codegen`. `program_argc/argv`
@@ -145,21 +144,29 @@ pub fn repl_main(args: &[impl AsRef<str>]) -> i32 {
     let global_state = LuaStateGuard(lua_l_newstate());
     let l: *mut LuaState = global_state.0;
 
-    // Safety: l 是刚由 lua_l_newstate 创建、被 LuaStateGuard 持有（作用域退出才 close）的新状态，setup_state 的契约（刚创建、有效）满足；仅当进程级 OOM 时该函数返回 null，此时行为与 cpp oracle（unique_ptr(lua_newstate()) 同样不判空）一致——继承上游边界而非本 port 新增隐患。
-    unsafe {
-      setup_state(l);
-    }
+    // Safety: `l` 是刚由 lua_l_newstate 创建、被 LuaStateGuard 持有（作用域退出才
+    // close）的新状态，setup_state 的「刚创建、有效」前置据此成立；仅当进程级 OOM 时
+    // 该函数返回 null，此时行为与 cpp oracle（unique_ptr(lua_newstate()) 同样不判空）
+    // 一致——继承上游边界而非本 port 新增隐患。REPL/CLI 单线程驱动，下面每次 `&mut *l`
+    // 物化的借用窗都止于当句调用、窗内无并存可变别名（采样线程只触原子面与 safepoint
+    // 独占的 interrupt 单槽，见 profiler_* 契约）。
+    unsafe { setup_state(&mut *l) };
 
     if profile != 0 {
+      // 采样器要把句柄登记进跨线程的回调表裸槽，只能收裸句柄（非解引用），故此处不
+      // 提前折成长寿借用。
       profiler_start(l, profile);
     }
 
-    if coverage {
-      coverage_init(l);
-    }
+    // Safety: 同上契约；coverage_init/counters_init 各自只沿存活状态回溯主线程。
+    unsafe {
+      if coverage {
+        coverage_init(&mut *l);
+      }
 
-    if counters {
-      counters_init(l);
+      if counters {
+        counters_init(&mut *l);
+      }
     }
 
     let mut failed = 0i32;
@@ -168,10 +175,11 @@ pub fn repl_main(args: &[impl AsRef<str>]) -> i32 {
     let mut iter = files.iter().peekable();
     while let Some(file) = iter.next() {
       let is_last_file = iter.peek().is_none();
-      // run_file 现为 crate 内借用形安全编排 fn；gl 由本入口经 `state` 门面物化一次，
-      // 在守卫作用域内存活（close 在循环之后）满足其存活契约；file/program_args
-      // 借自本帧 Vec 迭代、调用窗口内不失效。
-      let ran = run_file(file, state(l), interactive && is_last_file, program_args);
+      // run_file 现为 crate 内借用形安全编排 fn；gl 由本入口在其守卫作用域内存活，
+      // file/program_args 借自本帧 Vec 迭代、调用窗口内不失效。
+      // Safety: 同上契约，且 run_file 的借用窗止于本次调用（其内部新线程槽在返回前已
+      // 由 gl.pop(1) 配平）。
+      let ran = unsafe { run_file(file, &mut *l, interactive && is_last_file, program_args) };
       failed += (!ran) as i32;
     }
 

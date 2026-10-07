@@ -37,6 +37,10 @@ use crate::functions::{
 // rustyline Helper bridging the REPL to the faithful completion / incomplete
 // detection ports. It holds the raw `LuaState` so the completer can introspect
 // the global table exactly as `getCompletions` did in C++.
+// review.md §2 说明：这里刻意保留裸句柄而非 `&'a mut LuaState`——rustyline 的
+// `Completer::complete` 只给 `&self`，无法透过共享接收者交出可变借用，helper 必须是
+// 长寿登记点；该句柄的存活期被构造它的 `run_repl_impl` 帧内 editor 包住、单线程串行
+// 驱动，解引用只发生在回调触发处一次 `unsafe { &mut *.. }` 物化（借用窗止于当句调用）。
 struct ReplHelper {
   l: *mut LuaState,
 }
@@ -51,9 +55,10 @@ impl Completer for ReplHelper {
     _ctx: &Context<'_>,
   ) -> rustyline::Result<(usize, Vec<Pair>)> {
     // Faithful port of completeRepl / icGetCompletions / getCompletions.
-    // self.l 与构造它的 run_repl_impl 参数 l 同一状态（该 fn 的存活前提：整个
-    // 循环内有效），rustyline 补全回调在 REPL 同一线程同步触发。
-    let (start, completions) = complete_repl(self.l, line, pos);
+    // Safety: self.l 与构造它的 run_repl_impl 参数 l 同一状态（该 fn 的存活前提：整个
+    // 循环内有效），rustyline 补全回调在 REPL 同一线程同步触发，本次物化的借用窗止于
+    // 当句调用、窗内无并存可变别名。
+    let (start, completions) = complete_repl(unsafe { &mut *self.l }, line, pos);
     Ok((start, completions))
   }
 }
@@ -112,9 +117,10 @@ fn is_incomplete_chunk(source: &str) -> bool {
 /// helper 的 `ReplHelper { l }` 长期持有者）。
 // DELIBERATE DEVIATION（review.md §9.3）：`ReplHelper` 在 rustyline 回调中解引用
 // `*mut LuaState` 遍历全局表补全（ulua-vm c-API）；该裸句柄的存活期被本帧 editor
-// 包住、单线程串行驱动，其可空性无缺席态（恒为活动主状态），故非 Option 场景。本入口
-// 为 crate 内编排函数：句柄由调用方交出的存活状态传入，解引用关在 `run_code` 边界与
-// `complete_repl` 的 `state` 门面内，故收编为安全 fn、原 `unsafe fn` 契约降级为文档约定。
+// 包住、单线程串行驱动，其可空性无缺席态（恒为活动主状态），故非 Option 场景——
+// 本入口因此只能收裸句柄（helper 的长寿登记点），解引用一律关在本文件两处带
+// `// Safety:` 的最小 `unsafe { &mut *.. }` 物化点（run_code / complete_repl 均已收编
+// 为 `&mut LuaState` 借用形的安全 fn），故收编为安全 fn、原 `unsafe fn` 契约降级为文档约定。
 pub(crate) fn run_repl_impl(l: *mut LuaState) {
   // isocline's `ic_set_history(path, -1)` capped history at its default of 200
   // entries; mirror that via the editor configuration.
@@ -163,9 +169,10 @@ pub(crate) fn run_repl_impl(l: *mut LuaState) {
           let mut wrapped = String::with_capacity("return ".len() + line.len());
           wrapped.push_str("return ");
           wrapped.push_str(&line);
-          // Safety: l 自本循环开始到返回全程有效且仅本线程驱动（本 fn 文档契约；
-          // run_code 为跨 crate `pub` c-API 句柄边界，保留 `unsafe fn` 签名）。
-          if unsafe { run_code(l, &wrapped) }.is_none() {
+          // Safety: l 自本循环开始到返回全程有效且仅本线程驱动（本 fn 文档契约）；
+          // 每次物化的借用窗止于当句 run_code 调用。run_code 已按 review.md §2 收编为
+          // `&mut LuaState` 借用形的安全 fn。
+          if run_code(unsafe { &mut *l }, &wrapped).is_none() {
             let _ = editor.add_history_entry(line.as_str());
             continue;
           }
@@ -175,7 +182,7 @@ pub(crate) fn run_repl_impl(l: *mut LuaState) {
         // skip printing and let the next read continue it. (With the
         // rustyline validator this is normally caught before accept.)
         // Safety: 同上，l 在本帧循环内有效且单线程驱动。
-        if let Some(error) = unsafe { run_code(l, &line) } {
+        if let Some(error) = run_code(unsafe { &mut *l }, &line) {
           if error.ends_with("<eof>") {
             continue;
           }

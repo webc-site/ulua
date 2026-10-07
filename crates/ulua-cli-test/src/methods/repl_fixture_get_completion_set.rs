@@ -22,9 +22,10 @@ impl ReplFixture {
       });
     };
 
-    // 前置条件由 get_completions 文档约定：`self.l()` 为 fixture 持有的活跃
-    // 主线程状态（守卫契约）；`input_prefix` 为合法 UTF-8 前缀。
-    get_completions(self.l(), input_prefix, &mut callback);
+    // `get_completions` 已按 review.md §2 收编为 `&mut LuaState` 借用形的安全 fn：
+    // 句柄经 `state_mut` 在夹具层唯一物化点交出（fixture 持有的活跃主线程状态），
+    // `input_prefix` 为合法 UTF-8 前缀。
+    get_completions(self.state_mut(), input_prefix, &mut callback);
 
     debug_assert!(top == self.state_mut().get_top());
 

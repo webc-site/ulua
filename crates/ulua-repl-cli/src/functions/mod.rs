@@ -63,5 +63,3 @@ pub(crate) mod sigint_handler_repl;
 // 收口门面：Ctrl-C 处理的注册/撤回（libc FFI 与 null 协议值只留这里）
 pub(crate) mod sigint_setup;
 pub(crate) mod stack_function_name;
-// `*mut LuaState` 入口解引用门面（各 VM 边界入口共用，契约见模块头）
-pub(crate) mod state_ref;

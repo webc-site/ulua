@@ -82,8 +82,9 @@ const CACHE_MISS_MSG: &str = "Cache already contained module result";
 
 /// 在主线程上执行 Luau 源码（对齐 cpp 的 `runCode(L, src)`）
 fn run_code_str(l: *mut LuaState, src: &str) {
-  // Safety: `l` 指向 fixture 初始化完成的主线程，`src` 为合法 UTF-8 源码。
-  let _ = unsafe { run_code(l, src) };
+  // Safety: `l` 指向 fixture 初始化完成的主线程（本 tests 各用例的唯一裸句柄来源
+  // `fixture.l()`），借用窗止于当句 run_code 调用；`src` 为合法 UTF-8 源码。
+  let _ = run_code(unsafe { &mut *l }, src);
 }
 
 /// 注册运行时模块 `@test/helloworld`（hello = "world"）供 require 读取
