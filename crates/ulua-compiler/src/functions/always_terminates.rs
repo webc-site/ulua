@@ -5,56 +5,53 @@ use ulua_ast::records::{
 use ulua_common::records::dense_hash_map::DenseHashMap;
 
 use crate::{
-  functions::{
-    ast_slot_ref::{ast_slot_is, ast_slot_try_as},
-    is_constant::{is_constant_false, is_constant_true},
-  },
+  functions::is_constant::{is_constant_false, is_constant_true},
   records::{constant::Constant, node::Node},
 };
 
-/// 仅 crate 内判定用；node 为 null 或指向存活节点（同 C++ 前置条件）。
+/// 仅 crate 内判定用；`node` 为分发遍历交付的 arena 存活语句句柄
+/// （非空由 [`Node`] 类型端承载，cpp 的 null 折叠分支在本形态下不可达）。
 pub(crate) fn always_terminates(
   constants: &DenseHashMap<Node<AstExpr>, Constant>,
-  node: *mut AstStat,
+  node: Node<AstStat>,
 ) -> bool {
-  // 顺序块：首条必终止的语句决定整体
-  // 门面判型+下转：null 输入返回 None，命中即 class_index 判定类型正确
-  // （node 契约为 cost 模型分发遍历交付的 arena 存活 AstStat）。
-  if let Some(block) = ast_slot_try_as::<AstStatBlock, _>(node) {
+  // 顺序块：首条必终止的语句决定整体（句柄判型+下转：命中即 class 判定类型正确）
+  if let Some(block) = node.try_as::<AstStatBlock>() {
     return block
       .body
       .iter_nodes()
-      .any(|item| always_terminates(constants, item.as_ptr()));
+      .any(|item| always_terminates(constants, Node::from(*item)));
   }
 
-  // 门面判型（只读 class index、不外传借用，null 折叠 false）。
-  if ast_slot_is::<AstStatReturn, _>(node)
-    || ast_slot_is::<AstStatBreak, _>(node)
-    || ast_slot_is::<AstStatContinue, _>(node)
-  {
+  // 句柄判型（只读 class 位、不外传借用）。
+  if node.is::<AstStatReturn>() || node.is::<AstStatBreak>() || node.is::<AstStatContinue>() {
     return true;
   }
 
   // 条件块：常量条件只看活分支，否则两支都须终止
-  // 门面判型+下转：thenbody/elsebody 已句柄化，非空/判空由 Node/OptNode 类型端
-  // 兑现，as_ptr 仅作既有裸指针 API 的桥接。
-  if let Some(stat_if) = ast_slot_try_as::<AstStatIf, _>(node) {
+  // thenbody/elsebody 已句柄化，非空/判空由 Node/OptNode 类型端兑现。
+  if let Some(stat_if) = node.try_as::<AstStatIf>() {
     let condition = stat_if.condition;
-    let thenbody = stat_if.thenbody;
-    let elsebody = stat_if.elsebody;
+    let thenbody = Node::from(stat_if.thenbody).cast::<AstStat>();
+    let elsebody = stat_if
+      .elsebody
+      .to_option()
+      .map(|n| Node::from(n).cast::<AstStat>());
 
     if is_constant_true(constants, condition.into()) {
       // thenbody 静态类型是 AstStatBlock，向上转基类传参
-      return always_terminates(constants, thenbody.as_ptr().cast::<AstStat>());
+      return always_terminates(constants, thenbody);
     }
 
-    if is_constant_false(constants, condition.into()) && elsebody.is_some() {
-      return always_terminates(constants, elsebody.as_ptr());
+    let Some(elsebody) = elsebody else {
+      return false;
+    };
+
+    if is_constant_false(constants, condition.into()) {
+      return always_terminates(constants, elsebody);
     }
 
-    return elsebody.is_some()
-      && always_terminates(constants, thenbody.as_ptr().cast::<AstStat>())
-      && always_terminates(constants, elsebody.as_ptr());
+    return always_terminates(constants, thenbody) && always_terminates(constants, elsebody);
   }
 
   false

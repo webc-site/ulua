@@ -139,7 +139,7 @@ impl TypeMapVisitor<'_, '_> {
     // 外层 `None` = 未做解析（回落原 ty）；`Some(inner)` 恒非空——type_ptr
     // 槽已句柄化为非空 `Node`（cpp `getType((*alias)->type, ...)` 直接递归，
     // 无 null 形态）。
-    let resolved = match ty_node.borrow().as_type_ref() {
+    let resolved = match ty_node.get().as_type_ref() {
       // 带 prefix 的限定引用（如 `pkg.Type`）不是裸别名，原样返回
       AstTypeRef::Reference(ref_node) if ref_node.prefix.is_some() => None,
       AstTypeRef::Reference(ref_node) => self
@@ -149,7 +149,7 @@ impl TypeMapVisitor<'_, '_> {
         .flatten()
         // alias 由 push_type_aliases 建档，指向 arena 存活 AstStatTypeAlias；
         // 建档缺席视为无法解析，回落原 ty。
-        .map(|alias| Some(Node::from_ast_handle(alias.borrow().type_ptr))),
+        .map(|alias| Some(Node::from_ast_handle(alias.get().type_ptr))),
       _ => None,
     };
 
@@ -158,20 +158,16 @@ impl TypeMapVisitor<'_, '_> {
 
   /// expr 的类型若为表类型则取其类型节点（cpp `TypeSet` 中 resolvedExprs 下转
   /// `AstTypeTable` 的共用入口，props 扫描与 indexer 查找共享）。
-  pub(crate) fn try_get_table_type(
-    &self,
-    expr: impl Into<Node<AstExpr>>,
-  ) -> Option<&'static AstTypeTable> {
-    self
-      .resolved_exprs
-      .find(&expr.into())
-      .copied()
+  ///
+  /// 借用半径：直接从 map 槽位借出句柄（不 `copied` 成临时值），[`Node::get`]
+  /// 交出的引用即 `&self` 借用，不再向外界泄露 `'static`（旧 nn_alias 形态）。
+  pub(crate) fn try_get_table_type(&self, expr: impl Into<Node<AstExpr>>) -> Option<&AstTypeTable> {
+    let type_node = self.resolved_exprs.find(&expr.into())?.as_ref()?;
+    match type_node.get().as_type_ref() {
       // 值槽缺席（cpp 的 null）即无类型，与「无表类型」同结果。
-      .flatten()
-      .and_then(|type_node| match type_node.borrow().as_type_ref() {
-        AstTypeRef::Table(tbl) => Some(tbl),
-        _ => None,
-      })
+      AstTypeRef::Table(tbl) => Some(tbl),
+      _ => None,
+    }
   }
 
   /// expr 的类型若为表类型则取其 indexer（cpp `TypeSet::tryGetTableIndexer`）。
@@ -179,7 +175,7 @@ impl TypeMapVisitor<'_, '_> {
   pub(crate) fn try_get_table_indexer(
     &self,
     expr: impl Into<Node<AstExpr>>,
-  ) -> Option<&'static AstTableIndexer> {
+  ) -> Option<&AstTableIndexer> {
     // 表类型节点的 indexer 槽可缺席（cpp 存 null）：句柄 `get` 归一为 None。
     self
       .try_get_table_type(expr)
@@ -378,36 +374,27 @@ impl<'a, 'b> AstVisitor for TypeMapVisitor<'a, 'b> {
         let arg = call.args.as_slice()[0];
 
         if is_matching_global(self.globals, ast_slot_ref(call.func), "ipairs") {
-          // 纯只读查找，判空下转在门面内收口。
+          // 纯只读查找，判空下转在门面内收口。先取出 Copy 句柄结束 `indexer`
+          // 的 `&self` 借用，再进入记录调用的 `&mut self`。
           if let Some(indexer) = self.try_get_table_indexer(arg) {
             let number_ty = self.builtin_types.number_node();
+            let result_ty = Some(Node::from_ast_handle(indexer.result_type));
             self.record_resolved_type_ast_local_ast_type(vars[0], Some(number_ty));
-            self.record_resolved_type_ast_local_ast_type(
-              vars[1],
-              Some(Node::from_ast_handle(indexer.result_type)),
-            );
+            self.record_resolved_type_ast_local_ast_type(vars[1], result_ty);
           }
         } else if is_matching_global(self.globals, ast_slot_ref(call.func), "pairs")
           && let Some(indexer) = self.try_get_table_indexer(arg)
         {
-          self.record_resolved_type_ast_local_ast_type(
-            vars[0],
-            Some(Node::from_ast_handle(indexer.index_type)),
-          );
-          self.record_resolved_type_ast_local_ast_type(
-            vars[1],
-            Some(Node::from_ast_handle(indexer.result_type)),
-          );
+          let index_ty = Some(Node::from_ast_handle(indexer.index_type));
+          let result_ty = Some(Node::from_ast_handle(indexer.result_type));
+          self.record_resolved_type_ast_local_ast_type(vars[0], index_ty);
+          self.record_resolved_type_ast_local_ast_type(vars[1], result_ty);
         }
       } else if let Some(indexer) = self.try_get_table_indexer(value_ptr) {
-        self.record_resolved_type_ast_local_ast_type(
-          vars[0],
-          Some(Node::from_ast_handle(indexer.index_type)),
-        );
-        self.record_resolved_type_ast_local_ast_type(
-          vars[1],
-          Some(Node::from_ast_handle(indexer.result_type)),
-        );
+        let index_ty = Some(Node::from_ast_handle(indexer.index_type));
+        let result_ty = Some(Node::from_ast_handle(indexer.result_type));
+        self.record_resolved_type_ast_local_ast_type(vars[0], index_ty);
+        self.record_resolved_type_ast_local_ast_type(vars[1], result_ty);
       }
     }
 
@@ -538,16 +525,16 @@ impl<'a, 'b> AstVisitor for TypeMapVisitor<'a, 'b> {
     // expr 已句柄化恒非空；ast_slot_visit_expr 为既有裸指针槽位门面，经 as_ptr 桥接。
     ast_slot_visit_expr(node.expr.as_ptr(), self);
 
-    // 表类型判定共用 `try_get_table_type` 入口，消除重复下转样板
-    if let Some(table_ty) = self.try_get_table_type(node.expr) {
-      for prop in table_ty.props.iter() {
-        // AstName 的 Eq 即指针身份，与 cpp `prop.name.value == node->index.value` 等价
-        // （cpp 原语保留在注释；Rust 侧 AstName 判等即驻留指针比较）。
-        if prop.name == node.index {
-          self.record_resolved_type_ast_expr_ast_type(base_key(node), Node::try_new(prop.r#type));
-          return false;
-        }
-      }
+    // 表类型判定共用 `try_get_table_type` 入口，消除重复下转样板。借用半径现为
+    // `&self`，故先取出命中 prop 的类型句柄（Copy）、结束表节点借用，再进入随后
+    // `&mut self` 的记录调用（与 `visit_expr_index` 同式）。
+    let matched = self
+      .try_get_table_type(node.expr)
+      .and_then(|table_ty| table_ty.props.iter().find(|prop| prop.name == node.index))
+      .map(|prop| Node::try_new(prop.r#type));
+    if let Some(prop_type) = matched {
+      self.record_resolved_type_ast_expr_ast_type(base_key(node), prop_type);
+      return false;
     }
 
     if let Some(&type_bc) = self.expr_types.find(&node.expr.into())

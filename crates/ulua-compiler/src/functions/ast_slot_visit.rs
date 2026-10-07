@@ -34,5 +34,5 @@ fn ast_slot_visit_node<V: AstVisitor + ?Sized>(slot: *mut AstNode, visitor: &mut
     return;
   }
 
-  dispatch_node(Node::<AstNode>::from(slot).borrow_mut(), visitor);
+  dispatch_node(Node::<AstNode>::from(slot).get_mut(), visitor);
 }

@@ -42,7 +42,7 @@ use crate::{
     compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
     compiler::{
       Compiler, K_GETIMPORT_FLAG, K_MAX_AD_INDEX, K_MAX_IMPORT_ID, K_MAX_K_CONST_INDEX,
-      K_MAX_TARGET_COUNT, nn_alias::alias,
+      K_MAX_TARGET_COUNT,
     },
     constant::Constant,
     node::Node,
@@ -77,7 +77,7 @@ impl Compiler {
         // Box 字段靠自动解引用强转即可，无需显式 `*`（clippy explicit_auto_deref）
         // expr 已句柄化恒非空；本入口持共享借用（cpp 非 const 透传形态），&mut 重建
         // 经 as_ptr 裸出口，写穿仅落在该节点编译期临时字段，单线程独占。
-        self.compile_expr(alias(expr_group.expr.as_ptr()), target, target_temp);
+        self.compile_expr(Node::from(expr_group.expr).get_mut(), target, target_temp);
       }
       AstExprRef::ConstantNil(_) => {
         self
@@ -186,7 +186,11 @@ impl Compiler {
       AstExprRef::TypeAssertion(expr_assertion) => {
         // expr 已句柄化恒非空；本入口持共享借用（cpp 非 const 透传形态），&mut 重建
         // 经 as_ptr 裸出口，写穿仅落在该节点编译期临时字段，单线程独占。
-        self.compile_expr(alias(expr_assertion.expr.as_ptr()), target, target_temp);
+        self.compile_expr(
+          Node::from(expr_assertion.expr).get_mut(),
+          target,
+          target_temp,
+        );
       }
       AstExprRef::IfElse(expr_if_else) => {
         self.compile_expr_if_else(expr_if_else, target, target_temp);
@@ -197,7 +201,11 @@ impl Compiler {
       AstExprRef::Instantiate(expr_instantiate) => {
         // expr 为 parser 接线的存活子指针恒非空；本入口持共享借用（cpp 非 const
         // 透传形态），&mut 重建经裸出口，写穿仅落在该节点编译期临时字段，单线程独占。
-        self.compile_expr(alias(expr_instantiate.expr), target, target_temp);
+        self.compile_expr(
+          Node::from(expr_instantiate.expr).get_mut(),
+          target,
+          target_temp,
+        );
       }
       AstExprRef::Error(_) => LUAU_ASSERT!(false),
     }
@@ -230,7 +238,7 @@ impl Compiler {
         } else {
           expr_ref.left
         };
-        self.compile_expr(alias(branch.as_ptr()), target, target_temp);
+        self.compile_expr(Node::from(branch).get_mut(), target, target_temp);
         return;
       }
 
@@ -280,7 +288,7 @@ impl Compiler {
       let skip_jump = self.compile_condition_value(expr_ref.left.get(), Some(reg), !and_);
       // Safety: right 出自 parser 接线的存活 arena 子句柄；本入口持 &AstExprBinary
       // （cpp 非 const 透传形态），&mut 重建限于该节点编译期临时字段，单线程独占。
-      self.compile_expr(alias(expr_ref.right.as_ptr()), reg, true);
+      self.compile_expr(Node::from(expr_ref.right).get_mut(), reg, true);
       let move_label = self.bc().emit_label();
       self.patch_jumps(&expr_ref.base.base, &skip_jump, move_label);
 
@@ -298,14 +306,14 @@ impl Compiler {
   pub(crate) fn compile_expr_auto(&mut self, node: &AstExpr, _rs: &mut RegScope) -> u8 {
     // 身份句柄：constants/expr_local_reg 的地址键与借用（含分发器所需的 &mut 形态）
     // 统一由 `Node` 的 arena 存活契约承载（见 records/node.rs）。
-    let handle = Node::from_ref(node);
+    let mut handle = Node::from_ref(node);
 
     if let Some(reg) = self.get_expr_local_reg(handle) {
       return reg;
     }
 
-    let reg = self.alloc_reg(&handle.borrow().base, 1);
-    self.compile_expr(handle.borrow_mut(), reg, true);
+    let reg = self.alloc_reg(&handle.get().base, 1);
+    self.compile_expr(handle.get_mut(), reg, true);
     reg
   }
 
@@ -394,13 +402,13 @@ impl Compiler {
           let mut args = vec![expr_ref.left.into(), expr_ref.right.into()];
           self.unroll_concats(&mut args);
           let regs = self.alloc_reg(&expr_ref.base.base, args.len() as u32);
-          for (i, arg) in args.iter().copied().enumerate() {
+          for (i, mut arg) in args.iter().copied().enumerate() {
             // arg 为同树存活节点句柄，&mut 借用经 Node 契约交求值路径（写穿限于
             // 该节点编译期临时字段）。
             if fflag::LuauCompileConcatTargetTop.get() {
-              self.compile_expr_temp_top(arg.borrow_mut(), regs + i as u8);
+              self.compile_expr_temp_top(arg.get_mut(), regs + i as u8);
             } else {
-              self.compile_expr(arg.borrow_mut(), regs + i as u8, true);
+              self.compile_expr(arg.get_mut(), regs + i as u8, true);
             }
           }
           self.bc_mut().emit_abc(
@@ -493,7 +501,7 @@ impl Compiler {
       } else {
         // local 是 class_locals 表登记的存活节点句柄（构造期登记、比 self 长寿），
         // get_upval 常态仅按地址查重。
-        let uid = self.get_upval(local.borrow());
+        let uid = self.get_upval(local.get());
         self
           .bc_mut()
           .emit_abc(LuauOpcode::LOP_GETUPVAL, target, uid, 0);
@@ -538,10 +546,18 @@ impl Compiler {
       if is_constant_true(&self.constants, expr_ref.condition.as_ptr().into()) {
         // Safety: true_expr 已句柄化（parser 接线的存活子节点）；本函数持共享引用，
         // 写穿借用的还原沿既有形态经 as_ptr 桥接，target 由上层分配到本帧寄存器。
-        self.compile_expr(alias(expr_ref.true_expr.as_ptr()), target, target_temp);
+        self.compile_expr(
+          Node::from(expr_ref.true_expr).get_mut(),
+          target,
+          target_temp,
+        );
       } else {
         // Safety: false_expr 同上（句柄即存活证明）。
-        self.compile_expr(alias(expr_ref.false_expr.as_ptr()), target, target_temp);
+        self.compile_expr(
+          Node::from(expr_ref.false_expr).get_mut(),
+          target,
+          target_temp,
+        );
       }
     } else {
       if let Some(creg) = self.get_expr_local_reg(expr_ref.condition.as_ptr()) {
@@ -565,7 +581,11 @@ impl Compiler {
       // 返回值即本条件新发射的 skip 跳转标签；condition 已句柄化，`.get()` 直供只读入参。
       let else_jump = self.compile_condition_value(expr_ref.condition.get(), None, false);
       // Safety: true_expr 存活（同上）。
-      self.compile_expr(alias(expr_ref.true_expr.as_ptr()), target, target_temp);
+      self.compile_expr(
+        Node::from(expr_ref.true_expr).get_mut(),
+        target,
+        target_temp,
+      );
 
       // 不驻留 &mut 长借用（原写法的局部别名会与后续 &mut self 调用重叠），
       // 逐点经 bc/bc_mut 取现，语义同 cpp 的引用成员直调。
@@ -574,7 +594,11 @@ impl Compiler {
 
       let else_label = self.bc().emit_label();
       // Safety: false_expr 存活（同上）。
-      self.compile_expr(alias(expr_ref.false_expr.as_ptr()), target, target_temp);
+      self.compile_expr(
+        Node::from(expr_ref.false_expr).get_mut(),
+        target,
+        target_temp,
+      );
       let end_label = self.bc().emit_label();
 
       self.patch_jumps(&expr_ref.base.base, &else_jump, else_label);
@@ -741,7 +765,7 @@ impl Compiler {
     } else if target_temp {
       // Safety: expr.expr 已句柄化恒非空（上方同款契约），裸出口经 as_ptr 桥接写穿
       // 子槽位；target 本帧可覆写。
-      self.compile_expr(alias(expr.expr.as_ptr()), target, true);
+      self.compile_expr(Node::from(expr.expr).get_mut(), target, true);
       target
     } else {
       self.compile_expr_auto(expr.expr.get(), &mut rs)
@@ -777,22 +801,34 @@ impl Compiler {
     if list.size == target_count as usize {
       for (i, &expr) in list.iter().enumerate() {
         // Safety: 见上，expr 存活、寄存器有效。
-        self.compile_expr(alias(expr), target.wrapping_add(i as u8), true);
+        self.compile_expr(
+          Node::from(expr).get_mut(),
+          target.wrapping_add(i as u8),
+          true,
+        );
       }
     } else if list.size > target_count as usize {
       for (i, &expr) in list.iter().take(target_count as usize).enumerate() {
         // Safety: 见上，expr 存活、寄存器有效。
-        self.compile_expr(alias(expr), target.wrapping_add(i as u8), true);
+        self.compile_expr(
+          Node::from(expr).get_mut(),
+          target.wrapping_add(i as u8),
+          true,
+        );
       }
 
       for &expr in list.iter().skip(target_count as usize) {
         // expr 同上存活（parser 接线），句柄借用交副作用求值路径。
-        self.compile_expr_side(Node::from(expr).borrow());
+        self.compile_expr_side(Node::from(expr).get());
       }
     } else if !list.is_empty() {
       for (i, &expr) in list.iter().take(list.size - 1).enumerate() {
         // Safety: 见上，expr 存活、寄存器有效。
-        self.compile_expr(alias(expr), target.wrapping_add(i as u8), true);
+        self.compile_expr(
+          Node::from(expr).get_mut(),
+          target.wrapping_add(i as u8),
+          true,
+        );
       }
 
       // !is_empty 已保证末槽存在：as_slice().last() 取代裸 data.add(size-1)，
@@ -802,7 +838,7 @@ impl Compiler {
       };
       self.compile_expr_temp_n(
         // last_expr 同上存活（parser 接线），&mut 借用只覆盖该次调用。
-        alias(last_expr),
+        Node::from(last_expr).get_mut(),
         target.wrapping_add((list.size - 1) as u8),
         target_count.wrapping_sub((list.size - 1) as u8),
         target_top,
@@ -1002,7 +1038,7 @@ impl Compiler {
       }
 
       let mut rs = self.reg_scope();
-      let rl = self.compile_expr_auto(left.borrow(), &mut rs);
+      let rl = self.compile_expr_auto(left.get(), &mut rs);
 
       if is_eq && operand_is_constant {
         let cv = self.get_constant(right);
@@ -1014,11 +1050,11 @@ impl Compiler {
           // right 为 expr 子句柄指向的存活 arena 节点，get_constant_index 只读消费其常量表项。
           Constant::Number(_) => (
             LuauOpcode::LOP_JUMPXEQKN,
-            self.get_constant_index(right.borrow()).unwrap_or(-1),
+            self.get_constant_index(right.get()).unwrap_or(-1),
           ),
           Constant::Str(_) => (
             LuauOpcode::LOP_JUMPXEQKS,
-            self.get_constant_index(right.borrow()).unwrap_or(-1),
+            self.get_constant_index(right.get()).unwrap_or(-1),
           ),
           _ => {
             LUAU_ASSERT!(false);
@@ -1040,7 +1076,7 @@ impl Compiler {
         jump_label
       } else {
         let opc = self.get_jump_op_compare(expr_ref.op, not_);
-        let rr = self.compile_expr_auto(right.borrow(), &mut rs);
+        let rr = self.compile_expr_auto(right.get(), &mut rs);
         let jump_label = self.bc().emit_label();
 
         if expr_ref.op == AstExprBinaryOp::CompareGt || expr_ref.op == AstExprBinaryOp::CompareGe {
@@ -1069,14 +1105,14 @@ impl Compiler {
     only_truth: bool,
   ) -> Vec<usize> {
     // 身份句柄：地址键与分发器所需的 `&mut` 借用统一由 `Node` 契约承载。
-    let handle = Node::from_ref(node);
+    let mut handle = Node::from_ref(node);
 
     if let Some(cv) = self.constants.find(&handle)
       && !cv.is_unknown()
     {
       if cv.is_truthful() == only_truth {
         if let Some(target) = target {
-          self.compile_expr(handle.borrow_mut(), target, true);
+          self.compile_expr(handle.get_mut(), target, true);
         }
         let label = self.bc().emit_label();
         self.bc_mut().emit_ad(LuauOpcode::LOP_JUMP, 0, 0);
@@ -1133,7 +1169,7 @@ impl Compiler {
 
     let mut rs = self.reg_scope();
     let reg = if let Some(target) = target {
-      self.compile_expr(handle.borrow_mut(), target, true);
+      self.compile_expr(handle.get_mut(), target, true);
       target
     } else {
       self.compile_expr_auto(node, &mut rs)
@@ -1210,7 +1246,9 @@ impl Compiler {
   }
 
   /// C++ `isExprMultRet`：调用（非内建或多返回值内建）或 varargs 视为多返回值。
-  pub(crate) fn is_expr_mult_ret(&self, node: &AstExpr) -> bool {
+  /// 下钻 `get_function_expr` 可能把常量表键名 intern 进名字表，故需 `&mut self`
+  /// （旧实现在 `&self` 下经裸指针写穿名表，属别名违例，已随指针门面一并收紧）。
+  pub(crate) fn is_expr_mult_ret(&mut self, node: &AstExpr) -> bool {
     // 分发器判型：其余表达式恒为单返回值。
     let expr = match node.as_expr_ref() {
       AstExprRef::Varargs(_) => return true,

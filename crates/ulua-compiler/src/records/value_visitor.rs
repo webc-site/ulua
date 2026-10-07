@@ -97,14 +97,16 @@ impl AstVisitor for ValueVisitor {
     // vars/values 槽由 parser 保证为非空存活表达式指针；本 visitor 只写自身
     // map、不改 AST，arena 独占成立。
     for &var in node.vars.iter() {
-      // var 为 parser 保证非空存活的表达式槽（见上）；句柄物化独占借用，null 折叠 None。
-      self.assign((!var.is_null()).then(|| Node::new(var).borrow_mut()));
+      // var 为 parser 保证非空存活的表达式槽（见上）；句柄先落本地 Option，
+      // get_mut 交出独占借用，null 折叠为 None（同 cpp 判空早退）。
+      let mut var_node = Node::try_new(var);
+      self.assign(var_node.as_mut().map(|n| n.get_mut()));
     }
     for &value in node.values.iter() {
       // value 为 parser 保证非空存活的表达式槽（见上）；null 折叠为早退，
-      // 与旧指针门面等价；`borrow_mut()` 交出独占借用，`_ref` 门面全链路 safe。
-      if let Some(value) = Node::try_new(value) {
-        ast_expr_visit_ref(value.borrow_mut(), self);
+      // 与旧指针门面等价；`get_mut()` 交出独占借用，`_ref` 门面全链路 safe。
+      if let Some(mut value) = Node::try_new(value) {
+        ast_expr_visit_ref(value.get_mut(), self);
       }
     }
 
@@ -113,7 +115,7 @@ impl AstVisitor for ValueVisitor {
 
   fn visit_stat_compound_assign(&mut self, node: &mut AstStatCompoundAssign) -> bool {
     // var/value 已句柄化（node_handle::Node）：`get_mut()` 即非空 + 独占证明，
-    // 原 `is_null` 死守卫、`Node::new(..).borrow_mut()` 指针物化与子节点遍历的
+    // 原 `is_null` 死守卫、`Node::new(..).get_mut()` 指针物化与子节点遍历的
     // unsafe 门面一并消失；本 visitor 只写自身 map、不改 AST。
     self.assign(Some(node.var.get_mut()));
     ast_expr_visit_ref(node.value.get_mut(), self);
@@ -131,7 +133,7 @@ impl AstVisitor for ValueVisitor {
 
   fn visit_stat_function(&mut self, node: &mut AstStatFunction) -> bool {
     // name/func 已句柄化（node_handle::Node）：`get_mut()` 即非空 + 独占证明，
-    // 原 `is_null` 死守卫与 `Node::new(..).borrow_mut()` 指针物化一并消失。
+    // 原 `is_null` 死守卫与 `Node::new(..).get_mut()` 指针物化一并消失。
     self.assign(Some(node.name.get_mut()));
     // C++ `node->func->visit(this)` 是 AST 节点分发——既跑 visit_expr_function
     // 回调（登记形参）又递归进函数体。此前只调裸回调跳过了函数体，

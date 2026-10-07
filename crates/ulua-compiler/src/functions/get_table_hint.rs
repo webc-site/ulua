@@ -13,7 +13,7 @@ use crate::{functions::ast_slot_ref::ast_slot_ref, records::node::Node};
 pub(crate) fn get_table_hint(expr: Node<AstExpr>) -> Option<Node<AstExprTable>> {
   // expr 为表形状预测传入的 arena 存活 AstExpr 句柄（visit_stat_local 的
   // values 元素，契约见 `Node::borrow`）；判型走安全引用门面。
-  let expr_ref = expr.borrow();
+  let expr_ref = expr.get();
   if let Some(table) = ast_node_try_as::<AstExprTable>(expr_ref) {
     return Some(table.into());
   }

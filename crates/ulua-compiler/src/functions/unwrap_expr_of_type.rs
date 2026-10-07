@@ -15,7 +15,7 @@ where
   T: AstNodeClass + 'static,
 {
   loop {
-    let base = &node.borrow().base;
+    let base = &node.get().base;
 
     if let Some(expr) = ast_node_try_as::<T>(base) {
       return Some(expr.into());

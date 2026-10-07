@@ -7,8 +7,10 @@ use ulua_ast::{
   enums::ast_expr_ref::AstExprRef,
   records::{
     ast_array::AstArray,
+    ast_expr::AstExpr,
     ast_expr_call::AstExprCall,
     ast_expr_function::AstExprFunction,
+    ast_expr_index_name::AstExprIndexName,
     ast_expr_interp_string::AstExprInterpString,
     ast_expr_table::{
       AstExprTable, Item, ItemKind,
@@ -44,7 +46,7 @@ use crate::{
     builtin_info::BuiltinInfo,
     capture::Capture,
     compile_error::{CompileError, ERR_EXCEEDED_JUMP_DISTANCE_LIMIT, REMARK_INLINE_RECURSIVE},
-    compiler::{Compiler, K_MAX_AD_INDEX, K_MAX_TARGET_COUNT, nn_alias::alias},
+    compiler::{Compiler, K_MAX_AD_INDEX, K_MAX_TARGET_COUNT},
     constant::Constant,
     node::Node,
   },
@@ -54,8 +56,22 @@ const K_BIT32_FIELD_WIDTH: i64 = 32;
 /// EXTRACTK 常量打包位移：低 5 位存起始位 `f`，其上 5 位存 `w - 1`。
 const K_BIT32_FIELD_PACK_SHIFT: u32 = 5;
 
+/// `a:f(x)` 形态的被调表达式必为 `AstExprIndexName`（parser 接线保证）：cpp 在
+/// 静态断言后裸 `static_cast` 解引用，Rust 侧把判型 + 断言收口这一处，两个调用点
+/// 复用。借用半径由入参句柄的借用供给（arena 存活契约见 [`Node::get`]）。
+fn self_call_index_name(func: &Node<AstExpr>) -> &AstExprIndexName {
+  match func.as_expr_ref() {
+    AstExprRef::IndexName(fi) => fi,
+    _ => {
+      LUAU_ASSERT!(false);
+      unreachable!(
+        "self_ 调用的 func 必为 AstExprIndexName（parser 保证，cpp 静态断言后裸解引用）"
+      );
+    }
+  }
+}
+
 impl Compiler {
-  /// 调用表达式编译（对应 cpp/Compiler/src/Compiler.cpp:1484-1556）：
   /// `FFlag::LuauCompileFastpcall` 开启且优化级别 ≥1 时，对可导入的全局
   /// `pcall`/`xpcall` 直发 `LOP_FASTPCALL`；否则走 FASTCALL/CALL 常规路径。
   /// `expr` 为分发器判型后的存活 `AstExprCall`（args 访问受 `args.size` 界约束）；
@@ -71,7 +87,7 @@ impl Compiler {
     mult_ret: bool,
   ) {
     let expr = expr.into();
-    let expr_ref = expr.borrow();
+    let expr_ref = expr.get();
     LUAU_ASSERT!(target_count < K_MAX_TARGET_COUNT);
     LUAU_ASSERT!(!target_top || (target as u32 + target_count as u32) == self.reg_top);
 
@@ -93,7 +109,7 @@ impl Compiler {
         if can_inline
           && self.try_compile_inlined_call(
             expr_ref,
-            func.borrow(),
+            func.get(),
             target,
             target_count,
             mult_ret,
@@ -107,7 +123,7 @@ impl Compiler {
 
         // 为未尝试内联的函数补调试备注（cpp Compiler.cpp:1374-1384）
         if !can_inline && self.bc().needs_debug_remarks() {
-          let func_ref = func.borrow();
+          let func_ref = func.get();
           if func_ref.vararg {
             self
               .bc_mut()
@@ -289,56 +305,46 @@ impl Compiler {
       }
     }
 
-    // self_ 调用的 func 必为 AstExprIndexName（parser 保证）：checked 共享下转 +
-    // 断言收口为闭包两处复用；全为只读访问，调用点现场重建借用、半径限于单条语句。
-    let index_name = || match Node::from(expr_ref.func).as_expr_ref() {
-      AstExprRef::IndexName(fi) => fi,
-      _ => {
-        LUAU_ASSERT!(false);
-        unreachable!(
-          "self_ 调用的 func 必为 AstExprIndexName（parser 保证，cpp 静态断言后裸解引用）"
-        );
-      }
-    };
+    // self_ 调用的 func 必为 AstExprIndexName（parser 保证）：判型收口到
+    // [`self_call_index_name`]，两处复用同一断言语义；全为只读访问。
+    let func = Node::from(expr_ref.func);
 
     if expr_ref.self_ {
-      let fi = index_name();
+      let fi = self_call_index_name(&func);
       if let Some(reg) = self.get_expr_local_reg(fi.expr) {
         selfreg = reg;
       } else {
         selfreg = regs;
-        // Safety: fi.expr 已句柄化恒非空，裸出口经 as_ptr 桥接；&mut 写穿仅落在该节点
-        // 的编译期临时字段，调用方独占本编译器、AST arena 无并发访问。
-        self.compile_expr_temp_top(alias(fi.expr.as_ptr()), selfreg);
+        // fi.expr 已句柄化恒非空；写穿限于该节点编译期临时字段（契约见 `Node::get_mut`）。
+        self.compile_expr_temp_top(Node::from(fi.expr).get_mut(), selfreg);
       }
     } else if bfid < 0 && fast_pcall_id < 0 {
-      // Safety: expr_ref.func 为调用节点的存活函数表达式子指针（parser 保证非空）；
-      // &mut 写穿限于该节点编译期临时字段，独占由本编译器持有。
-      self.compile_expr_temp_top(alias(expr_ref.func), regs);
+      // expr_ref.func 为调用节点的存活函数表达式子指针（parser 保证非空）。
+      self.compile_expr_temp_top(Node::from(expr_ref.func).get_mut(), regs);
     }
 
     let mut mult_call = false;
     for (i, &arg) in expr_ref.args.iter().enumerate() {
       if i + 1 == expr_ref.args.size {
-        // Safety: arg 为 args 数组第 i 项，parser 登记的存活 AstExpr 子指针；
-        // &mut 写穿限于该节点编译期临时字段。
-        mult_call =
-          self.compile_expr_temp_mult_ret(alias(arg), regs + 1 + (expr_ref.self_ as u8) + i as u8);
+        // arg 为 args 数组第 i 项，parser 登记的存活 AstExpr 子指针。
+        mult_call = self.compile_expr_temp_mult_ret(
+          Node::from(arg).get_mut(),
+          regs + 1 + (expr_ref.self_ as u8) + i as u8,
+        );
       } else {
-        // Safety: 同上，args 各项均为存活 AstExpr 子指针。
-        self.compile_expr_temp_top(alias(arg), regs + 1 + (expr_ref.self_ as u8) + i as u8);
+        // 同上，args 各项均为存活 AstExpr 子指针。
+        self.compile_expr_temp_top(
+          Node::from(arg).get_mut(),
+          regs + 1 + (expr_ref.self_ as u8) + i as u8,
+        );
       }
     }
 
-    // 门面解引用后仅读 func 基类 location（cpp 同处直接解引用，非空由 parser 接线保证）。
-    self.set_debug_line_end(
-      &ast_slot_ref(expr_ref.func)
-        .expect("expr_ref.func 为 parser 接线的存活 AstExpr 子指针")
-        .base,
-    );
+    // func 句柄借出只读视图后仅取基类 location（cpp 同处直接解引用，非空由 parser 接线保证）。
+    self.set_debug_line_end(&func.get().base);
 
     if expr_ref.self_ {
-      let fi = index_name();
+      let fi = self_call_index_name(&func);
       self.set_debug_line_location(&fi.index_location);
       let iname = sref_ast_name(fi.index);
       let cid = self.bc_mut().add_constant_string(iname.clone());
@@ -368,7 +374,7 @@ impl Compiler {
           .emit_abc(LuauOpcode::LOP_FASTCALL, bfid as u8, 0, 0);
       }
       // Safety: expr_ref.func 为存活 AstExpr 子指针；&mut 写穿限于该节点编译期临时字段。
-      self.compile_expr(alias(expr_ref.func), regs, true);
+      self.compile_expr(Node::from(expr_ref.func).get_mut(), regs, true);
       let call_label = self.bc().emit_label();
       // cpp 校验 patchSkipC 返回值，失败时报错（Compiler.cpp:1562-1565）
       if !self.bc_mut().patch_skip_c(fastcall_label, call_label) {
@@ -400,7 +406,7 @@ impl Compiler {
       && fast_pcall_id < 0
       // current_function 为 Some 时必是 compile_function 进入函数体置入的
       // 存活句柄，仅读 function_depth。
-      && self.current_function.is_some_and(|f| f.borrow().function_depth != 0)
+      && self.current_function.is_some_and(|f| f.get().function_depth != 0)
       && !mult_call
       && !mult_ret
     {
@@ -476,7 +482,7 @@ impl Compiler {
           args[i] = (regs as u32) + 1 + (i as u32);
           // Safety: arg_expr 为存活子表达式指针；args[i] 由 regs+1+i 推得，
           // regs 为本调用已分配的实参基寄存器，编号在帧内有效。
-          self.compile_expr_temp_top(alias(arg_expr), args[i] as u8);
+          self.compile_expr_temp_top(Node::from(arg_expr).get_mut(), args[i] as u8);
         }
       }
     }
@@ -508,7 +514,7 @@ impl Compiler {
 
     // Safety: expr_ref.func 为 parser 保证非空的被调表达式指针（arena 内存活），
     // regs 是本帧为其分配的基寄存器。
-    self.compile_expr(alias(expr_ref.func), regs, true);
+    self.compile_expr(Node::from(expr_ref.func).get_mut(), regs, true);
 
     let call_label = self.bc().emit_label();
 
@@ -628,7 +634,10 @@ impl Compiler {
       } else {
         // Safety: sub_expr 为 expressions 数组记录的存活 AstExpr 子指针；&mut 写穿
         // 限于该节点编译期临时字段，AST 与 &mut self 各字段无别名交集。
-        self.compile_expr_temp_top(alias(sub_expr), base_reg + 2 + i as u8 - skipped as u8);
+        self.compile_expr_temp_top(
+          Node::from(sub_expr).get_mut(),
+          base_reg + 2 + i as u8 - skipped as u8,
+        );
       }
     }
 
@@ -662,8 +671,9 @@ impl Compiler {
   #[inline]
   fn record_item_key_cid(&mut self, item: &Item) -> i32 {
     LUAU_ASSERT!(item.kind == ItemKind::Record);
-    // 门面判型+下转：Record 项的 key 由 parser 保证为存活 AstExprConstantString。
-    let AstExprRef::ConstantString(ckey) = Node::from(item.key).as_expr_ref() else {
+    // 句柄判型+下转：Record 项的 key 由 parser 保证为存活 AstExprConstantString。
+    let key = Node::from(item.key);
+    let AstExprRef::ConstantString(ckey) = key.as_expr_ref() else {
       LUAU_ASSERT!(false);
       unreachable!("Record 项的 key 由 parser 保证为 AstExprConstantString");
     };
@@ -899,18 +909,18 @@ impl Compiler {
         let mut rsi = self.reg_scope();
         // key 为已判非空的存活表键节点，value 为存活表达式节点（句柄借用后
         // 只读消费）：compile_l_value_index 收裸键址、compile_expr_auto 收只读借用。
-        let lv = self.compile_l_value_index(reg, key, &mut rsi);
-        let rv = self.compile_expr_auto(Node::from(value).borrow(), &mut rsi);
+        let lv = self.compile_l_value_index(reg, Node::from(key), &mut rsi);
+        let rv = self.compile_expr_auto(Node::from(value).get(), &mut rsi);
         self.compile_assign(&lv, rv, None);
       } else {
         // 无键的项经 SETLIST 批量写入，快速初始化大数组
         let temp = (array_chunk_reg as u32 + array_chunk_current) as u8;
         if i + 1 == expr_ref.items.size {
           // Safety: value 为存活表项节点，&mut 借用只覆盖该次调用。
-          mult_ret = self.compile_expr_temp_mult_ret(alias(value), temp);
+          mult_ret = self.compile_expr_temp_mult_ret(Node::from(value).get_mut(), temp);
         } else {
           // Safety: value 为存活表项节点，temp 是本块连续数组槽。
-          self.compile_expr_temp_top(alias(value), temp);
+          self.compile_expr_temp_top(Node::from(value).get_mut(), temp);
         }
         array_chunk_current += 1;
       }
@@ -953,7 +963,7 @@ impl Compiler {
     // 存活节点句柄（compile_or_throw 持有 parse arena 至编译结束），编译链对其
     // 只读；借用止于本函数末尾且不与 self 字段重叠（契约见 `Node::borrow`）。
     let expr = expr.into();
-    let func_ref = expr.borrow();
+    let func_ref = expr.get();
 
     // cpp:1634-1635 `LUAU_ASSERT(f)`：functions 表缺条目属于编译器内部状态被破坏，
     // 以类型化编译错误上抛，不用 unwrap/panic 掩盖。
@@ -983,7 +993,7 @@ impl Compiler {
       // cpp:1651 `LUAU_ASSERT(uv->functionDepth < expr->functionDepth)`
       // uv 来自 compile_function 阶段登记的 upvalue 列表（arena 存活 AstLocal
       // 句柄，比编译器长寿），此处仅读 function_depth。
-      LUAU_ASSERT!(uv.borrow().function_depth < func_ref.function_depth);
+      LUAU_ASSERT!(uv.get().function_depth < func_ref.function_depth);
       if let Some(reg) = self.get_local_reg(uv) {
         // 注：无法判定 uv 是否为当前帧的 upvalue——内联会把 upvalue 迁移为 local
         let immutable = self.variables.find(&uv).is_none_or(|ul| !ul.written);
@@ -1016,13 +1026,13 @@ impl Compiler {
       } else {
         // cpp:1671；wrapping_sub 与上游无符号减法一致（此处 function_depth >= 1 恒成立）
         // uv 同上为存活 AstLocal 句柄，仅读取。
-        LUAU_ASSERT!(uv.borrow().function_depth < func_ref.function_depth.wrapping_sub(1));
+        LUAU_ASSERT!(uv.get().function_depth < func_ref.function_depth.wrapping_sub(1));
 
         // 从父帧取 upvalue
         // 注：如有必要，这会把 uv 加入当前 upvalue 列表
         // uv 为存活 AstLocal 句柄；get_upval 仅将其作 upvalues map 键并按
         // cpp 逻辑登记到当前函数，不解引用写入。
-        let uid = self.get_upval(uv.borrow());
+        let uid = self.get_upval(uv.get());
         self.captures.push(Capture {
           r#type: LuauCaptureType::LCT_UPVAL,
           data: uid,
@@ -1096,7 +1106,7 @@ impl Compiler {
     } else {
       argreg = regs + 1;
       // Safety: arg 为存活索引参数表达式；regs+1 是为本调用预留的实参槽。
-      self.compile_expr_temp_top(alias(arg), argreg);
+      self.compile_expr_temp_top(Node::from(arg).get_mut(), argreg);
     }
 
     let fastcall_label = self.bc().emit_label();
@@ -1110,7 +1120,7 @@ impl Compiler {
 
     // Safety: expr_ref.func 为 parser 保证非空存活的被调表达式（此处为 `select`），
     // regs 为其基寄存器。
-    self.compile_expr(alias(expr_ref.func), regs, true);
+    self.compile_expr(Node::from(expr_ref.func).get_mut(), regs, true);
 
     if argreg != regs + 1 {
       self

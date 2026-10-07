@@ -113,7 +113,7 @@ impl<'a> AstVisitor for ShapeVisitor<'a> {
       let table = get_table_hint(value.into());
       // get_table_hint 只会返回存活 AST 中的表字面量句柄（同 cpp getTableHint）。
       if let Some(table) = table
-        && table.borrow().items.size == 0
+        && table.get().items.size == 0
       {
         // 首行已验证 size == 1：vars 首槽经 as_slice 界内取回
         let var = node.vars.as_slice()[0];
@@ -129,11 +129,11 @@ impl<'a> AstVisitor for ShapeVisitor<'a> {
       self.assign((*var).into());
     }
 
-    for value in node.values.iter().map(|v| Node::from(*v)) {
-      // values 元素为 parser 保证非空存活的 AstExpr（`Node` 契约）；`borrow_mut()`
+    for mut value in node.values.iter().map(|v| Node::from(*v)) {
+      // values 元素为 parser 保证非空存活的 AstExpr（`Node` 契约）；`get_mut()`
       // 交出的独占借用即存活+可独占证明，`_ref` 门面全链路 safe。ShapeVisitor
       // 只写自身 tables/shapes/loops map，不写 AST，arena 独占成立。
-      ast_expr_visit_ref(value.borrow_mut(), self);
+      ast_expr_visit_ref(value.get_mut(), self);
     }
 
     false

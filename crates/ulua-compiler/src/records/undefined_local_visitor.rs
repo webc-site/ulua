@@ -41,9 +41,9 @@ impl AstVisitor for UndefinedLocalVisitor<'_> {
 
     // uv 句柄的存活契约见 `Node::borrow`（Function 建档的 arena local，编译期只读）。
     for uv in &f.upvals {
-      LUAU_ASSERT!(uv.borrow().function_depth < node.function_depth);
+      LUAU_ASSERT!(uv.get().function_depth < node.function_depth);
 
-      if uv.borrow().function_depth == node.function_depth - 1 {
+      if uv.get().function_depth == node.function_depth - 1 {
         self.check(*uv);
       }
     }

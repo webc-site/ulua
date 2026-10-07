@@ -81,10 +81,10 @@ impl Compiler {
     // `current_function = Some(func)`（指向 parser arena 内存活的 AstExprFunction，比 self 长寿），
     // 出口才复位 None；repr(C) 前缀字段基址重合，取 &base.base 仅读 location/class 元数据，
     // 编译链不回写该节点，独占无冲突。此借用整体提到函数头一次取得，供下方各报错定位复用。
-    let loc_ast = match self.current_function {
-      Some(node) => &node.borrow().base.base,
-      None => return,
+    let Some(current) = self.current_function else {
+      return;
     };
+    let loc_ast = &current.get().base.base;
 
     // 出现在模块仅导出 class 的情形
     self.ensure_export_table(loc_ast);
@@ -103,7 +103,7 @@ impl Compiler {
         cls_idx += 1;
         // 句柄借用：类局部 AstLocal 由解析器分配于 arena，编译期全程存活（同
         // push_local 的借用契约）。
-        let class_name_ref = sref_ast_name(class_local.borrow().name);
+        let class_name_ref = sref_ast_name(class_local.get().name);
         let class_name_cid = self.bc_mut().add_constant_string(class_name_ref.clone());
         self.check_constant(class_name_cid, &loc_ast.location);
 
@@ -185,7 +185,7 @@ impl Compiler {
     // 编译期内不被移动，地址稳定——与 cpp 版把 &exportTableLocal 存入
     // locals/local_stack 的设计一致）。push_local 以该地址句柄为键读写自身映射表，
     // 写入字段与 export_table_local 不相交（存活契约见 `Node::borrow`）。
-    self.push_local(export_local.borrow(), table_reg, K_DEFAULT_ALLOC_PC);
+    self.push_local(export_local.get(), table_reg, K_DEFAULT_ALLOC_PC);
   }
 
   /// cpp `Exports::isEmpty()`（Compiler.cpp:5561-5564）。

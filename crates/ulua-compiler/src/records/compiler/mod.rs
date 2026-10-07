@@ -11,7 +11,6 @@ use ulua_common::{
   enums::luau_bytecode_type::LuauBytecodeType, records::dense_hash_map::DenseHashMap,
 };
 
-use self::nn_alias::{alias_nn, alias_nn_ref};
 use crate::{
   enums::{global::Global, table_constant_kind::TableConstantKind},
   records::{
@@ -133,8 +132,7 @@ mod expr_call;
 mod fold;
 mod function;
 mod module;
-pub(crate) mod nn_alias;
-mod scope;
+pub(crate) mod scope;
 mod stat;
 
 impl Compiler {
@@ -213,33 +211,45 @@ impl Compiler {
   /// `bytecode` 句柄解引用的唯一安全收口点（只读视图）。字段契约见
   /// `Compiler::bytecode`：builder 由唯一构造点 `new` 的 `&mut` 借用提升而来，
   /// 且活得比 `Compiler` 久，故经指针造引用与直接持有引用语义一致。
+  ///
+  /// # Safety
+  /// `self.bytecode` 非空、对齐且指向本次 `&self` 借用期间存活的
+  /// `BytecodeBuilder`（字段契约）；区间内无其它可变别名（同原裸指针解引用）。
   #[inline]
   pub(crate) fn bc(&self) -> &BytecodeBuilder<'static> {
-    // 句柄经 nn_alias 门面物化只读借用：字段契约保证句柄非空且指向存活
-    // BytecodeBuilder（借用半径由调用点决定，同原裸指针解引用）。
-    alias_nn_ref(self.bytecode)
+    // Safety: 见方法级 `# Safety`。借用半径由 `&self` 供给，不再外借 `'static`。
+    unsafe { self.bytecode.as_ref() }
   }
 
-  /// [`bc`](Self::bc) 的可变形态：独占借用半径即本次调用生命周期，与原先
-  /// 散点 `(*self.bytecode).emit_x(..)` 解引用所在的语句范围一致。
+  /// [`bc`](Self::bc) 的可变形态：独占借用半径即本次 `&mut self` 的生命周期。
+  ///
+  /// # Safety
+  /// 同 [`bc`](Self::bc)；调用处 `self` 的 `&mut` 借用保证此刻无并发别名。
   #[inline]
   pub(crate) fn bc_mut(&mut self) -> &mut BytecodeBuilder<'static> {
-    // 同 bc()；调用处 self 的 &mut 借用保证无并发别名，解引用落 nn_alias 门面本体。
-    alias_nn(self.bytecode)
+    // Safety: 见方法级 `# Safety`。
+    unsafe { self.bytecode.as_mut() }
   }
 
   /// `names` 句柄解引用的唯一安全收口点（只读视图），契约同 [`bc`](Self::bc)。
+  ///
+  /// # Safety
+  /// `self.names` 非空、对齐且指向存活 `AstNameTable`（字段契约）。
   #[inline]
   pub(crate) fn names(&self) -> &AstNameTable {
-    // 字段契约保证句柄非空且指向存活 AstNameTable；解引用收口于 nn_alias 门面。
-    alias_nn_ref(self.names)
+    // Safety: 见方法级 `# Safety`。
+    unsafe { self.names.as_ref() }
   }
 
-  /// [`names`](Self::names) 的可变形态（字符串驻留点使用），契约同 [`bc_mut`](Self::bc_mut)。
+  /// [`names`](Self::names) 的可变形态（字符串驻留点使用），契约同
+  /// [`bc_mut`](Self::bc_mut)。
+  ///
+  /// # Safety
+  /// 同 [`names`](Self::names)；调用处 `self` 的 `&mut` 借用保证无并发别名。
   #[inline]
   pub(crate) fn names_mut(&mut self) -> &mut AstNameTable {
-    // 同 names()；调用处 self 的 &mut 借用保证无并发别名，解引用落 nn_alias 门面本体。
-    alias_nn(self.names)
+    // Safety: 见方法级 `# Safety`。
+    unsafe { self.names.as_mut() }
   }
 
   /// `try_compile_*` 的守卫样板单源：记录放弃原因 remark 后返回 `false`

@@ -52,7 +52,7 @@ pub(crate) fn get_type<G: GenericList + ?Sized>(
   let Some(ty_node) = ty else {
     return LuauBytecodeType::LBC_TYPE_ANY;
   };
-  let ty_ref = ty_node.borrow();
+  let ty_ref = ty_node.get();
 
   if let Some(ref_node) = ast_node_try_as::<AstTypeReference>(&ty_ref.base) {
     if ref_node.prefix.is_some() {
@@ -63,7 +63,7 @@ pub(crate) fn get_type<G: GenericList + ?Sized>(
     // 出块时被还原为先前的空绑定），此时它不在作用域内，必须落到
     // 通用/userdata 解析路径。`Option<Node>` 值 + `flatten` 即该双折叠。
     if let Some(alias_node) = type_aliases.find(&ref_node.name).copied().flatten() {
-      let alias = alias_node.borrow();
+      let alias = alias_node.get();
       if seen_aliases.contains(&alias.name) {
         if !fflag::LuauCompileRecursiveAliases.get() {
           seen_aliases.clear();

@@ -19,16 +19,11 @@ use crate::{
   },
   records::{
     compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
-    compiler::{
-      Compiler,
-      nn_alias::{alias, alias_nn},
-    },
+    compiler::Compiler,
     constant::Constant,
     node::Node,
   },
 };
-impl Compiler {}
-
 impl Compiler {
   pub(crate) fn check_constant(&mut self, constant: i32, location: &Location) {
     if constant < 0 {
@@ -58,10 +53,10 @@ impl Compiler {
       local_changes,
       ..
     } = self;
-    // 契约：names 句柄在 Compiler 构造时由 `&mut AstNameTable` 接线（非空、
-    // 唯一归属 self、比编译存活），该可变借用仅用于向字符串表 intern 新名字；
-    // 解引用收口于 nn_alias 门面。
-    let string_table = alias_nn(*names);
+    // Safety: `names` 句柄在 Compiler 构造时由 `&mut AstNameTable` 接线（非空、
+    // 唯一归属 self、比编译存活）；此处可变借用半径即解构出的 `names` 借用，
+    // 只用于向字符串表 intern 新名字，与其余解构字段互不相交。
+    let string_table = unsafe { names.as_mut() };
     fold_constants(
       root,
       FoldConstantsArgs {
@@ -172,36 +167,51 @@ impl Compiler {
   /// 原 `pub unsafe fn` + null 哨兵返回已 Rust 化：入参收紧为引用（判空由调用方
   /// 的类型系统承担），未命中路径统一返回 `None`，命中返回表项值表达式句柄
   /// （arena 地址身份，后续仅作 map 键/只读遍历入参）。
-  pub(crate) fn try_index_constant_table(&self, expr: &AstExprIndexName) -> Option<Node<AstExpr>> {
-    let table_local =
-      unwrap_expr_of_type::<AstExprLocal>(expr.expr.into()).map(|node| node.borrow())?;
+  ///
+  /// 表项键名要 intern 进名字表，故本函数需 `&mut self`（旧实现经裸指针句柄
+  /// 在 `&self` 下写穿名表，属别名违例）；字段解构拆借用，`constants` 只读与
+  /// `names` 驻留互不相交。
+  pub(crate) fn try_index_constant_table(
+    &mut self,
+    expr: &AstExprIndexName,
+  ) -> Option<Node<AstExpr>> {
+    let Self {
+      constants,
+      variables,
+      table_constants,
+      names,
+      ..
+    } = self;
+    // Safety: `names` 句柄在 Compiler 构造点由 `&mut AstNameTable` 接线（非空、
+    // 比 self 长寿），本次可变借用半径即解构出的 `names` 借用，独占名表写入。
+    let string_table = unsafe { names.as_mut() };
 
-    let lv = *self.variables.find(&table_local.local.into())?;
+    let table_local = unwrap_expr_of_type::<AstExprLocal>(expr.expr.into())?;
+
+    let lv = *variables.find(&table_local.get().local.into())?;
     if lv.written {
       return None;
     }
     // cpp `lv->init == nullptr` 判空 → Option（`?` 即早退）
     let init = lv.init?;
 
-    if *self.table_constants.find(&table_local.local.into())? != TableConstantKind::ConstantTable {
+    if *table_constants.find(&table_local.get().local.into())? != TableConstantKind::ConstantTable {
       return None;
     }
 
-    let table = unwrap_expr_of_type::<AstExprTable>(init).map(|node| node.borrow())?;
+    let table = unwrap_expr_of_type::<AstExprTable>(init)?;
 
     // 语义同 cpp `match_value`：命中的表项会被后续「常量未登记」的表项重置，
     // 折叠为迭代器 scan 保留该行为。
-    table.items.as_slice().iter().fold(None, |acc, item| {
+    table.get().items.as_slice().iter().fold(None, |acc, item| {
       if !matches!(item.kind, ItemKind::Record | ItemKind::General) {
         return acc;
       }
-      match self.constants.find(&item.key.into()) {
+      match constants.find(&item.key.into()).copied() {
+        // 契约：Str 载荷的字节区间由名表/字面量 arena 持有（见 `ConstantStr`），
+        // 外层已判 len != 0；get_or_add_slice 只在名表内 intern。
         Some(Constant::Str(s)) if s.len != 0 => {
-          // 契约：self.names 句柄在构造点由 `&mut AstNameTable` 接线（非空、
-          // 比 self 长寿）；get_or_add_slice 只在名表内 intern，与 self 其余字段
-          // 不相交。s.ptr/s.len 来自已录入的 Str 常量键，为合法字符串区间且
-          // 外层已判 len != 0。解引用收口于 nn_alias 门面。
-          let key_name = alias(self.names.as_ptr()).get_or_add_slice(s.bytes());
+          let key_name = string_table.get_or_add_slice(s.bytes());
           if key_name == expr.index {
             Some(item.value.into())
           } else {

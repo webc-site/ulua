@@ -100,7 +100,7 @@ impl Compiler {
     // `is_some_and` 一步承担判空与读取；句柄解引用收口在 `Node::borrow` 契约内。
     self
       .current_function
-      .is_some_and(|f| f.borrow().function_depth == 0)
+      .is_some_and(|f| f.get().function_depth == 0)
       && self.block_depth == 0
       && self.loops.is_empty()
   }
@@ -146,7 +146,7 @@ impl Compiler {
         // parser arena 中存活的 AstLocal 或 Compiler 自身 export_table_local 字段
         // 地址，两者在整个编译期可读（存活契约见 `Node::borrow`）；此处仅复制
         // name 值（Copy 读）交给 sref_ast_name 写调试信息，不修改 AST。
-        let name = local.borrow().name;
+        let name = local.get().name;
         let debugpc = self.bc().get_debug_pc();
         self
           .bc_mut()
@@ -216,7 +216,7 @@ impl Compiler {
       // get_expr_local 经 RTTI 类型校验返回 Some(arena 中确为 AstExprLocal 的
       // 节点句柄)，命中后 .local 读取合法；该 local 是 parser 登记、编译期存活
       // 的 AstLocal，locals 仅以句柄为键查询，不改写不释放。
-      let local = expr.borrow().local;
+      let local = expr.get().local;
       self.get_local_reg(local)
     } else if DebugLuauUserDefinedClasses.get()
       // 门面判型+下转：null/不符返回 None，命中即动态类型
@@ -260,7 +260,7 @@ impl Compiler {
   /// 对应 cpp `Compiler::resolveAssignConflicts`。原裸指针契约 fn 已 safe 化：
   /// `stat` 由 compile_stat_assign 现场传入（arena 存活语句指针，基类字段经
   /// 槽位门面读取作 alloc_reg 定位）；`vars`/`values` 为该赋值语句的有效借出
-  /// 切片，元素为 parser 登记的表达式指针——经 `Node::borrow_mut` 升为独占借用后
+  /// 切片，元素为 parser 登记的表达式指针——经 `Node::get_mut` 升为独占借用后
   /// 交安全引用门面 `ast_expr_visit_ref` 遍历；位图下标依赖 reg/index < 256
   /// （u8 寄存器号）天然不越界。
   pub(crate) fn resolve_assign_conflicts(
@@ -278,7 +278,7 @@ impl Compiler {
         let li = &var.lvalue;
         if li.kind == Kind::Local {
           if let Some(&expr) = values.as_slice().get(i) {
-            ast_expr_visit_ref(Node::from(expr).borrow_mut(), &mut visitor);
+            ast_expr_visit_ref(Node::from(expr).get_mut(), &mut visitor);
           }
           let reg = li.reg as usize;
           visitor.assigned[reg / 64] |= 1 << (reg % 64);
@@ -293,7 +293,7 @@ impl Compiler {
           .get(i)
           .is_some_and(|var| var.lvalue.kind == Kind::Local);
         if !local_owned {
-          ast_expr_visit_ref(Node::from(expr).borrow_mut(), &mut visitor);
+          ast_expr_visit_ref(Node::from(expr).get_mut(), &mut visitor);
         }
       }
 

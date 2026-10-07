@@ -26,7 +26,7 @@ pub(crate) fn get_builtin(
 ) -> Builtin {
   // 顶层判定链走引用形态；嵌套实参（expr.expr 等）保留判空下转（可空槽），
   // v.init 由 Option 命中。
-  let node_ref = node.borrow();
+  let node_ref = node.get();
 
   // 局部变量：未写且带初值时沿初值继续追踪
   if let Some(expr) = ast_node_try_as::<AstExprLocal>(&node_ref.base) {
@@ -49,8 +49,8 @@ pub(crate) fn get_builtin(
       && !v.written
       && let Some(init) = v.init
     {
-      let target_global = ast_node_try_as::<AstExprGlobal>(init.borrow()).or_else(|| {
-        ast_node_try_as::<AstExprBinary>(init.borrow())
+      let target_global = ast_node_try_as::<AstExprGlobal>(init.get()).or_else(|| {
+        ast_node_try_as::<AstExprBinary>(init.get())
           .filter(|cond| cond.op == AstExprBinaryOp::Or)
           // Or 二元节点的 left 操作数由 parser 保证非空存活。
           .and_then(|cond| ast_slot_ref(cond.left.as_ptr()))

@@ -127,8 +127,9 @@ impl Compiler {
     }
 
     for body_stat in body.body.iter_nodes() {
-      self.compile_stat(body_stat.as_ptr());
-      if always_terminates(&self.constants, body_stat.as_ptr()) {
+      let body_stat = Node::from(*body_stat);
+      self.compile_stat(body_stat);
+      if always_terminates(&self.constants, body_stat) {
         terminates_early = true;
         break;
       }
@@ -173,7 +174,7 @@ impl Compiler {
         if self.options.debug_level >= 2 {
           // upval 为 get_upval 登记的存活节点句柄（parser arena 或
           // export_table_local 字段地址），仅读 name。
-          let name = upval.borrow().name;
+          let name = upval.get().name;
           self.bc_mut().push_debug_upval(sref_ast_name(name));
         }
 
@@ -285,7 +286,7 @@ impl Compiler {
         cost_model
       };
       let returns_one =
-        if always_terminates(&self.constants, func_ref.body.as_ptr().cast::<AstStat>()) {
+        if always_terminates(&self.constants, Node::from(func_ref.body).cast::<AstStat>()) {
           let mut rv = ReturnVisitor::new(self);
           ast_stat_block_visit(body, &mut rv);
           Some(rv.returns_one)
@@ -328,7 +329,8 @@ impl Compiler {
   ) {
     // inline_frames 以 arena 地址为帧键，引用实参由 Node 句柄承接
     let func_node = Node::from_ref(func);
-    let body = Node::from(func.body).borrow_mut();
+    let mut body_node = Node::from(func.body);
+    let body = body_node.get_mut();
 
     let _rs = self.reg_scope();
     let old_locals = self.local_stack.len();
@@ -386,7 +388,7 @@ impl Compiler {
         let reg = self.alloc_reg(&expr.base.base, 1u32);
         let allocpc = self.bc().get_debug_pc();
         if let Some(arg) = arg {
-          self.compile_expr(Node::from(arg).borrow_mut(), reg, true);
+          self.compile_expr(Node::from(arg).get_mut(), reg, true);
         } else {
           self.bc_mut().emit_abc(LuauOpcode::LOP_LOADNIL, reg, 0, 0);
         }
@@ -427,7 +429,7 @@ impl Compiler {
         let lv = le.map(|le| {
           self
             .variables
-            .find(&le.borrow().local.into())
+            .find(&le.get().local.into())
             .map(|v| (v.written, v.init))
         });
 
@@ -447,7 +449,7 @@ impl Compiler {
         } else {
           let temp = self.alloc_reg(&expr.base.base, 1u32);
           let allocpc = self.bc().get_debug_pc();
-          self.compile_expr(Node::from(arg).borrow_mut(), temp, true);
+          self.compile_expr(Node::from(arg).get_mut(), temp, true);
           args.push(InlineArg {
             local: var.into(),
             reg: temp,
@@ -463,7 +465,7 @@ impl Compiler {
     if let Some(extra) = expr_args.get(func_args_size..) {
       for &side in extra {
         // side 为 parser 接线的存活实参节点，句柄借用交副作用求值路径。
-        self.compile_expr_side(Node::from(side).borrow());
+        self.compile_expr_side(Node::from(side).get());
       }
     }
 
@@ -473,7 +475,7 @@ impl Compiler {
       if arg.value.is_unknown() {
         // arg.local 为 arena 存活 AstLocal 句柄（存活契约见 `Node::borrow`），
         // push_local 仅读节点头部字段并写编译器状态
-        self.push_local(arg.local.borrow(), arg.reg, arg.allocpc);
+        self.push_local(arg.local.get(), arg.reg, arg.allocpc);
         if let Some(init) = arg.init
           && let Some(lv) = self.variables.find_mut(&arg.local)
         {
@@ -530,8 +532,9 @@ impl Compiler {
 
     let mut terminates_early = false;
     for stat in body.body.iter_nodes() {
-      self.compile_stat(stat.as_ptr());
-      if always_terminates(&self.constants, stat.as_ptr()) {
+      let stat = Node::from(*stat);
+      self.compile_stat(stat);
+      if always_terminates(&self.constants, stat) {
         terminates_early = true;
         let curr_frame = self.inline_frames.last_mut().unwrap();
         if !curr_frame.return_jumps.is_empty() {
@@ -794,10 +797,10 @@ impl Compiler {
     self.expr_changes.clear();
     self.local_changes.clear();
 
-    // Safety: func_ref.body 为 parser 在 arena 接线的函数体根（非空、比编译存活）；
-    // 折叠/代价访问需要 body 子树的独占视图（cpp 侧为 const_cast），func_ref 的共享借用
-    // 仅覆盖 func 节点头部字段（args/body 读取），两借用指向互不相交的节点内存。
-    let body = Node::from(func_ref.body).borrow_mut();
+    // func_ref.body 为 parser 在 arena 接线的函数体根（非空、比编译存活，契约见
+    // `Node::get_mut`）：折叠/代价访问需要 body 子树的独占借用，半径限于本函数。
+    let mut body_node = Node::from(func_ref.body);
+    let body = body_node.get_mut();
 
     self.fold_constants(&mut body.base.base, true);
 
@@ -848,7 +851,7 @@ impl Compiler {
       }
 
       let nested = {
-        let uv_ref = uv.borrow();
+        let uv_ref = uv.get();
         uv_ref.function_depth != 0 || uv_ref.loop_depth != 0
       };
 
@@ -856,7 +859,7 @@ impl Compiler {
         // cpp `ul->init ? ul->init->as<AstExprFunction>() : nullptr` → Option 链，
         // 无初值或类型不符均视为失败。
         let uf = ul.init.and_then(|init| {
-          ast_node_try_as::<AstExprFunction>(&init.borrow().base).map(Node::from_ref)
+          ast_node_try_as::<AstExprFunction>(&init.get().base).map(Node::from_ref)
         });
 
         let Some(uf) = uf else {
@@ -875,16 +878,17 @@ impl Compiler {
   /// 沿局部变量初值/包装表达式（group、类型断言、instantiation、常量表索引）
   /// 下钻，解析出节点背后的函数表达式；未命中返回 `None`（取代 cpp 的 null 哨兵）。
   ///
-  /// 只读分支走判型下转门面（判空 + 下转收口一处）；控制流、查表与递归都是安全代码。
+  /// 判型下转挂在句柄上（[`Node::try_as`]）：借用半径即 `node` 句柄的借用，
+  /// 控制流、查表与递归全是安全代码。
   pub(crate) fn get_function_expr(
-    &self,
+    &mut self,
     node: impl Into<Node<AstExpr>>,
   ) -> Option<Node<AstExprFunction>> {
-    let node = node.into();
-    let node_ptr = node.as_ptr();
-    // 门面判型+下转：命中即动态类型 AstExprLocal；expr_local.local 是 parser
+    let mut node = node.into();
+
+    // 句柄判型+下转：命中即动态类型 AstExprLocal；expr_local.local 是 parser
     // 登记、编译期只读存活的 AstLocal。
-    if let Some(expr_local) = ast_slot_try_as::<AstExprLocal, _>(node_ptr) {
+    if let Some(expr_local) = node.try_as::<AstExprLocal>() {
       let lv = self.variables.find(&expr_local.local.into()).copied();
       if lv.is_none_or(|lv| lv.written) {
         return None;
@@ -895,40 +899,36 @@ impl Compiler {
       return self.get_function_expr(init);
     }
 
-    // 门面判型+下转：命中即 AstExprIndexName；try_index_constant_table 只返回
-    // Some(同一存活 AST 中的表达式指针) 或 None，递归沿树下行深度有限。
-    if let Some(expr_index) = ast_slot_try_as::<AstExprIndexName, _>(node_ptr)
+    // 句柄判型+下转：命中即 AstExprIndexName；try_index_constant_table 只返回
+    // Some(同一存活 AST 中的表达式句柄) 或 None，递归沿树下行深度有限。
+    if let Some(expr_index) = node.try_as::<AstExprIndexName>()
       && fflag::LuauCompileInlineTableFunctions.get()
     {
-      let value = self.try_index_constant_table(expr_index);
-      if let Some(value) = value {
-        return self.get_function_expr(value);
-      }
-
-      return None;
+      let indexed = self.try_index_constant_table(expr_index);
+      return indexed.and_then(|value| self.get_function_expr(value));
     }
 
-    // 门面判型+下转：group.expr 为 parser 保证非空存活的子节点，位于 arena、编译期只读存活。
-    if let Some(expr_group) = ast_slot_try_as::<AstExprGroup, _>(node_ptr) {
+    // 句柄判型+下转：group.expr 为 parser 保证非空存活的子节点，位于 arena、编译期只读存活。
+    if let Some(expr_group) = node.try_as::<AstExprGroup>() {
       return self.get_function_expr(expr_group.expr);
     }
 
-    // 门面判型+下转：assertion.expr 由 parser 接线为非空子节点。
-    if let Some(expr_assertion) = ast_slot_try_as::<AstExprTypeAssertion, _>(node_ptr) {
+    // 句柄判型+下转：assertion.expr 由 parser 接线为非空子节点。
+    if let Some(expr_assertion) = node.try_as::<AstExprTypeAssertion>() {
       return self.get_function_expr(expr_assertion.expr);
     }
 
-    // 门面判型+下转：instantiate.expr 由 parser 接线为非空子节点。
-    if let Some(expr_instantiate) = ast_slot_try_as::<AstExprInstantiate, _>(node_ptr)
+    // 句柄判型+下转：instantiate.expr 由 parser 接线为非空子节点。
+    if let Some(expr_instantiate) = node.try_as::<AstExprInstantiate>()
       && fflag::LuauCompileInlineTableFunctions.get()
     {
       return self.get_function_expr(expr_instantiate.expr);
     }
 
-    // 可变判型门面：命中即动态类型为 AstExprFunction（repr(C) 首字段与基类重合）；
-    // `Node::from_mut` 把该独占借用的地址升格为句柄交回 `Option<Node<_>>` 查询签名，
-    // 借用随表达式求值终止。
-    ast_slot_try_as_mut::<AstExprFunction, _>(node_ptr).map(Node::from_mut)
+    // 句柄可变判型+下转（[`Node::try_as_mut`]）：命中即动态类型为 AstExprFunction
+    // （repr(C) 首字段与基类重合）；`Node::from_mut` 把该独占借用的地址升格为句柄
+    // 交回 `Option<Node<_>>` 查询签名，借用随表达式求值终止。
+    node.try_as_mut::<AstExprFunction>().map(Node::from_mut)
   }
 
   /// `local` 以引用证明存活（parser arena 节点或 Compiler 内嵌 `export_table_local`
@@ -987,7 +987,7 @@ impl Compiler {
   pub(crate) fn compile_stat_function(&mut self, stat_ref: &AstStatFunction) {
     if let Some(reg) = self.get_expr_local_reg(stat_ref.name) {
       self.compile_expr(
-        Node::from(stat_ref.func).cast::<AstExpr>().borrow_mut(),
+        Node::from(stat_ref.func).cast::<AstExpr>().get_mut(),
         reg,
         false,
       );
@@ -997,14 +997,14 @@ impl Compiler {
     let mut rs = self.reg_scope();
     let reg = self.alloc_reg(&stat_ref.base.base, 1);
     self.compile_expr(
-      Node::from(stat_ref.func).cast::<AstExpr>().borrow_mut(),
+      Node::from(stat_ref.func).cast::<AstExpr>().get_mut(),
       reg,
       true,
     );
-    // name 已句柄化为 Node<AstExpr>（非空+存活由句柄契约承载），`as_ptr` 桥交
-    // 仍以指针形态消费的 compile_l_value/compile_assign。
-    let var = self.compile_l_value(stat_ref.name.as_ptr(), &mut rs);
-    self.compile_assign(&var, reg, Some(stat_ref.name.as_ptr()));
+    // name 已句柄化为 Node<AstExpr>（非空+存活由句柄契约承载），直接升格为本
+    // crate 身份句柄交 compile_l_value/compile_assign（均已 Node 化形参）。
+    let var = self.compile_l_value(Node::from(stat_ref.name), &mut rs);
+    self.compile_assign(&var, reg, Some(Node::from(stat_ref.name)));
   }
 
   /// `func_ref` 由调用方 `&mut` 交接证明存活且独占（`body` 非空由 parser 保证）；
@@ -1021,7 +1021,7 @@ impl Compiler {
 
     for local in upvals {
       // local 为上一步遍历从 AST 收集的存活节点句柄（契约见 `Node::borrow`）。
-      self.get_upval(local.borrow());
+      self.get_upval(local.get());
     }
   }
 }

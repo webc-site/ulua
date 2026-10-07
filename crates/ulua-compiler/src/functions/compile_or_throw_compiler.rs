@@ -191,10 +191,10 @@ pub fn compile_or_throw_bytecode_builder_parse_result_ast_name_table_compile_opt
     );
   }
 
-  for expr in functions {
+  for mut expr in functions {
     // expr 由 FunctionVisitor 在 arena 存活期内收集的节点句柄（存活契约见
-    // `Node::borrow_mut`）；借用只覆盖本调用，compile_function 对其 body 子树只读遍历。
-    let (_, protoflags) = compiler.compile_function(expr.borrow_mut(), 0);
+    // `Node::get_mut`）；借用只覆盖本调用，compile_function 对其 body 子树只读遍历。
+    let (_, protoflags) = compiler.compile_function(expr.get_mut(), 0);
 
     if LuauProtoFlag::LPF_NATIVE_FUNCTION.is_set(protoflags)
       && !LuauProtoFlag::LPF_NATIVE_MODULE.is_set(main_flags)
