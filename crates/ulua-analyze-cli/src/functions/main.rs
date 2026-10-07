@@ -199,7 +199,7 @@ pub fn run(args: &[String]) -> i32 {
       let location = ice.location.unwrap_or_default();
       let module_name = ModuleName::from(ice.module_name.as_deref().unwrap_or("<unknown module>"));
       let human_readable_name = frontend
-        .file_resolver_ref()
+        .file_resolver
         .get_human_readable_module_name(&module_name);
 
       let error = TypeError::type_error_location_module_name_type_error_data(
@@ -211,7 +211,7 @@ pub fn run(args: &[String]) -> i32 {
       let message = to_string_type_error_type_error_to_string_options(
         &error,
         TypeErrorToStringOptions {
-          file_resolver: Some(frontend.file_resolver_ref()),
+          file_resolver: Some(&*frontend.file_resolver),
         },
       );
       report(

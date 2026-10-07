@@ -114,19 +114,6 @@ pub struct Frontend {
 }
 
 impl Frontend {
-  /// C++ `fileResolver` 成员的只读借用口。**这是本仓唯一保留的解析器访问器**：
-  /// 字段 `file_resolver` / `config_resolver` 本身已 `pub`，读写一律直接用字段
-  /// （`Box<dyn _>` 在方法调用处自动 deref，原 `file_resolver_mut` /
-  /// `config_resolver_ref` 两个纯转发 chokepoint 已按 review.md §7「内部结构体
-  /// 直接暴露字段，别套 getter」删除），本口仅为 `crates/ulua-analyze-cli`
-  /// 既有调用点（report_error / report_module_result / main）暂存，待该 crate
-  /// 改用 `&*frontend.file_resolver` 后即删（本轮改动范围不含该 crate）。
-  /// `dyn` 保留理由见 [`Frontend::file_resolver`] 字段注（宿主注入、集合运行期
-  /// 开放，review.md §4）。
-  pub fn file_resolver_ref(&self) -> &dyn FileResolver {
-    self.file_resolver.as_ref()
-  }
-
   /// 自指针 `builtin_types`（C++ `NotNull<BuiltinTypes>{&builtinTypes_}`）的
   /// **唯一解引用 chokepoint**（手法对齐 `BuiltinTypes::arena_handle` 与
   /// `Handle::get`：借用生命周期刻意不绑定 `&self`，与原
