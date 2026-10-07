@@ -2,9 +2,8 @@ use itoa::Buffer;
 
 use crate::{
   functions::{
-    lua_getinfo::lua_getinfo, lua_l_addchar::lua_l_addchar,
-    lua_l_addlstring::lua_l_addlstring, lua_l_buffinit::lua_l_buffinit,
-    lua_l_pushresult::lua_l_pushresult,
+    lua_getinfo::lua_getinfo, lua_l_addchar::lua_l_addchar, lua_l_addlstring::lua_l_addlstring,
+    lua_l_buffinit::lua_l_buffinit, lua_l_pushresult::lua_l_pushresult,
   },
   records::{
     lua_debug::{LuaDebug, LuaWhat},
