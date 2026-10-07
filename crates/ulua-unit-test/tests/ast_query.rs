@@ -197,11 +197,10 @@ fn ast_query_find_binding_at_position_global_start_of_file() {
     column: 12,
   };
 
-  let module = fixture.base.base.get_main_module(false);
+  // Safety: `get_main_module` 的句柄由 resolver 容器保活，本用例只读查询、借用不出帧。
+  let module = unsafe { &*fixture.base.base.get_main_module(false) };
   let source_module = fixture.base.base.main_source_module();
-  // Safety: module 为 resolver 容器保有的存活 Module，&* 物化只读借用；
-  // source_module 已是 Handle 交付的共享只读借用。
-  let binding = unsafe { find_binding_at_position(&*module, source_module, pos) };
+  let binding = find_binding_at_position(module, source_module, pos);
 
   assert!(binding.is_some());
   assert_eq!(
@@ -280,10 +279,28 @@ fn ast_query_include_types_ancestry() {
   let ancestry_types = find_ast_ancestry_of_position(source_module, pos, true);
 
   assert!(ancestry_types.len() > ancestry_no_types.len());
-  // Safety: ancestry 数组元素为 arena 存活 AstNode*（查询期内有效），取末元素只读下转判型
-  assert!(unsafe { (*ancestry_no_types.last().copied().unwrap()).as_type() }.is_none());
-  // Safety: ancestry 数组元素为 arena 存活 AstNode*（查询期内有效），取末元素只读下转判型
-  assert!(unsafe { (*ancestry_types.last().copied().unwrap()).as_type() }.is_some());
+  // ancestry 元素是 arena 存活的 `AstNode` 句柄：判空后一次物化借用，判型侧不再有
+  // 裸解引用（review.md §2）。`as_type` 是 RTTI 下转判型，按 cpp `v[i]->as_type()`
+  // 取独占借用，写完即丢。
+  // Safety: 两个句柄均由本用例的 arena 查询产出，存活至断言结束、用例内独占。
+  let (no_types_tail, types_tail) = unsafe {
+    (
+      ancestry_no_types
+        .last()
+        .copied()
+        .expect("ancestry of a parsed module is non-empty")
+        .as_mut()
+        .expect("arena-pinned ancestry node"),
+      ancestry_types
+        .last()
+        .copied()
+        .expect("ancestry of a parsed module is non-empty")
+        .as_mut()
+        .expect("arena-pinned ancestry node"),
+    )
+  };
+  assert!(no_types_tail.as_type().is_none());
+  assert!(types_tail.as_type().is_some());
 }
 
 // Source: `tests/AstQuery.test.cpp:402-430`
@@ -305,20 +322,18 @@ fn ast_query_interior_binding_location_is_consistent_with_exterior_binding() {
 
   assert!(result.errors.is_empty());
 
-  let module = fixture.get_main_module(false);
+  // Safety: 同上——resolver 保有的主模块，查询全程只读。
+  let module = unsafe { &*fixture.get_main_module(false) };
   let source_module = fixture.main_source_module();
 
-  // Safety: `&*module`/source_module 均为 fixture 保有的存活对象，查询只读
-  let decl_binding = unsafe {
-    find_binding_at_position(
-      &*module,
-      source_module,
-      Position {
-        line: 1,
-        column: 26,
-      },
-    )
-  };
+  let decl_binding = find_binding_at_position(
+    module,
+    source_module,
+    Position {
+      line: 1,
+      column: 26,
+    },
+  );
   assert!(decl_binding.is_some());
   assert_eq!(
     decl_binding.unwrap().location,
@@ -334,17 +349,14 @@ fn ast_query_interior_binding_location_is_consistent_with_exterior_binding() {
     }
   );
 
-  // Safety: `&*module`/source_module 均为 fixture 保有的存活对象，查询只读
-  let inner_call_binding = unsafe {
-    find_binding_at_position(
-      &*module,
-      source_module,
-      Position {
-        line: 2,
-        column: 15,
-      },
-    )
-  };
+  let inner_call_binding = find_binding_at_position(
+    module,
+    source_module,
+    Position {
+      line: 2,
+      column: 15,
+    },
+  );
   assert!(inner_call_binding.is_some());
   assert_eq!(
     inner_call_binding.unwrap().location,
@@ -362,7 +374,10 @@ fn ast_query_interior_binding_location_is_consistent_with_exterior_binding() {
 
   let outer_call_binding =
     // Safety: `&*module`/source_module 均为 fixture 保有的存活对象，查询只读
-    unsafe { find_binding_at_position(&*module, source_module, Position { line: 5, column: 8 }) };
+    find_binding_at_position(module, source_module, Position {
+      line: 5,
+      column: 8,
+    });
   assert!(outer_call_binding.is_some());
   assert_eq!(
     outer_call_binding.unwrap().location,
@@ -521,16 +536,19 @@ fn ast_query_luau_selectively_query_for_a_different_boolean() {
     vec![nth_t::<AstStatLocal>(1), nth_t::<AstExprConstantBool>(2)],
   );
   assert!(!fst.is_null());
-  // Safety: 指针/句柄出自本夹具存活 arena（槽地址不动、用例期内独占），按被调例程 `# Safety` 契约调用
-  assert!(unsafe { (*fst).value });
+  // 句柄出自本夹具 arena（槽地址不动、用例期内存活），判空后经 `as_ref` 只读物化。
+  // Safety: 句柄出自本夹具 arena（槽地址不动、用例期内存活），只读物化为借用。
+  let fst = unsafe { fst.cast_const().as_ref() }.expect("arena-pinned query result");
+  assert!(fst.value);
 
   let snd = query::<AstExprConstantBool>(
     from_mut(block),
     vec![nth_t::<AstStatLocal>(2), nth_t::<AstExprConstantBool>(2)],
   );
   assert!(!snd.is_null());
-  // Safety: 指针/句柄出自本夹具存活 arena（槽地址不动、用例期内独占），按被调例程 `# Safety` 契约调用
-  assert!(!unsafe { (*snd).value });
+  // Safety: 同上，句柄为 arena 保活的只读节点。
+  let snd = unsafe { snd.cast_const().as_ref() }.expect("arena-pinned query result");
+  assert!(!snd.value);
 }
 
 // Source: `tests/AstQuery.test.cpp:337-347`
@@ -556,8 +574,9 @@ fn ast_query_luau_selectively_query_for_a_different_boolean_2() {
     vec![nth_t::<AstStatLocal>(2), nth_t::<AstExprConstantBool>(1)],
   );
   assert!(!snd.is_null());
-  // Safety: 指针/句柄出自本夹具存活 arena（槽地址不动、用例期内独占），按被调例程 `# Safety` 契约调用
-  assert!(unsafe { (*snd).value });
+  // Safety: 同上，句柄为 arena 保活的只读节点。
+  let snd = unsafe { snd.cast_const().as_ref() }.expect("arena-pinned query result");
+  assert!(snd.value);
 }
 
 // Source: `tests/AstQuery.test.cpp:106-128`

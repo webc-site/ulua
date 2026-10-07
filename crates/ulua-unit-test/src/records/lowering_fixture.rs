@@ -190,10 +190,11 @@ unsafe extern "C-unwind" fn userdata_remapper(
   name: *const c_char,
   name_length: usize,
 ) -> u8 {
+  // `c_char` → `u8` 的字节域折算只在本 ABI 入口这一处。
   // Safety: luau 编译 C ABI 回调契约：remapper 的 name/name_length 恒指向编译器
   // 传入的待映射类型名缓冲（本帧内可读、界内），借用不出帧（[`member_to_str`]
   // 契约）。
-  let name_str = unsafe { member_to_str(name, name_length) };
+  let name_str = unsafe { member_to_str(name.cast(), name_length) };
   // 运行时映射故意与编译期映射（vec2,color,mat3,vertex）不同序。
   match name_str {
     "extra" => 0,
@@ -923,10 +924,10 @@ fn userdata_namecall_hook(
 /// `ptr` 为空，或指向 `len` 字节可读内存（成员名缓冲由编译器在本回调调用期间持有）。
 /// 返回引用只允许在回调帧内使用；外传需 `String`/`Cow<'a, str>` 拷贝。
 #[inline]
-unsafe fn member_to_str<'a>(ptr: *const c_char, len: usize) -> &'a str {
+unsafe fn member_to_str<'a>(ptr: *const u8, len: usize) -> &'a str {
   // Safety: 前置条件保证 `[ptr, ptr + len)` 可读；null 配 0 长的 C 惯例由 `c_slice`
   // 门面承接（返回空切片），非法 UTF-8 降级空串。
-  from_utf8(unsafe { c_slice(ptr.cast::<u8>(), len) }).unwrap_or("")
+  from_utf8(unsafe { c_slice(ptr, len) }).unwrap_or("")
 }
 
 // ============================================================================

@@ -225,7 +225,8 @@ fn config_extract_luau_configuration() {
 
   // CODE_LOCAL_UNUSED 默认关闭，其余 lint 默认开启
   for i in 0..=LintWarning::CODE_COUNT as i32 {
-    // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`config` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+    // Safety: `Code` 是整型 `#[repr(C)]` 枚举，`i` 恒在 `0..=CODE_COUNT` 取值域内，
+    // 转置即被测的码值→枚举形态。
     let code: Code = unsafe { transmute(i) };
     assert_eq!(
       code != LintWarning::CODE_LOCAL_UNUSED,
@@ -260,7 +261,8 @@ fn config_interrupt_execution() {
   };
 
   unsafe extern "C-unwind" fn interrupt(l: *mut LuaState, _gc: c_int) {
-    // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`l` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+    // Safety: 中断回调由 VM 在本帧传入存活 LuaState；`cstr(b"interrupted\0")` 是静态
+    // NUL 结尾串且被调方当场内化，`status` 写的是本用例自有的状态字段。
     unsafe {
       lua_g_pusherror(&mut *l, cstr(b"interrupted\0"));
       (*l).status = LuaStatus::ErrRun as u8;
@@ -572,7 +574,8 @@ fn config_extract_luau_config_from_bytecode() {
 
   // CODE_LOCAL_UNUSED 默认关闭，其余 lint 默认开启
   for i in 0..=LintWarning::CODE_COUNT as i32 {
-    // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`config` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+    // Safety: `Code` 为整型 `#[repr(C)]` 枚举，`i` 恒取自 `0..=CODE_COUNT` 取值域，
+    // 位转置即被测的「码值 → 枚举」形态。
     let code: Code = unsafe { transmute(i) };
     assert_eq!(
       code != LintWarning::CODE_LOCAL_UNUSED,
