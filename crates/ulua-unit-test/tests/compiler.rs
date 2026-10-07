@@ -62,7 +62,7 @@ use ulua_common::{
     LuauEmitCallFeedback, LuauExportValueSyntax, LuauIntegerType2,
   },
   fint,
-  functions::{c_str::cstr_cow, format_append::format_append, split::split},
+  functions::{format_append::format_append, split::split},
 };
 use ulua_compiler::{
   functions::{
@@ -6583,8 +6583,7 @@ end
 
   assert_eq!(err_obj.get_location().begin.line + 1, 9);
 
-  // Safety: `what()` 按 C ABI 契约返回本次调用期内 NUL 结尾的 c_message 缓冲。
-  let msg = unsafe { cstr_cow(err_obj.what()).into_owned() };
+  let msg = err_obj.message();
   assert_eq!(
     msg,
     "Local x used in the repeat..until condition is undefined because continue statement on line 6 jumps over it"
@@ -6682,24 +6681,10 @@ fn compiler_loop_continue_respects_explicit_constant() {
   let loc = err_str.get_location();
   assert_eq!(loc.begin.line + 1, 6);
 
-  // Safety: `what()` 按 C ABI 契约返回本用例独占、断言前不释放的 NUL 结尾
-  // c_message 缓冲；读取收口到 cstr_cow 门面。
-  let msg = unsafe { cstr_cow(err_str.what()).into_owned() };
-  let expected_msg = "Local c used in the repeat..until condition is undefined because continue statement on line 3 jumps over it";
-  assert_eq!(msg, expected_msg);
-
-  // Deterministic guard for issue #3's follow-up bug: a Rust `String` is not
-  // NUL-terminated, so `what()` must hand out a terminated Buffer or
-  // 门面（cstr_cow）按 NUL 扫描时会越过 Buffer 尾部读进相邻内存 (which
-  // failed flakily on Windows). The byte at `message.len()` must be the NUL.
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`bcb` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  unsafe {
-    assert_eq!(
-      *err_str.what().add(expected_msg.len()),
-      0,
-      "CompileError::what() must be NUL-terminated"
-    );
-  }
+  assert_eq!(
+    err_str.message(),
+    "Local c used in the repeat..until condition is undefined because continue statement on line 3 jumps over it"
+  );
 }
 
 #[test]
