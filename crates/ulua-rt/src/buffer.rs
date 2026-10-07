@@ -202,7 +202,10 @@ impl Buffer {
   /// `&mut state` 经 StateView DerefMut 协变直达（`memory.rs` `lua_setmemcat`
   /// 同款惯用形），本调用点不再自建裸解引用；`unsafe` 仅剩对 `pub unsafe fn`
   /// 门面的调用本身，契约如上。
-  fn bytes(reference: &XRc<LuaRef>) -> &'static mut [u8] {
+  /// 有效期只由注册表引用钉住的对象决定，故寿命交调用点选定（`'a`），不在类型上
+  /// 伪造 `'static`：`'static mut` 会把这一借窗谎报成全程序期独占，可被写入
+  /// global/静态槽而绕过本契约（review.md §2：不造 `'static` 借用）。
+  fn bytes<'a>(reference: &XRc<LuaRef>) -> &'a mut [u8] {
     let mut state = reference.state();
     reference.push();
     // Safety: 见上方 # Safety 契约（栈槽 -1 即刚 push 回的 buffer 对象）。
