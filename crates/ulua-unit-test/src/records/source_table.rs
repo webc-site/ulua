@@ -6,8 +6,9 @@
 //! C++ 靠"`TestFileResolver` 拥有 suggester，且 suggester 不会比它活得久"这一
 //! 隐含约定成立；Rust 里 suggester 存放在 `'static` 的 `Arc<dyn RequireSuggester>`
 //! 中，无法借用宿主字段，用裸指针 + thread_local 布线则会随 fixture 析构/移动而悬垂。
-//! 故改为引用计数共享：resolver 持唯一 `Rc`，suggester 持 `Weak`（`get_node` 时
-//! `upgrade`，失败即无候选），派生出的节点持 `Rc` 克隆 —— 存活期由计数决定，
+//! 故改为引用计数共享：resolver 持唯一 `Rc`，suggester 持 `Weak`（查询时
+//! `upgrade`，失败即无候选），派生出的节点数据由
+//! [`crate::functions::test_require_node`] 现场构造 —— 存活期由计数决定，
 //! 不再有裸指针。
 
 use alloc::{string::String, vec::Vec};

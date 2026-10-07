@@ -8,13 +8,24 @@ use alloc::{
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  records::{require_node::RequireNode, require_suggestion::RequireSuggestion},
+  records::{
+    require_node::RequireNode, require_suggester::RequireSuggester,
+    require_suggestion::RequireSuggestion,
+  },
   type_aliases::require_suggestions::RequireSuggestions,
 };
 
+/// C++ `makeSuggestionsFromNode`（`Analysis/src/FileResolver.cpp`）：以 `node` 的
+/// 直接子节点生成 require 候选。
+///
+/// `suggester: &dyn RequireSuggester` 的 `dyn` 保留：它是宿主注入的
+/// [`RequireSuggester`](crate::records::require_suggester::RequireSuggester) 在
+/// [`FileResolver`](crate::records::file_resolver::FileResolver) 处已擦除的边界，
+/// 本函数只在边界的下游取子节点。节点本身是具体数据（见 [`RequireNode`]），
+/// 故逐子节点的 vtable 调用已不存在，一次查询只剩 `get_children` 一次间接。
 pub(crate) fn make_suggestions_from_node(
-  // `dyn` 保留：`RequireNode` 实现方（测试替身等）跨 crate、运行期开放。
-  node: &dyn RequireNode,
+  suggester: &dyn RequireSuggester,
+  node: &RequireNode,
   path: &str,
   is_partial_path: bool,
 ) -> RequireSuggestions {
@@ -47,41 +58,35 @@ pub(crate) fn make_suggestions_from_node(
     if let Some(last_slash) = last_slash_in_path {
       full_path_prefix.push_str(&path[0..=last_slash]);
     }
+  } else if path.ends_with('/') {
+    full_path_prefix.push_str(path);
   } else {
-    if path.ends_with('/') {
-      full_path_prefix.push_str(path);
-    } else {
-      full_path_prefix.push_str(path);
-      full_path_prefix.push('/');
-    }
+    full_path_prefix.push_str(path);
+    full_path_prefix.push('/');
   }
 
-  node.foreach_child(&mut |child| {
-    let path_component = child.get_path_component();
-
-    if path_component.contains('/') {
-      return;
+  for child in suggester.get_children(node) {
+    if child.path_component.contains('/') {
+      continue;
     }
 
     let label = if is_partial_path || path.ends_with('/') {
-      child.get_label()
+      child.label
     } else {
       let mut l = "/".to_string();
-      l.push_str(&child.get_label());
+      l.push_str(&child.label);
       l
     };
 
     let mut full_path = full_path_prefix.clone();
-    full_path.push_str(&path_component);
-
-    let tags = child.get_tags();
+    full_path.push_str(&child.path_component);
 
     result.push(RequireSuggestion {
       label,
       full_path,
-      tags,
+      tags: child.tags,
     });
-  });
+  }
 
   result
 }

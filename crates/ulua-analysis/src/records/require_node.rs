@@ -1,47 +1,62 @@
 use alloc::{string::String, vec::Vec};
 
-use crate::records::require_alias::RequireAlias;
+use crate::{records::require_alias::RequireAlias, type_aliases::module_name_type::ModuleName};
 
 /// C++ `Luau::RequireNode`（`Analysis/include/Luau/FileResolver.h`）的 Rust 化。
 ///
-/// cpp 侧三个产出节点的操作（`getNode` / `getChildren` / `resolvePathToNode`）都按
-/// `std::unique_ptr<RequireNode>` 逐层交回所有权，此前的直译 `Box<dyn RequireNode>`
-/// 意味着每枚举一个子节点、每解析一层路径都要一次堆分配 + 一次 vtable 装箱。
-/// 现在改为「栈上节点 + 借用回调」：实现方在栈上构造节点，以 `&dyn RequireNode`
-/// 交给访问方，节点全链路零堆分配。
+/// cpp 侧它是纯虚基类：`getPathComponent` / `getLabel` / `getTags` /
+/// `getAvailableAliases` 四个只读查询 + `getChildren` / `resolvePathToNode` 两个
+/// 交回 `unique_ptr<RequireNode>` 的遍历操作。补全管线自始至终**只读数据、不调
+/// 行为**（rg 交叉核对：全仓唯一实现方是 ulua-unit-test 的测试替身，且它对这些
+/// 虚函数的回答全部是字段值），故此处把虚接口具体成纯数据结构：每字段对应 cpp
+/// 一个虚函数的返回值，vtable 与 fat-pointer 一并消失（review.md §0「结构随
+/// 语义重写」、§4「消除可单态化的 dyn」）。`getChildren` / `resolvePathToNode`
+/// 需要宿主的全量模块表，无法由节点自身回答，因此移到
+/// [`RequireSuggester`](crate::records::require_suggester::RequireSuggester) 上，
+/// 入参就是这个节点——与 cpp 的 `node->getChildren()` 一一对应，只是查询方从
+/// 节点换成了解析器。
 ///
-/// `dyn` 在此保留（review.md §4「类型集合运行期开放」条款，r13-w1c 逐处复核）：
-/// 该接口由宿主注入（`FileResolver::require_suggester` 存
-/// `Arc<dyn RequireSuggester>`），实现方位于本 crate 之外（rg 交叉核对：唯一实现
-/// 为 ulua-unit-test 的 `TestRequireNode`），实现集合跨 crate 运行期开放，无法
-/// enum_dispatch 穷举；trait 泛型化亦会使 `Arc<dyn RequireSuggester>` 的宿主注入
-/// 口无法定型。下方两个遍历方法的访问者形参同样取
-/// `&mut dyn FnMut(&dyn RequireNode)`：泛形参（`impl`/泛型方法）会破坏对象安全，
-/// 令 `&dyn RequireNode` 沿遍历链传递不再可行——此处 `dyn` 是对象安全的必要代价，
-/// 非热路径单态化候选。
-pub trait RequireNode {
-  fn get_path_component(&self) -> String;
-
-  fn get_label(&self) -> String {
-    self.get_path_component()
-  }
-
-  fn get_tags(&self) -> Vec<String> {
-    Vec::new()
-  }
-
-  fn get_available_aliases(&self) -> Vec<RequireAlias>;
-
-  /// cpp `getChildren()`：对直接位于本节点之下的每个子节点回调一次 `visit`。
-  fn foreach_child(&self, visit: &mut dyn FnMut(&dyn RequireNode));
-
-  /// cpp `resolvePathToNode()`：`path` 命中已有节点时，以该节点回调一次 `visit`
-  /// 并返回 `true`；未命中返回 `false` 且不回调。
-  fn resolve_path_to_node(&self, path: &str, visit: &mut dyn FnMut(&dyn RequireNode)) -> bool;
-
+/// ## DELIBERATE DEVIATION
+/// cpp `getChildren()` / `resolvePathToNode()` 是 `RequireNode` 的虚方法；Rust 侧
+/// 节点无 Behaviour，这两个操作改由 `RequireSuggester::get_children` /
+/// `resolve_path_to_node` 以节点为键回答（cpp `RequireNode` 的测试实现同样把
+/// 二者委托给 `TestFileResolver::source`，语义等价）。此改写同时去掉了原先
+/// 「栈上节点 + `&mut dyn FnMut(&dyn RequireNode)` 访问者」的两层虚分派：
+/// 遍历子节点现在是 `Vec<RequireNode>` 的具体返回值，即 cpp
+/// `vector<unique_ptr<RequireNode>>` 去掉指针那层。
+#[derive(Clone, Debug)]
+pub struct RequireNode {
+  /// 节点身份：cpp `TestRequireNode::moduleName`。分析侧只把它回传给
+  /// [`RequireSuggester`](crate::records::require_suggester::RequireSuggester)
+  /// 用于查子节点/解相对路径，不解释其内容（宿主可用自己的键空间）。
+  pub module_name: ModuleName,
+  /// cpp `getPathComponent()`。
+  pub path_component: String,
+  /// cpp `getLabel()`：基类缺省即 `getPathComponent()`。
+  pub label: String,
+  /// cpp `getTags()`：基类缺省为空。
+  pub tags: Vec<String>,
+  /// cpp `getAvailableAliases()`。
+  pub aliases: Vec<RequireAlias>,
   /// cpp `permitsRelativeRequirePaths()`：是否支持相对 require 路径（`./` / `../`），
-  /// 默认 `true`（与 cpp 虚基类默认一致）。
-  fn permits_relative_require_paths(&self) -> bool {
-    true
+  /// 基类缺省 `true`（见 [`RequireNode::new`]）。
+  pub permits_relative_require_paths: bool,
+}
+
+impl RequireNode {
+  /// 按 cpp `RequireNode` 基类缺省构造：label 取 path component、无 tags、无
+  /// aliases、允许相对路径。宿主需要偏离缺省时用函数更新语法覆写对应字段
+  /// （`..RequireNode::new(name, component)`），避免 `Default` 把
+  /// 「允许相对路径」静默置成 `false`。
+  pub fn new(module_name: ModuleName, path_component: String) -> Self {
+    let label = path_component.clone();
+    Self {
+      module_name,
+      path_component,
+      label,
+      tags: Vec::new(),
+      aliases: Vec::new(),
+      permits_relative_require_paths: true,
+    }
   }
 }

@@ -21,7 +21,8 @@ use crate::records::{source_table::SourceTable, test_require_suggester::TestRequ
 #[derive(Debug, Default, Clone)]
 pub struct TestFileResolver {
   /// cpp `TestFileResolver::source`。`Rc` 是为了让 `TestRequireSuggester` 及其
-  /// 派生的 [`crate::records::test_require_node::TestRequireNode`] 共享同一张表（cpp 用 `&resolver->source` 裸指针）。
+  /// 派生的 [`RequireNode`](ulua_analysis::records::require_node::RequireNode)
+  /// 数据共享同一张表（cpp 用 `&resolver->source` 裸指针）。
   pub source: Rc<SourceTable>,
   /// 内部可变的共享表：见结构体注（宿主与 frontend 各持一份句柄仍可互通）。
   pub source_types: Rc<RefCell<HashMap<ModuleName, SourceCodeType>>>,
@@ -33,8 +34,8 @@ pub struct TestFileResolver {
   /// `Arc<dyn RequireSuggester>` 为 ulua-analysis 的 `FileResolver` trait
   /// 签名（`fn require_suggester(&self) -> Option<&Arc<dyn RequireSuggester>>`）
   /// 所定，字段类型必须与 trait 一致；trait 处保留 `dyn` 的理由是
-  /// `RequireSuggester` 实现方集合跨 crate 运行期开放（宿主按需注入），无法
-  /// enum_dispatch 穷举。
+  /// `RequireSuggester` 是宿主注入点、实现方在 ulua-analysis 之外，无法
+  /// enum_dispatch 穷举（详见该 trait 注）。
   pub require_suggester: Option<Arc<dyn RequireSuggester>>,
 }
 
