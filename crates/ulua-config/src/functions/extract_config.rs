@@ -48,7 +48,7 @@ impl Drop for StateGuard {
 /// 创建沙箱 VM（对应 C++ `luaL_newstate + luaL_openlibs + luaL_sandbox`）。
 /// `luaL_newstate` 内存耗尽返回 null 时经 `Option` 回报失败，不解引用。
 fn new_sandbox() -> Option<StateGuard> {
-  let state = NonNull::new(lua_l_newstate())?;
+  let mut state = NonNull::new(lua_l_newstate())?;
 
   // 先入守卫再开库：openlibs/sandbox 自身可抛错（VVM 错误通道即 OOM），
   // 守卫保证展开路径 lua_close——对齐 cpp LuauConfig.cpp:145 的 closing
@@ -56,10 +56,12 @@ fn new_sandbox() -> Option<StateGuard> {
   let guard = StateGuard(state);
 
   // Safety: null 已被 NonNull::new 上界拒绝，state 为 lua_l_newstate
-  // 刚创建的有效 VM 状态，可安全开库与沙箱化
+  // 刚创建的有效 VM 状态，可安全开库与沙箱化；`as_mut` 交出的借用窗止于
+  // 各自那句调用（不再经 `as_ptr` + `&mut *` 往返折回裸指针）。
   unsafe {
-    lua_l_openlibs(&mut *state.as_ptr());
-    lua_l_sandbox(&mut *state.as_ptr());
+    let l = state.as_mut();
+    lua_l_openlibs(l);
+    lua_l_sandbox(l);
   }
 
   Some(guard)
@@ -80,11 +82,13 @@ fn execute_and_extract(
 ) -> Result<ConfigTable, ConfigError> {
   // 真边界：`thread_data` 是 VM lightuserdata 线程数据槽（cpp
   // `lua_setthreaddata(l, &info)` 的等价单点）的转手地址，只挂接、不解引用。
+  // NonNull 在这里落回 `*mut c_void` 仅因 `set_thread_data` 收 VM 原生形参；
+  // 缺席（None）保持缺席，不再落 null 哨兵。
   // 契约（InterruptCallbacks::thread_data）：载荷指向本配置执行同步窗口内
   // 存活的数据——窗口由 `run_in_sandbox` 的 StateGuard 与调用栈界定，各构造
   // 点注释注明指向对象；挂接后指针不再被本模块读写。
   if let Some(thread_data) = callbacks.thread_data {
-    l.set_thread_data(thread_data);
+    l.set_thread_data(thread_data.as_ptr());
   }
 
   // Safety: l 为 new_sandbox 返回的有效 VM 状态；

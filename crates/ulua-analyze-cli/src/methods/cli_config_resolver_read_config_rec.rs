@@ -3,6 +3,7 @@ use alloc::{
   format,
   string::{String, ToString},
 };
+use core::{ffi::c_void, ptr::NonNull};
 use std::panic::panic_any;
 
 use ulua_analysis::records::{
@@ -47,8 +48,9 @@ use crate::records::{
 ///
 /// # Safety
 /// 由 VM 以合法 `LuaState*` 调用（`InterruptCallbacks` 契约）；线程数据槽里
-/// 只可能挂着 `luau_config_thread_data` 交出的 `*mut LuauConfigInterruptInfo`
-/// 或 null，null 已在函数首行守卫（cpp 原版直接解引用，行为收敛为 no-op）。
+/// 只可能挂着 `luau_config_thread_data` 交出的 `NonNull<LuauConfigInterruptInfo>`
+/// 地址或 null，null 已收编为 `Option` 的缺席臂（cpp 原版直接解引用，行为收敛为
+/// no-op）。
 // 真边界：本指针经 `InterruptCallbacks::interrupt_callback` 写入 VM 的
 // `LuaCallbacks::interrupt` 槽（`ulua-vm` 声明即 `Option<unsafe extern
 // "C-unwind" fn(*mut LuaState, i32)>`，safepoint 处按 C ABI 调用），故保留
@@ -58,18 +60,21 @@ use crate::records::{
 // 展开型 panic 跨 `extern "C-unwind"` 传播（等价 cpp 异常）；线程数据槽裸指针仅
 // 在本边界单次解码。
 pub(crate) unsafe extern "C-unwind" fn luau_config_interrupt(l: *mut LuaState, _gc: i32) {
-  // 边界解码：从线程数据槽（lightuserdata 裸指针面）还原本回调的配对上下文。
-  // Safety: 依函数 `# Safety` 契约，`l` 合法；线程数据槽只可能挂
-  // `*mut LuauConfigInterruptInfo` 或 null，故下方判空成立。
-  let info = unsafe { (*l).get_thread_data() as *const LuauConfigInterruptInfo };
-  if info.is_null() {
-    // cpp 原版直接解引用，行为收敛为 no-op。
+  // 边界解码：`l` 只在物化这一句里被解引用，取回线程数据槽的裸载荷。
+  // Safety: 依函数 `# Safety` 契约，`l` 为 VM 交出的合法活跃状态，本行只读其线程
+  // 数据槽（不移动栈），借用窗止于当句。
+  let thread_data = unsafe { (*l).get_thread_data() };
+
+  // 可空载荷收编为 Option（review.md §2）：null 即「本回调无配对上下文」，缺席态
+  // 由类型表达，不再是裸指针 + is_null 两态；cpp 原版直接解引用，此处行为收敛为
+  // no-op。
+  let Some(info) = NonNull::new(thread_data.cast::<LuauConfigInterruptInfo>()) else {
     return;
-  }
-  // Safety: 非空时该指针指向 `luau_config_thread_data` 交出的本栈帧局部 `info`
-  // （由 `extract_config` 在配置执行窗口前挂接），
-  // `extract_luau_config` 同步返回前回调窗口内始终存活、且无人并发改写。
-  let info = unsafe { &*info };
+  };
+  // Safety: 非空时该地址由 `luau_config_thread_data` 交出、`extract_config` 在配置
+  // 执行窗口前单点挂接，指向 `read_config_rec` 的本栈帧局部 `info`；
+  // `extract_luau_config` 同步返回前的回调窗口内始终存活且无人并发改写。
+  let info = unsafe { info.as_ref() };
 
   // 以下为纯安全逻辑（时钟/令牌只读 + 类型化 panic），出圈。
   if let Some(finish_time) = info.limits.finish_time()
@@ -87,19 +92,41 @@ pub(crate) unsafe extern "C-unwind" fn luau_config_interrupt(l: *mut LuaState, _
 }
 
 impl CliConfigResolver {
+  /// 缓存只读面：`UnsafeCell` 裸指针的解码单点（review.md §2「把 `unsafe` 关进有契约
+  /// 的最小边界」），`read_config_rec` 因此全程安全 Rust。
+  ///
+  /// 契约（本 fn 内唯一 `unsafe` 的依据）：
+  /// - 单线程：resolver 由 Analyze 主线程独占驱动（见 [`CliConfigResolver`] 字段文档），
+  ///   解码窗口内不存在其它可变借用；
+  /// - 地址稳定：值以 `Box` 定址，表 grow 只搬内联槽位、不搬堆上的 `Config`，故借出的
+  ///   `&Config` 寿命可提升到 `&self`（等价 cpp `return it->second`）。
+  pub(crate) fn cached_config(&self, path: &str) -> Option<&Config> {
+    // Safety: 上方两条契约——单线程故无重叠可变借用，Box 定址使返回引用独立于表结构。
+    unsafe { (&*self.config_cache.get()).get(path).map(Box::as_ref) }
+  }
+
+  /// 缓存写入面：同样把裸指针解码收在一处；返回新插入（或已存在）项的共享引用。
+  ///
+  /// 契约：同 [`Self::cached_config`]；写入前调用方持有的缓存共享借用（find 分支）早已
+  /// 收敛，`or_insert_with` 命中已有项时原地址不变，故先前交出的 `&Config` 仍有效。
+  pub(crate) fn cache_config(&self, path: &str, config: Config) -> &Config {
+    // Safety: 见本 fn 与 [`Self::cached_config`] 的契约（单线程 + Box 堆上定址）。
+    unsafe {
+      let cache = &mut *self.config_cache.get();
+      cache
+        .entry(path.to_string())
+        .or_insert_with(move || Box::new(config))
+    }
+  }
+
   /// C++ `const Config& readConfigRec(const std::string& path, const TypeCheckLimits& limits) const`
   /// (`CLI/src/Analyze.cpp:252-320`).
   ///
-  /// 逻辑 const：缓存读写走 `UnsafeCell`/`RefCell`（C++ `mutable`），单线程契约见
-  /// [`CliConfigResolver`] 字段文档。
+  /// 逻辑 const：缓存读写经上面两个 `UnsafeCell` 收口面（C++ `mutable`），单线程契约见
+  /// [`CliConfigResolver`] 字段文档；本函数体本身零 `unsafe`、零裸指针。
   pub(crate) fn read_config_rec(&self, path: &str, limits: &TypeCheckLimits) -> &Config {
     // auto it = configCache.find(path); if (it != configCache.end()) return it->second;
-    // 借用只在单语句内存在：本函数会递归调用自身，长活 `&mut` 会自重叠（UB）。
-    // Safety: 单线程契约（见 `CliConfigResolver` 字段文档），缓存 cell 的读窗口
-    // 内无任何并发可变借用。
-    if let Some(cached) = unsafe { &*self.config_cache.get() }.get(path) {
-      // Safety: 单线程契约（见 CliConfigResolver 字段文档），返回的 &Config
-      // 指向 Box 堆上的值，地址随表 grow 保持稳定，与 C++ `return it->second` 同义。
+    if let Some(cached) = self.cached_config(path) {
       return cached;
     }
 
@@ -167,11 +194,10 @@ impl CliConfigResolver {
         // The interrupt info lives on the stack for the duration of the
         // synchronous extractLuauConfig call (mirroring the C++ stack local
         // whose address is stored via lua_setthreaddata).
-        let mut info = LuauConfigInterruptInfo {
+        let info = LuauConfigInterruptInfo {
           limits: limits.clone(),
           module: luau_config_path.clone(),
         };
-        let info_ptr: *mut LuauConfigInterruptInfo = &mut info;
 
         let callbacks = InterruptCallbacks {
           // 真边界：`thread_data` 是 VM lightuserdata 线程数据槽（cpp 原版
@@ -180,7 +206,7 @@ impl CliConfigResolver {
           // 契约：`info` 是本栈帧的局部（cpp 原版同样是栈局部 `&info`），
           // `extract_luau_config` 同步返回前地址始终指向存活的
           // `LuauConfigInterruptInfo`，窗口结束后随沙箱状态失效。
-          thread_data: Some(info_ptr.cast()),
+          thread_data: Some(NonNull::from(&info).cast::<c_void>()),
           interrupt_callback: Some(luau_config_interrupt),
         };
 
@@ -196,14 +222,6 @@ impl CliConfigResolver {
     }
 
     // return configCache[path] = result;
-    // Safety: 单线程契约（`CliConfigResolver` 字段文档）；插入前当前函数持有的
-    // 缓存共享借用（find 分支）早已收敛，Box 值定址保证已返回的 `&Config` 不悬垂。
-    let cache = unsafe { &mut *self.config_cache.get() };
-
-    // 显式 `&**` 解出 Box 堆值再转共享借用——不靠 `as _` 目标推断，读者可直接
-    // 核对指向的是堆上 Config 而非表内槽位
-    cache
-      .entry(path.to_string())
-      .or_insert_with(move || Box::new(result))
+    self.cache_config(path, result)
   }
 }

@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use core::{cell::Cell, ffi::c_void, ptr::from_ref};
+use core::{cell::Cell, ffi::c_void, ptr::NonNull};
 
 use coarsetime::Instant;
 use ulua_vm::{
@@ -76,7 +76,7 @@ impl<'ctx, H: RequireHost> RuntimeNavigationContext<'ctx, H> {
   /// （cpp `RuntimeNavigationContext` 的 `luauConfigInit` 回调体的 Rust 形态）。
   ///
   /// 别名论证：timer 可变字段由 `Cell` 承载且 Luau 状态机单线程串行使用；
-  /// 地址经 `from_ref` 只读借出，写权限由 Cell 提供，交出的指针只会被
+  /// 地址经 `NonNull::from` 只读取址，写权限由 `Cell` 提供，交出的指针只会被
   /// `extract_config` 原样挂进线程数据槽、本模块内不解引用。
   ///
   /// DELIBERATE DEVIATION（review.md §0）：cpp 的 init 回调在
@@ -84,10 +84,12 @@ impl<'ctx, H: RequireHost> RuntimeNavigationContext<'ctx, H> {
   /// 收敛为载荷转手后，启动点前移到交出载荷（构造 `InterruptCallbacks`）
   /// 之时，超时窗口起点略早于 cpp（多出沙箱建机/装载耗时，判定更保守），
   /// 配置执行全程仍被覆盖。
-  fn start_config_timer(&self) -> *mut c_void {
+  fn start_config_timer(&self) -> NonNull<c_void> {
     let timeout = self.host.get_luau_config_timeout();
     self.timer.start(timeout);
-    from_ref(&self.timer).cast::<c_void>().cast_mut()
+    // 只读取址、非空由 `NonNull` 类型承载（review.md §2：不再交 `*mut c_void` 让
+    // 消费侧自行判空）
+    NonNull::from(&self.timer).cast::<c_void>()
   }
 }
 
@@ -132,7 +134,7 @@ impl<H: RequireHost> NavigationContext for RuntimeNavigationContext<'_, H> {
     self.host.get_config()
   }
 
-  fn luau_config_thread_data(&self) -> Option<*mut c_void> {
+  fn luau_config_thread_data(&self) -> Option<NonNull<c_void>> {
     // 存活论证：载荷指向本上下文的 timer，仅在
     // navigate_to_and_populate_config 同步调用 extract_luau_config 的窗口内
     // 被挂接与读取，该窗口由 resolve_require 调用栈保证本导航上下文存活。
@@ -162,14 +164,15 @@ unsafe extern "C-unwind" fn runtime_luau_config_interrupt(l: *mut LuaState, _gc:
   // Safety: 中断回调入口，l 由 VM 在配置线程仍在执行时以当前 LuaState* 调用
   // （Lua/C API 中断约定），重建只读驱动的借用。
   let l = unsafe { &mut *l };
-  // 线程数据槽内容只能为 null，或 luau_config_thread_data 交出、
-  // extract_config 在本次配置执行窗口内挂接的存活 timer
-  // 地址（上下文由 resolve_require 调用栈保活）；as_ref() 先判空，
-  // 仅对存活 timer 做只读 is_finished()（Cell 承载可变性），无悬挂或别名写。
-  let timer = lua_getthreaddata(l).cast::<RuntimeLuauConfigTimer>();
-  // Safety: 见函数 # Safety：槽内容为 null 或本次配置执行期写入的存活 timer
-  // 地址，as_ref 判空后仅做只读 is_finished（Cell 承载可变性）。
-  if unsafe { timer.as_ref() }.is_some_and(|timer| timer.is_finished()) {
+  // 线程数据槽的可空载荷收编为 `Option<NonNull<_>>`（review.md §2）：null 即「本次
+  // 配置执行未挂计时器」，缺席态由类型表达而非裸指针判空。
+  let Some(timer) = NonNull::new(lua_getthreaddata(l).cast::<RuntimeLuauConfigTimer>()) else {
+    return;
+  };
+  // Safety: 见函数 # Safety——槽内容只可能是 `luau_config_thread_data` 交出、
+  // extract_config 在本次配置执行期写入的存活 timer 地址；as_ref 之后仅做只读
+  // is_finished()（可变性由 Cell 承载），无悬挂、无别名写。
+  if unsafe { timer.as_ref() }.is_finished() {
     luaL_error!(l, "{CONFIG_TIMEOUT_MSG}");
   }
 }

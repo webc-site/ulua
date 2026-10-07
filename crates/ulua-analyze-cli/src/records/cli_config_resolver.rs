@@ -33,7 +33,12 @@ pub struct CliConfigResolver {
   /// 表用工作区统一的 foldhash `FixedState` 别名（先例
   /// `ulua-common/src/collections.rs`）：仅 get/insert，无迭代，
   /// 仅去掉 std 默认 SipHash。
-  pub config_cache: UnsafeCell<HashMap<String, Box<Config>>>,
+  ///
+  /// 私有到 crate：`UnsafeCell` 一旦外泄，外部就能在缓存借用窗口内再造可变借用
+  /// （重叠 `&mut`，UB）。读写一律经 `cli_config_resolver_read_config_rec.rs` 的
+  /// [`CliConfigResolver::cached_config`] / [`CliConfigResolver::cache_config`]
+  /// 两个单点收口面。
+  pub(crate) config_cache: UnsafeCell<HashMap<String, Box<Config>>>,
   /// `Rc` 共享槽：所有权移交 frontend 后，宿主经移交前克隆的句柄读回错误列表。
   pub config_errors: Rc<RefCell<Vec<(String, String)>>>,
 }
