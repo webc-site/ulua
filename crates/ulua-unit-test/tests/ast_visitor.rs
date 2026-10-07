@@ -32,7 +32,8 @@ use ulua_unit_test::records::{
 /// `v[i]->is<T>()`：节点指针的 RTTI 类型判定。每个节点在偏移 0 处内嵌
 /// `AstNode` 基类，重解释是安全的。
 fn is<T: AstNodeClass>(node: *mut AstNode) -> bool {
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`node` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  // Safety: `node` 由夹具 arena 保活（cpp `v[i]` 同款非空节点指针），本行只读其
+  // RTTI 判型，不建引用、不转移所有权。
   unsafe { (*node).is::<T>() }
 }
 

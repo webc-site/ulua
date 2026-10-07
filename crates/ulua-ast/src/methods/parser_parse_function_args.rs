@@ -50,7 +50,8 @@ impl Parser {
 
       let close_position = self.expect_match_and_consume_position(')', &match_paren, true);
 
-      let args_array = self.copy_temp_vector_t(&args);
+      // 记录边界单点折算：scratch 句柄窗口 → 未引用化的 `AstArray<*mut AstExpr>`。
+      let args_array = self.copy_temp_vector_ptrs(&args);
       let explicit_types: AstArray<AstTypeOrPack> = AstArray::EMPTY;
 
       let node = self.alloc_expr(AstExprCall::new(

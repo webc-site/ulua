@@ -1,3 +1,4 @@
+use core::ptr::NonNull;
 #[cfg(not(target_os = "windows"))]
 use core::{ffi::c_void, ptr::null_mut};
 
@@ -15,7 +16,10 @@ unsafe extern "C" {
   ) -> *mut c_void;
 }
 
-pub fn allocate_pages_impl(size: usize) -> *mut u8 {
+/// 映射 `size`（须页对齐）字节可写私有内存。`None` 即「映射失败」——cpp 的
+/// 「返回 null 由调用方判空」在 Rust 侧是类型化的缺席语义，不再是裸指针哨兵
+/// （review.md §2）。
+pub fn allocate_pages_impl(size: usize) -> Option<NonNull<u8>> {
   CODEGEN_ASSERT!(size == CodeAllocator::align_to_page_size(size));
 
   #[cfg(target_os = "windows")]
@@ -27,15 +31,15 @@ pub fn allocate_pages_impl(size: usize) -> *mut u8 {
     };
 
     // Safety: VirtualAlloc 为 Win32 C ABI——addr=null 由内核选址、size>0 且断言页对齐、
-    // MEM_RESERVE|MEM_COMMIT + PAGE_READWRITE 合法组合；失败返回 null 由调用方判空，
-    // 成功即指向存活的私有提交区。
+    // MEM_RESERVE|MEM_COMMIT + PAGE_READWRITE 合法组合；失败返回 null 折叠为 `None`，
+    // 成功即指向存活的私有提交区，`NonNull::new` 保非空。
     unsafe {
-      VirtualAlloc(
+      NonNull::new(VirtualAlloc(
         core::ptr::null::<c_void>(),
         size,
         MEM_RESERVE | MEM_COMMIT,
         PAGE_READWRITE,
-      ) as *mut u8
+      ) as *mut u8)
     }
   }
 
@@ -63,8 +67,9 @@ pub fn allocate_pages_impl(size: usize) -> *mut u8 {
     #[cfg(not(target_os = "macos"))]
     const MAP_JIT: i32 = 0;
 
-    // Safety: 本分支为 mmap C ABI 调用，实参皆常量：addr=null（内核选址）、len=size>0 且断言
-    // 页对齐、prot=READ|WRITE、flags=PRIVATE|ANON(|JIT)、fd=-1、offset=0，是合法匿名私有映射。
+    // Safety: 本分支为 mmap C ABI 调用，实参皆常量：addr=null（内核选址，真 FFI 边界的
+    // `null_mut()`）、len=size>0 且断言页对齐、prot=READ|WRITE、flags=PRIVATE|ANON(|JIT)、
+    // fd=-1、offset=0，是合法匿名私有映射。
     let result = unsafe {
       mmap(
         null_mut(),
@@ -76,11 +81,11 @@ pub fn allocate_pages_impl(size: usize) -> *mut u8 {
       )
     };
 
-    // 返回 MAP_FAILED(-1) 已折叠为 null_mut()，故返回值或为空、或指向存活的映射区。
+    // MAP_FAILED(-1) 不是有效地址，先折叠为 `None`；其余按 mmap 非空返回值收编 `NonNull`。
     if result as isize == -1 {
-      null_mut()
+      None
     } else {
-      result.cast()
+      NonNull::new(result.cast::<u8>())
     }
   }
 }

@@ -145,11 +145,11 @@ impl PollKind {
 
   /// `idx` 处是否正是本信号（其它 light-userdata、非 light-userdata 都为 false）。
   ///
-  /// `lightuserdata_at` 是带契约的 safe 门面：对任意 idx 有界读取（非 lud 一律返回
-  /// null，不越栈不解引用），state 存活契约同 [`Self::push`]；token 恒非 null，
-  /// 故 null（缺省）必不等于任何 token，比较语义与原 `== Some(token)` 逐字一致。
+  /// `lightuserdata_at` 返回 `Option`：`None`（非 lud）不等于任何 `Some(_)`；
+  /// token 恒非 null，故 null 载荷的 lud（`Some(null)`）也不等于 `Some(token)`，
+  /// 与旧「读裸指针后 `== token`」逐位一致。state 存活契约同 [`Self::push`]。
   pub(crate) fn is_at(self, state: StateView<'_>, idx: i32) -> bool {
-    lightuserdata_at(state, idx) == self.token().as_ptr()
+    lightuserdata_at(state, idx) == Some(self.token().as_ptr())
   }
 }
 

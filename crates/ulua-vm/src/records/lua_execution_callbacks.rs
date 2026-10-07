@@ -7,7 +7,7 @@
 
 use core::{
   ffi::{c_char, c_void},
-  ptr::null_mut,
+  ptr::{NonNull, null_mut},
   sync::atomic::AtomicPtr,
 };
 
@@ -39,12 +39,19 @@ pub struct lua_ExecutionCallbacks {
     Option<unsafe extern "C-unwind" fn(l: *mut LuaState, proto: *mut Proto) -> usize>,
   pub gettypemapping:
     Option<unsafe extern "C-unwind" fn(l: *mut LuaState, str: *const c_char, len: usize) -> u8>,
+  /// 原生码之后的宿主反馈计数向量首址。DELIBERATE DEVIATION / review.md §2/§3：cpp
+  /// `CodeGen/IExecutionCallbacks.h` 把它声明成 `char* (*getcounterdata)(...)`，但那
+  /// 只是一个**字节地址**（元素为 `kind(u32)+pcpos(u32)+hits(u64)`，见
+  /// `functions::getcounters`），从来不是字符串；故 `c_char` 不收在此槽位（它只留给真正
+  /// 承载 C 字符串的 `gettypemapping` 槽），并把 cpp 的「返回 NULL 由调用方判空」折叠成
+  /// `Option<NonNull<u8>>` 的缺席语义。`repr(C)` 下 `Option<NonNull<u8>>` 与裸指针逐位等价
+  /// （niche 优化），ABI（指针宽度/调用约定/空值表示）与 cpp 一致。
   pub getcounterdata: Option<
     unsafe extern "C-unwind" fn(
       l: *mut LuaState,
       proto: *mut Proto,
       count: *mut usize,
-    ) -> *mut c_char,
+    ) -> Option<NonNull<u8>>,
   >,
   pub inlinefunction: Option<
     unsafe extern "C-unwind" fn(

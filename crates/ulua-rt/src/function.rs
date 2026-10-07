@@ -175,12 +175,13 @@ impl Function {
       // The coroutine is *implicit* (created by `call_async`): register it
       // so `Lua::current_thread` running on it resolves to the owner (the
       // thread that issued this call). Mirrors mlua's thread-ownership map.
-      // `co_state` 是 `Thread` 内 `NonNull → &mut` 的带契约收口点;登记/撤销
-      // 只把地址写进/移出 per-VM ownership 表(usize key,从不解引用)。
       register_implicit_thread(thread.co_state(), lua.state());
       // 注册后任何失败都必须撤销登记：否则 ownership 表项泄漏到
       // `LuaInner::drop`，期间同地址新协程会被 `current_thread` 误判。
-      let co_state = thread.state();
+      // `thread_state` 是 `NonNull`（Copy、不借用 `thread`），先取出句柄再
+      // `into_async` 消费 `thread`；撤销时经 safe 收口 `from_handle` 重建视图，
+      // 无 `unsafe`、无 `*mut` 裸形（协程对象由 `thread` 注册表引用锚定存活）。
+      let co_state = thread.thread_state;
       let setup_result = thread.into_async(args);
       match setup_result {
         Ok(mut th) => {
@@ -188,9 +189,9 @@ impl Function {
           Ok(th)
         }
         Err(e) => {
-          // Safety: co_state 是刚 spawn、由 `thread` 注册表引用锚定存活的协程
-          // state 指针;视图只在本撤销调用内。
-          unregister_implicit_thread(unsafe { StateView::from_raw(co_state) });
+          // co_state 是刚 spawn、由 `thread` 注册表引用锚定存活的协程 state 句柄；
+          // 视图只在本撤销调用内。
+          unregister_implicit_thread(StateView::from_handle(co_state));
           Err(e)
         }
       }

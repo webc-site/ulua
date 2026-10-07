@@ -3,6 +3,7 @@ mod common;
 extern crate alloc;
 
 use ulua_analysis::functions::follow_type;
+use ulua_unit_test::functions::raw_handle::raw_handle;
 
 // Source: `tests/Generalization.test.cpp`
 #[test]
@@ -108,11 +109,7 @@ fn generalization_a_number_string_string() {
 // Source: `tests/Generalization.test.cpp`
 #[test]
 fn generalization_avoid_cross_module_mutation_in_bidirectional_inference() {
-  use std::sync::Arc;
-
-  use ulua_analysis::{
-    functions::freeze::freeze, records::module::Module, type_aliases::module_name_type::ModuleName,
-  };
+  use ulua_analysis::{functions::freeze::freeze, type_aliases::module_name_type::ModuleName};
   use ulua_unit_test::records::builtins_fixture::BuiltinsFixture;
 
   let mut fixture = BuiltinsFixture::default();
@@ -153,7 +150,7 @@ fn generalization_avoid_cross_module_mutation_in_bidirectional_inference() {
 
   // Safety: 主模块由 fixture frontend 的 resolver 保有（存活、非空）；&* 物化只读借用，引用不出帧
   unsafe {
-    let module = Arc::as_ptr(&mod_list_fns) as *mut Module;
+    let module = raw_handle(&mod_list_fns);
     freeze(&mut (*module).interface_types);
     freeze(&mut (*module).internal_types);
   }
@@ -257,13 +254,10 @@ fn generalization_cache_fully_generalized_types() {
 #[test]
 fn generalization_dont_cache_types_that_arent_done_yet() {
   use alloc::collections::BTreeMap;
-  use std::sync::Arc;
 
   use ulua_analysis::{
     enums::polarity::Polarity,
-    records::{
-      free_type::FreeType, function_type::FunctionType, property_type::Property, scope::Scope,
-    },
+    records::{free_type::FreeType, function_type::FunctionType, property_type::Property},
   };
   use ulua_unit_test::{
     functions::add_sealed_table_type::add_sealed_table_type,
@@ -271,7 +265,7 @@ fn generalization_dont_cache_types_that_arent_done_yet() {
   };
 
   let mut fixture = GeneralizationFixture::new();
-  let global_scope = Arc::as_ptr(&fixture.global_scope) as *mut Scope;
+  let global_scope = raw_handle(&fixture.global_scope);
   let free_ty = fixture
     .arena
     .add_type(FreeType::free_type_scope_type_id_type_id_polarity(
@@ -668,16 +662,14 @@ end)
 // Source: `tests/Generalization.test.cpp`
 #[test]
 fn generalization_intersection_type_traversal_doesnt_crash() {
-  use std::sync::Arc;
-
   use ulua_analysis::{
     functions::get_mutable_type,
-    records::{free_type::FreeType, intersection_type::IntersectionType, scope::Scope},
+    records::{free_type::FreeType, intersection_type::IntersectionType},
   };
   use ulua_unit_test::records::generalization_fixture::GeneralizationFixture;
 
   let mut fixture = GeneralizationFixture::new();
-  let global_scope = Arc::as_ptr(&fixture.global_scope) as *mut Scope;
+  let global_scope = raw_handle(&fixture.global_scope);
 
   let i = fixture
     .arena
@@ -765,16 +757,14 @@ fn generalization_t1_t1_b_where_t1_a_t1_b_number_number() {
 // Source: `tests/Generalization.test.cpp`
 #[test]
 fn generalization_union_type_traversal_doesnt_crash() {
-  use std::sync::Arc;
-
   use ulua_analysis::{
     functions::get_mutable_type,
-    records::{free_type::FreeType, scope::Scope, union_type::UnionType},
+    records::{free_type::FreeType, union_type::UnionType},
   };
   use ulua_unit_test::records::generalization_fixture::GeneralizationFixture;
 
   let mut fixture = GeneralizationFixture::new();
-  let global_scope = Arc::as_ptr(&fixture.global_scope) as *mut Scope;
+  let global_scope = raw_handle(&fixture.global_scope);
 
   let i = fixture
     .arena

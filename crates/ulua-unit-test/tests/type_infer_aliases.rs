@@ -1177,10 +1177,10 @@ fn type_infer_aliases_mutually_recursive_types_errors() {
 
   assert!(!result.errors.is_empty(), "{:?}", result.errors);
 
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`fixture` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  // Safety: `get_main_module` 返回 fixture 保活的非空 Module 指针，本用例独占写。
   let module = unsafe { &mut *fixture.get_main_module(false) };
   unfreeze(&mut module.interface_types);
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`module` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  // Safety: `builtin_types` 是 fixture 字段裸句柄，此处按只读借用交给 copy_errors。
   copy_errors(&mut module.errors, &mut module.interface_types, unsafe {
     &*fixture.builtin_types
   });

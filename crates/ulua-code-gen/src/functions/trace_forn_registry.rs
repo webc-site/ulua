@@ -373,10 +373,14 @@ unsafe fn read_step(l: *mut LuaState, ra: u8) -> f64 {
 
 /// ecb 槽导出：1 = 已承接（savedpc 已落续延位），0 = 不承接。
 ///
+/// 与主体 `forn_trace_enter` 的分层是 ABI 适配而非「双入口」：裁决主体按 Rust
+/// 惯用返回 `bool`（缺席/命中语义），本壳唯一职责是把 `bool` 编码成 ecb 槽约定的
+/// `i32` 0/1（review.md §3「出参 → 返回值」的反向：边界处才做类型编码）。
+///
 /// # Safety
 /// `l`/`proto` 为解释器派发环契约的存活指针（h_fornprep 数值判定通过后
 /// 调用），单线程串行。
-pub unsafe extern "C-unwind" fn forn_trace_enter_export(
+pub(crate) unsafe extern "C-unwind" fn forn_trace_enter_export(
   l: *mut LuaState,
   proto: *mut Proto,
   pcpos: u32,
@@ -594,20 +598,13 @@ unsafe fn call_trace(code_start: *mut u8, l: *mut LuaState, proto: *const Proto)
   unsafe { f(l, proto) }
 }
 
-/// ecb 回边慢路导出（T2）：回边计数精确达阈，录制装配 + 解除武装。
+/// ecb 回边慢路（T2）：回边计数精确达阈，录制装配 + 解除武装。
 ///
-/// # Safety
-/// `l`/`proto` 为解释器派发环契约的存活指针（h_fornloop 内联计数达阈时
-/// 调用），单线程串行；本函数不扰动解释器状态（savedpc/栈/寄存器面零触碰）。
-pub unsafe extern "C-unwind" fn forn_trace_backedge_export(
-  l: *mut LuaState,
-  proto: *mut Proto,
-  pcpos: u32,
-) {
-  // Safety: 契约透传至 forn_trace_backedge
-  unsafe { forn_trace_backedge(l, proto, pcpos) }
-}
-
+/// 壳与主体合并（review.md §2 与既有 `refactor(code-gen)` 先例：仅原样转发一次的
+/// C ABI 壳并入逻辑层本体）——本函数唯一入口是 `ecb.trace_forn_backedge` 槽，无
+/// Rust 侧直调者，`extern "C-unwind"` 只承载「unwind 可跨本帧」这一 ABI 契约，
+/// 不再多一层同名转发。
+///
 /// 回边阈值主体：FORNLOOP 位点 → 结构恒等式定 FORNPREP（回边 d 域恒指环体
 /// 头 = fornprep + 1，故 fornprep = fornloop + d）→ 录制装配（入口路径同款
 /// 一次性收口，成败皆 dead 收口防逐回边重试）→ 无论成败解除武装并回收计数
@@ -618,8 +615,13 @@ pub unsafe extern "C-unwind" fn forn_trace_backedge_export(
 /// 收口——关态抵达只解除武装，不录制不安装。
 ///
 /// # Safety
-/// 同 [`forn_trace_backedge_export`]。
-unsafe fn forn_trace_backedge(l: *mut LuaState, proto: *mut Proto, fornloop_pc: u32) {
+/// `l`/`proto` 为解释器派发环契约的存活指针（h_fornloop 内联计数达阈时
+/// 调用），单线程串行；本函数不扰动解释器状态（savedpc/栈/寄存器面零触碰）。
+pub(crate) unsafe extern "C-unwind" fn forn_trace_backedge(
+  l: *mut LuaState,
+  proto: *mut Proto,
+  fornloop_pc: u32,
+) {
   // 先解除武装再动注册表：解释器下一回边起零计数税（进程级武装槽 + per-state
   // 身份键同步清除）
   FORN_HEAT_ARMED.store(null_mut(), AtomicOrdering::Relaxed);

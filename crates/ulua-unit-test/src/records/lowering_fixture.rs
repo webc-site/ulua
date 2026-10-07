@@ -14,7 +14,6 @@ use core::{
   ffi::{c_char, c_void},
   mem::{offset_of, size_of},
   ptr::{NonNull, null_mut},
-  slice::from_raw_parts,
   str::from_utf8,
 };
 
@@ -40,14 +39,14 @@ use ulua_code_gen::{
     ir_builder::IrBuilder, ir_op::IrOp,
   },
 };
-use ulua_common::functions::c_str::cstr_bytes;
+use ulua_common::functions::{c_slice::c_slice, c_str::cstr_bytes};
 use ulua_compiler::{
   functions::{
     compile::compile,
     compile_or_throw_compiler::compile_or_throw_bytecode_builder_string_compile_options_parse_options,
     set_compile_constant::{
       set_compile_constant_boolean, set_compile_constant_nil, set_compile_constant_number,
-      set_compile_constant_string, set_compile_constant_vector,
+      set_compile_constant_str, set_compile_constant_vector,
     },
   },
   records::compile_options::CompileOptions,
@@ -99,49 +98,62 @@ fn luau_library_type_lookup(library: &str, member: &str) -> i32 {
   LBC_TYPE_ANY
 }
 
-fn luau_library_constant_lookup(library: &str, member: &str, constant: *mut CompileConstant) {
-  let const_ptr: CompileConstant = constant.cast();
+/// 库成员常量查找的结果（纯值，不含 ABI 形状）：`(library, member)` → 常量。
+enum TestConstant {
+  Vector([f32; 4]),
+  Nil,
+  Bool(bool),
+  Number(f64),
+  Str(&'static str),
+}
 
-  // (library, member) → 向量常量：命中即写入并返回，与原两段 `if + match member` 语义一致
-  let vector_const = match (library, member) {
+/// 查表产出常量值；未命中返回 `None`（cpp 侧不写 constant 的分支）。
+fn library_constant(library: &str, member: &str) -> Option<TestConstant> {
+  let vector = match (library, member) {
     ("vector", "zero") => Some([0.0, 0.0, 0.0, 0.0]),
     ("vector", "one") => Some([1.0, 1.0, 1.0, 0.0]),
     ("Vector3", "xAxis") => Some([1.0, 0.0, 0.0, 0.0]),
     ("Vector3", "yAxis") => Some([0.0, 1.0, 0.0, 0.0]),
     _ => None,
   };
-  if let Some([x, y, z, w]) = vector_const {
-    set_compile_constant_vector(const_ptr, x, y, z, w);
-    return;
+  if vector.is_some() {
+    return vector.map(TestConstant::Vector);
   }
 
-  if library == "test" {
-    match member {
-      "some_nil" => set_compile_constant_nil(const_ptr),
-      "some_boolean" => set_compile_constant_boolean(const_ptr, true),
-      "some_number" => set_compile_constant_number(const_ptr, 4.75),
-      "some_vector" => set_compile_constant_vector(const_ptr, 1.0, 2.0, 4.0, 8.0),
-      "some_string" => {
-        set_compile_constant_string(const_ptr, NAME_TEST_STR.as_ptr(), NAME_TEST_STR.len())
-      }
-      _ => {}
-    }
+  match (library, member) {
+    ("test", "some_nil") => Some(TestConstant::Nil),
+    ("test", "some_boolean") => Some(TestConstant::Bool(true)),
+    ("test", "some_number") => Some(TestConstant::Number(4.75)),
+    ("test", "some_vector") => Some(TestConstant::Vector([1.0, 2.0, 4.0, 8.0])),
+    ("test", "some_string") => Some(TestConstant::Str(NAME_TEST_STR)),
+    _ => None,
   }
 }
 
-/// C 字符串 → `&str`：经 `cstr_bytes` 门面取 NUL 前原始字节再判 UTF-8 解码，
-/// 读法本身不安全，存活期由调用点决定。
+/// 把常量值写进编译器交出的槽位：`set_compile_constant_*` 是唯一的写入面。
+fn write_constant(slot: CompileConstant, value: TestConstant) {
+  match value {
+    TestConstant::Vector([x, y, z, w]) => set_compile_constant_vector(slot, x, y, z, w),
+    TestConstant::Nil => set_compile_constant_nil(slot),
+    TestConstant::Bool(b) => set_compile_constant_boolean(slot, b),
+    TestConstant::Number(n) => set_compile_constant_number(slot, n),
+    TestConstant::Str(s) => set_compile_constant_str(slot, s),
+  }
+}
+
+/// C 串名字缓冲 → `&str`：经 `cstr_bytes` 门面取 NUL 前原始字节再判 UTF-8 解码。
+/// 形参取 `*const u8`（`CompileOptions` 回调契约的字节指针），`c_char` 折算只在本
+/// 函数这一处发生，调用点不再散落 `.cast()`。
 ///
 /// # Safety
 /// `ptr` 为空，或指向在返回引用的整个存活期内保持有效的 NUL 结尾 C 字符串。
 /// 回调传入的名字缓冲只在**该次回调调用期间**有效，故返回引用只允许在回调
 /// 帧内使用；外传需 `String`/`Cow<'a, str>` 拷贝。
 #[inline]
-unsafe fn cstr_to_str<'a>(ptr: *const c_char) -> &'a str {
+unsafe fn cstr_to_str<'a>(ptr: *const u8) -> &'a str {
   // Safety: 前置条件即 `ptr` 为空或指向合法 NUL 结尾串；`cstr_bytes` 空指针译空
-  // 切片、非空返回 NUL 前借用（存活期 `'a`）。非法 UTF-8 降级空串（等价旧
-  // `to_str().unwrap_or("")`）。
-  from_utf8(unsafe { cstr_bytes(ptr) }).unwrap_or("")
+  // 切片、非空返回 NUL 前借用（存活期 `'a`）。非法 UTF-8 降级空串。
+  from_utf8(unsafe { cstr_bytes(ptr.cast()) }).unwrap_or("")
 }
 
 /// # Safety
@@ -151,20 +163,24 @@ unsafe extern "C-unwind" fn luau_library_type_lookup_callback(
   member: *const u8,
 ) -> i32 {
   // Safety: 两个缓冲在本回调帧内有效，返回值不出帧。
-  let (library, member) = unsafe { (cstr_to_str(library.cast()), cstr_to_str(member.cast())) };
+  let (library, member) = unsafe { (cstr_to_str(library), cstr_to_str(member)) };
   luau_library_type_lookup(library, member)
 }
 
 /// # Safety
-/// 回调契约：指针指向以 NUL 结尾的合法 C 字符串，constant 可写。
+/// 回调契约：两个名字指针指向以 NUL 结尾的合法 C 字符串，`constant` 可写。
 unsafe extern "C-unwind" fn luau_library_constant_lookup_callback(
   library: *const u8,
   member: *const u8,
   constant: *mut CompileConstant,
 ) {
   // Safety: 同上，引用仅在本回调帧内使用。
-  let (library, member) = unsafe { (cstr_to_str(library.cast()), cstr_to_str(member.cast())) };
-  luau_library_constant_lookup(library, member, constant);
+  let (library, member) = unsafe { (cstr_to_str(library), cstr_to_str(member)) };
+  // `constant` 的位形就是编译器交出的 `&mut Constant`（`CompileConstant = *mut ()`
+  // 只是同一地址的不透明别名），故原样透传给唯一的写入面。
+  if let Some(value) = library_constant(library, member) {
+    write_constant(constant.cast(), value);
+  }
 }
 
 /// # Safety
@@ -174,10 +190,11 @@ unsafe extern "C-unwind" fn userdata_remapper(
   name: *const c_char,
   name_length: usize,
 ) -> u8 {
+  // `c_char` → `u8` 的字节域折算只在本 ABI 入口这一处。
   // Safety: luau 编译 C ABI 回调契约：remapper 的 name/name_length 恒指向编译器
   // 传入的待映射类型名缓冲（本帧内可读、界内），借用不出帧（[`member_to_str`]
   // 契约）。
-  let name_str = unsafe { member_to_str(name, name_length) };
+  let name_str = unsafe { member_to_str(name.cast(), name_length) };
   // 运行时映射故意与编译期映射（vec2,color,mat3,vertex）不同序。
   match name_str {
     "extra" => 0,
@@ -907,14 +924,10 @@ fn userdata_namecall_hook(
 /// `ptr` 为空，或指向 `len` 字节可读内存（成员名缓冲由编译器在本回调调用期间持有）。
 /// 返回引用只允许在回调帧内使用；外传需 `String`/`Cow<'a, str>` 拷贝。
 #[inline]
-unsafe fn member_to_str<'a>(ptr: *const c_char, len: usize) -> &'a str {
-  if ptr.is_null() || len == 0 {
-    ""
-  } else {
-    // Safety: 前置条件保证 `[ptr, ptr + len)` 可读。
-    let bytes = unsafe { from_raw_parts(ptr.cast::<u8>(), len) };
-    from_utf8(bytes).unwrap_or("")
-  }
+unsafe fn member_to_str<'a>(ptr: *const u8, len: usize) -> &'a str {
+  // Safety: 前置条件保证 `[ptr, ptr + len)` 可读；null 配 0 长的 C 惯例由 `c_slice`
+  // 门面承接（返回空切片），非法 UTF-8 降级空串。
+  from_utf8(unsafe { c_slice(ptr, len) }).unwrap_or("")
 }
 
 // ============================================================================

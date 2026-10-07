@@ -8,7 +8,7 @@ use crate::{macros::codegen_assert::CODEGEN_ASSERT, records::code_allocator::Cod
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn make_pages_executable(mem: *mut u8, size: usize) -> bool {
+pub(crate) unsafe fn make_pages_executable(mem: *mut u8, size: usize) -> bool {
   CODEGEN_ASSERT!(CodeAllocator::align_to_page_size(mem as usize) == mem as usize);
   CODEGEN_ASSERT!(size == CodeAllocator::align_to_page_size(size));
 

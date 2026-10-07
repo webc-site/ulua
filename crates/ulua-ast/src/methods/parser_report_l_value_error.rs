@@ -29,10 +29,12 @@ impl Parser {
 
     // cpp:2051 类名全局被赋值有专门报错，指回类定义行。
     if fflag::DebugLuauUserDefinedClasses.get() {
-      // get_matching_class 已返回 Option：Some 侧即 arena 存活类声明节点的共享借用，
-      // 读嵌套 name/location 字段全程类型系统保证，判空守卫与两处解引用一并消失。
+      // get_matching_class 交出自有 `Node<AstStatClass>`（Option 侧即 arena 存活类
+      // 声明）：读嵌套 name/location 字段经句柄 Deref，且句柄不携带对 self 的借用，
+      // 下方以 `&mut self` 报错无需假 'static。
       if let Some(class_stat) = self.get_matching_class(expr) {
-        // name 指向 arena 存活的 Name 表项（classes_within_module 登记时写入）。
+        // name 指向 arena 存活的 Name 表项（classes_within_module 登记时写入；
+        // AstStatClass::name 槽位仍是 cpp 形态裸指针，records 引用化后续波次收口）。
         let name = slot_ref(class_stat.name).name;
         let line = class_stat.base.base.location.begin.line + 1;
         let expressions = self.copy_initializer_list_t(&[expr]);

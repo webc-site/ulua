@@ -4,8 +4,8 @@ use crate::{
   enums::{brace_type::BraceType::InterpolatedString, type_lexer::Type},
   records::{
     ast_array::AstArray, ast_expr::AstExpr, ast_expr_interp_string::AstExprInterpString,
-    cst_expr_interp_string::CstExprInterpString, lexer::Lexer, location::Location, parser::Parser,
-    position::Position, temp_vector::TempVector,
+    cst_expr_interp_string::CstExprInterpString, lexer::Lexer, location::Location,
+    node_handle::Node, parser::Parser, position::Position, temp_vector::TempVector,
   },
 };
 
@@ -77,15 +77,16 @@ impl Parser {
 
       if let Some(message) = error_message {
         self.next_lexeme();
-        expressions.push_back(self.report_expr_error(
+        // arena 分配产物恒非空：错误占位表达式以 Node::from_raw 单点升格入栈。
+        expressions.push_back(Node::from_raw(self.report_expr_error(
           end_location,
           AstArray::EMPTY,
           format_args!("{message}"),
-        ));
+        )));
         break;
       }
 
-      expressions.push_back(self.parse_expr(0));
+      expressions.push_back(Node::from_raw(self.parse_expr(0)));
 
       match self.lexer.current().r#type {
         Type::INTERP_STRING_BEGIN | Type::INTERP_STRING_MID | Type::INTERP_STRING_END => {}
@@ -157,12 +158,13 @@ impl Parser {
     start: Position,
     end: Position,
     strings: &TempVector<'_, AstArray<u8>>,
-    expressions: &TempVector<'_, *mut AstExpr>,
+    expressions: &TempVector<'_, Node<AstExpr>>,
     source_strings: &TempVector<'_, AstArray<u8>>,
     string_positions: &TempVector<'_, Position>,
   ) -> *mut AstExpr {
     let strings_array = self.copy_temp_vector_t(strings);
-    let expressions_array = self.copy_temp_vector_t(expressions);
+    // 记录边界单点折算：句柄窗口 → 未引用化的 `AstArray<*mut AstExpr>` 字段。
+    let expressions_array = self.copy_temp_vector_ptrs(expressions);
     let node = self.alloc_expr(AstExprInterpString::new(
       Location::new(start, end),
       strings_array,

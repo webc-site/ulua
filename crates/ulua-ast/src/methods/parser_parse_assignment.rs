@@ -11,7 +11,8 @@ use crate::{
   functions::optional_node::slot_ref,
   records::{
     ast_expr::AstExpr, ast_stat::AstStat, ast_stat_assign::AstStatAssign,
-    cst_stat_assign::CstStatAssign, location::Location, parser::Parser, temp_vector::TempVector,
+    cst_stat_assign::CstStatAssign, location::Location, node_handle::Node, parser::Parser,
+    temp_vector::TempVector,
   },
 };
 
@@ -23,7 +24,9 @@ impl Parser {
 
     let mut vars = TempVector::new(&mut self.scratch_expr);
     let mut vars_comma_positions = TempVector::new(&mut self.scratch_position);
-    vars.push_back(initial);
+    // 入 scratch 即折算为 arena 句柄：initial/expr 出自 parse_primary_expr 或
+    // report_l_value_error，两者都是 arena 分配产物（失败即中止），恒非空。
+    vars.push_back(Node::from_raw(initial));
 
     while self.lexer.current().r#type == Type::COMMA {
       if self.options.store_cst_data {
@@ -37,7 +40,7 @@ impl Parser {
         expr = self.report_l_value_error(expr);
       }
 
-      vars.push_back(expr);
+      vars.push_back(Node::from_raw(expr));
     }
 
     let equals_position = self.expect_and_consume_char_position('=', "assignment");
@@ -53,8 +56,8 @@ impl Parser {
       },
     );
 
-    let vars_array = self.copy_temp_vector_t(&vars);
-    let values_array = self.copy_temp_vector_t(&values);
+    let vars_array = self.copy_temp_vector_ptrs(&vars);
+    let values_array = self.copy_temp_vector_ptrs(&values);
 
     let node = self.alloc_stat(AstStatAssign::new(
       Location::new(
@@ -63,11 +66,8 @@ impl Parser {
         // 引用后拷贝基类前缀字段，全程 safe。
         slot_ref(initial).base.location.begin,
         // values 由 parse_expr_list 至少推入一条表达式（其首元素在循环前 push），
-        // 元素均为 arena 刚分配的存活表达式指针；last() 取末元素读基类 location.end。
-        slot_ref(*values.last().expect("values 非空"))
-          .base
-          .location
-          .end,
+        // 元素均为 arena 句柄，last() 经 Deref 读末元素基类 location.end。
+        values.last().expect("values 非空").base.location.end,
       ),
       vars_array,
       values_array,

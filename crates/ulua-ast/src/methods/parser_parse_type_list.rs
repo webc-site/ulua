@@ -14,8 +14,8 @@ use crate::{
   enums::type_lexer::Type,
   functions::should_parse_type_pack::should_parse_type_pack,
   records::{
-    ast_type::AstType, ast_type_pack::AstTypePack, parser::Parser, position::Position,
-    temp_vector::TempVector,
+    ast_type::AstType, ast_type_pack::AstTypePack, node_handle::Node, parser::Parser,
+    position::Position, temp_vector::TempVector,
   },
   type_aliases::ast_argument_name::AstArgumentName,
 };
@@ -26,9 +26,12 @@ impl Parser {
   /// 返回的是「列表以 `...Pack` 收尾时的尾注」：cpp 在该情形 `return parseTypePack()`，
   /// 其余路径统一 `return nullptr`（`Parser.cpp:2558`），即 `None` == 「无尾注」，
   /// 与「有尾注但类型未知」无关（`AstTypeList::tailType` 的 cpp 注释同此）。
+  ///
+  /// `result` 是调用方 `scratch_type` 的 TempVector 窗口，元素以 [`Node`] 入栈
+  /// （`parse_type` 的产物出自 arena 分配、恒非空）。
   pub(crate) fn parse_type_list(
     &mut self,
-    result: &mut TempVector<'_, *mut AstType>,
+    result: &mut TempVector<'_, Node<AstType>>,
     result_names: &mut TempVector<'_, Option<AstArgumentName>>,
     mut comma_positions: Option<&mut TempVector<'_, Position>>,
     mut name_colon_positions: Option<&mut TempVector<'_, Position>>,
@@ -68,7 +71,7 @@ impl Parser {
       }
 
       let ty = self.parse_type(false);
-      result.push_back(ty);
+      result.push_back(Node::from_raw(ty));
       if self.lexer.current().r#type != Type::COMMA {
         break;
       }

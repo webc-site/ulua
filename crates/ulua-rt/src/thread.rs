@@ -419,7 +419,8 @@ impl Thread {
 
   /// The raw coroutine state pointer. Mirrors `mlua::Thread::state`.
   /// （公开面维持 mlua 同型的裸指针返回——那是调用方侧的 FFI 形态；句柄
-  /// 内部字段是 `NonNull`，此 accessor 即本类型的边界转换点。）
+  /// 内部字段是 `NonNull`，此 accessor 即本类型的边界转换点。内部代码一律走
+  /// [`Self::co_state`] 的 safe 视图，此 `pub` 面仅供外部/测试裸访问 VM 状态。）
   pub fn state(&self) -> *mut LuaState {
     self.thread_state.as_ptr()
   }
@@ -782,9 +783,9 @@ impl Lua {
     func.push_to_stack(); // pushes onto parent stack
     // `move_slots(state, co, 1)` 是 safe 搬运门面：两侧同 VM（co 是刚创建的空栈新协程，
     // 非空已由 `NonNull` 确认），写入一层即函数体，无越界或覆盖，`// Safety` 收在函数头一处。
-    // Safety: co 与 state 是同 VM 的不同对象(刚 spawn 的空栈协程),视图只在
-    // 本次搬运内(驱动契约见 [`StateView`])。
-    move_slots(state, unsafe { StateView::from_raw(co.as_ptr()) }, 1);
+    // `co` 已是 `NonNull`，经 safe 收口 `from_handle` 取视图（纯指针拷贝，无 `unsafe`）：
+    // co 与 state 是同 VM 的不同对象（刚 spawn 的空栈协程），视图只在本次搬运内。
+    move_slots(state, StateView::from_handle(co), 1);
     Ok(thread)
   }
 
@@ -804,9 +805,9 @@ impl Lua {
     #[cfg(feature = "async")]
     if let Some(owner) = implicit_thread_owner(state) {
       // owner 是 per-VM 表登记的存活协程 state(创建点登记、随其驱动方存活),
-      // 非空由 `NonNull` 表达。
-      // Safety: VM 自引用图的既定驱动契约(见 [`StateView`]);视图只在本分支内。
-      let owner_state = unsafe { StateView::from_raw(owner.as_ptr()) };
+      // 非空由 `NonNull` 表达。经 safe 收口 `from_handle` 取视图（纯指针拷贝，无
+      // `unsafe`），VM 自引用图的既定驱动契约见 [`StateView`]；视图只在本分支内。
+      let owner_state = StateView::from_handle(owner);
       // `push_own_thread(owner)` + `move_slots` 是 safe 门面，同存活 VM 的 `// Safety`
       // 各收在其函数头一处：上方 `ensure_stack_or_panic` 已为落到 state 的一层预留头寸；
       // `push_own_thread` 净压 owner 自身线程值一层，`move` 把该层搬到 state

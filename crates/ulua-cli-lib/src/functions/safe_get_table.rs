@@ -23,7 +23,7 @@ pub(crate) const META_INDEX_FIELD: &[u8] = b"__index";
 // 全部栈操作（pushvalue/rawget/pop/replace/remove + `lua_l_getmetafield_bytes`）在引用
 // 接收者上均为 ulua-vm 安全面，解引用对象是调用方交出的存活借用而非函数自持裸指针，
 // 故降为安全 `fn`，原 `# Safety` 契约降级为下述「调用序契约」（正确性，非内存安全）。
-// `state` 门面与 `&mut *l` 重借用随之消亡（review.md §3 禁 `&*x`）。
+// 本 crate 不再有裸 `*mut LuaState` 形与 `&mut *l` 物化点（review.md §2/§3）。
 //
 // 调用序契约（由调用方 complete_indexer 成立）：`l` 为活跃状态机，`table_index` 指向
 // 栈上的表，且待查找的键位于栈顶。

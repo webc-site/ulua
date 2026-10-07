@@ -12,7 +12,7 @@ use crate::{
     ast_array::AstArray, ast_class_method::AstClassMethod, ast_class_property::AstClassProperty,
     ast_expr::AstExpr, ast_local::AstLocal, ast_name::AstName, ast_stat::AstStat,
     ast_stat_class::AstStatClass, ast_type::AstType, lexeme::lexeme_name_is, location::Location,
-    name::Name, parser::Parser, temp_vector::TempVector,
+    name::Name, node_handle::Node, parser::Parser, temp_vector::TempVector,
   },
 };
 
@@ -257,7 +257,9 @@ impl Parser {
     }
     // cpp:1707 `classesWithinModule[nameLocal->name] = cls;`——映射到类声明本身，
     // 供赋值处（isExprLValue / reportLValueError）按名找回并报错其定义行。
-    *self.classes_within_module.get_or_insert(name_local_name) = cls_class;
+    // 值列是 cpp `operator[]` 形态的可空槽：此处由刚分配的 `Node` 升格接线，
+    // 之后 `get_matching_class` 的 `to_option` 即按「已接线/空槽」给出 Option。
+    *self.classes_within_module.get_or_insert(name_local_name) = Node::from_raw(cls_class).into();
     cls
   }
 }

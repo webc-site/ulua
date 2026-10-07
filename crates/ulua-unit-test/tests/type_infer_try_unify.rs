@@ -454,7 +454,8 @@ fn type_infer_try_unify_txnlog_preserves_type_owner() {
     .try_unify_type_id_type_id_bool_bool_literal_properties(a, b, false, false, None);
   fixture.state.log.commit();
 
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`fixture` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  // Safety: `a` 是 arena 分配的 TypeId（`fixture.arena` 保活到本行之后），此处只读
+  // 其 `owning_arena` 字段，与 cpp `(*a).owningArena` 同形。
   assert_eq!(unsafe { (*a).owning_arena }, fixture.arena.arena_id);
 }
 

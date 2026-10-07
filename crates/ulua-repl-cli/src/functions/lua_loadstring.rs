@@ -9,7 +9,7 @@ use ulua_vm::{
   records::lua_state::LuaState,
 };
 
-use crate::functions::{compile_source::compile_source, state_ref::state};
+use crate::functions::compile_source::compile_source;
 
 /// `loadstring` 全局函数（cpp Repl.cpp 的 lua_loadstring），经 `setup_state`
 /// 注册进 VM，由 VM 在 Lua 调用点回调。
@@ -26,9 +26,10 @@ use crate::functions::{compile_source::compile_source, state_ref::state};
 /// `l` 必须是 VM 在调用本 `lua_CFunction` 时传入的当前有效线程状态，且栈上
 /// 参数布局符合 Lua/C API 调用约定（索引 1 为待检查的字符串参数）。
 pub(crate) unsafe extern "C-unwind" fn lua_loadstring(l: *mut LuaState) -> i32 {
-  // Safety: `# Safety` 契约保证 `l` 非空、活跃，经 `state` 门面物化后全走安全方法
-  // （仍是 unsafe fn 的 `lua_*` 导出在各块内论证）。
-  let l = state(l);
+  // Safety: 本 fn 是装入 VM 的 `lua_CFunction`（真 C ABI 边界），VM 在调用点交出的 `l`
+  // 非空且在本次调用期内活跃；REPL/VM 单线程驱动，该借用存活期内无并存可变别名。边界
+  // 一次物化为带调用期生命周期的借用后，下游全走 ulua-vm 的引用形安全面。
+  let l = unsafe { &mut *l };
   // Safety: 索引 1 为本次调用的实参槽位；非字符串即报错发散（不返回），返回的切片由
   // 栈槽持有、在本次调用期内有效。
   // r16-p28 锚定形：长度快照先行，使首窗在实参判定前即结束借用。

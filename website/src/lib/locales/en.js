@@ -26,6 +26,7 @@ export default {
   "bench.tip_faster": "Lower is faster",
   "bench.current": "this",
   "bench.lang.ulua": "Luau (Pure Rust)",
+  "bench.lang.mlua_luau": "Luau (C++)",
   "bench.lang.mlua_luajit": "LuaJIT 2.1",
   "bench.lang.mlua_lua54": "Lua 5.4",
   "bench.item.fib": "Recursive Fibonacci",

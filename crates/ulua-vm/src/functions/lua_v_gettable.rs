@@ -1,6 +1,6 @@
 //! Source: `VM/src/lvmutils.cpp:196-290` (hand-ported)
 
-use core::{mem::MaybeUninit, ptr::null_mut};
+use core::mem::MaybeUninit;
 
 use ulua_common::{fflag, macros::luau_assert::LUAU_ASSERT};
 
@@ -34,19 +34,20 @@ pub unsafe fn lua_v_gettable(l: *mut LuaState, mut t: Slot<'_>, key: Slot<'_>, v
   unsafe {
     // ---- J4 多点链缓存：资格前置（首表 + 字符串键 + 非空元表）一次判定，probe 与
     // 慢路伴随记录共用；任一不满足则原路直行，零行为差异 ----
-    let mut rec_ok = t.get().is_table() && key.get().is_string();
-    let mut mt0: *mut LuaTable = null_mut();
-    let mut k: *mut tstring = null_mut();
-    let mut t0: *mut LuaTable = null_mut();
-    if rec_ok {
+    // 可缓存上下文以 `Option` 承载（review.md §2 规则 1）：`None` 即不可缓存（键型不符
+    // 或元表缺席），取代原「裸指针空占位 + rec_ok 旗标 + 判空舞步」三件套；
+    // 元组形参序 (t0, mt0, k) 与 [`index_chain_fill`] 入参一致
+    let mut chain_ctx: Option<(*mut LuaTable, *mut LuaTable, *mut tstring)> = None;
+    if t.get().is_table() && key.get().is_string() {
       let h = t.get().as_table_ptr();
-      k = key.get().as_string_ptr();
-      mt0 = (*h).metatable;
-      rec_ok = !mt0.is_null();
-      t0 = h;
-      // 命中即「恒等守卫走查 + owner 单次哈希」，写回与 cachedslot 回填同原慢路语义
-      if rec_ok && index_chain_probe(l, h, k, val.as_ptr()) {
-        return;
+      let k = key.get().as_string_ptr();
+      let mt0 = (*h).metatable;
+      if !mt0.is_null() {
+        // 命中即「恒等守卫走查 + owner 单次哈希」，写回与 cachedslot 回填同原慢路语义
+        if index_chain_probe(l, h, k, val.as_ptr()) {
+          return;
+        }
+        chain_ctx = Some((h, mt0, k));
       }
     }
     // 慢路伴随记录：逐级解析到的链表（全表链走到非 nil 命中才回填）。
@@ -71,7 +72,9 @@ pub unsafe fn lua_v_gettable(l: *mut LuaState, mut t: Slot<'_>, key: Slot<'_>, v
         if !(*res).is_nil() {
           setobj_2_s!(l, val.as_ptr(), res);
           // 回填：非首表命中（rec_len ≥ 1）且全链为表——缓存「守卫链 + owner」
-          if rec_ok && rec_len > 0 {
+          if rec_len > 0
+            && let Some((t0, mt0, k)) = chain_ctx
+          {
             index_chain_fill(t0, mt0, k, &rec, rec_len);
           }
           return;
@@ -84,12 +87,12 @@ pub unsafe fn lua_v_gettable(l: *mut LuaState, mut t: Slot<'_>, key: Slot<'_>, v
         }
 
         // 链记录：tm 为表则续记，函数元方法/超深/杂型 → 本调用不可缓存
-        if rec_ok {
+        if chain_ctx.is_some() {
           if (*tm).is_table() && rec_len < INDEX_CHAIN_MAX {
             rec[rec_len].write((*tm).as_table_ptr());
             rec_len += 1;
           } else {
-            rec_ok = false;
+            chain_ctx = None;
           }
         }
       } else if fflag::DebugLuauUserDefinedClassesRuntime.get() && t.get().is_object() {
@@ -126,7 +129,7 @@ pub unsafe fn lua_v_gettable(l: *mut LuaState, mut t: Slot<'_>, key: Slot<'_>, v
         setobj_2_s!(l, val.as_ptr(), static_slot);
         return;
       } else {
-        rec_ok = false;
+        chain_ctx = None;
         tm = lua_t_gettmbyobj(l, t.as_const_ptr(), TMS::TmIndex);
         if (*tm).is_nil() {
           lua_g_indexerror(l, t.as_const_ptr(), key.as_const_ptr());

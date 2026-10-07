@@ -16,8 +16,6 @@
 //!   `std::string(lexeme.data, getLength())` 镜像为 `payload()`。
 //! - C++ `Lexeme::toString()` 对应 Rust `Display`（`to_string()`）。
 
-use core::slice;
-
 use ulua_ast::{
   enums::type_lexer::Type,
   records::{
@@ -25,6 +23,7 @@ use ulua_ast::{
     position::Position,
   },
 };
+use ulua_common::functions::c_slice::c_slice;
 
 /// C++ 每个用例的公共前奏
 /// `Allocator alloc; AstNameTable table(alloc); Lexer lexer(input.c_str(), size, table);`。
@@ -58,8 +57,9 @@ impl TestLexer {
 /// `lexeme` 的 `data` 指向仍存活的输入缓冲区（`TestLexer` 与输入同帧），
 /// `length` 由词法器保证落在缓冲区内。
 fn payload(lexeme: &Lexeme) -> &[u8] {
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`names` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
-  unsafe { slice::from_raw_parts(lexeme.data.as_ptr(), lexeme.get_length() as usize) }
+  // Safety: `data` 与 `length` 由词法器成对写入，指向与本帧同存活的输入缓冲区间；
+  // 判空/零长由 `c_slice` 门面按 C「NULL 配 0 长度」惯例折成空切片。
+  unsafe { c_slice(lexeme.data.as_ptr(), lexeme.get_length() as usize) }
 }
 
 // Source: `tests/Lexer.test.cpp:13-22`

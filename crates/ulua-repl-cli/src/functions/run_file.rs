@@ -15,7 +15,7 @@ use ulua_vm::{
 use crate::functions::{
   compile_source::compile_source, counters_active::counters_active, counters_track::counters_track,
   coverage_active::coverage_active, coverage_track::coverage_track, get_file_path::get_file_path,
-  repl_main::repl_codegen_enabled, run_repl_impl::run_repl_impl, state_ref::state,
+  repl_main::repl_codegen_enabled, run_repl_impl::run_repl_impl,
 };
 
 // `luau_load`/`lua_resume` 的成功返回码（免散落字面 0）
@@ -43,14 +43,14 @@ fn sandboxed_thread(gl: &mut LuaState) -> *mut LuaState {
 }
 
 /// 调用契约（本 fn 为 `pub(crate)` 安全 fn，crate 内唯一调用方 repl_main 保证）：`gl`
-/// 为 repl_main 经 `state` 门面物化后交出的存活、有效 `LuaState` 主状态借用。
+/// 为 repl_main 在其守卫句柄的唯一物化点交出的存活、有效 `LuaState` 主状态借用。
 // review.md §2/§3 收形：`gl` 由裸 `*mut LuaState` 收编为借用 `&mut LuaState`，真实物化
 // 点上移到 repl_main 入口一次。新线程上编译并运行脚本的 VM 驱动
 // （newthread/sandboxthread/luau_load/codegen/coverage/counters/resume 全为 ulua-vm
-// c-API）；不可拆的 newthread+sandboxthread 两步收在私有 `# Safety` 封装
+// c-API）；不可拆的 newthread+sandboxthread 两步收在私有 `// SAFETY:` 封装
 // `sandboxed_thread`，单步 c-API 调用以带 `// Safety:` 论证的最小 `unsafe` 块就地使用，
-// 线程句柄的解引用关在 `state` 门面内。主线程恢复的 `from == NULL` 已由 `resume_main`
-// 门面收口，本处不留裸 null。
+// 线程句柄只在下方一处 `unsafe { &mut *.. }` 物化点折成借用。主线程恢复的 `from == NULL`
+// 已由 `resume_main` 门面收口，本处不留裸 null。
 // `repl` is used to indicate if a repl should be started after executing the file.
 // `program_args` 是 `--program-args` 之后的原样参数（cpp 的 `program_argv/argc`）。
 pub(crate) fn run_file(
@@ -67,9 +67,12 @@ pub(crate) fn run_file(
   };
 
   // module needs to run in a new thread, isolated from the rest
-  // `sandboxed_thread` 现收 `&mut` 借用为安全 fn，其 c-API 边界 unsafe 已下沉体内窄块，
-  // 返回线程经 `state` 门面物化后栈操作走安全方法。
-  let l = state(sandboxed_thread(gl));
+  // `sandboxed_thread` 收 `&mut` 借用为安全 fn，其 c-API 边界 unsafe 已下沉体内窄块；
+  // 交出的新线程句柄在下方唯一的裸指针物化点折成带调用窗口生命周期的借用（本 port 内
+  // 该句柄与 `gl` 是两个互不重叠的 LuaState 对象，故此处刻意不经 `gl` 再借用派生）。
+  // Safety: `sandboxed_thread` 的调用序契约——句柄由 `gl` 栈槽持有、与 `gl` 共同存活至
+  // 本函数末尾 `gl.pop(1)` 配平；REPL 单线程驱动，该借用存活期内无并存可变别名。
+  let l = unsafe { &mut *sandboxed_thread(gl) };
 
   // cpp Repl.cpp:604 `("@" + normalizePath(name)).c_str()`：源名直接以 String
   // 持有，内部 NUL 由 `luau_load` 按 cpp `strlen` 规则截断，无需预补终止符

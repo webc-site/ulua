@@ -31,7 +31,7 @@ impl Parser {
         stat.base.location.end = self.lexer.previous_location().end;
       }
 
-      body.push_back(stat.as_ptr());
+      body.push_back(stat);
 
       if is_stat_last(&stat) {
         break;

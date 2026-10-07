@@ -37,7 +37,7 @@ impl Parser {
 
       self.expect_match_and_consume(')', &match_paren, false);
 
-      let args_array = self.copy_temp_vector_t(&args);
+      let args_array = self.copy_temp_vector_ptrs(&args);
       (
         args_array,
         Location::new(arg_start, arg_end),

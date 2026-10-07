@@ -24,6 +24,7 @@ export default {
   "bench.tip_faster": "越快越好",
   "bench.current": "本專案",
   "bench.lang.ulua": "Luau (纯 Rust)",
+  "bench.lang.mlua_luau": "Luau (C++)",
   "bench.lang.mlua_luajit": "LuaJIT 2.1",
   "bench.lang.mlua_lua54": "Lua 5.4",
   "bench.item.fib": "斐波那契遞迴",

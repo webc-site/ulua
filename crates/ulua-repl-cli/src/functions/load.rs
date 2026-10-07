@@ -28,10 +28,7 @@ use ulua_vm::{
   records::lua_state::LuaState,
 };
 
-use crate::{
-  functions::state_ref::state,
-  records::repl_requirer::{ReplRequirer, host_str},
-};
+use crate::records::repl_requirer::{ReplRequirer, host_str};
 
 // `luau_load`/`lua_resume` 的返回码常量（免散落字面 0 与逐处 `as` 转型）
 const OK: i32 = LuaStatus::Ok as i32;
@@ -60,17 +57,17 @@ fn spawn_module_thread(l: &mut LuaState) -> *mut LuaState {
   }
 }
 
-/// FFI 边界（ulua-vm c-API）：在 `l` 上按格式化消息抛出 Lua 错误（发散，不返回）。
-/// crate 内单点封装，`load` 与 `sigint_callback` 共用（`luaL_error!` 宏展开点统一收口
-/// 于此，业务侧不再直接书写该宏）。
+/// crate 内单点封装：在 `l` 上按格式化消息抛出 Lua 错误（发散，不返回），`load` 与
+/// `sigint_callback` 共用（`luaL_error!` 宏展开点统一收口于此，业务侧不再直接书写该宏）。
 ///
-/// # Safety
+/// review.md §2 收形：被调 `lua_l_error_l` 已是 `&mut LuaState` 引用形的安全门面，本
+/// 封装因此是安全 fn——原先的 `# Safety` 契约由 `l` 的借用类型承载，唯一的裸指针物化点
+/// 留在 `sigint_callback` 这一真 C ABI 边界内。
 ///
-/// `l` 为活跃且受保护的调用状态、栈上预留 ≥2 空槽（`lua_l_error_l` 的契约前置）；
-/// `msg` 为纯 Rust 格式化串，在被调窗口内消费、无逃逸借用。
-pub(crate) unsafe fn throw(l: *mut LuaState, msg: Arguments<'_>) -> ! {
-  // Safety: 前置条件即本 fn 契约（`l` 活跃受保护、栈留 ≥2 空槽），原样透传给 `lua_l_error_l`。
-  unsafe { lua_l_error_l(&mut *l, msg) }
+/// 调用序契约（由 `&mut` 承载存活）：`l` 为活跃且受保护的调用状态、栈上预留 ≥2 空槽
+/// （`lua_l_error_l` 的前置）；`msg` 为纯 Rust 格式化串，在被调窗口内消费、无逃逸借用。
+pub(crate) fn throw(l: &mut LuaState, msg: Arguments<'_>) -> ! {
+  lua_l_error_l(l, msg)
 }
 
 /// FFI 边界（ulua-vm / ulua-require c-API）：`luau_load` 成功后、运行前的模块
@@ -107,25 +104,21 @@ fn prepare(l: &mut LuaState, ml: &mut LuaState, codegen: bool) {
 /// 调用序契约（正确性，非内存安全——`l`/`ml` 的存活前提已由 `&mut` 接收者类型承载，
 /// review.md §2 诚实降级为安全 `fn`）：`l` 为 require 调用帧活跃状态（`throw` 前置）；
 /// `ml` 为 resume 已返回、仍由 l 栈槽持有的存活模块线程，run_status 失败时其 -1 槽为
-/// 错误对象。本 fn 自身不解引用 `l`，仅在抛出点以窄 `unsafe` 块把 `l`（经 `&mut`→`*mut`
-/// 隐式重借）透传给发散型 c-API 门面 `throw`（各块就地 `// SAFETY:` 论证）。
+/// 错误对象。本 fn 只在 `ml` 上读栈，`l` 仅经引用透传给发散型安全门面 `throw`，函数体
+/// 内无 `unsafe`。
 fn check_run(l: &mut LuaState, ml: &mut LuaState, run_status: i32) {
   if run_status == OK {
     // ml 是 resume 已返回、仍由 l 栈槽持有的存活线程，-1 为模块返回值。
     if ml.get_top() != 1 {
-      // SAFETY: l 活跃即 `throw` 契约全部前置（承本 fn 调用序契约）。
-      unsafe { throw(l, format_args!("module must return a single value")) };
+      throw(l, format_args!("module must return a single value"));
     }
   } else if run_status == YIELD {
-    // SAFETY: 同上。
-    unsafe { throw(l, format_args!("module can not yield")) };
+    throw(l, format_args!("module can not yield"));
   } else if lua_isstring(ml, -1) == 0 {
-    // SAFETY: 同上。
-    unsafe { throw(l, format_args!("unknown error while running module")) };
+    throw(l, format_args!("unknown error while running module"));
   } else {
     let msg = ml.to_str(-1).unwrap_or_default();
-    // SAFETY: msg 已转 Rust 借用，抛出不再依赖其它外部内存。
-    unsafe { throw(l, format_args!("error while running module: {msg}")) };
+    throw(l, format_args!("error while running module: {msg}"));
   }
 }
 
@@ -134,10 +127,10 @@ fn check_run(l: &mut LuaState, ml: &mut LuaState, run_status: i32) {
 ///
 // review.md §2/§3 收形：`l` 由裸 `*mut LuaState` 收编为借用 `&mut LuaState`（真实
 // 物化点下移到 trait 实现上游的 `lua_requireinternal` C 边界）。模块装载驱动仍全程
-// 在 VM 句柄上开线程/xmove/resume（ulua-vm c-API）；边界的 `unsafe` 收敛为带 `# Safety`
+// 在 VM 句柄上开线程/xmove/resume（ulua-vm c-API）；边界的 `unsafe` 收敛为带 `// SAFETY:`
 // 契约的最小私有封装，`load` 自身为安全 fn，字节串入参在本边界一次性转 owned，后续
 // 只见 Rust 类型（review.md §2/§3/§10）。新线程句柄 `ml` 由 `spawn_module_thread` 交出
-// 裸指针，仍经 `state` 门面物化一次。
+// 裸指针，只在本函数一处 `unsafe { &mut *.. }` 物化点折成借用。
 pub(crate) fn load(
   req: &ReplRequirer,
   l: &mut LuaState,
@@ -147,9 +140,13 @@ pub(crate) fn load(
 ) -> i32 {
   // module needs to run in a new thread, isolated from the rest
   // note: we create ML on main thread so that it doesn't inherit environment of l
-  // `spawn_module_thread` 现收 `&mut` 借用为安全 fn，其 c-API 边界 unsafe 已下沉体内窄块，
-  // 此处直调后交 `state` 门面物化线程句柄。
-  let ml = state(spawn_module_thread(l));
+  // `spawn_module_thread` 收 `&mut` 借用为安全 fn，其 c-API 边界 unsafe 已下沉体内窄块；
+  // 交出的模块线程在下方唯一物化点折成借用。
+  // Safety: `spawn_module_thread` 的调用序契约——句柄自 `l` 的栈槽持有、与 `l` 共同
+  // 存活至本函数末尾的 `l.remove(-2)` 配平；模块线程与 `l` 是 VM 内两个互不重叠的
+  // LuaState 对象（故本借用不经 `l` 派生，令 `l` 在装载窗口内仍可独立使用），require
+  // 同步执行期间单线程驱动，借用存活期内无并存可变别名。
+  let ml = unsafe { &mut *spawn_module_thread(l) };
 
   // Safety: loadname/chunkname 同源于 require 链路压栈的 VM 串字节（调用帧持有、
   // 本帧窗口内可读），此步按 cpp C 串消费规则（首 NUL 截断 + lossy）一次性转成
@@ -158,9 +155,9 @@ pub(crate) fn load(
 
   // cpp: `if (!contents) return luaL_error(L, "could not read file '%s'", loadName);`
   let Some(source) = read_file(&loadname) else {
-    // Safety: l 是 require 调用帧的活跃状态，实参 loadname 已是 owned Cow，
-    // 格式化路径不再触碰任何外部指针（`throw` 契约前置）。
-    unsafe { throw(l, format_args!("could not read file '{}'", loadname)) }
+    // `throw` 现为安全门面：l 是 require 调用帧的活跃状态（借用形承载），实参 loadname
+    // 已是 owned Cow，格式化路径不再触碰任何外部指针。
+    throw(l, format_args!("could not read file '{}'", loadname))
   };
 
   // now we can compile & run module on the new thread

@@ -14,6 +14,6 @@ use alloc::sync::Arc;
 /// 确需写入（对应上游对同一 `ScopePtr` 的非 const 使用）必须在调用点 `unsafe` 块里按
 /// "单线程、顺序执行、无并发借用" 的契约进行。
 #[inline]
-pub(crate) fn raw_handle<T>(shared: &Arc<T>) -> *mut T {
+pub fn raw_handle<T>(shared: &Arc<T>) -> *mut T {
   Arc::as_ptr(shared).cast_mut()
 }

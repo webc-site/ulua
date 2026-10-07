@@ -12,7 +12,7 @@ use crate::{
   functions::{
     counters_function_callback::counters_function_callback, counters_init::G_COUNTERS,
     counters_value_callback::counters_value_callback, create_dump_writer::create_dump_writer,
-    stack_function_name::stack_function_name, state_ref::state,
+    stack_function_name::stack_function_name,
   },
   records::{counters::Counters, module_counters::ModuleCounters},
 };
@@ -73,7 +73,7 @@ pub(crate) fn counters_dump(path: &str) {
     let mut counters = cell.borrow_mut();
 
     // 未 init 时为 None，经 opt_node 落回 cpp 同款空指针后照常交给 VM 调用
-    let l = opt_node(counters.l);
+    let main_thread = opt_node(counters.l);
 
     // 解构借用：module_refs 只读遍历、module_counters 就地追加，字段不相交，
     // 借用检查器允许并行持有。
@@ -88,10 +88,10 @@ pub(crate) fn counters_dump(path: &str) {
       // 契约合并为一条：cpp 是 push 进 Vec 后取 `&back()` 交给回调，Rust 侧改为先填
       // 局部元素、收集完成后再 push —— 回调只写该元素（见两个 cb 的 # Safety），
       // 于是既不需要 `last_mut()` 反查、也不依赖 Vec 元素地址在多次 push 间稳定。
-      // Safety: l 为 counters_init 记录的 VM 主线程（有引用被 track 即已 init），
-      // 经 `state` 门面物化后全走安全方法；fref 是 lua_ref 注册的引用，getref 压入的
-      // 栈顶即该函数值。
-      let l = state(l);
+      // Safety: `main_thread` 为 counters_init 记录的 VM 主线程（有引用被 track 即已
+      // init，故本分支非空），在守卫持有期间活跃；REPL 单线程驱动，本次物化的借用窗
+      // 止于当轮循环、窗内无并存可变别名（两个回调只写本帧局部 ModuleCounters）。
+      let l = unsafe { &mut *main_thread };
       l.get_ref(fref);
       let name = stack_function_name(l);
 

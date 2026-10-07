@@ -37,9 +37,10 @@ pub(crate) unsafe extern "C-unwind" fn sigint_callback(l: *mut LuaState, gc: c_i
   unsafe { (*lua_callbacks(l)).interrupt = None };
 
   // Safety: l 为受保护调用状态、存活；checkstack 预留错误串槽位（cpp 同款）后，
-  // throw 单点封装经 VM 错误机制发散（承接 `lua_l_error_l` 的栈槽契约）。
+  // throw 单点门面经 VM 错误机制发散（承接 `lua_l_error_l` 的栈槽契约）。
   unsafe {
     lua_rawcheckstack(&mut *l, 1); // reserve space for error string
-    throw(l, format_args!("Execution interrupted"));
+    // `throw` 已是安全引用形门面：在本真 C ABI 边界的窄块内即时物化 `l`。
+    throw(&mut *l, format_args!("Execution interrupted"));
   }
 }

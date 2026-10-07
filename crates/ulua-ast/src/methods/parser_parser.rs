@@ -6,8 +6,15 @@ use ulua_common::{macros::luau_assert::LUAU_ASSERT, records::dense_hash_map::Den
 use crate::{
   enums::type_lexer::Type,
   records::{
-    allocator::Allocator, ast_name::AstName, ast_name_table::AstNameTable, function::Function,
-    lexer::Lexer, parse_options::ParseOptions, parser::Parser, position::Position,
+    allocator::Allocator,
+    ast_name::AstName,
+    ast_name_table::AstNameTable,
+    function::Function,
+    lexer::Lexer,
+    node_handle::{Node, OptNode},
+    parse_options::ParseOptions,
+    parser::Parser,
+    position::Position,
   },
 };
 
@@ -111,11 +118,21 @@ impl Parser {
     parser.hotcomment_header = false;
 
     // parse_fragment 仅 new 内读取（此处为最后一读）：take() 移动所有权，
-    // 省两次堆分配克隆（DenseHashMap + Vec）；options.parse_fragment 置 None
-    // 不影响后续（无其他读取点）。
+    // options.parse_fragment 置 None 不影响后续（无其他读取点）。
+    // 记录面交接口：`FragmentParseResumeSettings` 仍持 cpp 形态裸指针面（其生产者
+    // ulua-analysis 未句柄化，属 records 引用化的后续波次），在唯一注入点把
+    // `*mut AstLocal` 折算为符号表 `OptNode`（null 槽即 cpp `operator[]` 空位）与
+    // `local_stack` 的 `Node`（栈内恒为 pushLocal 产物、非空，违例即上游 bug，
+    // `Node::from_raw` 断言拦截）。
     if let Some(fragment) = parser.options.parse_fragment.take() {
-      parser.local_map = fragment.local_map;
-      parser.local_stack = fragment.local_stack;
+      for (name, local) in fragment.local_map.iter() {
+        *parser.local_map.get_or_insert(*name) = OptNode::from_ptr(*local);
+      }
+      parser.local_stack = fragment
+        .local_stack
+        .into_iter()
+        .map(Node::from_raw)
+        .collect();
     }
 
     parser
