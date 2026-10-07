@@ -11,7 +11,8 @@ impl ReplWithPathFixture {
   pub fn run_protected_require(&mut self, path: &str) {
     let code = format!("return pcall(function() return require(\"{path}\") end)");
 
-    // Safety: `self.l()` 为 fixture 持有的活跃主线程状态；`code` 为合法源码。
-    let _ = unsafe { run_code(self.l(), &code) };
+    // `run_code` 已按 review.md §2 收编为 `&mut LuaState` 借用形的安全 fn：句柄经
+    // `state_mut` 在夹具层唯一物化点交出，`code` 为合法源码。
+    let _ = run_code(self.state_mut(), &code);
   }
 }

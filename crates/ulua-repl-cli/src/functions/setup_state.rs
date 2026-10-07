@@ -14,33 +14,28 @@ use ulua_vm::{
 
 use crate::functions::{
   create_cli_require_context::create_cli_require_context, lua_loadstring::lua_loadstring,
-  repl_main::repl_codegen_enabled, state_ref::state,
+  repl_main::repl_codegen_enabled,
 };
 
-/// DELIBERATE DEVIATION（review.md §9.3）：本函数是 VM c-API 初始化边界，逐步调用
+/// DELIBERATE DEVIATION（review.md §2/§9.3）：cpp `setupState(LuaState* L)`
+/// （`CLI/src/Repl.cpp`，经 `Repl.h` 暴露给测试）是 VM c-API 初始化边界，逐步调用
 /// `luau_codegen_create`/`luaL_openlibs`/`luaL_register`/`luaopen_require`/
-/// `luaL_sandbox` 并以裸 `*mut LuaState` 收发，`unsafe` 与裸指针系 ulua-vm 边界固有
-/// 形态，非纯 Rust 逻辑；理由即下条 `# Safety` 契约。
-/// 保留 `pub unsafe fn` 定性：本入口是跨 crate `pub` 句柄边界（`Repl.h` 的 setupState），
-/// 由 `ulua-cli-test`/`repl_main`/`run_repl` 以 `unsafe` 块断言刚创建状态有效；改 safe
-/// fn 会撤掉这层调用方契约强制（且 `pub fn` 解引用裸指针形参将命中
-/// `clippy::not_unsafe_ptr_arg_deref`），故属「确属 c-API 句柄边界」而非纯逻辑层，签名不动。
+/// `luaL_sandbox`。本 port 把句柄收编为借用 `&mut LuaState`：存活/独占前提由类型承载，
+/// 故入口降级为安全 `fn`，原先的 `# Safety` 契约上移到各调用方唯一的裸指针物化点
+/// （`repl_main`/`run_repl` 的 `LuaStateGuard` 句柄、`ulua-cli-test` 夹具的
+/// `lua_l_newstate` 结果），仍是 `unsafe` 导出的 `lua_*` 调用以带 `// Safety:` 的最小
+/// 块就地使用。
 ///
-/// # Safety
-///
-/// `l` 必须是刚创建、有效的 `LuaState`。
-pub unsafe fn setup_state(l: *mut LuaState) {
-  // Safety: `# Safety` 契约保证 `l` 非空、活跃，经 `state` 门面物化后全走安全方法
-  // （仍是 unsafe fn 的 `lua_*` 导出在各块内论证）。
-  let l = state(l);
-  // Safety: `luau_codegen_create` 为 unsafe 导出；l 为调用方（run_repl/repl_main 路径）
-  // 刚创建的有效状态（fn /// # Safety）。
+/// 调用序契约（由 `&mut` 承载存活，本处补足初始化次序）：`l` 必须是刚创建、尚未
+/// openlibs/sandbox 的 `LuaState`。
+pub fn setup_state(l: &mut LuaState) {
+  // Safety: `luau_codegen_create` 为 unsafe 导出；l 为调用方（run_repl/repl_main/
+  // cli-test 夹具路径）刚创建的有效状态（本 fn 调用序契约）。
   if repl_codegen_enabled() {
     unsafe { luau_codegen_create(l) };
   }
 
-  // `lua_l_openlibs` 已前移引用形：`l` 经上方 `state` 门面物化为 `&mut LuaState` 后
-  // 直传借用（免 `&mut *l` 重折叠，review.md §3），仅初始化标准库表。
+  // `lua_l_openlibs` 为引用形安全面：`l` 直传借用（review.md §3）。
   lua_l_openlibs(l);
 
   // Note: a CALLGRIND build also registers {"callgrind", lua_callgrind}; the

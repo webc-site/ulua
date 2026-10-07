@@ -35,20 +35,19 @@ pub(crate) fn new_fixture_state(pretty_print: &str) -> Result<LuaStateGuard, Str
   // 判空后立即入守卫：成功/失败两路统一由 `Drop` 收口 `lua_close`，
   // 不再有手动的失败路径 close。
   let state = LuaStateGuard(l_state);
-  let l = state.0;
 
-  // Safety: `l` 是上方已判非空的本帧独占活跃状态机；setup_state 完成
-  // openlibs + sandbox（repl-cli 契约）。
+  // Safety: `state.0` 是上方已判非空的本帧独占活跃状态机，存活期覆盖下面整段初始化
+  // 与 pretty printer 执行（守卫直到本函数返回才 close）；夹具为单线程驱动，每个
+  // `&mut *` 物化的借用窗都止于当句调用、窗内无并存可变别名。setup_state/sandboxthread
+  // 的「刚创建、有效」前置即此契约。
+  let l = unsafe { &mut *state.0 };
   // new thread needs to have the globals sandboxed
-  // Safety: 同上，冻结线程全局表。
-  unsafe {
-    setup_state(l);
-    lua_l_sandboxthread(&mut *l);
-  }
+  setup_state(l);
+  lua_l_sandboxthread(l);
 
-  // Safety: `run_code` 前置（活跃状态机、已 openlibs/sandbox/sandboxthread）恰由
-  // 上两句成立；`pretty_print` 为合法 Lua 源码系本函数文档契约。
-  if let Some(error) = unsafe { run_code(l, pretty_print) } {
+  // `run_code` 前置（活跃状态机、已 openlibs/sandbox/sandboxthread）恰由上两句成立；
+  // `pretty_print` 为合法 Lua 源码系本函数文档契约。
+  if let Some(error) = run_code(l, pretty_print) {
     return Err(error);
   }
 

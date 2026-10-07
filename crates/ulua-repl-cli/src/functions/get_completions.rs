@@ -4,20 +4,19 @@
 
 use ulua_vm::records::lua_state::LuaState;
 
-use crate::functions::{complete_indexer::complete_indexer, state_ref::state};
+use crate::functions::complete_indexer::complete_indexer;
 
 // DELIBERATE DEVIATION（review.md §9.3）：cpp `Repl.h` 对外导出的补全入口，`Repl.test.cpp`
-// 经 `self.l()`（裸 `*mut LuaState`）调用，故本入口保留裸指针形参（跨 crate 句柄边界，
-// cli-test 在夹具层收口）。内部按 §3 收形：入口经 `state` 门面一次物化为借用后透传给
-// complete_indexer（ulua-vm c-API 边界），下游全程只见 `&mut LuaState`。
+// 经 `self.l()` 取句柄调用；本 port 按 §2 把该句柄收编为借用 `&mut LuaState`，存活/独占
+// 前提由类型承载，调用方（ulua-cli-test 夹具的 `state_mut`、crate 内 rustyline 补全回调）
+// 各自在唯一的裸指针出处物化一次，本入口因此是安全 fn。内部按 §3 收形：透传给
+// complete_indexer（ulua-vm c-API 引用形安全面），下游全程只见 `&mut LuaState`。
 //
-// 调用序契约（由 REPL 单线程补全路径传入并逐层透传）：`l` 必须是有效、活跃的
-// `LuaState` 指针。
+// 调用序契约（由调用方成立）：`l` 为活跃状态机。
 pub fn get_completions(
-  l: *mut LuaState,
+  l: &mut LuaState,
   edit_buffer: &str,
   add_completion_callback: &mut impl FnMut(&str, &str),
 ) {
-  // 唯一物化点：`state` 门面契约（l 非空、活跃、单线程无并存可变别名）；其后借用透传。
-  complete_indexer(state(l), edit_buffer, add_completion_callback);
+  complete_indexer(l, edit_buffer, add_completion_callback);
 }

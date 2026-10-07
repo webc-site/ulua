@@ -14,7 +14,6 @@ use ulua_vm::functions::lua_getcoverage::lua_getcoverage;
 use crate::functions::{
   coverage_callback::coverage_callback, coverage_init::G_COVERAGE,
   create_dump_writer::create_dump_writer, stack_function_name::stack_function_name,
-  state_ref::state,
 };
 
 // lua_getcoverage 的 C 回调外壳：把泛型 `coverage_callback<W: Write>`（无法直接充当
@@ -66,7 +65,7 @@ pub(crate) fn coverage_dump(path: &str) {
     let coverage = cell.borrow();
 
     // 未 init 时为 None，经 opt_node 落回 cpp 同款空指针后照常交给 VM 调用
-    let l = opt_node(coverage.l);
+    let main_thread = opt_node(coverage.l);
 
     // cpp `fopen(path, "wb")`: 写模式打开, 失败报错返回
     let Some(mut out) = create_dump_writer(path, "coverage") else {
@@ -77,9 +76,11 @@ pub(crate) fn coverage_dump(path: &str) {
     let _ = out.write_all(b"TN:\n");
 
     for &fref in coverage.functions.iter() {
-      // Safety: l 为 coverage_init 记录的 VM 主线程（有函数被 track 即已 init），
-      // 经 `state` 门面物化后全走安全方法；fref 是已注册的表引用。
-      let l = state(l);
+      // Safety: `main_thread` 为 coverage_init 记录的 VM 主线程（有函数被 track 即已
+      // init，故本分支非空），在守卫持有期间活跃；REPL 单线程驱动，本次物化的借用窗
+      // 止于当轮循环、窗内无并存可变别名（回调只写本帧的 BufWriter）。fref 是已注册的
+      // 表引用。
+      let l = unsafe { &mut *main_thread };
       l.get_ref(fref);
 
       // cpp 的 short_src 是内嵌 char[256]，取不到即空串；本端口为裸指针，
