@@ -1,5 +1,8 @@
 use crate::records::{
-  ast_local::AstLocal, binding::Binding, node_handle::{Node, OptNode}, parser::Parser,
+  ast_local::AstLocal,
+  binding::Binding,
+  node_handle::{Node, OptNode},
+  parser::Parser,
 };
 
 impl Parser {

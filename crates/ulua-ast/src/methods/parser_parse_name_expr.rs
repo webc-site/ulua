@@ -1,9 +1,7 @@
-use crate::{
-  records::{
-    ast_array::AstArray, ast_expr::AstExpr, ast_expr_error::AstExprError,
-    ast_expr_global::AstExprGlobal, ast_expr_local::AstExprLocal, node_handle::OptNode,
-    parser::Parser,
-  },
+use crate::records::{
+  ast_array::AstArray, ast_expr::AstExpr, ast_expr_error::AstExprError,
+  ast_expr_global::AstExprGlobal, ast_expr_local::AstExprLocal, node_handle::OptNode,
+  parser::Parser,
 };
 
 impl Parser {
@@ -25,7 +23,10 @@ impl Parser {
         return self.report_expr_error(
           self.lexer.current().location,
           AstArray::EMPTY,
-          format_args!("Type function cannot reference outer local '{}'", local.name),
+          format_args!(
+            "Type function cannot reference outer local '{}'",
+            local.name
+          ),
         );
       }
 

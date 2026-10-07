@@ -3,8 +3,11 @@ use ulua_common::{LUAU_ASSERT, fflag};
 use crate::{
   functions::optional_node::slot_opt,
   records::{
-    ast_expr::AstExpr, ast_expr_global::AstExprGlobal, ast_stat_class::AstStatClass,
-    node_handle::{Node, OptNode}, parser::Parser,
+    ast_expr::AstExpr,
+    ast_expr_global::AstExprGlobal,
+    ast_stat_class::AstStatClass,
+    node_handle::{Node, OptNode},
+    parser::Parser,
   },
   rtti::ast_node_try_as,
 };
