@@ -435,6 +435,12 @@ fn fold(diagnostics: Vec<TypeDiagnostic>) -> Result<(), Vec<TypeDiagnostic>> {
 
 /// 构造 + 自指针布线一步完成（经 [`Frontend::new_boxed`] 安全装箱构造器）。
 ///
+/// dyn 保留：`Box<dyn FileResolver>` / `Box<dyn ConfigResolver>` 的形参形态由
+/// `ulua_analysis::Frontend` 的构造器与字段类型锁死（`pub file_resolver: Box<dyn
+/// FileResolver>` 等，见 `new_boxed` 的 9 个跨 crate 调用方），实现集合虽在本文件
+/// 封闭（`CheckFileResolver`/`CheckModuleFileResolver`/`CheckConfigResolver`），
+/// 但接口边界在 ulua-analysis crate 内，本 crate 侧仅装箱适配、无从单态化。
+///
 /// `new_boxed` 在 safe 边界内完成「构造 → 堆上落位 → 自指针布线」全序列，
 /// 调用点不再有 unsafe 构造/`wire_self_pointers` 两步手写；返回的 `Box<Frontend>`
 /// 只被按指针移动（pointee 留在堆上），自指针在其整个生命周期内恒有效。
