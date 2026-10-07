@@ -267,10 +267,14 @@ fn get_assembly_impl<B: AsmBuilder>(
 
   // gather_functions 返回按 bytecodeid 索引的稀疏表（None 为空槽），沿原型链收集子 Proto。
   // 本处 flatten 依序紧凑（与原 `retain(!is_null)` 语义一致）。
-  let protos: Vec<&Proto> = gather_functions(root, options.compilation_options.flags, root_is_native_function)
-    .into_iter()
-    .flatten()
-    .collect();
+  let protos: Vec<&Proto> = gather_functions(
+    root,
+    options.compilation_options.flags,
+    root_is_native_function,
+  )
+  .into_iter()
+  .flatten()
+  .collect();
 
   with_lowering_stats(stats.as_deref_mut(), |s| {
     s.total_functions += protos.len() as u32

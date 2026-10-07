@@ -2,6 +2,7 @@ use alloc::{string::String, vec::Vec};
 use core::{
   iter::once,
   mem::{size_of, size_of_val},
+  ptr::from_ref,
 };
 
 use ulua_common::{enums::luau_proto_flag::LuauProtoFlag, functions::c_str::cstr_cow};
@@ -132,14 +133,13 @@ pub unsafe fn compile_internal(
   // gather_functions 沿原型链只读收集（元素借用随 root 存活契约）；此处还原 C-ABI
   // 指针形态——compile 链下游（create_native_function_* / try_bind_existing_module）
   // 仍以 `*mut Proto` 为 execdata 绑定句柄，身份同一、仅形态转换（引用转指针安全）。
-  let protos: Vec<*mut Proto> =
-    gather_functions(root, options.flags, (root_flags & LuauProtoFlag::LPF_NATIVE_FUNCTION as u8) != 0)
+  let protos: Vec<*mut Proto> = gather_functions(root, options.flags, (root_flags & LuauProtoFlag::LPF_NATIVE_FUNCTION as u8) != 0)
       .into_iter()
       .flatten()
       // J1 Phase 2b：force_recompile（暖重编译）时保留已编译 proto——重编译并重绑定；
       // 常规路径跳过已编译（NothingToCompile 语义）。
       .filter(|proto| options.force_recompile || proto.execdata.is_null())
-      .map(|proto| core::ptr::from_ref(proto).cast_mut())
+      .map(|proto| from_ref(proto).cast_mut())
       .collect();
 
   if protos.is_empty() {

@@ -3,10 +3,7 @@ use alloc::vec::Vec;
 use ulua_common::enums::luau_proto_flag::LuauProtoFlag;
 use ulua_vm::records::proto::Proto;
 
-use crate::{
-  enums::code_gen_flags::CodeGenFlags,
-  functions::proto_views::child_proto_refs,
-};
+use crate::{enums::code_gen_flags::CodeGenFlags, functions::proto_views::child_proto_refs};
 
 /// 递归收集（累加器 `results` 为跨递归复用的输出缓冲，非出参）。
 ///

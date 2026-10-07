@@ -38,7 +38,7 @@ use core::{
   cmp::Ordering,
   fmt::{self, Debug, Formatter},
   mem::{size_of, transmute},
-  ptr::{addr_of, from_ref, null_mut},
+  ptr::{addr_of, from_ref, null, null_mut},
   slice::from_raw_parts,
   sync::atomic::{AtomicU64, Ordering as AtomicOrdering},
 };
@@ -60,6 +60,7 @@ use ulua_vm::{
 use crate::{
   functions::{
     get_code_gen_context::get_code_gen_context,
+    proto_views,
     proto_views::constants,
     trace_forn_codegen_a_64::emit_trace_a_64,
     trace_forn_ir::{
@@ -191,7 +192,7 @@ enum Guard {
 /// 活跃帧槽只读视图（派发环契约：`l.base+s` 落在活跃帧槽域内且槽值存活；
 /// 返回寿命锚定 `l` 的借用——活跃帧随 state 存活，保守于实际寿命）。
 #[inline]
-fn frame_slot<'a>(l: &'a LuaState, s: u8) -> &'a TValue {
+fn frame_slot(l: &LuaState, s: u8) -> &TValue {
   // Safety: 派发环契约保证 l.base 指向活跃帧槽域，`s` 为该域合法下标。
   unsafe { &*l.base.add(usize::from(s)) }
 }
@@ -203,7 +204,11 @@ fn frame_slot<'a>(l: &'a LuaState, s: u8) -> &'a TValue {
 fn upref_slot(cl: &Closure, idx: u8) -> &TValue {
   // Safety: uprefs 为柔性数组语义（luaF_newLClosure 按 nupvalues 过分配布局保证），
   // idx 已由调用点对 nupvalues 校验界内。
-  unsafe { &*addr_of!(cl.inner.l.uprefs).cast::<TValue>().add(usize::from(idx)) }
+  unsafe {
+    &*addr_of!(cl.inner.l.uprefs)
+      .cast::<TValue>()
+      .add(usize::from(idx))
+  }
 }
 
 /// 入口守卫（Rust 侧，拒绝路径零状态扰动；逐迭代守卫在生成码内）。
@@ -273,10 +278,9 @@ fn entry_guard(l: &LuaState, e: &InstalledTrace, proto: &Proto) -> Guard {
       let src: *const TValue = if is_uv {
         // Safety: ur 的 is_upval() 已命中 → value.gc 臂有效且指向存活
         // UpVal（GC 强可达）；v 为其 open/closed 双态槽指针。
-        unsafe { ur.value.gc.cast::<UpVal>().as_ref() }
-          .map_or(core::ptr::null(), |uv| uv.v.cast_const())
+        unsafe { ur.value.gc.cast::<UpVal>().as_ref() }.map_or(null(), |uv| uv.v.cast_const())
       } else {
-        core::ptr::from_ref(ur)
+        from_ref(ur)
       };
       // Safety: cell 源为闭包 upref 体系内的存活 TValue（GC 强可达）
       let tv = unsafe { &*src };
@@ -424,7 +428,7 @@ unsafe fn forn_trace_enter(l: *mut LuaState, proto: &Proto, pcpos: u32) -> bool 
   };
   // 指令流/常量表走 proto_views 安全视图：空基址/负长度折叠为 `&[]`，与原
   // `sizecode < 0` / `sizek <= 0` 的早退/空表语义一致（review.md §2）。
-  let code = crate::functions::proto_views::code(proto);
+  let code = proto_views::code(proto);
   let k = constants(proto);
   let sizecode = code.len() as u32;
   if pcpos as usize >= code.len() {
@@ -619,7 +623,7 @@ unsafe fn call_trace(code_start: *mut u8, l: *mut LuaState, proto: &Proto) -> u3
   // Safety: code_start 指向已切换可执行页的本模块发射产物
   let f: TraceFn = unsafe { transmute(code_start) };
   // Safety: 生成码叶函数，l/proto 契约存活（引用侧由借用系统保证）
-  unsafe { f(l, core::ptr::from_ref(proto)) }
+  unsafe { f(l, from_ref(proto)) }
 }
 
 /// ecb 回边慢路（T2）：回边计数精确达阈，录制装配 + 解除武装。
@@ -664,7 +668,7 @@ pub(crate) unsafe extern "C-unwind" fn forn_trace_backedge(
   // （原 `fornloop_pc >= sizecode` 早退等价：折叠视图越界前先行拒绝）。
   // Safety: proto 为派发环契约的存活对象
   let proto_ref: &Proto = unsafe { &*proto };
-  let code = crate::functions::proto_views::code(proto_ref);
+  let code = proto_views::code(proto_ref);
   let k = constants(proto_ref);
   let sizecode = code.len() as u32;
   if fornloop_pc as usize >= code.len() {

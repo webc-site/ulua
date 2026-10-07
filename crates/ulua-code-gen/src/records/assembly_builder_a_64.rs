@@ -3,6 +3,7 @@ use core::{
   fmt::Arguments,
   mem::{align_of, size_of, take},
   ops::{Deref, DerefMut},
+  ptr::from_ref,
   slice::from_raw_parts,
 };
 
@@ -121,9 +122,7 @@ impl AssemblyBuilderA64 {
   pub fn adr_value<T>(&mut self, dst: RegisterA64, value: &T) {
     // Safety: `value` 为存活引用，`size_of::<T>` 即其字节长度，`*const u8` 对齐
     // 为 1 恒满足；所得切片仅在本语句内被逐字节拷贝消费。
-    let slice = unsafe {
-      from_raw_parts(core::ptr::from_ref(value).cast::<u8>(), size_of::<T>())
-    };
+    let slice = unsafe { from_raw_parts(from_ref(value).cast::<u8>(), size_of::<T>()) };
     self.adr_data_with_align(dst, slice, align_of::<T>());
   }
 
