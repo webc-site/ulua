@@ -32,24 +32,24 @@ fn math_fn_addr(kind: TMathUnary) -> usize {
 
 /// 槽值是哪个 math 单参内建 C 函数（None = 非 math 内建闭包）。
 ///
-/// # Safety
-/// `tv` 须为活跃帧槽域的存活 TValue，且 `tv.is_function()` 谓词已命中——
-/// `as_closure_ptr` 为同址类型化读。
-pub(crate) unsafe fn slot_math_fn(tv: *const TValue) -> Option<TMathUnary> {
-  // SAFETY: 调用方契约见函数注；transmute 同上（fn 项地址对账）
-  unsafe {
-    if (*(*tv).as_closure_ptr()).is_c != 1 {
-      return None;
-    }
-    let slot_f = transmute::<LuaCFunction, usize>((*(*tv).as_closure_ptr()).inner.c.f);
-    [
-      TMathUnary::Sqrt,
-      TMathUnary::Abs,
-      TMathUnary::Floor,
-      TMathUnary::Ceil,
-      TMathUnary::Round,
-    ]
-    .into_iter()
-    .find(|&kind| slot_f == math_fn_addr(kind))
+/// 契约：`tv` 为活跃帧槽域的存活 TValue，且 `tv.is_function()` 谓词已命中
+/// （`as_closure` 为同址类型化读）。
+pub(crate) fn slot_math_fn(tv: &TValue) -> Option<TMathUnary> {
+  // SAFETY: is_function() 谓词由调用方契约保证命中，as_closure 同址类型化读
+  let cl = unsafe { tv.as_closure() };
+  if cl.is_c != 1 {
+    return None;
   }
+  // SAFETY: LuaCFunction 为 Option<extern fn>，与 usize 同尺寸裸转（fn 项
+  // 地址对账，不回落任何表示）
+  let slot_f = unsafe { transmute::<LuaCFunction, usize>(cl.inner.c.f) };
+  [
+    TMathUnary::Sqrt,
+    TMathUnary::Abs,
+    TMathUnary::Floor,
+    TMathUnary::Ceil,
+    TMathUnary::Round,
+  ]
+  .into_iter()
+  .find(|&kind| slot_f == math_fn_addr(kind))
 }

@@ -1,7 +1,6 @@
 //! Source: `CodeGen/src/IrLoweringA64.cpp:308`
 use core::{
-  ffi::c_void,
-  mem::{align_of, offset_of, size_of, size_of_val},
+  mem::{offset_of, size_of},
   ptr,
 };
 
@@ -2486,9 +2485,7 @@ impl IrLoweringA64 {
             let temp = self.regs.alloc_temp(KindA64::X);
 
             let vec = [as_u32, as_u32, as_u32, 0u32];
-            self
-              .build_mut()
-              .adr_ptr(temp, vec.as_ptr().cast::<c_void>(), size_of_val(&vec));
+            self.build_mut().adr_value(temp, &vec);
             self.build_mut().ldr(inst.reg_a64, mem(temp, 0));
           }
         } else {
@@ -4786,12 +4783,7 @@ impl IrLoweringA64 {
       self.emit_vm_reg_addr(X2, inst.op(2));
     } else if (inst.op(2)).kind() == IrOpKind::Constant {
       let n = nvalue(self.uint_op(inst.op(2)) as f64);
-      self.build_mut().adr_ptr_align(
-        X2,
-        ptr::from_ref(&n).cast::<c_void>(),
-        size_of::<TValue>(),
-        align_of::<TValue>(),
-      );
+      self.build_mut().adr_value(X2, &n);
     } else {
       unsupported_instruction_form();
     }

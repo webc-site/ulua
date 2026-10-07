@@ -62,6 +62,14 @@ pub(crate) fn child_protos(proto: &Proto) -> &[*mut Proto] {
   unsafe { span(proto.p.cast_const(), proto.sizep) }
 }
 
+/// 子原型表的只读引用迭代（[`child_protos`] 的引用化视图）。
+///
+/// 契约：同 [`child_protos`]——元素指向的 `Proto` 与宿主一起由 VM 在编译会话内持有。
+pub(crate) fn child_proto_refs(proto: &Proto) -> impl Iterator<Item = &Proto> {
+  // Safety: `child_protos` 契约保证每个元素指针为非空存活 Proto。
+  child_protos(proto).iter().map(|&child| unsafe { &*child })
+}
+
 /// 局部变量表 `locvars[0..sizelocvars]`。
 ///
 /// 契约：`proto` 指向存活 Proto；`locvars`/`sizelocvars` 由字节码加载接线一致。

@@ -34,7 +34,7 @@ use crate::{
 };
 
 /// 平台专属 `lower_ir` 回调的 fn 指针形态（X64/A64 末步注入，签名跨平台一致）。
-type LowerIrFn<B> = unsafe fn(
+type LowerIrFn<B> = fn(
   &mut B,
   &mut IrBuilder,
   &[u32],
@@ -140,12 +140,9 @@ fn lower_function_common<B>(
     }
   });
 
-  // Safety: `lower_ir` 依各平台实现自身的 `# Safety` 契约接收参数——`build`/`ir`/`helpers`
-  // 为本函数存活引用的独占借用（此前的 stats 临时借用均已按 NLL 结束）；`proto` 只被被调方
-  // 判空使用（None 即 cpp nullptr 实参，或存活由调用方契约保证）；`stats` 透传同一可空可变借用（本函数最后一次
-  // 使用，先前的 as_deref_mut 临时借用均已按 NLL 结束），被调方的每次解引用都与其判空守卫
-  // 配套，且本时刻不存在并存 &mut 别名（单线程串行）。
-  let result = unsafe { lower_ir(build, ir, &sorted_blocks, helpers, proto, options, stats) };
+  // `lower_ir` 的参数均为本函数存活引用（stats 的临时借用已按 NLL 结束），末步平台
+  // 回调安全移交。
+  let result = lower_ir(build, ir, &sorted_blocks, helpers, proto, options, stats);
 
   if result {
     Ok(())
@@ -155,10 +152,7 @@ fn lower_function_common<B>(
 }
 
 /// lowering 主入口（X64）：IR → 机器码。失败时返回对应的编译结果错误（出参改返回值）。
-///
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn lower_function_x_64(
+pub(crate) fn lower_function_x_64(
   ir: &mut IrBuilder,
   build: &mut AssemblyBuilderX64,
   helpers: &mut ModuleHelpers,
@@ -166,16 +160,11 @@ pub(crate) unsafe fn lower_function_x_64(
   options: AssemblyOptions,
   stats: Option<&mut LoweringStats>,
 ) -> Result<(), CodeGenCompilationResult> {
-  // 本 `unsafe fn` 的指针参数仅原样透传给安全主体 `lower_function_common`，
-  // 其内部唯一的解引用时刻由该函数的 `// Safety` 契约约束。
   lower_function_common(ir, build, helpers, proto, options, stats, lower_ir_x_64)
 }
 
 /// lowering 主入口（A64）：IR → 机器码。语义与 X64 版逐路径一致（cpp 同款模板共用主体）。
-///
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn lower_function_a_64(
+pub(crate) fn lower_function_a_64(
   ir: &mut IrBuilder,
   build: &mut AssemblyBuilderA64,
   helpers: &mut ModuleHelpers,
@@ -183,6 +172,5 @@ pub(crate) unsafe fn lower_function_a_64(
   options: AssemblyOptions,
   stats: Option<&mut LoweringStats>,
 ) -> Result<(), CodeGenCompilationResult> {
-  // 同 X64 版：指针参数原样透传给安全主体，本函数头 `# Safety` 契约不变。
   lower_function_common(ir, build, helpers, proto, options, stats, lower_ir_a_64)
 }
