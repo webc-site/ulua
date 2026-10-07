@@ -1,9 +1,8 @@
 use alloc::{string::String, vec::Vec};
-use core::{mem::take, str::from_utf8};
+use core::{mem::take, ptr::from_ref, str::from_utf8};
 
 use ulua_ast::{
   records::{
-    ast_expr::AstExpr,
     ast_expr_constant_bool::AstExprConstantBool,
     ast_expr_constant_integer::AstExprConstantInteger,
     ast_expr_constant_string::AstExprConstantString,
@@ -146,7 +145,8 @@ impl ConstraintGenerator {
     // 该地址与 cpp `dfg->getRefinementKey(local)` 的键同一。
     let key = self
       .dfg_ref()
-      .get_refinement_key((local as *const AstExprLocal).cast::<AstExpr>());
+      // `&local.base`（repr(C) 首字段）即 cpp `AstExpr*` upcast，取址成键免手工转型。
+      .get_refinement_key(from_ref(&local.base));
     LUAU_ASSERT!(!key.is_null());
 
     // if we have a refinement key, we can look up its type.
@@ -185,9 +185,7 @@ impl ConstraintGenerator {
   /// cpp `check(const ScopePtr&, AstExprGlobal*)`（ConstraintGenerator.cpp:3344）。
   /// `global` 为分派层经类索引校验后传入的共享借用，本方法只读取其字段。
   pub fn check_expr_global(&mut self, scope: &ScopePtr, global: &AstExprGlobal) -> Inference {
-    let key = self
-      .dfg_ref()
-      .get_refinement_key((global as *const AstExprGlobal).cast::<AstExpr>());
+    let key = self.dfg_ref().get_refinement_key(from_ref(&global.base));
     LUAU_ASSERT!(!key.is_null());
 
     // prepopulateGlobalScope() has already added all global functions to the environment by this point, so any
@@ -222,7 +220,7 @@ impl ConstraintGenerator {
   ) -> Inference {
     let key = self
       .dfg_ref()
-      .get_refinement_key((index_name as *const AstExprIndexName).cast::<AstExpr>());
+      .get_refinement_key(from_ref(&index_name.base));
     let index: String = index_name.index.as_str_or_empty().to_string();
     // index_name.expr 已句柄化恒非空，alias_ref 收口为共享引用直传（cpp
     // checkIndexName 同款）；key 为 DFG 内部只读节点或 null 的可空契约；index
@@ -260,7 +258,7 @@ impl ConstraintGenerator {
       }
       let key = self
         .dfg_ref()
-        .get_refinement_key((index_expr as *const AstExprIndexExpr).cast::<AstExpr>());
+        .get_refinement_key(from_ref(&index_expr.base));
       let index: String = String::from(from_utf8(constant_string.value.as_bytes()).unwrap_or(""));
       // index_expr.expr 为存活节点名下的 arena 子表达式，alias_ref 收口直传；
       // key 可空由 check_index_name 的消费契约覆盖（cpp 同款）。
@@ -284,7 +282,7 @@ impl ConstraintGenerator {
 
     let key = self
       .dfg_ref()
-      .get_refinement_key((index_expr as *const AstExprIndexExpr).cast::<AstExpr>());
+      .get_refinement_key(from_ref(&index_expr.base));
     // §2：可空 key 收口 Option<&RefinementKey>（驻留 DFG 内部 arena、随会话存活）。
     if let Some(refinement_key) = alias_opt(key) {
       let def = refinement_key.def;
@@ -312,7 +310,7 @@ impl ConstraintGenerator {
     // `getMutable<BlockedType>(result)->setOwner(c)`
     let blocked = get_mutable_type::get_mutable::<BlockedType>(result)
       .expect("result 刚由 add_type(BlockedType) 分配，必命中（cpp:3349）");
-    blocked.set_owner(c as *const _);
+    blocked.set_owner(c.cast_const());
 
     // §2：key 可空的两路手判并入 Option 链路——`proposition_refinement_key_type_id`
     // 对空 key 返回 `None`，`inference_with_refinement` 再把 `None`
@@ -390,7 +388,7 @@ impl ConstraintGenerator {
     // `getMutable<BlockedType>(generalizedTy)->setOwner(gc)`
     let blocked = get_mutable_type::get_mutable::<BlockedType>(generalized_ty)
       .expect("generalized_ty 刚由 add_type(BlockedType) 分配，必命中（cpp:3432）");
-    blocked.set_owner(gc as *const _);
+    blocked.set_owner(gc.cast_const());
 
     if fflag::LuauConstraintGraph.get() {
       // SAFETY: 本分支由 `LuauConstraintGraph` flag 守卫，宿主（`check_frontend`）仅在
@@ -628,7 +626,7 @@ impl ConstraintGenerator {
     // `getMutable<BlockedType>(placeholderType)->setOwner(constraint)`
     let blocked = get_mutable_type::get_mutable::<BlockedType>(placeholder_type)
       .expect("placeholder_type 刚由 add_type(BlockedType) 分配，必命中（cpp:3630）");
-    blocked.set_owner(constraint as *const _);
+    blocked.set_owner(constraint.cast_const());
 
     Inference::no_refinement(placeholder_type)
   }
@@ -752,10 +750,10 @@ impl ConstraintGenerator {
           ConstraintV::PushType(PushTypeConstraint {
             expected_type,
             target_type: table_ty,
-            ast_types: &alias(module_ptr).ast_types as *const _,
-            ast_expected_types: &alias(module_ptr).ast_expected_types as *const _,
+            ast_types: from_ref(&alias(module_ptr).ast_types),
+            ast_expected_types: from_ref(&alias(module_ptr).ast_expected_types),
             // 身份键：cpp `NotNull{expr}` 存的就是被检节点地址，求解侧只读。
-            expr: (table as *const AstExprTable).cast::<AstExpr>(),
+            expr: from_ref(&table.base),
           }),
         );
 

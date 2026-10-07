@@ -1,8 +1,7 @@
+use core::ptr::from_ref;
+
 use crate::{
-  functions::{
-    are_seen::are_seen, begin_type_pack::begin, end_type_pack::end,
-    get_type_pack::type_pack_variant_of,
-  },
+  functions::{are_seen::are_seen, begin_type_pack::begin, get_type_pack::type_pack_variant_of},
   records::{
     any_type::AnyType, arena_handle::alias_ref, free_type::FreeType, free_type_pack::FreeTypePack,
     function_type::FunctionType, generic_type::GenericType, generic_type_pack::GenericTypePack,
@@ -21,42 +20,29 @@ pub fn are_equal_seen_set_type_pack_var_type_pack_var(
   lhs: &TypePackVar,
   rhs: &TypePackVar,
 ) -> bool {
-  let lhs_id = lhs as *const TypePackVar;
-  let rhs_id = rhs as *const TypePackVar;
+  // `from_ref`：`&TypePackVar → TypePackId`（裸指针别名）的既有收口形态。
+  let mut lhs_iter = begin(from_ref(lhs));
+  let mut rhs_iter = begin(from_ref(rhs));
 
-  let mut lhs_iter = begin(lhs_id);
-  let mut rhs_iter = begin(rhs_id);
-  let lhs_end = end(lhs_id);
-  let rhs_end = end(rhs_id);
-
-  while lhs_iter != lhs_end && rhs_iter != rhs_end {
-    let l = *lhs_iter.current();
-    let r = *rhs_iter.current();
-    if !are_equal_seen_set_type_item_type_item(seen, alias_ref(l), alias_ref(r)) {
-      return false;
+  // 双侧逐项同步推进：一侧耗尽而另一侧尚有元素即长度不齐，直接判不等。
+  loop {
+    match (lhs_iter.next(), rhs_iter.next()) {
+      (Some(l), Some(r)) => {
+        if !are_equal_seen_set_type_item_type_item(seen, alias_ref(l), alias_ref(r)) {
+          return false;
+        }
+      }
+      (None, None) => break,
+      _ => return false,
     }
-    lhs_iter.advance();
-    rhs_iter.advance();
   }
 
-  if lhs_iter != lhs_end || rhs_iter != rhs_end {
-    return false;
-  }
-
-  if lhs_iter.tail().is_none() && rhs_iter.tail().is_none() {
-    return true;
-  }
-  if lhs_iter.tail().is_none() || rhs_iter.tail().is_none() {
-    return false;
-  }
-
-  // Safety: 上方两处 is_none 判定均已早返，两侧 tail 至此必为 Some。
-  let lhs_tail = lhs_iter
-    .tail()
-    .expect("上方双侧 is_none 判定均已早返，至此必为 Some");
-  let rhs_tail = rhs_iter
-    .tail()
-    .expect("上方双侧 is_none 判定均已早返，至此必为 Some");
+  let (lhs_tail, rhs_tail) = match (lhs_iter.tail(), rhs_iter.tail()) {
+    (None, None) => return true,
+    (Some(l), Some(r)) => (l, r),
+    // 单侧有尾包：形状不等。
+    _ => return false,
+  };
 
   // `lhs_tail`/`rhs_tail` 的变体读取收口在 `type_pack_variant_of`（arena 节点
   // 有效性契约同 C++ `get(TypePackId)`）。分支内的 `lb.bound_to`/`rb.bound_to`
@@ -108,11 +94,7 @@ pub fn are_equal_seen_set_function_type_function_type(
   lhs: &FunctionType,
   rhs: &FunctionType,
 ) -> bool {
-  if are_seen(
-    seen,
-    lhs as *const FunctionType as *const (),
-    rhs as *const FunctionType as *const (),
-  ) {
+  if are_seen(seen, lhs, rhs) {
     return true;
   }
 
@@ -132,13 +114,8 @@ pub fn are_equal_seen_set_table_type_table_type(
   lhs: &TableType,
   rhs: &TableType,
 ) -> bool {
-  // are_seen expects BTreeSet<(*const (), *const ())>; 这里用 `as *const ()`
-  // 指针转型即匹配该签名（非 transmute，对应 C++ 侧的 const 性转换注释）。
-  if are_seen(
-    seen,
-    lhs as *const TableType as *const (),
-    rhs as *const TableType as *const (),
-  ) {
+  // 节点地址身份比较已收口进 `are_seen`（泛型引用形参）。
+  if are_seen(seen, lhs, rhs) {
     return true;
   }
 
@@ -209,14 +186,8 @@ pub fn are_equal_seen_set_metatable_type_metatable_type(
   lhs: &MetatableType,
   rhs: &MetatableType,
 ) -> bool {
-  // The SeenSet in this context is BTreeSet<(*const (), *const ())>.
-  // are_seen expects BTreeSet<(*const (), *const ())>.
-  // We must cast the seen set pointer to match the expected mutability of the are_seen signature.
-  if are_seen(
-    seen,
-    lhs as *const MetatableType as *const (),
-    rhs as *const MetatableType as *const (),
-  ) {
+  // 节点地址身份比较已收口进 `are_seen`（泛型引用形参）。
+  if are_seen(seen, lhs, rhs) {
     return true;
   }
 
@@ -249,6 +220,9 @@ pub fn are_equal_seen_set_type_item_type_item(seen: &mut SeenSet, lhs: &Type, rh
     }
   }
 
+  // DELIBERATE DEVIATION: cpp `StructuralTypeEquality.cpp:143-156` 因复制粘贴
+  // 存在两段完全相同的 GenericType 比较（第二段永不可达），Rust 侧合并为一段，
+  // 行为逐位等价。
   {
     let lg = GenericType::get_if(&lhs.ty);
     let rg = GenericType::get_if(&rhs.ty);
@@ -262,14 +236,6 @@ pub fn are_equal_seen_set_type_item_type_item(seen: &mut SeenSet, lhs: &Type, rh
     let rp = PrimitiveType::get_if(&rhs.ty);
     if let (Some(lp), Some(rp)) = (lp, rp) {
       return lp.r#type == rp.r#type;
-    }
-  }
-
-  {
-    let lg = GenericType::get_if(&lhs.ty);
-    let rg = GenericType::get_if(&rhs.ty);
-    if let (Some(lg), Some(rg)) = (lg, rg) {
-      return lg.index == rg.index;
     }
   }
 

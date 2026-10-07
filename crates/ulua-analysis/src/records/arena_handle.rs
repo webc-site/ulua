@@ -16,6 +16,7 @@
 //!    存活的可变别名（与原裸指针解引用处的 `// SAFETY:` 注释同一契约）；
 //! 3. null 哨兵不进入句柄：可空处一律用 `Option<Handle<T>>` 表达。
 
+use alloc::sync::Arc;
 use core::{
   fmt::{self, Debug, Formatter},
   hash::{Hash, Hasher},
@@ -173,6 +174,18 @@ pub(crate) fn alias<T>(p: *mut T) -> &'static mut T {
   // SAFETY: 见函数级契约——调用点保证 `p` 非空、指向存活对象且借用期内
   // 无其它可变别名（与原 `unsafe { &mut *p }` 解引用处逐条同构）。
   unsafe { &mut *p }
+}
+
+/// `Arc<T>`（`ScopePtr` 等）→ `&'static mut T` 的就地写收口门面：承接 cpp
+/// 对共享句柄目标的就地写路径（原业务侧 `arc.as_ref() as *const T as *mut T`
+/// 三段强转 + [`alias`] 的唯一替身）。
+///
+/// 契约与 [`alias`] 相同：调用点单线程驱动、目标在整个 `Arc` 克隆存活期内
+/// 地址稳定，且本次物化的可变借用期内无其它存活的 `&mut T`。
+pub(crate) fn alias_arc<T>(a: &Arc<T>) -> &'static mut T {
+  // SAFETY: `Arc` 数据非空且地址稳定；独占窗口由调用点按模块契约保证
+  // （原三段强转后的 `unsafe { &mut *p }` 逐条同构）。
+  unsafe { &mut *(Arc::as_ptr(a) as *mut T) }
 }
 
 /// [`alias`] 的共享只读形态。

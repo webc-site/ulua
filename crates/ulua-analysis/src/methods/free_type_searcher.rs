@@ -39,7 +39,7 @@ impl<'a> FreeTypeSearcher<'a> {
 }
 
 impl FreeTypeSearcher<'_> {
-  pub fn seen_with_current_polarity(&mut self, ty: *const ()) -> bool {
+  pub fn seen_with_current_polarity<T>(&mut self, ty: *const T) -> bool {
     let key = VisitKeyRef::from_ptr(ty);
     match self.polarity {
       Polarity::Positive => {

@@ -44,7 +44,7 @@ impl IterativeTypeFunctionTypeVisitor {
 }
 
 impl IterativeTypeFunctionTypeVisitor {
-  pub fn has_seen(&mut self, tv: *const ()) -> bool {
+  pub fn has_seen<T>(&mut self, tv: *const T) -> bool {
     if !self.visit_once {
       return false;
     }
@@ -62,37 +62,35 @@ impl IterativeTypeFunctionTypeVisitor {
 
 /// C++ 模板 `IterativeTypeFunctionTypeVisitor::isCyclic<TID>`
 /// （IterativeTypeFunctionTypeVisitor.cpp:345-362）：沿 `parent` 链回溯，
-/// 逐项 `*item == ty` 比对。`WorkItem::t` 存的就是 id 裸指针，按指针值比较。
-pub(crate) trait IdRaw {
-  fn raw(self) -> *const ();
-}
-impl IdRaw for TypeFunctionTypeId {
-  fn raw(self) -> *const () {
-    self as *const ()
-  }
-}
-impl IdRaw for TypeFunctionTypePackId {
-  fn raw(self) -> *const () {
-    self as *const ()
-  }
-}
+/// 逐项 `*item == ty` 比对。enum 化后按变体内的 id 值直接比较指针。
 impl IterativeTypeFunctionTypeVisitor {
-  pub(crate) fn is_cyclic<TID>(&self, ty: TID) -> bool
-  where
-    TID: IdRaw,
-  {
-    let ty = ty.raw();
+  pub(crate) fn is_cyclic_type_id(&self, ty: TypeFunctionTypeId) -> bool {
     let mut cursor = self.work_cursor as i32;
     let mut item = &self.work_queue[self.work_cursor as usize];
 
-    while item.parent >= 0 {
-      LUAU_ASSERT!(item.parent < cursor);
-      cursor = item.parent;
+    while item.parent() >= 0 {
+      LUAU_ASSERT!(item.parent() < cursor);
+      cursor = item.parent();
       item = &self.work_queue[cursor as usize];
 
-      // C++ `if (*item == ty)`：等价于 `item.asType()/asTypePack()` 分派后的
-      // 指针比较；`t` 本身即 id 值，此处直接比对原始指针。
-      if item.t == ty {
+      if matches!(item, WorkItem::Type(t, _) if *t == ty) {
+        return true;
+      }
+    }
+
+    false
+  }
+
+  pub(crate) fn is_cyclic_type_pack_id(&self, tp: TypeFunctionTypePackId) -> bool {
+    let mut cursor = self.work_cursor as i32;
+    let mut item = &self.work_queue[self.work_cursor as usize];
+
+    while item.parent() >= 0 {
+      LUAU_ASSERT!(item.parent() < cursor);
+      cursor = item.parent();
+      item = &self.work_queue[cursor as usize];
+
+      if matches!(item, WorkItem::Pack(t, _) if *t == tp) {
         return true;
       }
     }
@@ -164,7 +162,7 @@ impl IterativeTypeFunctionTypeVisitor {
   /// Function→Table→Extern→Generic 逐一匹配，互斥变体下与原 12 次 `get<T>()`
   /// 逐臂求值的可观察结果一致。
   pub(crate) fn process_type_function_type_id(&mut self, ty: TypeFunctionTypeId) {
-    if self.has_seen(ty as *const ()) {
+    if self.has_seen(ty) {
       return;
     }
 
@@ -258,7 +256,7 @@ impl IterativeTypeFunctionTypeVisitor {
       }
     }
 
-    self.unsee(ty as *const ());
+    self.unsee(ty);
   }
 
   /// 对应 C++ `IterativeTypeFunctionTypeVisitor::process(TypeFunctionTypePackId)`
@@ -270,7 +268,7 @@ impl IterativeTypeFunctionTypeVisitor {
   /// `get<T>()` 入口判空，走断言分支返回不被解引用。分支顺序与 C++ 一致：
   /// TypePack→Variadic→GenericTypePack。
   pub(crate) fn process_type_function_type_pack_id(&mut self, tp: TypeFunctionTypePackId) {
-    if self.has_seen(tp as *const ()) {
+    if self.has_seen(tp) {
       return;
     }
 
@@ -304,7 +302,7 @@ impl IterativeTypeFunctionTypeVisitor {
       }
     }
 
-    self.unsee(tp as *const ());
+    self.unsee(tp);
   }
 }
 
@@ -318,13 +316,13 @@ impl IterativeTypeFunctionTypeVisitor {
 
       // 经判别式 Option 取值，unsafe 解引用收敛到 WorkItem 内部的指针转换。
       if let Some(ty) = item.type_function_type_id() {
-        if self.is_cyclic(ty) {
+        if self.is_cyclic_type_id(ty) {
           self.cycle_type_function_type_id(ty);
         } else {
           self.process_type_function_type_id(ty);
         }
       } else if let Some(tp) = item.type_function_type_pack_id() {
-        if self.is_cyclic(tp) {
+        if self.is_cyclic_type_pack_id(tp) {
           self.cycle_type_function_type_pack_id(tp);
         } else {
           self.process_type_function_type_pack_id(tp);
@@ -350,26 +348,16 @@ impl IterativeTypeFunctionTypeVisitor {
 
 impl IterativeTypeFunctionTypeVisitor {
   pub fn traverse_type_function_type_id(&mut self, ty: TypeFunctionTypeId) {
-    self
-      .work_queue
-      .push(WorkItem::work_item_type_function_type_id_i32(
-        ty,
-        self.parent_cursor,
-      ));
+    self.work_queue.push(WorkItem::Type(ty, self.parent_cursor));
   }
 
   pub fn traverse_type_function_type_pack_id(&mut self, tp: TypeFunctionTypePackId) {
-    self
-      .work_queue
-      .push(WorkItem::work_item_type_function_type_pack_id_i32(
-        tp,
-        self.parent_cursor,
-      ));
+    self.work_queue.push(WorkItem::Pack(tp, self.parent_cursor));
   }
 }
 
 impl IterativeTypeFunctionTypeVisitor {
-  pub fn unsee(&mut self, _tv: *const ()) {
+  pub fn unsee<T>(&mut self, _tv: *const T) {
     if !self.visit_once {
       // C++: `seen.erase(tv);`
       //
@@ -449,26 +437,5 @@ default_visit_hooks! {
 impl IterativeTypeFunctionTypeVisitor {
   pub fn visit_type_function_type_pack_id(&mut self, _tp: TypeFunctionTypePackId) -> bool {
     true
-  }
-}
-
-impl IterativeTypeFunctionTypeVisitor {
-  pub fn work_item_type_function_type_id_i32(ty: TypeFunctionTypeId, parent: i32) -> WorkItem {
-    WorkItem {
-      t: ty as *const (),
-      is_type: true,
-      parent,
-    }
-  }
-
-  pub fn work_item_type_function_type_pack_id_i32(
-    tp: TypeFunctionTypePackId,
-    parent: i32,
-  ) -> WorkItem {
-    WorkItem {
-      t: tp as *const (),
-      is_type: false,
-      parent,
-    }
   }
 }

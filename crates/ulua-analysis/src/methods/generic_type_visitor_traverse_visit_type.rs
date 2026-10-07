@@ -49,7 +49,7 @@ fn traverse_type_id_in_limiter<V: GenericTypeVisitorTrait>(this: &mut V, ty: Typ
   // `ty` 是调用方 arena 持有的存活 `Type` 句柄（C++ `traverse(TypeId)` 同契约，
   // 收口于 `type_variant_of`）；本访问者遍历期间类型图不被其自身改写；
   // `seen.has_seen` 只做去重记账，与 `this` 的可变借用（访问者状态）互不别名。
-  if this.visitor_base().seen.has_seen(ty as *const ()) {
+  if this.visitor_base().seen.has_seen(ty) {
     this.cycle_type_id(ty);
     return;
   }
@@ -259,7 +259,7 @@ fn traverse_type_id_in_limiter<V: GenericTypeVisitorTrait>(this: &mut V, ty: Typ
     }
   }
 
-  this.visitor_base().seen.unsee(ty as *const ());
+  this.visitor_base().seen.unsee(ty);
 }
 
 pub fn traverse_type_pack_id<V: GenericTypeVisitorTrait>(this: &mut V, tp: TypePackId) {
@@ -273,7 +273,7 @@ fn traverse_type_pack_id_in_limiter<V: GenericTypeVisitorTrait>(this: &mut V, tp
   // `tp` 是 arena 存活的 `TypePack` 句柄（C++ 同契约，收口于
   // `type_pack_variant_of`），遍历期间 pack 图不被本访问者改写；
   // `seen` 仅做去重记账，与 `this` 状态借用不别名。
-  if this.visitor_base().seen.has_seen(tp as *const ()) {
+  if this.visitor_base().seen.has_seen(tp) {
     this.cycle_type_pack_id(tp);
     return;
   }
@@ -335,5 +335,5 @@ fn traverse_type_pack_id_in_limiter<V: GenericTypeVisitorTrait>(this: &mut V, tp
     }
   }
 
-  this.visitor_base().seen.unsee(tp as *const ());
+  this.visitor_base().seen.unsee(tp);
 }

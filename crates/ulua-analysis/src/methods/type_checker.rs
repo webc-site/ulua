@@ -307,8 +307,20 @@ impl TypeChecker {
 
 impl TypeChecker {
   pub fn child_scope(&mut self, parent: &ScopePtr, location: &Location) -> ScopePtr {
+    self.child_scope_with_level(parent, location, parent.level)
+  }
+
+  /// [`Self::child_scope`] 的 level 定制变体：承接 cpp 注册后经裸指针回写
+  /// `aliasScope->level = scope->level.incr()` 一类的覆写——在 Arc 装箱与
+  /// 共享注册前完成定制，杜绝注册后的强转写。
+  pub fn child_scope_with_level(
+    &mut self,
+    parent: &ScopePtr,
+    location: &Location,
+    level: TypeLevel,
+  ) -> ScopePtr {
     let mut scope_value = Scope::new(parent, 0);
-    scope_value.level = parent.level;
+    scope_value.level = level;
     scope_value.vararg_pack = parent.vararg_pack;
     scope_value.location = *location;
     scope_value.return_type = parent.return_type;

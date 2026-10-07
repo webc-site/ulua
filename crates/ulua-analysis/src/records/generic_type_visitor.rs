@@ -40,25 +40,27 @@ use crate::{
     type_pack_id::TypePackId,
   },
 };
+/// 已访问集合统一入口：键由节点地址（`TypeId`/`TypePackId` 等裸指针别名）
+/// 折算为 [`VisitKey`]，调用点直接传指针别名、不再手写 `as *const ()` 转型。
 pub trait VisitSeen {
-  fn has_seen(&mut self, tv: *const ()) -> bool;
-  fn unsee(&mut self, tv: *const ());
+  fn has_seen<T>(&mut self, tv: *const T) -> bool;
+  fn unsee<T>(&mut self, tv: *const T);
 }
 
 impl VisitSeen for HashSet<VisitKey> {
-  fn has_seen(&mut self, tv: *const ()) -> bool {
+  fn has_seen<T>(&mut self, tv: *const T) -> bool {
     has_seen_visit_type::has_seen(self, tv)
   }
-  fn unsee(&mut self, tv: *const ()) {
+  fn unsee<T>(&mut self, tv: *const T) {
     unsee_visit_type::unsee(self, tv)
   }
 }
 
 impl VisitSeen for DenseHashSet<VisitKey> {
-  fn has_seen(&mut self, tv: *const ()) -> bool {
+  fn has_seen<T>(&mut self, tv: *const T) -> bool {
     has_seen_visit_key(self, tv)
   }
-  fn unsee(&mut self, tv: *const ()) {
+  fn unsee<T>(&mut self, tv: *const T) {
     unsee_visit_key(self, tv)
   }
 }

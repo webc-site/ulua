@@ -1,3 +1,6 @@
+use alloc::sync::Arc;
+use core::ptr::from_ref;
+
 use ulua_ast::records::{
   ast_stat_declare_extern_type::AstStatDeclareExternType, ast_stat_type_alias::AstStatTypeAlias,
 };
@@ -10,12 +13,11 @@ use crate::{
     shared_mut::shared_mut,
   },
   records::{
-    arena_handle::{alias, alias_ref},
+    arena_handle::{alias_arc, alias_ref},
     duplicate_type_definition::DuplicateTypeDefinition,
     extern_type::ExternType,
     free_type::FreeType,
     generic_error::GenericError,
-    scope::Scope,
     table_type::TableType,
     type_checker::TypeChecker,
     type_error::TypeError,
@@ -79,12 +81,11 @@ impl TypeChecker {
           .duplicate_type_aliases
           .insert((typealias.exported, name));
       } else {
-        let alias_scope = self.child_scope(&scope, &typealias.base.base.location);
-        {
-          let alias_scope_raw = alias_scope.as_ref() as *const Scope as *mut Scope;
-          alias(alias_scope_raw).level = scope.level.incr();
-          alias(alias_scope_raw).level.sub_level = sub_level;
-        }
+        // level 定制（cpp `aliasScope->level = scope->level.incr()` + `subLevel`）
+        // 在 Arc 注册前完成，不再经裸指针回写已共享的 Scope。
+        let mut level = scope.level.incr();
+        level.sub_level = sub_level;
+        let alias_scope = self.child_scope_with_level(&scope, &typealias.base.base.location, level);
 
         let defs = self.create_generic_types(
           &alias_scope,
@@ -109,21 +110,22 @@ impl TypeChecker {
           definition_location: Some(typealias.base.base.location),
         };
 
-        let scope_raw = scope.as_ref() as *const Scope as *mut Scope;
+        // Arc<Scope> 注册后的就地写路径：别名物化收口进 alias_arc（单点
+        // unsafe 契约），替代三段 `as_ref() as *const Scope as *mut Scope` 强转。
         if typealias.exported {
-          alias(scope_raw)
+          alias_arc(&scope)
             .exported_type_bindings
             .insert(name.clone(), type_fun);
         } else {
-          alias(scope_raw)
+          alias_arc(&scope)
             .private_type_bindings
             .insert(name.clone(), type_fun);
         }
 
-        alias(scope_raw)
+        alias_arc(&scope)
           .type_alias_locations
           .insert(name.clone(), typealias.base.base.location);
-        alias(scope_raw)
+        alias_arc(&scope)
           .type_alias_name_locations
           .insert(name, typealias.name_location);
       }
@@ -151,7 +153,7 @@ impl TypeChecker {
         );
         self
           .incorrect_extern_type_definitions
-          .insert(declared_extern_type as *const AstStatDeclareExternType);
+          .insert(from_ref(declared_extern_type));
         return;
       }
 
@@ -179,7 +181,7 @@ impl TypeChecker {
         );
         self
           .incorrect_extern_type_definitions
-          .insert(declared_extern_type as *const AstStatDeclareExternType);
+          .insert(from_ref(declared_extern_type));
         return;
       }
     }
@@ -189,7 +191,9 @@ impl TypeChecker {
     let module_name = self.expect_current_module().name.clone();
 
     let scope_level = scope.level;
-    let scope_raw = scope.as_ref() as *const Scope as *mut Scope;
+    // `TableType.scope` 为既有裸指针身份字段（键族，见 records/table_type.rs
+    // 模块注释）：此处以 Arc 数据地址完成构造桥接，逐位同址于原三段强转。
+    let scope_raw = Arc::as_ptr(&scope).cast_mut();
 
     // Safety: `shared_mut(self.current_module.as_ref().expect(..))` 裸化自 `self`
     // 独占持有的 `Arc<Module>`（本函数内单线程、模块存活），`as_ref` 借用仅用于
@@ -231,7 +235,7 @@ impl TypeChecker {
       .expect("class_ty 刚以 ExternType 变体分配（TypeInfer.cpp:1711-1718），下转必然成功")
       .metatable = Some(meta_ty);
 
-    alias(scope_raw).exported_type_bindings.insert(
+    alias_arc(&scope).exported_type_bindings.insert(
       class_name,
       TypeFun {
         type_params: Default::default(),
