@@ -22,7 +22,7 @@ const ERR_ITERATE_OVER: &str = "iterate over";
 
 use core::{
   ffi::c_void,
-  ptr::{null, null_mut},
+  ptr::{NonNull, null},
 };
 
 use ulua_common::{
@@ -933,25 +933,29 @@ fn fuse_ok(l: *mut LuaState) -> bool {
   unsafe { !cfg!(feature = "vm-opcount") && !(*l).singlestep }
 }
 
-/// 在无元表表内快速查找已存在的数字键对应值槽（返回 null 表示未分配或未命中）。
+/// 在无元表表内快速查找已存在的数字键对应值槽。
+///
+/// `None` = 未分配（表尚无 hash 部分，node 即 dummynode）或未命中——缺席语义由
+/// `Option` 承载（review.md §2 规则 1），调用点直接 `if let`/`let Some` 分派，
+/// 不再折回裸 null 哨兵判空。
 ///
 /// # Safety（内部 unsafe 块契约，签名安全：调用方全部是本模块的派发 handler）
 /// `h` 须指向存活的 `LuaTable`。
 #[inline(always)]
-unsafe fn table_hash_find_num(h: *mut LuaTable, n: f64) -> *mut TValue {
+unsafe fn table_hash_find_num(h: *mut LuaTable, n: f64) -> Option<NonNull<TValue>> {
   // SAFETY: 契约由调用方保证，h 指向存活表且其 node 数组在界内
   unsafe {
     if eq((*h).node, dummynode) {
-      return null_mut();
+      return None;
     }
     let mut node = hashnum(&*h, n);
     loop {
       if (*node).key.is_number() && luai_numeq((*node).key.as_number(), n) {
-        return gval!(node);
+        return NonNull::new(gval!(node));
       }
       let next = (*node).key.next();
       if next == 0 {
-        return null_mut();
+        return None;
       }
       node = node.offset(next as isize);
     }
@@ -1054,13 +1058,10 @@ fn fuse_succ_gettable(
       if (*h).metatable.is_null() && index as f64 == indexd {
         if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32 {
           setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
+        } else if let Some(val) = table_hash_find_num(h, indexd) {
+          setobj_2_s!(l, ra, val.as_ptr());
         } else {
-          let val = table_hash_find_num(h, indexd);
-          if val.is_null() {
-            setnilvalue!(ra);
-          } else {
-            setobj_2_s!(l, ra, val);
-          }
+          setnilvalue!(ra);
         }
         return fuse_jumpifnot(l, pc.add(1), base, cl);
       }
@@ -1256,12 +1257,12 @@ fn fuse_succ_settable(
       return pc;
     }
     let slot = if (index as u32).wrapping_sub(1) < (*h).sizearray as u32 {
-      (*h).array.add((index - 1) as u32 as usize)
+      NonNull::new((*h).array.add((index - 1) as u32 as usize))
     } else {
       table_hash_find_num(h, indexd)
     };
-    if !slot.is_null() {
-      setobj2t!(l, slot, ra);
+    if let Some(slot) = slot {
+      setobj2t!(l, slot.as_ptr(), ra);
       fuse_succ_fornloop(l, pc.add(1), base, cl)
     } else {
       pc
@@ -1647,13 +1648,10 @@ fn h_gettable(
       if (*h).metatable.is_null() && index as f64 == indexd {
         if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32 {
           setobj_2_s!(l, ra, (*h).array.add((index - 1) as u32 as usize));
+        } else if let Some(val) = table_hash_find_num(h, indexd) {
+          setobj_2_s!(l, ra, val.as_ptr());
         } else {
-          let val = table_hash_find_num(h, indexd);
-          if val.is_null() {
-            setnilvalue!(ra);
-          } else {
-            setobj_2_s!(l, ra, val);
-          }
+          setnilvalue!(ra);
         }
         // fannkuch 等表格拷贝循环（GETTABLE -> SETTABLE -> FORNLOOP 回边本指令）紧致超循环
         if fuse_ok(l)
@@ -1703,17 +1701,17 @@ fn h_gettable(
                   let cur_index = idx as i32;
                   let array_idx = (cur_index as u32).wrapping_sub(1);
                   let dst_slot = if array_idx < dst_sizearray {
-                    dst_array.add(array_idx as usize)
+                    NonNull::new(dst_array.add(array_idx as usize))
                   } else {
                     table_hash_find_num(dst_h, idx)
                   };
-                  if dst_slot.is_null() {
+                  let Some(mut dst_slot) = dst_slot else {
                     break;
-                  }
+                  };
                   if luaC_barriert_pending!(dst_h, ra) {
                     break;
                   }
-                  *dst_slot = *ra;
+                  *dst_slot.as_mut() = *ra;
 
                   forn_backedge_heat_tick(l, forn_pc, &*cl);
                   idx += step;
@@ -1745,13 +1743,10 @@ fn h_gettable(
                   let next_array_idx = (next_cur as u32).wrapping_sub(1);
                   if next_array_idx < src_sizearray {
                     *ra = *src_array.add(next_array_idx as usize);
+                  } else if let Some(val) = table_hash_find_num(h, idx) {
+                    *ra = *val.as_ref();
                   } else {
-                    let val = table_hash_find_num(h, idx);
-                    if val.is_null() {
-                      setnilvalue!(ra);
-                    } else {
-                      *ra = *val;
-                    }
+                    setnilvalue!(ra);
                   }
                 }
               }
@@ -2055,14 +2050,14 @@ fn h_loadb(
               }
               let array_idx = (index as u32).wrapping_sub(1);
               let slot = if array_idx < sizearray {
-                array.add(array_idx as usize)
+                NonNull::new(array.add(array_idx as usize))
               } else {
                 table_hash_find_num(h, idx)
               };
-              if slot.is_null() {
+              let Some(slot) = slot else {
                 break;
-              }
-              *slot = val;
+              };
+              *slot.as_ptr() = val;
 
               if !backedge_idle(l) {
                 return s_fornloop(l, forn_pc, base, k, cl);
@@ -2355,12 +2350,12 @@ fn h_settable(
       // index has to be an exact integer and no metamethod
       if (*h).metatable.is_null() && (*h).readonly == 0 && index as f64 == indexd {
         let slot = if ((index as u32).wrapping_sub(1)) < (*h).sizearray as u32 {
-          (*h).array.add((index - 1) as u32 as usize)
+          NonNull::new((*h).array.add((index - 1) as u32 as usize))
         } else {
           table_hash_find_num(h, indexd)
         };
-        if !slot.is_null() {
-          setobj2t!(l, slot, ra);
+        if let Some(slot) = slot {
+          setobj2t!(l, slot.as_ptr(), ra);
           // 同 [`h_settablen`]：屏障谓词无调用、就地判，只有真要 mark 才交续延
           if luaC_barriert_pending!(h, ra) {
             return s_settable_bar(l, pc, base, k, cl);
