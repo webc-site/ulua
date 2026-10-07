@@ -1,5 +1,5 @@
 use alloc::{boxed::Box, vec::Vec};
-use core::ffi::c_void;
+use core::{ffi::c_void, ptr::NonNull};
 
 use ulua_vm::records::lua_state::LuaState;
 
@@ -60,7 +60,8 @@ pub trait NavigationContext {
   /// 形态的载荷（lightuserdata 转手槽地址）：实现方交出的地址由
   /// `extract_config` 在配置执行的同步窗口内单点挂接，仅需在该窗口内存活；
   /// 中断回调经 `lua_getthreaddata` 在窗口内还原。
-  fn luau_config_thread_data(&self) -> Option<*mut c_void> {
+  /// `Option` 即「无配对上下文」，`Some` 恒非空（review.md §2）。
+  fn luau_config_thread_data(&self) -> Option<NonNull<c_void>> {
     None
   }
 
