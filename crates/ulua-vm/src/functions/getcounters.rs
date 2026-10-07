@@ -1,7 +1,7 @@
 use core::{
   ffi::c_void,
   mem::size_of,
-  ptr::{NonNull, null, read_unaligned},
+  ptr::{null, read_unaligned},
 };
 
 use crate::{
@@ -36,16 +36,17 @@ pub(crate) fn getcounters(
       let global = l.global;
       // if let 替代 is_none + unwrap，Option 由类型系统收口非空
       let mut count: usize = 0;
-      // 「global 缺席 / 回调未安装 / 宿主返回 null」三态经 Option/NonNull 并为同一
-      // `None`（review.md §2 规则 1），不再折回裸 null 哨兵后判空
+      // 「global 缺席 / 回调未安装 / 宿主返回空」三态经 `Option<NonNull<u8>>` 并为同一
+      // `None`（review.md §2 规则 1）：计数向量首址是字节地址而非 C 串，槽位已直接产出
+      // 类型化缺席，故此处不再 `NonNull::new` 包裹裸指针、也不折回 `null_mut` 哨兵判空。
       let data = if !global.is_null()
         && let Some(getcounterdata) = (*global).ecb.getcounterdata
       {
-        NonNull::new(getcounterdata(
+        getcounterdata(
           l.read_ptr(),
           (p as *const Proto).cast_mut(),
           &mut count as *mut usize,
-        ))
+        )
       } else {
         None
       };
@@ -75,7 +76,7 @@ pub(crate) fn getcounters(
       // SAFETY: 契约保证宿主反馈向量覆盖 `count * COUNTER_SLOT_SIZE` 字节且在本轮消费期内
       // 存活；`read_unaligned` 逐槽非对齐读取限于该切片界内。
       unsafe {
-        let slots = c_slice(data as *const u8, count * COUNTER_SLOT_SIZE);
+        let slots = c_slice(data, count * COUNTER_SLOT_SIZE);
         for slot in slots.as_chunks::<COUNTER_SLOT_SIZE>().0 {
           let kind = read_unaligned(slot.as_ptr() as *const u32);
           let pcpos = read_unaligned(slot[size_of::<u32>()..].as_ptr() as *const u32);
