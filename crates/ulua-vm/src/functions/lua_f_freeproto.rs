@@ -16,20 +16,20 @@ use crate::{
 /// # Safety
 /// `f` 的 `k_retired` 链须为本模块 `proto_k_intern_string` 挂载的自洽链表
 /// （节点与 `ptr` 均为同 `memcat` 的 `luaM` 分配），且无并发访问。
-unsafe fn free_retired_k_arrays(l: *mut LuaState, head: *mut RetiredKArray) {
+fn free_retired_k_arrays(l: *mut LuaState, head: *mut RetiredKArray) {
   unsafe {
     let mut node = head;
     while !node.is_null() {
       let next = (*node).next;
       lua_m_free(
         l,
-        (*node).ptr as *mut u8,
+        (*node).ptr.cast::<u8>(),
         (*node).size * size_of::<TValue>(),
         (*node).memcat,
       );
       lua_m_free(
         l,
-        node as *mut u8,
+        node.cast::<u8>(),
         size_of::<RetiredKArray>(),
         (*node).memcat,
       );
@@ -43,26 +43,26 @@ unsafe fn free_retired_k_arrays(l: *mut LuaState, head: *mut RetiredKArray) {
 /// `lineinfo/debuginsn/execdata/typeinfo/feedbackvec` 各段须由对应 `size*` 字段界定的已分配区间（用 `(*f).hdr.memcat` 记账）；
 /// `page` 允许 NULL（交由 `lua_m_freegco` 归还）。execdata 非空时回调 `ecb.destroy`。释放后 `f` 不得再被引用，须在无并发访问该 proto 时调用。
 /// cpp VM/src/lfunc.cpp:173
-pub(crate) unsafe fn lua_f_freeproto(l: *mut LuaState, f: *mut Proto, page: *mut lua_Page) {
+pub(crate) fn lua_f_freeproto(l: *mut LuaState, f: *mut Proto, page: *mut lua_Page) {
   unsafe {
     // cpp lfunc.cpp:29 luaF_freeproto：各字段读取集中在 free 前，绑定引用消除重复解引用
     let p = &*f;
     free_retired_k_arrays(l, p.k_retired);
     lua_m_free(
       l,
-      p.code as *mut u8,
+      p.code.cast::<u8>(),
       p.sizecode as usize * size_of::<Instruction>(),
       p.hdr.memcat,
     );
     lua_m_free(
       l,
-      p.p as *mut u8,
+      p.p.cast::<u8>(),
       p.sizep as usize * size_of::<*mut Proto>(),
       p.hdr.memcat,
     );
     lua_m_free(
       l,
-      p.k as *mut u8,
+      p.k.cast::<u8>(),
       p.sizek as usize * size_of::<TValue>(),
       p.hdr.memcat,
     );
@@ -76,13 +76,13 @@ pub(crate) unsafe fn lua_f_freeproto(l: *mut LuaState, f: *mut Proto, page: *mut
     }
     lua_m_free(
       l,
-      p.locvars as *mut u8,
+      p.locvars.cast::<u8>(),
       p.sizelocvars as usize * size_of::<LocVar>(),
       p.hdr.memcat,
     );
     lua_m_free(
       l,
-      p.upvalues as *mut u8,
+      p.upvalues.cast::<u8>(),
       p.sizeupvalues as usize * size_of::<*mut tstring>(),
       p.hdr.memcat,
     );
@@ -113,7 +113,7 @@ pub(crate) unsafe fn lua_f_freeproto(l: *mut LuaState, f: *mut Proto, page: *mut
     if !p.feedbackvec.is_null() {
       lua_m_free(
         l,
-        p.feedbackvec as *mut u8,
+        p.feedbackvec.cast::<u8>(),
         p.feedbackvecsize as usize * size_of::<FeedbackVectorSlot>(),
         p.hdr.memcat,
       );
@@ -121,7 +121,7 @@ pub(crate) unsafe fn lua_f_freeproto(l: *mut LuaState, f: *mut Proto, page: *mut
 
     lua_m_freegco(
       l,
-      f as *mut GCObject,
+      f.cast::<GCObject>(),
       size_of::<Proto>(),
       p.hdr.memcat,
       page,

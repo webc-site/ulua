@@ -15,7 +15,7 @@ use crate::{
 /// （`bucket_of` 取模语义依赖），`luaM_newarray`/`luaM_freearray` 可 OOM 抛错；调用须在
 /// GC 之外、所有内联/外联 `tstring` 仍挂在旧桶链上时进行（逐一 rehash 到新表）。
 /// cpp `lstring.cpp:45`。
-pub(crate) unsafe fn lua_s_resize(l: *mut LuaState, newsize: i32) {
+pub(crate) fn lua_s_resize(l: *mut LuaState, newsize: i32) {
   unsafe {
     let newhash = luaM_newarray!(l, newsize as usize, *mut tstring, 0);
     // SAFETY: luaM_newarray 契约为 newsize 个 *mut tstring 槽的已分配数组；

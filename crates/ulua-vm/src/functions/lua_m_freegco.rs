@@ -14,7 +14,7 @@ use crate::{
 /// `osize == 0 ⟺ block == null`（cpp lmem.cpp:695）：小对象经 `sizeclass!` 查表归还页链，
 /// 大对象则 `page` 必须是 `block` 所属单页（`busy_blocks == 1` 断言兜底），`memcat` 须与
 /// 分配时一致以回退 `totalbytes/memcatbytes` 记账。
-pub(crate) unsafe fn lua_m_freegco(
+pub(crate) fn lua_m_freegco(
   l: *mut LuaState,
   block: *mut GCObject,
   osize: usize,

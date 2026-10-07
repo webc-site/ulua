@@ -8,7 +8,7 @@ use crate::{
 /// `l` 须为存活 LuaState 且 `(*l).global` 有效（更新 `totalbytes`/`memcatbytes[memcat]` 记账）；`block` 须为先前
 /// 由同尺寸 `osize` 分配的块或 `NULL`（`LUAU_ASSERT` 要求 `osize == 0` 当且仅当 `block` 为空）；`memcat` 须 `< MEMCAT__COUNT`
 /// 以在界内索引 `memcatbytes`。小尺寸走 `freeblock` 页内回收，否则调 `frealloc` 用户回调。cpp/VM/src/lmem.cpp:674 luaM_free_。
-pub(crate) unsafe fn lua_m_free(l: *mut LuaState, block: *mut u8, osize: usize, memcat: u8) {
+pub(crate) fn lua_m_free(l: *mut LuaState, block: *mut u8, osize: usize, memcat: u8) {
   unsafe {
     let g = (*l).global;
     LUAU_ASSERT!((osize == 0) == block.is_null());

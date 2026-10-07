@@ -19,7 +19,7 @@ const K_GCO_LINK_OFFSET: usize =
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn newgcoblock(l: *mut LuaState, size_class: i32) -> *mut u8 {
+pub(crate) fn newgcoblock(l: *mut LuaState, size_class: i32) -> *mut u8 {
   unsafe {
     let g: *mut global_State = (*l).global;
     // freegcopages 即 [*mut lua_Page; LUA_SIZECLASSES]（cpp `freepages[sizeClass]` 同款）：
