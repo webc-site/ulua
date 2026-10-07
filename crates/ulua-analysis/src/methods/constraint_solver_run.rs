@@ -1,0 +1,317 @@
+//! `void ConstraintSolver::run()` (`Analysis/src/ConstraintSolver.cpp:506-765`,
+//! the main solver loop, hand-ported faithfully). The C++ `runSolverPass` lambda
+//! is lowered to the private `run_solver_pass` method below.
+
+use alloc::{string::String, vec::Vec};
+use core::ptr::NonNull;
+
+use ulua_ast::records::location::Location;
+use ulua_common::{
+  fflag, fint,
+  functions::get_clock::get_clock,
+  macros::luau_assert::LUAU_ASSERT,
+  records::{dense_hash_set::DenseHashSet, variant::Variant2},
+};
+
+use crate::{
+  functions::{
+    dump_bindings::dump_bindings,
+    dump_constraint_solver::dump,
+    follow_type,
+    to_string_to_string::{to_string_constraint_to_string_options, to_string_type_id},
+  },
+  records::{
+    arena_handle::{alias, alias_ref},
+    blocked_constraint_registry::register_constraint,
+    constraint::Constraint,
+    constraint_solver::ConstraintSolver,
+    constraint_solving_incomplete_error::ConstraintSolvingIncompleteError,
+  },
+  type_aliases::{
+    blocked_constraint_id::BlockedConstraintId, module_name_type::ModuleName, type_id::TypeId,
+  },
+};
+impl ConstraintSolver {
+  pub fn constraint_solver_run(&mut self) {
+    // LUAU_TIMETRACE_SCOPE("ConstraintSolver::run", "Typechecking");
+
+    if self.is_done() {
+      return;
+    }
+
+    if fflag::DebugLuauLogSolver.get() {
+      let (human, name) = match &self.module {
+        Some(m) => (m.human_readable_name.clone(), m.name.clone()),
+        None => (String::new(), ModuleName::new()),
+      };
+      println!("Starting solver for module {} ({})", human, name);
+      let mut opts = self.opts.clone();
+      dump(self, &mut opts);
+      self.opts = opts;
+      println!("Bindings:");
+      dump_bindings(self.root_scope_ref(), &mut self.opts.clone());
+    }
+
+    if !self.logger.is_null() {
+      let unsolved = self.unsolved_constraints.clone();
+      // is_null 短路在先；logger 为 SolverParams 注入、活过整个求解过程的可空
+      // 裸句柄，alias 单点物化为独占借用。root_scope 契约见 `root_scope_ref`。
+      alias(self.logger).capture_initial_solver_state(self.root_scope_ref(), &unsolved);
+    }
+
+    // Free types that have no constraints at all can be generalized right away.
+    // 单一快照供两分支共用；循环期间 callee 可能回写 free_types，不可 take。
+    let free_types: Vec<TypeId> = self.constraint_set.free_types.order.clone();
+    if fflag::LuauConstraintGraph.get() {
+      // TODO CLI-206649: We can fold constraint set into constraint graph.
+      LUAU_ASSERT!(!self.cgraph.is_null());
+      for ty in free_types {
+        if !alias(self.cgraph).has_unsolved_dependencies(BlockedConstraintId::V0(ty)) {
+          self.generalize_one_type(ty);
+        }
+      }
+    } else {
+      for ty in free_types {
+        let empty = match self.deprecated_type_to_constraint_set.get(&ty) {
+          Some(set) => set.is_empty(),
+          None => true,
+        };
+        if empty {
+          self.generalize_one_type(ty);
+        }
+      }
+    }
+
+    self.constraint_set.free_types.clear();
+
+    loop {
+      let mut progress = self.run_solver_pass(false);
+      if !progress {
+        progress |= self.run_solver_pass(true);
+      }
+      if !progress {
+        break;
+      }
+    }
+
+    if !self.unsolved_constraints.is_empty() {
+      self.report_error_type_error_data_location(
+        ConstraintSolvingIncompleteError.into(),
+        &Location::default(),
+      );
+    }
+
+    // After we have run all the constraints, type functions should be generalized
+    // At this point, we can try to perform one final simplification to suss out
+    // whether type functions are truly uninhabited or if they can reduce
+
+    self.constraint_solver_finalize_type_functions();
+
+    if fflag::DebugLuauLogSolver.get() || fflag::DebugLuauLogBindings.get() {
+      dump_bindings(self.root_scope_ref(), &mut self.opts.clone());
+    }
+
+    if !self.logger.is_null() {
+      let unsolved = self.unsolved_constraints.clone();
+      alias(self.logger).capture_final_solver_state(self.root_scope_ref(), &unsolved);
+    }
+  }
+
+  /// 两处「快照→generalizeOneType→提交」序列合一（cpp ConstraintSolver.cpp:598-612；
+  /// deprecated 路径为旧版 cpp 同款重复）。
+  fn generalize_logging_snapshot(&mut self, ty: TypeId) {
+    let mut snap = None;
+    if !self.logger.is_null() {
+      let unsolved = self.unsolved_constraints.clone();
+      // is_null 短路在先；prepare_* 返回按值快照，借用止于本次调用。
+      snap = Some(alias(self.logger).prepare_generalization_snapshot(
+        to_string_type_id(ty),
+        self.root_scope_ref(),
+        &unsolved,
+      ));
+    }
+
+    self.generalize_one_type(ty);
+
+    // snap 为 Some 蕴含 logger 非空。
+    if let Some(mut s) = snap {
+      s.after = to_string_type_id(ty);
+      // snap 为 Some 蕴含 logger 非空且自构造后无改写点。
+      alias(self.logger).commit_step_snapshot(Variant2::V1(s));
+    }
+  }
+
+  /// C++ `auto runSolverPass = [&](bool force) { ... };`
+  fn run_solver_pass(&mut self, force: bool) -> bool {
+    let mut progress = false;
+
+    // i 为保序删除坐标（成功时 unsolved_constraints.remove(i) 后不前进），且循环体
+    // 多次可变借用 self，迭代器无法表达，保留下标遍历。
+    let mut i: usize = 0;
+    while i < self.unsolved_constraints.len() {
+      // `c` 取自 unsolved_constraints——其元素是指向 solver_constraints 中
+      // Box<Constraint> 的非空裸指针（NotNull 语义：入 vec 时即非空；Box 堆址
+      // 稳定，且 unsolved 移除只删指针不释放 Box，Constraint 活过本循环）。
+      let c: *const Constraint = self.unsolved_constraints[i];
+      if fflag::LuauConstraintGraph.get() {
+        if !force
+          && alias(self.cgraph)
+            .has_unsolved_dependencies(BlockedConstraintId::V2(register_constraint(c)))
+        {
+          i += 1;
+          continue;
+        }
+      } else if !force && self.deprecate_d_is_blocked(c) {
+        i += 1;
+        continue;
+      }
+
+      if let Some(finish_time) = self.limits.finish_time()
+        && get_clock() > finish_time
+      {
+        self.constraint_solver_throw_time_limit_error();
+      }
+      if let Some(token) = self.limits.cancellation_token()
+        && token.requested()
+      {
+        self.constraint_solver_throw_user_cancel_error();
+      }
+
+      // If we were _given_ a limit, and the current limit has hit zero,
+      // then early exit from constraint solving.
+      if fint::LuauSolverConstraintLimit.get() > 0 && self.solver_constraint_limit == 0 {
+        break;
+      }
+
+      let save_me: String = if fflag::DebugLuauLogSolver.get() {
+        // c 非空且指向 solver_constraints 保活的 Box<Constraint>，alias_ref 单点
+        // 物化为只读共享借用，仅用于字符串化。
+        to_string_constraint_to_string_options(alias_ref(c), &mut self.opts.clone())
+      } else {
+        String::new()
+      };
+
+      let mut snapshot = None;
+      if !self.logger.is_null() {
+        let unsolved = self.unsolved_constraints.clone();
+        // is_null 短路保证 logger 非空；root_scope 契约见 `root_scope_ref`；
+        // c 存活如上；返回按值快照。
+        snapshot = Some(alias(self.logger).prepare_step_snapshot(
+          self.root_scope_ref(),
+          c,
+          force,
+          &unsolved,
+        ));
+      }
+
+      if fflag::DebugLuauAssertOnForcedConstraint.get() {
+        LUAU_ASSERT!(!force);
+      }
+
+      // c 指向上文取出的 solver_constraints 存活 Box<Constraint>（NotNull：非空，
+      // 地址稳定至求解结束）；alias_ref 单点物化为共享再借交给分发逻辑只读
+      // （对应 C++ `tryDispatch(const Constraint& c, ...)`），Box 不会被并发
+      // 释放——本函数持有 `&mut self`，unsolved/solver 两 vec 都不变。
+      let success = self.try_dispatch_not_null_constraint_bool(alias_ref(c), force);
+
+      progress |= success;
+
+      if success {
+        if !self.logger.is_null()
+          && let Some(snap) = snapshot.take()
+        {
+          alias(self.logger).commit_step_snapshot(Variant2::V0(snap));
+        }
+
+        if fflag::LuauConstraintGraph.get() {
+          LUAU_ASSERT!(!self.cgraph.is_null());
+          let unblock_result = alias(self.cgraph).unblock_constraint(
+            NonNull::new(c.cast_mut()).expect("c 为刚 add/入队的存活约束指针，非空"),
+          );
+
+          // We need to handle the logger here.
+          if !self.logger.is_null() {
+            alias(self.logger).pop_block_not_null_constraint(c);
+          }
+
+          self.unsolved_constraints.remove(i);
+
+          let unblocked_types: Vec<TypeId> = unblock_result.types.order.clone();
+          for ty in unblocked_types {
+            if !alias(self.cgraph).has_unsolved_dependencies(BlockedConstraintId::V0(ty)) {
+              self.generalize_logging_snapshot(ty);
+              self.unblock_type_id_location(ty, Location::default());
+            }
+          }
+
+          // TODO CLI-206534: We never eagerly generalize free type
+          // packs. Maybe we should.
+        } else {
+          self.constraint_solver_deprecate_d_unblock(c);
+          self.unsolved_constraints.remove(i);
+          if let Some(entry) = self.deprecated_constraint_to_mutated_types.find(&c) {
+            let mutated: Vec<TypeId> = entry.order.clone();
+            let mut seen: DenseHashSet<TypeId> = DenseHashSet::default();
+            for ty in mutated {
+              // There is a high chance that this type has been rebound
+              // across blocked types, rebound free types, pending
+              // expansion types, etc, so we need to follow it.
+              let ty = follow_type::follow(ty);
+              if seen.contains(&ty) {
+                continue;
+              }
+              seen.insert(ty);
+
+              let present = self.deprecated_type_to_constraint_set.contains_key(&ty);
+              if present {
+                let (became_small, became_empty) = {
+                  let set = self
+                    .deprecated_type_to_constraint_set
+                    .get_mut(&ty)
+                    .expect("紧邻上方 contains_key(&ty) 同判据为真蕴含 get_mut 必命中");
+                  set.remove(&c);
+                  (set.len() <= 1, set.is_empty())
+                };
+                if became_small {
+                  self.unblock_type_id_location(ty, Location::default());
+                }
+
+                if became_empty {
+                  self.generalize_logging_snapshot(ty);
+                }
+              }
+            }
+          }
+        }
+
+        if fflag::DebugLuauLogSolver.get() {
+          if force {
+            std::print!("Force ");
+          }
+          std::print!("Dispatched\n\t{}\n", save_me);
+
+          if force && fflag::LuauConstraintGraph.get() {
+            let mut opts = self.opts.clone();
+            alias(self.cgraph).dump_blocked(
+              NonNull::new(c.cast_mut()).expect("c 指向存活 Box，非空"),
+              &mut opts,
+            );
+            self.opts = opts;
+          }
+
+          let mut opts = self.opts.clone();
+          dump(self, &mut opts);
+          self.opts = opts;
+        }
+      } else {
+        i += 1;
+      }
+
+      if force && success {
+        return true;
+      }
+    }
+
+    progress
+  }
+}

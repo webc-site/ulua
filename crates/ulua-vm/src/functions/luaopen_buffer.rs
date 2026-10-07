@@ -1,0 +1,142 @@
+use ulua_common::fflag;
+
+use crate::{
+  functions::{
+    buffer_copy::buffer_copy_arm, buffer_create::buffer_create_arm, buffer_fill::buffer_fill_arm,
+    buffer_fromstring::buffer_fromstring_arm, buffer_len::buffer_len_arm,
+    buffer_readbits::buffer_readbits_arm, buffer_readfp::buffer_readfp,
+    buffer_readinteger::buffer_readinteger, buffer_readlong::buffer_readlong_arm,
+    buffer_readstring::buffer_readstring_arm, buffer_tostring::buffer_tostring_arm,
+    buffer_writebits::buffer_writebits_arm, buffer_writefp::buffer_writefp,
+    buffer_writeinteger::buffer_writeinteger, buffer_writelong::buffer_writelong_arm,
+    buffer_writestring::buffer_writestring_arm, lua_l_register::lua_l_register_bytes,
+  },
+  macros::lua_lib_fn::lua_lib_fn,
+  records::{lua_l_reg::LuaLReg, lua_state::LuaState},
+};
+/// 模块名（bytes 键契约：`lua_l_register_bytes` 的 `libname` 直接作 `_LOADED`/全局表
+/// 键，不含尾部 `\0`；§10 不引入 C 字符串类型）。
+const LIB_BUFFER: &[u8] = b"buffer";
+
+/// 泛型函数不能声明为 `extern "C"`，为每个宽度生成具体包装（FFI 注册表需要 C ABI）。
+macro_rules! integer_wrappers {
+  ($(($name:ident, $fn:ident, $ty:ty)),+ $(,)?) => {
+    $(
+      /// # Safety
+      /// `l` 须为存活 LuaState 且已处于本 C 函数的受保护调用帧：栈上按 buffer 库约定备好参数
+      /// （1 号 buffer、2 号偏移等，`$fn::<$ty>` 会经 checkbuffer/checkinteger 读取并按需抛错/触发 GC）。
+      /// 本帧把裸指针重建为独占引用（`&mut *l`），重建窗口即本次调用。
+      /// cpp/VM/src/lbuflib.cpp:67 buffer_readinteger、:88 buffer_writeinteger。
+      unsafe extern "C-unwind" fn $name(l: *mut LuaState) -> i32 {
+        unsafe { $fn::<$ty>(&mut *l) }
+      }
+    )+
+  };
+}
+
+integer_wrappers! {
+  (buffer_readinteger_i8, buffer_readinteger, i8),
+  (buffer_readinteger_u8, buffer_readinteger, u8),
+  (buffer_readinteger_i16, buffer_readinteger, i16),
+  (buffer_readinteger_u16, buffer_readinteger, u16),
+  (buffer_readinteger_i32, buffer_readinteger, i32),
+  (buffer_readinteger_u32, buffer_readinteger, u32),
+  (buffer_writeinteger_i8, buffer_writeinteger, i8),
+  (buffer_writeinteger_u8, buffer_writeinteger, u8),
+  (buffer_writeinteger_i16, buffer_writeinteger, i16),
+  (buffer_writeinteger_u16, buffer_writeinteger, u16),
+  (buffer_writeinteger_i32, buffer_writeinteger, i32),
+  (buffer_writeinteger_u32, buffer_writeinteger, u32),
+}
+
+macro_rules! fp_wrappers {
+  ($(($name:ident, $fn:ident, $ty:ty)),+ $(,)?) => {
+    $(
+      /// # Safety
+      /// `l` 须为存活 LuaState 且处于本 C 函数的受保护调用帧，栈上备好 buffer 库约定参数
+      /// （`$fn::<$ty>` 读取 buffer/偏移并按需抛错/GC，`$ty` 为编译期选定并经
+      /// `SwapBe` 位宽对固化的浮点宽度）。
+      /// 本帧把裸指针重建为独占引用（`&mut *l`），重建窗口即本次调用。
+      /// cpp/VM/src/lbuflib.cpp:147 buffer_readfp、:174 buffer_writefp。
+      unsafe extern "C-unwind" fn $name(l: *mut LuaState) -> i32 {
+        unsafe { $fn::<$ty>(&mut *l) }
+      }
+    )+
+  };
+}
+
+fp_wrappers! {
+  (buffer_readfp_f32, buffer_readfp, f32),
+  (buffer_readfp_f64, buffer_readfp, f64),
+  (buffer_writefp_f32, buffer_writefp, f32),
+  (buffer_writefp_f64, buffer_writefp, f64),
+}
+
+// 共享基表（integer 开关不影响的前 26 个条目，编译期拼接出两个注册表）
+const BUFFER_BASE: [LuaLReg; 26] = [
+  LuaLReg::new(b"create", buffer_create_arm),
+  LuaLReg::new(b"fromstring", buffer_fromstring_arm),
+  LuaLReg::new(b"tostring", buffer_tostring_arm),
+  LuaLReg::new(b"readi8", buffer_readinteger_i8),
+  LuaLReg::new(b"readu8", buffer_readinteger_u8),
+  LuaLReg::new(b"readi16", buffer_readinteger_i16),
+  LuaLReg::new(b"readu16", buffer_readinteger_u16),
+  LuaLReg::new(b"readi32", buffer_readinteger_i32),
+  LuaLReg::new(b"readu32", buffer_readinteger_u32),
+  LuaLReg::new(b"readf32", buffer_readfp_f32),
+  LuaLReg::new(b"readf64", buffer_readfp_f64),
+  LuaLReg::new(b"writei8", buffer_writeinteger_i8),
+  LuaLReg::new(b"writeu8", buffer_writeinteger_u8),
+  LuaLReg::new(b"writei16", buffer_writeinteger_i16),
+  LuaLReg::new(b"writeu16", buffer_writeinteger_u16),
+  LuaLReg::new(b"writei32", buffer_writeinteger_i32),
+  LuaLReg::new(b"writeu32", buffer_writeinteger_u32),
+  LuaLReg::new(b"writef32", buffer_writefp_f32),
+  LuaLReg::new(b"writef64", buffer_writefp_f64),
+  LuaLReg::new(b"readstring", buffer_readstring_arm),
+  LuaLReg::new(b"writestring", buffer_writestring_arm),
+  LuaLReg::new(b"len", buffer_len_arm),
+  LuaLReg::new(b"copy", buffer_copy_arm),
+  LuaLReg::new(b"fill", buffer_fill_arm),
+  LuaLReg::new(b"readbits", buffer_readbits_arm),
+  LuaLReg::new(b"writebits", buffer_writebits_arm),
+];
+
+// integer 开启时追加 readinteger/writeinteger（转调 buffer_readlong/writelong）
+const INTEGER_TAIL: [LuaLReg; 2] = [
+  LuaLReg::new(b"readinteger", buffer_readlong_arm),
+  LuaLReg::new(b"writeinteger", buffer_writelong_arm),
+];
+
+// 编译期拼接注册表：`split_at_mut`/`copy_from_slice` 已 const 稳定（1.83+），
+// 两段整块拷入，免去 i/j 下标游走（const fn 内切片下标走 IndexMut const trait 仍未稳）
+const fn join<const N: usize>(a: &[LuaLReg], b: &[LuaLReg]) -> [LuaLReg; N] {
+  let mut out = [a[0]; N];
+  let (head, tail) = out.split_at_mut(a.len());
+  head.copy_from_slice(a);
+  tail.copy_from_slice(b);
+  out
+}
+
+static BUFFER_LIB: [LuaLReg; 28] = join::<28>(&BUFFER_BASE, &INTEGER_TAIL);
+
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载，
+/// r12-w6 收形后本体降为安全 `fn`；r12-w6d 姊妹门面 `lua_l_register_bytes` 亦降为安全
+/// `fn`，其内部裸操作由被调自身窄块与契约承担）：`l` 须为可分配、可抛错的受保护帧且
+/// 栈顶之上至少留 1 空槽（`lua_l_register_bytes` 会 push 库表并作为返回值）；
+/// `BUFFER_LIB`/`BUFFER_BASE` 为本文件静态的合法 C 臂表，名字为不含尾部 `\0` 的静态
+/// 字节切片，满足其切片契约。
+/// cpp/VM/src/lbuflib.cpp:433 luaopen_buffer。
+pub fn luaopen_buffer(l: &mut LuaState) -> i32 {
+  let buffer_lib: &[LuaLReg] = if fflag::LuauIntegerLibrary.get() {
+    &BUFFER_LIB
+  } else {
+    &BUFFER_BASE
+  };
+
+  lua_l_register_bytes(l, Some(LIB_BUFFER), buffer_lib);
+
+  1
+}
+
+lua_lib_fn!(pub fn luaopen_buffer @ref, luaopen_buffer_arm);

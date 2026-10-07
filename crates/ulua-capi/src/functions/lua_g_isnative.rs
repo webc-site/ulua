@@ -1,0 +1,6 @@
+//! 本文件对应 `ulua_luaG_isnative` 导出符号（源：ulua-vm/src/functions/lua_g_isnative.rs）。
+//! 导出壳为 `functions/shells.rs` 中模板宏 `capi_shell_l_int!` 的 `@refshared` 只读引用重建
+//! 变体臂一次调用（r16-v37 地基票：本壳曾因 vm 核心前移为 `&LuaState` 只读接收者而退役为显式壳，
+//! 见 `lua_xmove.rs`/`lua_status.rs` 显式壳先例；该缺位已由 `@refshared` 臂补足，故复归宏模板
+//! 单源）。导出符号名与函数名不同形，故符号以字面量入参，同 `capi_shell_tkeyval!` 先例；壳契约见宏模板。
+capi_shell_l_int!(lua_g_isnative, lua_g_isnative, "ulua_luaG_isnative", level @refshared);

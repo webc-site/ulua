@@ -1,0 +1,52 @@
+use ulua_vm::records::lua_state::LuaState;
+
+use crate::{
+  functions::{
+    alloc_type_user_data::alloc_type_user_data, get_tag::get_tag,
+    get_type_function_runtime::get_type_function_type_id, get_type_user_data::get_type_user_data,
+    throw_type_error::throw_type_error,
+  },
+  macros::lua_check_args,
+  records::{
+    type_function_extern_type::TypeFunctionExternType,
+    type_function_table_type::TypeFunctionTableType,
+  },
+};
+pub(crate) fn get_metatable(l: &mut LuaState) -> i32 {
+  // Safety: `l` 由 Lua VM 运行时约定传入并全程存活（经 `c_thunk!` 蹦床重建为独占 `&mut`）。
+  // `tfmt`/`tfct` 按 class-index 下转，仅命中 Some 分支才读取 `metatable`；`if let Some(metatable)`
+  // 命中后 `(*metatable)` 指向 arena 存活 TypeVar（bump 分配、地址不移动），读取其 type_variant 合法。
+  // 末尾 `throw_type_error` 分支返回 `!` 不返回。单线程串行执行，无并发别名。
+  unsafe {
+    lua_check_args!(l, != 1, "type.metatable: expected 1 arguments, but got {}");
+
+    let self_ty = get_type_user_data(l, 1);
+
+    if let Some(tfmt) = get_type_function_type_id::<TypeFunctionTableType>(self_ty) {
+      if let Some(metatable) = tfmt.metatable {
+        alloc_type_user_data(l, (*metatable).type_variant.clone(), false);
+      } else {
+        l.push_nil();
+      }
+      return 1;
+    }
+
+    if let Some(tfct) = get_type_function_type_id::<TypeFunctionExternType>(self_ty) {
+      if let Some(metatable) = tfct.metatable {
+        alloc_type_user_data(l, (*metatable).type_variant.clone(), false);
+      } else {
+        l.push_nil();
+      }
+      return 1;
+    }
+
+    let tag = get_tag(l, self_ty);
+    throw_type_error(
+      l,
+      format_args!(
+        "type.metatable: expected self to be a table or class, but got {} instead",
+        tag
+      ),
+    );
+  }
+}

@@ -1,0 +1,1226 @@
+extern crate alloc;
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+#[test]
+fn bytecode_compiler_bytecode_roundtrip() {
+  use ulua_unit_test::records::bytecode_compiler_fixture::BytecodeCompilerFixture;
+
+  let snippets = [
+    r#"
+        function fn(a, b)
+            local extra = 0
+            if a > b then extra = 1 end
+            return extra + a + b
+        end
+    "#,
+    r#"
+        function fn()
+            local var = 0
+            repeat var += 1 until var < 10
+        end
+    "#,
+    r#"
+        function fn()
+            local var = 3
+            for i = 1, 10 do
+                if var > 0 then print(i) end
+                var -= 1;
+            end
+        end
+    "#,
+    r#"
+        function fn()
+            local res = 0
+            local var = 0
+            repeat
+                local i = 0
+                repeat
+                    res += i * var
+                    i += 1
+                until i < 5
+                var += 1
+            until var < 10
+        end
+    "#,
+    r#"
+        local function x()
+            local a, b = f()
+            return b, a
+        end
+    "#,
+    r#"
+        local function fn(n)
+            if n > 0 then
+                return 0, 1
+            else
+                local a, b = fn(n - 1)
+                return a + b, fn(n)
+            end
+        end
+    "#,
+    r#"
+        local function fn(a, ...)
+            local b, c = ...
+            local l = {...}
+            return a + b + c + l[1], ...
+        end
+    "#,
+    r#"
+        local function fn(x)
+            local f = function (a, b) return a .. " and " .. b .. " and agian " .. b end
+            return f(x, "eleven")
+        end
+    "#,
+    r#"
+        local tt = {}
+        local function fn(x)
+            local t = { a = x, b = x .. 42 }
+            return table.insert({t}, tt)
+        end
+    "#,
+  ];
+
+  let mut fixture = BytecodeCompilerFixture::new();
+  for snippet in snippets {
+    fixture.check_roundtrip(snippet);
+  }
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+#[test]
+fn bytecode_compiler_classes_bytecode_roundtrips() {
+  use ulua_common::fflag::DebugLuauUserDefinedClasses;
+  use ulua_unit_test::{
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
+  };
+
+  let _classes = ScopedFastFlag::new(&DebugLuauUserDefinedClasses, true);
+  let mut fixture = BytecodeCompilerFixture::new();
+  fixture.check_roundtrip(
+    r#"
+        class Point
+            public x
+            public y
+
+            function magnitude(self)
+                return math.sqrt(self.x * self.x + self.y * self.y)
+            end
+
+            function __mul(self, other)
+                return Point { x = self.x * other.x, y = self.y * other.y }
+            end
+
+            function __add(self, other)
+                return Point { x = self.x + other.x, y = self.y + other.y }
+            end
+
+            function __eq(self, other)
+                return self.x == other.x and self.y == other.y
+            end
+
+            function zero()
+                return Point { x = 0, y = 0 }
+            end
+
+            function asserttriple(self)
+                local mag = self:magnitude()
+                assert(mag == math.ceil(mag), "Not a pythagorean triple!")
+            end
+
+            function __tostring(self)
+                return `Point(x={self.x}, y={self.y})`
+            end
+
+        end
+
+        print(Point)
+
+        return { Point = Point }
+    "#,
+  );
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+#[test]
+fn bytecode_compiler_for_loop_and_backward_input() {
+  use ulua_bytecode::enums::bc_block_edge_kind::BcBlockEdgeKind;
+  use ulua_common::{enums::luau_opcode::LuauOpcode, fflag::LuauEmitCallFeedback};
+  use ulua_unit_test::{
+    functions::{
+      branch_op::branch_op, check_edges::check_edges, check_ops::check_ops,
+      fallthrough_op::fallthrough_op, get_op::get_op, is_phi_of::is_phi_of, loop_op::loop_op,
+    },
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
+  };
+
+  let _emit_call_feedback = ScopedFastFlag::new(&LuauEmitCallFeedback, true);
+  let mut fixture = BytecodeCompilerFixture::new();
+  let mut fn_ = fixture
+    .build_bytecode(
+      r#"
+        function fn()
+            local var = 3
+            for i = 1, 10 do
+                if var > 0 then print(i) end
+                var -= 1;
+            end
+        end
+    "#,
+      0,
+    )
+    .expect("expected bytecode");
+
+  assert_eq!(fn_.blocks.len(), 6);
+  let entry_op = fn_.entry_block;
+  let entry = fn_.block_op(entry_op).clone();
+  assert_eq!(entry.successors.len(), 2);
+  assert!(check_edges(
+    &entry.successors,
+    &[BcBlockEdgeKind::Branch, BcBlockEdgeKind::Fallthrough]
+  ));
+
+  let loop_enter_op = fallthrough_op(&entry.successors);
+  let loop_enter = fn_.block_op(loop_enter_op).clone();
+  assert!(check_edges(
+    &loop_enter.predecessors,
+    &[BcBlockEdgeKind::Fallthrough, BcBlockEdgeKind::Loop]
+  ));
+  assert!(check_edges(
+    &loop_enter.successors,
+    &[BcBlockEdgeKind::Branch, BcBlockEdgeKind::Fallthrough]
+  ));
+
+  let loop_cond = fn_.block_op(fallthrough_op(&loop_enter.successors)).clone();
+  assert!(check_edges(
+    &loop_cond.successors,
+    &[BcBlockEdgeKind::Fallthrough]
+  ));
+  let loop_epllog_op = branch_op(&loop_enter.successors);
+  assert_eq!(fallthrough_op(&loop_cond.successors), loop_epllog_op);
+  let loop_epllog = fn_.block_op(loop_epllog_op).clone();
+  assert!(check_edges(
+    &loop_epllog.successors,
+    &[BcBlockEdgeKind::Loop, BcBlockEdgeKind::Fallthrough]
+  ));
+  assert_eq!(loop_op(&loop_epllog.successors), loop_enter_op);
+  let ret = fn_.block_op(loop_epllog.successors[1].target).clone();
+
+  assert!(check_ops(
+    &mut fn_,
+    &entry.ops,
+    &[
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_LOADN,
+      LuauOpcode::LOP_FORNPREP,
+    ]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &loop_enter.ops,
+    &[LuauOpcode::LOP_LOADK, LuauOpcode::LOP_JUMPIFNOTLT]
+  ));
+
+  let var_init_op = get_op(&entry, 0);
+  let sub_var_op = get_op(&loop_epllog, 1);
+  let jump_if_not_lt = fn_.inst_op(get_op(&loop_enter, 1)).clone();
+  assert_eq!(jump_if_not_lt.ops.len(), 3);
+  assert_eq!(jump_if_not_lt.ops[0], get_op(&loop_enter, 0));
+  assert!(is_phi_of(
+    &mut fn_,
+    jump_if_not_lt.ops[1],
+    var_init_op,
+    sub_var_op
+  ));
+  assert_eq!(jump_if_not_lt.ops[2], loop_epllog_op);
+
+  let sub_var = fn_.inst_op(sub_var_op).clone();
+  assert_eq!(sub_var.ops.len(), 2);
+  assert!(is_phi_of(&mut fn_, sub_var.ops[0], var_init_op, sub_var_op));
+  assert_eq!(sub_var.ops[1], get_op(&loop_epllog, 0));
+
+  assert!(check_ops(
+    &mut fn_,
+    &loop_cond.ops,
+    &[
+      LuauOpcode::LOP_GETGLOBAL,
+      LuauOpcode::LOP_MOVE,
+      LuauOpcode::LOP_CALLFB,
+    ]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &loop_epllog.ops,
+    &[
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_SUB,
+      LuauOpcode::LOP_FORNLOOP,
+    ]
+  ));
+  assert!(check_ops(&mut fn_, &ret.ops, &[LuauOpcode::LOP_RETURN]));
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+#[test]
+fn bytecode_compiler_from_function_bytecode() {
+  use ulua_bytecode::enums::{
+    bc_block_edge_kind::BcBlockEdgeKind, bc_op_kind::BcOpKind, bc_vm_const_kind::BcVmConstKind,
+  };
+  use ulua_common::enums::luau_opcode::LuauOpcode;
+  use ulua_unit_test::{
+    functions::{
+      branch_op::branch_op, check_edges::check_edges, check_ops::check_ops,
+      fallthrough_op::fallthrough_op,
+    },
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+  };
+
+  let mut fixture = BytecodeCompilerFixture::new();
+  let mut fn_ = fixture
+    .build_bytecode(
+      r#"
+        function fn(a, b)
+            local extra = 0
+            if a > b then extra = 1 end
+            return extra + a + b
+        end
+    "#,
+      0,
+    )
+    .expect("expected bytecode");
+
+  assert_eq!(fn_.nups, 0);
+  assert_eq!(fn_.numparams, 2);
+  assert_eq!(fn_.constants.len(), 2);
+
+  assert_eq!(fn_.blocks.len(), 4);
+  let entry_op = fn_.entry_block;
+  let entry = fn_.block_op(entry_op).clone();
+  assert!(check_edges(
+    &entry.successors,
+    &[BcBlockEdgeKind::Branch, BcBlockEdgeKind::Fallthrough]
+  ));
+
+  let cond_false_op = branch_op(&entry.successors);
+  let cond_true = fn_.block_op(entry.successors[1].target).clone();
+  assert!(check_edges(
+    &cond_true.successors,
+    &[BcBlockEdgeKind::Fallthrough]
+  ));
+  assert_eq!(fallthrough_op(&cond_true.successors), cond_false_op);
+
+  let cond_false = fn_.block_op(cond_false_op).clone();
+  assert!(check_edges(
+    &cond_false.successors,
+    &[BcBlockEdgeKind::Fallthrough]
+  ));
+  assert_eq!(fallthrough_op(&cond_false.successors), fn_.exit_block);
+  let exit_op = fn_.exit_block;
+  let exit = fn_.block_op(exit_op).clone();
+
+  assert_eq!(entry.ops.len(), 2);
+  let mut ops = entry.ops.iter();
+  let load_k_op = *ops.next().expect("entry loadk");
+  let load_k = fn_.inst_op(load_k_op).clone();
+  assert_eq!(load_k.op, LuauOpcode::LOP_LOADK);
+  assert_eq!(load_k.ops.len(), 1);
+  assert_eq!(load_k.ops[0].kind, BcOpKind::VmConst);
+  assert_eq!(load_k.ops[0].index, 0);
+  assert_eq!(fn_.constants[0].kind(), BcVmConstKind::Number);
+  assert_eq!(fn_.constants[0].as_number(), 0.0);
+
+  let jump_if_not_lt = fn_.inst_op(*ops.next().expect("entry jump")).clone();
+  assert_eq!(jump_if_not_lt.op, LuauOpcode::LOP_JUMPIFNOTLT);
+  assert_eq!(jump_if_not_lt.ops.len(), 3);
+
+  assert!(check_ops(
+    &mut fn_,
+    &cond_true.ops,
+    &[LuauOpcode::LOP_LOADK]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &cond_false.ops,
+    &[
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_RETURN,
+    ]
+  ));
+  assert!(check_ops(&mut fn_, &exit.ops, &[]));
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+#[test]
+fn bytecode_compiler_multi_call_fixed() {
+  use ulua_bytecode::enums::{bc_imm_kind::BcImmKind, bc_op_kind::BcOpKind};
+  use ulua_common::{enums::luau_opcode::LuauOpcode, fflag::LuauEmitCallFeedback};
+  use ulua_unit_test::{
+    functions::{check_ops::check_ops, get_op::get_op},
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
+  };
+
+  let _emit_call_feedback = ScopedFastFlag::new(&LuauEmitCallFeedback, true);
+  let mut fixture = BytecodeCompilerFixture::new();
+  let mut fn_ = fixture
+    .build_bytecode(
+      r#"
+        local function x()
+            local a, b = f()
+            return b, a
+        end
+    "#,
+      0,
+    )
+    .expect("expected bytecode");
+
+  let entry_op = fn_.entry_block;
+  let entry = fn_.block_op(entry_op).clone();
+  assert!(check_ops(
+    &mut fn_,
+    &entry.ops,
+    &[
+      LuauOpcode::LOP_GETGLOBAL,
+      LuauOpcode::LOP_CALLFB,
+      LuauOpcode::LOP_MOVE,
+      LuauOpcode::LOP_MOVE,
+      LuauOpcode::LOP_RETURN,
+    ]
+  ));
+
+  let call_op = get_op(&entry, 1);
+  let move1_op = get_op(&entry, 2);
+  let move1 = fn_.inst_op(move1_op).clone();
+  assert_eq!(move1.ops.len(), 1);
+  assert_eq!(move1.ops[0].kind, BcOpKind::Proj);
+  let move1_proj = *fn_.proj_op(move1.ops[0]);
+  assert_eq!(move1_proj.op, call_op);
+  assert_eq!(move1_proj.index, 1);
+
+  let move2_op = get_op(&entry, 3);
+  let move2 = fn_.inst_op(move2_op).clone();
+  assert_eq!(move2.ops.len(), 1);
+  assert_eq!(move2.ops[0].kind, BcOpKind::Proj);
+  let move2_proj = *fn_.proj_op(move2.ops[0]);
+  assert_eq!(move2_proj.op, call_op);
+  assert_eq!(move2_proj.index, 0);
+
+  let ret = fn_.inst_op(get_op(&entry, 4)).clone();
+  assert_eq!(ret.ops.len(), 3);
+  assert_eq!(ret.ops[0].kind, BcOpKind::Imm);
+  let ret_count = *fn_.imm_op(ret.ops[0]);
+  assert_eq!(ret_count.kind(), BcImmKind::Int);
+  assert_eq!(ret_count.as_int(), 2);
+  assert_eq!(ret.ops[1], move1_op);
+  assert_eq!(ret.ops[2], move2_op);
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+#[test]
+fn bytecode_compiler_multi_call_variadic() {
+  use ulua_bytecode::enums::{
+    bc_block_edge_kind::BcBlockEdgeKind, bc_imm_kind::BcImmKind, bc_op_kind::BcOpKind,
+  };
+  use ulua_common::{enums::luau_opcode::LuauOpcode, fflag::LuauEmitCallFeedback};
+  use ulua_unit_test::{
+    functions::{
+      branch_op::branch_op, check_edges::check_edges, check_ops::check_ops,
+      fallthrough_op::fallthrough_op, get_op::get_op,
+    },
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
+  };
+
+  let _emit_call_feedback = ScopedFastFlag::new(&LuauEmitCallFeedback, true);
+  let mut fixture = BytecodeCompilerFixture::new();
+  let mut fn_ = fixture
+    .build_bytecode(
+      r#"
+        local function fn(n)
+            if n > 0 then
+                return 0, 1
+            else
+                local a, b = fn(n - 1)
+                return a + b, fn(n)
+            end
+        end
+    "#,
+      0,
+    )
+    .expect("expected bytecode");
+
+  assert_eq!(fn_.blocks.len(), 4);
+  let entry_op = fn_.entry_block;
+  let entry = fn_.block_op(entry_op).clone();
+  assert!(check_edges(
+    &entry.successors,
+    &[BcBlockEdgeKind::Branch, BcBlockEdgeKind::Fallthrough]
+  ));
+  let if_true = fn_.block_op(fallthrough_op(&entry.successors)).clone();
+  assert!(check_edges(
+    &if_true.successors,
+    &[BcBlockEdgeKind::Fallthrough]
+  ));
+  let if_false = fn_.block_op(branch_op(&entry.successors)).clone();
+  assert!(check_edges(
+    &if_true.successors,
+    &[BcBlockEdgeKind::Fallthrough]
+  ));
+
+  assert!(check_ops(
+    &mut fn_,
+    &entry.ops,
+    &[LuauOpcode::LOP_LOADK, LuauOpcode::LOP_JUMPIFNOTLT]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &if_true.ops,
+    &[
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_RETURN,
+    ]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &if_false.ops,
+    &[
+      LuauOpcode::LOP_GETUPVAL,
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_SUB,
+      LuauOpcode::LOP_CALLFB,
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_GETUPVAL,
+      LuauOpcode::LOP_MOVE,
+      LuauOpcode::LOP_CALL,
+      LuauOpcode::LOP_RETURN,
+    ]
+  ));
+
+  let ret = fn_.inst_op(get_op(&if_false, 8)).clone();
+  assert_eq!(ret.ops.len(), 3);
+  assert_eq!(ret.ops[0].kind, BcOpKind::Imm);
+  let ret_count = *fn_.imm_op(ret.ops[0]);
+  assert_eq!(ret_count.kind(), BcImmKind::Int);
+  assert_eq!(ret_count.as_int(), -1);
+  let add_op = get_op(&if_false, 4);
+  assert_eq!(ret.ops[1], add_op);
+  let multi_call_op = get_op(&if_false, 7);
+  assert_eq!(ret.ops[2], multi_call_op);
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+#[test]
+fn bytecode_compiler_nested_loops() {
+  use ulua_bytecode::enums::bc_block_edge_kind::BcBlockEdgeKind;
+  use ulua_common::enums::luau_opcode::LuauOpcode;
+  use ulua_unit_test::{
+    functions::{
+      branch_op::branch_op, check_edges::check_edges, check_ops::check_ops,
+      fallthrough_op::fallthrough_op, get_op::get_op, is_phi_of::is_phi_of, loop_op::loop_op,
+    },
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+  };
+
+  let mut fixture = BytecodeCompilerFixture::new();
+  let mut fn_ = fixture
+    .build_bytecode(
+      r#"
+        function fn()
+            local res = 0
+            local var = 0
+            repeat
+                local i = 0
+                repeat
+                    res += i * var
+                    i += 1
+                until i < 5
+                var += 1
+            until var < 10
+        end
+    "#,
+      0,
+    )
+    .expect("expected bytecode");
+
+  assert_eq!(fn_.blocks.len(), 8);
+  let entry_op = fn_.entry_block;
+  let entry = fn_.block_op(entry_op).clone();
+  assert!(check_edges(
+    &entry.successors,
+    &[BcBlockEdgeKind::Fallthrough]
+  ));
+
+  let outer_entry_op = fallthrough_op(&entry.successors);
+  let outer_entry = fn_.block_op(outer_entry_op).clone();
+  assert!(check_edges(
+    &outer_entry.predecessors,
+    &[BcBlockEdgeKind::Fallthrough, BcBlockEdgeKind::Loop]
+  ));
+  assert!(check_edges(
+    &outer_entry.successors,
+    &[BcBlockEdgeKind::Fallthrough]
+  ));
+
+  let inner_entry_op = fallthrough_op(&outer_entry.successors);
+  let inner_entry = fn_.block_op(inner_entry_op).clone();
+  assert!(check_edges(
+    &inner_entry.predecessors,
+    &[BcBlockEdgeKind::Fallthrough, BcBlockEdgeKind::Loop]
+  ));
+  assert!(check_edges(
+    &inner_entry.successors,
+    &[BcBlockEdgeKind::Branch, BcBlockEdgeKind::Fallthrough]
+  ));
+
+  let inner_back_loop = fn_
+    .block_op(fallthrough_op(&inner_entry.successors))
+    .clone();
+  assert!(check_edges(
+    &inner_back_loop.successors,
+    &[BcBlockEdgeKind::Loop]
+  ));
+  assert_eq!(loop_op(&inner_back_loop.successors), inner_entry_op);
+
+  let outer_epllog = fn_.block_op(branch_op(&inner_entry.successors)).clone();
+  assert!(check_edges(
+    &outer_epllog.successors,
+    &[BcBlockEdgeKind::Branch, BcBlockEdgeKind::Fallthrough]
+  ));
+  let outer_back_loop = fn_
+    .block_op(fallthrough_op(&outer_epllog.successors))
+    .clone();
+  assert!(check_edges(
+    &outer_back_loop.successors,
+    &[BcBlockEdgeKind::Loop]
+  ));
+  assert_eq!(loop_op(&outer_back_loop.successors), outer_entry_op);
+  let ret = fn_.block_op(branch_op(&outer_epllog.successors)).clone();
+
+  assert!(check_ops(
+    &mut fn_,
+    &entry.ops,
+    &[LuauOpcode::LOP_LOADK, LuauOpcode::LOP_LOADK]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &outer_entry.ops,
+    &[LuauOpcode::LOP_LOADK]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &inner_entry.ops,
+    &[
+      LuauOpcode::LOP_MUL,
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_JUMPIFLT,
+    ]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &inner_back_loop.ops,
+    &[LuauOpcode::LOP_JUMPBACK]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &outer_epllog.ops,
+    &[
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_JUMPIFLT,
+    ]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &outer_back_loop.ops,
+    &[LuauOpcode::LOP_JUMPBACK]
+  ));
+  assert!(check_ops(&mut fn_, &ret.ops, &[LuauOpcode::LOP_RETURN]));
+
+  let var_init_op = get_op(&entry, 1);
+  let var_inc_op = get_op(&outer_epllog, 1);
+  let i_init_op = get_op(&outer_entry, 0);
+  let i_inc_op = get_op(&inner_entry, 3);
+  let i_times_var_op = get_op(&inner_entry, 0);
+  let i_times_var = fn_.inst_op(i_times_var_op).clone();
+  assert_eq!(i_times_var.ops.len(), 2);
+  assert!(is_phi_of(&mut fn_, i_times_var.ops[0], i_init_op, i_inc_op));
+  assert!(is_phi_of(
+    &mut fn_,
+    i_times_var.ops[1],
+    var_init_op,
+    var_inc_op
+  ));
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+// "def_use_chains" (line 606).
+#[test]
+fn bytecode_compiler_def_use_chains() {
+  use ulua_bytecode::{
+    enums::{bc_block_edge_kind::BcBlockEdgeKind, bc_op_kind::BcOpKind},
+    records::bc_op::BcOp,
+  };
+  use ulua_common::enums::luau_opcode::LuauOpcode;
+  use ulua_unit_test::{
+    functions::{
+      check_edges::check_edges, check_ops::check_ops, fallthrough_op::fallthrough_op,
+      get_op::get_op,
+    },
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+  };
+
+  let mut fixture = BytecodeCompilerFixture::new();
+  let mut fn_ = fixture
+    .build_bytecode(
+      r#"
+        local function fn(a, b, c)
+            local s = a + b
+            local x = s + c
+            local y = s + a
+            return x + y
+        end
+    "#,
+      0,
+    )
+    .expect("expected bytecode");
+
+  assert_eq!(fn_.blocks.len(), 2);
+  let entry = fn_.block_op(fn_.entry_block).clone();
+  assert!(check_edges(
+    &entry.successors,
+    &[BcBlockEdgeKind::Fallthrough]
+  ));
+  let exit = fn_.block_op(fallthrough_op(&entry.successors)).clone();
+  assert!(check_edges(
+    &exit.predecessors,
+    &[BcBlockEdgeKind::Fallthrough]
+  ));
+
+  // ; %0 = ADD R0, R1 / %1 = ADD %0, R2 / %2 = ADD %0, R0 / %3 = ADD %1, %2 / %4 = RETURN
+  assert!(check_ops(
+    &mut fn_,
+    &entry.ops,
+    &[
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_RETURN,
+    ]
+  ));
+
+  // DEVIATION: cpp `REQUIRE_EQ(verifyUseConsistency(*fn), true)` 与
+  // `toString(fn, true)` 行尾 `; uses: …` 用列表——Rust 图不常驻 def→use
+  // 反向边（见 bytecode_inliner_fixture::inline_and_print 注记），改以逐条
+  // 指令操作数句柄（正向 def→use 边）锁定同一链形。
+  let vmreg = |r| BcOp::with(BcOpKind::VmReg, r);
+  let add0 = get_op(&entry, 0);
+  let add1 = get_op(&entry, 1);
+  let add2 = get_op(&entry, 2);
+  let add3 = get_op(&entry, 3);
+  let ret = get_op(&entry, 4);
+  let add0_inputs = fn_.inst_op(add0).ops.iter().copied().collect::<Vec<_>>();
+  let add1_inputs = fn_.inst_op(add1).ops.iter().copied().collect::<Vec<_>>();
+  let add2_inputs = fn_.inst_op(add2).ops.iter().copied().collect::<Vec<_>>();
+  let add3_inputs = fn_.inst_op(add3).ops.iter().copied().collect::<Vec<_>>();
+  let ret_inputs = fn_.inst_op(ret).ops.iter().copied().collect::<Vec<_>>();
+  assert_eq!(add0_inputs, [vmreg(0), vmreg(1)]); // s = a + b
+  assert_eq!(add1_inputs, [add0, vmreg(2)]); // x = s + c
+  assert_eq!(add2_inputs, [add0, vmreg(0)]); // y = s + a
+  assert_eq!(add3_inputs, [add1, add2]); // x + y
+  assert!(ret_inputs.contains(&add3));
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+// "loop_invariant_inst_phi_collapse" (line 650).
+#[test]
+fn bytecode_compiler_loop_invariant_inst_phi_collapse() {
+  use ulua_bytecode::{
+    enums::{bc_block_edge_kind::BcBlockEdgeKind, bc_op_kind::BcOpKind},
+    records::bc_op::BcOp,
+  };
+  use ulua_common::enums::luau_opcode::LuauOpcode;
+  use ulua_unit_test::{
+    functions::{
+      branch_op::branch_op, check_edges::check_edges, check_ops::check_ops,
+      fallthrough_op::fallthrough_op, get_op::get_op, is_phi_of::is_phi_of, loop_op::loop_op,
+    },
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+  };
+
+  let mut fixture = BytecodeCompilerFixture::new();
+  let mut fn_ = fixture
+    .build_bytecode(
+      r#"
+        local function fn(a, b)
+            local s = a + b
+            local acc = 0
+            repeat acc += s until acc < 100
+            return acc
+        end
+    "#,
+      0,
+    )
+    .expect("expected bytecode");
+
+  // bb_0(entry) + bb_4(loop head) + bb_3(back edge) + bb_2(return) + bb_1(exit)
+  assert_eq!(fn_.blocks.len(), 5);
+  let entry = fn_.block_op(fn_.entry_block).clone();
+  assert!(check_edges(
+    &entry.successors,
+    &[BcBlockEdgeKind::Fallthrough]
+  ));
+  let loop_head_op = fallthrough_op(&entry.successors);
+  let loop_head = fn_.block_op(loop_head_op).clone();
+  assert!(check_edges(
+    &loop_head.predecessors,
+    &[BcBlockEdgeKind::Fallthrough, BcBlockEdgeKind::Loop]
+  ));
+  assert!(check_edges(
+    &loop_head.successors,
+    &[BcBlockEdgeKind::Branch, BcBlockEdgeKind::Fallthrough]
+  ));
+  let back_edge = fn_.block_op(fallthrough_op(&loop_head.successors)).clone();
+  assert!(check_edges(&back_edge.successors, &[BcBlockEdgeKind::Loop]));
+  let exit = fn_.block_op(branch_op(&loop_head.successors)).clone();
+  assert!(check_edges(
+    &exit.successors,
+    &[BcBlockEdgeKind::Fallthrough]
+  ));
+
+  assert!(check_ops(
+    &mut fn_,
+    &entry.ops,
+    &[LuauOpcode::LOP_ADD, LuauOpcode::LOP_LOADK]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &loop_head.ops,
+    &[
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_JUMPIFLT,
+    ]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &back_edge.ops,
+    &[LuauOpcode::LOP_JUMPBACK]
+  ));
+  assert_eq!(loop_op(&back_edge.successors), loop_head_op);
+
+  // DEVIATION: 同 def_use_chains——cpp 以 `toString(fn, true)` 的 `; uses:`
+  // 用列表与 `verifyUseConsistency` 断言不变式；此处以操作数句柄正向锁定。
+  // 核心语义：循环不变式 `s = a + b`（entry 的 ADD）在 loop head 被直接引用
+  // 而非 phi 化；仅 acc（LOADK 0）经 phi.0 回接。
+  let add_s = get_op(&entry, 0);
+  let acc_init = get_op(&entry, 1);
+  let add_acc = get_op(&loop_head, 0);
+  let add_acc_inputs = fn_.inst_op(add_acc).ops.iter().copied().collect::<Vec<_>>();
+  assert_eq!(add_acc_inputs.len(), 2);
+  assert_eq!(add_acc_inputs[0].kind, BcOpKind::Phi);
+  assert!(is_phi_of(&mut fn_, add_acc_inputs[0], acc_init, add_acc));
+  assert_eq!(add_acc_inputs[1], add_s);
+  // cpp 打印把参数的退化 phi 折叠回 `R0, R1`（`%0 = ADD R0, R1`）；Rust 图
+  // 显式保留 `phi = [VmReg r, VmReg r]` 退化对，在此正向锁定同一形态。
+  let vmreg = |r| BcOp::with(BcOpKind::VmReg, r);
+  let s_inputs = fn_.inst_op(add_s).ops.iter().copied().collect::<Vec<_>>();
+  assert_eq!(s_inputs.len(), 2);
+  assert_eq!(s_inputs[0].kind, BcOpKind::Phi);
+  assert_eq!(s_inputs[1].kind, BcOpKind::Phi);
+  assert!(is_phi_of(&mut fn_, s_inputs[0], vmreg(0), vmreg(0)));
+  assert!(is_phi_of(&mut fn_, s_inputs[1], vmreg(1), vmreg(1)));
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+#[test]
+fn bytecode_compiler_repeat_until_loop() {
+  use ulua_bytecode::enums::{bc_block_edge_kind::BcBlockEdgeKind, bc_op_kind::BcOpKind};
+  use ulua_common::enums::luau_opcode::LuauOpcode;
+  use ulua_unit_test::{
+    functions::{
+      branch_op::branch_op, check_edges::check_edges, check_ops::check_ops,
+      fallthrough_op::fallthrough_op, get_op::get_op,
+    },
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+  };
+
+  let mut fixture = BytecodeCompilerFixture::new();
+  let mut fn_ = fixture
+    .build_bytecode(
+      r#"
+        function fn()
+            local var = 0
+            repeat var += 1 until var < 10
+            --return var
+        end
+    "#,
+      0,
+    )
+    .expect("expected bytecode");
+
+  assert_eq!(fn_.blocks.len(), 5);
+  let entry_op = fn_.entry_block;
+  let entry = fn_.block_op(entry_op).clone();
+  assert!(check_edges(
+    &entry.successors,
+    &[BcBlockEdgeKind::Fallthrough]
+  ));
+
+  let loop_body_op = fallthrough_op(&entry.successors);
+  let loop_body = fn_.block_op(loop_body_op).clone();
+  assert!(check_edges(
+    &loop_body.predecessors,
+    &[BcBlockEdgeKind::Fallthrough, BcBlockEdgeKind::Loop]
+  ));
+  assert!(check_edges(
+    &loop_body.successors,
+    &[BcBlockEdgeKind::Branch, BcBlockEdgeKind::Fallthrough]
+  ));
+
+  let loop_jump_back = fn_.block_op(fallthrough_op(&loop_body.successors)).clone();
+  assert!(check_edges(
+    &loop_jump_back.successors,
+    &[BcBlockEdgeKind::Loop]
+  ));
+  let ret = fn_.block_op(branch_op(&loop_body.successors)).clone();
+
+  assert!(check_ops(&mut fn_, &entry.ops, &[LuauOpcode::LOP_LOADK]));
+  assert!(check_ops(
+    &mut fn_,
+    &loop_body.ops,
+    &[
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_JUMPIFLT,
+    ]
+  ));
+  assert!(check_ops(
+    &mut fn_,
+    &loop_jump_back.ops,
+    &[LuauOpcode::LOP_JUMPBACK]
+  ));
+  assert!(check_ops(&mut fn_, &ret.ops, &[LuauOpcode::LOP_RETURN]));
+
+  let var_init_op = get_op(&entry, 0);
+  let load_k_one_op = get_op(&loop_body, 0);
+  let add_var_op = get_op(&loop_body, 1);
+  let add_var = fn_.inst_op(add_var_op).clone();
+  assert_eq!(add_var.ops.len(), 2);
+  assert_eq!(add_var.ops[0].kind, BcOpKind::Phi);
+  let add_var_phi = fn_.phi_op(add_var.ops[0]).clone();
+  assert_eq!(add_var_phi.ops[0], var_init_op);
+  assert_eq!(add_var_phi.ops[1], add_var_op);
+  assert_eq!(add_var.ops[1], load_k_one_op);
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+#[test]
+fn bytecode_compiler_tables_strings_and_fastcall() {
+  use ulua_common::enums::luau_opcode::LuauOpcode;
+  use ulua_unit_test::{
+    functions::check_ops::check_ops, records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+  };
+
+  let mut fixture = BytecodeCompilerFixture::new();
+  let mut fn_ = fixture
+    .build_bytecode(
+      r#"
+        local tt = {}
+        local function fn(x)
+            local t = { a = x, b = x .. 42 }
+            return table.insert({t}, tt)
+        end
+    "#,
+      1,
+    )
+    .expect("expected bytecode");
+
+  assert_eq!(fn_.blocks.len(), 2);
+  let entry_op = fn_.entry_block;
+  let entry = fn_.block_op(entry_op).clone();
+  assert!(check_ops(
+    &mut fn_,
+    &entry.ops,
+    &[
+      LuauOpcode::LOP_DUPTABLE,
+      LuauOpcode::LOP_SETTABLEKS,
+      LuauOpcode::LOP_MOVE,
+      LuauOpcode::LOP_LOADN,
+      LuauOpcode::LOP_CONCAT,
+      LuauOpcode::LOP_SETTABLEKS,
+      LuauOpcode::LOP_NEWTABLE,
+      LuauOpcode::LOP_MOVE,
+      LuauOpcode::LOP_SETLIST,
+      LuauOpcode::LOP_GETUPVAL,
+      LuauOpcode::LOP_FASTCALL2,
+      LuauOpcode::LOP_GETIMPORT,
+      LuauOpcode::LOP_CALL,
+      LuauOpcode::LOP_RETURN,
+    ]
+  ));
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+#[test]
+fn bytecode_compiler_variadic_function() {
+  use ulua_bytecode::enums::{bc_imm_kind::BcImmKind, bc_op_kind::BcOpKind};
+  use ulua_common::enums::luau_opcode::LuauOpcode;
+  use ulua_unit_test::{
+    functions::{check_ops::check_ops, get_op::get_op},
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+  };
+
+  let mut fixture = BytecodeCompilerFixture::new();
+  let mut fn_ = fixture
+    .build_bytecode(
+      r#"
+        local function fn(a, ...)
+            local b, c = ...
+            local l = {...}
+            return a + b + c + l[1], ...
+        end
+    "#,
+      0,
+    )
+    .expect("expected bytecode");
+
+  assert_eq!(fn_.blocks.len(), 2);
+  let entry_op = fn_.entry_block;
+  let entry = fn_.block_op(entry_op).clone();
+  assert!(check_ops(
+    &mut fn_,
+    &entry.ops,
+    &[
+      LuauOpcode::LOP_PREPVARARGS,
+      LuauOpcode::LOP_GETVARARGS,
+      LuauOpcode::LOP_NEWTABLE,
+      LuauOpcode::LOP_GETVARARGS,
+      LuauOpcode::LOP_SETLIST,
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_LOADK,
+      LuauOpcode::LOP_GETTABLE,
+      LuauOpcode::LOP_ADD,
+      LuauOpcode::LOP_GETVARARGS,
+      LuauOpcode::LOP_RETURN,
+    ]
+  ));
+
+  let get_var_args1 = fn_.inst_op(get_op(&entry, 1)).clone();
+  assert_eq!(get_var_args1.ops.len(), 2);
+  assert_eq!(get_var_args1.ops[0].kind, BcOpKind::VmReg);
+  assert_eq!(get_var_args1.ops[0].index, 1);
+  assert_eq!(get_var_args1.ops[1].kind, BcOpKind::Imm);
+  let get_var_args1_count = *fn_.imm_op(get_var_args1.ops[1]);
+  assert_eq!(get_var_args1_count.kind(), BcImmKind::Int);
+  assert_eq!(get_var_args1_count.as_int(), 2);
+
+  let get_var_args2_op = get_op(&entry, 3);
+  let get_var_args2 = fn_.inst_op(get_var_args2_op).clone();
+  assert_eq!(get_var_args2.ops.len(), 2);
+  assert_eq!(get_var_args2.ops[0].kind, BcOpKind::VmReg);
+  assert_eq!(get_var_args2.ops[0].index, 4);
+  assert_eq!(get_var_args2.ops[1].kind, BcOpKind::Imm);
+  let get_var_args2_count = *fn_.imm_op(get_var_args2.ops[1]);
+  assert_eq!(get_var_args2_count.kind(), BcImmKind::Int);
+  assert_eq!(get_var_args2_count.as_int(), -1);
+
+  let set_list = fn_.inst_op(get_op(&entry, 4)).clone();
+  assert_eq!(set_list.ops.len(), 4);
+  let set_list_start_idx = *fn_.imm_op(set_list.ops[0]);
+  assert_eq!(set_list_start_idx.kind(), BcImmKind::Int);
+  assert_eq!(set_list_start_idx.as_int(), 1);
+  let set_list_count = *fn_.imm_op(set_list.ops[1]);
+  assert_eq!(set_list_count.kind(), BcImmKind::Int);
+  assert_eq!(set_list_count.as_int(), -1);
+  let new_table_op = get_op(&entry, 2);
+  assert_eq!(set_list.ops[2], new_table_op);
+  assert_eq!(set_list.ops[3], get_var_args2_op);
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+// "inheriting_classes_bytecode_roundtrips" (line 827).
+#[test]
+fn bytecode_compiler_inheriting_classes_bytecode_roundtrips() {
+  use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
+  use ulua_common::fflag::DebugLuauUserDefinedClasses;
+  use ulua_unit_test::{
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
+  };
+
+  let _classes = ScopedFastFlag::new(&DebugLuauUserDefinedClasses, true);
+
+  let source = r#"
+open class Animal
+    public species: string
+
+    function __tostring(self)
+        return "I am an animal."
+    end
+
+    function live(self)
+        return "I am alive"
+    end
+end
+
+class Cat extends Animal
+    public breed: string
+
+    function __tostring(self): string
+        return `{Animal.__tostring(self)} I am a {self.breed} cat.`
+    end
+end
+
+print(Cat)
+
+return { Animal = Animal, Cat = Cat }
+    "#;
+
+  let mut fixture = BytecodeCompilerFixture::new();
+  fixture.check_roundtrip(source);
+
+  let dump = fixture.get_roundtrip_function_bytecode(
+    source,
+    BytecodeBuilder::DUMP_CODE | BytecodeBuilder::DUMP_CONSTANTS,
+    1,
+    3,
+  );
+
+  let expected = r#"
+K0: 'Animal'
+K1: 'species'
+K2: function __tostring
+K3: '__tostring'
+K4: function live
+K5: 'live'
+K6: 'new'
+K7: '__init'
+K8: class Animal (props: 1, methods: 4)
+  props:
+    K1 ['species']
+  methods:
+    K3 ['__tostring']
+    K5 ['live']
+    K6 ['new']
+    K7 ['__init']
+K9: 'Cat'
+K10: 'breed'
+K11: class Cat (props: 1, methods: 3)
+  props:
+    K10 ['breed']
+  methods:
+    K3 ['__tostring']
+    K6 ['new']
+    K7 ['__init']
+K12: 'print'
+K13: print
+K14: {['Animal'] #1, ['Cat'] #0} sizenode=2
+LOADNIL R0
+LOADNIL R1
+NEWCLASS R0 no_base K8 1 [class Animal (props: 1, methods: 4)]
+DUPCLOSURE R2 K2 ['__tostring']
+NEWCLASSMEMBER R0 R2 ['__tostring']
+DUPCLOSURE R2 K4 ['live']
+NEWCLASSMEMBER R0 R2 ['live']
+NEWCLASS R1 R0 K11 0 [class Cat (props: 1, methods: 3)]
+NEWCLOSURE R2 P2
+CAPTURE REF R0
+NEWCLASSMEMBER R1 R2 ['__tostring']
+GETIMPORT R2 13 [print]
+MOVE R3 R1
+CALL R2 1 0
+DUPTABLE R2 14
+SETTABLEKS R0 R2 K0 ['Animal']
+SETTABLEKS R1 R2 K9 ['Cat']
+CLOSEUPVALS R0
+RETURN R2 1
+"#;
+
+  assert_eq!(format!("\n{}", dump), expected);
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+// "fastpcall_roundtrip" (line 912).
+#[test]
+fn bytecode_compiler_fastpcall_roundtrip() {
+  use ulua_common::fflag::LuauCompileFastpcall;
+  use ulua_unit_test::{
+    records::bytecode_compiler_fixture::BytecodeCompilerFixture,
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
+  };
+
+  let _luau_compile_fastpcall = ScopedFastFlag::new(&LuauCompileFastpcall, true);
+
+  let mut fixture = BytecodeCompilerFixture::new();
+  fixture.check_roundtrip(
+    r#"
+        local function test(fn)
+            return pcall(fn, 42)
+        end
+    "#,
+  );
+
+  fixture.check_roundtrip(
+    r#"
+        local function test(fn, errf)
+            return xpcall(fn, errf, 1, 2, 3)
+        end
+    "#,
+  );
+}
+
+// Source: `tests/BytecodeCompiler.test.cpp`
+// "jump_expand_limits" (line 924).
+#[test]
+fn bytecode_compiler_jump_expand_limits() {
+  use ulua_bytecode::records::bytecode_builder::BytecodeBuilder;
+  use ulua_common::enums::luau_opcode::LuauOpcode;
+
+  // cpp 用例的构建期门槛（`#if !(defined(_DEBUG) || defined(_NOOPT))`）：
+  // 本移植无 _NOOPT 构型，直接运行；上游同步已删除运行期旗标
+  // LuauCompileExpandLimit，expandJumps 报错路径不再有旗标门控。
+
+  let mut bcb = BytecodeBuilder::new(None);
+  bcb.begin_function(0, false);
+
+  let jump_count: usize = 2_804_000;
+
+  for _ in 0..jump_count {
+    bcb.emit_ad(LuauOpcode::LOP_JUMP, 0, 0);
+  }
+
+  let target = bcb.emit_label();
+  bcb.emit_abc(LuauOpcode::LOP_RETURN, 0, 1, 0);
+
+  let mut success = true;
+  for i in 0..jump_count {
+    success = success && bcb.patch_jump_d(i, target);
+  }
+
+  assert!(success);
+
+  // cpp `expandJumps(error)` 出参：展开后仍超出 JUMPX 24 位射程时报错
+  let error = bcb.expand_jumps();
+
+  assert!(error);
+}
+
+// 缺口（未移植，对照 `tests/BytecodeCompiler.test.cpp`，共 1 例）：
+// - jump_expand_short_limits（:952）——旧票面称其依赖 FFlag
+//   `LuauCompileExpandShortLimit` 及 BytecodeBuilder 的 short-jump 扩张预算分支；
+//   0.740 同步后 cpp 源码已无该旗标（`LuauCompileExpandLimit` 亦已删除、
+//   本仓 fflag.rs 随之移除），`expandJumps` 两侧均无 short-limit 分支，
+//   cpp 用例现仅校验 `CHECK(!error)`。本移植未补该正向用例，让位登记，
+//   留待后续波次按 cpp :952 语义补 port。

@@ -1,0 +1,41 @@
+//! cpp `Repl.cpp:239` 的 `runCode` 薄壳：全部加载/执行/打印/错误组装逻辑已
+//! 下沉到 [`ulua_vm::functions::run_loaded_chunk`]（含 `_PRETTYPRINT` 为 nil 时
+//! 回退 print 的 REPL 差异，传 `pretty_print_fallback = true`），此处仅保留
+//! 编译入口与 REPL 形态的返回约定。
+
+use alloc::string::String;
+
+use ulua_vm::{
+  functions::{lua_checkstack::lua_checkstack, run_loaded_chunk::run_loaded_chunk},
+  macros::lua_minstack::LUA_MINSTACK,
+  records::lua_state::LuaState,
+};
+
+use crate::functions::compile_source::compile_source;
+
+/// 运行 `source`：成功返回 `None`，失败返回 `Some(错误文本)`。
+///
+/// cpp `Repl.cpp:239` 的 `runCode` 用空串当成功哨兵；这里用 `Option` 表达同一
+/// 语义，避免调用方把「错误文本恰为空」误判成成功。
+///
+/// # Safety
+///
+/// `l` must be a valid, active pointer to a `LuaState`.
+// DELIBERATE DEVIATION（review.md §9.3）：`Repl.h` 导出入口，编译产物经
+// `run_loaded_chunk`（ulua-vm c-API）在 `*mut LuaState` 上执行；成功/失败以
+// `Option<String>` 表达（cpp 空串哨兵的 Rust 化），本处不再有可空指针。
+// 保留 `pub unsafe fn` 定性：本入口是跨 crate `pub` 句柄边界——`ulua-cli-test` 夹具以
+// 专属 `unsafe { run_code(..) }` 块断言传入句柄有效，改 safe fn 会撤掉这层调用方契约
+// 强制（且 `pub fn` 解引用裸指针形参将命中 `clippy::not_unsafe_ptr_arg_deref`），故属
+// 「确属 c-API 句柄边界」而非纯逻辑层，签名不动。
+pub unsafe fn run_code(l: *mut LuaState, source: &str) -> Option<String> {
+  // Safety: l 是 REPL 循环全程有效的主线程状态（fn /// # Safety），块内即时建引用
+  // 预留后续 VM 调用所需槽位（r16-v3：callee 已 safe 化，unsafe 仅剩边界裸指针重建）。
+  unsafe { lua_checkstack(&mut *l, LUA_MINSTACK) };
+
+  let bytecode = compile_source(source);
+
+  // Safety: run_loaded_chunk 的 `# Safety` 契约（活跃状态机、调用前栈平衡）由
+  // 上方 checkstack 与 REPL 主循环的栈平衡保证。
+  unsafe { run_loaded_chunk(l, &bytecode, true) }.err()
+}

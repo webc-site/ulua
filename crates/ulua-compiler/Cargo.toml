@@ -1,0 +1,43 @@
+[package]
+name = "ulua-compiler"
+version = "0.1.6"
+description = "Luau source-to-bytecode compiler (Rust)."
+keywords = [ "luau", "lua", "compiler", "bytecode" ]
+categories = [ "compilers" ]
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[lib]
+crate-type = [ "rlib" ]
+
+[dependencies.memchr]
+workspace = true
+default-features = false
+
+[dependencies.museair]
+workspace = true
+
+[dependencies.thiserror]
+workspace = true
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.6"
+
+[dependencies.ulua-bytecode]
+path = "../ulua-bytecode"
+version = "0.1.6"
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.6"

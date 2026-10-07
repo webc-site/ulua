@@ -1,0 +1,50 @@
+[package]
+name = "ulua-bench-runner"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ulua = { path = "../../crates/ulua", default-features = false, features = ["jit"] }
+ulua-ast = { path = "../../crates/ulua-ast" }
+ulua-analysis = { path = "../../crates/ulua-analysis" }
+ulua-bytecode = { path = "../../crates/ulua-bytecode" }
+ulua-compiler = { path = "../../crates/ulua-compiler" }
+ulua-code-gen = { path = "../../crates/ulua-code-gen" }
+ulua-common = { path = "../../crates/ulua-common" }
+ulua-config = { path = "../../crates/ulua-config" }
+# 引擎后端三选一（互斥，见 src/main.rs 顶部的 compile_error 守卫）。mlua 0.12
+# 的 ffi 模块把各 Lua 版本的 C 符号扁平 re-export（`pub use lua54::*`），同一
+# 二进制只能共链一种 C Lua；同版本多别名依赖会被 cargo 特性并集并回同一节点，
+# 故互斥性靠 feature 守卫保证，靠可选依赖保证未选中的后端零编译。
+mlua-luajit = { package = "mlua", version = "0.12", default-features = false, features = ["luajit", "vendored"], optional = true }
+mlua-lua54 = { package = "mlua", version = "0.12", default-features = false, features = ["lua54", "vendored"], optional = true }
+mlua-luau = { package = "mlua", version = "0.12", default-features = false, features = ["luau", "luau-jit", "vendored"], optional = true }
+serde = { version = "1.0", features = ["derive"] }
+sonic-rs = "0.3"
+mimalloc = "0.1.52"
+jiff = "0.2.37"
+sysinfo = "0.39.6"
+
+[features]
+default = []
+# 引擎后端（互斥三选一）：
+# - engine-luajit → mlua/luajit-interp + mlua/luajit（LuaJIT 2.1 解释 / JIT）
+# - engine-lua54  → mlua/lua5.4（PUC Lua 5.4 解释）
+# - engine-luau   → mlua/luau + mlua/luau-jit（官方 Luau C++ 解释 / JIT）
+# ulua 自家引擎（interp / JIT）与 compile/analysis 组的 ulua 侧不依赖后端，
+# 任何后端下都可测；bench.sh 以 `--append` 把多个后端的部分结果合并进同一
+# results.json，网站侧即得到全集对比。
+engine-luajit = ["dep:mlua-luajit"]
+engine-lua54 = ["dep:mlua-lua54"]
+engine-luau = ["dep:mlua-luau"]
+# cfg 门控的分配计数：开启后全局分配器切换为计数包装（默认关闭，
+# 既有对比输出与性能零影响）。见 src/main.rs `--alloc`。
+count-alloc = []
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+
+[workspace]

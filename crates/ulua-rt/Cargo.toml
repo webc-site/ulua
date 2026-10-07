@@ -1,0 +1,102 @@
+[package]
+name = "ulua-rt"
+version = "0.1.6"
+description = "Safe, ergonomic, mlua-style API for ulua (pure-Rust Luau)."
+keywords = [ "luau", "lua", "mlua", "scripting", "embedding" ]
+categories = [ "api-bindings", "development-tools::ffi", "game-development" ]
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[features]
+serde = [ "dep:serde" ]
+macros = [ "dep:ulua-rt-derive" ]
+async = [ "dep:futures-util" ]
+typecheck = [ "dep:ulua-analysis", "dep:ulua-config" ]
+send = [ "dep:parking_lot" ]
+jit = [ "dep:ulua-code-gen" ]
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.6"
+
+[dependencies.ulua-code-gen]
+path = "../ulua-code-gen"
+version = "0.1.6"
+optional = true
+
+[dependencies.ulua-rt-derive]
+path = "../ulua-rt-derive"
+version = "0.1.4"
+optional = true
+
+[dependencies.ulua-compiler]
+path = "../ulua-compiler"
+version = "0.1.6"
+
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.6"
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.6"
+
+[dependencies.ulua-bytecode]
+path = "../ulua-bytecode"
+version = "0.1.6"
+
+[dependencies.ulua-analysis]
+path = "../ulua-analysis"
+version = "0.1.6"
+optional = true
+
+[dependencies.ulua-config]
+path = "../ulua-config"
+version = "0.1.6"
+optional = true
+
+[dependencies.serde]
+workspace = true
+optional = true
+default-features = false
+features = [ "std" ]
+
+[dependencies.futures-util]
+workspace = true
+optional = true
+
+[dependencies.thiserror]
+workspace = true
+
+[dependencies.parking_lot]
+workspace = true
+optional = true
+
+[dependencies.strum]
+workspace = true
+
+[dev-dependencies.serde]
+workspace = true
+features = [ "std", "derive" ]
+
+[dev-dependencies.bstr]
+workspace = true
+
+[dev-dependencies.tokio]
+workspace = true
+
+[dev-dependencies.futures-util]
+workspace = true
+
+[dev-dependencies.sonic-rs]
+workspace = true

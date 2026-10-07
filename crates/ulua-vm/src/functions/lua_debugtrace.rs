@@ -1,0 +1,77 @@
+//! Source: `VM/src/ldebug.cpp:630-677` (hand-ported)
+
+use core::{cell::UnsafeCell, ffi::c_char, mem::zeroed};
+
+use itoa::Buffer;
+use ulua_common::macros::luau_assert::LUAU_ASSERT;
+
+use crate::{
+  functions::{append::append_bytes, cstr, cstr_bytes, lua_getinfo::lua_getinfo},
+  records::{lua_debug::LuaDebug, lua_state::LuaState},
+};
+
+const BUF_LEN: usize = 4096;
+
+// cpp `ldebug.cpp:632` 的函数级 `static char buf[4096]` 在 Rust 下若照抄为
+// `static mut`，两线程各持 VM 并发调用即数据竞争 UB；改为线程局部缓冲，
+// 线程内语义（返回指针在下一次本线程调用前有效）与上游一致，且彻底消除
+// 跨线程竞争。FFI 返回形态（`*const c_char`）保持不变。
+thread_local! {
+  static TRACE_BUF: UnsafeCell<[u8; BUF_LEN]> = const { UnsafeCell::new([0; BUF_LEN]) };
+}
+
+/// # Safety
+/// `l` 须存活且 `ci`/`base_ci` 指向同一 CallInfo 数组（`offset_from` 前提），回溯期间栈不被重排
+/// （`lua_getinfo` 不触发 GC/扩容）。返回指针指向线程局部缓冲，仅在本线程下一次调用前有效。
+/// cpp ldebug.cpp:668。
+pub unsafe fn lua_debugtrace(l: *mut LuaState) -> *const c_char {
+  unsafe {
+    const LIMIT1: i32 = 10;
+    const LIMIT2: i32 = 10;
+
+    TRACE_BUF.with(|cell| {
+      // 线程局部缓冲在本线程再次调用前稳定有效，指针可安全返回给 FFI 调用方。
+      let buf = &mut *cell.get();
+
+      let depth: i32 = (*l).ci.offset_from((*l).base_ci) as i32;
+      let mut offset: usize = 0;
+
+      let mut ar: LuaDebug = zeroed();
+      let mut num = Buffer::new();
+
+      let mut level: i32 = 0;
+      while lua_getinfo(l, level, cstr(b"sln\0"), &mut ar) != 0 {
+        if !ar.short_src.is_null() {
+          offset = append_bytes(buf, offset, cstr_bytes(ar.short_src));
+        }
+
+        if ar.currentline > 0 {
+          offset = append_bytes(buf, offset, b":");
+          offset = append_bytes(buf, offset, num.format(ar.currentline).as_bytes());
+        }
+
+        if !ar.name.is_null() {
+          offset = append_bytes(buf, offset, b" function ");
+          offset = append_bytes(buf, offset, cstr_bytes(ar.name));
+        }
+
+        offset = append_bytes(buf, offset, b"\n");
+
+        if depth > LIMIT1 + LIMIT2 && level == LIMIT1 - 1 {
+          offset = append_bytes(buf, offset, b"... (+");
+          offset = append_bytes(buf, offset, num.format(depth - LIMIT1 - LIMIT2).as_bytes());
+          offset = append_bytes(buf, offset, b" frames)\n");
+
+          level = depth - LIMIT2 - 1;
+        }
+
+        level += 1;
+      }
+
+      LUAU_ASSERT!(offset < BUF_LEN);
+      buf[offset] = 0;
+
+      buf.as_ptr().cast::<c_char>()
+    })
+  }
+}

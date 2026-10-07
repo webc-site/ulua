@@ -1,0 +1,42 @@
+[package]
+name = "ulua-bytecode"
+description = "Luau bytecode format and builder (Rust)."
+keywords = [ "luau", "lua", "bytecode", "compiler" ]
+categories = [ "compilers", "encoding" ]
+version = "0.1.6"
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[lib]
+crate-type = [ "rlib" ]
+
+[dependencies.foldhash]
+workspace = true
+
+[dependencies.hashbrown]
+workspace = true
+
+[dependencies.strum]
+workspace = true
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.6"
+
+[dev-dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.6"
+
+[dev-dependencies.ulua-compiler]
+path = "../ulua-compiler"
+version = "0.1.6"

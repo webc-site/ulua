@@ -1,0 +1,44 @@
+[package]
+name = "ulua-conformance"
+version = "0.1.4"
+publish = false
+
+[package.edition]
+workspace = true
+
+[dependencies.hashbrown]
+workspace = true
+
+[dependencies.foldhash]
+workspace = true
+
+[dependencies.strum]
+workspace = true
+
+[dependencies.ulua-analysis]
+path = "../ulua-analysis"
+version = "0.1.6"
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.6"
+
+[dependencies.ulua-bytecode]
+path = "../ulua-bytecode"
+version = "0.1.6"
+
+[dependencies.ulua-code-gen]
+path = "../ulua-code-gen"
+version = "0.1.6"
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.6"
+
+[dependencies.ulua-compiler]
+path = "../ulua-compiler"
+version = "0.1.6"
+
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.6"

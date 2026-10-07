@@ -1,0 +1,46 @@
+//! TypeFunction 原始类型（primordial）create_* 构造骨架单点
+//! （`TypeFunctionRuntime.cpp`）。
+//!
+//! C++ 侧 `createAny/createNever/createUnknown/createNumber/createString/
+//! createBoolean/createBuffer/createThread` 是同一形状：现场构造一枚
+//! `TypeFunctionTypeVariant` 交给 `alloc_type_user_data` 压栈后固定返回 1。
+//! 本仓库原先把这副骨架在 8 个模块里各手抄一遍（含逐字重复的 import 块与
+//! `# Safety` 契约文本）。[`create_primordial!`] 保留全部对外路径、函数名、
+//! 签名与构造语义不变，契约文本单点维护在宏内，调用点只剩「cpp 出处
+//! + 函数名 + 变体表达式」。
+
+/// 生成一枚「构造指定 `TypeFunctionTypeVariant` 变体并 `alloc_type_user_data`
+/// 压栈、返回 1」的 `pub fn` 入口。r19 起首参收形为 vm 侧独占 `&mut LuaState`
+/// （本宏 8 枚调用点全数随形，不留裸指针旧臂——零消费者的臂既不参与展开检验，
+/// 又属死文本，违 review.md §7），蹦床侧须同用 `c_thunk!` 的 `, @ref` 形。宏体
+/// 一律书写全限定路径：`macro_rules!` 展开点的标识符在**调用点**解析，本文件的
+/// `use` 对展开不可见。
+///
+/// 用法：
+/// ```ignore
+/// create_primordial!(
+///   /// 对应 C++ 原生 `static int createNumber(lua_State* L)`
+///   /// （`cpp/Analysis/src/TypeFunctionRuntime.cpp:498`）。
+///   create_number,
+///   TypeFunctionTypeVariant::Primitive(TypeFunctionPrimitiveType::new(Type::Number))
+/// );
+/// ```
+macro_rules! create_primordial {
+  ($(#[$attr:meta])* $name:ident, $variant:expr $(,)?) => {
+    $(#[$attr])*
+    ///
+    /// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载）：
+    /// `l` 须是 Lua VM 在本次原生函数调用中传入、且在该调用全程有效的状态：VM 已把实参
+    /// 压入栈顶，本函数只借用不持有该地址、返回前不跨调用保存；调用期间单线程独占 VM 栈与
+    /// 类型运行期数据。栈需可增 2 槽（`alloc_type_user_data` 语义），可触发分配与 GC。
+    pub(crate) fn $name(
+      l: &mut ulua_vm::records::lua_state::LuaState,
+    ) -> i32 {
+      crate::functions::alloc_type_user_data::alloc_type_user_data(l, $variant, false);
+
+      1
+    }
+  };
+}
+
+pub(crate) use create_primordial;

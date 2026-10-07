@@ -1,0 +1,103 @@
+use ulua_ast::{
+  enums::ast_expr_ref::AstExprRef,
+  records::{
+    ast_expr::AstExpr, ast_expr_global::AstExprGlobal, ast_name::AstName,
+    ast_stat_function::AstStatFunction, ast_visitor::AstVisitor, location::Location,
+  },
+  visit::{ast_expr_visit_ref, ast_stat_visit_ref},
+};
+use ulua_common::records::{dense_hash_map::DenseHashMap, dense_hash_table::DenseDefault};
+use ulua_config::enums::code::Code;
+
+use crate::{
+  functions::emit_warning::emit_warning,
+  records::{
+    arena_handle::alias_opt_mut, lint_context::LintContext, lint_context_handle::LintContextHandle,
+  },
+};
+#[derive(Debug, Clone, Default)]
+pub struct Global {
+  pub(crate) location: Location,
+  pub(crate) function: bool,
+  pub(crate) used: bool,
+}
+
+impl DenseDefault for Global {
+  fn dense_default() -> Self {
+    Self::default()
+  }
+}
+
+#[derive(Debug, Clone)]
+pub struct LintUnusedFunction<'ctx> {
+  pub(crate) context: LintContextHandle<'ctx>,
+  pub(crate) globals: DenseHashMap<AstName, Global>,
+}
+
+impl<'ctx> LintUnusedFunction<'ctx> {
+  pub fn process(context: &'ctx mut LintContext) {
+    let root = context.root;
+    let mut pass = Self {
+      context: LintContextHandle::from_ref(context),
+      globals: DenseHashMap::default(),
+    };
+    // root 为 null 或贯穿整趟 lint pass 存活的 arena AstStat；`alias_opt_mut`
+    // 句柄边界折叠 null（与旧指针门面同语义）后交引用门面递归，遍历为单线程
+    // 串行，宿主 LintContext 的写句柄由本 pass 独占。
+    if let Some(root) = alias_opt_mut(root) {
+      ast_stat_visit_ref(root, &mut pass);
+    }
+    pass.report();
+  }
+
+  pub fn report(&mut self) {
+    let mut handle = self.context;
+    for (name, global) in self.globals.iter() {
+      if global.function && !global.used {
+        // AstName::as_bytes 容忍 null（空名 → 空切片，直接跳过）。
+        let name_bytes = name.as_bytes();
+        if !name_bytes.is_empty() && name_bytes[0] != b'_' {
+          emit_warning(
+            handle.get(),
+            Code::FunctionUnused,
+            global.location,
+            format_args!(
+              "Function '{}' is never used; prefix with '_' to silence",
+              name.as_str_or_empty()
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  pub(crate) fn visit_stat_function(&mut self, node: &mut AstStatFunction) -> bool {
+    if let AstExprRef::Global(expr) = node.name.as_expr_ref() {
+      let g = self.globals.get_or_insert(expr.name);
+      g.function = true;
+      g.location = expr.base.base.location;
+      // `func` 已句柄化为 Node（非空由句柄契约承载），基类视图 `cast::<AstExpr>`
+      // 后 `get_mut()` 出借独占借用喂引用门面，全链路 safe。
+      ast_expr_visit_ref(node.func.cast::<AstExpr>().get_mut(), self);
+      return false;
+    }
+    true
+  }
+
+  pub(crate) fn visit_expr_global(&mut self, node: &mut AstExprGlobal) -> bool {
+    let name = node.name;
+    let g = self.globals.get_or_insert(name);
+    g.used = true;
+    true
+  }
+}
+
+impl<'ctx> AstVisitor for LintUnusedFunction<'ctx> {
+  fn visit_stat_function(&mut self, node: &mut AstStatFunction) -> bool {
+    self.visit_stat_function(node)
+  }
+
+  fn visit_expr_global(&mut self, node: &mut AstExprGlobal) -> bool {
+    self.visit_expr_global(node)
+  }
+}

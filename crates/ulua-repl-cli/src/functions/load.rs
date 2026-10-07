@@ -1,0 +1,209 @@
+//! cpp `ReplRequirer.cpp` 的 `static load`：在新线程上编译并运行被 require 的模块。
+//!
+//! 审计结论（工单 r13-w1e）：装载驱动 `load` 本身为安全 fn；确需的 `unsafe` 全部
+//! 落在 ulua-vm / ulua-require c-API 边界，收敛为本文件带 `# Safety` 契约的最小封装
+//! （`spawn_module_thread` / `prepare` / `check_run` 为本文件私有，`throw` 上提为
+//! `pub(crate)` 单点供 `sigint_callback` 复用）与三个单步边界调用（`luau_load` /
+//! `resume` / `lua_xmove`）。文件读取走 `std::fs`
+//! （`read_file`），字符串入参 `&[u8]`、出边界即转 owned `Cow<str>`，无 C 串管道
+//! （review.md §2/§3/§10）。
+
+use core::fmt::Arguments;
+
+use ulua_ast::records::parse_options::ParseOptions;
+use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
+use ulua_cli_lib::functions::read_file::read_file;
+use ulua_code_gen::functions::luau_codegen_compile::luau_codegen_compile;
+use ulua_common::fflag::LuauCyclicRequireShortCircuit;
+use ulua_compiler::functions::compile::compile;
+use ulua_require::functions::cyclic_placeholder::luarequire_createplaceholder;
+use ulua_vm::{
+  enums::lua_status::LuaStatus,
+  functions::{
+    lua_isstring::lua_isstring, lua_l_error_l::lua_l_error_l,
+    lua_l_sandboxthread::lua_l_sandboxthread, lua_mainthread::lua_mainthread,
+    lua_newthread::lua_newthread, lua_usesexport::lua_usesexport, lua_xmove::lua_xmove,
+    luau_load::luau_load,
+  },
+  records::lua_state::LuaState,
+};
+
+use crate::{
+  functions::state_ref::state,
+  records::repl_requirer::{ReplRequirer, host_str},
+};
+
+// `luau_load`/`lua_resume` 的返回码常量（免散落字面 0 与逐处 `as` 转型）
+const OK: i32 = LuaStatus::Ok as i32;
+const YIELD: i32 = LuaStatus::Yield as i32;
+
+/// FFI 边界（ulua-vm c-API）：开模块线程的不可拆四步序列——沿 require 帧回溯主
+/// 线程 gl → 在 gl 上新建线程（令其不继承 l 的环境）→ `lua_xmove` 把线程移到 l
+/// 栈顶槽位持有 → 对新线程沙箱化全局。单独看任何一步都不成立：新线程只有在
+/// xmove 之后才被 l 的栈槽持有，故契约合并为一条，免逐行重复论证。
+///
+/// 调用序契约（正确性，非内存安全——`l` 的存活/独占前提已由 `&mut` 接收者类型承载，
+/// review.md §2 诚实降级为安全 `fn`）：`l` 为 require 调用帧的活跃 `LuaState`（受保护
+/// 帧、有栈余量）；返回的线程指针自此由 l 的栈槽持有，与 l 在整个后续装载窗口内共同
+/// 存活。体内四步 `lua_*` c-API 仍为 ulua-vm `unsafe` 导出，裸操作下沉为下方单个窄
+/// `unsafe` 块（`// SAFETY:` 就地论证），`l` 自身不再要求调用方包裹。
+fn spawn_module_thread(l: &mut LuaState) -> *mut LuaState {
+  // SAFETY: 四步均为 ulua-vm c-API 导出；`l` 由 `&mut` 承载其存活/独占，`gl`/`ml`
+  // 为同 VM 内 `lua_mainthread`/`lua_newthread` 交出的存活状态，双状态存活前提由本
+  // fn 调用序契约覆盖，`&mut *` 重建的借用窗止于当句。
+  unsafe {
+    let gl = lua_mainthread(l);
+    let ml = lua_newthread(gl);
+    lua_xmove(&mut *gl, &mut *l, 1);
+    lua_l_sandboxthread(&mut *ml);
+    ml
+  }
+}
+
+/// FFI 边界（ulua-vm c-API）：在 `l` 上按格式化消息抛出 Lua 错误（发散，不返回）。
+/// crate 内单点封装，`load` 与 `sigint_callback` 共用（`luaL_error!` 宏展开点统一收口
+/// 于此，业务侧不再直接书写该宏）。
+///
+/// # Safety
+///
+/// `l` 为活跃且受保护的调用状态、栈上预留 ≥2 空槽（`lua_l_error_l` 的契约前置）；
+/// `msg` 为纯 Rust 格式化串，在被调窗口内消费、无逃逸借用。
+pub(crate) unsafe fn throw(l: *mut LuaState, msg: Arguments<'_>) -> ! {
+  // Safety: 前置条件即本 fn 契约（`l` 活跃受保护、栈留 ≥2 空槽），原样透传给 `lua_l_error_l`。
+  unsafe { lua_l_error_l(&mut *l, msg) }
+}
+
+/// FFI 边界（ulua-vm / ulua-require c-API）：`luau_load` 成功后、运行前的模块
+/// 预处理——export 模块在循环 require 短路开关开启时先建占位表入缓存（循环
+/// require 方经 `isCached` 拿到占位表而非重入本模块，cpp ReplRequirer.cpp:170）；
+/// codegen 开启时就地编译闭包（改写该原型，不产生跨帧指针）。
+///
+/// 调用序契约（正确性，非内存安全——`l`/`ml` 的存活前提已由 `&mut` 接收者类型承载，
+/// review.md §2 诚实降级为安全 `fn`）：`l` 为 require 调用帧活跃状态且栈槽 2 为
+/// `lua_requireinternal` 建立的 cacheKey 串；`ml` 为存活模块线程、其 -1 槽为
+/// `luau_load` 刚压入的闭包值。本 fn 不解引用两参，仅在窄 `unsafe` 块内把它们经
+/// `&mut`→`*mut` 重借透传给 ulua-vm/ulua-require 的 `unsafe` 导出（就地 `// SAFETY:`）。
+fn prepare(l: &mut LuaState, ml: &mut LuaState, codegen: bool) {
+  // SAFETY: 三处导出的栈布局前提由本 fn 调用序契约逐条覆盖；两 `&mut` 借用的
+  // 裸指针重借窗止于各句调用。
+  unsafe {
+    if LuauCyclicRequireShortCircuit.get() && lua_usesexport(ml, -1) != 0 {
+      luarequire_createplaceholder(l);
+    }
+    if codegen {
+      // The Rust codegen port exposes `luau_codegen_compile(l, idx)`; the
+      // native CompilationOptions (CodeGenColdFunctions / recordCounters)
+      // are not threaded through the public Rust API.
+      luau_codegen_compile(ml, -1);
+    }
+  }
+}
+
+/// FFI 边界（ulua-vm c-API）：把模块闭包的运行结果映射为 Lua 错误——运行成功但
+/// 返回值不唯一、模块 yield、或错误对象非串时抛对应错误（发散）；失败且错误为
+/// 串时拼消息抛出；全部通过则安静返回。`get_top`/`lua_isstring`/`to_str` 均为
+/// ulua-vm 安全方法，边界实质只在各 `throw` 抛出点。
+///
+/// 调用序契约（正确性，非内存安全——`l`/`ml` 的存活前提已由 `&mut` 接收者类型承载，
+/// review.md §2 诚实降级为安全 `fn`）：`l` 为 require 调用帧活跃状态（`throw` 前置）；
+/// `ml` 为 resume 已返回、仍由 l 栈槽持有的存活模块线程，run_status 失败时其 -1 槽为
+/// 错误对象。本 fn 自身不解引用 `l`，仅在抛出点以窄 `unsafe` 块把 `l`（经 `&mut`→`*mut`
+/// 隐式重借）透传给发散型 c-API 门面 `throw`（各块就地 `// SAFETY:` 论证）。
+fn check_run(l: &mut LuaState, ml: &mut LuaState, run_status: i32) {
+  if run_status == OK {
+    // ml 是 resume 已返回、仍由 l 栈槽持有的存活线程，-1 为模块返回值。
+    if ml.get_top() != 1 {
+      // SAFETY: l 活跃即 `throw` 契约全部前置（承本 fn 调用序契约）。
+      unsafe { throw(l, format_args!("module must return a single value")) };
+    }
+  } else if run_status == YIELD {
+    // SAFETY: 同上。
+    unsafe { throw(l, format_args!("module can not yield")) };
+  } else if lua_isstring(ml, -1) == 0 {
+    // SAFETY: 同上。
+    unsafe { throw(l, format_args!("unknown error while running module")) };
+  } else {
+    let msg = ml.to_str(-1).unwrap_or_default();
+    // SAFETY: msg 已转 Rust 借用，抛出不再依赖其它外部内存。
+    unsafe { throw(l, format_args!("error while running module: {msg}")) };
+  }
+}
+
+/// 对应 cpp `load` 回调体：宿主在 require 同步执行窗口内调用（由
+/// `RequireHost::load` 的 `ReplRequirer` 实现转交）。
+///
+// review.md §2/§3 收形：`l` 由裸 `*mut LuaState` 收编为借用 `&mut LuaState`（真实
+// 物化点下移到 trait 实现上游的 `lua_requireinternal` C 边界）。模块装载驱动仍全程
+// 在 VM 句柄上开线程/xmove/resume（ulua-vm c-API）；边界的 `unsafe` 收敛为带 `# Safety`
+// 契约的最小私有封装，`load` 自身为安全 fn，字节串入参在本边界一次性转 owned，后续
+// 只见 Rust 类型（review.md §2/§3/§10）。新线程句柄 `ml` 由 `spawn_module_thread` 交出
+// 裸指针，仍经 `state` 门面物化一次。
+pub(crate) fn load(
+  req: &ReplRequirer,
+  l: &mut LuaState,
+  _path: &[u8],
+  chunkname: &[u8],
+  loadname: &[u8],
+) -> i32 {
+  // module needs to run in a new thread, isolated from the rest
+  // note: we create ML on main thread so that it doesn't inherit environment of l
+  // `spawn_module_thread` 现收 `&mut` 借用为安全 fn，其 c-API 边界 unsafe 已下沉体内窄块，
+  // 此处直调后交 `state` 门面物化线程句柄。
+  let ml = state(spawn_module_thread(l));
+
+  // Safety: loadname/chunkname 同源于 require 链路压栈的 VM 串字节（调用帧持有、
+  // 本帧窗口内可读），此步按 cpp C 串消费规则（首 NUL 截断 + lossy）一次性转成
+  // owned `Cow<str>`，后续逻辑只见 Rust 字符串。
+  let (loadname, chunkname) = (host_str(loadname), host_str(chunkname));
+
+  // cpp: `if (!contents) return luaL_error(L, "could not read file '%s'", loadName);`
+  let Some(source) = read_file(&loadname) else {
+    // Safety: l 是 require 调用帧的活跃状态，实参 loadname 已是 owned Cow，
+    // 格式化路径不再触碰任何外部指针（`throw` 契约前置）。
+    unsafe { throw(l, format_args!("could not read file '{}'", loadname)) }
+  };
+
+  // now we can compile & run module on the new thread
+  // (req.copts 与 crate copts 来源不同, 保留独立编译调用)
+  let options = (req.copts)();
+  let bytecode = compile(&source, &options, &ParseOptions::default(), NoopEncoder);
+  // Safety: `luau_load` 为 unsafe 导出；ml 为存活线程，chunkname 已在上一步转
+  // owned 借用，bytecode 是本帧 Vec（长度自洽、本帧存活），仅在调用窗口内被
+  // 完整借用。
+  let load_status = unsafe { luau_load(ml, &chunkname, &bytecode, 0) };
+
+  if load_status == OK {
+    // `prepare` 现降级为安全 fn：ml 的 -1 槽是刚压入的闭包，l 的栈槽 2 为
+    // lua_requireinternal 建立的 cacheKey（其调用序契约）；边界 unsafe 已下沉体内窄块。
+    prepare(l, ml, req.codegen_enable());
+
+    if req.coverage_active() {
+      (req.coverage_track)(ml, -1);
+    }
+
+    if req.counters_active() {
+      (req.counters_track)(ml, -1);
+    }
+
+    // Safety: `LuaState::resume` 为 unsafe 方法；ml 为持有唯一待执行闭包的存活
+    // 线程，from=l 是其父线程（Lua/C API resume 配对），nargs=0 与栈中参数一致。
+    let run_status = unsafe { ml.resume(l, 0) };
+    // `check_run` 现降级为安全 fn：其抛出点内的窄 `unsafe` 已就地论证，本处直调。
+    check_run(l, ml, run_status);
+  }
+
+  // add ML result to l stack, then remove the ML thread slot
+  //
+  // 与 `spawn_module_thread` 里 `lua_xmove(gl, l, 1)` 配平的收尾序列，必须整体看：
+  // xmove 之后 l 栈顶是 [thread, result]，`remove(l, -2)` 弹走的正是该线程槽，
+  // 只留 result。
+  // Safety: ml 与 l 同属一个 VM 且都存活（xmove 前提成立）；-1 值移出后线程槽
+  // 已无引用需求（值已移出），remove 只搬运栈槽、不读已失效内存。callee 已前移
+  // 引用形，直接以借用传参（免 `&mut *` 重折叠）。
+  lua_xmove(ml, l, 1);
+  // remove ML thread from l stack
+  l.remove(-2);
+
+  // added one value to l stack: module result
+  1
+}

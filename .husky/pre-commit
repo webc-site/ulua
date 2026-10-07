@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+if command -v codegraph >/dev/null 2>&1; then
+  if [ -d .codegraph ]; then
+    codegraph sync -q
+  else
+    codegraph init -y
+  fi
+fi
+
+bun x lint-staged

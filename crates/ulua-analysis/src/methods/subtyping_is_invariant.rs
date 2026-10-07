@@ -1,0 +1,75 @@
+use alloc::vec::Vec;
+
+use ulua_common::fflag::LuauSubtypingSkipUnreadReasoning;
+
+use crate::{
+  enums::{
+    subtyping_suppression_policy::SubtypingSuppressionPolicy, subtyping_variance::SubtypingVariance,
+  },
+  functions::assert_reasoning_valid_subtyping::assert_reasoning_valid,
+  methods::subtyping_is_contravariant::IntoCovOperand,
+  records::{
+    path::Path, scope::Scope, subtyping::Subtyping, subtyping_environment::SubtypingEnvironment,
+    subtyping_reasoning::SubtypingReasoning, subtyping_result::SubtypingResult,
+  },
+};
+
+impl Subtyping {
+  pub(crate) fn is_invariant_with_subtyping_environment_sub_ty_super_ty_not_null_scope<
+    SubTy,
+    SuperTy,
+  >(
+    &mut self,
+    env: &mut SubtypingEnvironment,
+    sub_ty: SubTy,
+    super_ty: SuperTy,
+    scope: &Scope,
+  ) -> SubtypingResult
+  where
+    SubTy: IntoCovOperand,
+    SuperTy: IntoCovOperand,
+  {
+    // C++: isCovariantWith(env, sub_ty, super_ty, scope).
+    let mut result = self.covariant_dispatch(
+      env,
+      sub_ty.into_cov_operand(),
+      super_ty.into_cov_operand(),
+      scope,
+    );
+    let contra = self.is_contravariant_with_subtyping_environment_sub_ty_super_ty_not_null_scope(
+      env, sub_ty, super_ty, scope,
+    );
+    result.and_also(contra, SubtypingSuppressionPolicy::Any);
+
+    if LuauSubtypingSkipUnreadReasoning.get() && result.is_subtype {
+      return result;
+    }
+
+    if result.reasoning.empty() {
+      result.reasoning.insert(SubtypingReasoning {
+        sub_path: Path::default(),
+        super_path: Path::default(),
+        variance: SubtypingVariance::Invariant,
+        is_property_modifier_violation: false,
+      });
+    } else {
+      let count = result.reasoning.size();
+      let mut items = Vec::with_capacity(count);
+      for r in result.reasoning.iter() {
+        let mut r = r.clone();
+        r.variance = SubtypingVariance::Invariant;
+        items.push(r);
+      }
+      result.reasoning.clear();
+      for item in items {
+        result.reasoning.insert(item);
+      }
+    }
+
+    // `assertReasoningValid` is a debug-only no-op; pass `sub_ty` for both args to
+    // satisfy the single `TID` parameter (see the contravariant port for details).
+    assert_reasoning_valid(sub_ty, sub_ty, &result, self.builtin_types, self.arena);
+
+    result
+  }
+}

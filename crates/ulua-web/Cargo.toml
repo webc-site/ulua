@@ -1,0 +1,70 @@
+[package]
+name = "ulua-web"
+version = "0.1.6"
+description = "WebAssembly bindings to run and type-check Luau in the browser (Rust)."
+keywords = [ "luau", "lua", "wasm", "webassembly", "playground" ]
+categories = [ "wasm", "web-programming" ]
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[lib]
+crate-type = [ "rlib", "cdylib" ]
+
+[dependencies.wasm-bindgen]
+workspace = true
+optional = true
+
+[dependencies.console_error_panic_hook]
+workspace = true
+optional = true
+
+[dependencies.ulua-analysis]
+path = "../ulua-analysis"
+version = "0.1.6"
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.6"
+
+[dependencies.ulua-bytecode]
+path = "../ulua-bytecode"
+version = "0.1.6"
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.6"
+
+[dependencies.ulua-compiler]
+path = "../ulua-compiler"
+version = "0.1.6"
+
+[dependencies.ulua-config]
+path = "../ulua-config"
+version = "0.1.6"
+
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.6"
+
+[dependencies.itoa]
+workspace = true
+default-features = false
+
+[dependencies.hashbrown]
+workspace = true
+
+[dependencies.foldhash]
+workspace = true
+
+[features]
+wasm = [ "dep:wasm-bindgen", "dep:console_error_panic_hook" ]

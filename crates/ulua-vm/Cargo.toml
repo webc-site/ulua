@@ -1,0 +1,51 @@
+[package]
+name = "ulua-vm"
+version = "0.1.6"
+description = "The Luau register virtual machine and standard library (Rust)."
+keywords = [ "luau", "lua", "vm", "interpreter", "bytecode" ]
+categories = [ "compilers", "emulators" ]
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[lib]
+crate-type = [ "rlib" ]
+
+[dependencies.coarsetime]
+workspace = true
+
+[dependencies.itoa]
+workspace = true
+default-features = false
+
+[dependencies.jiff]
+workspace = true
+
+[dependencies.memchr]
+workspace = true
+default-features = false
+features = [ "alloc" ]
+
+[dependencies.strum]
+workspace = true
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.6"
+
+[features]
+luai_gcmetrics = [ ]
+hard_mem_tests = [ ]
+
+# 测量用：在 VM 派发环里记录动态 opcode 直方图与转移计数（见 functions/op_count.rs）。
+# 打开后臂尾融合整体禁用（计数点只在环头），故只用于选融合站点，不进默认构建。
+vm-opcount = [ ]

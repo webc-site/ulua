@@ -1,0 +1,100 @@
+[package]
+name = "ulua"
+version = "0.1.6"
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[package.description]
+workspace = true
+
+[package.keywords]
+workspace = true
+
+[package.categories]
+workspace = true
+
+[package.metadata.docs.rs]
+features = [ "serde", "async", "macros" ]
+rustdoc-args = [ "--cfg", "docsrs" ]
+
+[[bin]]
+name = "ulua"
+path = "src/bin/ulua.rs"
+required-features = [ "cli" ]
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.6"
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.6"
+
+[dependencies.ulua-bytecode]
+path = "../ulua-bytecode"
+version = "0.1.6"
+
+[dependencies.ulua-compiler]
+path = "../ulua-compiler"
+version = "0.1.6"
+
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.6"
+
+[dependencies.ulua-analysis]
+path = "../ulua-analysis"
+version = "0.1.6"
+
+[dependencies.ulua-config]
+path = "../ulua-config"
+version = "0.1.6"
+
+[dependencies.ulua-require]
+path = "../ulua-require"
+version = "0.1.6"
+
+[dependencies.ulua-rt]
+path = "../ulua-rt"
+version = "0.1.6"
+
+[dependencies.ulua-checked-macros]
+path = "../ulua-checked-macros"
+version = "0.1.6"
+optional = true
+
+[dependencies.ulua-repl-cli]
+path = "../ulua-repl-cli"
+version = "0.1.6"
+optional = true
+
+[features]
+default = [ "typecheck", "cli" ]
+cli = [ "dep:ulua-repl-cli" ]
+async = [ "ulua-rt/async" ]
+serde = [ "ulua-rt/serde" ]
+send = [ "ulua-rt/send" ]
+macros = [ "ulua-rt/macros" ]
+jit = [ "ulua-rt/jit" ]
+checked-macros = [ "typecheck", "dep:ulua-checked-macros" ]
+typecheck = [ "ulua-rt/typecheck" ]
+
+[dev-dependencies.divan]
+workspace = true
+
+[dev-dependencies.mimalloc]
+workspace = true
+
+[[bench]]
+name = "benchmarks"
+harness = false

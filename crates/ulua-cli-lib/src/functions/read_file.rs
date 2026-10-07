@@ -1,0 +1,35 @@
+use alloc::string::String;
+use std::fs::read;
+
+pub fn read_file(name: &str) -> Option<String> {
+  // Use the standard library's filesystem layer rather than hand-rolled C
+  // `fopen`/`_wfopen` FFI. `std::fs` handles cross-platform path encoding
+  // (including UTF-16 wide paths with correct NUL termination on Windows) and
+  // is free of the unsafe pointer plumbing the previous port carried. Files
+  // are read as raw bytes, mirroring the C++ reader's binary (`"rb"`) mode.
+  //
+  // Several callers hand us a C-string-style path that still carries its
+  // trailing NUL (e.g. `to_bytes_with_nul()` / `nul_terminated()`), relying on
+  // the old `fopen` stopping at the first NUL. `std::fs` treats an interior
+  // NUL as an error, so reproduce that termination behaviour here.
+  let name = match name.find('\0') {
+    Some(end) => &name[..end],
+    None => name,
+  };
+  let bytes = read(name).ok()?;
+
+  // cpp 把字节原样存入 `std::string` 交给编译器；Rust 侧 `String` 要求 UTF-8，
+  // 合法字节零拷贝原样保留，非 UTF-8（如 `"\xFF"` 字面量）走 lossy 而非 UB。
+  let mut result = match String::from_utf8(bytes) {
+    Ok(s) => s,
+    Err(e) => String::from_utf8_lossy(e.as_bytes()).into_owned(),
+  };
+
+  // Skip first line if it's a shebang
+  if result.len() > 2 && result.starts_with("#!") {
+    let end = result.find('\n').unwrap_or(result.len());
+    result.drain(..end);
+  }
+
+  Some(result)
+}

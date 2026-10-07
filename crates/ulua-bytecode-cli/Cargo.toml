@@ -1,0 +1,54 @@
+[package]
+name = "ulua-bytecode-cli"
+description = "Command-line Luau bytecode disassembler and inspector (Rust)."
+keywords = [ "luau", "lua", "bytecode", "disassembler", "cli" ]
+categories = [ "command-line-utilities", "development-tools" ]
+version = "0.1.6"
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[lib]
+crate-type = [ "rlib" ]
+
+[[bin]]
+name = "ulua-bytecode"
+path = "src/main.rs"
+
+[dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.6"
+
+[dependencies.ulua-bytecode]
+path = "../ulua-bytecode"
+version = "0.1.6"
+
+[dependencies.ulua-cli-lib]
+path = "../ulua-cli-lib"
+version = "0.1.6"
+
+[dependencies.ulua-code-gen]
+path = "../ulua-code-gen"
+version = "0.1.6"
+
+[dependencies.ulua-compiler]
+path = "../ulua-compiler"
+version = "0.1.6"
+
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.6"
+
+[dev-dependencies.ulua-cli-lib]
+path = "../ulua-cli-lib"
+features = [ "test-utils" ]
+version = "0.1.6"

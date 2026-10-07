@@ -1,0 +1,56 @@
+[package]
+name = "ulua-code-gen"
+description = "Native A64/X64 JIT code generation for compiled Luau bytecode."
+keywords = [ "luau", "lua", "codegen", "jit", "assembler" ]
+categories = [ "compilers" ]
+version = "0.1.6"
+
+[package.edition]
+workspace = true
+
+[package.license]
+workspace = true
+
+[package.authors]
+workspace = true
+
+[package.repository]
+workspace = true
+
+[lib]
+crate-type = [ "rlib" ]
+
+[dependencies.strum]
+workspace = true
+
+[dependencies.ulua-common]
+path = "../ulua-common"
+version = "0.1.6"
+
+[dependencies.ulua-vm]
+path = "../ulua-vm"
+version = "0.1.6"
+
+[dev-dependencies.ulua-ast]
+path = "../ulua-ast"
+version = "0.1.6"
+
+[dev-dependencies.ulua-bytecode]
+path = "../ulua-bytecode"
+version = "0.1.6"
+
+[dev-dependencies.ulua-compiler]
+path = "../ulua-compiler"
+version = "0.1.6"
+
+[target."cfg(windows)".dependencies.windows-sys]
+workspace = true
+features = [
+"Win32_Foundation",
+"Win32_System_Memory",
+"Win32_System_Threading",
+"Win32_System_Diagnostics_Debug"
+]
+
+[lints.rust.unexpected_cfgs]
+level = "warn"
