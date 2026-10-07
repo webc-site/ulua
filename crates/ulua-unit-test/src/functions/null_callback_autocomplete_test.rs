@@ -6,7 +6,7 @@ use ulua_analysis::{
 
 pub fn null_callback(
   _tag: String,
-  _ptr: Option<*const ExternType>,
+  _extern_type: Option<&'static ExternType>,
   _contents: Option<String>,
 ) -> Option<AutocompleteEntryMap> {
   None
