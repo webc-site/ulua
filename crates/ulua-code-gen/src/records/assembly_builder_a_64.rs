@@ -117,13 +117,15 @@ impl AssemblyBuilderA64 {
     self.adr_data_with_align(dst, data, 4);
   }
 
-  /// 把栈上 `Copy` 值以字节视图嵌入 data 段（ADR 取址）：对齐取 `align_of::<T>`，
-  /// 长度取 `size_of::<T>`——(裸指针, 长度) C 风格对由此收口为 `&T` 契约。
+  /// 把栈上 `Copy` 值以字节视图嵌入 data 段（ADR 取址）：长度取 `size_of::<T>`——
+  /// (裸指针, 长度) C 风格对由此收口为 `&T` 契约。对齐不取 `align_of::<T>`：
+  /// `patch_data_ref` 以指令字（4 字节）粒度换算 `data_pos`（`(len - pos) / 4`），
+  /// 非 4 对齐的 pos 整除截断会让 ADR 偏移错位，故对齐下限 4（cpp:708 `allocateData(size, 4)`）。
   pub fn adr_value<T>(&mut self, dst: RegisterA64, value: &T) {
     // Safety: `value` 为存活引用，`size_of::<T>` 即其字节长度，`*const u8` 对齐
     // 为 1 恒满足；所得切片仅在本语句内被逐字节拷贝消费。
     let slice = unsafe { from_raw_parts(from_ref(value).cast::<u8>(), size_of::<T>()) };
-    self.adr_data_with_align(dst, slice, align_of::<T>());
+    self.adr_data_with_align(dst, slice, align_of::<T>().max(4));
   }
 
   pub fn adr_u64(&mut self, dst: RegisterA64, value: u64) {
