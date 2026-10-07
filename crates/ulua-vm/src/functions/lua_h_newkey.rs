@@ -1,5 +1,3 @@
-use core::ptr::null;
-
 use crate::{
   functions::{
     index_chain_cache::index_chain_write, lua_g_runerror_l::lua_g_runerror_l,
@@ -30,11 +28,11 @@ pub(crate) unsafe fn lua_h_newkey(l: *mut LuaState, t: *mut LuaTable, key: &TVal
   // SAFETY: 契约保证 `t` 为存活 LuaTable 且 key 为存活 TValue 只读借用，块内 rehash/节点搬运仅触及 array 与 sizenode 界内槽位
   unsafe {
     if key.is_nil() {
-      lua_g_runerror_l(l, null(), format_args!("table index is nil"));
+      lua_g_runerror_l(l, format_args!("table index is nil"));
     } else if key.is_number() && luai_numisnan(key.as_number()) {
-      lua_g_runerror_l(l, null(), format_args!("table index is NaN"));
+      lua_g_runerror_l(l, format_args!("table index is NaN"));
     } else if key.is_vector() && luai_vecisnan(key.as_vector_ref()) {
-      lua_g_runerror_l(l, null(), format_args!("table index contains NaN"));
+      lua_g_runerror_l(l, format_args!("table index contains NaN"));
     }
 
     // 新键插入改变「键 → 非 nil 值」存在性（含 __index 链中间级的后插键遮蔽），
