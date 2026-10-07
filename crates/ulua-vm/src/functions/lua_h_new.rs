@@ -13,7 +13,7 @@ use crate::{
 /// `l` 须存活且分配器就绪（`setarrayvector`/`setnodevector` 可抛 ERR_MEM unwind）；`narray`/`nhash`
 /// 须为经 luaO 向上取整后的非负预估值（负值虽走不到分配分支，但超大正值会在乘法换算中回绕成错误分配尺寸）。
 /// 返回表未入栈，调用方须尽快置于可达槽位。cpp ltable.cpp:824。
-pub unsafe fn lua_h_new(l: *mut LuaState, narray: i32, nhash: i32) -> *mut LuaTable {
+pub(crate) unsafe fn lua_h_new(l: *mut LuaState, narray: i32, nhash: i32) -> *mut LuaTable {
   unsafe {
     let t = lua_m_newgco(l, size_of::<LuaTable>(), (*l).activememcat) as *mut LuaTable;
 

@@ -20,7 +20,7 @@ use crate::{
 /// `l` 须存活且分配器就绪（拷贝数组/节点时可抛 ERR_MEM unwind）；`tt` 须为存活 `LuaTable` 且
 /// array/sizearray、node/lsizenode 自洽——两处切片窗整段拷贝直接以源表长度为界，失真即越界复制。
 /// 返回的新表尚未入栈，调用方须尽快放进可达槽位。cpp ltable.cpp:1374。
-pub unsafe fn lua_h_clone(l: *mut LuaState, tt: *mut LuaTable) -> *mut LuaTable {
+pub(crate) unsafe fn lua_h_clone(l: *mut LuaState, tt: *mut LuaTable) -> *mut LuaTable {
   unsafe {
     let t = lua_m_newgco(l, size_of::<LuaTable>(), (*l).activememcat) as *mut LuaTable;
 

@@ -7,13 +7,17 @@ use crate::functions::{
   get_native_proto_exec_data_header_native_proto_exec_data::get_native_proto_exec_data_header,
 };
 
+/// 函数销毁钩子（ecb.destroy 槽位实现）：归还原生码模块引用计数并把 proto 复位到字节码入口。
+///
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn on_destroy_function(l: *mut LuaState, proto: *mut Proto) {
-  // Safety: 先判空 l/proto 后返回, 二者其后均活; ctx 仅做存活上下文存在性判定(is_some)。
-  // (*proto).execdata 判非空后归还模块引用计数, 满足其对有效 execdata 的前置条件。
-  // 随后清空 execdata/exectarget 并令 codeentry=code 均为对本活 Proto 字段的合法写
-  // (code 为该 proto 自身字节码数组)。以下窄块统一援引。
+/// `extern "C-unwind"` FFI 边界，由 VM 宿主按 Lua/C 契约传入存活的 `LuaState` 与 `Proto`。
+/// 判空早返回后二者均活；`get_code_gen_context` 依其 `# Safety` 返回存活上下文的独占借用或 None，
+/// 本函数只做存在性判定（镜像 cpp `if (getCodeGenContext(L))`），借用即时结束，不与后续 Proto
+/// 字段写冲突。`(*proto).execdata` 判非空后指向 `NativeProtoExecData` 存活缓冲，依「头部先于
+/// instruction_offsets 数组」布局，`get_native_proto_exec_data_header` 由有效指针算得同分配内非空
+/// 且对齐的头部地址，故派生 `&` 合法；`release()` 只在 `&self` 上递减原子引用计数，无并存别名。
+/// 随后清空 `execdata`/`exectarget` 并令 `codeentry = code` 均为对本活 Proto 字段的合法写。
+pub unsafe extern "C-unwind" fn on_destroy_function(l: *mut LuaState, proto: *mut Proto) {
   if l.is_null() || proto.is_null() {
     return;
   }
@@ -46,12 +50,4 @@ pub unsafe fn on_destroy_function(l: *mut LuaState, proto: *mut Proto) {
     (*proto).exectarget = 0;
     (*proto).codeentry = (*proto).code;
   }
-}
-
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn on_destroy_function_export(l: *mut LuaState, proto: *mut Proto) {
-  // Safety: 导出 C ABI 入口原样转发 l/proto 给同契约 unsafe fn on_destroy_function; 该内部
-  // 函数对 l/proto 判空早返回并仅在 execdata 非空时使用, 满足被调前置条件。
-  unsafe { on_destroy_function(l, proto) };
 }

@@ -5,16 +5,13 @@ use core::{
 };
 
 use itoa::Buffer;
-use ulua_common::functions::c_str::{cstr, cstr_cow};
+use ulua_common::functions::c_str::cstr;
 use ulua_vm::{
   functions::{lua_callbacks::lua_callbacks, lua_getinfo::lua_getinfo},
-  records::lua_state::LuaState,
+  records::{lua_debug::LuaDebug, lua_state::LuaState},
 };
 
-use crate::{
-  functions::ZERO_DEBUG,
-  records::profiler::{GC_STATE_COUNT, ProfilerMain, ProfilerShared},
-};
+use crate::records::profiler::{GC_STATE_COUNT, ProfilerMain, ProfilerShared};
 
 /// cpp 文件静态量 `static Profiler gProfiler` 的跨线程共享发布面：`ticks`/`samples`
 /// 由采样线程唯一写入，`exit` 主线程落、采样线程读——纯原子字段，静态量普通放置
@@ -59,16 +56,16 @@ fn collect_stack(l: &mut LuaState, gc: i32, stack: &mut String) {
     stack.push_str("GC,GC,");
   }
 
-  // C++ `LuaDebug ar = {}`：编译期零初值（见 functions::ZERO_DEBUG）
-  let mut ar = ZERO_DEBUG;
+  // `LuaDebug::default()`：Rust 原生记录的「未填写」初值（替代原编译期零初值 POD）
+  let mut ar = LuaDebug::default();
   // 一枚复用的 itoa 栈缓冲（采样热路径，免 core::fmt 开销与逐级重初始化）
   let mut num = Buffer::new();
   // cpp `for (level = 0; lua_getinfo(...); level++)`：open-ended range 即同形，
   // getinfo 返回 0 即 break。
   for level in 0.. {
     // Safety: `lua_getinfo` 为 unsafe 导出；`&mut ar` 以 `&mut T → *mut T` 隐式转换
-    // 交出本地独占出参，getinfo 成功时把 short_src/name 填为 NUL 结尾串（串缓冲由
-    // 调用帧持有，本循环窗口内有效）；what 为 NUL 结尾静态字节串（`cstr` 门面）。
+    // 交出本地独占出参，getinfo 成功时把 short_src/name 填为 owned `Vec<u8>`；
+    // what 为 NUL 结尾静态字节串（`cstr` 门面）。
     if unsafe { lua_getinfo(l, level, cstr(GETINFO_SN_OPT), &mut ar) } == 0 {
       break;
     }
@@ -77,14 +74,13 @@ fn collect_stack(l: &mut LuaState, gc: i32, stack: &mut String) {
       stack.push(';');
     }
 
-    // 「判空 + NUL 截断解码」样板收敛到 cstr_cow 门面：null 译空串，push 空串
-    // 与原判空跳过的观察行为一致。
-    // Safety: `cstr_cow` 为 unsafe fn；short_src/name 为 null 或 NUL 结尾串（上一行
-    // getinfo 契约）。
-    stack.push_str(&unsafe { cstr_cow(ar.short_src) });
+    // `short_src`/`name` 是 VM 拷成的 owned 字节，lossy 解码后拼进栈串；未填写
+    // （`None`）译空串，与原判空跳过的观察行为一致。
+    stack.push_str(&String::from_utf8_lossy(
+      ar.short_src.as_deref().unwrap_or(b""),
+    ));
     stack.push(',');
-    // Safety: 同上。
-    stack.push_str(&unsafe { cstr_cow(ar.name) });
+    stack.push_str(&String::from_utf8_lossy(ar.name.as_deref().unwrap_or(b"")));
     stack.push(',');
     if ar.linedefined > 0 {
       stack.push_str(num.format(ar.linedefined));

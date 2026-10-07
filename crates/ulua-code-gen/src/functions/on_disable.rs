@@ -4,8 +4,7 @@
 //! 并遍历所有线程的 Lua call stack，清除仍指向该 proto 的帧上的
 //! `LUA_CALLINFO_NATIVE` 标志。
 
-use core::ffi::c_void;
-use std::ptr::eq;
+use core::{ffi::c_void, ptr::eq};
 
 use ulua_vm::{
   enums::lua_type::LuaType,
@@ -55,14 +54,13 @@ unsafe fn on_disable_visitor(
   false
 }
 
+/// 禁用回调（ecb.disable 槽位实现）。
+///
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn on_disable(l: *mut LuaState, proto: *mut Proto) {
-  // Safety: `l` 为存活 `LuaState`、`proto` 为存活 `*mut Proto`（调用方 codegen disable 路径保证）。
-  // 读写 `(*proto).codeentry/code/exectarget` 均为该存活对象上的字段操作（把入口指回字节码、清
-  // 原生目标）；`lua_m_visitgco` 的 visitor 契约（context 存活、gco 由遍历提供）由下方 visitor 证成。
-  // 以下各窄块统一援引本契约。
-
+/// `extern "C-unwind"` FFI 边界：由 VM 宿主按 Lua/C 契约传入存活的 `LuaState` 与 `Proto`。
+/// 读写 `(*proto).codeentry/code/exectarget` 均为该存活对象上的字段操作（把入口指回字节码、
+/// 清原生目标）；`lua_m_visitgco` 的 visitor 契约由 [`on_disable_visitor`] 自身证成。
+pub unsafe extern "C-unwind" fn on_disable(l: *mut LuaState, proto: *mut Proto) {
   // proto 已使用字节码则什么都不做
   if unsafe { eq((*proto).codeentry, (*proto).code) } {
     return;
@@ -75,14 +73,4 @@ pub unsafe fn on_disable(l: *mut LuaState, proto: *mut Proto) {
   unsafe { (*proto).exectarget = 0 };
 
   unsafe { lua_m_visitgco(l, proto as *mut c_void, on_disable_visitor) };
-}
-
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn on_disable_export(l: *mut LuaState, proto: *mut Proto) {
-  // Safety: `extern "C-unwind"` FFI 壳，按 Lua/C 契约由 VM 宿主传入存活的 `LuaState` 与 `Proto`；
-  // 本行原样转发给 `on_disable`，其 unsafe 前置条件由该宿主约定满足。
-  unsafe {
-    on_disable(l, proto);
-  }
 }

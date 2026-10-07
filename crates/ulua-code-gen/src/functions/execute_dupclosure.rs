@@ -18,7 +18,7 @@ use crate::{
 /// VM 回调 ABI 约定：`l` 为存活 `LuaState`，`pc` 指向本帧 code 内一条 DUPCLOSURE 指令
 /// （其后随 `kcl.nupvalues` 条 CAPTURE 字），`base`/`k` 为本帧活动栈基址与常量表基址。
 /// 边界契约集中于 [`VmFrame::new`]，其余为安全逻辑。
-pub unsafe fn execute_dupclosure(
+pub unsafe extern "C-unwind" fn execute_dupclosure(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -94,18 +94,4 @@ pub unsafe fn execute_dupclosure(
 
   // 跳过 nupvalues 条捕获字得下一条指令。
   frame.insn_offset(pc_ptr, nup as usize)
-}
-
-/// # Safety
-/// C-ABI 导出边界：由生成码/VM 按 codegen 回调约定调用，`l`/`pc`/`base`/`k` 的合法性与
-/// 存活性与 [`execute_dupclosure`] 的契约一致（本函数仅原样透传）。
-pub unsafe extern "C-unwind" fn execute_dupclosure_export(
-  l: *mut LuaState,
-  pc: *const Instruction,
-  base: StkId,
-  k: *mut TValue,
-) -> *const Instruction {
-  // Safety: 导出 C ABI 入口原样转发 l/pc/base/k 给同契约 unsafe fn execute_dupclosure;
-  // 调用方(生成的原生代码/VM)保证这些指针指向活的 LuaState/code/栈/常量, 满足被调前置条件。
-  unsafe { execute_dupclosure(l, pc, base, k) }
 }

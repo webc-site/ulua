@@ -4,9 +4,9 @@ use ulua_vm::records::lua_state::LuaState;
 
 use crate::{
   functions::{
-    get_counter_data::get_counter_data_export, get_memory_size::get_memory_size_export,
-    on_close_state::on_close_state_export, on_destroy_function::on_destroy_function_export,
-    on_disable::on_disable_export, on_enter::on_enter_export,
+    get_counter_data::get_counter_data, get_memory_size::get_memory_size,
+    on_close_state::on_close_state, on_destroy_function::on_destroy_function,
+    on_disable::on_disable, on_enter::on_enter,
   },
   macros::codegen_assert::CODEGEN_ASSERT,
   records::base_code_gen_context::BaseCodeGenContext,
@@ -27,12 +27,12 @@ pub unsafe fn initialize_execution_callbacks(
     let ecb = &mut (*(*l).global).ecb;
 
     ecb.context = code_gen_context as *mut c_void;
-    ecb.close = Some(on_close_state_export);
-    ecb.destroy = Some(on_destroy_function_export);
-    ecb.enter = Some(on_enter_export);
-    ecb.disable = Some(on_disable_export);
-    ecb.getmemorysize = Some(get_memory_size_export);
-    ecb.getcounterdata = Some(get_counter_data_export);
+    ecb.close = Some(on_close_state);
+    ecb.destroy = Some(on_destroy_function);
+    ecb.enter = Some(on_enter);
+    ecb.disable = Some(on_disable);
+    ecb.getmemorysize = Some(get_memory_size);
+    ecb.getcounterdata = Some(get_counter_data);
     // FORN trace 层入口（阶段二 PoC）：仅 a64 编译目标安装——录制/生成/原生
     // 执行全链仅在 aarch64 生效，其余平台槽位 None（解释器零问询）。
     #[cfg(target_arch = "aarch64")]

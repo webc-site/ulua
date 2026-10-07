@@ -20,10 +20,6 @@
 //! do **not** fake a 5.x hook surface; the interrupt API is the Luau-native
 //! analog and is implemented separately.
 
-use core::{ffi::c_char, mem::zeroed};
-
-use ulua_common::functions::c_str::cstr_cow;
-
 use crate::{
   state::{Lua, StateView},
   sys::*,
@@ -33,20 +29,13 @@ use crate::{
 /// 静态 NUL 结尾字节串，收口点交给 `*const c_char` 契约 API。
 const GETINFO_NSL: &[u8] = b"nsl\0";
 
-/// 把 VM 报告的 `*const c_char` 调试字段转成 Rust 字符串（null -> `None`）。
-/// [`Lua::inspect_stack`] 与 `Function::info` 共用。safe 收口：入参只可能是
-/// `lua_Debug` 回填字段（NUL 结尾 VM 串）或未回填的 null，两分支就地处理，
-/// 无调用方前置条件。
-pub(crate) fn debug_cstr(p: *const c_char) -> Option<String> {
-  if p.is_null() {
-    None
-  } else {
-    // Safety: `p` 非 null 且指向 VM 内部存活、NUL 结尾的字符串（上方判空）。
-    Some(unsafe { cstr_cow(p) }.into_owned())
-  }
+/// 把 `LuaDebug` 回填的 owned 字节转成 Rust 字符串（`None` 原样透传）。
+/// [`Lua::inspect_stack`] 与 `Function::info` 共用。
+pub(crate) fn debug_string(bytes: Option<Vec<u8>>) -> Option<String> {
+  bytes.map(|b| String::from_utf8_lossy(&b).into_owned())
 }
 
-/// `lua_getinfo` 的 safe 门面（本 crate 唯一 getinfo 边界）：以全零 `LuaDebug`
+/// `lua_getinfo` 的 safe 门面（本 crate 唯一 getinfo 边界）：以默认 `LuaDebug`
 /// 作 out 参数按 `options` 模板回填，解析不到（VM 返回 ok==0）时给 `None`。
 ///
 /// 调用序契约（正确性，非内存安全）：`state` 存活且由当前线程驱动；`level` 有效
@@ -62,13 +51,12 @@ pub(crate) fn get_info(
     options.last() == Some(&0),
     "getinfo template must be NUL-terminated"
   );
-  // Safety: `LuaDebug` 全部由整数/裸指针/定长数组字段构成（`#[repr(C)]` POD），
-  // `zeroed()` 对其每个字段都是合法位模式（null 指针与 0 整数均可表示）。
-  let mut ar: LuaDebug = unsafe { zeroed() };
+  // `LuaDebug` 现是 Rust 原生记录（owned `Vec<u8>`/枚举/整数字段），`default()`
+  // 即「未填写」的合法初值，不再需要 `mem::zeroed()`。
+  let mut ar: LuaDebug = LuaDebug::default();
   // Safety: `state` 存活且由当前线程驱动（调用点句柄契约）；`&mut ar` 指向本帧
   // 对齐存活的局部；`options.as_ptr().cast()` 是上面 debug_assert 兜底的静态
-  // NUL 模板串，满足 `what` 形参存续期契约；VM 只向该 out 参数写非空或保持
-  // null 的 `*const c_char` 内部串指针（消费侧 `debug_cstr` 自带 null 判据）。
+  // NUL 模板串，满足 `what` 形参存续期契约；VM 只向该 out 参数写 owned 字段。
   let ok = unsafe {
     lua_getinfo(
       state.as_ptr().cast_mut(),
@@ -147,22 +135,21 @@ impl Lua {
     // `get_info`（safe 门面）收口零初始化 + `lua_getinfo` out 参数两步；
     // `GETINFO_NSL` 是静态 NUL 结尾模板串，满足其形参契约。ok==0 时不读 `ar`。
     let ar = get_info(state, level as i32, GETINFO_NSL)?;
-    // 以下仅按 `#[repr(C)]` 读 `ar` 各标量字段（`debug_cstr` 是带 null 判据的
-    // safe fn），不再触任何 C 边界，故无 unsafe。
-    let what_str = debug_cstr(ar.what).unwrap_or_default();
-    let what = match what_str.as_str() {
-      "Lua" => DebugWhat::Lua,
-      "main" => DebugWhat::Main,
-      "C" => DebugWhat::C,
-      _ => DebugWhat::Unknown,
+    // 仅按 Rust 原生字段读 `ar`（owned 字节经 `debug_string` 转 `String`，`what`
+    // 是 `LuaWhat` 枚举），不再触任何 C 边界，故无 unsafe。
+    let what = match ar.what {
+      LuaWhat::Lua => DebugWhat::Lua,
+      LuaWhat::Main => DebugWhat::Main,
+      LuaWhat::C => DebugWhat::C,
+      LuaWhat::Tail | LuaWhat::Unknown => DebugWhat::Unknown,
     };
     let current_line = (ar.currentline >= 0).then_some(ar.currentline as i64);
     let line_defined = (ar.linedefined > 0).then_some(ar.linedefined as i64);
     Some(Debug {
-      name: debug_cstr(ar.name),
+      name: debug_string(ar.name),
       what,
-      source: debug_cstr(ar.source),
-      short_src: debug_cstr(ar.short_src),
+      source: debug_string(ar.source),
+      short_src: debug_string(ar.short_src),
       current_line,
       line_defined,
     })

@@ -5,8 +5,6 @@
 //! `lua_getinfo`'s `f` option, which pushes it). Used by the env builtins.
 
 /// NUL 结尾字节串（`*const c_char` 契约调用点 `.as_ptr().cast()`；§10 不引入 C 字符串类型）。
-use core::mem::zeroed;
-
 use crate::{
   functions::{lua_getinfo::lua_getinfo, lua_l_optinteger::lua_l_optinteger},
   macros::lua_l_error::luaL_error,
@@ -23,7 +21,7 @@ pub(crate) unsafe fn getfunc(l: *mut LuaState, opt: i32) {
     if (*l).is_function(1) {
       (*l).push_value(1);
     } else {
-      let mut ar: LuaDebug = zeroed();
+      let mut ar: LuaDebug = LuaDebug::default();
       let level: i32 = if opt != 0 {
         lua_l_optinteger(&mut *l, 1, 1)
       } else {

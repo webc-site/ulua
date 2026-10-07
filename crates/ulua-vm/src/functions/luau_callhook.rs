@@ -1,6 +1,6 @@
 //! Source: `VM/src/lvmexecute.cpp:147-200` (hand-ported)
 
-use core::{ffi::c_void, mem::zeroed, ptr::null_mut};
+use core::ffi::c_void;
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
@@ -84,19 +84,20 @@ pub unsafe fn luau_callhook(l: *mut LuaState, hook: LuaHook, userdata: Option<*m
     (*(*l).ci).top = (*l).top.add(LUA_MINSTACK as usize);
     LUAU_ASSERT!((*(*l).ci).top <= (*l).stack_last);
 
-    let mut ar: LuaDebug = zeroed();
-    ar.currentline = if (*cl).is_c != 0 {
-      -1
-    } else {
-      let p = {
-        let l = &(*cl).inner.l;
-        l.p
-      };
-      // pcRel! 需按裸指针比对 code 基址，仍传 `p`；取行号本身降共享引用（纯读）
-      lua_g_getline(&*p, pcRel!((*(*l).ci).savedpc, p))
+    let mut ar = LuaDebug {
+      currentline: if (*cl).is_c != 0 {
+        -1
+      } else {
+        let p = {
+          let l = &(*cl).inner.l;
+          l.p
+        };
+        // pcRel! 需按裸指针比对 code 基址，仍传 `p`；取行号本身降共享引用（纯读）
+        lua_g_getline(&*p, pcRel!((*(*l).ci).savedpc, p))
+      },
+      userdata,
+      ..LuaDebug::default()
     };
-    // 既有约定（review.md §2）：VM c-API 边界 userdata POD 实参——无 hook 上下文时 null 为 LuaDebug.userdata 合法值，从不解引用，边界体内保留
-    ar.userdata = userdata.unwrap_or(null_mut());
 
     if let Some(hook) = hook {
       hook(l, &mut ar);

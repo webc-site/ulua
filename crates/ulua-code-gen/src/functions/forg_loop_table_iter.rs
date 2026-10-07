@@ -12,7 +12,7 @@ use crate::{functions::forg_loop_node_iter::forg_loop_node_iter, records::vm_fra
 /// VM 回调 ABI 约定：`l` 为存活 `LuaState`，`h` 指向存活 `LuaTable`，`ra` 为本帧迭代器
 /// 槽（协议预留 `ra..ra+5`），`index` 为数组段游标。边界契约集中于 [`VmFrame::current`]，
 /// 其余为安全逻辑。
-pub unsafe fn forg_loop_table_iter(
+pub unsafe extern "C-unwind" fn forg_loop_table_iter(
   l: *mut LuaState,
   h: *mut LuaTable,
   mut index: i32,
@@ -46,18 +46,4 @@ pub unsafe fn forg_loop_table_iter(
 
   // Safety: 依本函数头契约把同一活帧的 l/h/index/ra 原样转交同 ABI 的哈希段例程。
   unsafe { forg_loop_node_iter(l, h, index, ra) }
-}
-
-/// # Safety
-/// C-ABI 导出边界：由生成码按 codegen 回调约定调用，`l`/`h`/`index`/`ra` 的合法性与
-/// 存活性与 [`forg_loop_table_iter`] 的契约一致（本函数仅原样透传）。
-pub unsafe extern "C-unwind" fn forg_loop_table_iter_export(
-  l: *mut LuaState,
-  h: *mut LuaTable,
-  index: i32,
-  ra: *mut TValue,
-) -> bool {
-  // Safety: 导出 C ABI 入口原样转发 l/h/index/ra 给同契约 unsafe fn forg_loop_table_iter;
-  // 调用方按 ABI 保证 h 为活 LuaTable、ra 为帧内活栈槽且 index 有界, 满足被调前置条件。
-  unsafe { forg_loop_table_iter(l, h, index, ra) }
 }

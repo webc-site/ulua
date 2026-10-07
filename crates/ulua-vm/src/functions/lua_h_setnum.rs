@@ -26,7 +26,7 @@ use crate::{
 /// `l` 须存活（新键路径走 `newkey`，可 rehash/抛 ERR_MEM）；`t` 须为存活 `LuaTable` 且 array 区长度
 /// 不小于 `sizearray`（数组路径按 `array.add(key-1)` 直接寻址）。返回的可写值槽在下一次 rehash 前有效
 /// （noalias 前提：取槽与写之间不得对该表做结构性扩容，否则旧指针悬垂）。`sizearray` 与实区不符会越界取槽。cpp ltable.cpp:1247。
-pub unsafe fn lua_h_setnum(l: *mut LuaState, t: *mut LuaTable, key: i32) -> *mut TValue {
+pub(crate) unsafe fn lua_h_setnum(l: *mut LuaState, t: *mut LuaTable, key: i32) -> *mut TValue {
   unsafe {
     // (1 <= key && key <= t->sizearray)
     if (key as c_uint).wrapping_sub(1) < (*t).sizearray as c_uint {

@@ -38,7 +38,7 @@ unsafe fn updateaboundary(t: *mut LuaTable, boundary: i32) -> i32 {
 /// `t` 须指向存活 `LuaTable` 且 `array` 与 `sizearray`、hash 部分与 `sizenode` 元数据一致
 /// （cpp ltable.cpp:1333）：数组部分二分回探仅在 `array_window()` 窗内读，缓存 boundary
 /// 的回写经 `maybesetaboundary` 维护。
-pub unsafe fn lua_h_getn(t: *mut LuaTable) -> i32 {
+pub(crate) unsafe fn lua_h_getn(t: *mut LuaTable) -> i32 {
   unsafe {
     let boundary = getaboundary(t);
 

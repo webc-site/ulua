@@ -17,7 +17,7 @@ use crate::{
 /// VM 回调 ABI 约定：`l` 为存活 `LuaState`（`ci`/`top` 有效），`pc` 指向本帧 code 内
 /// 一条 SETLIST 指令（其后随 index AUX 字），`base` 为活动栈帧基址、`k` 为常量表基址
 /// （本指令不使用）。慢路径允许重入 VM，参数指针须比本次调用存活。
-pub unsafe fn execute_setlist(
+pub unsafe extern "C-unwind" fn execute_setlist(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -70,18 +70,4 @@ pub unsafe fn execute_setlist(
 
   frame.barrier_fast(h);
   pc_ptr
-}
-
-/// # Safety
-/// C-ABI 导出边界：由生成码/VM 按 Lua codegen 回调约定调用，`l`/`pc`/`base`/`k`
-/// 的存活性与界内性与 [`execute_setlist`] 的契约一致（本函数仅原样透传）。
-pub unsafe extern "C-unwind" fn execute_setlist_export(
-  l: *mut LuaState,
-  pc: *const Instruction,
-  base: StkId,
-  k: *mut TValue,
-) -> *const Instruction {
-  // Safety: 导出 C ABI 入口原样转发 l/pc/base/k 给同契约 unsafe fn execute_setlist;
-  // 调用方按 ABI 提供活 LuaState 及帧内 code/栈指针, 满足被调前置条件。
-  unsafe { execute_setlist(l, pc, base, k) }
 }
