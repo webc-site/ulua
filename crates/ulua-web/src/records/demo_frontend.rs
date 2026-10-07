@@ -27,7 +27,7 @@ use crate::records::{
 pub(crate) struct DemoFrontend {
   /// Drop 按字段声明序：frontend 先析构、两解析器随 frontend 的 `Box` 字段一并
   /// 释放（所有权已移交 `Frontend` 独占），与原实现「栈局部逆序析构、frontend
-  /// 先亡」一致。config resolver 无接收者状态（`'static` 单例，见
+  /// 先亡」一致。config resolver 的配置由其自身字段持有（见
   /// [`DemoConfigResolver`]），宿主侧无存活别名，故不再单独留字段。
   frontend: Box<Frontend>,
   /// `source` 表在每次检查前被清空重写。所有权移交 frontend 后仍经此 `Rc` 槽
@@ -41,8 +41,8 @@ impl DemoFrontend {
   pub(crate) fn new(use_new_solver: bool) -> Self {
     let file_resolver = DemoFileResolver::default();
     let source = file_resolver.source.clone();
-    // cpp `DemoConfigResolver()` 构造即默认配置：配置为 `'static` 单例，
-    // DemoConfigResolver 是无状态单元，所有权移交 frontend 独占。
+    // cpp `DemoConfigResolver()` 构造即默认配置：配置由 resolver 自身字段持有
+    // （见 [`DemoConfigResolver`]），所有权随 `Box` 移交 frontend 独占。
     let options = FrontendOptions::default();
 
     // 构造入参为移交所有权的 `Box<dyn FileResolver>` / `Box<dyn ConfigResolver>`：
@@ -58,7 +58,7 @@ impl DemoFrontend {
     let frontend = Frontend::new_boxed(
       mode,
       Box::new(file_resolver),
-      Box::new(DemoConfigResolver),
+      Box::new(DemoConfigResolver::default()),
       options,
     );
 
