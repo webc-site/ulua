@@ -1,8 +1,6 @@
 //! Source: `VM/src/ldebug.cpp:264-275` (hand-ported; `luaT_eventname[op]`
 //! is read from `g->tmname[op]`, built from the same string table)
 
-use core::ffi::c_char;
-
 use crate::{
   enums::tms::TMS,
   functions::{cstr_cow, lua_t_objtypename::lua_t_objtypename},
@@ -21,10 +19,13 @@ pub(crate) unsafe fn lua_g_aritherror(
   p2: *const TValue,
   op: TMS,
 ) -> ! {
-  // SAFETY: 契约保证 `l` 为存活调用帧、操作数 TValue 可读；错误串格式化后经 luaG 路径抛出、不返回
+  // SAFETY: 契约保证 `l` 为存活调用帧、操作数 TValue 可读；错误串格式化后经 luaG 路径抛出、不返回。
+  // `t1`/`t2`/`opname` 保留 `lua_t_objtypename`/`getstr` 的裸串指针形态，仅为复刻 cpp「比较
+  // interned 类型名指针」的等价语义；对外文案一律经 `cstr_cow` 收口（unsafe 关在门面内），
+  // 本函数不再出现显式宿主 C 串裸指针类型面（review.md §10）。
   unsafe {
-    let t1: *const c_char = lua_t_objtypename(&*l, &*p1);
-    let t2: *const c_char = lua_t_objtypename(&*l, &*p2);
+    let t1 = lua_t_objtypename(&*l, &*p1);
+    let t2 = lua_t_objtypename(&*l, &*p2);
     // skip __ from metamethod name
     let opname = getstr((*l).gs_ref().tmname[op as usize]).add(2);
 
