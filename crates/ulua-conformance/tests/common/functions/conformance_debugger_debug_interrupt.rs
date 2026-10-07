@@ -15,8 +15,8 @@ pub unsafe extern "C-unwind" fn conformance_debugger_debug_interrupt(
       .is_none()
   );
   // Safety: `ar` 由 VM 在中断点交回，指向本回调期间存活的 LuaDebug 记录。
-  let userdata = unsafe { (*ar).userdata };
-  assert!(!userdata.is_null());
+  // `userdata` 是 VM 透传给 hook 的不透明指针（`Some` 即非空）。
+  let userdata = unsafe { (*ar).userdata }.expect("interrupt hook must receive userdata");
 
   // 登记为 safe 原子指针存储：值即 VM 写入该调试记录的用户数据指针（被中断线程状态）。
   CONFORMANCE_DEBUGGER_STATE.set_interruptedthread(Some(userdata as *mut LuaState));

@@ -19,7 +19,6 @@
 use alloc::string::String;
 use core::{
   ffi::{c_char, c_int, c_uint, c_void},
-  mem::zeroed,
   ptr::{from_mut, null, null_mut, write},
   slice::from_raw_parts,
 };
@@ -1086,11 +1085,10 @@ pub fn pcallyieldable(l: L, nargs: c_int, nresults: c_int, errfunc: c_int) -> c_
 // 调试 / 回溯 / 覆盖率族（debugger、interrupt inspection、coverage 用例）
 // ---------------------------------------------------------------------------
 
-/// `lua_Debug ar = {}` 的等价收口：`repr(C)` 记录全零初始化（各字段的全零位模式
-/// 均合法），随后由 [`getinfo`] 按 what 掩码填写。
+/// `lua_Debug ar = {}` 的等价收口：Rust 原生记录的默认「未填写」初值，随后由
+/// [`getinfo`] 按 what 掩码填写 owned 字段。
 pub fn zero_debug() -> LuaDebug {
-  // Safety: `LuaDebug` 为全字段可全零表示的 repr(C) 记录（与 cpp `{}` 同形）。
-  unsafe { zeroed() }
+  LuaDebug::default()
 }
 
 /// `lua_getinfo`：按 `what` 掩码（NUL 结尾静态串，如 `b"f\0"`）填充 `ar`；

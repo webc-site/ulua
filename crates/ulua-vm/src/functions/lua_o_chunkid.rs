@@ -5,12 +5,13 @@
 //! `auxgetinfo` 直写，指针面不可收口），窗口派生只发生在垫片，核心零裸窗。
 //! cpp `lobject.cpp:157`。
 
-use core::{
-  ffi::c_char,
-  slice::{from_raw_parts, from_raw_parts_mut},
-};
+use alloc::vec::Vec;
+use core::ffi::c_char;
+use core::slice::{from_raw_parts, from_raw_parts_mut};
 
 use memchr::memchr3;
+
+use crate::macros::lua_idsize::LUA_IDSIZE;
 
 // 重复字面量提取为常量，逻辑不变（截断省略号；`[string "` 前缀与 `"]` 后缀各
 // 只出现一次，留字面）。
@@ -37,8 +38,8 @@ enum ChunkIdSite {
 /// 各分支写入区含终止 NUL 均落在 `buf` 界内。
 ///
 /// 前置条件（由垫片 [`lua_o_chunkid`] 的窗派生承接）：`buf.len() >= 16`
-/// （cpp `sizeof("[string \"...\"]")` 扣减面；仓内消费点全数传 `LUA_IDSIZE` 或
-/// `lua_Debug.ssbuf.len()`），`@` 截断分支另需 `>= 4`。过小缓冲在 cpp 为写越界
+/// （cpp `sizeof("[string \"...\"]")` 扣减面；仓内消费点全数传 `LUA_IDSIZE`），
+/// `@` 截断分支另需 `>= 4`。过小缓冲在 cpp 为写越界
 /// UB，此处以切片界检 panic 收口（严格改善面，仓内不可达）。
 fn lua_o_chunkid_ref(buf: &mut [u8], source: &[u8]) -> ChunkIdSite {
   let srclen = source.len();
@@ -114,11 +115,27 @@ fn lua_o_chunkid_ref(buf: &mut [u8], source: &[u8]) -> ChunkIdSite {
   }
 }
 
+/// Rust 原生落点（供 `LuaDebug.short_src` 填写）：把 [`lua_o_chunkid_ref`] 的
+/// 结果拷成拥有的字节 `Vec`（不含终止 NUL），从而切断 cpp「`short_src` 指向
+/// 记录内嵌 `ssbuf`」的自引用。`source` 为不含 NUL 的源名 payload 切片。
+pub(crate) fn lua_o_chunkid_owned(source: &[u8]) -> Vec<u8> {
+  let mut buf = [0u8; LUA_IDSIZE as usize];
+  match lua_o_chunkid_ref(&mut buf, source) {
+    // cpp `return source + 1`：结果留在源名本体，跳过 `=`/`@` 前缀
+    ChunkIdSite::Source => source[1..].to_vec(),
+    // cpp `return buf`：结果在输出缓冲，取首个 NUL 前的字节
+    ChunkIdSite::Buf => {
+      let end = memchr::memchr(0, &buf).unwrap_or(buf.len());
+      buf[..end].to_vec()
+    }
+  }
+}
+
 /// C-ABI 镜像垫片（窗口派生唯一发生地，真实逻辑见 [`lua_o_chunkid_ref`]）：
 /// 把切片核心的落点折回 cpp `luaO_chunkid` 的裸指针 return——`buf` 或
-/// `source + 1`。消费面实测：`auxgetinfo` 需指针直写 `lua_Debug.short_src`
-/// C 结构字段，`pusherror`/`lua_l_where`/`loadsafe` 经 `cstr_cow`/`cstr_bytes`
-/// 门面读回指针串，指针形不可收口，故垫片保留。
+/// `source + 1`。消费面实测：`pusherror`/`lua_l_where`/`loadsafe` 经
+/// `cstr_cow`/`cstr_bytes` 门面读回指针串，指针形不可收口，故垫片保留；
+/// `auxgetinfo` 填 `LuaDebug.short_src` 改走拥有型的 [`lua_o_chunkid_owned`]。
 ///
 /// # Safety
 /// `buf`/缓冲指针必须存活且 `buf[..buflen]` 可写，输出缓冲满足注释所述最小长度
