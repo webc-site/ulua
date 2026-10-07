@@ -36,8 +36,10 @@ fn string_slot(t: &TValue) -> Option<&tstring> {
 }
 
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn lua_v_concat(l: *mut LuaState, mut total: i32, mut last: i32) {
+/// `l` 须为存活 `LuaState`，其栈自 `(*l).base` 起至少 `last + 1` 个槽位可读写，且
+/// `[last - total + 1, last]` 闭区间内的槽即待拼接操作数（`total >= 2`）； TM 路径经
+/// `call_bin_tm` 要求栈顶余量。cpp lvmutils.cpp:500。
+pub(crate) unsafe fn lua_v_concat(l: *mut LuaState, mut total: i32, mut last: i32) {
   unsafe {
     loop {
       let top: StkId = (*l).base.add((last + 1) as usize);
@@ -129,7 +131,7 @@ pub unsafe fn lua_v_concat(l: *mut LuaState, mut total: i32, mut last: i32) {
 }
 
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
+/// C ABI 导出壳：`l`/`total`/`last` 原样透传，须满足 [`lua_v_concat`] 的全部前提。
 pub unsafe extern "C-unwind" fn lua_v_concat_export(l: *mut LuaState, total: i32, last: i32) {
   unsafe {
     lua_v_concat(l, total, last);

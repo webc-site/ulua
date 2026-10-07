@@ -14,7 +14,7 @@ use crate::{
 /// `l` 须为处于活动调用中的存活状态（断言 `isactive`、自身非黑）；`level` 必须落在 `l` 当前栈区且
 /// 指向活跃局部槽——链表按 `(*pp).v >= level` 比较裸栈指针。`l.openupval`/`g.uvhead` 双链须自洽，
 /// 否则解引用悬垂 UpVal 或写坏全局 uv 环。新建 upval 时可抛 ERR_MEM。cpp lfunc.cpp:99。
-pub unsafe fn lua_f_findupval(l: *mut LuaState, level: StkId) -> *mut UpVal {
+pub(crate) unsafe fn lua_f_findupval(l: *mut LuaState, level: StkId) -> *mut UpVal {
   unsafe {
     let g = (*l).global;
     let mut pp: *mut *mut UpVal = addr_of_mut!((*l).openupval);
