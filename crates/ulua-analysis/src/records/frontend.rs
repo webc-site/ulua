@@ -62,9 +62,9 @@ pub struct Frontend {
   /// `FileResolver*` 成员裸指针、要求宿主保证其长寿，本仓库全部构造点
   /// 实参恒为存活解析器（缺位场景由宿主显式传 [`crate::records::null_file_resolver::NullFileResolver`]
   /// 实例表达，见 conformance），故 Rust 把「恒非空且存活」收窄为类型级
-  /// 所有权——移交即唯一所有者，宿主改写一律经
-  /// [`Frontend::file_resolver_ref`] / [`Frontend::file_resolver_mut`]
-  /// chokepoint，不存在并存可变别名，解引用零 unsafe。
+  /// 所有权——移交即唯一所有者，宿主读写一律直接用本字段（`Box<dyn _>` 在方法
+  /// 调用处自动 deref，原 `file_resolver_mut` 纯转发 chokepoint 已按 review.md
+  /// §7 删除），不存在并存可变别名，解引用零 unsafe。
   /// 宿主需继续读写同一份状态时，与实现方约定共享槽（如 `Rc` 句柄）而非
   /// 第二把可变借用，行为可见性与 cpp 直写字段等价。
   ///
@@ -86,7 +86,8 @@ pub struct Frontend {
   /// 同形）：cpp 构造收 `ConfigResolver*` 成员裸指针、要求宿主保证其长寿，
   /// 缺位（cpp nullptr、从不查询 `getConfig`）场景改由
   /// [`crate::records::null_config_resolver::NullConfigResolver`] 活实例表达。
-  /// 移交即唯一所有者，读取一律经 [`Frontend::config_resolver_ref`] chokepoint，
+  /// 移交即唯一所有者，读取一律直接用本字段（`Box<dyn _>` 自动 deref，原
+  /// `config_resolver_ref` 纯转发 chokepoint 已按 review.md §7 删除），
   /// 不存在并存可变别名，解引用零 unsafe。宿主需继续读写同一份配置状态时，与
   /// 实现方约定共享槽（如 `Rc<UnsafeCell<_>>`）而非第二把可变借用，行为可见性
   /// 与 cpp 直写字段等价。
@@ -113,28 +114,17 @@ pub struct Frontend {
 }
 
 impl Frontend {
-  /// C++ `fileResolver` 成员的受控读取 chokepoint。所有权归本结构
-  /// （`Box<dyn FileResolver>` 独占），借用直出、零 unsafe；`dyn` 保留理由见
-  /// [`Frontend::file_resolver`] 字段注（宿主注入、集合运行期开放，
-  /// review.md §4）。
+  /// C++ `fileResolver` 成员的只读借用口。**这是本仓唯一保留的解析器访问器**：
+  /// 字段 `file_resolver` / `config_resolver` 本身已 `pub`，读写一律直接用字段
+  /// （`Box<dyn _>` 在方法调用处自动 deref，原 `file_resolver_mut` /
+  /// `config_resolver_ref` 两个纯转发 chokepoint 已按 review.md §7「内部结构体
+  /// 直接暴露字段，别套 getter」删除），本口仅为 `crates/ulua-analyze-cli`
+  /// 既有调用点（report_error / report_module_result / main）暂存，待该 crate
+  /// 改用 `&*frontend.file_resolver` 后即删（本轮改动范围不含该 crate）。
+  /// `dyn` 保留理由见 [`Frontend::file_resolver`] 字段注（宿主注入、集合运行期
+  /// 开放，review.md §4）。
   pub fn file_resolver_ref(&self) -> &dyn FileResolver {
     self.file_resolver.as_ref()
-  }
-
-  /// 同 [`Frontend::file_resolver_ref`]，可变版（`readSource` / `resolveModule`
-  /// 契约为 `&mut self`）；宿主对解析器状态的一切改写走本口。
-  pub fn file_resolver_mut(&mut self) -> &mut dyn FileResolver {
-    self.file_resolver.as_mut()
-  }
-
-  /// C++ `configResolver` 成员的唯一读取 chokepoint。所有权归本结构
-  /// （`Box<dyn ConfigResolver>` 独占），借用直出、零 unsafe；`dyn` 保留理由见
-  /// [`Frontend::config_resolver`] 字段注（宿主注入、集合运行期开放，review.md §4）。
-  /// cpp 侧 nullptr（从不查询 `getConfig`）的缺位场景在本仓库以
-  /// [`crate::records::null_config_resolver::NullConfigResolver`] 活实例承载，
-  /// 故本口恒可取到解析器，无需判空分支。
-  pub fn config_resolver_ref(&self) -> &dyn ConfigResolver {
-    self.config_resolver.as_ref()
   }
 
   /// 自指针 `builtin_types`（C++ `NotNull<BuiltinTypes>{&builtinTypes_}`）的

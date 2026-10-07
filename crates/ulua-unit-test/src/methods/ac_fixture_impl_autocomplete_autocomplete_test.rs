@@ -32,11 +32,11 @@ impl AcFixtureImpl {
       ..Default::default()
     };
     self.base.config_resolver.default_config_mut().mode = Mode::NoCheck;
-    // suggester 启用走 frontend 独占实例（`&mut dyn` chokepoint）：夹具句柄上
-    // 的拷贝对 frontend 不可见，只有此处能改到被查询的那份。
+    // suggester 启用走 frontend 独占持有的解析器实例（直接改字段，`Box<dyn _>`
+    // 自动 deref）：夹具句柄上的拷贝对 frontend 不可见，只有此处能改到被查询的那份。
     let frontend = self.get_frontend();
     if with_require_suggester {
-      frontend.file_resolver_mut().enable_require_suggester();
+      frontend.file_resolver.enable_require_suggester();
     }
     frontend.check_module_name_optional_frontend_options(module_name, Some(opts));
     autocomplete(self.get_frontend(), module_name, position, callback)

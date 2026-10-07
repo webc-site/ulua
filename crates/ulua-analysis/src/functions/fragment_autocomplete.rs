@@ -121,7 +121,7 @@ pub fn fragment_autocomplete(args: FragmentAutocompleteArgs<'_, '_>) -> Fragment
     global_scope,
     scope_at_position: &fresh_scope,
     position: cursor_position,
-    file_resolver: Some(frontend.file_resolver_ref()),
+    file_resolver: Some(&*frontend.file_resolver),
     callback,
     is_in_hot_comment,
   });

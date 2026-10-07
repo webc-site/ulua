@@ -214,7 +214,7 @@ pub(crate) fn typecheck_fragment_(
   // 本函数独占使用；`get_mut` 借用半径止于本次调用（cpp `traceRequires(..., root, ...)`
   // :1208 对非 const `AstStatBlock*` 的直译），返回的 RequireTraceResult 为独立值。
   let trace = trace_requires(
-    frontend.file_resolver_mut(),
+    &mut *frontend.file_resolver,
     root.get_mut(),
     module_name.clone(),
     &limits,

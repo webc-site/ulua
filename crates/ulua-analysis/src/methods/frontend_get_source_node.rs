@@ -54,8 +54,8 @@ impl Frontend {
 
     let timestamp = get_timestamp();
 
-    let source = self.file_resolver_mut().read_source(name);
-    let environment_name = self.file_resolver_ref().get_environment_for_module(name);
+    let source = self.file_resolver.read_source(name);
+    let environment_name = self.file_resolver.get_environment_for_module(name);
 
     self.stats.time_read += get_timestamp() - timestamp;
 
@@ -77,9 +77,9 @@ impl Frontend {
     };
 
     let mut opts = {
-      // 配置读取收敛于 `config_resolver_ref` chokepoint（`Box<dyn ConfigResolver>`
-      // 独占、借用直出，零 unsafe）；`.clone()` 为拥有值后即释放对 `self` 的借用。
-      let config = self.config_resolver_ref().get_config(name, limits);
+      // 配置读取直接用 `config_resolver` 字段（`Box<dyn ConfigResolver>` 独占、
+      // 自动 deref，零 unsafe）；`.clone()` 为拥有值后即释放对 `self` 的借用。
+      let config = self.config_resolver.get_config(name, limits);
       config.parse_options.clone()
     };
     opts.capture_comments = true;
@@ -93,7 +93,7 @@ impl Frontend {
       .root
       .expect("getSourceNode: 解析后根块应在场（cpp 直取 result.root）");
     let require = trace_requires(
-      self.file_resolver_mut(),
+      &mut *self.file_resolver,
       root.get_mut(),
       name.clone(),
       limits,
