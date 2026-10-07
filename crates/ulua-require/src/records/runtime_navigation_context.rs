@@ -2,10 +2,8 @@ use alloc::vec::Vec;
 use core::{cell::Cell, ffi::c_void, ptr::from_ref};
 
 use coarsetime::Instant;
-use ulua_config::records::interrupt_callbacks::ConfigInitCallback;
 use ulua_vm::{
-  functions::{lua_getthreaddata::lua_getthreaddata, lua_setthreaddata::lua_setthreaddata},
-  macros::lua_l_error::luaL_error,
+  functions::lua_getthreaddata::lua_getthreaddata, macros::lua_l_error::luaL_error,
   records::lua_state::LuaState,
 };
 
@@ -74,17 +72,22 @@ impl<'ctx, H: RequireHost> RuntimeNavigationContext<'ctx, H> {
     self.host.get_cache_key()
   }
 
-  /// 读配置超时、启动计时器、把计时器地址交给 VM 线程数据槽
-  /// （cpp `RuntimeNavigationContext` 的 `luauConfigInit` 回调体）。
+  /// 读配置超时、启动计时器，交出计时器地址作为 VM 线程数据槽的转手载荷
+  /// （cpp `RuntimeNavigationContext` 的 `luauConfigInit` 回调体的 Rust 形态）。
   ///
-  /// 别名论证（原 `# Safety` 的可变字段部分）：timer 可变字段由 `Cell` 承载且
-  /// Luau 状态机单线程串行使用，`l` 在本次调用窗口内由调用方以 `&mut` 独占
-  /// 驱动；`lua_setthreaddata` 只是把 timer 地址转手给 VM 数据槽（地址经
-  /// `from_ref` 只读借出，写权限由 Cell 提供）。
-  fn start_config_timer(&self, l: &mut LuaState) {
+  /// 别名论证：timer 可变字段由 `Cell` 承载且 Luau 状态机单线程串行使用；
+  /// 地址经 `from_ref` 只读借出，写权限由 Cell 提供，交出的指针只会被
+  /// `extract_config` 原样挂进线程数据槽、本模块内不解引用。
+  ///
+  /// DELIBERATE DEVIATION（review.md §0）：cpp 的 init 回调在
+  /// `executeAndExtractConfig` 内被调用时才启动计时器；此处函数指针抽象
+  /// 收敛为载荷转手后，启动点前移到交出载荷（构造 `InterruptCallbacks`）
+  /// 之时，超时窗口起点略早于 cpp（多出沙箱建机/装载耗时，判定更保守），
+  /// 配置执行全程仍被覆盖。
+  fn start_config_timer(&self) -> *mut c_void {
     let timeout = self.host.get_luau_config_timeout();
     self.timer.start(timeout);
-    lua_setthreaddata(l, from_ref(&self.timer).cast::<c_void>().cast_mut());
+    from_ref(&self.timer).cast::<c_void>().cast_mut()
   }
 }
 
@@ -129,18 +132,11 @@ impl<H: RequireHost> NavigationContext for RuntimeNavigationContext<'_, H> {
     self.host.get_config()
   }
 
-  fn luau_config_init(&self) -> Option<ConfigInitCallback> {
-    // 静态分派：回调取按宿主类型 `H` 单态化的具名函数指针（`runtime_luau_config_init
-    // ::<H>` coerce 为 `ConfigInitFn`），捕获数据为 `self` 地址（timer/host/
-    // requirer_chunkname 即原闭包捕获项）。存活论证：callback 仅在
-    // navigate_to_and_populate_config 同步调用 extract_luau_config 的窗口内被
-    // 触发，该窗口由 resolve_require 调用栈保证本导航上下文存活。
-    Some(ConfigInitCallback {
-      callback: runtime_luau_config_init::<H>,
-      // timer 是 `&self` 借出的只读引用，其内部可变字段用 Cell 承载，
-      // 因此把地址交给 VM 线程数据槽不构成别名冲突；Luau 状态机单线程使用。
-      userdata: from_ref(self).cast::<c_void>().cast_mut(),
-    })
+  fn luau_config_thread_data(&self) -> Option<*mut c_void> {
+    // 存活论证：载荷指向本上下文的 timer，仅在
+    // navigate_to_and_populate_config 同步调用 extract_luau_config 的窗口内
+    // 被挂接与读取，该窗口由 resolve_require 调用栈保证本导航上下文存活。
+    Some(self.start_config_timer())
   }
 
   fn luau_config_interrupt(
@@ -148,31 +144,6 @@ impl<H: RequireHost> NavigationContext for RuntimeNavigationContext<'_, H> {
   ) -> Option<unsafe extern "C-unwind" fn(l: *mut LuaState, gc: i32)> {
     Some(runtime_luau_config_interrupt)
   }
-}
-
-/// `luau_config_init` 的具名回调：从 userdata 取回导航上下文本体，转交
-/// 计时器启动（原 `Rc<dyn Fn>` 闭包体，逐字保留语义；`H` 由交出回调的
-/// `luau_config_init` 与本体同一单态化实例，读回类型必然一致）。
-///
-/// 保留 `unsafe fn` 的裁定（review.md §2 判定 1）：两枚形参都由 VM 以裸指针交回且
-/// 函数体解引用，且其类型被 ulua-config 的 `ConfigInitFn`（`unsafe fn(*mut LuaState,
-/// *mut c_void)`）钉死——降级需同步该禁区签名，故 `unsafe` 留在签名而非虚假消除。
-///
-/// # Safety
-/// - `l`：必须指向执行配置的那个 VM 提供的存活 `LuaState`，且本次调用窗口内无人
-///   并发可变借用（VM 在配置线程执行期串行调用本回调）。
-/// - `userdata`：必须是 [`RuntimeNavigationContext::luau_config_init`] 交出的本
-///   上下文地址（即 `RuntimeNavigationContext<'_, H>` 本体，`H` 与本实例化一致，
-///   读写类型同源单态化），并仅在配置执行的同步窗口内被调用一次——该窗口由
-///   `resolve_require` 的调用栈保证上下文存活，且窗口内无人可变借用本上下文
-///   （host/timer 只共享读取，timer 可变字段由 `Cell` 承载）。
-unsafe fn runtime_luau_config_init<H: RequireHost>(l: *mut LuaState, userdata: *mut c_void) {
-  // Safety: 契约保证 userdata 指向存活的本体，且无人并发可变借用
-  // （host/timer 仅共享读取，timer 可变字段由 Cell 承载）。
-  let nav = unsafe { &*userdata.cast::<RuntimeNavigationContext<'_, H>>() };
-  // Safety: l 与本次配置执行窗口同存活（fn 契约第一条），重建独占借用。
-  let l = unsafe { &mut *l };
-  nav.start_config_timer(l);
 }
 
 /// 配置执行中断回调：超时则报错（对应 C++ `luauConfigInterrupt`）。
@@ -183,15 +154,17 @@ unsafe fn runtime_luau_config_init<H: RequireHost>(l: *mut LuaState, userdata: *
 /// # Safety
 /// - `l`：必须指向存活的 `LuaState`，本函数只应作为 VM 的中断回调，由 VM 在配置
 ///   线程执行期间以当前状态调用；
-/// - 线程数据槽：内容只可能为 null，或 `luau_config_init` 在本次配置执行期间写入的
-///   存活 `RuntimeLuauConfigTimer` 地址（上下文由 `resolve_require` 的调用栈保活）；
+/// - 线程数据槽：内容只可能为 null，或 `luau_config_thread_data` 交出、
+///   `extract_config` 在本次配置执行窗口内挂接的存活
+///   `RuntimeLuauConfigTimer` 地址（上下文由 `resolve_require` 的调用栈保活）；
 /// - `_gc`：仅按 Lua/C 中断约定占位，不被读。
 unsafe extern "C-unwind" fn runtime_luau_config_interrupt(l: *mut LuaState, _gc: i32) {
   // Safety: 中断回调入口，l 由 VM 在配置线程仍在执行时以当前 LuaState* 调用
   // （Lua/C API 中断约定），重建只读驱动的借用。
   let l = unsafe { &mut *l };
-  // 线程数据槽内容只能为 null，或 luau_config_init 在本次配置执行期间写入的
-  // 存活 timer 地址（上下文由 resolve_require 调用栈保活）；as_ref() 先判空，
+  // 线程数据槽内容只能为 null，或 luau_config_thread_data 交出、
+  // extract_config 在本次配置执行窗口内挂接的存活 timer
+  // 地址（上下文由 resolve_require 调用栈保活）；as_ref() 先判空，
   // 仅对存活 timer 做只读 is_finished()（Cell 承载可变性），无悬挂或别名写。
   let timer = lua_getthreaddata(l).cast::<RuntimeLuauConfigTimer>();
   // Safety: 见函数 # Safety：槽内容为 null 或本次配置执行期写入的存活 timer

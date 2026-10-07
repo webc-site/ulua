@@ -20,10 +20,8 @@ use ulua_common::functions::get_clock::get_clock;
 use ulua_config::{
   functions::{extract_luau_config::extract_luau_config, parse_config::parse_config},
   records::{
-    alias_options::AliasOptions,
-    config::Config,
-    config_options::ConfigOptions,
-    interrupt_callbacks::{ConfigInitCallback, InterruptCallbacks, attach_threaddata_init},
+    alias_options::AliasOptions, config::Config, config_options::ConfigOptions,
+    interrupt_callbacks::InterruptCallbacks,
   },
 };
 use ulua_vm::records::lua_state::LuaState;
@@ -49,8 +47,8 @@ use crate::records::{
 ///
 /// # Safety
 /// 由 VM 以合法 `LuaState*` 调用（`InterruptCallbacks` 契约）；线程数据槽里
-/// 只可能挂着 `luau_config_init` 布线的 `*mut LuauConfigInterruptInfo` 或 null，
-/// null 已在函数首行守卫（cpp 原版直接解引用，行为收敛为 no-op）。
+/// 只可能挂着 `luau_config_thread_data` 交出的 `*mut LuauConfigInterruptInfo`
+/// 或 null，null 已在函数首行守卫（cpp 原版直接解引用，行为收敛为 no-op）。
 // 真边界：本指针经 `InterruptCallbacks::interrupt_callback` 写入 VM 的
 // `LuaCallbacks::interrupt` 槽（`ulua-vm` 声明即 `Option<unsafe extern
 // "C-unwind" fn(*mut LuaState, i32)>`，safepoint 处按 C ABI 调用），故保留
@@ -68,7 +66,8 @@ pub(crate) unsafe extern "C-unwind" fn luau_config_interrupt(l: *mut LuaState, _
     // cpp 原版直接解引用，行为收敛为 no-op。
     return;
   }
-  // Safety: 非空时该指针指向 `luau_config_init` 布线的栈帧局部 `info`，
+  // Safety: 非空时该指针指向 `luau_config_thread_data` 交出的本栈帧局部 `info`
+  // （由 `extract_config` 在配置执行窗口前挂接），
   // `extract_luau_config` 同步返回前回调窗口内始终存活、且无人并发改写。
   let info = unsafe { &*info };
 
@@ -175,19 +174,13 @@ impl CliConfigResolver {
         let info_ptr: *mut LuauConfigInterruptInfo = &mut info;
 
         let callbacks = InterruptCallbacks {
-          // 静态分派对：cpp 原版闭包 `[&info](LuaState* l)` 仅捕获一枚 info
-          // 指针，改为具名 `attach_threaddata_init` + 该指针转手 userdata。
-          // Safety 契约随函数文档：`info` 是本栈帧的局部（cpp 原版同样是栈
-          // 局部 `&info`），`extract_luau_config` 同步返回前回调即失效，挂入
-          // VM 线程的纯指针数据在窗口内始终指向存活的 `LuauConfigInterruptInfo`。
-          init_callback: Some(ConfigInitCallback {
-            callback: attach_threaddata_init,
-            // 真边界：`ConfigInitCallback::userdata` 字段形态 `*mut c_void` 由
-            // `ulua-config` 固定（lightuserdata 转手槽，经 `lua_setthreaddata`
-            // 挂入 VM），本枚 cast 是指针跨界唯一落点，目标类型由字段推断、
-            // 不在 CLI 侧书写 `core::ffi`。
-            userdata: info_ptr.cast(),
-          }),
+          // 真边界：`thread_data` 是 VM lightuserdata 线程数据槽（cpp 原版
+          // `lua_setthreaddata(l, &info)`，`Analyze.cpp:194-197` 同形闭包）的
+          // 转手地址，由 `extract_config` 在配置执行窗口前单点挂接、不解引用。
+          // 契约：`info` 是本栈帧的局部（cpp 原版同样是栈局部 `&info`），
+          // `extract_luau_config` 同步返回前地址始终指向存活的
+          // `LuauConfigInterruptInfo`，窗口结束后随沙箱状态失效。
+          thread_data: Some(info_ptr.cast()),
           interrupt_callback: Some(luau_config_interrupt),
         };
 

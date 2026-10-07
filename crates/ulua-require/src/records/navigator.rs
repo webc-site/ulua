@@ -376,7 +376,7 @@ impl<'ctx, C: NavigationContext, E: ErrorHandler> Navigator<'ctx, C, E> {
       } else {
         // PresentLuau
         let callbacks = InterruptCallbacks {
-          init_callback: self.navigation_context.luau_config_init(),
+          thread_data: self.navigation_context.luau_config_thread_data(),
           interrupt_callback: self.navigation_context.luau_config_interrupt(),
         };
 
