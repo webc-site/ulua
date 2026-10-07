@@ -181,12 +181,7 @@ impl TypeFunctionSerializer {
   ) {
   }
 
-  fn serialize_children_any_type(
-    &mut self,
-    _source: &AnyType,
-    _target: &mut TypeFunctionAnyType,
-  ) {
-  }
+  fn serialize_children_any_type(&mut self, _source: &AnyType, _target: &mut TypeFunctionAnyType) {}
 
   fn serialize_children_singleton_type(
     &mut self,
@@ -343,11 +338,7 @@ impl TypeFunctionSerializer {
   ) {
   }
 
-  fn serialize_children_type_pack(
-    &mut self,
-    source: &TypePack,
-    target: &mut TypeFunctionTypePack,
-  ) {
+  fn serialize_children_type_pack(&mut self, source: &TypePack, target: &mut TypeFunctionTypePack) {
     for &ty in &source.head {
       target.head.push(self.shallow_serialize_type_id(ty));
     }

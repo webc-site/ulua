@@ -163,12 +163,7 @@ impl ConstraintGenerator {
   /// cpp `visitLValue(const ScopePtr&, AstExprGlobal*, TypeId)`
   /// （ConstraintGenerator.cpp:3961 重载）：`global` 为分发层经类索引校验后
   /// 传入的共享借用，只读取其 `name`/`location` 字段。
-  fn visit_l_value_global(
-    &mut self,
-    scope: &ScopePtr,
-    global: &AstExprGlobal,
-    rhs_type: TypeId,
-  ) {
+  fn visit_l_value_global(&mut self, scope: &ScopePtr, global: &AstExprGlobal, rhs_type: TypeId) {
     // name 是模块 AstNameTable 持有的值拷贝（对照 C++:3963 `Symbol{global->name}`）。
     let global_name = global.name;
     let annotated_ty = scope.lookup_symbol(Symbol::from_global(global_name));

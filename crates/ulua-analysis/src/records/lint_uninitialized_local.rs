@@ -124,10 +124,7 @@ fn lint_uninitialized_local_report(pass: &mut LintUninitializedLocal<'_>) {
 /// `node` 的 `&mut` 借用即「节点非空、存活且本帧可独占」的类型系统证明（原
 /// `&AstExpr`+const→mut 回灌指针门面的形态退役）：非 Local 目标经引用门面
 /// 递归遍历子树，写穿语义与 cpp `expr->visit(this)` 一致。
-fn lint_uninitialized_local_visit_assign(
-  pass: &mut LintUninitializedLocal,
-  node: &mut AstExpr,
-) {
+fn lint_uninitialized_local_visit_assign(pass: &mut LintUninitializedLocal, node: &mut AstExpr) {
   if let AstExprRef::Local(lv) = node.as_expr_ref() {
     // local 槽已句柄化恒非空；locals 键值为既有裸指针形态，经 as_ptr 桥接。
     let l = pass.locals.get_or_insert(lv.local.as_ptr());

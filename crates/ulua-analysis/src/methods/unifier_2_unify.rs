@@ -300,11 +300,7 @@ impl Unifier2 {
   ///
   /// 本仓库唯一调用点（同文件 `unify_type_id_type_id` 的 union 分支）在 follow
   /// 与 get_type_id 之后传参，契约天然成立；函数为 `pub`，外部复用须同守。
-  fn unify_union_type_type_id(
-    &mut self,
-    sub_union: &UnionType,
-    super_ty: TypeId,
-  ) -> UnifyResult {
+  fn unify_union_type_type_id(&mut self, sub_union: &UnionType, super_ty: TypeId) -> UnifyResult {
     let mut result = UnifyResult::Ok;
 
     for sub_option in sub_union.options.iter() {
@@ -316,11 +312,7 @@ impl Unifier2 {
     result
   }
 
-  fn unify_type_id_union_type(
-    &mut self,
-    sub_ty: TypeId,
-    super_union: &UnionType,
-  ) -> UnifyResult {
+  fn unify_type_id_union_type(&mut self, sub_ty: TypeId, super_union: &UnionType) -> UnifyResult {
     let sub_ty = follow_type::follow(sub_ty);
 
     // T <: T | U1 | U2 | ... | Un is trivially true, so we don't gain any information by unifying

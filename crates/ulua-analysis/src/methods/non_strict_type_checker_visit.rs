@@ -473,10 +473,7 @@ impl<'a> NonStrictTypeChecker<'a> {
   /// (NonStrictTypeChecker.cpp:882)：先访问类型实参列表再向下访问被实例化
   /// 表达式；`instantiate` 为存活引用，`type_arguments` 变体载荷恒为 arena
   /// 存活节点，Error 形态对应 cpp 向 `visitAstTypePack` 传 null（早退），跳过。
-  fn visit_ast_expr_instantiate(
-    &mut self,
-    instantiate: &AstExprInstantiate,
-  ) -> NonStrictContext {
+  fn visit_ast_expr_instantiate(&mut self, instantiate: &AstExprInstantiate) -> NonStrictContext {
     for param in instantiate.type_arguments.as_slice() {
       // 变体分发替代判空哨兵，Error 形态无可访问节点。
       match *param {

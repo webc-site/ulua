@@ -302,11 +302,7 @@ impl TxnLog {
       .push_seen_type_or_pack_id_type_or_pack_id(VisitKey::from_ptr(lhs), VisitKey::from_ptr(rhs));
   }
 
-  fn push_seen_type_or_pack_id_type_or_pack_id(
-    &mut self,
-    lhs: TypeOrPackId,
-    rhs: TypeOrPackId,
-  ) {
+  fn push_seen_type_or_pack_id_type_or_pack_id(&mut self, lhs: TypeOrPackId, rhs: TypeOrPackId) {
     // 缺席时按需新建自有栈（原 `Box::into_raw` 泄漏路径改为 Rc，随日志 drop）。
     self.seen_stack_mut().push(sorted_pair(lhs, rhs));
   }

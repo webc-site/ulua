@@ -271,12 +271,7 @@ impl<'ctx> LintDeprecatedApi<'ctx> {
       );
     }
   }
-  fn report_member(
-    &mut self,
-    location: &Location,
-    table_name: Option<&str>,
-    function_name: &str,
-  ) {
+  fn report_member(&mut self, location: &Location, table_name: Option<&str>, function_name: &str) {
     let context = self.context.get();
     if let Some(table_name) = table_name {
       emit_warning(

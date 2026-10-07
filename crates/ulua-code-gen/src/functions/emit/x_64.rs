@@ -47,12 +47,7 @@ fn jump_if_tag_is(build: &mut AssemblyBuilderX64, ri: i32, tag: LuaType, label: 
   build.jcc(ConditionX64::Equal, label);
 }
 
-fn jump_if_tag_is_not(
-  build: &mut AssemblyBuilderX64,
-  ri: i32,
-  tag: LuaType,
-  label: &mut Label,
-) {
+fn jump_if_tag_is_not(build: &mut AssemblyBuilderX64, ri: i32, tag: LuaType, label: &mut Label) {
   build.cmp(luau_reg_tag(ri), (tag as i32).into());
   build.jcc(ConditionX64::NotEqual, label);
 }

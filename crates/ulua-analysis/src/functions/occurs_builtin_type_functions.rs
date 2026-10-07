@@ -6,11 +6,7 @@ use crate::{
   type_aliases::type_id::TypeId,
 };
 
-fn occurs_with_seen(
-  mut haystack: TypeId,
-  needle: TypeId,
-  seen: &mut DenseHashSet<TypeId>,
-) -> bool {
+fn occurs_with_seen(mut haystack: TypeId, needle: TypeId, seen: &mut DenseHashSet<TypeId>) -> bool {
   haystack = follow_type::follow(haystack);
 
   if needle == haystack {

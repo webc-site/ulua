@@ -242,11 +242,7 @@ impl TypeFunctionDeserializer {
   }
 
   /// cpp `deserializeChildren(TypeFunctionTypePackId tftp, TypePackId tp)`。
-  fn deserialize_children_type_pack_id(
-    &mut self,
-    tftp: TypeFunctionTypePackId,
-    tp: TypePackId,
-  ) {
+  fn deserialize_children_type_pack_id(&mut self, tftp: TypeFunctionTypePackId, tp: TypePackId) {
     // 各 arm 对照 C++ `if (auto [x1, x2] = tuple{...}; x1 && x2)` 链。
     if let (Some(t1), Some(t2)) = (
       get_mutable_type_pack::get_mutable::<TypePack>(tp),

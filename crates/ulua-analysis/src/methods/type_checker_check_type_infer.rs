@@ -206,11 +206,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  fn check_stat_repeat(
-    &mut self,
-    _scope: &ScopePtr,
-    _statement: &AstStatRepeat,
-  ) -> ControlFlow {
+  fn check_stat_repeat(&mut self, _scope: &ScopePtr, _statement: &AstStatRepeat) -> ControlFlow {
     let rep_scope = self.child_scope(_scope, &{ _statement.base.base.location });
     // body 与 until 条件已句柄化为 Node（repeat 语法强制 `until` 表达式、parser
     // 必建，非空由类型层承载），`.get()` 直出安全引用，死 unsafe 消解。
@@ -1718,11 +1714,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  fn check_stat_error(
-    &mut self,
-    scope: &ScopePtr,
-    error_statement: &AstStatError,
-  ) -> ControlFlow {
+  fn check_stat_error(&mut self, scope: &ScopePtr, error_statement: &AstStatError) -> ControlFlow {
     let module_ptr = shared_mut(self.expect_current_module());
     // 经 Arc 共享引用读取错误条目数（与 (*module_ptr).errors.len() 等价的写法），无需 deref。
     let old_size = self.expect_current_module().errors.len();
