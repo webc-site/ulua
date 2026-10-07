@@ -1,4 +1,4 @@
-use core::{ffi::c_void, ptr::null_mut};
+use core::ffi::c_void;
 
 use crate::{
   enums::lua_status::LuaStatus,
@@ -33,19 +33,12 @@ pub unsafe fn luau_load(l: *mut LuaState, chunkname: &str, data: &[u8], env: i32
     lua_c_check_gc!(l);
 
     // pause GC for the duration of deserialization - some objects we're creating aren't rooted
-    // DELIBERATE DEVIATION（§2 判定=规则 2「null 只在占位形态」）：cpp 用带实参的 RAII 构造
-    // `ScopedSetGCThreshold pauseGC{L->global, SIZE_MAX}`（lvmload.cpp:801），global 从不为空。
-    // 本 Rust 移植把结构体（records/scoped_set_gc_threshold.rs）与其 `scoped_set_gc_threshold_*`
-    // 方法（methods/scoped_set_gc_threshold_..lvmload.rs）拆到并行会话文件，未提供等价的 `new`
-    // 构造器，只能用「先以 null 占位、紧接着调用方法接线」复现——`global: null_mut()` 一经下一行
-    // 方法调用即被 `(*l).global` 覆写，null 无缺席语义、纯为 struct 字面量必填项。理想修复是在结构
-    // 体文件加 `ScopedSetGcThreshold::new(global, threshold)` 后此处直接构造，但那要改非允许文件，
-    // 故本轮保留占位并记录此待协调改点。
-    let mut pause_gc = ScopedSetGcThreshold {
-      global: null_mut(),
-      original_threshold: 0,
-    };
-    pause_gc.scoped_set_gc_threshold_global_state_usize((*l).global, usize::MAX);
+    // DELIBERATE DEVIATION（review.md §2 规则 1 + §3「占位再接线 → 构造即接线」）：cpp 带实参
+    // RAII 构造 `ScopedSetGCThreshold pauseGC{L->global, SIZE_MAX}`（lvmload.cpp:801），
+    // `L->global` 从不为空。本移植早期以「结构体字面量空占位 + 方法接线」两步复现，留有一个
+    // 无缺席语义的裸空指针；现收口为 `arm` 构造子一步就位——守卫内部 `NonNull<global_State>`
+    // 存续期恒非空，Drop 恢复原阈值，与 cpp RAII 语义逐点一致（见 records/scoped_set_gc_threshold.rs）。
+    let pause_gc = ScopedSetGcThreshold::arm(&mut *(*l).global, usize::MAX);
 
     let mut ctx = LoadContext {
       strings: TempBuffer::new(),

@@ -12,6 +12,11 @@ use core::ptr::null_mut;
 use crate::type_aliases::t_value::TValue;
 
 /// 退役 k 数组节点（单链）。
+///
+/// 既有约定（review.md §2 规则 3）：本节点挂在 `Proto::k_retired`（repr(C) 发射器
+/// ABI 契约结构）的裸单链上，`next/ptr` 的 null 即「链尾 / 未挂块」结构哨兵，与
+/// `lua_Page` 链表头同归 arena 灰白链保留面；链体读写收口于
+/// `proto_k_intern_string`（挂链）与 `lua_f_freeproto`（统链释放）两处。
 #[repr(C)]
 pub struct RetiredKArray {
   pub next: *mut RetiredKArray,

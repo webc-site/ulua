@@ -18,6 +18,9 @@ pub(crate) unsafe fn lua_h_new(l: *mut LuaState, narray: i32, nhash: i32) -> *mu
     let t = lua_m_newgco(l, size_of::<LuaTable>(), (*l).activememcat) as *mut LuaTable;
 
     luaC_init!(l, t, LuaType::Table as i32);
+    // 既有约定（review.md §2 规则 3）：`metatable/array` 是 repr(C) LuaTable 的 ABI 字段
+    // （元表可空入约同 `fasttm` 垫片；array 为数组段指针算式基址，null 即「无数组段」，
+    // 与 sizearray==0 同现）——结构哨兵保留裸指针，判空收口于 table 簇既有约定
     (*t).metatable = null_mut();
     (*t).tmcache.set(!0u8);
     (*t).array = null_mut();

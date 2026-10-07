@@ -71,6 +71,9 @@ pub unsafe extern "C-unwind" fn lua_codegen_setmetatable_export(
     check_writable(l, h);
 
     // 赋值段（lapi lua_setmetatable 的 Table 分支逐位同形：字段写 + objbarrier）
+    // 既有约定（review.md §2 规则 3，同 `lua_setmetatable.rs` 边界注）：`mt_ptr` 的 null
+    // 即「清除元表」——`LuaTable::metatable` 为 repr(C) 表 ABI 裸字段、`fasttm` 垫片可空
+    // 入约的合法实参，null 在此是写而非缺席哨兵，保留裸指针形
     let mt_ptr: *mut LuaTable = if mt_is_nil {
       null_mut()
     } else {

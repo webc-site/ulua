@@ -1,6 +1,6 @@
 use core::{
   mem::offset_of,
-  ptr::{null_mut, NonNull},
+  ptr::{NonNull, null_mut},
 };
 
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
@@ -36,13 +36,12 @@ pub(crate) fn newpage(
   // 既有约定（review.md §2）：frealloc 是宿主 C 分配器回调（FFI 边界），
   // oldptr=null + osize=0 即纯分配请求；无回调或分配失败即抛 ErrMem。
   // SAFETY: FFI 边界——契约保证 `frealloc_fn` 满足 lua_Alloc 语义、`ud` 由宿主保活
-  let raw = match frealloc_fn {
-    Some(f) => unsafe { f(ud, null_mut(), 0, page_size as usize) },
-    None => null_mut(),
-  };
-
-  // 分配失败（或无回调）即抛 ErrMem；`lua_d_throw` 发散不返回，故其后页指针必非空
-  let Some(mut page_ptr) = NonNull::new(raw.cast::<lua_Page>()) else {
+  // 「无回调」与「回调返回 null」经 Option 组合子并为同一失败支，不再中转裸 null 判空
+  let Some(mut page_ptr) = frealloc_fn
+    .and_then(|f| NonNull::new(unsafe { f(ud, null_mut(), 0, page_size as usize) }))
+    .map(|p| p.cast::<lua_Page>())
+  else {
+    // 分配失败（或无回调）即抛 ErrMem；`lua_d_throw` 发散不返回，故其后页指针必非空
     lua_d_throw(l, LuaStatus::ErrMem as i32);
   };
 

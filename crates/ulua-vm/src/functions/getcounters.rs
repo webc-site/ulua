@@ -1,7 +1,7 @@
 use core::{
   ffi::c_void,
   mem::size_of,
-  ptr::{null, null_mut, read_unaligned},
+  ptr::{NonNull, null, read_unaligned},
 };
 
 use crate::{
@@ -36,21 +36,26 @@ pub(crate) fn getcounters(
       let global = l.global;
       // if let 替代 is_none + unwrap，Option 由类型系统收口非空
       let mut count: usize = 0;
+      // 「global 缺席 / 回调未安装 / 宿主返回 null」三态经 Option/NonNull 并为同一
+      // `None`（review.md §2 规则 1），不再折回裸 null 哨兵后判空
       let data = if !global.is_null()
         && let Some(getcounterdata) = (*global).ecb.getcounterdata
       {
-        getcounterdata(
+        NonNull::new(getcounterdata(
           l.read_ptr(),
           (p as *const Proto).cast_mut(),
           &mut count as *mut usize,
-        )
+        ))
       } else {
-        null_mut()
+        None
       };
       (data, count)
     };
 
-    if !data.is_null() && count != 0 {
+    if let Some(data) = data
+      && count != 0
+    {
+      let data = data.as_ptr();
       let debugname = if p.debugname.is_null() {
         null()
       } else {

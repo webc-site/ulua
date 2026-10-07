@@ -63,6 +63,9 @@ pub(crate) unsafe fn lua_v_equalval(l: *mut LuaState, t1: &TValue, t2: &TValue) 
       (ValueView::Object(o1), ValueView::Object(o2)) => {
         // 与 metatable 同规则：比较两侧实例类的 instancemetatable 上的 __eq
         // （`lclass` 为空对应 cpp 同址解引用前的既有判空加固，行为不变）
+        // 既有约定（review.md §2 规则 3）：`mt1/mt2` 的 null 即「元表缺席」，与 LuaTable
+        // 的 `metatable: *mut LuaTable` 字段及 `fasttm` 垫片可空入约同形（§3 双层形态，
+        // 垫片本轮不删），故此处保留裸指针哨兵
         let mt1 = if (*o1).lclass.is_null() {
           null_mut()
         } else {
@@ -92,7 +95,7 @@ pub(crate) unsafe fn lua_v_equalval(l: *mut LuaState, t1: &TValue, t2: &TValue) 
     }
 
     call_t_mres(l, (*l).top, tm, t1, t2);
-    if !l_isfalse!((*l).top) { 1 } else { 0 }
+    (!l_isfalse!((*l).top)) as i32
   }
 }
 
