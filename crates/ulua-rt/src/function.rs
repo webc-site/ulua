@@ -379,8 +379,8 @@ impl Function {
     // `get_info`（safe 门面）收口零初始化 + `lua_getinfo` out 参数两步：`state`
     // 存活、栈顶是刚压入的本函数值（`level = -1` 解到它）、`GETINFO_S` 为静态
     // NUL 结尾选项串且不含 `f`，不压值。
-    let closure =
-      get_info(state, -1, GETINFO_S).is_some_and(|ar| matches!(ar.what, LuaWhat::Lua | LuaWhat::Main));
+    let closure = get_info(state, -1, GETINFO_S)
+      .is_some_and(|ar| matches!(ar.what, LuaWhat::Lua | LuaWhat::Main));
     // `getinfo` 不压不弹，栈顶仍是 push 压入的本函数值；`pop_stack`（safe 门面）
     // 弹回这一层，恢复调用方栈深。
     pop_stack(state, 1);
