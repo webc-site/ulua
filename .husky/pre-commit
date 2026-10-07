@@ -8,4 +8,6 @@ if command -v codegraph >/dev/null 2>&1; then
   fi
 fi
 
+./i18n-guard.sh
+
 bun x lint-staged

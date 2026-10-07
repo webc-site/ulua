@@ -26,6 +26,28 @@ env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
 
 jobs:
+  # Fast locale-key guard: `website/scripts/i18nCheck.js` needs only bun (no cargo,
+  # no site build), so it catches missing/unused `bench.lang.*`-style parity keys in
+  # seconds instead of ~7 minutes deep inside the Pages job after the full wasm+site
+  # build. Fails cheaply on every push/PR touching the tree.
+  i18n-parity:
+    name: i18n locale parity (bun only)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+
+      - name: Locale parity check
+        # benchData.js is a gitignored, bench.sh-generated artifact; regenerate it
+        # from tracked inputs (benchmarks/cases/*.lua + benchConvert.js defaults) so
+        # i18nCheck can derive the full bench.* key set without any benchmark run.
+        run: |
+          bun website/scripts/benchConvert.js
+          bun website/scripts/i18nCheck.js
+
   # The core suite on all three desktop platforms. ulua is pure Rust with no C
   # dependency, so it should build and pass everywhere Rust does — this proves it.
   test:

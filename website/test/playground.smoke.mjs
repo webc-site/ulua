@@ -377,11 +377,21 @@ const ROOT_DIST = join(import.meta.dirname, "../dist"),
         zh_check.second_lang === "中文 (简体)",
       "count=" + zh_check.lang_count + " 1st=" + zh_check.first_lang,
     );
-    const { exitCode: i18n_code } = Bun.spawnSync([
-      "bun",
-      join(import.meta.dirname, "../scripts/i18nCheck.js"),
-    ]);
-    testCheck("i18n: zero parity error and zero unused/missing keys", i18n_code === 0);
+    // 子进程输出必须带回失败原因：仅 exitCode 非零时 CI 日志会留下空 FAIL 行，无法定位缺失词条。
+    const i18n_spawn = Bun.spawnSync([
+        "bun",
+        join(import.meta.dirname, "../scripts/i18nCheck.js"),
+      ], { stdout: "pipe", stderr: "pipe" }),
+      i18n_tail = (i18n_spawn.stdout.toString() + i18n_spawn.stderr.toString())
+        .trim()
+        .split("\n")
+        .slice(-15)
+        .join(" ⏐ ");
+    testCheck(
+      "i18n: zero parity error and zero unused/missing keys",
+      i18n_spawn.exitCode === 0,
+      i18n_tail,
+    );
     testCheck(
       "syntax: group titles cleanly localized without raw syntax.* keys",
       !zh_check.has_untranslated_groups,
