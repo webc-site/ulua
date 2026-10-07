@@ -1,14 +1,12 @@
-use alloc::{boxed::Box, vec::Vec};
-
 use ulua_analysis::records::symbol::Symbol;
 use ulua_ast::records::ast_name::AstName;
 
-/// 测试专用：把 `&str` 变成存活到进程结束的 `Symbol`。`AstName::value` 要求
-/// NUL 结尾缓冲，故泄漏「字节 + 尾 NUL」的 `Box<[u8]>`，经 `from_static` 收口；
-/// 不用散落的堆 C 串辅助类型，泄漏范围仅限测试进程。
-pub fn mk_symbol(s: &str) -> Symbol {
-  let mut bytes: Vec<u8> = Vec::with_capacity(s.len() + 1);
-  bytes.extend_from_slice(s.as_bytes());
-  bytes.push(0);
-  Symbol::from_global(AstName::from_static(Box::leak(bytes.into_boxed_slice())))
+/// 测试专用：把名字面量变成 `Symbol`（全局臂）。
+///
+/// `Symbol` 的 `Eq`/`Hash` 按 `global` 的**字节内容**判等，故此处无需驻留或泄漏：
+/// 名字恒为调用点的 `'static` 字面量，直接经 `AstName::from_str` 借用静态字节即可，
+/// 不再伪造 NUL 结尾缓冲、也不再 `Box::leak`。
+#[inline]
+pub fn mk_symbol(s: &'static str) -> Symbol {
+  Symbol::from_global(AstName::from_str(s))
 }

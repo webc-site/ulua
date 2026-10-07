@@ -1,3 +1,9 @@
+//! `cpp/tests/NotNull.test.cpp` 的移植。
+//!
+//! 被测对象就是 `NotNull<T>` 本身：`get()` 交回的裸指针即该类型的公共契约面，故
+//! 保留；但构造一律走 `NotNull::from_ref`（不再手写 `&mut x as *mut _` 的指针折算），
+//! 每处 `unsafe` 只包住「经 `get()` 写目标」这一句真实前置条件所在的最窄范围。
+
 extern crate alloc;
 
 // Source: `tests/NotNull.test.cpp`
@@ -8,27 +14,29 @@ fn not_null_basic_stuff() {
   use ulua_analysis::records::not_null::NotNull;
   use ulua_unit_test::records::test::Test;
 
+  /// 被测点：`get()` 的返回值可直接喂给 C 形签名（cpp 侧原样调用 `bar(q)`）。
   fn bar(_q: *mut i32) {}
 
   let mut a_box = Box::new(55);
   let mut b_box = Box::new(55);
 
-  let a = NotNull::new(&mut *a_box as *mut i32);
-  let b = NotNull::new(&mut *b_box as *mut i32);
+  let a = NotNull::from_ref(&mut *a_box);
+  let b = NotNull::from_ref(&mut *b_box);
 
   let d = a;
 
   let e = *d;
-  // cpp's `*d = 1;` — NotNull is Copy, so mutation goes through get()
-  // rather than DerefMut (see records/not_null.rs deviation note).
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`b_box` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  // cpp 的 `*d = 1;`。`NotNull` 是 `Copy`，故刻意不实现 `DerefMut`（否则复制
+  // `&mut NotNull` 会得到两个别名 `&mut`，见 records/not_null.rs 的偏离说明），
+  // 写操作必须经 `get()`。
+  // Safety: `d` 由非空不变式构造，指向本用例独占、直到此处仍存活的 `a_box` 内容。
   unsafe {
     *d.get() = 1;
   }
   assert_eq!(e, 55);
 
   let f = d;
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`b_box` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  // Safety: 同 `d`——`f` 是同一 `&mut a_box` 的副本，目标仍存活。
   unsafe {
     *f.get() = 5;
   }
@@ -40,19 +48,19 @@ fn not_null_basic_stuff() {
   assert_eq!(g, a);
 
   let mut t_box = Box::new(Test::new());
-  let t = NotNull::new(&mut *t_box as *mut Test);
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`t_box` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  let t = NotNull::from_ref(&mut *t_box);
+  // Safety: `t` 指向本用例独占且存活的 `t_box` 内容，`get()` 写目标即写该 Box。
   unsafe {
     (*t.get()).x = 5;
     (*t.get()).y = PI;
   }
 
   let u = t;
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`t_box` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  // Safety: 同上，`u` 为 `t` 的副本。
   unsafe {
     (*u.get()).x = 44;
   }
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`t_box` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  // Safety: 同上，只读回同一存活目标。
   let v = unsafe { (*u.get()).x };
   assert_eq!(v, 44);
 
@@ -73,9 +81,9 @@ fn not_null_const() {
   let mut p = 0;
   let mut q = 0;
 
-  let n = NotNull::new(&mut p as *mut i32);
+  let n = NotNull::from_ref(&mut p);
 
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`p` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  // Safety: `n` 指向本用例独占且存活的局部 `p`。
   unsafe {
     *n.get() = 123;
   }
@@ -84,11 +92,11 @@ fn not_null_const() {
 
   assert_eq!(123, *m);
 
-  let n2 = NotNull::new(&mut q as *mut i32);
+  let n2 = NotNull::from_ref(&mut q);
   m = n2;
 
   let m2 = n;
-  // Safety: 测试并行运行下本资源由本用例独占、无共享与并发访问；`q` 在本用例作用域内取得/构造（&mut 再借用、Box::into_raw 或 as_ptr 布线），至本行使用前不释放，故满足被调 unsafe 例程与 C ABI 的前置条件。
+  // Safety: `m2` 仍是 `p` 的副本，`n`/`p` 未释放。
   unsafe {
     *m2.get() = 321;
   }
@@ -104,8 +112,8 @@ fn not_null_const_compatibility() {
 
   let mut raw = Box::new(8);
 
-  let a = NotNull::new(&mut *raw as *mut i32);
-  let _b = NotNull::new(&mut *raw as *mut i32);
+  let a = NotNull::from_ref(&mut *raw);
+  let _b = NotNull::from_ref(&mut *raw);
   let c = a;
 
   assert_eq!(*c, 8);
@@ -120,8 +128,8 @@ fn not_null_hashable() {
   let mut a_ = 8;
   let mut b_ = 10;
 
-  let a = NotNull::new(&mut a_ as *mut i32);
-  let b = NotNull::new(&mut b_ as *mut i32);
+  let a = NotNull::from_ref(&mut a_);
+  let b = NotNull::from_ref(&mut b_);
 
   let hello = "hello";
   let world = "world";

@@ -1,4 +1,4 @@
-use core::marker::PhantomData;
+use core::{marker::PhantomData, ptr::from_ref};
 
 use ulua_common::records::f_value::{FValue, FValueOverridable};
 
@@ -14,7 +14,7 @@ impl<T: FValueOverridable> ScopedFValue<T> {
     fvalue.push_test_override(new_value);
 
     ScopedFValue {
-      value: fvalue as *const FValue<T> as *mut FValue<T>,
+      value: from_ref(fvalue).cast_mut(),
       old_value,
       _marker: PhantomData,
     }

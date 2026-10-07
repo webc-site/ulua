@@ -1,5 +1,5 @@
 use alloc::vec::Vec;
-use core::ptr::null_mut;
+use core::ptr::{from_ref, null_mut};
 
 use ulua_ast::rtti::{AstNodeClass, AstNodePtr, ast_node_try_as};
 
@@ -41,6 +41,6 @@ pub fn query<T: AstNodeClass>(node: impl AstNodePtr, nths: Vec<Nth>) -> *mut T {
     node
       .as_ref()
       .and_then(ast_node_try_as::<T>)
-      .map_or(null_mut(), |p| p as *const T as *mut T)
+      .map_or(null_mut(), |p| from_ref(p).cast_mut())
   }
 }
