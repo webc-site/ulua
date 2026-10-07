@@ -79,6 +79,35 @@ pub struct lua_ExecutionCallbacks {
     Option<unsafe extern "C-unwind" fn(l: *mut LuaState, proto: *mut Proto, pcpos: u32)>,
 }
 
+/// 「未安装任何回调」的唯一形态：cpp `L->global->ecb = lua_ExecutionCallbacks{}` 整体清零语义。
+///
+/// 回调槽用 `Option::None` 表达未安装，数值槽用 0；`context` 是类型擦除的宿主 user-data
+/// （安装端写 `code_gen_context as *mut c_void`，读取端 `cast::<T>()` 后 `as_mut()` 还原
+/// `Option`），字段类型只能是 `*mut c_void`，null 即「无宿主」。
+///
+/// 本表由 VM 与 code-gen 两侧重置，此前各自复制了一份全零构造（一份 14 字段字面量、一份
+/// `unsafe { zeroed() }`），新增字段时两处都会静默漏配；收口于此，字段清单与定义同址维护。
+impl Default for lua_ExecutionCallbacks {
+  fn default() -> Self {
+    Self {
+      context: null_mut(),
+      close: None,
+      destroy: None,
+      enter: None,
+      disable: None,
+      getmemorysize: None,
+      gettypemapping: None,
+      getcounterdata: None,
+      inlinefunction: None,
+      trace_forn_enter: None,
+      forn_heat_proto: 0,
+      forn_heat_pc: 0,
+      forn_heat_target: 0,
+      trace_forn_backedge: None,
+    }
+  }
+}
+
 /// Rust 惯用名。原名 `lua_ExecutionCallbacks` 必须保留：`ulua-code-gen` 直接按该名字构造
 /// 零值回调表（`repr(C)` 使混合大小写命名豁免 casing lint，改动会波及跨 crate 消费方）。
 pub(crate) type LuaExecutionCallbacks = lua_ExecutionCallbacks;
