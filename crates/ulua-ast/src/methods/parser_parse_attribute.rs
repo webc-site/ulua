@@ -8,22 +8,21 @@ use ulua_common::LUAU_ASSERT;
 
 use crate::{
   enums::type_lexer::Type,
-  functions::{
-    is_constant_literal::is_constant_literal, is_literal_table::is_literal_table,
-    optional_node::slot_ref,
-  },
+  functions::{is_constant_literal::is_constant_literal, is_literal_table::is_literal_table},
   records::{
     ast_attr::{AstAttr, AstAttrType},
     location::Location,
     match_lexeme::MatchLexeme,
-    node_handle::Nodes,
+    node_handle::{Node, Nodes},
     parser::Parser,
     temp_vector::TempVector,
   },
 };
 
 impl Parser {
-  pub fn parse_attribute(&mut self, attributes: &mut TempVector<'_, *mut AstAttr>) {
+  /// cpp `Parser::parseAttribute(TempVector<AstAttr*>& attributes)`：`attributes`
+  /// 是调用方 `scratch_attr` 的窗口，元素以 [`Node`] 入栈（`alloc` 恒非空）。
+  pub fn parse_attribute(&mut self, attributes: &mut TempVector<'_, Node<AstAttr>>) {
     LUAU_ASSERT!(
       self.lexer.current().r#type == Type::ATTRIBUTE
         || self.lexer.current().r#type == Type::ATTRIBUTE_OPEN
@@ -44,7 +43,7 @@ impl Parser {
           name,
         ),
       );
-      attributes.push_back(node);
+      attributes.push_back(Node::from_raw(node));
     } else {
       let open = *self.lexer.current();
       self.next_lexeme();
@@ -63,9 +62,9 @@ impl Parser {
           {
             let (args, args_location, _expr_location) = self.parse_call_list(None);
 
-            for &arg in args.iter() {
-              // parse_call_list 的实参由 arena 分配，元素恒非空；slot_ref 读成共享引用。
-              let arg_expr = slot_ref(arg);
+            for arg_expr in args.iter_nodes() {
+              // parse_call_list 的实参由 arena 分配，`AstArray::iter_nodes` 直接把
+              // 元素读成存活节点的共享引用（判空/解引用收口在该门面）。
               if !is_constant_literal(arg_expr) && !is_literal_table(arg_expr) {
                 self.report(
                   args_location,
@@ -88,7 +87,7 @@ impl Parser {
                 attr_name,
               ),
             );
-            attributes.push_back(node);
+            attributes.push_back(Node::from_raw(node));
           } else {
             let ty = self.validate_attribute(
               name_loc,
@@ -104,7 +103,7 @@ impl Parser {
                 attr_name,
               ),
             );
-            attributes.push_back(node);
+            attributes.push_back(Node::from_raw(node));
           }
 
           if self.lexer.current().r#type == Type::COMMA {
@@ -129,7 +128,7 @@ impl Parser {
             self.name_error,
           ),
         );
-        attributes.push_back(node);
+        attributes.push_back(Node::from_raw(node));
       }
 
       self.expect_match_and_consume(']', &MatchLexeme::new(&open), false);

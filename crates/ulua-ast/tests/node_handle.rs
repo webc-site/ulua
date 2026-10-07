@@ -93,8 +93,6 @@ mod opt_node {
 }
 
 mod temp_vector_transfer {
-  use core::ptr::from_mut;
-
   use ulua_ast::records::temp_vector::TempVector;
 
   use super::*;
@@ -102,26 +100,28 @@ mod temp_vector_transfer {
   #[test]
   fn from_temp_vector_copies_slots_and_scratch_is_released() {
     let mut markers = [Marker(0), Marker(1)];
-    let mut scratch: Vec<*mut Marker> = Vec::new();
+    // parser scratch 的句柄形态:暂存窗口元素恒为 Node(cpp TempVector<T*> 的
+    // Rust 对偶,非空性在类型层)。
+    let mut scratch: Vec<Node<Marker>> = Vec::new();
     let nodes;
     {
       let mut tv = TempVector::new(&mut scratch);
-      tv.push_back(from_mut(&mut markers[0]));
-      tv.push_back(from_mut(&mut markers[1]));
+      tv.push_back(Node::from_mut(&mut markers[0]));
+      tv.push_back(Node::from_mut(&mut markers[1]));
       nodes = Nodes::from_temp_vector(&tv);
       assert_eq!(nodes.len(), 2);
       assert!(eq(nodes.get(0).unwrap(), &markers[0]));
       assert!(eq(nodes.get(1).unwrap(), &markers[1]));
     } // TempVector 的 Drop 把 scratch 截回空窗
     assert!(scratch.is_empty());
-    // 句柄数组独立堆持有，scratch 回收后仍可读（cpp copy 的转移语义）
+    // 句柄数组独立堆持有,scratch 回收后仍可读(cpp copy 的转移语义)
     assert_eq!(nodes.iter().map(|m| m.0).collect::<Vec<_>>(), [0, 1]);
   }
 
   #[test]
   fn empty_temp_vector_degrades_per_flavor() {
-    let mut scratch: Vec<*mut Marker> = Vec::new();
-    let tv = TempVector::<*mut Marker>::new(&mut scratch);
+    let mut scratch: Vec<Node<Marker>> = Vec::new();
+    let tv = TempVector::<Node<Marker>>::new(&mut scratch);
     assert!(Nodes::from_temp_vector(&tv).is_empty());
   }
 }

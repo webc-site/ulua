@@ -54,10 +54,9 @@ impl Parser {
         location,
         // cpp Parser.cpp:1350 直传 `parseFunctionBody` 的 `funLocal`：本调用点
         // `localName = Some(&name)`，pushLocal（Parser.cpp:5147 `alloc<AstLocal>`）
-        // 恒非空 → name 槽位恒非空（cpp 处 null 即 UB，不可触发）。
-        Node::from_non_null(
-          var.expect("local function 的名字局部变量由 pushLocal 恒非空建出（cpp Parser.cpp:2345）"),
-        ),
+        // 恒非空 → name 槽位恒非空（cpp 处 null 即 UB，不可触发）。funLocal 已是
+        // `Node<AstLocal>`（类型层非空），expect 只折叠「local function 形态」维度。
+        var.expect("local function 的名字局部变量由 pushLocal 恒非空建出（cpp Parser.cpp:2345）"),
         Node::from_raw(body),
         is_const,
       ));
@@ -128,15 +127,16 @@ impl Parser {
         vars.push_back(self.push_local(name));
       }
 
-      let end = if let Some(&expr) = values.last() {
-        // 槽内为 parse_expr_list 收集的非空 arena 存活指针，仅读其基类 location。
-        slot_ref(expr).base.location
+      let end = if let Some(expr) = values.last() {
+        // 槽内为 parse_expr_list 收集的 arena 句柄（类型层恒非空），仅读其基类 location。
+        expr.get().base.location
       } else {
         *self.lexer.previous_location()
       };
 
-      let vars_array = self.copy_temp_vector_t(&vars);
-      let values_array = self.copy_temp_vector_t(&values);
+      // 记录边界单点折算：句柄窗口 → 未引用化的 `AstArray<*mut …>` 字段。
+      let vars_array = self.copy_temp_vector_ptrs(&vars);
+      let values_array = self.copy_temp_vector_ptrs(&values);
       let node = self.alloc_stat(AstStatLocal::new(
         Location::new(start.begin, end.end),
         vars_array,

@@ -8,12 +8,12 @@
 use ulua_common::fflag::DebugLuauNoInline;
 
 use crate::{
-  functions::{deprecated_args_validator::deprecated_args_validator, optional_node::slot_ref},
+  functions::deprecated_args_validator::deprecated_args_validator,
   records::{
     ast_attr::{AstAttr, AstAttrType},
     ast_expr::AstExpr,
     location::Location,
-    node_handle::Nodes,
+    node_handle::{Node, Nodes},
     parser::Parser,
     temp_vector::TempVector,
   },
@@ -24,7 +24,7 @@ impl Parser {
     &mut self,
     loc: Location,
     attribute_name: &str,
-    attributes: &TempVector<'_, *mut AstAttr>,
+    attributes: &TempVector<'_, Node<AstAttr>>,
     args: &Nodes<AstExpr>,
   ) -> Option<AstAttrType> {
     // kAttributeEntries (Parser.cpp): name -> (type, optional args validator).
@@ -49,9 +49,10 @@ impl Parser {
 
     if let Some(attr_type) = r#type {
       // check that attribute is not duplicated
-      for &attr_ptr in attributes.iter() {
-        // attr_ptr 指向 arena 中存活的 AstAttr 节点；slot_ref 只读判重。
-        if slot_ref(attr_ptr).r#type == attr_type {
+      for attr in attributes.iter() {
+        // scratch_attr 窗口的元素是 arena 句柄（类型层恒非空），判重经 Deref 只读
+        // `AstAttr::type`，无需解引用门面。
+        if attr.r#type == attr_type {
           self.report(
             loc,
             format_args!("Cannot duplicate attribute '@{}'", attribute_name),
