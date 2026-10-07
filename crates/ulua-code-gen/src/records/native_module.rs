@@ -51,11 +51,13 @@ impl NativeModule {
     // `code_base` 来自构造断言非空的 allocation code_start，`.add(entry_offset)` 落在该块内；
     // 写入的两字段位于 execdata 外部堆分配（非 self 内），与 `&mut self` 借用内存不相交。
     // header 读写一律经 `NativeProtoExecDataHeaderExt` 门面（unsafe 收口见该 trait 契约）。
-    let native_module = self as *mut NativeModule;
+    // `&mut self` 派生的 `NonNull` 由引用不变量保证非空，临时借用随语句结束（后续循环
+    // 再独占 `self.native_protos`），无需裸指针中转。
+    let native_module = NonNull::from(&mut *self);
 
     for native_proto in self.native_protos.iter_mut() {
       let header = native_proto.header_mut();
-      header.native_module = native_module;
+      header.native_module = Some(native_module);
       // Safety: code_base 来自构造断言非空的 allocation code_start，entry_offset 为该
       // 代码块内的合法偏移，`add` 落在块界内；仅地址算术，不解引用。
       header.entry_offset_or_address =
@@ -75,12 +77,13 @@ impl NativeModule {
   /// Box 化搬到最终堆地址后必须调用此方法重绑，否则 release 会作用到
   /// 已失效的栈内存（cpp `make_unique<NativeModule>` 直接在最终地址构造）。
   pub(crate) fn rebind_header_module_pointers(&mut self) {
-    let native_module = self as *mut NativeModule;
+    // `&mut self` 派生 `NonNull`：非空由引用不变量给出，临时借用随语句结束。
+    let native_module = NonNull::from(&mut *self);
 
     for native_proto in self.native_protos.iter_mut() {
       // 把 native_module 改写为 self 的最终(堆)地址，修正构造期捕获的栈临时地址；
       // header 写经 `header_mut` 门面（独占借用随 `&mut self` 存活，无别名冲突）。
-      native_proto.header_mut().native_module = native_module;
+      native_proto.header_mut().native_module = Some(native_module);
     }
   }
 

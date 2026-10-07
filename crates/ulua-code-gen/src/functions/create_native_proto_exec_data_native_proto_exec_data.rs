@@ -2,7 +2,7 @@ use alloc::alloc::{alloc, handle_alloc_error};
 use core::{
   alloc::Layout,
   mem::{align_of, size_of},
-  ptr::{NonNull, null, null_mut},
+  ptr::{NonNull, null},
 };
 
 use crate::{
@@ -45,17 +45,12 @@ pub fn create_native_proto_exec_data_u32_u32(
   // Default 同值的字面量整体初始化 header，写入后 header 各字段（裸指针为 null、计数为入参）无悬垂。
   unsafe {
     header.write(NativeProtoExecDataHeader {
-      // DELIBERATE DEVIATION / 保留理由：镜像 cpp `NativeProtoExecData.h:22`
-      // `NativeModule* nativeModule = nullptr`，语义是「本 execdata 尚未
-      // assignToModule」。目标形态是 `Option<NonNull<NativeModule>>`（同 crate 的
-      // `records::native_module_ref` 已是该形态，可作样板），但字段声明在
-      // `records::native_proto_exec_data_header`，写端
-      // `records::native_module`（构造期与 `rebind_header_module_pointers` 把临时栈址
-      // 改绑为最终堆址两处）、读端 `functions::on_destroy_function`
-      // （`header.native_module.as_ref().expect(..)` 后 `.release()`）都不在本轮
-      // 改动清单内；只改本构造端会留下无法编译的半截迁移，故此处维持 cpp 的逐字段
-      // 零初值形态——绑定前 null、绑定后恒非空由上述两端的既有契约把守。
-      native_module: null_mut(),
+      // `None` 即 cpp `NativeProtoExecData.h:22` 的 `nativeModule = nullptr`，语义
+      // 「本 execdata 尚未 assignToModule」；字段形态为 `Option<NonNull<NativeModule>>`
+      // （review.md §2 缺席语义收口），绑定由 `NativeModule::bind_native_protos` /
+      // `rebind_header_module_pointers` 两处写入点填 `Some`，读端
+      // `functions::on_destroy_function` 依既有契约「绑定后才分配 execdata」取值。
+      native_module: None,
       entry_offset_or_address: null(),
       bytecode_id: 0,
       bytecode_instruction_count,
