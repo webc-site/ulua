@@ -10,17 +10,19 @@ use crate::{
   type_aliases::api::LuaState,
 };
 
+/// `extern "C-unwind"` 入口（NativeContext `call_fallback` 槽位）：无法内联的调用整体回退解释器。
+///
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn call_fallback(
+/// 由解释器分发或生成的原生代码按 Lua VM ABI 提供 `l`/`ra`/`argtop`——`l` 为存活 `LuaState`、
+/// `ra` 为活栈槽、`argtop` 为参数区上界；C 闭包分支经 `inner.c.f`（宿主存活函数指针）按
+/// extern "C-unwind" ABI 调出。边界契约集中于 `VmFrame::current`，建帧/搬移逻辑全部经帧
+/// 方法以安全 API 进行，语句顺序与 cpp callFallback 逐字保持。
+pub unsafe extern "C-unwind" fn call_fallback(
   l: *mut LuaState,
   ra: StkId,
   mut argtop: StkId,
   nresults: i32,
 ) -> *mut Closure {
-  // 契约: l/ra/argtop 由调用方(解释器分发或原生代码)按 Lua VM ABI 提供——ra 为活栈槽、
-  // argtop 为参数区上界。边界契约集中于 `VmFrame::current`，以下建帧/搬移逻辑全部经帧
-  // 方法以安全 API 进行，语句顺序与 cpp callFallback 逐字保持。
   // Safety: 本函数头 ABI 契约保证 `l` 为存活 LuaState；VmFrame::current 依 VM 调度不变量以 L->base 收帧，不解引用。
   let frame = unsafe { VmFrame::current(l) };
 
@@ -115,17 +117,4 @@ pub unsafe fn call_fallback(
   });
 
   null_mut()
-}
-
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn call_fallback_export(
-  l: *mut LuaState,
-  ra: StkId,
-  argtop: StkId,
-  nresults: i32,
-) -> *mut Closure {
-  // Safety: extern "C-unwind" 导出入口按原样转发 l/ra/argtop/nresults 给同契约的 unsafe fn
-  // call_fallback; 参数由 VM/原生代码按 C ABI 提供且指向活对象, 满足被调前置条件, 本块不新增解引用。
-  unsafe { call_fallback(l, ra, argtop, nresults) }
 }

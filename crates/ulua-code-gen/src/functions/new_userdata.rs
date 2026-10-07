@@ -6,8 +6,10 @@ use ulua_vm::{
 };
 
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn new_userdata(l: *mut LuaState, s: usize, tag: i32) -> *mut Udata {
+/// `extern "C-unwind"` FFI 边界，调用方（生成的原生代码/VM）按 Lua codegen 回调约定保证：
+/// `l` 为存活 `LuaState`（`(*l).global` 活）且 `tag ∈ [0, utags)`，故 `udatamt[tag]` 在数组
+/// 界内；`lua_u_newudata` 成功返回非空活 `Udata` 否则抛错，metatable 写入落在刚分配的活对象上。
+pub unsafe extern "C-unwind" fn new_userdata(l: *mut LuaState, s: usize, tag: i32) -> *mut Udata {
   // Safety: l 为活 LuaState, (*l).global 活; lua_u_newudata 成功返回非空活 Udata 否则抛错。
   // udatamt 按 tag 索引, tag 由调用方约束在 [0, utags) 内, 故 udatamt[tag] 在数组界内;
   // h 非空时 (*u).metatable=h 写入的是刚分配的活对象。以下窄块统一援引本契约。
@@ -25,16 +27,4 @@ pub unsafe fn new_userdata(l: *mut LuaState, s: usize, tag: i32) -> *mut Udata {
   }
 
   u
-}
-
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe extern "C-unwind" fn new_userdata_export(
-  l: *mut LuaState,
-  s: usize,
-  tag: i32,
-) -> *mut Udata {
-  // Safety: 导出 C ABI 入口原样转发 l/s/tag 给同契约 unsafe fn new_userdata; 调用方按 ABI
-  // 保证 l 为活 LuaState 且 tag∈[0,utags), 满足被调前置条件。
-  unsafe { new_userdata(l, s, tag) }
 }

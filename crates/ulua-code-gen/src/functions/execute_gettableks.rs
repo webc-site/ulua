@@ -94,7 +94,7 @@ fn call_index_c_function(
 /// `global` 一致有效）；`pc` 指向当前 `LOP_GETTABLEKS`/`LOP_GETUDATAKS` 指令（主字 + AUX
 /// 常量字）；`base` 为合法栈基址；`k` 指向当前 proto 的常量表。边界契约集中于
 /// [`VmFrame::new`] 与 `call_udata_direct_field`，其余为安全逻辑。
-pub unsafe fn execute_gettableks(
+pub unsafe extern "C-unwind" fn execute_gettableks(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,
@@ -227,18 +227,4 @@ pub unsafe fn execute_gettableks(
     frame.gettable(rb, kv, ra);
   });
   next_pc
-}
-
-/// # Safety
-/// C-ABI 导出边界:由宿主/VM 依 Lua codegen 回调约定调用,`l`/`pc`/`base`/`k` 的合法性与存活前提
-/// 与 [`execute_gettableks`] 的契约完全一致(本函数仅原样透传)。
-pub unsafe extern "C-unwind" fn execute_gettableks_export(
-  l: *mut LuaState,
-  pc: *const Instruction,
-  base: StkId,
-  k: *mut TValue,
-) -> *const Instruction {
-  // Safety: 本 export 的 `unsafe fn` 契约与 `execute_gettableks` 的入参要求逐字相同(见上),
-  // 故把同一组 `l`/`pc`/`base`/`k` 原样透传即满足被调 unsafe fn 的全部前置条件。
-  unsafe { execute_gettableks(l, pc, base, k) }
 }
