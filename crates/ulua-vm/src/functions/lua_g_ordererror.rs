@@ -1,7 +1,5 @@
 //! Source: `VM/src/ldebug.cpp:277-284` (hand-ported)
 
-use core::ffi::c_char;
-
 use crate::{
   enums::tms::TMS,
   functions::{cstr_cow, lua_t_objtypename::lua_t_objtypename},
@@ -20,10 +18,12 @@ pub(crate) unsafe fn lua_g_ordererror(
   p2: *const TValue,
   op: TMS,
 ) -> ! {
-  // SAFETY: 契约保证 `l` 为存活调用帧、操作数 TValue 可读；错误串格式化后经 luaG 路径抛出、不返回
+  // SAFETY: 契约保证 `l` 为存活调用帧、操作数 TValue 可读；错误串格式化后经 luaG 路径抛出、不返回。
+  // lua_t_objtypename 返回的 C 串指针立即经 `cstr_cow` 收口为 `Cow<str>`（借用门面，unsafe 收拢于门
+  // 面内），本函数不再出现宿主 C 串裸指针（review.md §10）。
   unsafe {
-    let t1: *const c_char = lua_t_objtypename(&*l, &*p1);
-    let t2: *const c_char = lua_t_objtypename(&*l, &*p2);
+    let t1 = cstr_cow(lua_t_objtypename(&*l, &*p1));
+    let t2 = cstr_cow(lua_t_objtypename(&*l, &*p2));
     let opname: &str = if op == TMS::TmLt {
       "<"
     } else if op == TMS::TmLe {
@@ -32,12 +32,6 @@ pub(crate) unsafe fn lua_g_ordererror(
       "=="
     };
 
-    lua_g_runerror!(
-      l,
-      "attempt to compare {} {} {}",
-      cstr_cow(t1),
-      opname,
-      cstr_cow(t2)
-    )
+    lua_g_runerror!(l, "attempt to compare {} {} {}", t1, opname, t2)
   }
 }

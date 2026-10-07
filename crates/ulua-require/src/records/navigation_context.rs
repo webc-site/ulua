@@ -1,6 +1,6 @@
 use alloc::{boxed::Box, vec::Vec};
+use core::ffi::c_void;
 
-use ulua_config::records::interrupt_callbacks::ConfigInitCallback;
 use ulua_vm::records::lua_state::LuaState;
 
 use crate::enums::{
@@ -54,12 +54,13 @@ pub trait NavigationContext {
     None
   }
 
-  /// Luau 配置执行前的线程数据初始化回调。
+  /// Luau 配置执行前挂进 VM 线程数据槽的转手地址。
   ///
-  /// 返回 [`ConfigInitCallback`]（函数指针 + 转手 userdata 的静态分派对，
-  /// 零分配零虚分派）：实现方给出的 `callback` 只会在配置执行的同步窗口内
-  /// 被调用一次，`userdata` 指向该窗口内存活的数据即可。
-  fn luau_config_init(&self) -> Option<ConfigInitCallback> {
+  /// 返回 [`ulua_config::records::interrupt_callbacks::InterruptCallbacks::thread_data`]
+  /// 形态的载荷（lightuserdata 转手槽地址）：实现方交出的地址由
+  /// `extract_config` 在配置执行的同步窗口内单点挂接，仅需在该窗口内存活；
+  /// 中断回调经 `lua_getthreaddata` 在窗口内还原。
+  fn luau_config_thread_data(&self) -> Option<*mut c_void> {
     None
   }
 

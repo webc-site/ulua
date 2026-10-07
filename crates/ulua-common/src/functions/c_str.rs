@@ -16,14 +16,14 @@
 //! 真 C 边界（`*const c_char` 属契约要求、长期保留）：仅 `ulua-capi`，以及宿主注入的
 //! `extern "C-unwind"` 回调（如本 crate 的
 //! [`assert_call_handler`](crate::functions::assert_call_handler::assert_call_handler)）。
-//! `ulua-vm` 的 `lua_*` C 形态面（`lua_getinfo` 的 `what` 模板、`LuaDebug` 的
-//! `*const c_char` 字段、`lua_pushcclosurek` 的 debugname、`lua_exception::what()`）
-//! **不是 FFI 边界、不构成豁免**：它是 lua.h 的形状复刻，Rust 侧消费者一律应拿
-//! `&[u8]`/`&str`/`Cow`，这些签名属待消灭对象（review.md §3「`c_char` 仅在 FFI」+ §10，
-//! 与 vm 内部 `lua_*` 裸指针收形同批推进）。在其改完之前，跨 crate 进出其缓冲区仍必须
-//! 经本门面，不得新增绕过路径。既有消费清单：ulua-rt（`debug_cstr` / `is_lua_what_cstr`
-//! 读 `LuaDebug` 回填字段；`GETINFO_*` / `*_NAME` 静态模板走契约参数位）、ulua-web
-//! （`cstr_cow` 读 `lua_exception::what()` 与 `ar.short_src`）、ulua-analysis /
+//! `ulua-vm` 的 `lua_*` C 形态面（`lua_getinfo` 的 `what` 模板、`lua_pushcclosurek`
+//! 的 debugname、`lua_exception::what()`）**不是 FFI 边界、不构成豁免**：它是
+//! lua.h 的形状复刻，Rust 侧消费者一律应拿 `&[u8]`/`&str`/`Cow`，这些签名属待消灭
+//! 对象（review.md §3「`c_char` 仅在 FFI」+ §10，与 vm 内部 `lua_*` 裸指针收形同批
+//! 推进）。在其改完之前，跨 crate 进出其缓冲区仍必须经本门面，不得新增绕过路径。
+//! 既有消费清单：ulua-rt（`GETINFO_*` / `*_NAME` 静态模板走契约参数位；`LuaDebug`
+//! 回填字段已 Rust 化为 owned `Vec<u8>`/`LuaWhat`，不再经此）、ulua-web
+//! （`cstr_cow` 读 `lua_exception::what()`）、ulua-analysis /
 //! ulua-require / ulua-repl-cli / ulua-code-gen / ulua-conformance 等 VM C API 消费者。
 //!
 //! 内部 Rust-to-Rust 路径不再借道 C 形 API：`assert_fail`（`LUAU_ASSERT!` 宏的

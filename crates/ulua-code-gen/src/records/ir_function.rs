@@ -44,11 +44,6 @@ pub struct IrFunction {
 
   pub extra_native_data: Vec<u32>,
 
-  /// J1 Phase 2b：TSFB 观测类型提示 `(pc, reg, tag)`——暖重编译时从上一版
-  /// execdata 的 TSFB 侧表读出；analyze_bytecode_types 在对应 pc 施加 refine
-  /// （仅细化 ANY → 观测 tag，语义 = cpp typed-site 的 exit-guard 形态）。
-  pub type_hints: Vec<(u32, u8, u8)>,
-
   /// JIT call inlining 第 2 阶段：CALL 站点观测提示 `(pc, funid, callee proto 裸址)`
   /// ——暖重编译时从上一版 execdata 的 COBS 侧表读出（见 ulua-vm call_obs），
   /// try_translate_call_inline 以观测证据替代「常量 proto 槽」静态判据，funid
@@ -133,7 +128,6 @@ impl Default for IrFunction {
       entry_location: 0,
       end_location: 0,
       extra_native_data: Vec::new(),
-      type_hints: Vec::new(),
       call_hints: Vec::new(),
       l: None,
       value_restore_ops: Vec::new(),

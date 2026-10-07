@@ -16,7 +16,7 @@ use crate::{
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn freeblock(l: *mut LuaState, size_class: i32, block: *mut u8) {
+pub(crate) fn freeblock(l: *mut LuaState, size_class: i32, block: *mut u8) {
   unsafe {
     let g: *mut global_State = (*l).global;
 

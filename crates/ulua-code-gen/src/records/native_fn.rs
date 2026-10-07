@@ -69,19 +69,17 @@ use ulua_vm::{
 
 use crate::{
   functions::{
-    call_epilog_c::call_epilog_c_export, call_fallback::call_fallback_export,
-    call_obs_hook::call_obs_site_hook, call_prolog::call_prolog_export,
-    execute_dupclosure::execute_dupclosure_export, execute_forgprep::execute_forgprep_export,
-    execute_getglobal::execute_getglobal_export, execute_gettableks::execute_gettableks_export,
-    execute_getvarargs_const::execute_getvarargsconst,
-    execute_getvarargs_mult_ret::execute_getvarargsmult_ret,
-    execute_namecall::execute_namecall_export, execute_prepvarargs::execute_prepvarargs_export,
-    execute_setglobal::execute_setglobal_export, execute_setlist::execute_setlist_export,
-    execute_settableks::execute_settableks_export, forg_loop_node_iter::forg_loop_node_iter_export,
-    forg_loop_non_table_fallback::forg_loop_non_table_fallback_export,
-    forg_loop_table_iter::forg_loop_table_iter_export,
-    forg_prep_xnext_fallback::forg_prep_xnext_fallback_export, get_import::get_import_export,
-    new_userdata::new_userdata_export,
+    call_epilog_c::call_epilog_c, call_fallback::call_fallback, call_obs_hook::call_obs_site_hook,
+    call_prolog::call_prolog, execute_dupclosure::execute_dupclosure,
+    execute_forgprep::execute_forgprep, execute_getglobal::execute_getglobal,
+    execute_gettableks::execute_gettableks, execute_getvarargs_const::execute_getvarargsconst,
+    execute_getvarargs_mult_ret::execute_getvarargsmult_ret, execute_namecall::execute_namecall,
+    execute_prepvarargs::execute_prepvarargs, execute_setglobal::execute_setglobal,
+    execute_setlist::execute_setlist, execute_settableks::execute_settableks,
+    forg_loop_node_iter::forg_loop_node_iter_export,
+    forg_loop_non_table_fallback::forg_loop_non_table_fallback,
+    forg_loop_table_iter::forg_loop_table_iter, forg_prep_xnext_fallback::forg_prep_xnext_fallback,
+    get_import::get_import, new_userdata::new_userdata,
   },
   records::{c_math, native_context::NativeContext},
   type_aliases::{api::LuaState, ir::Instruction},
@@ -333,26 +331,25 @@ pub const LIBM_ATAN2: NativeMathBinaryFn = c_math::atan2;
 pub const LIBM_TAN: NativeMathUnaryFn = c_math::tan;
 pub const LIBM_TANH: NativeMathUnaryFn = c_math::tanh;
 
-pub const FORG_LOOP_TABLE_ITER: NativeForgLoopIterFn = forg_loop_table_iter_export;
+pub const FORG_LOOP_TABLE_ITER: NativeForgLoopIterFn = forg_loop_table_iter;
 pub const FORG_LOOP_NODE_ITER: NativeForgLoopIterFn = forg_loop_node_iter_export;
-pub const FORG_LOOP_NON_TABLE_FALLBACK: NativeForgLoopFallbackFn =
-  forg_loop_non_table_fallback_export;
-pub const FORG_PREP_XNEXT_FALLBACK: NativeForgPrepXnextFn = forg_prep_xnext_fallback_export;
-pub const CALL_PROLOG: NativeCallPrologFn = call_prolog_export;
+pub const FORG_LOOP_NON_TABLE_FALLBACK: NativeForgLoopFallbackFn = forg_loop_non_table_fallback;
+pub const FORG_PREP_XNEXT_FALLBACK: NativeForgPrepXnextFn = forg_prep_xnext_fallback;
+pub const CALL_PROLOG: NativeCallPrologFn = call_prolog;
 pub const CALL_OBS_SITE_HOOK: NativeCallObsHookFn = call_obs_site_hook;
-pub const CALL_EPILOG_C: NativeCallEpilogCFn = call_epilog_c_export;
-pub const NEW_USERDATA: NativeNewUserdataFn = new_userdata_export;
-pub const GET_IMPORT: NativeGetImportFn = get_import_export;
-pub const CALL_FALLBACK: NativeCallFallbackFn = call_fallback_export;
+pub const CALL_EPILOG_C: NativeCallEpilogCFn = call_epilog_c;
+pub const NEW_USERDATA: NativeNewUserdataFn = new_userdata;
+pub const GET_IMPORT: NativeGetImportFn = get_import;
+pub const CALL_FALLBACK: NativeCallFallbackFn = call_fallback;
 
-pub const EXECUTE_GETGLOBAL: NativeExecuteOpcodeFn = execute_getglobal_export;
-pub const EXECUTE_SETGLOBAL: NativeExecuteOpcodeFn = execute_setglobal_export;
-pub const EXECUTE_GETTABLEKS: NativeExecuteOpcodeFn = execute_gettableks_export;
-pub const EXECUTE_SETTABLEKS: NativeExecuteOpcodeFn = execute_settableks_export;
-pub const EXECUTE_NAMECALL: NativeExecuteOpcodeFn = execute_namecall_export;
-pub const EXECUTE_FORGPREP: NativeExecuteOpcodeFn = execute_forgprep_export;
+pub const EXECUTE_GETGLOBAL: NativeExecuteOpcodeFn = execute_getglobal;
+pub const EXECUTE_SETGLOBAL: NativeExecuteOpcodeFn = execute_setglobal;
+pub const EXECUTE_GETTABLEKS: NativeExecuteOpcodeFn = execute_gettableks;
+pub const EXECUTE_SETTABLEKS: NativeExecuteOpcodeFn = execute_settableks;
+pub const EXECUTE_NAMECALL: NativeExecuteOpcodeFn = execute_namecall;
+pub const EXECUTE_FORGPREP: NativeExecuteOpcodeFn = execute_forgprep;
 pub const EXECUTE_GETVARARGSMULT_RET: NativeExecuteGetvarargsMultRetFn = execute_getvarargsmult_ret;
 pub const EXECUTE_GETVARARGSCONST: NativeExecuteGetvarargsConstFn = execute_getvarargsconst;
-pub const EXECUTE_DUPCLOSURE: NativeExecuteOpcodeFn = execute_dupclosure_export;
-pub const EXECUTE_PREPVARARGS: NativeExecuteOpcodeFn = execute_prepvarargs_export;
-pub const EXECUTE_SETLIST: NativeExecuteOpcodeFn = execute_setlist_export;
+pub const EXECUTE_DUPCLOSURE: NativeExecuteOpcodeFn = execute_dupclosure;
+pub const EXECUTE_PREPVARARGS: NativeExecuteOpcodeFn = execute_prepvarargs;
+pub const EXECUTE_SETLIST: NativeExecuteOpcodeFn = execute_setlist;

@@ -61,7 +61,6 @@ pub mod table_skipping_visitor;
 pub mod test;
 pub mod test_config_resolver;
 pub mod test_file_resolver;
-pub mod test_require_node;
 pub mod test_require_suggester;
 pub mod tf_fixture;
 pub mod to_dot_class_fixture;

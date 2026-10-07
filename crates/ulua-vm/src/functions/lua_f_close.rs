@@ -8,8 +8,10 @@ use crate::{
 };
 
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn lua_f_close(l: *mut LuaState, level: StkId) {
+/// `l` 须为存活 `LuaState` 且 `openupval` 链自洽（链上各 `UpVal` 存活、`v` 为可比较裸栈
+/// 指针）；`level` 为 `l` 栈内合法槽位界点。逐槽关闭经 `lua_f_closeupval`，其前提由链
+/// 不变量承载。cpp lfunc.cpp:140。
+pub(crate) unsafe fn lua_f_close(l: *mut LuaState, level: StkId) {
   unsafe {
     let g = (*l).global;
 
@@ -26,7 +28,7 @@ pub unsafe fn lua_f_close(l: *mut LuaState, level: StkId) {
 }
 
 /// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
+/// C ABI 导出壳：`l`/`level` 原样透传，须满足 [`lua_f_close`] 的全部前提。
 pub unsafe extern "C-unwind" fn lua_f_close_export(l: *mut LuaState, level: StkId) {
   unsafe {
     lua_f_close(l, level);

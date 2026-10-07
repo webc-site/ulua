@@ -91,7 +91,7 @@ pub fn autocomplete(
     global_scope,
     scope_at_position: &start_scope,
     position,
-    file_resolver: Some(frontend.file_resolver_ref()),
+    file_resolver: Some(&*frontend.file_resolver),
     callback,
     is_in_hot_comment,
   })

@@ -278,7 +278,7 @@ fn config_interrupt_execution() {
     &mut config,
     None,
     InterruptCallbacks {
-      init_callback: None,
+      thread_data: None,
       interrupt_callback: Some(interrupt),
     },
   ) else {

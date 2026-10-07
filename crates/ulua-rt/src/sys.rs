@@ -6,12 +6,11 @@
 //!
 //! C ABI 类型退役：VM 已是纯 Rust，栈索引/返回计数/错误码形参一律是 `i32`，
 //! 故不再转出 `c_int`（历史上 128 处全是噪声）；`CompileOptions` 的 `c_char`
-//! 链亦已 Rust 化（punch #15）。`c_char`/`c_void` 只在真 C ABI 镜像处保留，
-//! 豁免台账（review.md §10，逐项一行）：
+//! 链亦已 Rust 化（punch #15）。`LuaDebug` 的 `name/what/source/short_src` 字段
+//! 现是 Rust 原生类型（owned `Vec<u8>` + `LuaWhat` 枚举），不再经本层借 C 串门面
+//! 解码。`c_char`/`c_void` 只在真 C ABI 镜像处保留，豁免台账（review.md §10，
+//! 逐项一行）：
 //!
-//! - `LuaDebug`（ulua-vm `lua_Debug` 的 C ABI 镜像）：`name/what/source/short_src`
-//!   的 `*const c_char` 回填字段，经 `debug.rs::debug_cstr` / `function.rs::
-//!   is_lua_what_cstr` 判空+门面转 Rust 串，本 crate 不自建同形结构。
 //! - `lua_getinfo` 的 `what` 模板形参（`*const c_char` 契约位）：消费者只持
 //!   `&'static [u8]` 静态 NUL 模板（`GETINFO_*`），在契约参数位一次 `.cast()`。
 //! - `lua_pushcclosurek` 的 debugname（`*const c_char`，VM 按 NUL 扫描长期持有）：
@@ -19,7 +18,7 @@
 //! - `c_void`：LightUserData 值、`lua_newuserdatadtor` 析构器与 VM 分配器回调
 //!   的 `extern "C-unwind"` ABI 形参（lua.h `void*` 面镜像）。
 
-pub(crate) use core::ffi::{c_char, c_void};
+pub(crate) use core::ffi::c_void;
 
 // ---- garbage collection --------------------------------------------------
 pub(crate) use ulua_vm::enums::lua_gc_op::LuaGcOp;
@@ -86,6 +85,9 @@ pub(crate) use ulua_vm::{
     lua_xmove::lua_xmove, luau_load::luau_load,
   },
   macros::{lua_registryindex::LUA_REGISTRYINDEX, lua_upvalueindex::lua_upvalueindex},
-  records::{lua_debug::LuaDebug, lua_state::LuaState},
+  records::{
+    lua_debug::{LuaDebug, LuaWhat},
+    lua_state::LuaState,
+  },
   type_aliases::{lua_c_function::LuaCFunction, lua_destructor::LuaDestructor},
 };

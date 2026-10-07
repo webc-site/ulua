@@ -10,14 +10,18 @@ use core::{ffi::c_char, ptr::null_mut};
 
 use crate::{
   functions::{
-    cstr_bytes, currentline::currentline, getfuncname::getfuncname, lua_o_chunkid::lua_o_chunkid,
+    cstr_bytes, currentline::currentline, getfuncname::getfuncname,
+    lua_o_chunkid::lua_o_chunkid_owned,
   },
   macros::{ci_func::ci_func, getstr::getstr, is_lua::isLua, short_src_c::SHORT_SRC_C},
-  records::{call_info::CallInfo, closure::Closure, lua_debug::LuaDebug},
+  records::{
+    call_info::CallInfo,
+    closure::Closure,
+    lua_debug::{LuaDebug, LuaWhat},
+  },
 };
-const SRC_C: &[u8] = b"=[C]\0";
-const WHAT_C: &[u8] = b"C\0";
-const WHAT_LUA: &[u8] = b"Lua\0";
+/// C 函数的 chunk 源名（cpp `getinfo` 的 `source` 占位，无终止 NUL）。
+const SRC_C: &[u8] = b"=[C]";
 
 /// # Safety
 /// 所查询的调用帧/Proto/输出记录按约定存活可写。
@@ -37,22 +41,21 @@ pub(crate) unsafe fn auxgetinfo(
       match ch {
         b's' => {
           if (*f).is_c != 0 {
-            (*ar).source = SRC_C.as_ptr().cast();
-            (*ar).what = WHAT_C.as_ptr().cast();
+            (*ar).source = Some(SRC_C.to_vec());
+            (*ar).what = LuaWhat::C;
             (*ar).linedefined = -1;
-            (*ar).short_src = SHORT_SRC_C.as_ptr().cast();
+            // SHORT_SRC_C 是 `b"[C]\0"`，剥掉终止 NUL 后作为拥有的 Rust 字节串。
+            (*ar).short_src = Some(SHORT_SRC_C[..SHORT_SRC_C.len() - 1].to_vec());
           } else {
             let proto = (*f).inner.l.p;
             let source = (*proto).source;
-            (*ar).source = getstr(source);
-            (*ar).what = WHAT_LUA.as_ptr().cast();
+            // SAFETY: `source` 为存活 TString，`getstr` 取其数据首址、第 `len` 位
+            // 为布局保证的终止 NUL，`cstr_bytes` 止于该 NUL 得到源名 payload。
+            let src = cstr_bytes(getstr(source));
+            (*ar).source = Some(src.to_vec());
+            (*ar).what = LuaWhat::Lua;
             (*ar).linedefined = (*proto).linedefined;
-            (*ar).short_src = lua_o_chunkid(
-              (*ar).ssbuf.as_mut_ptr(),
-              (*ar).ssbuf.len(),
-              getstr(source),
-              (*source).len as usize,
-            ) as *const c_char;
+            (*ar).short_src = Some(lua_o_chunkid_owned(src));
           }
         }
         b'l' => {
@@ -71,11 +74,11 @@ pub(crate) unsafe fn auxgetinfo(
         }
         b'a' => {
           if (*f).is_c != 0 {
-            (*ar).isvararg = 1;
+            (*ar).isvararg = true;
             (*ar).nparams = 0;
           } else {
             let proto = (*f).inner.l.p;
-            (*ar).isvararg = (*proto).is_vararg as c_char;
+            (*ar).isvararg = (*proto).is_vararg != 0;
             (*ar).nparams = (*proto).numparams;
           }
         }
@@ -90,10 +93,17 @@ pub(crate) unsafe fn auxgetinfo(
           }
         }
         b'n' => {
-          (*ar).name = if !ci.is_null() {
+          // SAFETY: `getfuncname` 契约保证返回 null 或存活至本帧结束、NUL 结尾的
+          // 名字串（TString/静态字面量），`cstr_bytes` 止于其自带 NUL 取 payload。
+          let ptr = if !ci.is_null() {
             getfuncname(ci_func!(ci))
           } else {
             getfuncname(f)
+          };
+          (*ar).name = if ptr.is_null() {
+            None
+          } else {
+            Some(cstr_bytes(ptr).to_vec())
           };
         }
         b'f' => {

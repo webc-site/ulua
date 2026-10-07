@@ -555,11 +555,6 @@ impl IrBuilder {
     IrOp::ir_op_ir_op_kind_u32(IrOpKind::Inst, index)
   }
 
-  /// J1 Phase 2b：设置 TSFB 观测类型提示（暖重编译入口在 build_function_ir 前调用）。
-  pub fn set_type_hints(&mut self, hints: Vec<(u32, u8, u8)>) {
-    self.function.type_hints = hints;
-  }
-
   /// JIT call inlining 第 2 阶段：设置 CALL 站点观测提示（暖重编译入口在
   /// build_function_ir 前调用；消费点 try_translate_call_inline）。
   pub fn set_call_hints(&mut self, hints: Vec<(u32, u32, usize)>) {

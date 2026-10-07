@@ -18,12 +18,7 @@ use std::{
   },
 };
 
-use ulua_common::enums::luau_opcode::LuauOpcode;
-
-use crate::{
-  records::proto::Proto,
-  type_aliases::{instruction::Instruction, t_value::TValue},
-};
+use crate::{records::proto::Proto, type_aliases::instruction::Instruction};
 
 static ENABLED: AtomicBool = AtomicBool::new(false);
 
@@ -121,18 +116,6 @@ pub fn dump() -> String {
     ));
   }
   out
-}
-
-/// 便捷包装：从 TValue 直取 tag。
-#[inline(always)]
-pub fn record_tvs(
-  proto: *const Proto,
-  pc: *const Instruction,
-  op: u8,
-  ta_tv: &TValue,
-  tb_tv: &TValue,
-) {
-  record(proto, pc, op, ta_tv.tt as u8, tb_tv.tt as u8);
 }
 
 // ---------------------------------------------------------------------------
@@ -301,82 +284,4 @@ pub fn tsfb_dump() -> String {
     }
   }
   out
-}
-
-/// J1 Phase 2b 选点入口：遍历已注册 TSFB 表，返回 hits ≥ `min_hits` 且
-/// 末 tag 占比 ≥ `min_share` 的站点 `(proto, pc, tag)`——暖重编译/特化的候选集。
-pub fn tsfb_over_threshold(min_hits: u32, min_share: f64) -> Vec<(usize, u32, u8)> {
-  let protos = tsfb_protos()
-    .lock()
-    .unwrap_or_else(|e| e.into_inner())
-    .clone();
-  let mut out = Vec::new();
-  for p in protos.iter() {
-    let proto = *p as *const Proto;
-    unsafe {
-      let d = (*proto).execdata;
-      if d.is_null() {
-        continue;
-      }
-      let sc = (*proto).sizecode as usize;
-      let data = d as *const u32;
-      let (_, nslots) = match locate_tsfb(data, sc, u32::MAX) {
-        Some(x) => x,
-        None => continue,
-      };
-      // 同上：站点区一次取切片，安全迭代（读数语义与原逐点裸读一致）。
-      let sites = from_raw_parts(data.add(sc + 2), 2 * nslots);
-      for pair in sites.as_chunks::<2>().0 {
-        let (pc, st) = (pair[0], pair[1]);
-        let hits = (st >> 8) as u64;
-        let tag = (st & 0xff) as u8;
-        if hits >= u64::from(min_hits) {
-          out.push((proto as usize, pc, tag));
-        }
-        let _ = min_share; // last_tag 单值占比 = 1.0（state 只记末 tag）；接口留扩展
-      }
-    }
-  }
-  out
-}
-
-/// J1 Phase 2b：从 proto 当前 execdata 的 TSFB 侧表产出类型提示
-/// （GETTABLEKS 站点：pc → (B 寄存器 = 接收者, 观测 tag)）。
-/// 暖重编译路径消费：hint 注入分析器细化 ANY → 观测 tag。
-///
-/// # Safety
-/// `proto` 须为存活 Proto 且其 `execdata`（若非空）为本模块布局的堆分配数据区；
-/// `code` 界内可读。
-pub unsafe fn tsfb_hints_for(proto: *const Proto) -> Vec<(u32, u8, u8)> {
-  // SAFETY: 契约保证 proto 存活、execdata/code 为同址字段读；locate_tsfb 界内扫描。
-  unsafe {
-    let mut out = Vec::new();
-    let d = (*proto).execdata;
-    if d.is_null() {
-      return out;
-    }
-    let sc = (*proto).sizecode as usize;
-    let data = d as *const u32;
-    let (_, nslots) = match locate_tsfb(data, sc, u32::MAX) {
-      Some(x) => x,
-      None => return out,
-    };
-    let code = (*proto).code;
-    for s in 0..nslots {
-      let pc = *data.add(sc + 2 + 2 * s);
-      let st = *data.add(sc + 3 + 2 * s);
-      let tag = (st & 0xff) as u8;
-      if pc as usize >= sc {
-        continue;
-      }
-      let insn = *code.add(pc as usize);
-      let op = (insn & 0xff) as u8;
-      // GETTABLEKS：B 即接收者寄存器
-      if op == LuauOpcode::LopGettableks as u8 {
-        let reg_b = ((insn >> 8) & 0xff) as u8;
-        out.push((pc, reg_b, tag));
-      }
-    }
-    out
-  }
 }

@@ -1,6 +1,8 @@
 //! Source: `VM/src/lapi.cpp:65-97` (hand-ported; includes the file-static
 //! `getcurrenv` helper inlined here since it was never a graph node)
 
+use core::ptr::{from_mut, from_ref};
+
 use crate::{
   macros::{
     api_check::api_check, curr_func::curr_func, lua_environindex::LUA_ENVIRONINDEX,
@@ -15,7 +17,7 @@ use crate::{
 /// # Safety
 /// `l` 须为存活 `LuaState`，`(*l).gt` 有效；当 `(*l).ci != (*l).base_ci` 时当前调用帧
 /// `func` 须为闭包（`curr_func` 取 `(*cl).env`），否则回退到 `gt`。cpp `lapi.cpp:81`。
-unsafe fn getcurrenv(l: *mut LuaState) -> *mut LuaTable {
+fn getcurrenv(l: *mut LuaState) -> *mut LuaTable {
   unsafe {
     if (*l).ci == (*l).base_ci {
       // no enclosing function? use global table as environment
@@ -40,14 +42,14 @@ pub(crate) fn pseudo_2_addr(l: &LuaState, idx: i32) -> StkId {
     let lp = l.read_ptr();
     match idx {
       // pseudo-indices
-      LUA_REGISTRYINDEX => registry!(lp) as *const TValue as *mut TValue,
+      LUA_REGISTRYINDEX => from_ref(registry!(lp)).cast_mut(),
       LUA_ENVIRONINDEX => {
-        let tmp = &mut (*(*lp).global).pseudotemp as *mut TValue;
+        let tmp = from_mut(&mut (*(*lp).global).pseudotemp);
         sethvalue!(lp, tmp, getcurrenv(lp));
         tmp
       }
       LUA_GLOBALSINDEX => {
-        let tmp = &mut (*(*lp).global).pseudotemp as *mut TValue;
+        let tmp = from_mut(&mut (*(*lp).global).pseudotemp);
         sethvalue!(lp, tmp, (*lp).gt);
         tmp
       }

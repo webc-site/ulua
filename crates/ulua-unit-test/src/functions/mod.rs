@@ -77,6 +77,7 @@ pub mod require_non_strict_function_definition_error_at;
 pub mod split_string_by_slashes;
 pub mod string_at_location;
 pub mod strip_lines_containing;
+pub mod test_require_node;
 pub mod throwing_code_allocator_test;
 pub mod toposort;
 pub mod type_error_data_ref;

@@ -30,7 +30,7 @@ use crate::{
 /// cpp lgc.cpp:541 `propagatemark`
 // traverse one gray object, turning it to black.
 // Returns `quantity' traversed.
-pub(crate) unsafe fn propagatemark(g: *mut global_State) -> usize {
+pub(crate) fn propagatemark(g: *mut global_State) -> usize {
   // SAFETY: 契约保证 `g` 存活且 currentwhite 与灰队列遍历方向一致，块内逐个灰对象的引用遍历不越过对象界
   unsafe {
     let o = (*g).gray;

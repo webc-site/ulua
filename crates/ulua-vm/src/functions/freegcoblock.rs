@@ -21,7 +21,7 @@ const K_GCO_LINK_OFFSET: usize =
 /// `l` 须存活（取 `global.freegcopages`）；`block` 必须是从 `page` 划出、尚未归还的 GCObject 块，
 /// `size_class` 须等于该页 `block_size` 对应的类别，且 `page.busy_blocks > 0`。
 /// 重复归还或类别不符会写脏页空闲链与位图，后续分配返回重叠内存。cpp lmem.cpp:508。
-pub(crate) unsafe fn freegcoblock(
+pub(crate) fn freegcoblock(
   l: *mut LuaState,
   size_class: i32,
   block: *mut u8,

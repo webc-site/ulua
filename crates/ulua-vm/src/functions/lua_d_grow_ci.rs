@@ -1,5 +1,3 @@
-use core::ptr::null;
-
 use crate::{
   enums::lua_status::LuaStatus,
   functions::{
@@ -37,7 +35,7 @@ pub unsafe fn lua_d_grow_ci(l: *mut LuaState) -> *mut CallInfo {
     lua_d_realloc_ci(l, new_size);
 
     if (*l).size_ci > LUAI_MAXCALLS {
-      lua_g_runerror_l(l, null(), format_args!("stack overflow"));
+      lua_g_runerror_l(l, format_args!("stack overflow"));
     }
 
     (*l).ci = (*l).ci.add(1);
