@@ -81,10 +81,10 @@ impl Parser {
 
       let node = self.alloc_stat(AstStatFor::new(
         Location::new(start.begin, end.end),
-        // 槽位收进 arena 句柄：var 出自 push_local(alloc 恒非空)、from/to/body
-        // 出自 parse_expr/parse_block(恒非空)，step 以 Option<NonNull> 原样落
-        // OptNode（论证见 records::ast_stat_for 字段注释）。
-        Node::from_raw(var),
+        // 槽位收进 arena 句柄：var 出自 push_local（返回类型即 Node，恒非空）、
+        // from/to 出自 parse_expr（alloc 恒非空）、body 出自 parse_block，
+        // step 以 Option<NonNull> 原样落 OptNode（论证见 records::ast_stat_for 字段注释）。
+        var,
         Node::from_raw(from),
         Node::from_raw(to),
         OptNode::from_non_null(step),
@@ -160,8 +160,8 @@ impl Parser {
 
       let end = self.consume_loop_end(&MatchLexeme::new(&match_do), body);
 
-      let vars_array = self.copy_temp_vector_t(&vars);
-      let values_array = self.copy_temp_vector_t(&values);
+      let vars_array = self.copy_temp_vector_ptrs(&vars);
+      let values_array = self.copy_temp_vector_ptrs(&values);
 
       let node = self.alloc_stat(AstStatForIn::new(
         Location::new(start.begin, end.end),

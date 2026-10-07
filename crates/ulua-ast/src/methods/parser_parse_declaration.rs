@@ -86,12 +86,12 @@ impl Parser {
 
       for arg in &args {
         // cpp `if (!args[i].annotation) return reportStatError(...)`（Parser.cpp:1855）：
-        // 「未标注」判空折叠为 Option::is_none，不再直接问裸指针。
-        if node_opt(arg.annotation).is_none() {
+        // 「未标注」判空折叠为 Option 模式匹配——同一 `Some` 分支即非空性证明，
+        // 直落 arena 句柄入 scratch，不再二次判读裸指针。
+        let Some(annotation) = node_opt(arg.annotation) else {
           return self.report_unannotated_param(start, &end);
-        }
-
-        vars.push_back(arg.annotation);
+        };
+        vars.push_back(Node::from_non_null(annotation));
         var_names.push_back((arg.name.name, arg.name.location));
       }
 
@@ -99,7 +99,7 @@ impl Parser {
         return self.report_unannotated_param(start, &end);
       }
 
-      let vars_array = self.copy_temp_vector_t(&vars);
+      let vars_array = self.copy_temp_vector_ptrs(&vars);
       let var_names_array = self.copy_temp_vector_t(&var_names);
       self.alloc_stat(AstStatDeclareFunction {
         base: AstStat::new(
