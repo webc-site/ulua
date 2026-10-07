@@ -3,7 +3,7 @@ use core::ffi::c_void;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  macros::{black_2_gray::black2gray, isblack::isblack, isdead::isdead},
+  macros::{black_2_gray::black2gray, gc_spause::GCSPAUSE, isblack::isblack, isdead::isdead},
   records::{gc_object::GCObject, lua_state::LuaState},
 };
 
@@ -24,7 +24,7 @@ pub unsafe fn lua_c_barrierback(l: &mut LuaState, o: *mut GCObject, gclist: *mut
   // grayagain 链写在 GC 阶段与对象协议界内，其成立前提系上方 Safety 节。
   unsafe {
     LUAU_ASSERT!(isblack!(o) && !isdead!(g, o));
-    LUAU_ASSERT!((*g).gcstate as i32 != 0); // GCSpause 为 0
+    LUAU_ASSERT!((*g).gcstate as i32 != GCSPAUSE);
 
     // black2gray(o)：重新标灰，但保留其 gclist
     black2gray!(o);
@@ -43,9 +43,9 @@ pub unsafe extern "C-unwind" fn lua_c_barrierback_export(
   o: *mut c_void,
   gclist: *mut *mut c_void,
 ) {
-  // SAFETY: 契约保证 `l` 存活且 `t`/`o` 相互一致（o 被 t 引用），`&mut *l` 引用重建仅收形
-  // （非空/对齐由本壳调用侧契约承载），屏障仅按协议改灰白标签并入 remark 队列，
-  // 不越出对象头写界
+  // SAFETY: 契约保证 `l` 存活且 `o`/`gclist` 相互一致（gclist 指向 o 自身的 gclist 字段），
+  // `&mut *l` 引用重建仅收形（非空/对齐由本壳调用侧契约承载），屏障仅按协议改灰白标签并
+  // 入 grayagain 链，不越出对象头写界
   unsafe {
     lua_c_barrierback(&mut *l, o as *mut GCObject, gclist as *mut *mut GCObject);
   }

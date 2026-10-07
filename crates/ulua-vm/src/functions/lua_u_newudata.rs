@@ -32,7 +32,7 @@ pub unsafe fn lua_u_newudata(l: *mut LuaState, s: usize, tag: i32) -> *mut Udata
 }
 
 /// # Safety
-/// 导出壳，契约同 `lua_u_newudata`：`l` 存活且处于受保护帧、`s ≤ i32::MAX-size_of::<Udata>()`、`tag∈0..=255`。
+/// C ABI 导出壳：`l`/`s`/`tag` 原样透传，须满足 [`lua_u_newudata`] 的全部前提。
 pub unsafe extern "C-unwind" fn lua_u_newudata_export(
   l: *mut LuaState,
   s: usize,
