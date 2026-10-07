@@ -16,7 +16,7 @@ impl NativeModuleRef {
   /// # Safety
   /// 非空时 `native_module` 必须指向存活 `NativeModule`；`add_ref` 只以 `&self` 做原子
   /// fetch_add，不产生可变借用。
-  pub unsafe fn native_module_ref_native_module(native_module: *const NativeModule) -> Self {
+  pub(crate) unsafe fn native_module_ref_native_module(native_module: *const NativeModule) -> Self {
     let native_module = NonNull::new(native_module.cast_mut());
     if let Some(native_module) = native_module {
       // Safety: 依本函数契约，非空 Some 分支的指针指向存活 NativeModule。

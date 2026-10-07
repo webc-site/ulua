@@ -86,7 +86,7 @@ pub struct BaseCodeGenContext {
   /// code_allocator（第一字段，先 drop）的 live_allocations 归零断言必炸。
   /// [`Drop`] 实现在该断言前归还——此刻 VM 已关闭、无在途 native 帧，页权限
   /// 回收安全。
-  pub warm_recompile_retires: Vec<*mut NativeModule>,
+  pub warm_recompile_retires: Vec<NonNull<NativeModule>>,
   /// FORN trace 层注册表（阶段二 PoC，trace_forn_registry）：热环检测计数 +
   /// 已装 trace（含可执行页宿主）。生命周期随本上下文（state 关闭时
   /// on_close_state 的 Box 回收整体 drop，页配对回收），声明在末位——
@@ -103,10 +103,11 @@ impl Drop for BaseCodeGenContext {
     // 暖重编译转移的旧 module 引用先归还（release 归零即 deallocate），再进
     // 字段 drop——code_allocator 是第一字段，其 Drop 里的 live_allocations 归零
     // 断言要求此处账已清平。
-    for &old in self.warm_recompile_retires.iter() {
-      // Safety: 登记点（bind_native_protos 的重绑定分支）契约保证指针指向
-      // 计数托管的存活 NativeModule；release 只递减原子引用计数。
-      unsafe { (*old).release() };
+    for old in &self.warm_recompile_retires {
+      // Safety: 登记点（bind_native_protos 的重绑定分支）契约保证句柄指向
+      // 计数托管的存活 NativeModule；`NonNull::as_ref` 只读出共享引用，
+      // release 只递减原子引用计数。
+      unsafe { old.as_ref() }.release();
     }
     self.warm_recompile_retires.clear();
     self.code_allocator.deallocate(self.gate_allocation_data);
@@ -190,7 +191,7 @@ impl BaseCodeGenContext {
     native_module: &NativeModule,
     module_protos: &[*mut Proto],
     rebind_retire: bool,
-    retires: &mut Vec<*mut NativeModule>,
+    retires: &mut Vec<NonNull<NativeModule>>,
   ) -> ModuleBindResult {
     let mut native_protos = native_module.native_protos.to_vec();
     let protos_bound =

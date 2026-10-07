@@ -1,3 +1,5 @@
+use core::ptr::NonNull;
+
 use ulua_common::enums::luau_opcode::LuauOpcode;
 use ulua_vm::{records::proto::Proto, type_aliases::instruction::Instruction};
 
@@ -16,11 +18,11 @@ static K_CODE_ENTRY_INSN: Instruction = LuauOpcode::LOP_NATIVECALL as u32;
 /// 必炸。此处把旧 module 逐 proto 转移登记进 `retires`，由上下文关闭链
 /// （BaseCodeGenContext::drop，无在途 native 帧）统一归还；立即归还会让在途
 /// 执行的旧机器码页被撤执行权限。
-pub fn bind_native_protos(
+pub(crate) fn bind_native_protos(
   module_protos: &[*mut Proto],
   native_protos: &mut [NativeProtoExecDataPtr],
   release: bool,
-  retires: &mut Vec<*mut NativeModule>,
+  retires: &mut Vec<NonNull<NativeModule>>,
 ) -> u32 {
   let mut protos_bound = 0u32;
   let mut proto_it = 0usize;
@@ -47,9 +49,11 @@ pub fn bind_native_protos(
     unsafe {
       if release && !(*proto).execdata.is_null() {
         // Safety: execdata 非空即此前绑定成功，header 反查按「header 紧接数组
-        // 之前同一分配」布局落界内；旧 module 由计数托管存活，此处只读指针。
-        let old = (*get_native_proto_exec_data_header((*proto).execdata.cast())).native_module;
-        if !old.is_null() {
+        // 之前同一分配」布局落界内；旧 module 由计数托管存活，此处只读句柄值。
+        // 「未绑定模块」= `None`，直接跳过登记（cpp 的 `if (old != nullptr)` 哨兵判定）。
+        if let Some(old) =
+          (*get_native_proto_exec_data_header((*proto).execdata.cast())).native_module
+        {
           retires.push(old);
         }
       }

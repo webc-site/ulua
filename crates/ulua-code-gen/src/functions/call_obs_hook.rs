@@ -57,7 +57,7 @@ pub unsafe extern "C-unwind" fn call_obs_site_hook(l: *mut LuaState, ra: *const 
 ///
 /// # Safety
 /// 契约同 [`call_obs_site_hook`]；`caller`/`call_pc` 须与 `l->ci` 帧一致。
-pub unsafe fn call_obs_record_and_maybe_recompile(
+pub(crate) unsafe fn call_obs_record_and_maybe_recompile(
   l: *mut LuaState,
   caller: *mut Proto,
   call_pc: u32,
@@ -85,7 +85,7 @@ pub unsafe fn call_obs_record_and_maybe_recompile(
 ///
 /// # Safety
 /// 契约同 [`call_obs_site_hook`]；`caller`/`call_pc` 须与 `l->ci` 帧一致。
-pub unsafe fn call_obs_record_maybe_recompile(
+pub(crate) unsafe fn call_obs_record_maybe_recompile(
   l: *mut LuaState,
   caller: *mut Proto,
   call_pc: u32,

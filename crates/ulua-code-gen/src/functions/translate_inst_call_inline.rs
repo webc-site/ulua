@@ -44,7 +44,7 @@
 //! 发射前经 `proto_k_intern_string` 物化进 caller 常量表（复用既有同指针项或
 //! 追加新槽），`VmConst` 下标重写到 caller 表——失败即整体放弃内联。
 
-use core::ptr::{from_ref, null_mut};
+use core::ptr::from_ref;
 
 use ulua_common::{
   enums::luau_opcode::LuauOpcode,
@@ -54,9 +54,8 @@ use ulua_common::{
   records::small_vector::SmallVector,
 };
 use ulua_vm::{
-  enums::lua_type::LuaType,
-  functions::proto_k_intern_string::proto_k_intern_string,
-  records::{closure::Closure, proto::Proto},
+  enums::lua_type::LuaType, functions::proto_k_intern_string::proto_k_intern_string,
+  records::proto::Proto,
 };
 
 use crate::{
@@ -419,26 +418,27 @@ fn resolve_callee_proto(
         return child_proto(proto_view, d);
       }
       RegDef::DupClosure(d) => {
-        // 模板闭包常量 k[d]：proto 编译期可读（同 env 时运行期还复用同一闭包对象）
+        // 模板闭包常量 k[d]：proto 编译期可读（同 env 时运行期还复用同一闭包对象）。
+        // 「常量不是 Lua 闭包」在 Rust 侧由 `None` 表达缺席（review.md §2），不再以 null
+        // 指针哨兵跨两层传递；`with_constant_value` 的外层 `None`（proto/常量表缺席）与
+        // 内层 `None`（判据不符）由 `??` 摊平为同一「解不出 callee」结果。
         let proto_ptr = with_constant_value(build.function.proto_view(), d, |tv| {
           if tv.is_function() {
             // Safety: `tt == Function` 时活跃臂为 `Closure` 指针（VM 常量表构造契约）；
-            // 常量闭包由编译器产出，必为 Lua 闭包（`is_c == 0`）。
-            let cl: *mut Closure = unsafe { tv.as_closure_ptr() };
+            // `inner.l` 臂仅在 `is_c == 0` 时活跃，非活跃分支不读该臂；读出的 `p` 只是
+            // Copy 出的子原型指针值，共享借用随本表达式结束。
             unsafe {
-              if (*cl).is_c == 0 {
-                (*cl).inner.l.p
+              let closure = &*tv.as_closure_ptr();
+              if closure.is_c == 0 {
+                Some(closure.inner.l.p)
               } else {
-                null_mut()
+                None
               }
             }
           } else {
-            null_mut()
+            None
           }
-        })?;
-        if proto_ptr.is_null() {
-          return None;
-        }
+        })??;
         return Some(proto_ptr);
       }
     }

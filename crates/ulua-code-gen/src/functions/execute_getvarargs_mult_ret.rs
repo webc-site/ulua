@@ -11,7 +11,7 @@ use crate::{
 /// VM 回调 ABI 约定：`l` 为存活 `LuaState`（当前被调为 L 闭包），`pc` 指向本帧 code 内
 /// 当前指令（供 savedpc 记录），`base` 为本帧活动栈基址，`rai` 为指令编码的目标寄存器号。
 /// 边界契约集中于 [`VmFrame::new`]，其余为安全逻辑。
-pub unsafe fn execute_getvarargs_mult_ret(
+pub(crate) unsafe fn execute_getvarargs_mult_ret(
   l: *mut LuaState,
   pc: *const Instruction,
   base: StkId,

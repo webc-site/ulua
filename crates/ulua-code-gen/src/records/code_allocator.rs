@@ -368,11 +368,13 @@ impl CodeAllocator {
   /// 映射一页对齐的可写块；失败（映射返回空）以 `None` 表达。
   pub fn allocate_pages(&self, size: usize) -> Option<NonNull<u8>> {
     let page_aligned_size = CodeAllocator::align_to_page_size(size);
-    let mem = allocate_pages_impl(page_aligned_size);
-    let mem = NonNull::new(mem)?;
+    let mem = allocate_pages_impl(page_aligned_size)?;
 
     // Safety: allocation_callback 为构造期注册的合法 C 回调，其契约接收 context（可 null，
     // 宿主提供）、旧块 null/0 与新映射 mem/页对齐 size，参数与此一致。
+    // 真 FFI 边界（review.md §2/§3 豁免项）：`AllocationCallback` 是宿主侧
+    // `unsafe extern "C-unwind" fn(void* ctx, void* old, size_t, void* new, size_t)`，
+    // 这里的 `null_mut()` 是该 C ABI 的「旧块缺席」实参编码，不是本 crate 的哨兵。
     if let Some(callback) = self.allocation_callback {
       unsafe {
         callback(

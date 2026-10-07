@@ -14,7 +14,7 @@ use crate::{
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn initialize_execution_callbacks(
+pub(crate) unsafe fn initialize_execution_callbacks(
   l: *mut LuaState,
   code_gen_context: *mut BaseCodeGenContext,
 ) {
@@ -37,12 +37,10 @@ pub unsafe fn initialize_execution_callbacks(
     // 执行全链仅在 aarch64 生效，其余平台槽位 None（解释器零问询）。
     #[cfg(target_arch = "aarch64")]
     {
-      use crate::functions::trace_forn_registry::{
-        forn_trace_backedge_export, forn_trace_enter_export,
-      };
+      use crate::functions::trace_forn_registry::{forn_trace_backedge, forn_trace_enter_export};
       ecb.trace_forn_enter = Some(forn_trace_enter_export);
       // T2 回边计数慢路：IC 武装/解除全由 trace_forn_registry 维护
-      ecb.trace_forn_backedge = Some(forn_trace_backedge_export);
+      ecb.trace_forn_backedge = Some(forn_trace_backedge);
     }
   }
 }

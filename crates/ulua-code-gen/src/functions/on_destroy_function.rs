@@ -33,13 +33,13 @@ pub unsafe extern "C-unwind" fn on_destroy_function(l: *mut LuaState, proto: *mu
     // get_native_proto_exec_data_header 由有效指针算得同分配内非空且对齐的头部地址, 故派生 & 合法。
     let header = unsafe { &*get_native_proto_exec_data_header((*proto).execdata as *const u32) };
     // Safety: codegen 产出的 execdata 在 NativeModule::bind_native_protos/rebind_header_module_pointers
-    // 中必已填入所属模块地址, 故 native_module 非空; release() 只在 &self 上递减
+    // 中必已填入所属模块（故 `native_module` 恒 `Some`）；release() 只在 &self 上递减
     // 原子引用计数, 所指 NativeModule 由计数托管存活, 无并存别名冲突。
     unsafe {
       header
         .native_module
-        .as_ref()
         .expect("native_module 恒为 Some：绑定模块后才分配 execdata，销毁前必已填入所属模块")
+        .as_ref()
         .release();
     }
   }

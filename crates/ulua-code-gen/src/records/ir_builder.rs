@@ -200,7 +200,7 @@ impl IrBuilder {
   /// # Safety
   /// `proto` 必须指向存活的 `Proto`，其 `code/sizecode` 字节码区在 IR 构建全程只读存活
   /// （契约与 C++ 参考实现一致）。
-  pub unsafe fn build_function_ir(&mut self, proto: *mut Proto) {
+  pub(crate) unsafe fn build_function_ir(&mut self, proto: *mut Proto) {
     // Safety: 契约保证 proto 为存活 Proto；IR 构建阶段字节码流不可变（无重编译改写 proto），
     // 该共享引用只读，且本函数调用栈上不写 Proto 字段（写点在 bind_native_protos 等阶段）。
     let proto_ref = unsafe { &*proto };
