@@ -13,7 +13,7 @@ use crate::{
 /// 调用方须保证：`l` 存活且处于受保护帧（分配 OOM、串表扩容均经 `l` 抛错）；`str_.len() <= MAXSSIZE`
 /// （超限抛 string too long）；`h` 必须是 lua_s_hash(str_) 的结果（错配会使串落错桶、破坏去重并使
 /// 后续查找失败）。cpp lstring.cpp:71 `newlstr`
-pub(crate) unsafe fn newlstr(l: *mut LuaState, str_: &[u8], h: c_uint) -> *mut tstring {
+pub(crate) fn newlstr(l: *mut LuaState, str_: &[u8], h: c_uint) -> *mut tstring {
   // SAFETY: 契约保证 `l` 存活；新串先挂桶链再发布，写入仅限刚分配对象自身
   unsafe {
     let len = str_.len();
