@@ -8,7 +8,7 @@ use crate::{records::vm_frame::VmFrame, type_aliases::api::LuaState};
 /// VM 回调 ABI 约定：`l` 为存活 `LuaState`（当前被调为 L 闭包），`base` 为本帧活动
 /// 栈基址（`ci->func` 与变参段同属分配栈数组），`rai`/`b` 为指令编码的目标寄存器号与
 /// 请求个数。边界契约集中于 [`VmFrame::new`]，其余为安全逻辑。
-pub unsafe fn execute_getvarargs_const(l: *mut LuaState, base: StkId, rai: i32, b: i32) {
+pub(crate) unsafe fn execute_getvarargs_const(l: *mut LuaState, base: StkId, rai: i32, b: i32) {
   let frame = unsafe { VmFrame::new(l, base) };
 
   let n = frame.varargs_count();

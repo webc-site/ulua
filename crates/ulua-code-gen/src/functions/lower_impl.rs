@@ -565,7 +565,7 @@ fn pad_block_nop<B: LowerBuild>(
 /// `build`/`lowering`/`function`/`sorted_blocks` 必须为互不重叠的存活借用，`lowering`
 /// 内持有的 build/function 裸指针须指向同批对象，`sorted_blocks` 为 `function.blocks`
 /// 的合法下标表（cpp 参考实现的同款前置条件）。
-pub unsafe fn lower_impl_x_64(
+pub(crate) unsafe fn lower_impl_x_64(
   build: &mut AssemblyBuilderX64,
   lowering: &mut IrLoweringX64,
   function: &mut IrFunction,
@@ -589,7 +589,7 @@ pub unsafe fn lower_impl_x_64(
 ///
 /// # Safety
 /// 与 [`lower_impl_x_64`] 同款：借用互不重叠且存活，`sorted_blocks` 为合法下标表。
-pub unsafe fn lower_impl_a_64(
+pub(crate) unsafe fn lower_impl_a_64(
   build: &mut AssemblyBuilderA64,
   lowering: &mut IrLoweringA64,
   function: &mut IrFunction,

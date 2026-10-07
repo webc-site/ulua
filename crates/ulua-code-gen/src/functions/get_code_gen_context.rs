@@ -13,7 +13,9 @@ use crate::records::base_code_gen_context::BaseCodeGenContext;
 ///   其它可变使用者）；所有权回收点（`on_close_state` 的 `Box::from_raw`）须在借用
 ///   结束后另行以裸指针配对，不得对返回值做跨窗口缓存。
 #[inline]
-pub unsafe fn get_code_gen_context<'a>(l: *mut LuaState) -> Option<&'a mut BaseCodeGenContext> {
+pub(crate) unsafe fn get_code_gen_context<'a>(
+  l: *mut LuaState,
+) -> Option<&'a mut BaseCodeGenContext> {
   if l.is_null() {
     return None;
   }

@@ -20,7 +20,7 @@ use crate::{
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn lower_ir_x_64(
+pub(crate) unsafe fn lower_ir_x_64(
   build: &mut AssemblyBuilderX64,
   ir: &mut IrBuilder,
   sorted_blocks: &[u32],
@@ -54,7 +54,7 @@ pub unsafe fn lower_ir_x_64(
 
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn lower_ir_a_64(
+pub(crate) unsafe fn lower_ir_a_64(
   build: &mut AssemblyBuilderA64,
   ir: &mut IrBuilder,
   sorted_blocks: &[u32],

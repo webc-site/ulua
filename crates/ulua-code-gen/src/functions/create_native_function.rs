@@ -116,7 +116,7 @@ pub unsafe fn create_native_function_x_64(
 ///
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn create_native_function_a_64(
+pub(crate) unsafe fn create_native_function_a_64(
   build: &mut AssemblyBuilderA64,
   helpers: &mut ModuleHelpers,
   proto: *mut Proto,

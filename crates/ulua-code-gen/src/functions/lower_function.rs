@@ -158,7 +158,7 @@ fn lower_function_common<B>(
 ///
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn lower_function_x_64(
+pub(crate) unsafe fn lower_function_x_64(
   ir: &mut IrBuilder,
   build: &mut AssemblyBuilderX64,
   helpers: &mut ModuleHelpers,
@@ -175,7 +175,7 @@ pub unsafe fn lower_function_x_64(
 ///
 /// # Safety
 /// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub unsafe fn lower_function_a_64(
+pub(crate) unsafe fn lower_function_a_64(
   ir: &mut IrBuilder,
   build: &mut AssemblyBuilderA64,
   helpers: &mut ModuleHelpers,
