@@ -88,18 +88,6 @@ pub(crate) fn analyze_bytecode_types(function: &mut IrFunction, host_hooks: &Hos
 
       let mut bc_type = BytecodeTypes::default();
 
-      // J1 Phase 2b：施加 TSFB 观测提示（仅细化 ANY → 观测 tag；
-      // 下游类型传播与本块内 check 消除由既有 bc_type_info 机制自然完成）
-      for (hpc, hreg, htag) in function.type_hints.iter() {
-        if *hpc == i as u32 && *htag != T_ANY {
-          let reg = *hreg as usize;
-          if reg_tags[reg] == T_ANY && reg < numparams as usize {
-            reg_tags[reg] = *htag;
-          }
-          refine_reg_type(bc_type_info, *hreg, i, *htag);
-        }
-      }
-
       match op {
         LuauOpcode::LOP_NOP => {}
         LuauOpcode::LOP_LOADNIL => {
