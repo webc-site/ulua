@@ -6,8 +6,10 @@
 //! cpp `lobject.cpp:157`。
 
 use alloc::vec::Vec;
-use core::ffi::c_char;
-use core::slice::{from_raw_parts, from_raw_parts_mut};
+use core::{
+  ffi::c_char,
+  slice::{from_raw_parts, from_raw_parts_mut},
+};
 
 use memchr::memchr3;
 
