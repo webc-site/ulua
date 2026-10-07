@@ -166,7 +166,7 @@ impl TypeArena {
 }
 
 impl TypeArena {
-  pub fn record_singleton_stats(&mut self, singleton: &SingletonType) {
+  fn record_singleton_stats(&mut self, singleton: &SingletonType) {
     match &singleton.variant {
       Variant2::V0(_bool_singleton) => {
         self.bool_singletons_minted += 1;

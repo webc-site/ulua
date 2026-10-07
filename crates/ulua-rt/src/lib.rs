@@ -147,8 +147,7 @@ pub use registry::RegistryKey;
 pub use scope::Scope;
 #[cfg(feature = "serde")]
 pub use serde::{
-  DeserializeOptions, Deserializer as LuaDeserializer, LuaSerdeExt, SerializableTable,
-  SerializableValue, SerializeOptions, Serializer as LuaSerializer,
+  DeserializeOptions, LuaSerdeExt, SerializableTable, SerializableValue, SerializeOptions,
 };
 pub use state::{Lua, WeakLua};
 pub use string::LuaString;

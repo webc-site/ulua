@@ -77,7 +77,7 @@ impl<'ctx> LintDuplicateFunction<'ctx> {
   pub fn report(&mut self, name: &str, location: Location, other_location: Location) {
     self.report_location_c_char_location(name, location, other_location);
   }
-  pub fn report_location_c_char_location(
+  fn report_location_c_char_location(
     &mut self,
     name: &str,
     location: Location,
@@ -98,7 +98,7 @@ impl<'ctx> LintDuplicateFunction<'ctx> {
 
 // —— 原 methods/lint_duplicate_function_track_function.rs ——
 impl<'ctx> LintDuplicateFunction<'ctx> {
-  pub fn track_function(&mut self, location: Location, name: &str) {
+  fn track_function(&mut self, location: Location, name: &str) {
     if name.is_empty() {
       return;
     }

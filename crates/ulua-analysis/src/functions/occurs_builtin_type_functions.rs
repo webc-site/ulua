@@ -6,7 +6,7 @@ use crate::{
   type_aliases::type_id::TypeId,
 };
 
-pub fn occurs_with_seen(
+fn occurs_with_seen(
   mut haystack: TypeId,
   needle: TypeId,
   seen: &mut DenseHashSet<TypeId>,

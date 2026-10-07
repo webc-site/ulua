@@ -4,7 +4,7 @@ use ulua_ast::records::{hot_comment::HotComment, parse_result::ParseResult, posi
 
 use crate::records::source_module::SourceModule;
 
-pub fn is_within_hot_comment_vector_hot_comment_position(
+fn is_within_hot_comment_vector_hot_comment_position(
   hot_comments: &Vec<HotComment>,
   pos: Position,
 ) -> bool {

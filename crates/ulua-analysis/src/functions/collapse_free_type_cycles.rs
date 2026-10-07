@@ -54,7 +54,7 @@ fn collapse_invariant_free_type(arena: Handle<TypeArena>, start_ty: TypeId) {
 /// C++ `collapseDirectBoundCycleAt`：从 `start_ty` 沿直接自由界行走，一旦发现
 /// 环，就把环成员合并到环的入边目标（代表）：各成员的外部下界并入代表的
 /// 下界、外部上界交入代表的上界，其余成员绑定到代表。命中塌缩返回 `true`。
-pub fn collapse_direct_bound_cycle_at(
+fn collapse_direct_bound_cycle_at(
   arena: Handle<TypeArena>,
   builtin_types: Handle<BuiltinTypes>,
   start_ty: TypeId,

@@ -7,7 +7,7 @@ pub struct PathHash;
 
 impl PathHash {
   #[inline]
-  pub fn hash_component(&self, component: &Component) -> usize {
+  fn hash_component(&self, component: &Component) -> usize {
     match component {
       Component::Property(prop) => fast_hash(prop.name()) ^ (prop.is_read() as usize),
       Component::Index(idx) => idx.index,
@@ -24,7 +24,7 @@ impl PathHash {
     self.hash_component(component)
   }
 
-  pub fn hash_path(&self, path: &Path) -> usize {
+  fn hash_path(&self, path: &Path) -> usize {
     path
       .components
       .iter()

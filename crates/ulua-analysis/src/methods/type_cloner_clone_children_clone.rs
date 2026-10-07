@@ -95,16 +95,16 @@ impl TypeCloner<'_> {
     }
   }
 
-  pub fn clone_children_blocked_type_pack(&mut self, _t: &mut BlockedTypePack) {
+  fn clone_children_blocked_type_pack(&mut self, _t: &mut BlockedTypePack) {
     // TODO: In the new solver, we should ice.
   }
 
   /// cpp `cloneChildren(BoundTypePack&)`：改写别名目标。
-  pub fn clone_children_bound_type_pack(&mut self, t: &mut BoundTypePack) {
+  fn clone_children_bound_type_pack(&mut self, t: &mut BoundTypePack) {
     t.bound_to = self.shallow_clone_type_pack_id(t.bound_to);
   }
 
-  pub fn clone_children_error_type_pack(&mut self, _t: &mut ErrorTypePack) {
+  fn clone_children_error_type_pack(&mut self, _t: &mut ErrorTypePack) {
     // noop.
   }
 
@@ -121,7 +121,7 @@ impl TypeCloner<'_> {
     }
   }
 
-  pub fn clone_children_type_function_instance_type_pack(
+  fn clone_children_type_function_instance_type_pack(
     &mut self,
     t: &mut TypeFunctionInstanceTypePack,
   ) {
@@ -167,17 +167,17 @@ impl TypeCloner<'_> {
     }
   }
 
-  pub fn clone_children_error_type(&mut self, _t: &mut ErrorType) {
+  fn clone_children_error_type(&mut self, _t: &mut ErrorType) {
     // noop
   }
 
-  pub fn clone_children_bound_type(&mut self, t: &mut BoundType) {
+  fn clone_children_bound_type(&mut self, t: &mut BoundType) {
     t.bound_to = self.shallow_clone_type_id(t.bound_to);
   }
 
   /// `lower_bound`/`upper_bound` 以 null 表示「无界」（镜像 cpp
   /// `std::optional`，字段形态属 arena 记录，本波不改）。
-  pub fn clone_children_free_type(&mut self, t: &mut FreeType) {
+  fn clone_children_free_type(&mut self, t: &mut FreeType) {
     if !t.lower_bound.is_null() {
       t.lower_bound = self.shallow_clone_type_id(t.lower_bound);
     }
@@ -194,11 +194,11 @@ impl TypeCloner<'_> {
     // noop.
   }
 
-  pub fn clone_children_blocked_type(&mut self, _t: &mut BlockedType) {
+  fn clone_children_blocked_type(&mut self, _t: &mut BlockedType) {
     // TODO: In the new solver, we should ice.
   }
 
-  pub fn clone_children_pending_expansion_type(&mut self, _t: &mut PendingExpansionType) {
+  fn clone_children_pending_expansion_type(&mut self, _t: &mut PendingExpansionType) {
     // TODO: In the new solver, we should ice.
   }
 
@@ -243,7 +243,7 @@ impl TypeCloner<'_> {
     }
   }
 
-  pub fn clone_children_metatable_type(&mut self, t: &mut MetatableType) {
+  fn clone_children_metatable_type(&mut self, t: &mut MetatableType) {
     t.table = self.shallow_clone_type_id(t.table);
     t.metatable = self.shallow_clone_type_id(t.metatable);
   }
@@ -289,7 +289,7 @@ impl TypeCloner<'_> {
     // noop.
   }
 
-  pub fn clone_children_no_refine_type(&mut self, _t: &mut NoRefineType) {
+  fn clone_children_no_refine_type(&mut self, _t: &mut NoRefineType) {
     // noop.
   }
 
@@ -307,7 +307,7 @@ impl TypeCloner<'_> {
 
   /// `unwrapped` 以 null 表示「尚未解包」（cpp 侧为
   /// `std::atomic<TypeId>`，本端口按单线程游程读写）。
-  pub fn clone_children_lazy_type(&mut self, t: &mut LazyType) {
+  fn clone_children_lazy_type(&mut self, t: &mut LazyType) {
     // The `FragmentAutocompleteTypeCloner` override (Clone.cpp:541-544) does
     // not clone lazy types: it overrides `cloneChildren(LazyType*)` to a no-op.
     if self.skip_lazy_type_clone {
@@ -333,7 +333,7 @@ impl TypeCloner<'_> {
   }
 
   /// `type_function` 本体（跨边界的类型函数定义）有意不克隆。
-  pub fn clone_children_type_function_instance_type(&mut self, t: &mut TypeFunctionInstanceType) {
+  fn clone_children_type_function_instance_type(&mut self, t: &mut TypeFunctionInstanceType) {
     for ty in t.type_arguments.iter_mut() {
       *ty = self.shallow_clone_type_id(*ty);
     }
@@ -342,7 +342,7 @@ impl TypeCloner<'_> {
     }
   }
 
-  pub fn clone_children_free_type_pack(&mut self, _t: &mut FreeTypePack) {
+  fn clone_children_free_type_pack(&mut self, _t: &mut FreeTypePack) {
     // TODO: clone lower and upper bounds.
     // TODO: In the new solver, we should ice.
   }

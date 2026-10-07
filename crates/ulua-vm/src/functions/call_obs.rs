@@ -43,7 +43,7 @@ const K_FLAG_POLY: u32 = 1;
 const K_FLAG_SEALED: u32 = 2;
 /// proto 恒定计数达到该值即触发暖重编译。取值下界由最短热身负载约束：
 /// spectralnorm 单轮 Av→eval_a 调用约 700 次，须在单轮内触发。
-pub const K_TRIGGER_HITS: u32 = 200;
+const K_TRIGGER_HITS: u32 = 200;
 
 /// 观测总预算（进程级，跨 context 共享）：x64 路径专用燃料。x64 无发射端插桩
 /// 概念（观测内嵌于每次 native CALL 必经的 call_prolog），靠「每次观测扣一、
@@ -51,11 +51,11 @@ pub const K_TRIGGER_HITS: u32 = 200;
 /// （递归体、多态站）的持续观测税止损。A64 路径的止损改由「暖产物零插桩 +
 /// 站点定案即触发暖重编译」结构性承接，不再烧本预算（否则 fib 烧穿后殃及同
 /// 进程后编译的一切 proto——官方 runner 单进程多用例的口径下正是本 bug）。
-pub const K_CALL_OBS_BUDGET: u32 = 50_000;
+const K_CALL_OBS_BUDGET: u32 = 50_000;
 /// 重编译触发总预算（进程级，两架构共享）：每次「站点定案（恒定满阈或多态）
 /// →触发暖重编译」扣一，耗尽后站点仍 sealed 但不再触发编译。兜底「海量站点
 /// 各触发一次」的编译风暴；正常负载每 proto 至多一次暖重编译，远触不到帽。
-pub const K_CALL_OBS_RECOMPILE_BUDGET: u32 = 1024;
+const K_CALL_OBS_RECOMPILE_BUDGET: u32 = 1024;
 /// state hits 字段饱和上限（触发即 sealed，常态到不了）。
 const K_HITS_CAP: u32 = 0xff_ffff;
 

@@ -45,9 +45,9 @@ pub struct UnwindBuilderDwarf2 {
 
 impl UnwindBuilderDwarf2 {
   /// `const int kCodeAlignFactor = 1;` (UnwindBuilderDwarf2.cpp:75)
-  pub const K_CODE_ALIGN_FACTOR: i32 = 1;
+  const K_CODE_ALIGN_FACTOR: i32 = 1;
   /// `const int kDataAlignFactor = 8;` (UnwindBuilderDwarf2.cpp:76)
-  pub const K_DATA_ALIGN_FACTOR: i32 = 8;
+  const K_DATA_ALIGN_FACTOR: i32 = 8;
 
   pub(crate) const K_RAW_DATA_LIMIT: u32 = K_RAW_DATA as u32;
 

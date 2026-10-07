@@ -303,7 +303,7 @@ impl Normalizer {
 }
 
 impl Normalizer {
-  pub fn intersection_of_functions(&mut self, here: TypeId, there: TypeId) -> Option<TypeId> {
+  fn intersection_of_functions(&mut self, here: TypeId, there: TypeId) -> Option<TypeId> {
     self.consume_fuel();
 
     let hftv = get_type::get::<FunctionType>(here)?;
@@ -641,7 +641,7 @@ impl Normalizer {
 }
 
 impl Normalizer {
-  pub fn union_of_functions(&mut self, here: TypeId, there: TypeId) -> Option<TypeId> {
+  fn union_of_functions(&mut self, here: TypeId, there: TypeId) -> Option<TypeId> {
     self.consume_fuel();
 
     if get_type::get::<ErrorType>(here).is_some() {
@@ -716,7 +716,7 @@ impl Normalizer {
 }
 
 impl Normalizer {
-  pub fn union_saturated_functions(&mut self, here: TypeId, there: TypeId) -> Option<TypeId> {
+  fn union_saturated_functions(&mut self, here: TypeId, there: TypeId) -> Option<TypeId> {
     self.consume_fuel();
 
     let hftv = get_type::get::<FunctionType>(here)?;

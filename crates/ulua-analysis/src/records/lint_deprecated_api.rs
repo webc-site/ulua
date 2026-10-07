@@ -77,7 +77,7 @@ impl<'ctx> AstVisitor for LintDeprecatedApi<'ctx> {
 
 // —— 原 methods/lint_deprecated_api_check_linter.rs ——
 impl<'ctx> LintDeprecatedApi<'ctx> {
-  pub fn check_ast_expr_index_name_type_id(&mut self, node: &AstExprIndexName, ty: TypeId) {
+  fn check_ast_expr_index_name_type_id(&mut self, node: &AstExprIndexName, ty: TypeId) {
     let ty = follow_type::follow(ty);
     let index = node.index.as_str().unwrap_or("");
     if let Some(extern_type) = get_type::get::<ExternType>(ty) {
@@ -136,7 +136,7 @@ impl<'ctx> LintDeprecatedApi<'ctx> {
       }
     }
   }
-  pub fn check_location_ast_name_ast_name(
+  fn check_location_ast_name_ast_name(
     &mut self,
     location: &Location,
     global: AstName,
@@ -155,7 +155,7 @@ impl<'ctx> LintDeprecatedApi<'ctx> {
       self.report_property(location, prop, global.as_str(), index_name);
     }
   }
-  pub fn check_ast_expr_function(&mut self, func: &mut AstExprFunction) {
+  fn check_ast_expr_function(&mut self, func: &mut AstExprFunction) {
     // func 的 `&mut` 借用即「节点非空、存活且遍历窗口内可独占」的类型系统证明，
     // 原首行 `LUAU_ASSERT!(!func.is_null())` 指针判空随形参收窄一并退役。
     let fty = self.get_function_type(Node::from_mut(&mut *func).cast::<AstExpr>().as_ptr());
@@ -185,7 +185,7 @@ impl<'ctx> LintDeprecatedApi<'ctx> {
 
 // —— 原 methods/lint_deprecated_api_in_scope.rs ——
 impl<'ctx> LintDeprecatedApi<'ctx> {
-  pub fn in_scope(&self, fty: *const FunctionType) -> bool {
+  fn in_scope(&self, fty: *const FunctionType) -> bool {
     self.function_type_scope_stack.contains(&fty)
   }
 }
@@ -220,7 +220,7 @@ impl<'ctx> LintDeprecatedApi<'ctx> {
 
 // —— 原 methods/lint_deprecated_api_report_linter.rs ——
 impl<'ctx> LintDeprecatedApi<'ctx> {
-  pub fn report_property(
+  fn report_property(
     &mut self,
     location: &Location,
     prop: &Property,
@@ -271,7 +271,7 @@ impl<'ctx> LintDeprecatedApi<'ctx> {
       );
     }
   }
-  pub fn report_member(
+  fn report_member(
     &mut self,
     location: &Location,
     table_name: Option<&str>,
@@ -294,7 +294,7 @@ impl<'ctx> LintDeprecatedApi<'ctx> {
       );
     }
   }
-  pub fn report_member_info(
+  fn report_member_info(
     &mut self,
     location: &Location,
     table_name: Option<&str>,
@@ -332,7 +332,7 @@ impl<'ctx> LintDeprecatedApi<'ctx> {
       );
     }
   }
-  pub fn report_function(&mut self, location: &Location, function_name: &str) {
+  fn report_function(&mut self, location: &Location, function_name: &str) {
     emit_warning(
       self.context.get(),
       Code::DeprecatedApi,
@@ -340,7 +340,7 @@ impl<'ctx> LintDeprecatedApi<'ctx> {
       format_args!("Function '{}' is deprecated", function_name),
     );
   }
-  pub fn report_function_info(
+  fn report_function_info(
     &mut self,
     location: &Location,
     function_name: &str,

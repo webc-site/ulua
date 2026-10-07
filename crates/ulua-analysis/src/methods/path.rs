@@ -18,7 +18,7 @@ impl Path {
     }
   }
 
-  pub fn path_vector_component(components: Vec<Component>) -> Self {
+  fn path_vector_component(components: Vec<Component>) -> Self {
     Self { components }
   }
 

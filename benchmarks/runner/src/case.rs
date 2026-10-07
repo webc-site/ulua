@@ -12,7 +12,7 @@ pub struct BenchMeta {
 }
 
 /// 扫描 `cases_dir` 下指定扩展名（如 `lua`/`luau`）的用例，按 id 排序返回。
-pub fn scan_cases(cases_dir: &Path, ext: &str) -> Result<Vec<BenchMeta>, io::Error> {
+fn scan_cases(cases_dir: &Path, ext: &str) -> Result<Vec<BenchMeta>, io::Error> {
   let mut cases = Vec::new();
   for entry in fs::read_dir(cases_dir)? {
     let path = entry?.path();

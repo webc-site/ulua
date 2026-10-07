@@ -167,7 +167,7 @@ impl TxnLog {
     self.have_seen_type_or_pack_id_type_or_pack_id(VisitKey::from_ptr(lhs), VisitKey::from_ptr(rhs))
   }
 
-  pub fn have_seen_type_or_pack_id_type_or_pack_id(
+  fn have_seen_type_or_pack_id_type_or_pack_id(
     &self,
     lhs: TypeOrPackId,
     rhs: TypeOrPackId,
@@ -281,7 +281,7 @@ impl TxnLog {
     self.pop_seen_type_or_pack_id_type_or_pack_id(VisitKey::from_ptr(lhs), VisitKey::from_ptr(rhs));
   }
 
-  pub fn pop_seen_type_or_pack_id_type_or_pack_id(&mut self, lhs: TypeOrPackId, rhs: TypeOrPackId) {
+  fn pop_seen_type_or_pack_id_type_or_pack_id(&mut self, lhs: TypeOrPackId, rhs: TypeOrPackId) {
     let pair = sorted_pair(lhs, rhs);
 
     if let Some(seen) = self.seen_stack() {
@@ -302,7 +302,7 @@ impl TxnLog {
       .push_seen_type_or_pack_id_type_or_pack_id(VisitKey::from_ptr(lhs), VisitKey::from_ptr(rhs));
   }
 
-  pub fn push_seen_type_or_pack_id_type_or_pack_id(
+  fn push_seen_type_or_pack_id_type_or_pack_id(
     &mut self,
     lhs: TypeOrPackId,
     rhs: TypeOrPackId,

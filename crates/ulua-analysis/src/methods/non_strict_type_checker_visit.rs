@@ -82,7 +82,7 @@ impl<'a> NonStrictTypeChecker<'a> {
   /// cpp `visit(AstStat*)`：`stat` 为 arena 存活节点引用（调用方经
   /// `as_stat_ref` 分派或块遍历取得），判别与子类下转全部走
   /// `AstStatRef` 安全枚举，无裸指针。
-  pub fn visit_ast_stat(&mut self, stat: &AstStat) -> NonStrictContext {
+  fn visit_ast_stat(&mut self, stat: &AstStat) -> NonStrictContext {
     let node: &AstNode = &stat.base;
     let _pusher = self.push_stack(node);
     match stat.as_stat_ref() {
@@ -123,7 +123,7 @@ impl<'a> NonStrictTypeChecker<'a> {
   /// cpp `NonStrictTypeChecker::visit(AstExprGlobal*, ValueContext)`
   /// (NonStrictTypeChecker.cpp:641)。`global` 为存活引用（非空由类型系统证明）；
   /// 未查得符号时按节点 Location 报 UnknownSymbol。
-  pub fn visit_ast_expr_global_value_context(
+  fn visit_ast_expr_global_value_context(
     &mut self,
     global: &AstExprGlobal,
     context: ValueContext,
@@ -306,7 +306,7 @@ impl<'a> NonStrictTypeChecker<'a> {
   /// cpp `NonStrictTypeChecker::visit(AstExprIndexName*, ValueContext)`
   /// (NonStrictTypeChecker.cpp:779)：仅向下访问被索引对象 `expr`，
   /// `index_name` 为存活引用。
-  pub fn visit_ast_expr_index_name_value_context(
+  fn visit_ast_expr_index_name_value_context(
     &mut self,
     index_name: &AstExprIndexName,
     context: ValueContext,
@@ -318,7 +318,7 @@ impl<'a> NonStrictTypeChecker<'a> {
   /// cpp `NonStrictTypeChecker::visit(AstExprIndexExpr*, ValueContext)`
   /// (NonStrictTypeChecker.cpp:784)：`expr` 与 `index` 子指针按各自上下文
   /// 向下访问后取合取；`index_expr` 为存活引用。
-  pub fn visit_ast_expr_index_expr_value_context(
+  fn visit_ast_expr_index_expr_value_context(
     &mut self,
     index_expr: &AstExprIndexExpr,
     context: ValueContext,
@@ -473,7 +473,7 @@ impl<'a> NonStrictTypeChecker<'a> {
   /// (NonStrictTypeChecker.cpp:882)：先访问类型实参列表再向下访问被实例化
   /// 表达式；`instantiate` 为存活引用，`type_arguments` 变体载荷恒为 arena
   /// 存活节点，Error 形态对应 cpp 向 `visitAstTypePack` 传 null（早退），跳过。
-  pub fn visit_ast_expr_instantiate(
+  fn visit_ast_expr_instantiate(
     &mut self,
     instantiate: &AstExprInstantiate,
   ) -> NonStrictContext {
@@ -784,7 +784,7 @@ impl<'a> NonStrictTypeChecker<'a> {
     ctx
   }
 
-  pub fn visit_ast_type_list(&mut self, list: &AstTypeList) {
+  fn visit_ast_type_list(&mut self, list: &AstTypeList) {
     // types 数组元素由 parser 填充、同属 arena；alias_opt 折叠为可空 Option。
     for &t in list.types.as_slice() {
       self.visit_ast_type(alias_opt(t));
@@ -1036,7 +1036,7 @@ impl<'a> NonStrictTypeChecker<'a> {
   /// cpp `NonStrictTypeChecker::visit(AstStatClass*, ...)`
   /// (NonStrictTypeChecker.cpp:521)：逐成员访问——属性读类型注解、方法向下
   /// 访问函数表达式；`decl_class` 为存活引用，`members` 变体数组由 parser 填充。
-  pub fn visit_ast_stat_class(&mut self, decl_class: &AstStatClass) -> NonStrictContext {
+  fn visit_ast_stat_class(&mut self, decl_class: &AstStatClass) -> NonStrictContext {
     let members = &decl_class.members;
     for prop in members.as_slice() {
       if let Some(property) = prop.get_if_0() {
@@ -1069,7 +1069,7 @@ impl<'a> NonStrictTypeChecker<'a> {
   /// 引用（cpp 侧同一指针直接 `expr->as<T>()`
   /// （NonStrictTypeChecker.cpp:546-604）作相同非空前提）。分派链以
   /// `as_expr_ref` 安全枚举完成，子类下转全部走匹配臂的类型化引用。
-  pub fn visit_ast_expr_value_context(
+  fn visit_ast_expr_value_context(
     &mut self,
     expr: &AstExpr,
     context: ValueContext,
@@ -1130,7 +1130,7 @@ impl<'a> NonStrictTypeChecker<'a> {
   /// cpp `NonStrictTypeChecker::visit(AstExprGroup*, ValueContext)`
   /// (NonStrictTypeChecker.cpp:606)：括号表达式直接向下访问 `expr` 子节点；
   /// `group` 为存活引用。
-  pub fn visit_ast_expr_group_value_context(
+  fn visit_ast_expr_group_value_context(
     &mut self,
     group: &AstExprGroup,
     context: ValueContext,

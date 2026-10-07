@@ -159,7 +159,7 @@ impl TypeChecker {
     flow
   }
 
-  pub fn check_stat_if(&mut self, scope: &ScopePtr, statement: &AstStatIf) -> ControlFlow {
+  fn check_stat_if(&mut self, scope: &ScopePtr, statement: &AstStatIf) -> ControlFlow {
     let result = self.check_expr(scope, &statement.condition, None, false);
 
     let then_scope = self.child_scope(scope, &statement.thenbody.base.base.location);
@@ -198,7 +198,7 @@ impl TypeChecker {
     }
   }
 
-  pub fn check_stat_while(&mut self, scope: &ScopePtr, statement: &AstStatWhile) -> ControlFlow {
+  fn check_stat_while(&mut self, scope: &ScopePtr, statement: &AstStatWhile) -> ControlFlow {
     let result = self.check_expr(scope, &statement.condition, None, false);
     let while_scope = self.child_scope(scope, &statement.body.base.base.location);
     self.resolve_predicate_vec_scope_ptr_bool(&result.predicates, &while_scope, true);
@@ -206,7 +206,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  pub fn check_stat_repeat(
+  fn check_stat_repeat(
     &mut self,
     _scope: &ScopePtr,
     _statement: &AstStatRepeat,
@@ -219,7 +219,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  pub fn check_stat_return(&mut self, scope: &ScopePtr, return_: &AstStatReturn) -> ControlFlow {
+  fn check_stat_return(&mut self, scope: &ScopePtr, return_: &AstStatReturn) -> ControlFlow {
     let mut expected_types: Vec<Option<TypeId>> = Vec::with_capacity(return_.list.len());
 
     let mut expected_ret_curr = begin(scope.return_type);
@@ -302,7 +302,7 @@ impl TypeChecker {
     ControlFlow::Returns
   }
 
-  pub fn check_stat_assign(&mut self, scope: &ScopePtr, assign: &AstStatAssign) -> ControlFlow {
+  fn check_stat_assign(&mut self, scope: &ScopePtr, assign: &AstStatAssign) -> ControlFlow {
     let mut expected_types: Vec<Option<TypeId>> = Vec::with_capacity(assign.vars.len());
 
     let module_scope = self.expect_current_module().get_module_scope();
@@ -434,7 +434,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  pub fn check_stat_compound_assign(
+  fn check_stat_compound_assign(
     &mut self,
     scope: &ScopePtr,
     assign: &AstStatCompoundAssign,
@@ -461,7 +461,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  pub fn check_stat_local(&mut self, scope: &ScopePtr, local: &AstStatLocal) -> ControlFlow {
+  fn check_stat_local(&mut self, scope: &ScopePtr, local: &AstStatLocal) -> ControlFlow {
     let mut variable_types: Vec<TypeId> = Vec::new();
     let mut expected_types: Vec<Option<TypeId>> = Vec::new();
     let mut bindings: Vec<(Symbol, Binding)> = Vec::new();
@@ -645,7 +645,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  pub fn check_stat_for(&mut self, scope: &ScopePtr, expr: &AstStatFor) -> ControlFlow {
+  fn check_stat_for(&mut self, scope: &ScopePtr, expr: &AstStatFor) -> ControlFlow {
     // ScopePtr loopScope = childScope(scope, expr.location);
     let loop_scope = self.child_scope(scope, &expr.base.base.location);
 
@@ -732,7 +732,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  pub fn check_stat_for_in(&mut self, scope: &ScopePtr, forin: &AstStatForIn) -> ControlFlow {
+  fn check_stat_for_in(&mut self, scope: &ScopePtr, forin: &AstStatForIn) -> ControlFlow {
     // ScopePtr loopScope = childScope(scope, forin.location);
     let loop_scope = self.child_scope(scope, &forin.base.base.location);
 
@@ -1349,7 +1349,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  pub fn check_stat_type_alias(
+  fn check_stat_type_alias(
     &mut self,
     scope: &ScopePtr,
     typealias: &AstStatTypeAlias,
@@ -1462,7 +1462,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  pub fn check_stat_type_function(
+  fn check_stat_type_function(
     &mut self,
     _scope: &ScopePtr,
     typefunction: &AstStatTypeFunction,
@@ -1477,7 +1477,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  pub fn check_stat_declare_extern_type(
+  fn check_stat_declare_extern_type(
     &mut self,
     scope: &ScopePtr,
     declared_extern_type: &AstStatDeclareExternType,
@@ -1605,7 +1605,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  pub fn check_stat_declare_function(
+  fn check_stat_declare_function(
     &mut self,
     scope: &ScopePtr,
     global: &AstStatDeclareFunction,
@@ -1684,7 +1684,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  pub fn check_stat_declare_global(
+  fn check_stat_declare_global(
     &mut self,
     scope: &ScopePtr,
     global: &AstStatDeclareGlobal,
@@ -1718,7 +1718,7 @@ impl TypeChecker {
     ControlFlow::None
   }
 
-  pub fn check_stat_error(
+  fn check_stat_error(
     &mut self,
     scope: &ScopePtr,
     error_statement: &AstStatError,

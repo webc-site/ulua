@@ -179,7 +179,7 @@ pub fn write_json_emitter_boundary_snapshot(
   o.finish();
 }
 
-pub fn write_json_emitter_constraint_step_snapshot(
+fn write_json_emitter_constraint_step_snapshot(
   emitter: &mut JsonEmitter,
   snapshot: &ConstraintStepSnapshot,
 ) {
@@ -193,7 +193,7 @@ pub fn write_json_emitter_constraint_step_snapshot(
   o.finish();
 }
 
-pub fn write_json_emitter_generalize_step_snapshot(
+fn write_json_emitter_generalize_step_snapshot(
   emitter: &mut JsonEmitter,
   eg: &GeneralizeStepSnapshot,
 ) {

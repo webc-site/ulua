@@ -54,7 +54,7 @@ pub struct LintGlobalLocal<'ctx> {
 
 // —— 原 methods/lint_global_local_function_info_function_info.rs ——
 impl FunctionInfo {
-  pub fn function_info_ast(ast: &mut AstExprFunction) -> Self {
+  fn function_info_ast(ast: &mut AstExprFunction) -> Self {
     Self {
       ast: NonNull::from(ast),
       dominated_globals: DenseHashSet::new(AstName::default()),
@@ -210,7 +210,7 @@ impl<'ctx> LintGlobalLocal<'ctx> {
   /// cpp `trackGlobalRef(AstExprGlobal*)`：`node` 为分析期存活、由 arena 持有的
   /// 全局引用节点共享借用；全局引用以对象身份（`NonNull`）登记进
   /// `global_refs`/`first_ref`（cpp 语义），由借用地址无损还原。
-  pub fn track_global_ref(&mut self, node: &AstExprGlobal) {
+  fn track_global_ref(&mut self, node: &AstExprGlobal) {
     // `name` 为 Copy 字段，先自共享借用只读取值；引用地址即节点对象身份。
     let name = node.name;
     let node = NonNull::from(node);

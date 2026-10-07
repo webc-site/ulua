@@ -5,7 +5,7 @@ use crate::functions::default_luau_print_line::default_luau_print_line;
 /// C++ `PrintLineProc`（TypeInfer.h:504，`void (*)(const std::string&)`）；
 /// 此处用普通（非 FFI）fn 指针 + `&str` 借用承载——全仓无 C 侧消费者，
 /// 假 `extern "C-unwind"` 只会逼出 usize→fn 的 transmute。
-pub type PrintLineProc = fn(line: &str);
+type PrintLineProc = fn(line: &str);
 
 /// cpp 的全局 `extern PrintLineProc luauPrintLine`（TypeInfer.h:506）。
 /// Mutex 包裹保持 `static` 免 `static mut` 的数据竞争 UB；parking_lot 无中毒

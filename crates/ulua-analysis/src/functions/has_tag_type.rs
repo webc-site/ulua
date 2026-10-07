@@ -6,7 +6,7 @@ use crate::{
   type_aliases::type_id::TypeId,
 };
 
-pub fn has_tag(tags: &[String], tag_name: &str) -> bool {
+fn has_tag(tags: &[String], tag_name: &str) -> bool {
   tags.iter().any(|t| t == tag_name)
 }
 

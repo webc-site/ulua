@@ -18,7 +18,7 @@ use crate::{
 };
 
 impl Replacer {
-  pub fn check_replacement_keys(&self) -> bool {
+  fn check_replacement_keys(&self) -> bool {
     let replacements = alias_ref(self.replacements);
     for (k, _) in replacements.iter() {
       let followed = follow_type::follow(*k);

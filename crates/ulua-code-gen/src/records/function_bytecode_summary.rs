@@ -110,7 +110,7 @@ impl FunctionBytecodeSummary {
     self.counts[nesting as usize][op as usize]
   }
 
-  pub fn inc_count(&mut self, nesting: u32, op: u8) {
+  fn inc_count(&mut self, nesting: u32, op: u8) {
     CODEGEN_ASSERT!(nesting <= self.get_nesting_limit());
     CODEGEN_ASSERT!((op as u32) < Self::LOP__COUNT);
     self.counts[nesting as usize][op as usize] += 1;

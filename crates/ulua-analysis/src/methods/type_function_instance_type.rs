@@ -38,7 +38,7 @@ impl TypeFunctionInstanceType {
 }
 
 impl TypeFunctionInstanceType {
-  pub fn type_function_instance_type_not_null_type_function_vector_type_id_vector_type_pack_id_optional_ast_name_user_defined_function_data(
+  fn type_function_instance_type_not_null_type_function_vector_type_id_vector_type_pack_id_optional_ast_name_user_defined_function_data(
     function: NonNull<TypeFunction>,
     type_arguments: Vec<TypeId>,
     pack_arguments: Vec<TypePackId>,

@@ -195,7 +195,7 @@ impl Substitution {
   /// 句柄（同 `get_mutable_type_id` 门面纪律，调用点传的是 Tarjan 产出的新类型），
   /// `self.base.log` 构造注入并 LUAU_ASSERT 非空（C++ 成员 `const TxnLog* log`）；
   /// 对二者的解引用收进下方窄 `unsafe` 块，本体改写下钻全部走安全 RTTI 门面。
-  pub fn replace_children_type_id(&mut self, ty: TypeId) {
+  fn replace_children_type_id(&mut self, ty: TypeId) {
     LUAU_ASSERT!(ty == alias_ref(self.base.log).follow_type_id(ty));
 
     if self.base.ignore_children_type_id(ty) {
@@ -289,7 +289,7 @@ impl Substitution {
   /// 类型包孪生版。对应 C++ `void Substitution::replaceChildren(TypePackId tp)`
   /// （`cpp/Analysis/src/Substitution.cpp:871`）。降 safe 理由同上：log/句柄解引用
   /// 均在窄 `unsafe` 块内证成。
-  pub fn replace_children_type_pack_id(&mut self, tp: TypePackId) {
+  fn replace_children_type_pack_id(&mut self, tp: TypePackId) {
     LUAU_ASSERT!(tp == alias_ref(self.base.log).follow_type_pack_id(tp));
 
     if self.base.ignore_children_type_pack_id(tp) {

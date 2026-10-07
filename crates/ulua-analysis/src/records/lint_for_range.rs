@@ -25,7 +25,7 @@ pub struct LintForRange<'ctx> {
 }
 
 impl<'ctx> LintForRange<'ctx> {
-  pub fn get_loop_end(&self, from: f64, to: f64) -> f64 {
+  fn get_loop_end(&self, from: f64, to: f64) -> f64 {
     from + (to - from).floor()
   }
 }

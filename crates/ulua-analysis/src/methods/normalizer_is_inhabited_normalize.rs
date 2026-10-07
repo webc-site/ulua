@@ -148,7 +148,7 @@ impl Normalizer {
     }
   }
 
-  pub fn is_inhabited_type_id_set_type_id(
+  fn is_inhabited_type_id_set_type_id(
     &mut self,
     ty: TypeId,
     seen: &mut DenseHashSet<TypeId>,

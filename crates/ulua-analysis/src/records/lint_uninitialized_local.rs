@@ -101,7 +101,7 @@ impl<'ctx> LintUninitializedLocal<'ctx> {
 }
 
 // —— 原 methods/lint_uninitialized_local_report.rs：C++ `LintUninitializedLocal::report` (`Analysis/src/Linter.cpp:2118`). ——
-pub fn lint_uninitialized_local_report(pass: &mut LintUninitializedLocal<'_>) {
+fn lint_uninitialized_local_report(pass: &mut LintUninitializedLocal<'_>) {
   let mut context = pass.context;
   for (local, l) in pass.locals.iter() {
     let local = *local;
@@ -124,7 +124,7 @@ pub fn lint_uninitialized_local_report(pass: &mut LintUninitializedLocal<'_>) {
 /// `node` 的 `&mut` 借用即「节点非空、存活且本帧可独占」的类型系统证明（原
 /// `&AstExpr`+const→mut 回灌指针门面的形态退役）：非 Local 目标经引用门面
 /// 递归遍历子树，写穿语义与 cpp `expr->visit(this)` 一致。
-pub fn lint_uninitialized_local_visit_assign(
+fn lint_uninitialized_local_visit_assign(
   pass: &mut LintUninitializedLocal,
   node: &mut AstExpr,
 ) {

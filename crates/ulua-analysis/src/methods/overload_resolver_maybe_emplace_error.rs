@@ -20,7 +20,7 @@ use crate::{
 impl OverloadResolver<'_> {
   /// 仅在 wanted/given 均存在时按抑制策略落错误；normalizer 为裸指针沿用
   /// records/ 中的字段定义，调用处由构造方保证有效。
-  pub fn maybe_emplace_error_error_vec_location_module_name_subtyping_reasoning_optional_type_id_optional_type_id(
+  fn maybe_emplace_error_error_vec_location_module_name_subtyping_reasoning_optional_type_id_optional_type_id(
     &self,
     errors: &mut ErrorVec,
     arg_location: Location,

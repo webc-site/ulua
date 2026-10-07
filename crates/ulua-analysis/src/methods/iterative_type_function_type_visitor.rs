@@ -34,11 +34,11 @@ use crate::{
 };
 
 impl IterativeTypeFunctionTypeVisitor {
-  pub fn cycle_type_function_type_id(&mut self, _ty: TypeFunctionTypeId) {
+  fn cycle_type_function_type_id(&mut self, _ty: TypeFunctionTypeId) {
     // Empty implementation per source: void IterativeTypeFunctionTypeVisitor::cycle(TypeFunctionTypeId) {}
   }
 
-  pub fn cycle_type_function_type_pack_id(&mut self, _tp: TypeFunctionTypePackId) {
+  fn cycle_type_function_type_pack_id(&mut self, _tp: TypeFunctionTypePackId) {
     // Empty implementation per source: void IterativeTypeFunctionTypeVisitor::cycle(TypeFunctionTypePackId) {}
   }
 }
@@ -108,7 +108,7 @@ impl IterativeTypeFunctionTypeVisitor {
     )
   }
 
-  pub fn iterative_type_function_type_visitor_string_seen_set_bool(
+  fn iterative_type_function_type_visitor_string_seen_set_bool(
     visitor_name: String,
     seen: SeenSet,
     visit_once: bool,
@@ -347,11 +347,11 @@ impl IterativeTypeFunctionTypeVisitor {
 }
 
 impl IterativeTypeFunctionTypeVisitor {
-  pub fn traverse_type_function_type_id(&mut self, ty: TypeFunctionTypeId) {
+  fn traverse_type_function_type_id(&mut self, ty: TypeFunctionTypeId) {
     self.work_queue.push(WorkItem::Type(ty, self.parent_cursor));
   }
 
-  pub fn traverse_type_function_type_pack_id(&mut self, tp: TypeFunctionTypePackId) {
+  fn traverse_type_function_type_pack_id(&mut self, tp: TypeFunctionTypePackId) {
     self.work_queue.push(WorkItem::Pack(tp, self.parent_cursor));
   }
 }
@@ -435,7 +435,7 @@ default_visit_hooks! {
   ) -> visit_type_function_type_pack_id;
 }
 impl IterativeTypeFunctionTypeVisitor {
-  pub fn visit_type_function_type_pack_id(&mut self, _tp: TypeFunctionTypePackId) -> bool {
+  fn visit_type_function_type_pack_id(&mut self, _tp: TypeFunctionTypePackId) -> bool {
     true
   }
 }

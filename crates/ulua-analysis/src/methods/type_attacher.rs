@@ -48,7 +48,7 @@ impl TypeAttacher {
     )
   }
 
-  pub fn get_scope(&mut self, loc: &Location) -> ScopePtr {
+  fn get_scope(&mut self, loc: &Location) -> ScopePtr {
     let module = alias_ref(self.module);
     module
       .scopes
@@ -76,14 +76,14 @@ impl TypeAttacher {
   /// `visit_local` 都由调用方守卫；原 `Option<TypeId>` 入参是移植层自加的可空往返，唯一
   /// 消费方（`visit_local` 命中支）恒传 `Some`，故入参收口为 `TypeId`。返回裸指针的落点
   /// 字段布局约定不变（见下方注）。
-  pub fn type_ast(&mut self, ty: TypeId) -> *mut AstType {
+  fn type_ast(&mut self, ty: TypeId) -> *mut AstType {
     // C++ `return Luau::visit(TypeRehydrationVisitor(allocator, &synthetic_names), (*type)->ty);`
     // 注：返回的裸指针直存 ulua-ast 结点 `*mut AstType` 字段（读取侧经
     // optional_node::node_opt 折回 Option），属既有落点字段布局约定（本批次不改字段类型）。
     self.rehydration_visitor().visit_type(ty)
   }
 
-  pub fn type_ast_pack(&mut self, r#type: TypePackId) -> AstArray<*mut AstType> {
+  fn type_ast_pack(&mut self, r#type: TypePackId) -> AstArray<*mut AstType> {
     let (v, _tail) = flatten_type_pack_id(r#type);
 
     // 槽位申请与逐槽写入收口在 `AstArrayBuilder`（容量 v.len()、每元素恰一槽，

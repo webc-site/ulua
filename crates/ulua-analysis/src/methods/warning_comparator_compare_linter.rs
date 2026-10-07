@@ -4,7 +4,7 @@ use crate::records::warning_comparator::WarningComparator;
 
 impl WarningComparator {
   #[inline]
-  pub fn compare_position_position(&self, lhs: &Position, rhs: &Position) -> i32 {
+  fn compare_position_position(&self, lhs: &Position, rhs: &Position) -> i32 {
     if lhs.line != rhs.line {
       return if lhs.line < rhs.line { -1 } else { 1 };
     }

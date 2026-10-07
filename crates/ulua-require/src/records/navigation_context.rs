@@ -8,7 +8,7 @@ use crate::enums::{
 };
 
 /// C++ 中配置回调缺省时的 Luau 配置执行超时（毫秒，`Require.h` 注释定死 2000）。
-pub const DEFAULT_LUAU_CONFIG_TIMEOUT_MS: i32 = 2000;
+const DEFAULT_LUAU_CONFIG_TIMEOUT_MS: i32 = 2000;
 
 /// 导航上下文接口，对应 cpp `RequireNavigator.h` 的纯虚基类 `NavigationContext`：
 /// [`crate::records::navigator::Navigator`] 沿宿主层级遍历 require 路径时调用的

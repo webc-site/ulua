@@ -107,7 +107,7 @@ impl DenseDefault for Symbol {
   }
 }
 impl DataFlowGraphBuilder {
-  pub fn data_flow_graph_builder_not_null_def_arena_not_null_refinement_key_arena(
+  fn data_flow_graph_builder_not_null_def_arena_not_null_refinement_key_arena(
     def_arena: Handle<DefArena>,
     key_arena: Handle<RefinementKeyArena>,
   ) -> Self {

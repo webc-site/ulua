@@ -51,7 +51,7 @@ impl<'ctx> AstVisitor for LintDuplicateCondition<'ctx> {
 
 // —— 原 methods/lint_duplicate_condition_detect_duplicates.rs ——
 impl<'ctx> LintDuplicateCondition<'ctx> {
-  pub fn detect_duplicates(&mut self, conditions: &[*mut AstExpr]) {
+  fn detect_duplicates(&mut self, conditions: &[*mut AstExpr]) {
     const K_MAX_DISTANCE: usize = 5;
     // K_MAX_DISTANCE 窗口内比较是否重复
     for (i, &cur_cond) in conditions.iter().enumerate() {

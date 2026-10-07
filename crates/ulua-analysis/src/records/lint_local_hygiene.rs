@@ -156,7 +156,7 @@ impl<'ctx> LintLocalHygiene<'ctx> {
   /// cpp `reportUnusedLocal(AstLocal*)`：`local` 为分析期存活、由 arena 持有的局部
   /// 节点共享借用（cpp 裸指针形参的 Rust 对应），本方法只读其 `name`/`location`；
   /// 告警经 `self.context` 写句柄发出。
-  pub fn report_unused_local(&mut self, local: &AstLocal, info: &Local) {
+  fn report_unused_local(&mut self, local: &AstLocal, info: &Local) {
     let name = local.name;
     let bytes = name.as_bytes();
     if bytes.is_empty() || bytes[0] == b'_' {
@@ -187,7 +187,7 @@ impl<'ctx> LintLocalHygiene<'ctx> {
   /// 持有的局部节点共享借用（cpp 裸指针形参的 Rust 对应），本方法只读其 `shadow`/
   /// `name`/`location`/`function_depth` 字段；`info` 为同一条目的值拷贝，仅参与
   /// `defined`/`function` 比较。告警经 `self.context` 写句柄发出。
-  pub fn report_used_local(&mut self, local: &AstLocal, info: &Local) {
+  fn report_used_local(&mut self, local: &AstLocal, info: &Local) {
     let mut handle = self.context;
     let context = handle.get();
     let shadow = local.shadow;

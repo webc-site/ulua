@@ -177,7 +177,7 @@ impl<'a> ErrorConverter<'a> {
     }
   }
 
-  pub fn operator_call_40(&self, tm: &TypeMismatch) -> String {
+  fn operator_call_40(&self, tm: &TypeMismatch) -> String {
     let given_type_name = to_string_type_id(tm.given_type);
     let wanted_type_name = to_string_type_id(tm.wanted_type);
 
@@ -296,11 +296,11 @@ impl<'a> ErrorConverter<'a> {
     result
   }
 
-  pub fn operator_call_28(&self, e: &IllegalRequire) -> String {
+  fn operator_call_28(&self, e: &IllegalRequire) -> String {
     format!("Cannot require module {}: {}", e.module_name(), e.reason())
   }
 
-  pub fn operator_call_31(&self, e: &MissingProperties) -> String {
+  fn operator_call_31(&self, e: &MissingProperties) -> String {
     let sub_type_str = to_string_type_id(e.sub_type());
     let super_type_str = to_string_type_id(e.super_type());
 
@@ -345,11 +345,11 @@ impl<'a> ErrorConverter<'a> {
     s
   }
 
-  pub fn operator_call_21(&self, e: &DuplicateGenericParameter) -> String {
+  fn operator_call_21(&self, e: &DuplicateGenericParameter) -> String {
     format!("Duplicate type parameter '{}'", e.parameter_name())
   }
 
-  pub fn operator_call_16(&self, e: &CannotInferBinaryOperation) -> String {
+  fn operator_call_16(&self, e: &CannotInferBinaryOperation) -> String {
     // 让位：条件分支累加，真需 owned。
     let mut result = String::from("Unknown type used in ");
     result.push_str(to_str(e.op()));
@@ -372,7 +372,7 @@ impl<'a> ErrorConverter<'a> {
     result
   }
 
-  pub fn operator_call_38(&self, e: &SwappedGenericTypeParameter) -> String {
+  fn operator_call_38(&self, e: &SwappedGenericTypeParameter) -> String {
     match e.kind {
       SwappedGenericTypeParameter::TYPE => format!(
         "Variadic type parameter '{}...' is used as a regular generic type; consider changing '{}...' to '{}' in the generic argument list",
@@ -385,12 +385,12 @@ impl<'a> ErrorConverter<'a> {
     }
   }
 
-  pub fn operator_call_37(&self, e: &OptionalValueAccess) -> String {
+  fn operator_call_37(&self, e: &OptionalValueAccess) -> String {
     let ty = to_string_type_id(e.optional);
     format!("Value of type '{ty}' could be nil")
   }
 
-  pub fn operator_call_32(&self, e: &MissingUnionProperty) -> String {
+  fn operator_call_32(&self, e: &MissingUnionProperty) -> String {
     // 让位：SepWriter 循环累加，真需 owned。
     let mut ss = String::from("Key '");
     ss.push_str(e.key());
@@ -410,7 +410,7 @@ impl<'a> ErrorConverter<'a> {
     ss
   }
 
-  pub fn operator_call_55(&self, e: &TypesAreUnrelated) -> String {
+  fn operator_call_55(&self, e: &TypesAreUnrelated) -> String {
     let opts = ToStringOptions::default();
     let left_str = to_string_type_id_to_string_options_mut(e.left, opts);
     let right_str = to_string_type_id(e.right);
@@ -420,7 +420,7 @@ impl<'a> ErrorConverter<'a> {
     )
   }
 
-  pub fn operator_call_48(&self, _error: &NormalizationTooComplex) -> String {
+  fn operator_call_48(&self, _error: &NormalizationTooComplex) -> String {
     String::from("Code is too complex to typecheck! Consider simplifying the code around this area")
   }
 
@@ -437,13 +437,13 @@ impl<'a> ErrorConverter<'a> {
     ss
   }
 
-  pub fn operator_call_7(&self, e: &DynamicPropertyLookupOnExternTypesUnsafe) -> String {
+  fn operator_call_7(&self, e: &DynamicPropertyLookupOnExternTypesUnsafe) -> String {
     "Attempting a dynamic property access on type '".to_owned()
       + &to_string_type_id(e.ty)
       + "' is unsafe and may cause exceptions at runtime"
   }
 
-  pub fn operator_call_60(&self, e: &UninhabitedTypeFunction) -> String {
+  fn operator_call_60(&self, e: &UninhabitedTypeFunction) -> String {
     let Some(tfit_ref) = get_type::get::<TypeFunctionInstanceType>(e.ty) else {
       LUAU_ASSERT!(false);
       return format!(
@@ -581,7 +581,7 @@ impl<'a> ErrorConverter<'a> {
     )
   }
 
-  pub fn operator_call_8(&self, e: &ExplicitFunctionAnnotationRecommended) -> String {
+  fn operator_call_8(&self, e: &ExplicitFunctionAnnotationRecommended) -> String {
     let recommended_return = to_string_type_id(e.recommended_return());
     let mut buf = String::new();
     {
@@ -601,28 +601,28 @@ impl<'a> ErrorConverter<'a> {
     }
   }
 
-  pub fn operator_call_61(&self, e: &UninhabitedTypePackFunction) -> String {
+  fn operator_call_61(&self, e: &UninhabitedTypePackFunction) -> String {
     format!(
       "Type pack function instance {} is uninhabited",
       to_string_type_pack_id(e.tp)
     )
   }
 
-  pub fn operator_call_63(&self, e: &WhereClauseNeeded) -> String {
+  fn operator_call_63(&self, e: &WhereClauseNeeded) -> String {
     let ty = format!("{:?}", e.ty);
     format!(
       "Type function instance {ty} depends on generic function parameters but does not appear in the function signature; this construct cannot be type-checked at this time"
     )
   }
 
-  pub fn operator_call_49(&self, e: &PackWhereClauseNeeded) -> String {
+  fn operator_call_49(&self, e: &PackWhereClauseNeeded) -> String {
     let tp = format!("{:?}", e.tp);
     format!(
       "Type pack function instance {tp} depends on generic function parameters but does not appear in the function signature; this construct cannot be type-checked at this time"
     )
   }
 
-  pub fn operator_call_5(&self, e: &CheckedFunctionCallError) -> String {
+  fn operator_call_5(&self, e: &CheckedFunctionCallError) -> String {
     format!(
       "the function '{}' expects to get a {} as its {} argument, but is being given a {}",
       e.checked_function_name(),
@@ -632,7 +632,7 @@ impl<'a> ErrorConverter<'a> {
     )
   }
 
-  pub fn operator_call_47(&self, e: &NonStrictFunctionDefinitionError) -> String {
+  fn operator_call_47(&self, e: &NonStrictFunctionDefinitionError) -> String {
     let mut result = String::new();
     if !e.function_name().is_empty() {
       result.push_str("in the function '");
@@ -645,7 +645,7 @@ impl<'a> ErrorConverter<'a> {
     result
   }
 
-  pub fn operator_call_50(&self, e: &PropertyAccessViolation) -> String {
+  fn operator_call_50(&self, e: &PropertyAccessViolation) -> String {
     let mut chars = e.key().chars();
     let is_identifier_key = chars
       .next()
@@ -694,32 +694,32 @@ impl<'a> ErrorConverter<'a> {
     )
   }
 
-  pub fn operator_call_58(&self, e: &UnexpectedTypeInSubtyping) -> String {
+  fn operator_call_58(&self, e: &UnexpectedTypeInSubtyping) -> String {
     let ty = to_string_type_id(e.ty);
     format!("Encountered an unexpected type in subtyping: {ty}")
   }
 
-  pub fn operator_call_59(&self, e: &UnexpectedTypePackInSubtyping) -> String {
+  fn operator_call_59(&self, e: &UnexpectedTypePackInSubtyping) -> String {
     let tp_str = to_string_type_pack_id(e.tp);
     format!("Encountered an unexpected type pack in subtyping: {tp_str}")
   }
 
-  pub fn operator_call_62(&self, e: &UserDefinedTypeFunctionError) -> String {
+  fn operator_call_62(&self, e: &UserDefinedTypeFunctionError) -> String {
     String::from(e.message())
   }
 
-  pub fn operator_call_2(&self, e: &BuiltInTypeFunctionError) -> String {
+  fn operator_call_2(&self, e: &BuiltInTypeFunctionError) -> String {
     to_string_type_function_error(&e.error)
   }
 
-  pub fn operator_call_52(&self, e: &ReservedIdentifier) -> String {
+  fn operator_call_52(&self, e: &ReservedIdentifier) -> String {
     format!(
       "{} cannot be used as an identifier for a type function or alias",
       e.name()
     )
   }
 
-  pub fn operator_call_3(&self, e: &CannotAssignToNever) -> String {
+  fn operator_call_3(&self, e: &CannotAssignToNever) -> String {
     let opts = ToStringOptions::default();
     let rhs_type_str = to_string_type_id_to_string_options_mut(e.rhs_type(), opts);
     let mut result =
@@ -740,7 +740,7 @@ impl<'a> ErrorConverter<'a> {
     result
   }
 
-  pub fn operator_call_45(&self, e: &UnknownSymbol) -> String {
+  fn operator_call_45(&self, e: &UnknownSymbol) -> String {
     match e.context() {
       UnknownSymbolContext::Binding => {
         format!(
@@ -755,44 +755,44 @@ impl<'a> ErrorConverter<'a> {
     // If a new context variant is added, compilation will fail due to non-exhaustive match.
   }
 
-  pub fn operator_call_57(&self, _error: &UnexpectedArrayLikeTableItem) -> String {
+  fn operator_call_57(&self, _error: &UnexpectedArrayLikeTableItem) -> String {
     String::from(
       "Unexpected array-like table item: the indexer key type of this table is not `number`.",
     )
   }
 
-  pub fn operator_call_4(&self, _e: &CannotCheckDynamicStringFormatCalls) -> String {
+  fn operator_call_4(&self, _e: &CannotCheckDynamicStringFormatCalls) -> String {
     String::from(
       "We cannot statically check the type of `string.format` when called with a format string that is not statically known.\nIf you'd like to use an unchecked `string.format` call, you can cast the format string to `any` using `:: any`.",
     )
   }
 
-  pub fn operator_call_10(&self, e: &GenericTypeCountMismatch) -> String {
+  fn operator_call_10(&self, e: &GenericTypeCountMismatch) -> String {
     format!(
       "Different number of generic type parameters: subtype had {}, supertype had {}.",
       e.sub_ty_generic_count, e.super_ty_generic_count
     )
   }
 
-  pub fn operator_call_11(&self, e: &GenericTypePackCountMismatch) -> String {
+  fn operator_call_11(&self, e: &GenericTypePackCountMismatch) -> String {
     format!(
       "Different number of generic type pack parameters: subtype had {}, supertype had {}.",
       e.sub_ty_generic_pack_count, e.super_ty_generic_pack_count
     )
   }
 
-  pub fn operator_call_46(&self, e: &MultipleNonviableOverloads) -> String {
+  fn operator_call_46(&self, e: &MultipleNonviableOverloads) -> String {
     format!(
       "None of the overloads for function that accept {} arguments are compatible.",
       e.attempted_arg_count
     )
   }
 
-  pub fn operator_call_51(&self, _e: &RecursiveRestraintViolation) -> String {
+  fn operator_call_51(&self, _e: &RecursiveRestraintViolation) -> String {
     String::from("Recursive type being used with different parameters.")
   }
 
-  pub fn operator_call_9(&self, e: &GenericBoundsMismatch) -> String {
+  fn operator_call_9(&self, e: &GenericBoundsMismatch) -> String {
     let mut lower_bounds = String::new();
     {
       let mut writer = SepWriter::new(&mut lower_bounds, " | ");
@@ -814,7 +814,7 @@ impl<'a> ErrorConverter<'a> {
     )
   }
 
-  pub fn operator_call_12(&self, e: &InstantiateGenericsOnNonFunction) -> String {
+  fn operator_call_12(&self, e: &InstantiateGenericsOnNonFunction) -> String {
     match e.interesting_edge_case {
       InstantiateGenericsOnNonFunction::NONE => {
         String::from("Cannot instantiate type parameters on something without type parameters.")
@@ -833,7 +833,7 @@ impl<'a> ErrorConverter<'a> {
     }
   }
 
-  pub fn operator_call_53(&self, e: &TypeInstantiationCountMismatch) -> String {
+  fn operator_call_53(&self, e: &TypeInstantiationCountMismatch) -> String {
     LUAU_ASSERT!(
       e.provided_types() > e.maximum_types() || e.provided_type_packs() > e.maximum_type_packs()
     );
@@ -884,7 +884,7 @@ impl<'a> ErrorConverter<'a> {
     result
   }
 
-  pub fn operator_call_56(&self, _e: &UnappliedTypeFunction) -> String {
+  fn operator_call_56(&self, _e: &UnappliedTypeFunction) -> String {
     String::from("Type functions always require `<>` when referenced.")
   }
 
@@ -898,7 +898,7 @@ impl<'a> ErrorConverter<'a> {
   }
 
   /// C++ `ErrorConverter::operator()(const UninitializedFieldAccess&)`（`Error.cpp:1025-1033`）。
-  pub fn operator_call_64(&self, e: &UninitializedFieldAccess) -> String {
+  fn operator_call_64(&self, e: &UninitializedFieldAccess) -> String {
     match &e.field_name {
       Some(field) => {
         format!("Access to field '{field}' of self before it has been initialized")
@@ -908,7 +908,7 @@ impl<'a> ErrorConverter<'a> {
   }
 
   /// C++ `ErrorConverter::operator()(const TypeAnnotationRequired&)`（`Error.cpp:1035-1044`）。
-  pub fn operator_call_65(&self, e: &TypeAnnotationRequired) -> String {
+  fn operator_call_65(&self, e: &TypeAnnotationRequired) -> String {
     let mut opts = ToStringOptions {
       function_type_arguments: true,
       ignore_synthetic_name: true,
@@ -922,7 +922,7 @@ impl<'a> ErrorConverter<'a> {
     }
   }
 
-  pub fn operator_call_43(&self, e: &UnknownProperty) -> String {
+  fn operator_call_43(&self, e: &UnknownProperty) -> String {
     let t = follow_type::follow(e.table);
     if get_type::get::<TableType>(t).is_none() {
       if get_type::get::<ExternType>(t).is_none() {
@@ -947,12 +947,12 @@ impl<'a> ErrorConverter<'a> {
     }
   }
 
-  pub fn operator_call_34(&self, e: &NotATable) -> String {
+  fn operator_call_34(&self, e: &NotATable) -> String {
     let ty = to_string_type_id(e.ty);
     format!("Expected type table, got '{ty}' instead")
   }
 
-  pub fn operator_call_15(&self, e: &CannotExtendTable) -> String {
+  fn operator_call_15(&self, e: &CannotExtendTable) -> String {
     let table = to_string_type_id(e.table_type());
     match e.context() {
       CannotExtendTableContext::Property => {
@@ -963,7 +963,7 @@ impl<'a> ErrorConverter<'a> {
     }
   }
 
-  pub fn operator_call_14(&self, e: &CannotCompareUnrelatedTypes) -> String {
+  fn operator_call_14(&self, e: &CannotCompareUnrelatedTypes) -> String {
     let left_str = to_string_type_id(e.left);
     let right_str = to_string_type_id(e.right);
     let op_str = to_str(e.op);
@@ -973,11 +973,11 @@ impl<'a> ErrorConverter<'a> {
     )
   }
 
-  pub fn operator_call_36(&self, e: &OnlyTablesCanHaveMethods) -> String {
+  fn operator_call_36(&self, e: &OnlyTablesCanHaveMethods) -> String {
     format!("Cannot add method to non-table type '{:?}'", e.table_type)
   }
 
-  pub fn operator_call_22(&self, e: &DuplicateTypeDefinition) -> String {
+  fn operator_call_22(&self, e: &DuplicateTypeDefinition) -> String {
     match e.previous_location() {
       Some(previous_location) => format!(
         "Redefinition of type '{}', previously defined at line {}",
@@ -988,7 +988,7 @@ impl<'a> ErrorConverter<'a> {
     }
   }
 
-  pub fn operator_call_19(&self, e: &CountMismatch) -> String {
+  fn operator_call_19(&self, e: &CountMismatch) -> String {
     let expected_s = if e.expected == 1 { "" } else { "s" };
     let actual_verb = if e.actual == 1 { "is" } else { "are" };
 
@@ -1045,21 +1045,21 @@ impl<'a> ErrorConverter<'a> {
     }
   }
 
-  pub fn operator_call_24(&self, _: &FunctionDoesNotTakeSelf) -> String {
+  fn operator_call_24(&self, _: &FunctionDoesNotTakeSelf) -> String {
     String::from("This function does not take self. Did you mean to use a dot instead of a colon?")
   }
 
-  pub fn operator_call_26(&self, _e: &FunctionRequiresSelf) -> String {
+  fn operator_call_26(&self, _e: &FunctionRequiresSelf) -> String {
     String::from(
       "This function must be called with self. Did you mean to use a colon instead of a dot?",
     )
   }
 
-  pub fn operator_call_35(&self, _: &OccursCheckFailed) -> String {
+  fn operator_call_35(&self, _: &OccursCheckFailed) -> String {
     String::from("Type contains a self-recursive construct that cannot be resolved")
   }
 
-  pub fn operator_call_44(&self, e: &UnknownRequire) -> String {
+  fn operator_call_44(&self, e: &UnknownRequire) -> String {
     if e.module_path().is_empty() {
       String::from("Unknown require: unsupported path")
     } else {
@@ -1067,7 +1067,7 @@ impl<'a> ErrorConverter<'a> {
     }
   }
 
-  pub fn operator_call_29(&self, e: &IncorrectGenericParameterCount) -> String {
+  fn operator_call_29(&self, e: &IncorrectGenericParameterCount) -> String {
     let mut name = e.name.clone();
     let opts = ToStringOptions::default();
 
@@ -1121,21 +1121,21 @@ impl<'a> ErrorConverter<'a> {
     )
   }
 
-  pub fn operator_call_39(&self, e: &SyntaxError) -> String {
+  fn operator_call_39(&self, e: &SyntaxError) -> String {
     String::from(e.message())
   }
 
-  pub fn operator_call_17(&self, _error: &CodeTooComplex) -> String {
+  fn operator_call_17(&self, _error: &CodeTooComplex) -> String {
     String::from("Code is too complex to typecheck! Consider simplifying the code around this area")
   }
 
-  pub fn operator_call_41(&self, _: &UnificationTooComplex) -> String {
+  fn operator_call_41(&self, _: &UnificationTooComplex) -> String {
     String::from(
       "Internal error: Code is too complex to typecheck! Consider adding type annotations around this area",
     )
   }
 
-  pub fn operator_call_42(&self, e: &UnknownPropButFoundLikeProp) -> String {
+  fn operator_call_42(&self, e: &UnknownPropButFoundLikeProp) -> String {
     // 让位：条件分支+SepWriter 循环累加，真需 owned。
     let mut candidates_suggestion = String::from("Did you mean ");
     if e.candidates().len() != 1 {
@@ -1170,21 +1170,21 @@ impl<'a> ErrorConverter<'a> {
     s
   }
 
-  pub fn operator_call_27(&self, e: &GenericError) -> String {
+  fn operator_call_27(&self, e: &GenericError) -> String {
     String::from(e.message())
   }
 
-  pub fn operator_call_30(&self, e: &InternalError) -> String {
+  fn operator_call_30(&self, e: &InternalError) -> String {
     String::from(e.message())
   }
 
-  pub fn operator_call_18(&self, _e: &ConstraintSolvingIncompleteError) -> String {
+  fn operator_call_18(&self, _e: &ConstraintSolvingIncompleteError) -> String {
     String::from(
       "Type inference failed to complete, you may see some confusing types and type errors.",
     )
   }
 
-  pub fn operator_call_13(&self, e: &CannotCallNonFunction) -> String {
+  fn operator_call_13(&self, e: &CannotCallNonFunction) -> String {
     let t = follow_type::follow(e.ty);
 
     if let Some(union_ty) = get_type::get::<UnionType>(t) {
@@ -1227,18 +1227,18 @@ impl<'a> ErrorConverter<'a> {
     format!("Cannot call a value of type {}", to_string_type_id(e.ty))
   }
 
-  pub fn operator_call_23(&self, e: &ExtraInformation) -> String {
+  fn operator_call_23(&self, e: &ExtraInformation) -> String {
     String::from(e.message())
   }
 
-  pub fn operator_call_20(&self, e: &DeprecatedApiUsed) -> String {
+  fn operator_call_20(&self, e: &DeprecatedApiUsed) -> String {
     format!(
       "The property .{} is deprecated.  Use .{} instead.",
       e.symbol, e.use_instead
     )
   }
 
-  pub fn operator_call_33(&self, e: &ModuleHasCyclicDependency) -> String {
+  fn operator_call_33(&self, e: &ModuleHasCyclicDependency) -> String {
     if e.cycle().is_empty() {
       return String::from("Cyclic module dependency detected");
     }
@@ -1259,7 +1259,7 @@ impl<'a> ErrorConverter<'a> {
     s
   }
 
-  pub fn operator_call_25(&self, e: &FunctionExitsWithoutReturning) -> String {
+  fn operator_call_25(&self, e: &FunctionExitsWithoutReturning) -> String {
     let expected_type_str = to_string_type_pack_id(e.expected_return_type);
     format!(
       "Not all codepaths in this function return '{}'.",

@@ -246,7 +246,7 @@ pub fn remove_use(function: &mut IrFunction, op: IrOp) {
   }
 }
 
-pub fn remove_inst_use(function: &mut IrFunction, inst_idx: u32) {
+fn remove_inst_use(function: &mut IrFunction, inst_idx: u32) {
   let inst = &mut function.instructions[inst_idx as usize];
 
   CODEGEN_ASSERT!(inst.use_count != 0);
@@ -259,7 +259,7 @@ pub fn remove_inst_use(function: &mut IrFunction, inst_idx: u32) {
   }
 }
 
-pub fn remove_block_use(function: &mut IrFunction, block_idx: u32) {
+fn remove_block_use(function: &mut IrFunction, block_idx: u32) {
   let block = &mut function.blocks[block_idx as usize];
 
   CODEGEN_ASSERT!(block.use_count != 0);

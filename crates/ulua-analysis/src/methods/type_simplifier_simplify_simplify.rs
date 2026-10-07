@@ -16,7 +16,7 @@ impl TypeSimplifier {
     self.simplify_type_id_dense_hash_set_type_id(ty, &mut seen)
   }
 
-  pub fn simplify_type_id_dense_hash_set_type_id(
+  fn simplify_type_id_dense_hash_set_type_id(
     &mut self,
     ty: TypeId,
     seen: &mut DenseHashSet<TypeId>,

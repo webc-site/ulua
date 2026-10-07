@@ -51,7 +51,7 @@ impl Normalizer {
     }
   }
 
-  pub fn is_intersection_inhabited_type_id_type_id_seen_table_prop_pairs_set_type_id(
+  fn is_intersection_inhabited_type_id_type_id_seen_table_prop_pairs_set_type_id(
     &mut self,
     left: TypeId,
     right: TypeId,

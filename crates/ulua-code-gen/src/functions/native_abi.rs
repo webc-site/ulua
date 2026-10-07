@@ -18,8 +18,8 @@ pub fn get_current_abi() -> ABIX64 {
   }
 }
 
-pub const K_SYSTEM_VUSABLE_XMM_REGS: u8 = 16;
-pub const K_WINDOWS_USABLE_XMM_REGS: u8 = 10;
+const K_SYSTEM_VUSABLE_XMM_REGS: u8 = 16;
+const K_WINDOWS_USABLE_XMM_REGS: u8 = 10;
 
 #[inline]
 pub fn get_xmm_register_count(abi: ABIX64) -> u8 {
