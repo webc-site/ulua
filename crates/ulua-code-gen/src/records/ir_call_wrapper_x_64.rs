@@ -399,18 +399,11 @@ impl IrCallWrapperX64 {
   }
 
   pub fn new(regs: &mut IrRegAllocX64, build: &mut AssemblyBuilderX64, inst_idx: u32) -> Self {
-    let mut wrapper = Self {
+    Self {
       regs: regs as *mut IrRegAllocX64,
       build: build as *mut AssemblyBuilderX64,
       inst_idx,
-      args: [
-        CallArgument::default(),
-        CallArgument::default(),
-        CallArgument::default(),
-        CallArgument::default(),
-        CallArgument::default(),
-        CallArgument::default(),
-      ],
+      args: [CallArgument::default(); Self::K_MAX_CALL_ARGUMENTS as usize],
       arg_count: 0,
       gpr_pos: 0,
       xmm_pos: 0,
@@ -419,12 +412,7 @@ impl IrCallWrapperX64 {
       result_inst_idx: 0,
       gpr_uses: [0u8; 16],
       xmm_uses: [0u8; 16],
-    };
-
-    wrapper.gpr_uses.fill(0);
-    wrapper.xmm_uses.fill(0);
-
-    wrapper
+    }
   }
 
   /// 将参数值搬运到目标位置（寄存器/栈槽）。

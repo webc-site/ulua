@@ -250,7 +250,6 @@ fn assembly_builder_a_64_conditionals() {
 #[test]
 fn assembly_builder_a_64_constants() {
   use alloc::vec::Vec;
-  use core::ffi::c_void;
 
   use ulua_code_gen::records::{
     assembly_builder_a_64::AssemblyBuilderA64, register_a_64::RegisterA64 as R,
@@ -262,8 +261,7 @@ fn assembly_builder_a_64_constants() {
   let mut build = AssemblyBuilderA64::new(false, 0);
 
   let arr: [u8; 12] = *b"hello world\0";
-  let ptr = arr.as_ptr() as *const c_void;
-  build.adr_ptr(R::X0, ptr, 12);
+  build.adr_data(R::X0, &arr);
 
   build.adr_u64(R::X0, 0x1234567887654321u64);
 
@@ -280,8 +278,7 @@ fn assembly_builder_a_64_constants() {
   let result = fixture.check(
     |b| {
       let arr: [u8; 12] = *b"hello world\0";
-      let ptr = arr.as_ptr() as *const c_void;
-      b.adr_ptr(R::X0, ptr, 12);
+      b.adr_data(R::X0, &arr);
       b.adr_u64(R::X0, 0x1234567887654321u64);
       b.adr_f64(R::X0, 1.0f64);
     },

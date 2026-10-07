@@ -150,7 +150,7 @@ pub(crate) fn try_translate_call_inline(
   // Safety: callee 为 caller proto `p[]` 数组内存活子原型（静态路径契约同
   // `translate_inst_new_closure`）或观测窗口内被 ra 槽闭包锚定的存活 proto
   // （同步暖重编译触发，见 call_obs 模块注），codegen 期间 VM 持有、只读。
-  unsafe { trial.build_function_ir(callee_proto) };
+  trial.build_function_ir(unsafe { &*callee_proto });
 
   let trial_function = trial.function;
   if inline_ir_veto(&trial_function, callee_proto).is_some() {

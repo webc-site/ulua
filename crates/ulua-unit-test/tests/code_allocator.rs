@@ -407,7 +407,7 @@ fn code_allocator_generated_code_execution_a64() {
 
   #[cfg(target_arch = "aarch64")]
   {
-    use core::{ffi::c_int, mem};
+    use core::ffi::c_int;
 
     use ulua_code_gen::{
       records::{
@@ -427,11 +427,7 @@ fn code_allocator_generated_code_execution_a64() {
     build.set_label_label(&mut skip);
 
     let one = 1_u8;
-    build.adr_ptr(
-      RegisterA64::X2,
-      (&one as *const u8).cast(),
-      mem::size_of_val(&one),
-    );
+    build.adr_value(RegisterA64::X2, &one);
     build.ldrb(RegisterA64::W2, mem(RegisterA64::X2, 0));
     build.sub_rrr_i32(RegisterA64::X1, RegisterA64::X1, RegisterA64::X2, 0);
 

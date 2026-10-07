@@ -37,8 +37,8 @@ use alloc::{boxed::Box, collections::BTreeMap, vec::Vec};
 use core::{
   cmp::Ordering,
   fmt::{self, Debug, Formatter},
-  mem::{size_of_val, transmute},
-  ptr::{addr_of, null_mut},
+  mem::{size_of, transmute},
+  ptr::{addr_of, from_ref, null_mut},
   slice::from_raw_parts,
   sync::atomic::{AtomicU64, Ordering as AtomicOrdering},
 };
@@ -60,6 +60,7 @@ use ulua_vm::{
 use crate::{
   functions::{
     get_code_gen_context::get_code_gen_context,
+    proto_views::constants,
     trace_forn_codegen_a_64::emit_trace_a_64,
     trace_forn_ir::{
       TArith, TInst, TMathUnary, TUpval, TUpvalKind, TVal, TraceIr, forn_body_eligible,
@@ -187,188 +188,210 @@ enum Guard {
   Refuse,
 }
 
+/// 活跃帧槽只读视图（派发环契约：`l.base+s` 落在活跃帧槽域内且槽值存活；
+/// 返回寿命锚定 `l` 的借用——活跃帧随 state 存活，保守于实际寿命）。
+#[inline]
+fn frame_slot<'a>(l: &'a LuaState, s: u8) -> &'a TValue {
+  // Safety: 派发环契约保证 l.base 指向活跃帧槽域，`s` 为该域合法下标。
+  unsafe { &*l.base.add(usize::from(s)) }
+}
+
+/// Lua 闭包 upref 槽只读视图（`inner.l.uprefs` 为 C 柔性数组，随 Closure 过分配）。
+///
+/// 契约：`idx < cl.nupvalues`（调用点先做防御校验）。
+#[inline]
+fn upref_slot(cl: &Closure, idx: u8) -> &TValue {
+  // Safety: uprefs 为柔性数组语义（luaF_newLClosure 按 nupvalues 过分配布局保证），
+  // idx 已由调用点对 nupvalues 校验界内。
+  unsafe { &*addr_of!(cl.inner.l.uprefs).cast::<TValue>().add(usize::from(idx)) }
+}
+
 /// 入口守卫（Rust 侧，拒绝路径零状态扰动；逐迭代守卫在生成码内）。
 ///
-/// # Safety
-/// `l`/`proto` 为解释器派发环契约的存活指针；三元组数值性由调用点
+/// `l`/`proto` 为解释器派发环契约的存活对象；三元组数值性由调用点
 /// （h_fornprep 数值判定通过）保证，此处仍防御性复核。
-unsafe fn entry_guard(l: *mut LuaState, e: &InstalledTrace, proto: *mut Proto) -> Guard {
-  // Safety: 函数契约（解释器派发环存活性），裸指针解引用统一收口本块
-  unsafe {
-    // 中断钩子在场 → 不承接（解释器逐迭代处理 VM_INTERRUPT/钩子）
-    let global: *mut global_State = (*l).global;
-    if global.is_null() || (*global).cb.interrupt.is_some() {
+fn entry_guard(l: &LuaState, e: &InstalledTrace, proto: &Proto) -> Guard {
+  // 中断钩子在场 → 不承接（解释器逐迭代处理 VM_INTERRUPT/钩子）
+  if l.global.is_null() {
+    return Guard::Refuse;
+  }
+  // Safety: global 为派发环契约下的存活全局态（上方判空收口）
+  let global: &global_State = unsafe { &*l.global };
+  if global.cb.interrupt.is_some() {
+    return Guard::Refuse;
+  }
+  // GETIMPORT 安全双守卫：safeenv != 0（环境对 import 安全）+ k[D] 非
+  // nil（import 缓存已解析）——任一不成立即拒绝（解释器 GETIMPORT 慢路
+  // 解析并写 k[D] 缓存，后续入口自然命中）。环体无调用无赋值，safeenv
+  // 与缓存跨环不变，入口一次判定即覆盖全环
+  let closure = if !e.imports.is_empty() || !e.upvals.is_empty() {
+    // Safety: l 派发环契约存活，ci 指向活跃调用帧，func 为该帧闭包槽
+    let func = unsafe { &*(*l.ci).func };
+    if !func.is_function() {
       return Guard::Refuse;
     }
-    // GETIMPORT 安全双守卫：safeenv != 0（环境对 import 安全）+ k[D] 非
-    // nil（import 缓存已解析）——任一不成立即拒绝（解释器 GETIMPORT 慢路
-    // 解析并写 k[D] 缓存，后续入口自然命中）。环体无调用无赋值，safeenv
-    // 与缓存跨环不变，入口一次判定即覆盖全环
-    let closure = if !e.imports.is_empty() || !e.upvals.is_empty() {
-      let closure = (*(*l).ci).func;
-      if !(*closure).is_function() {
+    // Safety: is_function() 命中后 as_closure 为同址类型化读（tag 契约）
+    let cl: &Closure = unsafe { func.as_closure() };
+    if !e.imports.is_empty() {
+      // Safety: env 为闭包构造接线的存活 LuaTable（GC 强可达）
+      if unsafe { &*cl.env }.safeenv == 0 {
         return Guard::Refuse;
       }
-      // Safety: is_closure() 谓词命中后 as_closure_ptr 为同址类型化读
-      let cl = (*closure).as_closure_ptr();
-      if !e.imports.is_empty() && (*(*cl).env).safeenv == 0 {
+    }
+    Some(cl)
+  } else {
+    None
+  };
+  if !e.imports.is_empty() {
+    let k = constants(proto);
+    for &(_, kidx) in &e.imports {
+      let Some(kv) = k.get(kidx as usize) else {
+        return Guard::Refuse;
+      };
+      if kv.is_nil() {
         return Guard::Refuse;
       }
-      Some(cl)
+    }
+  }
+  // upvalue 形态/值面复检（T8）：cell 源逐入口重解——真 UpVal 的 cell =
+  // (*uv).v（open→栈槽 / closed→storage，双态统一指针语义，态迁移只在
+  // 调用/返回/CLOSEUPVAL 发生、均不在环体内，逐入口重解即自然消费）；
+  // LCT_VAL 值内联 upref 的 cell 源 = upref 本体。upref 形态由 proto 捕获
+  // 描述符决定、跨入口稳定，此处复核防形态失配的生成码错位
+  if let Some(cl) = closure {
+    for uv in &e.upvals {
+      if usize::from(uv.idx) >= usize::from(cl.nupvalues) {
+        return Guard::Refuse;
+      }
+      let ur = upref_slot(cl, uv.idx);
+      let is_uv = ur.is_upval();
+      if is_uv != uv.cell {
+        return Guard::Refuse; // 生成码 prologue 形态锁定面
+      }
+      // cell 源 TValue：真 UpVal 经 v 指针解引（open/closed 双态统一），
+      // 值内联 upref 即本体
+      let src: *const TValue = if is_uv {
+        // Safety: ur 的 is_upval() 已命中 → value.gc 臂有效且指向存活
+        // UpVal（GC 强可达）；v 为其 open/closed 双态槽指针。
+        unsafe { ur.value.gc.cast::<UpVal>().as_ref() }
+          .map_or(core::ptr::null(), |uv| uv.v.cast_const())
+      } else {
+        core::ptr::from_ref(ur)
+      };
+      // Safety: cell 源为闭包 upref 体系内的存活 TValue（GC 强可达）
+      let tv = unsafe { &*src };
+      match uv.kind {
+        TUpvalKind::Cfn(kind) => {
+          // fn 载体真值源是 cell（槽值是上次 GETUPVAL 的脏快照）——按
+          // cell 复检 (种)，防环外重绑定后错特化
+          if !tv.is_function() || slot_math_fn(unsafe { &*src }) != Some(kind) {
+            return Guard::Refuse;
+          }
+        }
+        TUpvalKind::Num if uv.mutated => {
+          // 变更载体值面由生成码逐访问 tag 守卫收口（非 number 即 bail
+          // 回解释器），入口只钉形态
+        }
+        TUpvalKind::Num => {
+          // 只读内联：值装载进 prologue 保留临时，非 number 拒承（解释器
+          // 承接任意类型读）
+          if !tv.is_number() {
+            return Guard::Refuse;
+          }
+        }
+      }
+    }
+  }
+  // math 内建守卫槽复检：跨入口该局部可能被重赋值，特化环按槽拒承
+  for &(s, kind) in &e.math_fn_guards {
+    let tv = frame_slot(l, s);
+    if !tv.is_function() || slot_math_fn(tv) != Some(kind) {
+      return Guard::Refuse;
+    }
+  }
+  // 直读三元组（h_fornprep 数值判定通过后的防御复核）
+  let triple = |i: u8| -> Option<f64> {
+    let tv = frame_slot(l, i);
+    if tv.is_number() {
+      // Safety: tt==tnumber 保证 value 联合体 n 臂有效
+      Some(unsafe { tv.value.n })
     } else {
       None
-    };
-    if !e.imports.is_empty() {
-      let k = (*proto).k;
-      for &(_, kidx) in &e.imports {
-        // Safety: kidx 源自录制期 walk 的合法 k 下标（identity 面同源）
-        let kv = &*k.add(kidx as usize);
-        if kv.is_nil() {
-          return Guard::Refuse;
-        }
-      }
     }
-    // upvalue 形态/值面复检（T8）：cell 源逐入口重解——真 UpVal 的 cell =
-    // (*uv).v（open→栈槽 / closed→storage，双态统一指针语义，态迁移只在
-    // 调用/返回/CLOSEUPVAL 发生、均不在环体内，逐入口重解即自然消费）；
-    // LCT_VAL 值内联 upref 的 cell 源 = upref 本体。upref 形态由 proto 捕获
-    // 描述符决定、跨入口稳定，此处复核防形态失配的生成码错位
-    if let Some(cl) = closure {
-      for uv in &e.upvals {
-        if usize::from(uv.idx) >= (*cl).nupvalues as usize {
-          return Guard::Refuse;
-        }
-        // Safety: uprefs 为柔性数组语义（nupvalues 过分配，lua_f_new_lclosure
-        // 布局保证），idx 已防御校验；upref/cell 读取只触 tt/gc 头（外层
-        // unsafe 块契约覆盖）
-        let ur = addr_of!((*cl).inner.l.uprefs).cast::<TValue>();
-        let ur = ur.add(usize::from(uv.idx));
-        let is_uv = (*ur).is_upval();
-        if is_uv != uv.cell {
-          return Guard::Refuse; // 生成码 prologue 形态锁定面
-        }
-        // cell 源 TValue：真 UpVal 经 v 指针解引（open/closed 双态统一），
-        // 值内联 upref 即本体
-        let src: *const TValue = if is_uv {
-          (*(*ur).value.gc.cast::<UpVal>()).v
-        } else {
-          ur
-        };
-        // Safety: cell 源为闭包 upref 体系内的存活 TValue（GC 强可达）
-        let tv = &*src;
-        match uv.kind {
-          TUpvalKind::Cfn(kind) => {
-            // fn 载体真值源是 cell（槽值是上次 GETUPVAL 的脏快照）——按
-            // cell 复检 (种)，防环外重绑定后错特化
-            if !tv.is_function() || slot_math_fn(src) != Some(kind) {
-              return Guard::Refuse;
-            }
-          }
-          TUpvalKind::Num if uv.mutated => {
-            // 变更载体值面由生成码逐访问 tag 守卫收口（非 number 即 bail
-            // 回解释器），入口只钉形态
-          }
-          TUpvalKind::Num => {
-            // 只读内联：值装载进 prologue 保留临时，非 number 拒承（解释器
-            // 承接任意类型读）
-            if !tv.is_number() {
-              return Guard::Refuse;
-            }
-          }
-        }
-      }
-    }
-    // math 内建守卫槽复检：跨入口该局部可能被重赋值，特化环按槽拒承
-    for &(s, kind) in &e.math_fn_guards {
-      // Safety: 录制期 body 引用槽为活跃帧槽域合法下标
-      let tv = &*(*l).base.add(usize::from(s));
-      if !tv.is_function() || slot_math_fn(tv) != Some(kind) {
-        return Guard::Refuse;
-      }
-    }
-    let base = (*l).base;
-    // Safety: 派发环契约保证 base 指向活跃帧槽域，ra..ra+2 为合法槽
-    let triple = |i: u8| -> Option<f64> {
-      let tv = &*base.add(i as usize);
-      if tv.is_number() {
-        // Safety: tt==tnumber 保证 value 联合体 n 臂有效
-        Some(tv.value.n)
-      } else {
-        None
-      }
-    };
-    let Some(limit) = triple(e.ra) else {
-      return Guard::Refuse;
-    };
-    let Some(step) = triple(e.ra + 1) else {
-      return Guard::Refuse;
-    };
-    let Some(idx) = triple(e.ra + 2) else {
-      return Guard::Refuse;
-    };
-    // step 特化：NaN 拒承（解释器 `step > 0.0` 为假走 GE 路、首回合即退，
-    // 拒承同观测）；快 flavor 仅 step==1.0（`idx + step` 与 fadd idx,1.0
-    // 逐位一致）；泛 flavor 接受任意非 NaN step
-    if step.is_nan() || (e.step_one_only && step != 1.0) {
-      return Guard::Refuse;
-    }
-    // idx/limit 整性（整数表示寻址的前提）：快 flavor 沿用 T1 全检（idx
-    // 寻址 + 递增不破整）；泛 flavor 仅 PhiIdx 寻址形态校验 idx 起点整性
-    //（limit/非寻址 idx 只进 fcmp，任意 f64 逐位同解释器）
-    if e.step_one_only {
-      if exact_i32(idx).is_none() || exact_i32(limit).is_none() {
-        return Guard::Refuse;
-      }
-    } else if e.phi_indexed && exact_i32(idx).is_none() {
-      return Guard::Refuse;
-    }
-    // 零跳：与 fornprep_step 的选向式逐位一致——`step > 0 ? idx <= limit
-    // : limit <= idx`，f64 偏序，NaN（partial_cmp 为 None）两向皆假 → 退出
-    let can_iterate = if step > 0.0 {
-      matches!(
-        idx.partial_cmp(&limit),
-        Some(Ordering::Less | Ordering::Equal)
-      )
-    } else {
-      matches!(
-        limit.partial_cmp(&idx),
-        Some(Ordering::Less | Ordering::Equal)
-      )
-    };
-    if !can_iterate {
-      return Guard::ZeroTrip;
-    }
-    // 环不变 table 槽：tag / 元表缺席 / readonly（提至入口，合法性见模块注）
-    for &s in &e.tables {
-      let tv = &*base.add(s as usize);
-      if !tv.is_table() {
-        return Guard::Refuse;
-      }
-      // Safety: tt==ttable 保证 value 联合体 gc 臂有效（栈槽契约）
-      let t = tv.value.gc.cast::<LuaTable>();
-      if !(*t).metatable.is_null() || (*t).readonly != 0 {
-        return Guard::Refuse;
-      }
-    }
-    // 环不变 number 槽与累加器槽：tag 特化守卫
-    for &s in e.inv_nums.iter().chain(e.accs.iter()) {
-      let tv = &*base.add(s as usize);
-      if !tv.is_number() {
-        return Guard::Refuse;
-      }
-    }
-    Guard::Pass
+  };
+  let Some(limit) = triple(e.ra) else {
+    return Guard::Refuse;
+  };
+  let Some(step) = triple(e.ra + 1) else {
+    return Guard::Refuse;
+  };
+  let Some(idx) = triple(e.ra + 2) else {
+    return Guard::Refuse;
+  };
+  // step 特化：NaN 拒承（解释器 `step > 0.0` 为假走 GE 路、首回合即退，
+  // 拒承同观测）；快 flavor 仅 step==1.0（`idx + step` 与 fadd idx,1.0
+  // 逐位一致）；泛 flavor 接受任意非 NaN step
+  if step.is_nan() || (e.step_one_only && step != 1.0) {
+    return Guard::Refuse;
   }
+  // idx/limit 整性（整数表示寻址的前提）：快 flavor 沿用 T1 全检（idx
+  // 寻址 + 递增不破整）；泛 flavor 仅 PhiIdx 寻址形态校验 idx 起点整性
+  //（limit/非寻址 idx 只进 fcmp，任意 f64 逐位同解释器）
+  if e.step_one_only {
+    if exact_i32(idx).is_none() || exact_i32(limit).is_none() {
+      return Guard::Refuse;
+    }
+  } else if e.phi_indexed && exact_i32(idx).is_none() {
+    return Guard::Refuse;
+  }
+  // 零跳：与 fornprep_step 的选向式逐位一致——`step > 0 ? idx <= limit
+  // : limit <= idx`，f64 偏序，NaN（partial_cmp 为 None）两向皆假 → 退出
+  let can_iterate = if step > 0.0 {
+    matches!(
+      idx.partial_cmp(&limit),
+      Some(Ordering::Less | Ordering::Equal)
+    )
+  } else {
+    matches!(
+      limit.partial_cmp(&idx),
+      Some(Ordering::Less | Ordering::Equal)
+    )
+  };
+  if !can_iterate {
+    return Guard::ZeroTrip;
+  }
+  // 环不变 table 槽：tag / 元表缺席 / readonly（提至入口，合法性见模块注）
+  for &s in &e.tables {
+    let tv = frame_slot(l, s);
+    if !tv.is_table() {
+      return Guard::Refuse;
+    }
+    // Safety: tt==ttable 保证 value 联合体 gc 臂有效（栈槽契约）
+    let t = unsafe { tv.value.gc.cast::<LuaTable>().as_ref() };
+    let Some(t) = t else {
+      return Guard::Refuse;
+    };
+    if !t.metatable.is_null() || t.readonly != 0 {
+      return Guard::Refuse;
+    }
+  }
+  // 环不变 number 槽与累加器槽：tag 特化守卫
+  for &s in e.inv_nums.iter().chain(e.accs.iter()) {
+    if !frame_slot(l, s).is_number() {
+      return Guard::Refuse;
+    }
+  }
+  Guard::Pass
 }
 
 /// 直读三元组 step 槽（flavor 锁定用；tnumber 由 h_fornprep 数值判定前置
 /// 保证，录制约询仅在其后可达）。
 ///
-/// # Safety
-/// `l` 为派发环契约存活指针，`ra+1` 为活跃帧合法槽且 tag 为 tnumber。
-unsafe fn read_step(l: *mut LuaState, ra: u8) -> f64 {
-  // Safety: 契约见函数注
-  unsafe { (*(*l).base.add(ra as usize + 1)).value.n }
+/// 契约：`l` 为派发环契约存活对象，`ra+1` 为活跃帧合法槽且 tag 为 tnumber。
+fn read_step(l: &LuaState, ra: u8) -> f64 {
+  let tv = frame_slot(l, ra + 1);
+  // Safety: 契约见函数注——tag 为 tnumber，value 联合体 n 臂有效
+  unsafe { tv.value.n }
 }
 
 /// ecb 槽导出：1 = 已承接（savedpc 已落续延位），0 = 不承接。
@@ -385,33 +408,25 @@ pub(crate) unsafe extern "C-unwind" fn forn_trace_enter_export(
   proto: *mut Proto,
   pcpos: u32,
 ) -> i32 {
-  // Safety: 契约透传至 forn_trace_enter
-  i32::from(unsafe { forn_trace_enter(l, proto, pcpos) })
+  // Safety: 契约透传至 forn_trace_enter（proto 引用化随借用存活）
+  i32::from(unsafe { forn_trace_enter(l, &*proto, pcpos) })
 }
 
 /// 入口裁决主体（热环检测 + 命中执行 + 录制安装）。
 ///
 /// # Safety
 /// 同 [`forn_trace_enter_export`]。
-unsafe fn forn_trace_enter(l: *mut LuaState, proto: *mut Proto, pcpos: u32) -> bool {
+unsafe fn forn_trace_enter(l: *mut LuaState, proto: &Proto, pcpos: u32) -> bool {
+  // Safety: 契约透传至 get_code_gen_context
   let ctx = unsafe { get_code_gen_context(l) };
   let Some(ctx) = ctx else {
     return false;
   };
-  // Safety: proto 为派发环契约的存活对象，code/k 缓冲在其存活期合法
-  let (sizecode, code, k) = unsafe {
-    if (*proto).sizecode < 0 {
-      return false;
-    }
-    let sizecode = (*proto).sizecode as u32;
-    let code: &[Instruction] = from_raw_parts((*proto).code, sizecode as usize);
-    let k: &[TValue] = if (*proto).sizek > 0 {
-      from_raw_parts((*proto).k, (*proto).sizek as usize)
-    } else {
-      &[]
-    };
-    (sizecode, code, k)
-  };
+  // 指令流/常量表走 proto_views 安全视图：空基址/负长度折叠为 `&[]`，与原
+  // `sizecode < 0` / `sizek <= 0` 的早退/空表语义一致（review.md §2）。
+  let code = crate::functions::proto_views::code(proto);
+  let k = constants(proto);
+  let sizecode = code.len() as u32;
   if pcpos as usize >= code.len() {
     return false;
   }
@@ -423,6 +438,11 @@ unsafe fn forn_trace_enter(l: *mut LuaState, proto: *mut Proto, pcpos: u32) -> b
   }
   let fornloop_pc = (exit_pc - 1) as u32;
 
+  // 派发环只读面（守卫/录制问询共用）；对解释器状态的写仅下方 savedpc 一处，
+  // 单线程串行，与只读借用不交叠。
+  // Safety: l 为派发环契约的存活指针
+  let l_ref: &LuaState = unsafe { &*l };
+
   // —— 安装态：身份校验 → 入口守卫 → 零跳/原生执行；未承接落入热环计数 ——
   enum Outcome {
     Handled,
@@ -433,7 +453,7 @@ unsafe fn forn_trace_enter(l: *mut LuaState, proto: *mut Proto, pcpos: u32) -> b
     // 拆借：loops（安装态/计数）与 backedges（回边计数单元）两域独立可变，
     // 武装 helper 因此能同时写entry 与计数表
     let FornTraceRegistry { loops, backedges } = &mut ctx.forn_traces;
-    let key = (proto as usize, pcpos);
+    let key = (from_ref(proto) as usize, pcpos);
     if let Some(entry) = loops.get_mut(&key) {
       // 阶段 1（安装态判定，不变借用收口后再写 entry）：
       // None = 无安装；Some(None) = 身份失配弃置；Some(Some) = 有效安装
@@ -475,13 +495,14 @@ unsafe fn forn_trace_enter(l: *mut LuaState, proto: *mut Proto, pcpos: u32) -> b
           entry.installed = None;
           entry.count = 0;
         }
-        Some(Some(inst)) => match unsafe { entry_guard(l, inst, proto) } {
+        Some(Some(inst)) => match entry_guard(l_ref, inst, proto) {
           Guard::Refuse => outcome = Outcome::NotHandled,
           Guard::ZeroTrip => {
             // savedpc = 环出口（解释器从出口续延；idx 槽不动 = 零跳语义）
-            // Safety: l/proto 派发环契约存活，ci 指向活跃调用帧
+            // Safety: l 派发环契约存活，ci 指向活跃调用帧；savedpc 以 code
+            // 基址平移表达（inst.exit_pc 由上方界校验落在 sizecode 内）
             unsafe {
-              (*(*l).ci).savedpc = (*proto).code.add(inst.exit_pc as usize);
+              (*(*l).ci).savedpc = proto.code.add(inst.exit_pc as usize);
             }
             STAT_ZERO_TRIP.fetch_add(1, AtomicOrdering::Relaxed);
             outcome = Outcome::Handled;
@@ -507,8 +528,8 @@ unsafe fn forn_trace_enter(l: *mut LuaState, proto: *mut Proto, pcpos: u32) -> b
         if !entry.dead && entry.count >= K_HEAT_THRESHOLD {
           entry.dead = true; // 一次性尝试：失败不重试（防逐入口重试税）
           let ra = luau_insn_a(code[pcpos as usize]) as u8;
-          // Safety: h_fornprep 数值判定通过后问询，ra+1 为合法 tnumber 槽
-          let step = unsafe { read_step(l, ra) };
+          // h_fornprep 数值判定通过后问询，ra+1 为合法 tnumber 槽
+          let step = read_step(l_ref, ra);
           if let Some(inst) = unsafe {
             record_and_install(
               code,
@@ -562,7 +583,7 @@ fn arm_backedge_counter(
   l: *mut LuaState,
   backedges: &mut BTreeMap<(usize, u32), Box<u64>>,
   entry: &mut FornLoopEntry,
-  proto: *mut Proto,
+  proto: &Proto,
   pcpos: u32,
   fornloop_pc: u32,
   code: &[Instruction],
@@ -576,26 +597,29 @@ fn arm_backedge_counter(
   if !*eligible || backedges.len() >= K_BACKEDGE_CAP {
     return;
   }
-  let counter = backedges.entry((proto as usize, fornloop_pc)).or_default();
+  let counter = backedges
+    .entry((from_ref(proto) as usize, fornloop_pc))
+    .or_default();
   // Safety: l/global 派发环契约存活；ecb IC 为本注册表私有面，同刻仅一位点
   // 驻留（单槽），由本模块武装/解除
   let ecb = unsafe { &mut (*(*l).global).ecb };
   // T3 单载荷门：进程级武装槽上收在位信号（解释器热路一次链深 0 静态读），
   // 身份键/靶值留在 per-state ecb。单线程串行写入，Relaxed 宽松序足够。
   FORN_HEAT_ARMED.store(&mut **counter, AtomicOrdering::Relaxed);
-  ecb.forn_heat_proto = proto as usize;
+  ecb.forn_heat_proto = from_ref(proto) as usize;
   ecb.forn_heat_pc = fornloop_pc;
   ecb.forn_heat_target = K_HEAT_THRESHOLD;
 }
 
-/// 具名调用垫（lldb 断点锚点；逻辑与直调同形）。
+/// 具名调用垫（lldb 断点锚点；逻辑与直调同形）。proto 以引用入参，C ABI
+/// 边界处弱化为裸指针。
 #[inline(never)]
-unsafe fn call_trace(code_start: *mut u8, l: *mut LuaState, proto: *const Proto) -> u32 {
+unsafe fn call_trace(code_start: *mut u8, l: *mut LuaState, proto: &Proto) -> u32 {
   type TraceFn = unsafe extern "C" fn(*mut LuaState, *const Proto) -> u32;
   // Safety: code_start 指向已切换可执行页的本模块发射产物
   let f: TraceFn = unsafe { transmute(code_start) };
-  // Safety: 生成码叶函数，l/proto 契约存活
-  unsafe { f(l, proto) }
+  // Safety: 生成码叶函数，l/proto 契约存活（引用侧由借用系统保证）
+  unsafe { f(l, core::ptr::from_ref(proto)) }
 }
 
 /// ecb 回边慢路（T2）：回边计数精确达阈，录制装配 + 解除武装。
@@ -636,20 +660,16 @@ pub(crate) unsafe extern "C-unwind" fn forn_trace_backedge(
   let Some(ctx) = ctx else {
     return;
   };
-  // Safety: proto 为派发环契约的存活对象，code/k 缓冲在其存活期合法
-  let (sizecode, code, k) = unsafe {
-    if (*proto).sizecode < 0 || fornloop_pc as usize >= (*proto).sizecode as usize {
-      return;
-    }
-    let sizecode = (*proto).sizecode as u32;
-    let code: &[Instruction] = from_raw_parts((*proto).code, sizecode as usize);
-    let k: &[TValue] = if (*proto).sizek > 0 {
-      from_raw_parts((*proto).k, (*proto).sizek as usize)
-    } else {
-      &[]
-    };
-    (sizecode, code, k)
-  };
+  // 指令流/常量表走 proto_views 安全视图；fornloop_pc 界内性在此显式复核
+  // （原 `fornloop_pc >= sizecode` 早退等价：折叠视图越界前先行拒绝）。
+  // Safety: proto 为派发环契约的存活对象
+  let proto_ref: &Proto = unsafe { &*proto };
+  let code = crate::functions::proto_views::code(proto_ref);
+  let k = constants(proto_ref);
+  let sizecode = code.len() as u32;
+  if fornloop_pc as usize >= code.len() {
+    return;
+  }
   let fl_insn = code[fornloop_pc as usize];
   if LuauOpcode::from(luau_insn_op(fl_insn) as u8) != LuauOpcode::LOP_FORNLOOP {
     return;
@@ -666,8 +686,13 @@ pub(crate) unsafe extern "C-unwind" fn forn_trace_backedge(
   }
   let reg = &mut ctx.forn_traces;
   // 计数单元回收（成败皆然）：阈值已触发过一次，单元生命周期就此收口
-  reg.backedges.remove(&(proto as usize, fornloop_pc));
-  let Some(entry) = reg.loops.get_mut(&(proto as usize, fornprep_pc)) else {
+  reg
+    .backedges
+    .remove(&(from_ref(proto_ref) as usize, fornloop_pc));
+  let Some(entry) = reg
+    .loops
+    .get_mut(&(from_ref(proto_ref) as usize, fornprep_pc))
+  else {
     return;
   };
   if entry.installed.is_some() || entry.dead {
@@ -675,8 +700,9 @@ pub(crate) unsafe extern "C-unwind" fn forn_trace_backedge(
   }
   entry.dead = true; // 一次性尝试：失败不重试（防逐回边重试税）
   let ra = luau_insn_a(code[fornprep_pc as usize]) as u8;
-  // Safety: 回边位点活跃（h_fornloop 数值判定同面前置），ra+1 合法 tnumber 槽
-  let step = unsafe { read_step(l, ra) };
+  // 回边位点活跃（h_fornloop 数值判定同面前置），ra+1 合法 tnumber 槽
+  // Safety: l 为派发环契约的存活指针
+  let step = read_step(unsafe { &*l }, ra);
   if let Some(inst) = unsafe {
     record_and_install(
       code,
@@ -748,7 +774,7 @@ unsafe fn record_and_install(
   let bytes: &[u8] = unsafe {
     from_raw_parts(
       code_bytes.as_ptr().cast(),
-      code_bytes.len() * size_of_val(&code_bytes[0]),
+      code_bytes.len() * size_of::<u32>(),
     )
   };
   let allocation = allocator.allocate(&[], bytes);

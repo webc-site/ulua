@@ -84,7 +84,7 @@ pub unsafe fn create_native_function_x_64(
     ir.set_call_hints(unsafe { call_obs_hints_for(proto) });
   }
   // Safety: proto 为待编译的活 X64 L 函数 Proto（调用方 CodeGen 保证），IR 构建期只读。
-  unsafe { ir.build_function_ir(proto) };
+  ir.build_function_ir(unsafe { &*proto });
 
   let inst_count = ir.function.instructions.len() as u32;
 
@@ -95,18 +95,15 @@ pub unsafe fn create_native_function_x_64(
 
   *total_ir_inst_count = total_ir_inst_count.wrapping_add(inst_count);
 
-  // Safety: 同上存活前提；annotator_context 传 null 由被调方按 None 处理不解引用；
-  // `proto` 依契约非空存活，此处仅派生只读共享借用（lowering 侧不写原型）。
-  unsafe {
-    lower_function_x_64(
-      &mut ir,
-      build,
-      helpers,
-      Some(&*proto),
-      compilation_assembly_options(options),
-      None,
-    )
-  }?;
+  // `proto` 依契约非空存活，此处派生只读共享借用（lowering 侧不写原型）。
+  lower_function_x_64(
+    &mut ir,
+    build,
+    helpers,
+    Some(unsafe { &*proto }),
+    compilation_assembly_options(options),
+    None,
+  )?;
 
   // Safety: 同上——proto 存活且 IR 已就绪，execdata 只触及这些活对象。
   Ok(unsafe { create_native_proto_exec_data(proto, &ir, options.force_recompile) })
@@ -135,7 +132,7 @@ pub(crate) unsafe fn create_native_function_a_64(
     ir.set_call_hints(unsafe { call_obs_hints_for(proto) });
   }
   // Safety: proto 为待编译的活 A64 L 函数 Proto（调用方 CodeGen 保证），IR 构建期只读。
-  unsafe { ir.build_function_ir(proto) };
+  ir.build_function_ir(unsafe { &*proto });
 
   let inst_count = ir.function.instructions.len() as u32;
 
@@ -146,18 +143,15 @@ pub(crate) unsafe fn create_native_function_a_64(
 
   *total_ir_inst_count = total_ir_inst_count.wrapping_add(inst_count);
 
-  // Safety: 同上存活前提；annotator_context 传 null 由被调方按 None 处理不解引用；
-  // `proto` 依契约非空存活，此处仅派生只读共享借用（lowering 侧不写原型）。
-  unsafe {
-    lower_function_a_64(
-      &mut ir,
-      build,
-      helpers,
-      Some(&*proto),
-      compilation_assembly_options(options),
-      None,
-    )
-  }?;
+  // `proto` 依契约非空存活，此处派生只读共享借用（lowering 侧不写原型）。
+  lower_function_a_64(
+    &mut ir,
+    build,
+    helpers,
+    Some(unsafe { &*proto }),
+    compilation_assembly_options(options),
+    None,
+  )?;
 
   // Safety: 同上——proto 存活且 IR 已就绪，execdata 只触及这些活对象。
   Ok(unsafe { create_native_proto_exec_data(proto, &ir, options.force_recompile) })

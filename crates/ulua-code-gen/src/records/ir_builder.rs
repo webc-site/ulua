@@ -197,18 +197,16 @@ impl IrBuilder {
     result
   }
 
-  /// # Safety
-  /// `proto` 必须指向存活的 `Proto`，其 `code/sizecode` 字节码区在 IR 构建全程只读存活
-  /// （契约与 C++ 参考实现一致）。
-  pub(crate) unsafe fn build_function_ir(&mut self, proto: *mut Proto) {
-    // Safety: 契约保证 proto 为存活 Proto；IR 构建阶段字节码流不可变（无重编译改写 proto），
-    // 该共享引用只读，且本函数调用栈上不写 Proto 字段（写点在 bind_native_protos 等阶段）。
-    let proto_ref = unsafe { &*proto };
-
+  /// 从 `proto` 构建 IR：字节码基本块重建 + 类型信息装载。
+  ///
+  /// IR 构建阶段字节码流不可变（无重编译改写 proto），本函数调用栈上不写
+  /// `Proto` 字段（写点在 bind_native_protos 等阶段）。
+  pub(crate) fn build_function_ir(&mut self, proto: &Proto) {
     // IrFunction::proto 是类型化可空 arena 句柄（VM 侧 `Proto` 布局与所有权不变），
-    // 此处折叠判空存入；其余只读消费一律走 `proto_view`/`proto_views` 的安全视图。
-    self.function.proto = NonNull::new(proto);
-    self.function.variadic = proto_ref.is_vararg != 0;
+    // 此处存入（消费侧经 `proto_view` 只读重建）；其余只读消费一律走
+    // `proto_view`/`proto_views` 的安全视图。
+    self.function.proto = Some(NonNull::from(proto));
+    self.function.variadic = proto.is_vararg != 0;
 
     load_bytecode_type_info(&mut self.function);
 
@@ -219,10 +217,10 @@ impl IrBuilder {
       IrOp::default()
     };
 
-    self.rebuild_bytecode_basic_blocks(proto_ref);
+    self.rebuild_bytecode_basic_blocks(proto);
 
     // 指令流视图：`code.len()` 与原 `max(sizecode, 0)` 等价（空基址/负长度折成空切片）
-    let code = code(proto_ref);
+    let code = code(proto);
     let sizecode = code.len() as c_int;
 
     // 视图重建与安全论证单源于 `host_hooks_ref`；`'s` 解耦后先取视图再传 `&mut self.function`，

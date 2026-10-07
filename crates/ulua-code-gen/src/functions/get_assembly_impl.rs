@@ -69,9 +69,8 @@ pub(crate) trait AsmBuilder: LogAppend {
 
   fn assemble_helpers(&mut self, helpers: &mut ModuleHelpers);
 
-  /// # Safety
-  /// `proto` 为 None 或指向存活对象（借用由调用方保证），`stats` 借用独占，调用方须满足 C++ 参考实现的前置条件。
-  unsafe fn lower_function(
+  /// lowering 主入口：IR → 机器码。
+  fn lower_function(
     &mut self,
     ir: &mut IrBuilder,
     helpers: &mut ModuleHelpers,
@@ -122,9 +121,7 @@ impl AsmBuilder for AssemblyBuilderX64 {
   }
 
   /// lowering 主入口：IR → 机器码。
-  /// # Safety
-  /// `proto`/`stats` 指针必须有效且指向存活对象，`ir` 与 proto 一致，调用方须满足 C++ 参考实现的前置条件。
-  unsafe fn lower_function(
+  fn lower_function(
     &mut self,
     ir: &mut IrBuilder,
     helpers: &mut ModuleHelpers,
@@ -132,9 +129,7 @@ impl AsmBuilder for AssemblyBuilderX64 {
     options: AssemblyOptions,
     stats: Option<&mut LoweringStats>,
   ) -> Result<(), CodeGenCompilationResult> {
-    // Safety: 本 trait 方法的 `# Safety` 契约（`proto`/`stats` 存活、`ir` 与 proto 一致）原样
-    // 透传给 `lower_function_x_64`，参数一字不改，前置条件与调用本方法时相同。
-    unsafe { lower_function_x_64(ir, self, helpers, proto, options, stats) }
+    lower_function_x_64(ir, self, helpers, proto, options, stats)
   }
 }
 
@@ -180,9 +175,7 @@ impl AsmBuilder for AssemblyBuilderA64 {
   }
 
   /// lowering 主入口：IR → 机器码。
-  /// # Safety
-  /// `proto`/`stats` 指针必须有效且指向存活对象，`ir` 与 proto 一致，调用方须满足 C++ 参考实现的前置条件。
-  unsafe fn lower_function(
+  fn lower_function(
     &mut self,
     ir: &mut IrBuilder,
     helpers: &mut ModuleHelpers,
@@ -190,9 +183,7 @@ impl AsmBuilder for AssemblyBuilderA64 {
     options: AssemblyOptions,
     stats: Option<&mut LoweringStats>,
   ) -> Result<(), CodeGenCompilationResult> {
-    // Safety: 同 X64 版——本 trait 方法的 `# Safety` 契约原样透传给 `lower_function_a_64`，
-    // 参数一字不改，前置条件与调用本方法时相同。
-    unsafe { lower_function_a_64(ir, self, helpers, proto, options, stats) }
+    lower_function_a_64(ir, self, helpers, proto, options, stats)
   }
 }
 
@@ -252,49 +243,34 @@ fn record_function_stats(
 ///
 /// 返回值为机器码（`output_binary`）或 asm/IR 文本的字节表示，
 /// 对应 cpp 侧承载二进制的 `std::string`。
-///
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-unsafe fn get_assembly_impl<B: AsmBuilder>(
+fn get_assembly_impl<B: AsmBuilder>(
   build: &mut B,
-  func: *const TValue,
+  func: &TValue,
   options: AssemblyOptions,
   mut stats: Option<&mut LoweringStats>,
 ) -> Vec<u8> {
-  // Safety: 依函数契约，`func` 为存活且含闭包值的 `TValue`，`as_closure` 得到存活 Closure，
-  // 其 `inner.l.p` 即存活 root `Proto`；本块只取指针副本，不解引用。
-  let root: *mut Proto = unsafe { (*func).as_closure().inner.l.p };
-
-  // 反射/转储路径只读原型：对 `Proto` 的写入只发生在 bind_native_protos/on_disable/
-  // on_destroy_function 等编译阶段，与本函数无交叠，故此处一次派生共享引用、后续一律走
-  // 具名字段读取（review.md §2）。
-  // Safety: `root` 依上契约存活且本段无并存可变借用。
-  let root_ref = unsafe { &*root };
+  // Safety: 契约保证 `func` 为 LClosure 型 `TValue`（栈位为 Lua 函数，见 get_assembly
+  // 边界的 `lua_is_lfunction` 判据）：`as_closure` 的 tag 前提与 `inner.l` 的 union
+  // 分支选择由此成立，`p` 指向 VM 在整段编译会话内持有的存活 root `Proto`。
+  let root: &Proto = unsafe { &*func.as_closure().inner.l.p };
 
   if CodeGenFlags::CodeGenOnlyNativeModules.is_set(options.compilation_options.flags)
     // 短路顺序与 cpp `&&` 一致。
-    && !LuauProtoFlag::LPF_NATIVE_MODULE.is_set(root_ref.flags)
+    && !LuauProtoFlag::LPF_NATIVE_MODULE.is_set(root.flags)
   {
     build.finalize();
     return Vec::new();
   }
 
   // cpp 侧 gatherFunctions 第三实参同样无条件求值。
-  let root_is_native_function = root_ref.flags & LuauProtoFlag::LPF_NATIVE_FUNCTION as u8 != 0;
+  let root_is_native_function = root.flags & LuauProtoFlag::LPF_NATIVE_FUNCTION as u8 != 0;
 
   // gather_functions 返回按 bytecodeid 索引的稀疏表（None 为空槽），沿原型链收集子 Proto。
   // 本处 flatten 依序紧凑（与原 `retain(!is_null)` 语义一致）。
-  // Safety: `root` 指向存活 Proto，gather_functions 按其自身契约沿原型链只读遍历。
-  let protos: Vec<*mut Proto> = unsafe {
-    gather_functions(
-      root,
-      options.compilation_options.flags,
-      root_is_native_function,
-    )
-  }
-  .into_iter()
-  .flatten()
-  .collect();
+  let protos: Vec<&Proto> = gather_functions(root, options.compilation_options.flags, root_is_native_function)
+    .into_iter()
+    .flatten()
+    .collect();
 
   with_lowering_stats(stats.as_deref_mut(), |s| {
     s.total_functions += protos.len() as u32
@@ -316,15 +292,10 @@ unsafe fn get_assembly_impl<B: AsmBuilder>(
     ));
   }
 
-  for p in protos {
-    // Safety: `p` 为 gather_functions 收集的非空存活 Proto（None 槽已被上面的 flatten 去掉）；
-    // 本轮迭代只读取其字段，写原型的路径不在本函数调用栈上。
-    let proto = unsafe { &*p };
-
+  for &proto in &protos {
     let mut ir = IrBuilder::ir_builder_ir_builder(&options.compilation_options.hooks);
 
-    // Safety: `p` 与 `proto` 同源，build_function_ir 按其契约只读原型字段构建 IR。
-    unsafe { ir.build_function_ir(p) };
+    ir.build_function_ir(proto);
 
     let mut asm_size = build.get_code_size();
     let mut asm_count = build.get_instruction_count();
@@ -334,7 +305,6 @@ unsafe fn get_assembly_impl<B: AsmBuilder>(
     }
 
     if options.include_ir_types {
-      // log_function_types 只读已构建好的 `ir.function`（全为安全借用），本身即安全 `fn`。
       log_function_types(
         build,
         &ir.function,
@@ -343,18 +313,15 @@ unsafe fn get_assembly_impl<B: AsmBuilder>(
     }
 
     // lower 失败原因此处不消费（cpp 同款丢弃），仅判成败
-    // Safety: `p`/`stats` 存活性与 `ir` 与 `p` 的一致性由本函数 `# Safety` 契约保证，
-    // trait 方法将契约透传给平台 lower_function_{x64,a64}。
-    let lower_failed = unsafe {
-      build.lower_function(
+    let lower_failed = build
+      .lower_function(
         &mut ir,
         &mut helpers,
         Some(proto),
         options.clone(),
         stats.as_deref_mut(),
       )
-    }
-    .is_err();
+      .is_err();
     if lower_failed {
       if build.log_text() {
         build.log_append(format_args!("; skipping (can't lower)\n"));
@@ -369,12 +336,11 @@ unsafe fn get_assembly_impl<B: AsmBuilder>(
       asm_count = build.get_instruction_count().wrapping_sub(asm_count);
     }
 
-    // Safety: `stats` 为可空可变借用，`with_lowering_stats` 门面内部判空；此刻无并存
-    // &mut 别名（单线程串行，lower 已完成对 stats 的使用）。原型侧全为安全借用。
+    // 此刻无并存 &mut 别名（lower 已完成对 stats 的使用），原型侧全为安全借用。
     record_function_stats(
       stats.as_deref_mut(),
       proto,
-      root_ref,
+      root,
       &ir,
       asm_size,
       asm_count,
@@ -401,27 +367,22 @@ unsafe fn get_assembly_impl<B: AsmBuilder>(
   }
 }
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn get_assembly_impl_x_64(
+/// X64 汇编输出入口（[`get_assembly`] 边界的契约在此已窄化为引用）。
+pub(crate) fn get_assembly_impl_x_64(
   build: &mut AssemblyBuilderX64,
-  func: *const TValue,
+  func: &TValue,
   options: AssemblyOptions,
   stats: Option<&mut LoweringStats>,
 ) -> Vec<u8> {
-  // Safety: 本 `unsafe fn` 将自身 `# Safety` 契约（`func`/`stats` 存活、参数合法）原样透传给泛型
-  // `get_assembly_impl`，参数一字不改。
-  unsafe { get_assembly_impl(build, func, options, stats) }
+  get_assembly_impl(build, func, options, stats)
 }
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn get_assembly_impl_a_64(
+/// A64 汇编输出入口（[`get_assembly`] 边界的契约在此已窄化为引用）。
+pub(crate) fn get_assembly_impl_a_64(
   build: &mut AssemblyBuilderA64,
-  func: *const TValue,
+  func: &TValue,
   options: AssemblyOptions,
   stats: Option<&mut LoweringStats>,
 ) -> Vec<u8> {
-  // Safety: 同 X64 入口——将 `# Safety` 契约原样透传给泛型 `get_assembly_impl`，参数一字不改。
-  unsafe { get_assembly_impl(build, func, options, stats) }
+  get_assembly_impl(build, func, options, stats)
 }

@@ -561,11 +561,10 @@ fn pad_block_nop<B: LowerBuild>(
 
 /// 单函数 IR 块序列降低（X64）。
 ///
-/// # Safety
-/// `build`/`lowering`/`function`/`sorted_blocks` 必须为互不重叠的存活借用，`lowering`
-/// 内持有的 build/function 裸指针须指向同批对象，`sorted_blocks` 为 `function.blocks`
-/// 的合法下标表（cpp 参考实现的同款前置条件）。
-pub(crate) unsafe fn lower_impl_x_64(
+/// 借用互不重叠由 `&mut` 独占性保证；`lowering` 内持有的 build/function 裸指针指向
+/// 同批对象这一接线前提由 [`IrLoweringX64`] 的构造点（`lower_ir_x_64` 的
+/// `ptr::from_mut` 接线）承载；`sorted_blocks` 为 `function.blocks` 的合法下标表。
+pub(crate) fn lower_impl_x_64(
   build: &mut AssemblyBuilderX64,
   lowering: &mut IrLoweringX64,
   function: &mut IrFunction,
@@ -573,8 +572,6 @@ pub(crate) unsafe fn lower_impl_x_64(
   bytecodeid: i32,
   options: &AssemblyOptions,
 ) -> bool {
-  // 泛型主体本身是安全函数（其内部唯一 `unsafe` 边界是 annotator 的 C ABI 回调，已就地
-  // 收窄）；本入口保留 `unsafe fn` 只为向调用方声明上面的借用与下标前置条件。
   lower_blocks(
     build,
     lowering,
@@ -587,9 +584,8 @@ pub(crate) unsafe fn lower_impl_x_64(
 
 /// 单函数 IR 块序列降低（A64），语义与 X64 版逐路径一致（cpp 同款模板共用主体）。
 ///
-/// # Safety
-/// 与 [`lower_impl_x_64`] 同款：借用互不重叠且存活，`sorted_blocks` 为合法下标表。
-pub(crate) unsafe fn lower_impl_a_64(
+/// 前置条件与 [`lower_impl_x_64`] 同款（接线前提由 [`IrLoweringA64`] 构造点承载）。
+pub(crate) fn lower_impl_a_64(
   build: &mut AssemblyBuilderA64,
   lowering: &mut IrLoweringA64,
   function: &mut IrFunction,
@@ -597,7 +593,6 @@ pub(crate) unsafe fn lower_impl_a_64(
   bytecodeid: i32,
   options: &AssemblyOptions,
 ) -> bool {
-  // 同 X64 入口：泛型主体为安全函数，`unsafe fn` 仅承载对调用方的前置条件声明。
   lower_blocks(
     build,
     lowering,

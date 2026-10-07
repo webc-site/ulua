@@ -105,10 +105,9 @@ pub unsafe fn compile_internal(
   }
   // Safety: 同上，且上一条断言确认该栈位是 Lua 闭包，`as_closure` 的 TValue→GCObject→
   // Closure 解引用链由此前提保证；`inner.l.p` 为构造期接线的非空 root Proto*。
-  let root: *mut Proto = unsafe { (*lua_a_toobject(&*l, idx)).as_closure().inner.l.p };
-  // Safety: `root` 为存活 Proto*（C-ABI 契约），此处只取 flags 快照供后续判定，
-  // 避免整段流程反复解引用裸指针。
-  let root_flags = unsafe { (*root).flags };
+  let root: &Proto = unsafe { &*(*lua_a_toobject(&*l, idx)).as_closure().inner.l.p };
+  // flags 快照供后续判定，避免整段流程反复读字段。
+  let root_flags = root.flags;
 
   if CodeGenFlags::CodeGenOnlyNativeModules.is_set(options.flags)
     && !LuauProtoFlag::LPF_NATIVE_MODULE.is_set(root_flags)
@@ -130,21 +129,18 @@ pub unsafe fn compile_internal(
     };
   };
 
-  // Safety: `gather_functions` 依其 `# Safety` 契约消费存活的 `root`，返回的稀疏表元素
-  // 是同批存活的 `Proto*`（含递归收集的后代），`execdata` 判空只读这些存活对象。
-  let protos: Vec<*mut Proto> = unsafe {
-    gather_functions(
-      root,
-      options.flags,
-      (root_flags & LuauProtoFlag::LPF_NATIVE_FUNCTION as u8) != 0,
-    )
-    .into_iter()
-    .flatten()
-    // J1 Phase 2b：force_recompile（暖重编译）时保留已编译 proto——重编译并重绑定；
-    // 常规路径跳过已编译（NothingToCompile 语义）。
-    .filter(|&proto| options.force_recompile || (*proto).execdata.is_null())
-    .collect()
-  };
+  // gather_functions 沿原型链只读收集（元素借用随 root 存活契约）；此处还原 C-ABI
+  // 指针形态——compile 链下游（create_native_function_* / try_bind_existing_module）
+  // 仍以 `*mut Proto` 为 execdata 绑定句柄，身份同一、仅形态转换（引用转指针安全）。
+  let protos: Vec<*mut Proto> =
+    gather_functions(root, options.flags, (root_flags & LuauProtoFlag::LPF_NATIVE_FUNCTION as u8) != 0)
+      .into_iter()
+      .flatten()
+      // J1 Phase 2b：force_recompile（暖重编译）时保留已编译 proto——重编译并重绑定；
+      // 常规路径跳过已编译（NothingToCompile 语义）。
+      .filter(|proto| options.force_recompile || proto.execdata.is_null())
+      .map(|proto| core::ptr::from_ref(proto).cast_mut())
+      .collect();
 
   if protos.is_empty() {
     return CompilationResult {

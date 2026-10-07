@@ -18,9 +18,8 @@ use crate::{
   },
 };
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn lower_ir_x_64(
+/// X64 IR→机器码末步：内存操作数优化 + 装配 `IrLoweringX64` 后移交 [`lower_impl_x_64`]。
+pub(crate) fn lower_ir_x_64(
   build: &mut AssemblyBuilderX64,
   ir: &mut IrBuilder,
   sorted_blocks: &[u32],
@@ -37,24 +36,18 @@ pub(crate) unsafe fn lower_ir_x_64(
   // 显式判空短路：None 走常量分支（原 null 路径逐字等价），Some 只读 `bytecodeid`。
   let bytecodeid = proto.map_or(0, |proto| proto.bytecodeid);
 
-  // Safety: `lower_impl_x_64` 的裸指针入参在此合法：`build`/`ir.function` 为本作用域存活引用的
-  // 独占借用；`lowering` 持有的 `stats`（可 null，callee 按 C++ 语义守卫）与入参一致；
-  // `sorted_blocks`/`options` 为调用方提供的合法借用。透传被调 `# Safety` 契约。
-  unsafe {
-    lower_impl_x_64(
-      build,
-      &mut lowering,
-      &mut ir.function,
-      sorted_blocks,
-      bytecodeid,
-      &options,
-    )
-  }
+  lower_impl_x_64(
+    build,
+    &mut lowering,
+    &mut ir.function,
+    sorted_blocks,
+    bytecodeid,
+    &options,
+  )
 }
 
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn lower_ir_a_64(
+/// A64 IR→机器码末步：寄存器区间装配 + 装配 `IrLoweringA64` 后移交 [`lower_impl_a_64`]。
+pub(crate) fn lower_ir_a_64(
   build: &mut AssemblyBuilderA64,
   ir: &mut IrBuilder,
   sorted_blocks: &[u32],
@@ -102,6 +95,9 @@ pub(crate) unsafe fn lower_ir_a_64(
   let regs = IrRegAllocA64::new(build, &mut ir.function, stats_handle, &reg_ranges);
   let value_tracker = IrValueLocationTracking::new(&mut ir.function);
 
+  // lowering 内的 `build`/`helpers`/`function` 裸指针由本作用域存活引用以
+  // `ptr::from_mut` 接线，比 `lowering` 长寿且指向合法对象；`stats` 可为 null，
+  // 消费侧按 C++ 语义守卫。
   let mut lowering = IrLoweringA64 {
     build: ptr::from_mut(build),
     helpers: ptr::from_mut(helpers),
@@ -121,17 +117,12 @@ pub(crate) unsafe fn lower_ir_a_64(
   // 显式判空短路：None 走常量分支（原 null 路径逐字等价），Some 只读 `bytecodeid`。
   let bytecodeid = proto.map_or(0, |proto| proto.bytecodeid);
 
-  // Safety: `lowering` 内的 `build`/`helpers`/`function` 裸指针在上方由本作用域存活引用
-  // （`build`、`helpers`、`&mut ir.function`）以 `ptr::from_mut` 洗白接线，比 `lowering` 长寿且指向合法
-  // 对象；`stats` 可为 null，由 `lower_impl_a_64` 按 C++ 语义守卫。透传被调 `# Safety` 契约。
-  unsafe {
-    lower_impl_a_64(
-      build,
-      &mut lowering,
-      &mut ir.function,
-      sorted_blocks,
-      bytecodeid,
-      &options,
-    )
-  }
+  lower_impl_a_64(
+    build,
+    &mut lowering,
+    &mut ir.function,
+    sorted_blocks,
+    bytecodeid,
+    &options,
+  )
 }

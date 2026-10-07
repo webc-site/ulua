@@ -12,16 +12,12 @@ use crate::{
 /// 统一 X64/A64 的 IR→汇编输出骨架，对齐 cpp 侧 `getAssemblyFromImpl<B>` 模板：
 /// 平台差异（helpers 装配、lowering 入口、指令字宽与二进制展开）全部收口进
 /// [`AsmBuilder`]（见 get_assembly_impl.rs），与 `get_assembly_impl` 同构。
-///
-/// # Safety
-/// 传入的指针必须有效且指向存活对象，调用方须满足 C++ 参考实现的前置条件。
-pub(crate) unsafe fn get_assembly_from_ir_impl<B: AsmBuilder>(
+pub(crate) fn get_assembly_from_ir_impl<B: AsmBuilder>(
   build: &mut B,
   ir: &mut IrBuilder,
   options: AssemblyOptions,
   stats: Option<&mut LoweringStats>,
 ) -> Vec<u8> {
-  // Safety: build/ir 为调用方活借用, stats 为可空可变借用——本函数只透传不解引用。
   let mut helpers = ModuleHelpers::default();
   build.assemble_helpers(&mut helpers);
 
@@ -33,11 +29,11 @@ pub(crate) unsafe fn get_assembly_from_ir_impl<B: AsmBuilder>(
     ));
   }
 
-  // lower 失败原因此处不消费（cpp 同款丢弃），仅判成败
-  // Safety: proto 传 None 由被调方判空处理（cpp 同款 nullptr 实参）; build/ir/helpers
-  // 为存活独占借用, stats 透传可空可变借用且被调方每次解引用均在判空守卫之下。
-  let lowered =
-    unsafe { build.lower_function(ir, &mut helpers, None, options.clone(), stats) }.is_ok();
+  // lower 失败原因此处不消费（cpp 同款丢弃），仅判成败；proto 传 None 由被调方判空处理
+  // （cpp 同款 nullptr 实参）。
+  let lowered = build
+    .lower_function(ir, &mut helpers, None, options.clone(), stats)
+    .is_ok();
 
   if !lowered && build.log_text() {
     build.log_append(format_args!("; skipping (can't lower)\n"));

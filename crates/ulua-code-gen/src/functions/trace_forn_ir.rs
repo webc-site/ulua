@@ -816,7 +816,6 @@ pub(crate) unsafe fn record_forn_trace(
       unsafe {
         let tv = &*base.add(usize::from(s));
         if tv.is_function()
-          // Safety: is_function() 谓词命中后 as_closure_ptr 为同址类型化读；
           // math_* 全仓单一定义，fn 项地址唯一（fn_address_comparisons 的
           // 「地址不保证唯一」保守提示不适用），转 usize 对账
           && let Some(kind) = slot_math_fn(tv)
