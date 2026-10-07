@@ -225,7 +225,11 @@ impl Lexeme {
   /// 与 [`Lexeme::name`] 同理，这里直读 [`LexemeData`] 的裸指针字段：存活前提即
   /// [`LexemeData::EMPTY`] 文档所记契约——词法器成对写入的
   /// `[ptr, ptr + length)` 指向比词素长寿的源缓冲（records/lexer.rs）。
-  pub(crate) fn data_bytes(&self) -> Option<&[u8]> {
+  ///
+  /// `pub`：跨 crate 的负载读取也必须走这一收口（如 `ulua-config` 取 QUOTED_STRING
+  /// 串），调用点不得自行 `data.as_ptr()` + 长度重拼裸区间再 `from_raw_parts`——
+  /// 那等于把本函数内置的变体判定与存活契约外溢回业务侧（review.md §2）。
+  pub fn data_bytes(&self) -> Option<&[u8]> {
     // `data` 指针字段仅在下列变体下由词法器成对写入为有效载荷区间
     if !matches!(
       self.r#type,
