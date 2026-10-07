@@ -24,6 +24,9 @@ pub unsafe fn lua_u_newudata(l: *mut LuaState, s: usize, tag: i32) -> *mut Udata
     luaC_init!(l, u, LuaType::UserData as i32);
     let ud = &mut *u;
     ud.len = s as i32;
+    // 既有约定（review.md §2 规则 3）：`Udata::metatable` 与 `LuaTable::metatable` 同为
+    // repr(C) GC 对象的元表可空 ABI 字段（null=无元表，`fasttm`/`lua_t_gettmbyobj` 垫片
+    // 的合法入约），结构哨兵保留裸指针
     ud.metatable = null_mut();
     LUAU_ASSERT!((0..=255).contains(&tag));
     ud.tag = tag as u8;

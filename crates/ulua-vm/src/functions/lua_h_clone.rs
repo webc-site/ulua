@@ -27,6 +27,8 @@ pub(crate) unsafe fn lua_h_clone(l: *mut LuaState, tt: *mut LuaTable) -> *mut Lu
     luaC_init!(l, t, LuaType::Table as i32);
     (*t).metatable = (*tt).metatable;
     (*t).tmcache.set((*tt).tmcache.get());
+    // 空表初建：array 置 null 与 sizearray==0 同现（review.md §2 规则 3 结构哨兵，
+    // 同 `lua_h_new` 注），下方按需换入真实数组段
     (*t).array = null_mut();
     (*t).sizearray = 0;
     (*t).lsizenode = 0;
