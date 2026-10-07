@@ -1,7 +1,7 @@
 use core::{
   ffi::c_void,
   mem::size_of,
-  ptr::{null, null_mut, read_unaligned},
+  ptr::{null, read_unaligned},
 };
 
 use crate::{
@@ -32,25 +32,24 @@ pub(crate) fn getcounters(
     // 签名固定收 `*mut LuaState`/`*mut Proto`——其「只量取计数数据、不写穿 l/p」契约由公开边界
     // `lua_getcounters` 的 `# Safety` 收口，故 `read_ptr()` 只读转发与 `p` 的可变指针重取
     // 只跨越该外部调用边界，本函数不据此解写。
-    let (data, count) = unsafe {
+    let counters = unsafe {
       let global = l.global;
       // if let 替代 is_none + unwrap，Option 由类型系统收口非空
       let mut count: usize = 0;
-      let data = if !global.is_null()
+      if !global.is_null()
         && let Some(getcounterdata) = (*global).ecb.getcounterdata
       {
-        getcounterdata(
-          l.read_ptr(),
-          (p as *const Proto).cast_mut(),
-          &mut count as *mut usize,
-        )
+        getcounterdata(l.read_ptr(), (p as *const Proto).cast_mut(), &mut count)
+          .map(|data| (data, count))
       } else {
-        null_mut()
-      };
-      (data, count)
+        // 宿主槽未安装：cpp 的「NULL 返回 + 空数据」在 Rust 侧即类型化缺席（review.md §2）。
+        None
+      }
     };
 
-    if !data.is_null() && count != 0 {
+    // `count != 0` 与「有数据」同为量取前置，缺席任一即整段跳过（cpp 的
+    // `if (data && count)`）。
+    if let Some((data, count)) = counters.filter(|&(_, count)| count != 0) {
       let debugname = if p.debugname.is_null() {
         null()
       } else {
@@ -70,7 +69,7 @@ pub(crate) fn getcounters(
       // SAFETY: 契约保证宿主反馈向量覆盖 `count * COUNTER_SLOT_SIZE` 字节且在本轮消费期内
       // 存活；`read_unaligned` 逐槽非对齐读取限于该切片界内。
       unsafe {
-        let slots = c_slice(data as *const u8, count * COUNTER_SLOT_SIZE);
+        let slots = c_slice(data.as_ptr(), count * COUNTER_SLOT_SIZE);
         for slot in slots.as_chunks::<COUNTER_SLOT_SIZE>().0 {
           let kind = read_unaligned(slot.as_ptr() as *const u32);
           let pcpos = read_unaligned(slot[size_of::<u32>()..].as_ptr() as *const u32);

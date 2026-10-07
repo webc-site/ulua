@@ -119,9 +119,9 @@ pub type HostVectorOperationBytecodeType = Option<fn(member: &[u8]) -> u8>;
 // 经 `offset_of!`/`size_of!` 读取表槽位布局）使用。
 
 /// 宿主 userdata 类型名映射回调（cpp `CodeGenContext.h` 的 `UserdataRemapperCallback`）：
-/// 名称以 C 字符串形态（`*const c_char` + 显式长度）跨过宿主 ABI 边界，是本 crate 唯一
-/// 保留 `c_char` 的字符串入参点——字节码 loader 交出的就是 NUL 结尾的 `TString` 载荷，
-/// 长度由 `name_length` 界定（review.md §3「`c_char` 只在真 FFI 边界保留」）。
+/// 名称以 C 字符串形态（字符指针 + 显式长度）跨过宿主 ABI 边界，是本 crate 唯一保留
+/// C 字符入参的字符串点——字节码 loader 交出的就是 NUL 结尾的 `TString` 载荷，
+/// 长度由 `name_length` 界定（review.md §3：C 字符只准出现在真 FFI 边界）。
 ///
 /// # Safety（实现方契约）
 /// - `name` 在本次调用期间指向 `name_length` 字节可读缓冲（末位为 NUL 终止符，
