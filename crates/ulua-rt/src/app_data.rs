@@ -119,6 +119,18 @@ const BORROW_CONFLICT_MSG: &str = "cannot mutably borrow app data container";
 /// 把 `RefCell` 的借用守卫提升到 `'static`（签名固定输入/输出类型对，杜绝
 /// 无关类型的 `transmute` 误用）。
 ///
+/// 已知保留的最小 choke point（review.md §2「把 `unsafe` 关进有契约的最小边界」）。
+/// 为何安全形态不可能：守卫是**自引用**结构体——它把持有 `RefCell` 的
+/// `XRc<EntryCell>` 移进自身的 `_owner` 字段，同时字段里还存着一个借用该
+/// `RefCell` 的 `Ref`。没有任何外部生命周期能表达「`Ref` 借用的目标由同结构体
+/// 的兄弟字段拥有」这条不变式，`Deref` 又必须在守卫整个存续期内交出 `&T`（而非
+/// 临时借用），故无法用 `&'a self` 重取。给 [`AppDataRef`] 挂一个 `'a` 绑定到
+/// `&'a Lua` 也不解决问题：`RefCell` 活在 crate 级按 VM 键控的 side table
+/// （[`crate::vm_store`]）里、不在 `Lua` 的借用内存中，`&'a Lua` 无法佐证其存活。
+/// mlua 的 `AppDataRef`/`AppDataRefMut` 语义要求守卫**能活过 `&self` 借用**（自
+/// 持 `XRc` 让 `RefCell` 保活），这正是必须 `'static` 拓宽的根因。收窄至此单一
+/// 转调点，前提由调用点结构体逐条担保（见两处调用点 Safety 与字段顺序注）。
+///
 /// # Safety
 /// 调用方必须同时保有一个让底层 `RefCell` 活到 `'static` 的强引用（`Entry`
 /// `XRc`），且守卫结构体的字段顺序保证 `Ref::drop` 先于该 `XRc` 的 drop。

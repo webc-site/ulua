@@ -592,13 +592,17 @@ pub(crate) fn push_lightuserdata_tagged(state: StateView<'_>, p: *mut c_void, ta
   unsafe { lua_pushlightuserdatatagged(state.as_mut_ptr(), p, tag) }
 }
 
-/// 读 light userdata 指针（`lua_tolightuserdata_ref` 收口点；缺省 null）。
+/// 读 light userdata 指针（`lua_tolightuserdata_ref` 收口点）。
+///
+/// 忠实返回被调 safe 门面的 `Option`：`Some(p)` 表示该槽确是 light userdata
+/// （其载荷本身可为 null），`None` 严格表示「非 light userdata」。不再把 `Option`
+/// 折算回 null 哨兵（review.md §2：可空 → `Option`，判空哨兵就此消失）。
 #[inline]
-pub(crate) fn lightuserdata_at(state: StateView<'_>, idx: i32) -> *mut c_void {
+pub(crate) fn lightuserdata_at(state: StateView<'_>, idx: i32) -> Option<*mut c_void> {
   // r16-v4b：被调方已转 `&LuaState` 引用形 safe fn——`&state` 经 `StateView::deref`
   // 既有安全读数门面短借（存活论证收口于视图产生点），原 `read_ptr().cast_mut()`
-  // 裸转发与 unsafe 块随消亡；返回的是 VM 存的裸 token，本层不解引用。
-  lua_tolightuserdata_ref(&state, idx).unwrap_or(null_mut())
+  // 裸转发与 unsafe 块随消亡；返回的是 VM 存的裸 token 或 None，本层不解引用。
+  lua_tolightuserdata_ref(&state, idx)
 }
 
 /// 读 full userdata 的数据区指针（`lua_touserdata` 收口点；非 userdata 或空载荷
@@ -900,9 +904,10 @@ impl Drop for LuaInner {
     if self.owned {
       // 存活前提：`state` 此刻仍存活（`lua_close` 尚未运行，下方 clear_* 序列
       // 也都以存活 state 为前提），`global` 非空，满足 `vm_key` 的调用序契约。
-      // Safety: 本 Drop 持有该 VM 的唯一强引用（`owned:true` 且计数归零才进到
-      // 这里),独占且无并发访问;视图只在 `lua_close` 之前使用。
-      let state = unsafe { StateView::from_raw(self.state.as_ptr()) };
+      // 本 Drop 持有该 VM 的唯一强引用（`owned:true` 且计数归零才进到这里），
+      // 独占且无并发访问；视图只在 `lua_close` 之前使用。`self.state` 已是
+      // `NonNull`（构造期非空），经 safe 收口 `from_handle` 取视图，无需 `from_raw`。
+      let state = StateView::from_handle(self.state);
       // Evict every per-VM side-table entry keyed by this state before closing
       // it, so none of them leaks one slot per state created — and so the next
       // VM that reuses this `global_State` address does not inherit them. All
@@ -1001,9 +1006,9 @@ fn build_lua(create: impl FnOnce() -> Option<NonNull<LuaState>>, openlibs: bool)
   let state = create()?;
   if openlibs {
     // `open_std_libs` 是带契约的 safe 门面：`state` 刚过上一行的非空收口，
-    // 是完整可用的新 state。
-    // Safety: 构造期一次转换;视图只在 openlibs 调用内、不跨帧存放。
-    open_std_libs(unsafe { StateView::from_raw(state.as_ptr()) });
+    // 是完整可用的新 state。`state` 已是 `NonNull`，经 safe 收口 `from_handle`
+    // 取视图（纯指针拷贝，无 `unsafe`），视图只在 openlibs 调用内、不跨帧存放。
+    open_std_libs(StateView::from_handle(state));
   }
   Some(Lua::from_inner(XRc::new(LuaInner::new(state, true))))
 }

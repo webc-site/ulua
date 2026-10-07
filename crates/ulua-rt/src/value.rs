@@ -467,9 +467,12 @@ pub(crate) fn value_from_stack(lua: &Lua, idx: i32) -> Result<Value> {
   let value = match ty {
     LuaType::Nil | LuaType::None => Value::Nil,
     LuaType::Boolean => Value::Boolean(boolean_at(state, idx)),
-    // tag 已由上面 `type_at` 判为 LightUserData；`lightuserdata_at` 对该槽返回其
-    // 裸指针值（存的指针本身可为 null）。
-    LuaType::LightUserData => Value::LightUserData(LightUserData(lightuserdata_at(state, idx))),
+    // tag 已由上面 `type_at` 判为 LightUserData；同一槽的 `lightuserdata_at` 因此
+    // 必返回 `Some`（载荷本身可为 null，`Some(null)` 照常带出）——`unwrap` 的
+    // None 分支不可达（两次读数间栈未动，构造期不变式，见门面 `# Safety`）。
+    LuaType::LightUserData => {
+      Value::LightUserData(LightUserData(lightuserdata_at(state, idx).unwrap()))
+    }
     LuaType::Number => {
       // `number_at` 为 safe 门面（契约见 table.rs）；共用前置成立且 tag 已由
       // `type_at` 判为数，故必命中；`unwrap_or(0.0)` 兜底与旧「null 出参、非常
