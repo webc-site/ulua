@@ -22,7 +22,7 @@ const PLATFORM: &str = "Pure Rust In-Memory (No Process Overhead)";
 /// 基准单位（毫秒），随用例一起导出给前端。
 const UNIT_MS: &str = "ms";
 /// 相对 ulua 解释执行的基线引擎 key（其比率恒为 1.0）。
-pub const BASELINE_KEY: &str = "ulua";
+const BASELINE_KEY: &str = "ulua";
 
 #[derive(Serialize, Clone)]
 struct BenchmarkItem {
@@ -56,7 +56,7 @@ struct EnvironmentInfo {
 
 /// exec 组主结果（网站 `benchConvert.js` 消费，字段集是前端契约，不得裁剪）。
 #[derive(Serialize)]
-pub struct ResultsOutput {
+struct ResultsOutput {
   timestamp: String,
   platform: &'static str,
   environment: EnvironmentInfo,
@@ -77,7 +77,7 @@ struct GroupEngineItem {
 
 /// 分组结果 JSON（与主 `results.json` 分文件，杜绝污染既有前端数据）。
 #[derive(Serialize)]
-pub struct GroupOutput {
+struct GroupOutput {
   timestamp: String,
   group: &'static str,
   title: &'static str,

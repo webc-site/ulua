@@ -389,7 +389,7 @@ impl TypeChecker2 {
 }
 
 impl TypeChecker2 {
-  pub fn should_suppress_uninhabited_type_function_error(&mut self, ty: TypeId) -> bool {
+  fn should_suppress_uninhabited_type_function_error(&mut self, ty: TypeId) -> bool {
     let ty = follow_type::follow(ty);
     let Some(tfit) = get_type::get::<TypeFunctionInstanceType>(ty) else {
       return false;

@@ -24,7 +24,7 @@ impl IterativeTypeVisitor {
     );
   }
 
-  pub fn iterative_type_visitor_string_seen_set_bool_bool(
+  fn iterative_type_visitor_string_seen_set_bool_bool(
     &mut self,
     visitor_name: &str,
     seen: SeenSet,

@@ -508,7 +508,7 @@ impl AstJsonEncoder {
     self.write_string(from_utf8(&buf).unwrap_or(""));
   }
 
-  pub fn write_i32(&mut self, i: u32) {
+  fn write_i32(&mut self, i: u32) {
     let s = i.to_string();
     self.write_raw_string_view(&s);
   }
@@ -517,7 +517,7 @@ impl AstJsonEncoder {
 // Source: `Analysis/src/AstJsonEncoder.cpp` (AstJsonEncoder.cpp:188-191, hand-ported)
 impl AstJsonEncoder {
   // write(std::string_view str) — writeString(str) expansion
-  pub fn write_string_view(&mut self, str: &str) {
+  fn write_string_view(&mut self, str: &str) {
     self.write_string(str);
   }
 }

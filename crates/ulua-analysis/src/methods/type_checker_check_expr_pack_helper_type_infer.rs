@@ -5,7 +5,7 @@ use ulua_ast::{
   enums::ast_expr_ref::AstExprRef,
   records::{
     ast_expr::AstExpr, ast_expr_call::AstExprCall, ast_expr_index_name::AstExprIndexName,
-    location::Location,
+    ast_node::AstNode, location::Location,
   },
   rtti::ast_node_try_as,
 };
@@ -19,7 +19,6 @@ use crate::{
   methods::type_checker_check_call_overload::CheckCallOverloadArgs,
   records::{
     arena_handle::{alias, alias_opt, alias_ref},
-    ast_node::AstNode,
     free_type::FreeType,
     function_type::FunctionType,
     overload_error_entry::OverloadErrorEntry,
@@ -60,7 +59,7 @@ impl TypeChecker {
     }
   }
 
-  pub fn check_expr_pack_helper_scope_ptr_ast_expr_call(
+  fn check_expr_pack_helper_scope_ptr_ast_expr_call(
     &mut self,
     scope: &ScopePtr,
     expr: &AstExprCall,

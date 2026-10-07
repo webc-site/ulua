@@ -42,7 +42,7 @@ use crate::{
 // Source: `Analysis/src/SubtypingUnifier.cpp:24-31` — `SubtypingUnifier::can_be_unified`.
 
 impl SubtypingUnifier {
-  pub fn can_be_unified(&self, ty: TypeId) -> bool {
+  fn can_be_unified(&self, ty: TypeId) -> bool {
     let ty = follow_type::follow(ty);
     if let Some(tbl) = get_type::get::<TableType>(ty) {
       return tbl.state != TableState::Sealed;

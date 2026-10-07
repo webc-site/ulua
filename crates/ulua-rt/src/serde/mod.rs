@@ -38,8 +38,8 @@ pub mod de;
 pub mod ser;
 mod value_serialize;
 
-pub use de::{Deserializer, Options as DeserializeOptions};
-pub use ser::{Options as SerializeOptions, Serializer};
+pub use de::Options as DeserializeOptions;
+pub use ser::Options as SerializeOptions;
 pub use value_serialize::{SerializableTable, SerializableValue};
 
 /// 递归表检测的共享指针集（ser/de 同用一套）：元素是表对象地址，只作身份

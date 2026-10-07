@@ -60,7 +60,7 @@ impl StringifierState {
 impl StringifierState {
   /// C++ `emitIndentation()`:直接向结果追加缩进空格,
   /// 复用 `emit` 的截断守卫,免去临时 `String` 分配。
-  pub fn emit_indentation(&mut self) {
+  fn emit_indentation(&mut self) {
     if !self.opts().use_line_breaks {
       return;
     }

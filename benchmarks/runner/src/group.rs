@@ -40,7 +40,7 @@ impl GroupSpec {
 }
 
 /// exec 组：16 个纯计算 Lua 用例 × 全引擎矩阵（ulua 双模式 + 当前 C 后端）。
-pub static EXEC_GROUP: GroupSpec = GroupSpec {
+static EXEC_GROUP: GroupSpec = GroupSpec {
   id: "exec",
   title: "纯计算用例执行吞吐",
   dir_candidates: &["benchmarks/cases", "cases"],
@@ -52,7 +52,7 @@ pub static EXEC_GROUP: GroupSpec = GroupSpec {
 };
 
 /// 编译吞吐组（parse / parse+compile 到字节码）。
-pub static COMPILE_GROUP: GroupSpec = GroupSpec {
+static COMPILE_GROUP: GroupSpec = GroupSpec {
   id: "compile",
   title: "编译吞吐 (parse / parse+compile 到字节码)",
   dir_candidates: &["benchmarks/compile_cases", "compile_cases"],
@@ -64,7 +64,7 @@ pub static COMPILE_GROUP: GroupSpec = GroupSpec {
 };
 
 /// 类型检查组（ulua-analysis 前端，strict 模式）。
-pub static ANALYSIS_GROUP: GroupSpec = GroupSpec {
+static ANALYSIS_GROUP: GroupSpec = GroupSpec {
   id: "analysis",
   title: "类型检查吞吐 (ulua-analysis 前端, strict 模式)",
   dir_candidates: &["benchmarks/analysis_cases", "analysis_cases"],

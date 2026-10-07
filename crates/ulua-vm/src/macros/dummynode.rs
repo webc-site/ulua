@@ -21,7 +21,7 @@ unsafe impl Sync for DummyNodeSentinel {}
 
 /// sentinel 的完整值，提升为 `pub const` 供 ulua-capi 导出壳复用。
 /// 既有约定（review.md §2）：空槽结构哨兵——`Value.p = null_mut()` 作 hash 空结点的固定字节序列，从不解引用/写入，契约详见上方 `# Safety`。
-pub const LUA_H_DUMMYNODE_VALUE: DummyNodeSentinel = DummyNodeSentinel(LuaNode {
+const LUA_H_DUMMYNODE_VALUE: DummyNodeSentinel = DummyNodeSentinel(LuaNode {
   val: TValue {
     value: Value { p: null_mut() },
     extra: [0],

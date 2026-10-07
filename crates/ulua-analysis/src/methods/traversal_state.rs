@@ -18,7 +18,7 @@ impl TraversalState {
 }
 
 impl TraversalState {
-  pub fn too_long(&mut self) -> bool {
+  fn too_long(&mut self) -> bool {
     self.steps += 1;
     self.steps > dfint::LuauTypePathMaximumTraverseSteps.get()
   }

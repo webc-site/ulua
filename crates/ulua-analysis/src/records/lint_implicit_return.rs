@@ -32,7 +32,7 @@ impl<'ctx> LintImplicitReturn<'ctx> {
     lint_implicit_return_get_end_location(self, node)
   }
 
-  pub fn get_value_return(&mut self, block: &mut AstStat) -> *mut AstStatReturn {
+  fn get_value_return(&mut self, block: &mut AstStat) -> *mut AstStatReturn {
     lint_implicit_return_get_value_return(self, block)
   }
 }
@@ -44,7 +44,7 @@ impl<'ctx> AstVisitor for LintImplicitReturn<'ctx> {
 }
 
 // —— 原 methods/lint_implicit_return_get_end_location.rs ——
-pub fn lint_implicit_return_get_end_location(
+fn lint_implicit_return_get_end_location(
   _this: &mut LintImplicitReturn,
   node: *const (),
 ) -> Location {
@@ -65,7 +65,7 @@ pub fn lint_implicit_return_get_end_location(
 }
 
 // —— 原 methods/lint_implicit_return_get_value_return.rs ——
-pub fn lint_implicit_return_get_value_return(
+fn lint_implicit_return_get_value_return(
   _this: &mut LintImplicitReturn,
   block: &mut AstStat,
 ) -> *mut AstStatReturn {

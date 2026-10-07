@@ -561,7 +561,7 @@ impl Subtyping {
     }
   }
 
-  pub fn is_covariant_with_subtyping_environment_normalized_extern_type_type_ids_not_null_scope(
+  fn is_covariant_with_subtyping_environment_normalized_extern_type_type_ids_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_extern_type: &NormalizedExternType,
@@ -590,7 +590,7 @@ impl Subtyping {
     SubtypingResult::ok()
   }
 
-  pub fn is_covariant_with_subtyping_environment_normalized_string_type_normalized_string_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_normalized_string_type_normalized_string_type_not_null_scope(
     &mut self,
     _env: &mut SubtypingEnvironment,
     sub_string: &NormalizedStringType,
@@ -600,7 +600,7 @@ impl Subtyping {
     SubtypingResult::from_is_subtype(is_subtype_normalized_string(sub_string, super_string))
   }
 
-  pub fn is_covariant_with_subtyping_environment_normalized_string_type_type_ids_not_null_scope(
+  fn is_covariant_with_subtyping_environment_normalized_string_type_type_ids_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_string: &NormalizedStringType,
@@ -654,7 +654,7 @@ impl Subtyping {
     SubtypingResult::fail()
   }
 
-  pub fn is_covariant_with_subtyping_environment_normalized_function_type_normalized_function_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_normalized_function_type_normalized_function_type_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_function: &NormalizedFunctionType,
@@ -673,7 +673,7 @@ impl Subtyping {
     }
   }
 
-  pub fn is_covariant_with_subtyping_environment_type_ids_type_ids_not_null_scope(
+  fn is_covariant_with_subtyping_environment_type_ids_type_ids_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_types: &TypeIds,
@@ -1050,7 +1050,7 @@ impl Subtyping {
     result
   }
 
-  pub fn is_covariant_with_subtyping_environment_union_type_type_id_not_null_scope(
+  fn is_covariant_with_subtyping_environment_union_type_type_id_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_union: &UnionType,
@@ -1075,7 +1075,7 @@ impl Subtyping {
     result
   }
 
-  pub fn is_covariant_with_subtyping_environment_type_id_intersection_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_type_id_intersection_type_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_ty: TypeId,
@@ -1103,7 +1103,7 @@ impl Subtyping {
     result
   }
 
-  pub fn is_covariant_with_subtyping_environment_intersection_type_type_id_not_null_scope(
+  fn is_covariant_with_subtyping_environment_intersection_type_type_id_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_intersection: &IntersectionType,
@@ -1131,7 +1131,7 @@ impl Subtyping {
     result
   }
 
-  pub fn is_covariant_with_subtyping_environment_negation_type_type_id_not_null_scope(
+  fn is_covariant_with_subtyping_environment_negation_type_type_id_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_negation: &NegationType,
@@ -1242,7 +1242,7 @@ impl Subtyping {
     result
   }
 
-  pub fn is_covariant_with_subtyping_environment_type_id_negation_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_type_id_negation_type_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_ty: TypeId,
@@ -1418,7 +1418,7 @@ impl Subtyping {
     result
   }
 
-  pub fn is_covariant_with_subtyping_environment_primitive_type_primitive_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_primitive_type_primitive_type_not_null_scope(
     &mut self,
     _env: &mut SubtypingEnvironment,
     sub_prim: &PrimitiveType,
@@ -1428,7 +1428,7 @@ impl Subtyping {
     SubtypingResult::from_is_subtype(sub_prim.r#type == super_prim.r#type)
   }
 
-  pub fn is_covariant_with_subtyping_environment_singleton_type_primitive_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_singleton_type_primitive_type_not_null_scope(
     &mut self,
     _env: &mut SubtypingEnvironment,
     sub_singleton: &SingletonType,
@@ -1450,7 +1450,7 @@ impl Subtyping {
     SubtypingResult::fail()
   }
 
-  pub fn is_covariant_with_subtyping_environment_singleton_type_singleton_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_singleton_type_singleton_type_not_null_scope(
     &mut self,
     _env: &mut SubtypingEnvironment,
     sub_singleton: &SingletonType,
@@ -1476,7 +1476,7 @@ fn record(
 }
 
 impl Subtyping {
-  pub fn is_covariant_with_subtyping_environment_table_type_table_type_bool_not_null_scope(
+  fn is_covariant_with_subtyping_environment_table_type_table_type_bool_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_table: &TableType,
@@ -1688,7 +1688,7 @@ impl Subtyping {
     result
   }
 
-  pub fn is_covariant_with_subtyping_environment_metatable_type_metatable_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_metatable_type_metatable_type_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_mt: &MetatableType,
@@ -1718,7 +1718,7 @@ impl Subtyping {
       .to_owned()
   }
 
-  pub fn is_covariant_with_subtyping_environment_metatable_type_table_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_metatable_type_table_type_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_mt: &MetatableType,
@@ -1772,7 +1772,7 @@ impl Subtyping {
     SubtypingResult::fail()
   }
 
-  pub fn is_covariant_with_subtyping_environment_metatable_type_primitive_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_metatable_type_primitive_type_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_mt: &MetatableType,
@@ -1799,7 +1799,7 @@ impl Subtyping {
     SubtypingResult::fail()
   }
 
-  pub fn is_covariant_with_subtyping_environment_extern_type_extern_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_extern_type_extern_type_not_null_scope(
     &mut self,
     _env: &mut SubtypingEnvironment,
     sub_extern_type: &ExternType,
@@ -1812,7 +1812,7 @@ impl Subtyping {
     ))
   }
 
-  pub fn is_covariant_with_subtyping_environment_type_id_extern_type_type_id_table_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_type_id_extern_type_type_id_table_type_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_ty: TypeId,
@@ -1918,7 +1918,7 @@ impl Subtyping {
   /// 形参全为受检引用：`scope` 为非空 `&Scope`，`sub_function`/`super_function`
   /// 借用 arena 中的 `FunctionType` 节点，`env` 为调用方独占借用——契约由类型
   /// 承载，不再以 `unsafe fn` 表达。
-  pub fn is_covariant_with_subtyping_environment_function_type_function_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_function_type_function_type_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_function: &FunctionType,
@@ -2077,7 +2077,7 @@ impl Subtyping {
     result
   }
 
-  pub fn is_covariant_with_subtyping_environment_table_type_primitive_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_table_type_primitive_type_not_null_scope(
     &mut self,
     _env: &mut SubtypingEnvironment,
     _sub_table: &TableType,
@@ -2091,7 +2091,7 @@ impl Subtyping {
     result
   }
 
-  pub fn is_covariant_with_subtyping_environment_primitive_type_table_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_primitive_type_table_type_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_prim: &PrimitiveType,
@@ -2162,7 +2162,7 @@ impl Subtyping {
     result
   }
 
-  pub fn is_covariant_with_subtyping_environment_singleton_type_table_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_singleton_type_table_type_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_singleton: &SingletonType,
@@ -2488,7 +2488,7 @@ impl Subtyping {
     result
   }
 
-  pub fn is_covariant_with_subtyping_environment_normalized_extern_type_normalized_extern_type_not_null_scope(
+  fn is_covariant_with_subtyping_environment_normalized_extern_type_normalized_extern_type_not_null_scope(
     &mut self,
     env: &mut SubtypingEnvironment,
     sub_extern_type: &NormalizedExternType,

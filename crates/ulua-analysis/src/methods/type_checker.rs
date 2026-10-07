@@ -422,7 +422,7 @@ impl TypeChecker {
   /// C++ `std::optional<TypeId> TypeChecker::filterMapImpl(TypeId, TypeIdPredicate)`
   /// (`Analysis/src/TypeInfer.cpp:5559-5565`)。predicate 以泛型传入，
   /// 上游 `TypeIdPredicate` 是 `std::function`，这里无需 dyn/Box。
-  pub fn filter_map_impl<P: TypeIdPredicate>(
+  fn filter_map_impl<P: TypeIdPredicate>(
     &mut self,
     r#type: TypeId,
     predicate: &mut P,

@@ -17,13 +17,13 @@ use crate::{
 };
 
 impl NormalizedType {
-  pub fn has_booleans(&self) -> bool {
+  fn has_booleans(&self) -> bool {
     get_type::get::<NeverType>(self.booleans).is_none()
   }
 }
 
 impl NormalizedType {
-  pub fn has_buffers(&self) -> bool {
+  fn has_buffers(&self) -> bool {
     get_type::get::<NeverType>(self.buffers).is_none()
   }
 }
@@ -47,7 +47,7 @@ impl NormalizedType {
 }
 
 impl NormalizedType {
-  pub fn has_integers(&self) -> bool {
+  fn has_integers(&self) -> bool {
     if fflag::LuauIntegerType2.get() {
       get_type::get::<NeverType>(self.integers).is_none()
     } else {
@@ -57,13 +57,13 @@ impl NormalizedType {
 }
 
 impl NormalizedType {
-  pub fn has_nils(&self) -> bool {
+  fn has_nils(&self) -> bool {
     get_type::get::<NeverType>(self.nils).is_none()
   }
 }
 
 impl NormalizedType {
-  pub fn has_numbers(&self) -> bool {
+  fn has_numbers(&self) -> bool {
     get_type::get::<NeverType>(self.numbers).is_none()
   }
 }
@@ -71,7 +71,7 @@ impl NormalizedType {
 impl NormalizedType {
   /// 单个部件的非空判定：把 [`NormalizedPart`] 派发到对应的 `has_x()` 访问器，
   /// 使名单化判定（[`NormalizedType::has_parts_other_than`]）与逐条书写等价。
-  pub fn has_part(&self, part: NormalizedPart) -> bool {
+  fn has_part(&self, part: NormalizedPart) -> bool {
     match part {
       NormalizedPart::Tops => self.has_tops(),
       NormalizedPart::Booleans => self.has_booleans(),
@@ -102,7 +102,7 @@ impl NormalizedType {
 }
 
 impl NormalizedType {
-  pub fn has_strings(&self) -> bool {
+  fn has_strings(&self) -> bool {
     !self.strings.is_never()
   }
 }
@@ -114,7 +114,7 @@ impl NormalizedType {
 }
 
 impl NormalizedType {
-  pub fn has_threads(&self) -> bool {
+  fn has_threads(&self) -> bool {
     get_type::get::<NeverType>(self.threads).is_none()
   }
 }
@@ -144,7 +144,7 @@ impl NormalizedType {
 }
 
 impl NormalizedType {
-  pub fn has_tyvars(&self) -> bool {
+  fn has_tyvars(&self) -> bool {
     !self.tyvars.is_empty()
   }
 }

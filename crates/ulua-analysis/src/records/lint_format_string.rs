@@ -29,7 +29,7 @@ pub struct LintFormatString<'ctx> {
 /// `char_classifier` 的编译期分类表先例；位图化仅替换成员判定，`|b' '` 大小写
 /// 折叠臂语义逐字保留。
 #[derive(Debug, Clone, Copy)]
-pub struct CharSet([u64; 4]);
+struct CharSet([u64; 4]);
 
 impl CharSet {
   /// 由字节字面量集构建位图（const 求值的 while 循环，重复元素幂等无害，
@@ -78,7 +78,7 @@ impl<'ctx> AstVisitor for LintFormatString<'ctx> {
 
 // —— 原 methods/lint_format_string_check_date_format.rs ——
 impl<'ctx> LintFormatString<'ctx> {
-  pub fn check_date_format(&self, mut data: &[u8]) -> Option<&'static str> {
+  fn check_date_format(&self, mut data: &[u8]) -> Option<&'static str> {
     while let Some((&first, rest)) = data.split_first() {
       match first {
         b'%' => match rest.split_first() {
@@ -102,7 +102,7 @@ impl<'ctx> LintFormatString<'ctx> {
 
 // —— 原 methods/lint_format_string_check_string_format.rs ——
 impl<'ctx> LintFormatString<'ctx> {
-  pub fn check_string_format(&self, mut data: &[u8]) -> Option<&'static str> {
+  fn check_string_format(&self, mut data: &[u8]) -> Option<&'static str> {
     while let Some((&first, mut rest)) = data.split_first() {
       if first != b'%' {
         data = rest;
@@ -162,7 +162,7 @@ impl<'ctx> LintFormatString<'ctx> {
 // —— 原 methods/lint_format_string_check_string_match.rs ——
 impl<'ctx> LintFormatString<'ctx> {
   #[inline]
-  pub fn check_string_match(&self, mut data: &[u8]) -> Result<i32, &'static str> {
+  fn check_string_match(&self, mut data: &[u8]) -> Result<i32, &'static str> {
     let mut open_captures: Vec<i32> = Vec::new();
     let mut total_captures: i32 = 0;
     while let Some((&first, rest)) = data.split_first() {
@@ -275,7 +275,7 @@ impl<'ctx> LintFormatString<'ctx> {
 // —— 原 methods/lint_format_string_check_string_match_set.rs ——
 impl<'ctx> LintFormatString<'ctx> {
   #[inline]
-  pub fn check_string_match_set(
+  fn check_string_match_set(
     &self,
     mut data: &[u8],
     magic: CharSet,
@@ -321,7 +321,7 @@ impl<'ctx> LintFormatString<'ctx> {
 // —— 原 methods/lint_format_string_check_string_pack.rs ——
 impl<'ctx> LintFormatString<'ctx> {
   #[inline]
-  pub fn check_string_pack(&self, mut data: &[u8], fixed: bool) -> Option<&'static str> {
+  fn check_string_pack(&self, mut data: &[u8], fixed: bool) -> Option<&'static str> {
     while let Some((&ch, mut rest)) = data.split_first() {
       if !K_PACK_OPTIONS.has(ch) {
         return Some("unexpected character; must be a pack specifier or space");
@@ -368,7 +368,7 @@ impl<'ctx> LintFormatString<'ctx> {
 // —— 原 methods/lint_format_string_check_string_replace.rs ——
 impl<'ctx> LintFormatString<'ctx> {
   #[inline]
-  pub fn check_string_replace(&self, mut data: &[u8], captures: i32) -> Option<&'static str> {
+  fn check_string_replace(&self, mut data: &[u8], captures: i32) -> Option<&'static str> {
     while let Some((&first, rest)) = data.split_first() {
       if first == b'%' {
         match rest.split_first() {
@@ -407,7 +407,7 @@ impl<'ctx> LintFormatString<'ctx> {
 // —— 原 methods/lint_format_string_is_alpha.rs ——
 impl<'ctx> LintFormatString<'ctx> {
   #[inline]
-  pub fn is_alpha(&self, ch: u8) -> bool {
+  fn is_alpha(&self, ch: u8) -> bool {
     ((ch | b' ').wrapping_sub(b'a')) < 26
   }
 }
@@ -426,7 +426,7 @@ impl<'ctx> LintFormatString<'ctx> {
   /// cpp `matchCall(AstExprCall*)`：`node` 为分析期存活、由 arena 持有的调用节点
   /// 共享借用（cpp 裸指针形参的 Rust 对应），本方法对其只读；宿主 context 经
   /// `self.context` 写句柄瞬时借用。
-  pub fn match_call(&mut self, node: &AstExprCall) {
+  fn match_call(&mut self, node: &AstExprCall) {
     let Some(func_ref) = alias_opt(node.func) else {
       return;
     };

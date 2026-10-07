@@ -92,7 +92,7 @@ impl IrCallWrapperX64 {
     self.add_argument_op(target_size, OperandX64::from(source), IrOp::new());
   }
 
-  pub fn add_register_use(&mut self, reg: RegisterX64) {
+  fn add_register_use(&mut self, reg: RegisterX64) {
     if reg.size() == SizeX64::Xmmword {
       self.xmm_uses[reg.index() as usize] += 1;
     } else if reg.size() != SizeX64::None {
@@ -278,7 +278,7 @@ impl IrCallWrapperX64 {
     }
   }
 
-  pub fn count_register_uses(&mut self) {
+  fn count_register_uses(&mut self) {
     // 快照各参数的寄存器字段（RegisterX64 是 Copy），规避与 add_register_use 可变借用冲突，去除原 unsafe
     for i in 0..self.arg_count as usize {
       let (base, index) = (self.args[i].source.base, self.args[i].source.index);
@@ -290,7 +290,7 @@ impl IrCallWrapperX64 {
     self.add_register_use(self.func_op.index);
   }
 
-  pub fn find_conflicting_target(&self) -> RegisterX64 {
+  fn find_conflicting_target(&self) -> RegisterX64 {
     // 全部只读借用（&self 方法），迭代器替代索引遍历
     for arg in &self.args[..self.arg_count as usize] {
       if arg.candidate {
@@ -317,7 +317,7 @@ impl IrCallWrapperX64 {
 
   /// 释放参数 source 操作数占用的寄存器（base 与 index）。
   /// 按值取 `OperandX64`（Copy），调用侧即可与 `&mut self` 方法自然共存。
-  pub fn free_source_registers(&mut self, source: OperandX64) {
+  fn free_source_registers(&mut self, source: OperandX64) {
     self.remove_register_use(source.base);
     self.remove_register_use(source.index);
   }
@@ -366,7 +366,7 @@ impl IrCallWrapperX64 {
   }
 
   #[inline]
-  pub fn interferes_with_active_sources(
+  fn interferes_with_active_sources(
     &self,
     target_arg: &CallArgument,
     target_arg_index: i32,
@@ -384,7 +384,7 @@ impl IrCallWrapperX64 {
       })
   }
 
-  pub fn interferes_with_active_target(&self, source_reg: RegisterX64) -> bool {
+  fn interferes_with_active_target(&self, source_reg: RegisterX64) -> bool {
     // 命中即短路
     self
       .args
@@ -394,7 +394,7 @@ impl IrCallWrapperX64 {
   }
 
   #[inline]
-  pub fn interferes_with_operand(&self, op: &OperandX64, reg: RegisterX64) -> bool {
+  fn interferes_with_operand(&self, op: &OperandX64, reg: RegisterX64) -> bool {
     same_underlying_register(op.base, reg) || same_underlying_register(op.index, reg)
   }
 
@@ -418,7 +418,7 @@ impl IrCallWrapperX64 {
   /// 将参数值搬运到目标位置（寄存器/栈槽）。
   /// 按值取 `CallArgument`（Copy，字段全为值类型），调用侧可直接传 `self.args[i]`，
   /// 消除原裸指针再借用样板。
-  pub fn move_to_target(&mut self, arg: CallArgument) {
+  fn move_to_target(&mut self, arg: CallArgument) {
     let source_cat = arg.source.cat;
     if source_cat == CategoryX64::Reg {
       let source = arg.source.base;
@@ -448,7 +448,7 @@ impl IrCallWrapperX64 {
     }
   }
 
-  pub fn remove_register_use(&mut self, reg: RegisterX64) {
+  fn remove_register_use(&mut self, reg: RegisterX64) {
     if reg.size() == SizeX64::Xmmword {
       CODEGEN_ASSERT!(self.xmm_uses[reg.index() as usize] != 0);
       self.xmm_uses[reg.index() as usize] -= 1;
@@ -466,7 +466,7 @@ impl IrCallWrapperX64 {
     }
   }
 
-  pub fn rename_conflicting_register(&mut self, conflict: RegisterX64) {
+  fn rename_conflicting_register(&mut self, conflict: RegisterX64) {
     // 取一个新寄存器
     let fresh_reg = self.regs().alloc_reg(conflict.size(), K_INVALID_INST_IDX);
 
@@ -485,7 +485,7 @@ impl IrCallWrapperX64 {
     self.rename_source_registers(conflict, fresh_reg);
   }
 
-  pub fn rename_register(
+  fn rename_register(
     &mut self,
     target: &mut RegisterX64,
     reg: RegisterX64,
@@ -504,7 +504,7 @@ impl IrCallWrapperX64 {
     }
   }
 
-  pub fn rename_source_registers(&mut self, reg: RegisterX64, replacement: RegisterX64) {
+  fn rename_source_registers(&mut self, reg: RegisterX64, replacement: RegisterX64) {
     // RegisterX64 是 Copy：先取出、重命名、再写回，等价 cpp 的原地重命名，
     // 且不再需要裸指针转手来规避与 &mut self 的借用冲突。
     for i in 0..(self.arg_count as usize) {
@@ -600,7 +600,7 @@ impl IrCallWrapperX64 {
 
 /// 找到一个目标寄存器不与现存 source 冲突的候选参数，返回其在 `args` 中的下标；
 /// 无候选时返回 `None`。
-pub fn find_non_interfering_argument(receiver: &IrCallWrapperX64) -> Option<usize> {
+fn find_non_interfering_argument(receiver: &IrCallWrapperX64) -> Option<usize> {
   (0..receiver.arg_count as usize).find(|&i| {
     let arg = &receiver.args[i];
     arg.candidate

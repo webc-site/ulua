@@ -36,7 +36,7 @@ pub struct LintDuplicateLocal<'ctx> {
 impl<'ctx> LintDuplicateLocal<'ctx> {
   /// `_` 前缀局部变量视为有意忽略，不告警；指针有效性契约同
   /// [`is_underscore_name`]。
-  pub fn ignore_duplicate(&self, local: *mut AstLocal) -> bool {
+  fn ignore_duplicate(&self, local: *mut AstLocal) -> bool {
     is_underscore_name(local)
   }
 }

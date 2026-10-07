@@ -18,7 +18,7 @@ impl RecursionCounter {
     RecursionCounter { count }
   }
 
-  pub fn drop_recursion_counter(&mut self) {
+  fn drop_recursion_counter(&mut self) {
     let count = self.count.get();
     LUAU_ASSERT!(*count > 0);
     *self.count.get_mut() -= 1;

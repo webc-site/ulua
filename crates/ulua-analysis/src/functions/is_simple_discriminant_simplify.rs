@@ -12,7 +12,7 @@ use crate::{
   type_aliases::type_id::TypeId,
 };
 
-pub fn is_simple_discriminant(ty: TypeId, seen: &mut DenseHashSet<TypeId>) -> bool {
+fn is_simple_discriminant(ty: TypeId, seen: &mut DenseHashSet<TypeId>) -> bool {
   let ty = follow_type::follow(ty);
   if seen.contains(&ty) {
     return false;

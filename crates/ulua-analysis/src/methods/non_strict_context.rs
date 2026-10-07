@@ -22,7 +22,7 @@ impl NonStrictContext {
   }
 }
 
-pub fn non_strict_context_conjunction(
+fn non_strict_context_conjunction(
   builtins: Handle<BuiltinTypes>,
   arena: Handle<TypeArena>,
   left: &NonStrictContext,

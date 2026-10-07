@@ -109,7 +109,7 @@ pub fn kill_unused_blocks(function: &mut IrFunction) {
 // 位测试/置位表达式。`regs` 为 64 位字序的位图（RegisterSet.regs 为 4×u64，共 256 位）。
 
 /// 位图每字位数（编译期常量，来自 u64::BITS）
-pub const REG_WORD_BITS: usize = u64::BITS as usize;
+const REG_WORD_BITS: usize = u64::BITS as usize;
 
 /// 测试 `reg` 位是否置位
 #[inline]

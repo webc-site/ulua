@@ -245,7 +245,7 @@ impl ConstraintSolver {
     success
   }
 
-  pub fn try_dispatch_subtype_constraint_not_null_constraint(
+  fn try_dispatch_subtype_constraint_not_null_constraint(
     &mut self,
     c: &SubtypeConstraint,
     constraint: &Constraint,
@@ -258,7 +258,7 @@ impl ConstraintSolver {
     true
   }
 
-  pub fn try_dispatch_pack_subtype_constraint_not_null_constraint(
+  fn try_dispatch_pack_subtype_constraint_not_null_constraint(
     &mut self,
     c: &PackSubtypeConstraint,
     constraint: &Constraint,
@@ -271,7 +271,7 @@ impl ConstraintSolver {
     true
   }
 
-  pub fn try_dispatch_generalization_constraint_not_null_constraint(
+  fn try_dispatch_generalization_constraint_not_null_constraint(
     &mut self,
     c: &GeneralizationConstraint,
     constraint: &Constraint,
@@ -392,7 +392,7 @@ impl ConstraintSolver {
     true
   }
 
-  pub fn try_dispatch_iterable_constraint_not_null_constraint_bool(
+  fn try_dispatch_iterable_constraint_not_null_constraint_bool(
     &mut self,
     c: &IterableConstraint,
     constraint: &Constraint,
@@ -515,7 +515,7 @@ impl ConstraintSolver {
     self.try_dispatch_iterable_table(iterator.head[0], c, constraint, force)
   }
 
-  pub fn try_dispatch_name_constraint_not_null_constraint(
+  fn try_dispatch_name_constraint_not_null_constraint(
     &mut self,
     c: &NameConstraint,
     constraint: &Constraint,
@@ -570,7 +570,7 @@ impl ConstraintSolver {
     true
   }
 
-  pub fn try_dispatch_type_alias_expansion_constraint_not_null_constraint(
+  fn try_dispatch_type_alias_expansion_constraint_not_null_constraint(
     &mut self,
     c: &TypeAliasExpansionConstraint,
     constraint: &Constraint,
@@ -796,7 +796,7 @@ fn ast_name_to_string(name: AstName) -> String {
 }
 
 impl ConstraintSolver {
-  pub fn try_dispatch_function_call_constraint_not_null_constraint_bool(
+  fn try_dispatch_function_call_constraint_not_null_constraint_bool(
     &mut self,
     c: &FunctionCallConstraint,
     constraint: &Constraint,
@@ -1157,7 +1157,7 @@ impl ConstraintSolver {
     true
   }
 
-  pub fn try_dispatch_function_check_constraint_not_null_constraint_bool(
+  fn try_dispatch_function_check_constraint_not_null_constraint_bool(
     &mut self,
     c: &FunctionCheckConstraint,
     constraint: &Constraint,
@@ -1447,7 +1447,7 @@ impl ConstraintSolver {
     result
   }
 
-  pub fn try_dispatch_assign_prop_constraint_not_null_constraint(
+  fn try_dispatch_assign_prop_constraint_not_null_constraint(
     &mut self,
     c: &AssignPropConstraint,
     constraint: &Constraint,
@@ -1646,7 +1646,7 @@ fn table_stuff(
 }
 
 impl ConstraintSolver {
-  pub fn try_dispatch_assign_index_constraint_not_null_constraint(
+  fn try_dispatch_assign_index_constraint_not_null_constraint(
     &mut self,
     c: &AssignIndexConstraint,
     constraint: &Constraint,
@@ -1780,7 +1780,7 @@ impl ConstraintSolver {
     true
   }
 
-  pub fn try_dispatch_unpack_constraint_not_null_constraint(
+  fn try_dispatch_unpack_constraint_not_null_constraint(
     &mut self,
     c: &UnpackConstraint,
     constraint: &Constraint,
@@ -1924,7 +1924,7 @@ impl ConstraintSolver {
     reduction_finished
   }
 
-  pub fn try_dispatch_reduce_constraint_not_null_constraint_bool(
+  fn try_dispatch_reduce_constraint_not_null_constraint_bool(
     &mut self,
     c: &ReduceConstraint,
     constraint: &Constraint,
@@ -1962,7 +1962,7 @@ impl ConstraintSolver {
     self.finish_reduction(&result, constraint, force, reduction_finished)
   }
 
-  pub fn try_dispatch_reduce_pack_constraint_not_null_constraint_bool(
+  fn try_dispatch_reduce_pack_constraint_not_null_constraint_bool(
     &mut self,
     c: &ReducePackConstraint,
     constraint: &Constraint,
@@ -1985,7 +1985,7 @@ impl ConstraintSolver {
     self.finish_reduction(&result, constraint, force, reduction_finished)
   }
 
-  pub fn try_dispatch_equality_constraint_not_null_constraint(
+  fn try_dispatch_equality_constraint_not_null_constraint(
     &mut self,
     c: &EqualityConstraint,
     constraint: &Constraint,
@@ -1995,7 +1995,7 @@ impl ConstraintSolver {
     true
   }
 
-  pub fn try_dispatch_simplify_constraint_not_null_constraint_bool(
+  fn try_dispatch_simplify_constraint_not_null_constraint_bool(
     &mut self,
     c: &SimplifyConstraint,
     constraint: &Constraint,
@@ -2151,7 +2151,7 @@ impl ConstraintSolver {
     true
   }
 
-  pub fn try_dispatch_type_instantiation_constraint_not_null_constraint(
+  fn try_dispatch_type_instantiation_constraint_not_null_constraint(
     &mut self,
     c: &TypeInstantiationConstraint,
     constraint: &Constraint,
@@ -2173,7 +2173,7 @@ impl ConstraintSolver {
     true
   }
 
-  pub fn try_dispatch_push_type_constraint_not_null_constraint_bool(
+  fn try_dispatch_push_type_constraint_not_null_constraint_bool(
     &mut self,
     c: &PushTypeConstraint,
     constraint: &Constraint,

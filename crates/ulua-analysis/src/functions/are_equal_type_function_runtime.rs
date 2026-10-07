@@ -42,7 +42,7 @@ fn already_seen<T>(seen: &mut AreEqualState, lhs: &T, rhs: &T) -> bool {
   )
 }
 
-pub fn are_equal_are_equal_state_type_function_singleton_type_type_function_singleton_type(
+fn are_equal_are_equal_state_type_function_singleton_type_type_function_singleton_type(
   seen: &mut AreEqualState,
   lhs: &TypeFunctionSingletonType,
   rhs: &TypeFunctionSingletonType,
@@ -58,7 +58,7 @@ pub fn are_equal_are_equal_state_type_function_singleton_type_type_function_sing
   }
 }
 
-pub fn are_equal_are_equal_state_type_function_union_type_type_function_union_type(
+fn are_equal_are_equal_state_type_function_union_type_type_function_union_type(
   seen: &mut AreEqualState,
   lhs: &TypeFunctionUnionType,
   rhs: &TypeFunctionUnionType,
@@ -85,7 +85,7 @@ pub fn are_equal_are_equal_state_type_function_union_type_type_function_union_ty
   true
 }
 
-pub fn are_equal_are_equal_state_type_function_intersection_type_type_function_intersection_type(
+fn are_equal_are_equal_state_type_function_intersection_type_type_function_intersection_type(
   seen: &mut AreEqualState,
   lhs: &TypeFunctionIntersectionType,
   rhs: &TypeFunctionIntersectionType,
@@ -112,7 +112,7 @@ pub fn are_equal_are_equal_state_type_function_intersection_type_type_function_i
   true
 }
 
-pub fn are_equal_are_equal_state_type_function_negation_type_type_function_negation_type(
+fn are_equal_are_equal_state_type_function_negation_type_type_function_negation_type(
   seen: &mut AreEqualState,
   lhs: &TypeFunctionNegationType,
   rhs: &TypeFunctionNegationType,
@@ -128,7 +128,7 @@ pub fn are_equal_are_equal_state_type_function_negation_type_type_function_negat
   )
 }
 
-pub fn are_equal_are_equal_state_type_function_table_type_type_function_table_type(
+fn are_equal_are_equal_state_type_function_table_type_type_function_table_type(
   seen: &mut AreEqualState,
   lhs: &TypeFunctionTableType,
   rhs: &TypeFunctionTableType,
@@ -265,7 +265,7 @@ pub fn are_equal_are_equal_state_type_function_function_type_type_function_funct
   true
 }
 
-pub fn are_equal_are_equal_state_type_function_extern_type_type_function_extern_type(
+fn are_equal_are_equal_state_type_function_extern_type_type_function_extern_type(
   seen: &mut AreEqualState,
   lhs: &TypeFunctionExternType,
   rhs: &TypeFunctionExternType,
@@ -373,7 +373,7 @@ pub fn are_equal_are_equal_state_type_function_type_type_function_type(
   false
 }
 
-pub fn are_equal_are_equal_state_type_function_type_pack_type_function_type_pack(
+fn are_equal_are_equal_state_type_function_type_pack_type_function_type_pack(
   seen: &mut AreEqualState,
   lhs: &TypeFunctionTypePack,
   rhs: &TypeFunctionTypePack,
@@ -396,7 +396,7 @@ pub fn are_equal_are_equal_state_type_function_type_pack_type_function_type_pack
   true
 }
 
-pub fn are_equal_are_equal_state_type_function_variadic_type_pack_type_function_variadic_type_pack(
+fn are_equal_are_equal_state_type_function_variadic_type_pack_type_function_variadic_type_pack(
   seen: &mut AreEqualState,
   lhs: &TypeFunctionVariadicTypePack,
   rhs: &TypeFunctionVariadicTypePack,

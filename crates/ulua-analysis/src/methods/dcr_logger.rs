@@ -30,7 +30,7 @@ use crate::{
 };
 
 impl DcrLogger {
-  pub fn capture_boundary_state(
+  fn capture_boundary_state(
     &mut self,
     target: &mut BoundarySnapshot,
     root_scope: &Scope,
@@ -330,7 +330,7 @@ impl DcrLogger {
 impl DcrLogger {
   /// `std::vector<ConstraintBlock> DcrLogger::snapshotBlocks(NotNull<const Constraint> c)`
   /// (`Analysis/src/DcrLogger.cpp:510-550`).
-  pub fn snapshot_blocks(&self, c: *const Constraint) -> Vec<ConstraintBlock> {
+  fn snapshot_blocks(&self, c: *const Constraint) -> Vec<ConstraintBlock> {
     // The hash from `c` is independent of `opts`, so a `&self` shared borrow
     // suffices for the lookup; stringification clones `opts` internally.
     let mut opts = self.opts.clone();

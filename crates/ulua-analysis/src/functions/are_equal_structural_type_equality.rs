@@ -89,7 +89,7 @@ pub fn are_equal_seen_set_type_pack_var_type_pack_var(
   false
 }
 
-pub fn are_equal_seen_set_function_type_function_type(
+fn are_equal_seen_set_function_type_function_type(
   seen: &mut SeenSet,
   lhs: &FunctionType,
   rhs: &FunctionType,
@@ -109,7 +109,7 @@ pub fn are_equal_seen_set_function_type_function_type(
   are_equal_seen_set_type_pack_var_type_pack_var(seen, lhs_ret_types, rhs_ret_types)
 }
 
-pub fn are_equal_seen_set_table_type_table_type(
+fn are_equal_seen_set_table_type_table_type(
   seen: &mut SeenSet,
   lhs: &TableType,
   rhs: &TableType,
@@ -181,7 +181,7 @@ pub fn are_equal_seen_set_table_type_table_type(
   true
 }
 
-pub fn are_equal_seen_set_metatable_type_metatable_type(
+fn are_equal_seen_set_metatable_type_metatable_type(
   seen: &mut SeenSet,
   lhs: &MetatableType,
   rhs: &MetatableType,

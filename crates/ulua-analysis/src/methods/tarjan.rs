@@ -61,7 +61,7 @@ impl Tarjan {
 }
 
 impl Tarjan {
-  pub fn get_dirty(&self, index: i32) -> bool {
+  fn get_dirty(&self, index: i32) -> bool {
     let index_usize = index as usize;
     LUAU_ASSERT!(index_usize < self.nodes.len());
     self.nodes[index_usize].dirty
@@ -308,7 +308,7 @@ impl Tarjan {
 }
 
 impl Tarjan {
-  pub fn set_dirty(&mut self, index: i32, d: bool) {
+  fn set_dirty(&mut self, index: i32, d: bool) {
     let index_usize = index as usize;
     LUAU_ASSERT!(index_usize < self.nodes.len());
     self.nodes[index_usize].dirty = d;
@@ -337,7 +337,7 @@ impl Tarjan {
 }
 
 impl Tarjan {
-  pub fn visit_child_optional_ty<Ty>(&mut self, ty: Option<Ty>)
+  fn visit_child_optional_ty<Ty>(&mut self, ty: Option<Ty>)
   where
     Ty: Into<TypeId>,
   {
@@ -534,7 +534,7 @@ impl Tarjan {
 }
 
 impl Tarjan {
-  pub fn visit_edge(&mut self, index: i32, parent_index: i32) {
+  fn visit_edge(&mut self, index: i32, parent_index: i32) {
     let is_dirty = Tarjan::get_dirty(self, index);
     if is_dirty {
       Tarjan::set_dirty(self, parent_index, true);
@@ -586,7 +586,7 @@ impl Tarjan {
   /// `isDirty` and `foundDirty` are pure-virtual in C++; here they dispatch to
   /// the subclass through the installed
   /// [`SubstitutionVtable`](crate::records::tarjan::SubstitutionVtable).
-  pub fn visit_scc(&mut self, index: i32) {
+  fn visit_scc(&mut self, index: i32) {
     let mut d = self.get_dirty(index);
 
     let owner = self.vtable.owner;

@@ -103,7 +103,7 @@ impl<T: WriteJson> WriteJson for Option<T> {
   }
 }
 
-pub fn write_json_emitter_unordered_map_string_t<T: WriteJson + DenseDefault>(
+fn write_json_emitter_unordered_map_string_t<T: WriteJson + DenseDefault>(
   emitter: &mut JsonEmitter,
   map: &DenseHashMap<String, T>,
 ) {

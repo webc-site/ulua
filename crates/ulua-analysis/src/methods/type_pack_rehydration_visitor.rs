@@ -49,7 +49,7 @@ impl TypePackRehydrationVisitor {
 impl TypePackRehydrationVisitor {
   /// C++ `AstTypePack* operator()(const BoundTypePack& btp) const` —
   /// `return Luau::visit(*this, btp.bound_to->ty);`.
-  pub fn rehydrate_bound_pack(&self, btp: &BoundTypePack) -> *mut AstTypePack {
+  fn rehydrate_bound_pack(&self, btp: &BoundTypePack) -> *mut AstTypePack {
     // Safety: `btp.bound_to` 由 BoundTypePack 变体持有，对应 C++
     // `NotNull<TypePackId>`，恒指向类型 arena 中存活节点（attach 全程 arena
     // 只读）。这满足被调 `visit_type_pack` 契约对 `tp` 可解引用、变体稳定
@@ -58,7 +58,7 @@ impl TypePackRehydrationVisitor {
   }
 
   #[inline]
-  pub fn rehydrate_blocked_pack(&self, _btp: &BlockedTypePack) -> *mut AstTypePack {
+  fn rehydrate_blocked_pack(&self, _btp: &BlockedTypePack) -> *mut AstTypePack {
     // Safety: `self.allocator` 是 `TypeRehydrationVisitor::rehydrate` 构造本
     // visitor 时存入的 AST arena 裸指针（SourceModule 拥有，晚于整个 attach
     // 才析构，构造处 LUAU_ASSERT 判过非空）。借出的 `&mut` 仅用于分配
@@ -71,7 +71,7 @@ impl TypePackRehydrationVisitor {
   }
 
   #[inline]
-  pub fn rehydrate_type_pack(&self, tp: &TypePack) -> *mut AstTypePack {
+  fn rehydrate_type_pack(&self, tp: &TypePack) -> *mut AstTypePack {
     // Safety: 以下所有 `self.allocator` 重借的都是构造期存入的存活 AST arena
     // 指针（SourceModule 拥有、非空对齐）。每次 `&mut` 借出都收敛在单条语句
     // 内、随语句结束归还，保证与嵌套 visit（内部对同一 arena 再次借出）时序
@@ -116,7 +116,7 @@ impl TypePackRehydrationVisitor {
   }
 
   #[inline]
-  pub fn rehydrate_variadic_pack(&self, vtp: &VariadicTypePack) -> *mut AstTypePack {
+  fn rehydrate_variadic_pack(&self, vtp: &VariadicTypePack) -> *mut AstTypePack {
     if vtp.hidden {
       return null_mut();
     }
@@ -133,7 +133,7 @@ impl TypePackRehydrationVisitor {
   }
 
   #[inline]
-  pub fn rehydrate_generic_pack(&self, gtp: &GenericTypePack) -> *mut AstTypePack {
+  fn rehydrate_generic_pack(&self, gtp: &GenericTypePack) -> *mut AstTypePack {
     // get_name 助手以 `gtp` 的 arena 地址作键读写名字缓存（gtp 借自存活类型
     // arena），两个借出均随函数返回释放。
     let allocator = self.allocator_mut();
@@ -146,7 +146,7 @@ impl TypePackRehydrationVisitor {
   }
 
   #[inline]
-  pub fn rehydrate_free_pack(&self, _gtp: &FreeTypePack) -> *mut AstTypePack {
+  fn rehydrate_free_pack(&self, _gtp: &FreeTypePack) -> *mut AstTypePack {
     // Safety: 独占重借构造期存入的存活 arena 指针（SourceModule 拥有，attach
     // 期间无人并发访问），仅用于分配 `free` 泛型包节点；借出随尾表达式释放。
     let allocator = self.allocator_mut();
@@ -156,7 +156,7 @@ impl TypePackRehydrationVisitor {
   }
 
   #[inline]
-  pub fn rehydrate_error_pack(&self, _tp: &ErrorTypePack) -> *mut AstTypePack {
+  fn rehydrate_error_pack(&self, _tp: &ErrorTypePack) -> *mut AstTypePack {
     // Safety: 同其余分支——构造期存入的 arena 指针存活且此刻独占，这次借出
     // 只分配 `Unifiable<Error>` 泛型包节点，尾表达式后即归还借用。
     let allocator = self.allocator_mut();
@@ -166,7 +166,7 @@ impl TypePackRehydrationVisitor {
   }
 
   #[inline]
-  pub fn rehydrate_type_function_instance_pack(
+  fn rehydrate_type_function_instance_pack(
     &self,
     tfitp: &TypeFunctionInstanceTypePack,
   ) -> *mut AstTypePack {

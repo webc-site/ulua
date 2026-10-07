@@ -6,7 +6,7 @@ use crate::records::arena_handle::alias_opt;
 
 /// 结构等价性比较（只读引用安全门面）。
 /// 对应 C++ `static bool similar(AstExpr* lhs, AstExpr* rhs)` (`cpp/Analysis/src/Linter.cpp:110`)。
-pub fn similar_ref(lhs: &AstExpr, rhs: &AstExpr) -> bool {
+fn similar_ref(lhs: &AstExpr, rhs: &AstExpr) -> bool {
   match (lhs.as_expr_ref(), rhs.as_expr_ref()) {
     (AstExprRef::Group(l), AstExprRef::Group(r)) => similar_ref(&l.expr, &r.expr),
     (AstExprRef::ConstantNil(_), AstExprRef::ConstantNil(_)) => true,

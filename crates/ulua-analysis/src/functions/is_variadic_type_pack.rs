@@ -8,7 +8,7 @@ pub fn is_variadic(tp: TypePackId) -> bool {
   is_variadic_txn_log(tp, alias_ref(TxnLog::empty()))
 }
 
-pub fn is_variadic_txn_log(tp: TypePackId, log: &TxnLog) -> bool {
+fn is_variadic_txn_log(tp: TypePackId, log: &TxnLog) -> bool {
   let (_, tail) = flatten(tp, log);
 
   if let Some(tail_tp) = tail {

@@ -76,7 +76,7 @@ impl ConstraintGenerator {
   /// cpp `visitLValue(const ScopePtr&, AstExprLocal*, TypeId)`
   /// （ConstraintGenerator.cpp:3905 重载）：`local` 为分发层经类索引校验后
   /// 传入的共享借用，只读取其字段。
-  pub fn visit_l_value_local(&mut self, scope: &ScopePtr, local: &AstExprLocal, rhs_type: TypeId) {
+  fn visit_l_value_local(&mut self, scope: &ScopePtr, local: &AstExprLocal, rhs_type: TypeId) {
     // local 槽已句柄化恒非空（解析器 buildAllLocals 阶段写入的活 AstLocal，
     // C++:3920 同样无条件使用），直取共享引用；下游查表/符号只按指针身份取键，
     // 由存活引用还原地址。
@@ -163,7 +163,7 @@ impl ConstraintGenerator {
   /// cpp `visitLValue(const ScopePtr&, AstExprGlobal*, TypeId)`
   /// （ConstraintGenerator.cpp:3961 重载）：`global` 为分发层经类索引校验后
   /// 传入的共享借用，只读取其 `name`/`location` 字段。
-  pub fn visit_l_value_global(
+  fn visit_l_value_global(
     &mut self,
     scope: &ScopePtr,
     global: &AstExprGlobal,
@@ -216,7 +216,7 @@ impl ConstraintGenerator {
   /// cpp `visitLValue(const ScopePtr&, AstExprIndexName*, TypeId)`
   /// （ConstraintGenerator.cpp:3986 重载）：`expr` 为分发层经类索引校验后
   /// 传入的共享借用，其 `expr`/`index` 字段由解析器填为非空活节点。
-  pub fn visit_l_value_index_name(
+  fn visit_l_value_index_name(
     &mut self,
     scope: &ScopePtr,
     expr: &AstExprIndexName,
@@ -269,7 +269,7 @@ impl ConstraintGenerator {
   /// cpp `visitLValue(const ScopePtr&, AstExprIndexExpr*, TypeId)`
   /// （ConstraintGenerator.cpp:3999 重载）：`expr` 为分发层经类索引校验后
   /// 传入的共享借用，其 `expr`/`index` 子槽位已句柄化（Node）恒非空。
-  pub fn visit_l_value_index_expr(
+  fn visit_l_value_index_expr(
     &mut self,
     scope: &ScopePtr,
     expr: &AstExprIndexExpr,

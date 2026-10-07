@@ -57,7 +57,7 @@ impl TypeFunctionSerializer {
   /// cpp `serializeChildren(TypeId ty, TypeFunctionTypeId tfti)`：源取自模块
   /// 类型 arena（只读），目标为 runtime arena 里 `shallow_serialize` 新建的
   /// 槽位；源变体与目标变体一一配对后逐臂下发。
-  pub fn serialize_children_type_id(&mut self, ty: TypeId, tfti: TypeFunctionTypeId) {
+  fn serialize_children_type_id(&mut self, ty: TypeId, tfti: TypeFunctionTypeId) {
     let Some(target) = target_variant_mut(tfti) else {
       return;
     };
@@ -160,35 +160,35 @@ impl TypeFunctionSerializer {
     }
   }
 
-  pub fn serialize_children_primitive_type(
+  fn serialize_children_primitive_type(
     &mut self,
     _source: &PrimitiveType,
     _target: &mut TypeFunctionPrimitiveType,
   ) {
   }
 
-  pub fn serialize_children_unknown_type(
+  fn serialize_children_unknown_type(
     &mut self,
     _source: &UnknownType,
     _target: &mut TypeFunctionUnknownType,
   ) {
   }
 
-  pub fn serialize_children_never_type(
+  fn serialize_children_never_type(
     &mut self,
     _source: &NeverType,
     _target: &mut TypeFunctionNeverType,
   ) {
   }
 
-  pub fn serialize_children_any_type(
+  fn serialize_children_any_type(
     &mut self,
     _source: &AnyType,
     _target: &mut TypeFunctionAnyType,
   ) {
   }
 
-  pub fn serialize_children_singleton_type(
+  fn serialize_children_singleton_type(
     &mut self,
     _source: &SingletonType,
     _target: &mut TypeFunctionSingletonType,
@@ -197,7 +197,7 @@ impl TypeFunctionSerializer {
 
   /// cpp `serializeChildren(UnionType* u1, TypeFunctionUnionType* u2)`：源只读自
   /// 模块 arena，目标可写于 runtime arena，两 arena 地址不相交。
-  pub fn serialize_children_union_type(
+  fn serialize_children_union_type(
     &mut self,
     source: &UnionType,
     target: &mut TypeFunctionUnionType,
@@ -208,7 +208,7 @@ impl TypeFunctionSerializer {
     }
   }
 
-  pub fn serialize_children_intersection_type(
+  fn serialize_children_intersection_type(
     &mut self,
     source: &IntersectionType,
     target: &mut TypeFunctionIntersectionType,
@@ -219,7 +219,7 @@ impl TypeFunctionSerializer {
     }
   }
 
-  pub fn serialize_children_negation_type(
+  fn serialize_children_negation_type(
     &mut self,
     source: &NegationType,
     target: &mut TypeFunctionNegationType,
@@ -227,7 +227,7 @@ impl TypeFunctionSerializer {
     target.type_id = self.shallow_serialize_type_id(source.ty);
   }
 
-  pub fn serialize_children_table_type(
+  fn serialize_children_table_type(
     &mut self,
     source: &TableType,
     target: &mut TypeFunctionTableType,
@@ -254,7 +254,7 @@ impl TypeFunctionSerializer {
 
   /// cpp `serializeChildren(MetatableType*, TypeFunctionTableType*)`：表体由
   /// `follow` 后的内层 `TableType` 复用表分支序列化，元表另记一句柄。
-  pub fn serialize_children_metatable_type(
+  fn serialize_children_metatable_type(
     &mut self,
     source: &MetatableType,
     target: &mut TypeFunctionTableType,
@@ -268,7 +268,7 @@ impl TypeFunctionSerializer {
     target.metatable = Some(self.shallow_serialize_type_id(source.metatable));
   }
 
-  pub fn serialize_children_function_type(
+  fn serialize_children_function_type(
     &mut self,
     source: &FunctionType,
     target: &mut TypeFunctionFunctionType,
@@ -298,7 +298,7 @@ impl TypeFunctionSerializer {
     }
   }
 
-  pub fn serialize_children_extern_type(
+  fn serialize_children_extern_type(
     &mut self,
     source: &ExternType,
     target: &mut TypeFunctionExternType,
@@ -336,14 +336,14 @@ impl TypeFunctionSerializer {
     }
   }
 
-  pub fn serialize_children_generic_type(
+  fn serialize_children_generic_type(
     &mut self,
     _source: &GenericType,
     _target: &mut TypeFunctionGenericType,
   ) {
   }
 
-  pub fn serialize_children_type_pack(
+  fn serialize_children_type_pack(
     &mut self,
     source: &TypePack,
     target: &mut TypeFunctionTypePack,
@@ -356,7 +356,7 @@ impl TypeFunctionSerializer {
     }
   }
 
-  pub fn serialize_children_variadic_type_pack(
+  fn serialize_children_variadic_type_pack(
     &mut self,
     source: &VariadicTypePack,
     target: &mut TypeFunctionVariadicTypePack,
@@ -364,7 +364,7 @@ impl TypeFunctionSerializer {
     target.type_id = self.shallow_serialize_type_id(source.ty);
   }
 
-  pub fn serialize_children_generic_type_pack(
+  fn serialize_children_generic_type_pack(
     &mut self,
     _source: &GenericTypePack,
     _target: &mut TypeFunctionGenericTypePack,

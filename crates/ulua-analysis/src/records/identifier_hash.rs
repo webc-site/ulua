@@ -11,7 +11,7 @@ impl IdentifierHash {
   }
 
   #[inline]
-  pub fn hash_identifier(ident: &Identifier) -> usize {
+  fn hash_identifier(ident: &Identifier) -> usize {
     let name = ident.name();
     let ctx = ident.ctx() as *const ();
 

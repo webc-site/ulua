@@ -130,7 +130,7 @@ impl ConstraintGraph {
 }
 
 impl ConstraintGraph {
-  pub fn clear_reverse_dependencies_of(&mut self, vertex: BlockedConstraintId) {
+  fn clear_reverse_dependencies_of(&mut self, vertex: BlockedConstraintId) {
     // LUAU_ASSERT(vertex.get_if<const Constraint*>() == nullptr);
     // We cannot directly call get_if on ConstraintVertex here because it's a type alias
     // to BlockedConstraintId. The assertion is preserved as a comment since the
@@ -175,7 +175,7 @@ impl ConstraintGraph {
 }
 
 impl ConstraintGraph {
-  pub fn copy_dependencies_to_reachable_types(
+  fn copy_dependencies_to_reachable_types(
     &mut self,
     original_vertex: Option<BlockedConstraintId>,
     source_dependencies: SlotId,
@@ -336,14 +336,14 @@ fn find_or_create_list(
 }
 
 impl ConstraintGraph {
-  pub fn find_dependency_list(&mut self, vertex: BlockedConstraintId) -> SlotId {
+  fn find_dependency_list(&mut self, vertex: BlockedConstraintId) -> SlotId {
     // 两 map 与列表存储是互不相交的字段，可同时可变借用。
     find_or_create_list(&mut self.dependencies, &mut self.constraint_lists, vertex)
   }
 }
 
 impl ConstraintGraph {
-  pub fn find_reverse_dependency_list(&mut self, vertex: BlockedConstraintId) -> SlotId {
+  fn find_reverse_dependency_list(&mut self, vertex: BlockedConstraintId) -> SlotId {
     // 两 map 与列表存储是互不相交的字段，可同时可变借用。
     find_or_create_list(
       &mut self.reverse_dependencies,
@@ -406,7 +406,7 @@ impl ConstraintGraph {
 }
 
 impl ConstraintGraph {
-  pub fn repair_type_references_type_id(&mut self, mut ty: TypeId) {
+  fn repair_type_references_type_id(&mut self, mut ty: TypeId) {
     let root = follow_type::follow(ty);
 
     let mut seen: DenseHashSet<TypeId> = DenseHashSet::default();
@@ -472,7 +472,7 @@ impl ConstraintGraph {
     self.clear_reverse_dependencies_of(BlockedConstraintId::V0(source));
   }
 
-  pub fn shift_references_type_pack_id(&mut self, source: TypePackId, target: TypePackId) {
+  fn shift_references_type_pack_id(&mut self, source: TypePackId, target: TypePackId) {
     if source == target {
       return;
     }

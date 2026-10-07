@@ -8,7 +8,7 @@ use crate::type_aliases::{
 };
 
 /// C++ `IncompatibilityReason`（Analysis/include/Luau/OverloadResolution.h）
-pub type IncompatibilityReason = Variant2<SubtypingReasonings, ErrorVec>;
+type IncompatibilityReason = Variant2<SubtypingReasonings, ErrorVec>;
 
 #[derive(Debug, Clone)]
 pub struct OverloadResolution {

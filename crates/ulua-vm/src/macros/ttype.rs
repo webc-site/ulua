@@ -18,7 +18,7 @@ pub use ttype;
 /// 双份展开宏）；形态适配与按类型读 tag 两层职责混在一起。收口到本 trait 后，
 /// `TTypeOf` 只剩 4 个 blanket impl，单态化在编译期选定各类型的 `raw_tag`，
 /// 运行期不再有任何按类型手写的分派体。
-pub trait TTag {
+trait TTag {
   /// 读取本对象的类型 tag。`TValue`/`TKey` 为 i32 域（`TKey` 经 tt() 做 4-bit 抽取），
   /// GC 对象为 u8 域（`gch.tt`/`hdr.tt`/`tt` 字段），均为非负值，统一返回 `i32`
   /// 供 `TTypeOf` 收敛为 `u32`——与收口前各 impl 的逐类型 `as u32` 结果逐位一致。

@@ -23,7 +23,7 @@ pub fn add_global_binding_value(globals: &mut GlobalTypes, name: &str, binding: 
   add_global_binding_in_scope_value(globals, &scope, name, binding);
 }
 
-pub fn add_global_binding_in_scope(
+fn add_global_binding_in_scope(
   globals: &mut GlobalTypes,
   scope: &ScopePtr,
   name: &str,
@@ -45,7 +45,7 @@ pub fn add_global_binding_in_scope(
   );
 }
 
-pub fn add_global_binding_in_scope_value(
+fn add_global_binding_in_scope_value(
   globals: &mut GlobalTypes,
   scope: &ScopePtr,
   name: &str,

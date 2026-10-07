@@ -13,10 +13,10 @@ use core::fmt::{Arguments, write};
 use crate::{macros::codegen_assert::CODEGEN_ASSERT, records::label::Label};
 
 /// code/data 缓冲初始容量，对应 cpp 构造预分配 4096（x64 字节、a64 数据段字节）。
-pub const K_INITIAL_CAPACITY: usize = 4096;
+const K_INITIAL_CAPACITY: usize = 4096;
 
 /// 数据段分配支持的最大对齐；超过即内部不变量破坏。
-pub const K_MAX_DATA_ALIGN: usize = 16;
+const K_MAX_DATA_ALIGN: usize = 16;
 
 /// 尚未绑定地址的 label 哨兵（cpp `~0u`）。
 pub const LABEL_UNBOUND: u32 = !0u32;

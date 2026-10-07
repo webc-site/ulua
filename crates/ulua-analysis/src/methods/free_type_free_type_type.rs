@@ -6,7 +6,7 @@ use crate::{
 };
 
 impl FreeType {
-  pub fn free_type_type_level_type_id_type_id(
+  fn free_type_type_level_type_id_type_id(
     &mut self,
     level: TypeLevel,
     lower_bound: TypeId,

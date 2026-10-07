@@ -252,7 +252,7 @@ impl Unifier2 {
     UnifyResult::Ok
   }
 
-  pub fn unify_type_id_function_type(
+  fn unify_type_id_function_type(
     &mut self,
     sub_ty: TypeId,
     super_fn: &FunctionType,
@@ -300,7 +300,7 @@ impl Unifier2 {
   ///
   /// 本仓库唯一调用点（同文件 `unify_type_id_type_id` 的 union 分支）在 follow
   /// 与 get_type_id 之后传参，契约天然成立；函数为 `pub`，外部复用须同守。
-  pub fn unify_union_type_type_id(
+  fn unify_union_type_type_id(
     &mut self,
     sub_union: &UnionType,
     super_ty: TypeId,
@@ -316,7 +316,7 @@ impl Unifier2 {
     result
   }
 
-  pub fn unify_type_id_union_type(
+  fn unify_type_id_union_type(
     &mut self,
     sub_ty: TypeId,
     super_union: &UnionType,
@@ -345,7 +345,7 @@ impl Unifier2 {
     result
   }
 
-  pub fn unify_intersection_type_type_id(
+  fn unify_intersection_type_type_id(
     &mut self,
     sub_intersection: &IntersectionType,
     super_ty: TypeId,
@@ -370,7 +370,7 @@ impl Unifier2 {
     result
   }
 
-  pub fn unify_type_id_intersection_type(
+  fn unify_type_id_intersection_type(
     &mut self,
     sub_ty: TypeId,
     super_intersection: &IntersectionType,
@@ -384,7 +384,7 @@ impl Unifier2 {
     result
   }
 
-  pub fn unify_table_type_table_type(
+  fn unify_table_type_table_type(
     &mut self,
     sub_table: &mut TableType,
     super_table: &TableType,
@@ -473,7 +473,7 @@ impl Unifier2 {
     result
   }
 
-  pub fn unify_metatable_type_metatable_type(
+  fn unify_metatable_type_metatable_type(
     &mut self,
     sub_metatable: &MetatableType,
     super_metatable: &MetatableType,
@@ -486,7 +486,7 @@ impl Unifier2 {
     self.unify_type_id_type_id(sub_metatable.table, super_metatable.table)
   }
 
-  pub fn unify_any_type_function_type(
+  fn unify_any_type_function_type(
     &mut self,
     _sub_any: &AnyType,
     super_fn: &FunctionType,
@@ -499,7 +499,7 @@ impl Unifier2 {
     arg_result & ret_result
   }
 
-  pub fn unify_function_type_any_type(
+  fn unify_function_type_any_type(
     &mut self,
     sub_fn: &FunctionType,
     _super_any: &AnyType,
@@ -512,7 +512,7 @@ impl Unifier2 {
     arg_result & ret_result
   }
 
-  pub fn unify_any_type_table_type(
+  fn unify_any_type_table_type(
     &mut self,
     _sub_any: &AnyType,
     super_table: &TableType,
@@ -539,7 +539,7 @@ impl Unifier2 {
     UnifyResult::Ok
   }
 
-  pub fn unify_table_type_any_type(
+  fn unify_table_type_any_type(
     &mut self,
     sub_table: &TableType,
     _super_any: &AnyType,
@@ -564,7 +564,7 @@ impl Unifier2 {
     UnifyResult::Ok
   }
 
-  pub fn unify_metatable_type_any_type(
+  fn unify_metatable_type_any_type(
     &mut self,
     sub_metatable: &MetatableType,
     _super_any: &AnyType,
@@ -578,7 +578,7 @@ impl Unifier2 {
     self.unify_type_id_type_id(sub_metatable.table, builtin_types.any_type)
   }
 
-  pub fn unify_any_type_metatable_type(
+  fn unify_any_type_metatable_type(
     &mut self,
     _sub_any: &AnyType,
     super_metatable: &MetatableType,

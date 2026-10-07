@@ -89,7 +89,7 @@ impl TypeFunctionReducer {
 // `TypeFunctionReducer::stepPack` (TypeFunction.cpp:624-646).
 
 impl TypeFunctionReducer {
-  pub fn step_pack(&mut self) {
+  fn step_pack(&mut self) {
     // SAFETY: queued_tps 内的句柄由构造方按 C++ 契约保证有效（同 stepType 的 follow）。
     let subject = follow_type_pack::follow(*self.queued_tps.front());
     self.queued_tps.pop_front();

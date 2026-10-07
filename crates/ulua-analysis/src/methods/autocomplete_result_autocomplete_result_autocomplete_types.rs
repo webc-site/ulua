@@ -25,7 +25,7 @@ impl Default for AutocompleteResult {
 }
 
 impl AutocompleteResult {
-  pub fn autocomplete_result_autocomplete_entry_map_vector_ast_node_autocomplete_context(
+  fn autocomplete_result_autocomplete_entry_map_vector_ast_node_autocomplete_context(
     entry_map: AutocompleteEntryMap,
     ancestry: Vec<*mut AstNode>,
     context: AutocompleteContext,

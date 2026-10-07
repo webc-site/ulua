@@ -75,11 +75,11 @@ pub fn to_string_type_pack_id_to_string_options(
   to_string_detailed_type_pack_id_to_string_options(ty, opts).name
 }
 
-pub fn to_string_type_item_to_string_options(tv: &Type, opts: &mut ToStringOptions) -> String {
+fn to_string_type_item_to_string_options(tv: &Type, opts: &mut ToStringOptions) -> String {
   to_string_type_id_to_string_options(tv as *const Type as TypeId, opts)
 }
 
-pub fn to_string_type_pack_var_to_string_options(
+fn to_string_type_pack_var_to_string_options(
   tp: &TypePackVar,
   opts: &mut ToStringOptions,
 ) -> String {
@@ -245,7 +245,7 @@ pub fn to_string_location_i32_bool(location: &Location, offset: i32, _use_begin:
   )
 }
 
-pub fn to_string_type_or_pack_to_string_options(
+fn to_string_type_or_pack_to_string_options(
   ty_or_tp: &TypeOrPack,
   opts: &mut ToStringOptions,
 ) -> String {

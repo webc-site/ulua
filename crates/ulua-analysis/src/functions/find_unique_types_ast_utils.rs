@@ -33,7 +33,7 @@ pub fn find_unique_types(
 /// （`cpp/Analysis/src/AstUtils.cpp:77`）。降 safe：集合/映射形参收引用；
 /// `iter` 产出的每个 `*mut AstExpr` 是 parser arena 存活节点（地址不移动），
 /// 判型与解引用统一经 `alias_ref`/`alias` 句柄门面收口，循环体无 `unsafe`。
-pub fn find_unique_types_iter<I>(
+fn find_unique_types_iter<I>(
   unique_types: &mut DenseHashSet<TypeId>,
   iter: I,
   ast_types: &DenseHashMap<*const AstExpr, TypeId>,

@@ -56,7 +56,7 @@ impl<'ctx> AstVisitor for LintTableOperations<'ctx> {
 
 // —— 原 methods/lint_table_operations_check_indexer.rs ——
 impl<'ctx> LintTableOperations<'ctx> {
-  pub fn check_indexer(&mut self, node: &AstExpr, expr: &AstExpr, op: &str) {
+  fn check_indexer(&mut self, node: &AstExpr, expr: &AstExpr, op: &str) {
     // Safety: `expr` 是分发链借出的 `&AstExpr`（引用即存活证明），转成
     // 基址相同的裸指针仅作查表键，`get_type` 只读。
     let Some(ty) = self.context.get().get_type(from_ref(expr).cast_mut()) else {
@@ -102,7 +102,7 @@ impl<'ctx> LintTableOperations<'ctx> {
   /// cpp `checkTableCall(AstExprCall*, AstExprIndexName*)`：`node`/`func` 为分析期
   /// 存活、由 arena 持有的节点共享借用（cpp 裸指针形参的 Rust 对应），本方法对其
   /// 只读；`args` 元素仍是裸指针，按各自 `// Safety` 说明解引用。
-  pub fn check_table_call(&mut self, node: &AstExprCall, func: &AstExprIndexName) {
+  fn check_table_call(&mut self, node: &AstExprCall, func: &AstExprIndexName) {
     let args = node.args.as_slice();
     let index = &func.index;
     // 字符串关键字一次派发为整型 id（match 生成 DFA 跳转），
@@ -247,7 +247,7 @@ fn warn(context: &mut LintContext, location: Location, args: Arguments<'_>) {
 
 // —— 原 methods/lint_table_operations_get_return_count.rs ——
 impl<'ctx> LintTableOperations<'ctx> {
-  pub fn get_return_count(&mut self, ty: TypeId) -> usize {
+  fn get_return_count(&mut self, ty: TypeId) -> usize {
     let ty = follow_type::follow(ty);
     if let Some(ftv) = get_type::get::<FunctionType>(ty) {
       return size(ftv.ret_types, None);

@@ -41,7 +41,7 @@ impl DataFlowGraphBuilder {
 
   /// cpp `visitLValue(AstExprLocal*, DefId)`：非 upvalue 时为新值造 def 并更新
   /// bindings/captures；upvalue 走普通表达式路径（避免别名跟踪越界）。
-  pub fn visit_lvalue_local(&mut self, l: &AstExprLocal, incoming_def: DefId) -> DefId {
+  fn visit_lvalue_local(&mut self, l: &AstExprLocal, incoming_def: DefId) -> DefId {
     let scope = self.current_scope();
 
     if !l.upvalue {
@@ -66,7 +66,7 @@ impl DataFlowGraphBuilder {
   }
 
   /// cpp `visitLValue(AstExprGlobal*, DefId)`。
-  pub fn visit_lvalue_global(&mut self, g: &AstExprGlobal, incoming_def: DefId) -> DefId {
+  fn visit_lvalue_global(&mut self, g: &AstExprGlobal, incoming_def: DefId) -> DefId {
     let scope = self.current_scope();
     let symbol = Symbol::from_global(g.name);
     let subscripted = contains_subscripted_definition(incoming_def);
@@ -87,7 +87,7 @@ impl DataFlowGraphBuilder {
 
   /// cpp `visitLValue(AstExprIndexName*, DefId)`：
   /// `scope->props[parentDef][i->index.value] = updated`。
-  pub fn visit_lvalue_index_name(&mut self, i: &AstExprIndexName, incoming_def: DefId) -> DefId {
+  fn visit_lvalue_index_name(&mut self, i: &AstExprIndexName, incoming_def: DefId) -> DefId {
     // expr 已句柄化恒非空；arena_ref 为既有指针门面，经 as_ptr 桥接（判空 panic 分支类型端不可达）。
     let parent_expr = arena_ref(i.expr.as_ptr(), "AstExprIndexName.expr");
     let parent_def = self.visit_expr(parent_expr).def;
@@ -108,7 +108,7 @@ impl DataFlowGraphBuilder {
 
   /// cpp `visitLValue(AstExprIndexExpr*, DefId)`：字符串字面量下标按名登记
   /// props，否则视为真下标访问（subscripted = true）。
-  pub fn visit_lvalue_index_expr(&mut self, i: &AstExprIndexExpr, incoming_def: DefId) -> DefId {
+  fn visit_lvalue_index_expr(&mut self, i: &AstExprIndexExpr, incoming_def: DefId) -> DefId {
     // expr/index 已句柄化恒非空；arena_ref 为既有指针门面，经 as_ptr 桥接（判空 panic 分支类型端不可达）。
     let parent_expr = arena_ref(i.expr.as_ptr(), "AstExprIndexExpr.expr");
     let parent_def = self.visit_expr(parent_expr).def;
@@ -140,7 +140,7 @@ impl DataFlowGraphBuilder {
   }
 
   /// cpp `visitLValue(AstExprError*, DefId)`：错误恢复左值按普通表达式回退。
-  pub fn visit_lvalue_error(&mut self, error: &AstExprError, _incoming_def: DefId) -> DefId {
+  fn visit_lvalue_error(&mut self, error: &AstExprError, _incoming_def: DefId) -> DefId {
     // cpp `visitExpr(error).def`：上转基类走带缓存的分派入口。
     self.visit_expr(&error.base).def
   }

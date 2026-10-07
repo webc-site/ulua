@@ -54,7 +54,7 @@ impl TypeChecker {
     );
   }
 
-  pub fn resolve_predicate_vec_refinement_map_scope_ptr_bool_bool(
+  fn resolve_predicate_vec_refinement_map_scope_ptr_bool_bool(
     &mut self,
     predicates: &PredicateVec,
     refis: &mut RefinementMap,
@@ -67,7 +67,7 @@ impl TypeChecker {
     }
   }
 
-  pub fn resolve_predicate_refinement_map_scope_ptr_bool_bool(
+  fn resolve_predicate_refinement_map_scope_ptr_bool_bool(
     &mut self,
     predicate: &Predicate,
     refis: &mut RefinementMap,
@@ -113,7 +113,7 @@ impl TypeChecker {
     }
   }
 
-  pub fn resolve_truthy_predicate_refinement_map_scope_ptr_bool_bool(
+  fn resolve_truthy_predicate_refinement_map_scope_ptr_bool_bool(
     &mut self,
     truthy_p: &TruthyPredicate,
     refis: &mut RefinementMap,
@@ -135,7 +135,7 @@ impl TypeChecker {
     self.refine_l_value(&truthy_p.lvalue, refis, scope, &mut predicate);
   }
 
-  pub fn resolve_and_predicate_refinement_map_scope_ptr_bool(
+  fn resolve_and_predicate_refinement_map_scope_ptr_bool(
     &mut self,
     and_p: &AndPredicate,
     refis: &mut RefinementMap,
@@ -164,7 +164,7 @@ impl TypeChecker {
     );
   }
 
-  pub fn resolve_or_predicate_refinement_map_scope_ptr_bool(
+  fn resolve_or_predicate_refinement_map_scope_ptr_bool(
     &mut self,
     or_p: &OrPredicate,
     refis: &mut RefinementMap,
@@ -215,7 +215,7 @@ impl TypeChecker {
   }
 
   /// C++ `TypeChecker::resolve(const IsAPredicate&, ...)` (TypeInfer.cpp:6459).
-  pub fn resolve_is_a_predicate_refinement_map_scope_ptr_bool(
+  fn resolve_is_a_predicate_refinement_map_scope_ptr_bool(
     &mut self,
     isa_p: &IsAPredicate,
     refis: &mut RefinementMap,
@@ -321,7 +321,7 @@ impl TypeChecker {
     self.refine_l_value(lvalue, refis, scope, &mut predicate);
   }
 
-  pub fn resolve_type_guard_predicate_refinement_map_scope_ptr_bool(
+  fn resolve_type_guard_predicate_refinement_map_scope_ptr_bool(
     &mut self,
     typeguard_p: &TypeGuardPredicate,
     refis: &mut RefinementMap,
@@ -434,7 +434,7 @@ impl TypeChecker {
     );
   }
 
-  pub fn resolve_eq_predicate_refinement_map_scope_ptr_bool(
+  fn resolve_eq_predicate_refinement_map_scope_ptr_bool(
     &mut self,
     eq_p: &EqPredicate,
     refis: &mut RefinementMap,

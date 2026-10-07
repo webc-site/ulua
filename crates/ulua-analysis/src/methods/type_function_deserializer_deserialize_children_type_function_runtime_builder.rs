@@ -126,7 +126,7 @@ impl TypeFunctionDeserializer {
   /// （`TypeFunctionRuntimeBuilder.cpp:870-902`）：源为 runtime arena 的类型函数
   /// 负载（只读），目标为反序列化所在 `TypeArena` 的槽位（可写），二者按同一
   /// 变体配对后逐臂下发。
-  pub fn deserialize_children_type_id(&mut self, tfti: TypeFunctionTypeId, ty: TypeId) {
+  fn deserialize_children_type_id(&mut self, tfti: TypeFunctionTypeId, ty: TypeId) {
     // 各 arm 对照 C++ `if (auto [x1, x2] = tuple{...}; x1 && x2)` 链。
     if let (Some(t1), Some(t2)) = (
       get_mutable_type::get_mutable::<PrimitiveType>(ty),
@@ -242,7 +242,7 @@ impl TypeFunctionDeserializer {
   }
 
   /// cpp `deserializeChildren(TypeFunctionTypePackId tftp, TypePackId tp)`。
-  pub fn deserialize_children_type_pack_id(
+  fn deserialize_children_type_pack_id(
     &mut self,
     tftp: TypeFunctionTypePackId,
     tp: TypePackId,
@@ -298,28 +298,28 @@ impl TypeFunctionDeserializer {
     );
   }
 
-  pub fn deserialize_children_primitive_type(
+  fn deserialize_children_primitive_type(
     &mut self,
     _source: &TypeFunctionPrimitiveType,
     _target: &mut PrimitiveType,
   ) {
   }
 
-  pub fn deserialize_children_unknown_type(
+  fn deserialize_children_unknown_type(
     &mut self,
     _source: &TypeFunctionUnknownType,
     _target: &mut UnknownType,
   ) {
   }
 
-  pub fn deserialize_children_never_type(
+  fn deserialize_children_never_type(
     &mut self,
     _source: &TypeFunctionNeverType,
     _target: &mut NeverType,
   ) {
   }
 
-  pub fn deserialize_children_any_type(
+  fn deserialize_children_any_type(
     &mut self,
     _source: &TypeFunctionAnyType,
     _target: &mut AnyType,
@@ -327,7 +327,7 @@ impl TypeFunctionDeserializer {
     // noop.
   }
 
-  pub fn deserialize_children_singleton_type(
+  fn deserialize_children_singleton_type(
     &mut self,
     _source: &TypeFunctionSingletonType,
     _target: &mut SingletonType,
@@ -337,7 +337,7 @@ impl TypeFunctionDeserializer {
 
   /// cpp `deserializeChildren(TypeFunctionUnionType* u2, UnionType* u1)`：读 runtime
   /// 侧 `components`、写目标 arena 侧 `options`，两 arena 内存不相交。
-  pub fn deserialize_children_union_type(
+  fn deserialize_children_union_type(
     &mut self,
     source: &TypeFunctionUnionType,
     target: &mut UnionType,
@@ -350,7 +350,7 @@ impl TypeFunctionDeserializer {
     }
   }
 
-  pub fn deserialize_children_intersection_type(
+  fn deserialize_children_intersection_type(
     &mut self,
     source: &TypeFunctionIntersectionType,
     target: &mut IntersectionType,
@@ -361,7 +361,7 @@ impl TypeFunctionDeserializer {
     }
   }
 
-  pub fn deserialize_children_negation_type(
+  fn deserialize_children_negation_type(
     &mut self,
     source: &TypeFunctionNegationType,
     target: &mut NegationType,
@@ -370,7 +370,7 @@ impl TypeFunctionDeserializer {
     target.ty = self.shallow_deserialize_type_function_type_id(source.type_id);
   }
 
-  pub fn deserialize_children_table_type(
+  fn deserialize_children_table_type(
     &mut self,
     source: &TypeFunctionTableType,
     target: &mut TableType,
@@ -405,7 +405,7 @@ impl TypeFunctionDeserializer {
 
   /// cpp `deserializeChildren(TypeFunctionTableType* m2, MetatableType* m1)`：表体
   /// 先以「去掉元表的临时 TypeFunctionTableType」入 arena 再反序列化，元表另记。
-  pub fn deserialize_children_table_type_metatable_type(
+  fn deserialize_children_table_type_metatable_type(
     &mut self,
     source: &TypeFunctionTableType,
     target: &mut MetatableType,
@@ -440,7 +440,7 @@ impl TypeFunctionDeserializer {
   ///
   /// 源侧取 `&mut`：`SerializedFunctionScope::function` 是 runtime arena 的可变
   /// 槽位句柄（cpp 侧同为 `getMutable` 的结果），本函数自身只读它。
-  pub fn deserialize_children_function_type(
+  fn deserialize_children_function_type(
     &mut self,
     source: &mut TypeFunctionFunctionType,
     target: &mut FunctionType,
@@ -582,21 +582,21 @@ impl TypeFunctionDeserializer {
     }
   }
 
-  pub fn deserialize_children_extern_type(
+  fn deserialize_children_extern_type(
     &mut self,
     _source: &TypeFunctionExternType,
     _target: &mut ExternType,
   ) {
   }
 
-  pub fn deserialize_children_generic_type(
+  fn deserialize_children_generic_type(
     &mut self,
     _source: &TypeFunctionGenericType,
     _target: &mut GenericType,
   ) {
   }
 
-  pub fn deserialize_children_type_pack(
+  fn deserialize_children_type_pack(
     &mut self,
     source: &TypeFunctionTypePack,
     target: &mut TypePack,
@@ -614,7 +614,7 @@ impl TypeFunctionDeserializer {
     }
   }
 
-  pub fn deserialize_children_variadic_type_pack(
+  fn deserialize_children_variadic_type_pack(
     &mut self,
     source: &TypeFunctionVariadicTypePack,
     target: &mut VariadicTypePack,
@@ -623,7 +623,7 @@ impl TypeFunctionDeserializer {
     target.ty = deserialized;
   }
 
-  pub fn deserialize_children_generic_type_pack(
+  fn deserialize_children_generic_type_pack(
     &mut self,
     _source: &TypeFunctionGenericTypePack,
     _target: &mut GenericTypePack,

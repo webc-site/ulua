@@ -33,7 +33,7 @@ impl<'ctx> LintIntegerParsing<'ctx> {
 ///
 /// `node` 为分析期存活、由 arena 持有的字面量节点共享借用（cpp 裸指针形参的
 /// Rust 对应），本函数仅读取其 `parse_result` 与 `base.base.location` 两个 Copy 字段。
-pub fn lint_integer_parsing_visit(
+fn lint_integer_parsing_visit(
   this: &mut LintIntegerParsing,
   node: &AstExprConstantNumber,
 ) -> bool {

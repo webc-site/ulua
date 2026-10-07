@@ -17,7 +17,7 @@ pub struct NilSentinel(pub TValue);
 unsafe impl Sync for NilSentinel {}
 
 /// sentinel 的完整值，提升为 `pub const` 供 ulua-capi 导出壳复用。
-pub const LUA_O_NILOBJECT_VALUE: NilSentinel = NilSentinel(TValue {
+const LUA_O_NILOBJECT_VALUE: NilSentinel = NilSentinel(TValue {
   value: Value { p: null_mut() },
   extra: [0],
   tt: 0, // LUA_TNIL

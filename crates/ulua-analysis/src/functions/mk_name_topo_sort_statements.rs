@@ -17,7 +17,7 @@ use crate::records::{
   arena_handle::alias_ref, identifier::Identifier, internal_compiler_error::InternalCompilerError,
 };
 
-pub fn mk_name_ast_local(local: &AstLocal) -> Identifier {
+fn mk_name_ast_local(local: &AstLocal) -> Identifier {
   Identifier::new(
     local.name.as_str_or_empty().to_string(),
     local as *const AstLocal,
@@ -54,7 +54,7 @@ pub fn mk_name_ast_expr_index_name(expr: &AstExprIndexName) -> Option<Identifier
   }
 }
 
-pub fn mk_name_ast_expr_error(expr: &AstExprError) -> Identifier {
+fn mk_name_ast_expr_error(expr: &AstExprError) -> Identifier {
   Identifier::new(format(format_args!("error#{}", expr.message_index)), null())
 }
 
@@ -110,7 +110,7 @@ pub fn mk_name_ast_stat_local_function(function: &AstStatLocalFunction) -> Ident
   mk_name_ast_local(function.name.get())
 }
 
-pub fn mk_name_ast_stat_assign(assign: &AstStatAssign) -> Option<Identifier> {
+fn mk_name_ast_stat_assign(assign: &AstStatAssign) -> Option<Identifier> {
   if assign.vars.len() != 1 {
     return None;
   }
@@ -124,7 +124,7 @@ pub fn mk_name_ast_stat_assign(assign: &AstStatAssign) -> Option<Identifier> {
   mk_name_ast_expr(alias_ref(var_ptr)).map(|id| Identifier::new(id.name().to_string(), id.ctx()))
 }
 
-pub fn mk_name_ast_stat_local(local: &AstStatLocal) -> Option<Identifier> {
+fn mk_name_ast_stat_local(local: &AstStatLocal) -> Option<Identifier> {
   if local.vars.len() != 1 {
     return None;
   }

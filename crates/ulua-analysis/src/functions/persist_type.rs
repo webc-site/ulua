@@ -134,7 +134,7 @@ pub fn persist(ty: TypeId) {
   }
 }
 
-pub fn persist_pack(tp: TypePackId) {
+fn persist_pack(tp: TypePackId) {
   let pack = as_mutable_type_pack(tp);
   if alias_ref(pack).persistent {
     return;

@@ -30,7 +30,7 @@ impl CfgBuilder {
   /// 本分派链唯一的裸指针物化收口点：一次 `&*` 把 arena 节点换成 `&AstNode`，
   /// 之后各子类判定与下转全部走安全门面 `ast_node_try_as`，被调方以引用形参
   /// 拿到存活证明，不再有裸指针契约。
-  pub fn lower_ast_stat(&mut self, statement: *mut AstStat) {
+  fn lower_ast_stat(&mut self, statement: *mut AstStat) {
     let node = alias_ref(statement.as_ast_node());
 
     if let Some(block) = ast_node_try_as::<AstStatBlock>(node) {
@@ -61,7 +61,7 @@ impl CfgBuilder {
   /// cpp `CFGBuilder::lower(AstStatLocal*)`（ControlFlowGraph.cpp:287）：
   /// 为每个 `AstLocal` 发 `Declare` 指令。`values` 短于 `vars` 时对应初始化
   /// 表达式缺省（cpp 以 `i < values.size` 判定），此处折叠为 null 判空。
-  pub fn lower_ast_stat_local(&mut self, local: &AstStatLocal) {
+  fn lower_ast_stat_local(&mut self, local: &AstStatLocal) {
     let values = local.values.as_slice();
 
     for (i, &loc) in local.vars.as_slice().iter().enumerate() {
@@ -94,7 +94,7 @@ impl CfgBuilder {
 
   /// cpp `CFGBuilder::lower(AstStatAssign*)`（ControlFlowGraph.cpp:315）：
   /// 先 lower 右值，再为每个 lvalue 目标发 `Assign` 指令。
-  pub fn lower_ast_stat_assign(&mut self, assn: &AstStatAssign) {
+  fn lower_ast_stat_assign(&mut self, assn: &AstStatAssign) {
     for &expr in assn.values.as_slice() {
       self.lower_expr_ast_expr(expr);
     }
@@ -271,7 +271,7 @@ impl CfgBuilder {
 
   /// cpp `CFGBuilder::lower(AstStatExpr*)`（ControlFlowGraph.cpp:253）：
   /// 表达式语句直接 lower 其 `expr` 子节点（parser 恒填充非空）。
-  pub fn lower_ast_stat_expr(&mut self, stat: &AstStatExpr) {
+  fn lower_ast_stat_expr(&mut self, stat: &AstStatExpr) {
     // lowerExpr(stat->expr);（expr 已句柄化，lower 家族仍以 arena 裸指针身份为键）
     self.lower_expr_ast_expr(stat.expr.as_ptr());
   }

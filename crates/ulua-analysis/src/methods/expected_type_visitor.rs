@@ -44,7 +44,7 @@ use crate::{
 };
 
 impl ExpectedTypeVisitor {
-  pub fn apply_expected_type(&mut self, expected_type: TypeId, expr: *const AstExpr) {
+  fn apply_expected_type(&mut self, expected_type: TypeId, expr: *const AstExpr) {
     // 同型 alias_ref 收口后经 `AstNodeView` 安全下溯；不再手工 `as *const AstNode`
     // 跨基座转型。
     let expr_node = alias_ref(expr);

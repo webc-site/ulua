@@ -56,7 +56,7 @@ impl Widen {
 }
 
 impl Widen {
-  pub fn widen_ignore_children(&self, ty: TypeId) -> bool {
+  fn widen_ignore_children(&self, ty: TypeId) -> bool {
     let et = get_type::get::<ExternType>(ty);
     if et.is_some() {
       return true;

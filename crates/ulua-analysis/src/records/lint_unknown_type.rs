@@ -31,7 +31,7 @@ impl<'ctx> AstVisitor for LintUnknownType<'ctx> {
 
 // —— 原 methods/lint_unknown_type_get_type_kind.rs ——
 impl<'ctx> LintUnknownType<'ctx> {
-  pub fn get_type_kind(&mut self, name: &str) -> TypeKind {
+  fn get_type_kind(&mut self, name: &str) -> TypeKind {
     match name {
       "nil" | "boolean" | "userdata" | "number" | "string" | "table" | "function" | "thread"
       | "buffer" | "vector" => TypeKind::Primitive,
@@ -56,7 +56,7 @@ impl<'ctx> LintUnknownType<'ctx> {
 impl<'ctx> LintUnknownType<'ctx> {
   /// cpp `validateType(AstExprConstantString*)`：`expr` 为遍历期存活的字面量节点借用，
   /// 本方法只读其 `value`/`location`，告警经 `self.context` 写句柄发出。
-  pub fn validate_type(
+  fn validate_type(
     &mut self,
     expr: &AstExprConstantString,
     expected: &[TypeKind],

@@ -35,7 +35,7 @@ pub fn find_ast_ancestry_of_position(
 /// （`AstQuery.cpp:247`）：形参在 cpp 侧即非 const `AstStatBlock*`，因为
 /// `AstNode::visit` 需要非 const `this`；Rust 因此取 `&mut`（而非共享引用再
 /// 伪造 `*mut`）。
-pub fn find_ast_ancestry_of_position_ast_stat_block_position_bool(
+fn find_ast_ancestry_of_position_ast_stat_block_position_bool(
   root: &mut AstStatBlock,
   mut pos: Position,
   include_types: bool,

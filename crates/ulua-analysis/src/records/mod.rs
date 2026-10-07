@@ -534,36 +534,3 @@ pub mod with_predicate;
 pub mod work_item_iterative_type_function_type_visitor;
 pub mod work_item_iterative_type_visitor;
 
-pub mod ast_array {
-  pub use ulua_ast::records::ast_array::*;
-}
-pub mod ast_attr {
-  pub use ulua_ast::records::ast_attr::*;
-}
-pub mod ast_expr {
-  pub use ulua_ast::records::ast_expr::*;
-}
-pub mod ast_expr_binary {
-  pub use ulua_ast::records::ast_expr_binary::*;
-}
-pub mod ast_name {
-  pub use ulua_ast::records::ast_name::*;
-}
-pub mod ast_node {
-  pub use ulua_ast::records::ast_node::*;
-}
-pub mod ast_stat {
-  pub use ulua_ast::records::ast_stat::*;
-}
-pub mod ast_type {
-  pub use ulua_ast::records::ast_type::*;
-}
-pub mod location {
-  pub use ulua_ast::records::location::*;
-}
-pub mod position {
-  pub use ulua_ast::records::position::*;
-}
-pub mod lua_l_reg {
-  pub use ulua_vm::records::lua_l_reg::*;
-}
