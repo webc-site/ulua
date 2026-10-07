@@ -5,7 +5,6 @@ use core::{
 };
 
 use itoa::Buffer;
-use ulua_common::functions::c_str::cstr;
 use ulua_vm::{
   functions::{lua_callbacks::lua_callbacks, lua_getinfo::lua_getinfo},
   records::{lua_debug::LuaDebug, lua_state::LuaState},
@@ -39,9 +38,8 @@ thread_local! {
   };
 }
 
-/// `lua_getinfo` 选项串「取 short_src+name」（NUL 结尾字节串，经 `cstr` 收口点
-/// 转 C 指针，review.md §10：不散落 `.as_ptr().cast()`）。
-const GETINFO_SN_OPT: &[u8] = b"sn\0";
+/// `lua_getinfo` 选项模板「取 short_src+name」（§10：模板即字节切片，直接传参）。
+const GETINFO_SN_OPT: &[u8] = b"sn";
 
 /// 采样栈快照：`lua_getinfo` 逐级上爬拼 `src,line,linedefined;…` 串（真 FFI 边
 /// 界的遍历循环，(c) 保留）。拼好的串写入复用的 `stack_scratch`。
@@ -49,7 +47,7 @@ const GETINFO_SN_OPT: &[u8] = b"sn\0";
 /// `l` 为 VM 线程当前有效状态；`stack` 必须是 `G_PROFILER_MAIN` 的
 /// `stack_scratch` 字段在本帧的独占借用（thread_local 单线程所有），回调期间
 /// 无其它别名——两者均以借用类型表达，本函数体内只剩 `lua_getinfo` 导出一处
-/// `unsafe`（what 串经 `cstr` 门面收口）。
+/// `unsafe`。
 fn collect_stack(l: &mut LuaState, gc: i32, stack: &mut String) {
   stack.clear();
   if gc > 0 {
@@ -65,8 +63,8 @@ fn collect_stack(l: &mut LuaState, gc: i32, stack: &mut String) {
   for level in 0.. {
     // Safety: `lua_getinfo` 为 unsafe 导出；`&mut ar` 以 `&mut T → *mut T` 隐式转换
     // 交出本地独占出参，getinfo 成功时把 short_src/name 填为 owned `Vec<u8>`；
-    // what 为 NUL 结尾静态字节串（`cstr` 门面）。
-    if unsafe { lua_getinfo(l, level, cstr(GETINFO_SN_OPT), &mut ar) } == 0 {
+    // what 为静态选项模板切片。
+    if unsafe { lua_getinfo(l, level, GETINFO_SN_OPT, &mut ar) } == 0 {
       break;
     }
 

@@ -57,8 +57,8 @@ fn conformance_debug_api() {
   // `zero_debug` 交出全零 LuaDebug（repr(C) 各字段全零位模式皆合法），
   // getinfo 按 what 串负责填写。
   let mut ar = zero_debug();
-  assert_eq!(getinfo(l, -1, b"f\0", &mut ar), 0);
-  assert_eq!(getinfo(l, -10, b"f\0", &mut ar), 0);
+  assert_eq!(getinfo(l, -1, b"f", &mut ar), 0);
+  assert_eq!(getinfo(l, -10, b"f", &mut ar), 0);
 }
 
 #[test]
@@ -285,7 +285,7 @@ fib(5)
     // `zero_debug` 交出全零 LuaDebug，getinfo 按 what 串负责填写；
     // callhook 的 ud 传 null 与钩子签名一致。
     let mut ar = zero_debug();
-    assert_ne!(0, getinfo(l, 0, b"nsl\0", &mut ar));
+    assert_ne!(0, getinfo(l, 0, b"nsl", &mut ar));
 
     callhook(l, Some(conformance_interrupt_inspection_hook), None);
   }

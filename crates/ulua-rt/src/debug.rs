@@ -25,9 +25,9 @@ use crate::{
   sys::*,
 };
 
-/// `lua_getinfo` 的选项串：`n`（名字）+ `s`（源/类型）+ `l`（当前行）。
-/// 静态 NUL 结尾字节串，收口点交给 `*const c_char` 契约 API。
-const GETINFO_NSL: &[u8] = b"nsl\0";
+/// `lua_getinfo` 的选项模板：`n`（名字）+ `s`（源/类型）+ `l`（当前行）。
+/// 静态字节切片，直传切片形 `what` 形参（§10：不经 C 指针契约位）。
+const GETINFO_NSL: &[u8] = b"nsl";
 
 /// 把 `LuaDebug` 回填的 owned 字节转成 Rust 字符串（`None` 原样透传）。
 /// [`Lua::inspect_stack`] 与 `Function::info` 共用。
@@ -40,7 +40,7 @@ pub(crate) fn debug_string(bytes: Option<Vec<u8>>) -> Option<String> {
 ///
 /// 调用序契约（正确性，非内存安全）：`state` 存活且由当前线程驱动；`level` 有效
 /// （>=0 计帧数、-1 指栈顶——本仓库 Luau 的 `lua_getinfo` 无 5.x 的 `">"` 弹栈
-/// 约定）；`options` 为含结尾 NUL 的 `'static` 模板串且不含 `f` 选项（含 `f` 会
+/// 约定）；`options` 为不含 NUL 的 `'static` 模板串且不含 `f` 选项（含 `f` 会
 /// 向栈压值，本门面不做栈配平）。
 pub(crate) fn get_info(
   state: StateView<'_>,
@@ -48,23 +48,16 @@ pub(crate) fn get_info(
   options: &'static [u8],
 ) -> Option<LuaDebug> {
   debug_assert!(
-    options.last() == Some(&0),
-    "getinfo template must be NUL-terminated"
+    !options.contains(&0),
+    "getinfo template must not contain NUL"
   );
   // `LuaDebug` 现是 Rust 原生记录（owned `Vec<u8>`/枚举/整数字段），`default()`
   // 即「未填写」的合法初值，不再需要 `mem::zeroed()`。
   let mut ar: LuaDebug = LuaDebug::default();
   // Safety: `state` 存活且由当前线程驱动（调用点句柄契约）；`&mut ar` 指向本帧
-  // 对齐存活的局部；`options.as_ptr().cast()` 是上面 debug_assert 兜底的静态
-  // NUL 模板串，满足 `what` 形参存续期契约；VM 只向该 out 参数写 owned 字段。
-  let ok = unsafe {
-    lua_getinfo(
-      state.as_ptr().cast_mut(),
-      level,
-      options.as_ptr().cast(),
-      &mut ar,
-    )
-  };
+  // 对齐存活的局部；`options` 为上面 debug_assert 兜底的静态选项模板切片，
+  // 满足 `what` 切片形参契约；VM 只向该 out 参数写 owned 字段。
+  let ok = unsafe { lua_getinfo(state.as_ptr().cast_mut(), level, options, &mut ar) };
   (ok != 0).then_some(ar)
 }
 

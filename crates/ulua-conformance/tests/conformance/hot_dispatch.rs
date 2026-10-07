@@ -91,7 +91,7 @@ unsafe extern "C-unwind" fn hot_dispatch_interrupt(l: *mut LuaState, gc: c_int) 
   // 命中点的源码行号必须落在被驱动函数的区间内：这条断言把「回边上的 pc 推进」钉死，
   // jump_split! 的两条尾块若把 pc 走错，行号会跑到函数外（或直接命中失败）。
   let mut ar = zero_debug();
-  getinfo(l, 0, b"l\0", &mut ar);
+  getinfo(l, 0, b"l", &mut ar);
   let line = ar.currentline;
   if line >= 0 {
     HOT_HOOK.line_min.fetch_min(line, Ordering::SeqCst);

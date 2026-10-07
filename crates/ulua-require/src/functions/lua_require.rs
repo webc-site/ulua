@@ -1,4 +1,3 @@
-use ulua_common::functions::c_str::cstr;
 use ulua_vm::{
   functions::lua_getinfo::lua_getinfo,
   macros::lua_l_error::luaL_error,
@@ -13,9 +12,8 @@ use crate::{
   records::navigation_context::RequireHost,
 };
 
-/// `lua_getinfo` 的选项串：仅取 `what` 字段（NUL 结尾字节串，经 `cstr` 收口点转
-/// C 指针，review.md §10：不散落 `.as_ptr().cast()`）。
-const GETINFO_WHAT_OPT: &[u8] = b"s\0";
+/// `lua_getinfo` 的选项模板：仅取 `what` 字段（§10：模板即字节切片，直接传参）。
+const GETINFO_WHAT_OPT: &[u8] = b"s";
 
 /// require 闭包体（cpp `requireLikeFunc`）：泛型参数 `C` 为注入时的宿主类型，
 /// `luarequire_pushrequire::<C>` 以 `Some(lua_require::<C>)` 具名实例化后 coerce 为
@@ -42,7 +40,7 @@ pub(crate) unsafe extern "C-unwind" fn lua_require<C: RequireHost>(l: *mut LuaSt
   // 契约（同源单态化）。
   let requirer_chunkname = unsafe {
     for level in 1.. {
-      if lua_getinfo(l.as_mut_ptr(), level, cstr(GETINFO_WHAT_OPT), &mut ar) == 0 {
+      if lua_getinfo(l.as_mut_ptr(), level, GETINFO_WHAT_OPT, &mut ar) == 0 {
         luaL_error!(l, "{NOT_ALLOWED_MSG}");
       }
       if ar.what != LuaWhat::C {

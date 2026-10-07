@@ -13,7 +13,7 @@ pub unsafe extern "C-unwind" fn conformance_n_debug_get_up_value_yield(l: *mut L
 
   // `zero_debug` 交出全零 LuaDebug，getinfo 按掩码 'f' 填充函数原型槽。
   let mut ar = zero_debug();
-  assert_ne!(0, getinfo(l, 1, b"f\0", &mut ar));
+  assert_ne!(0, getinfo(l, 1, b"f", &mut ar));
 
   // 栈顶为刚取到的函数原型；取第 1 个上值的名字指针（断言非空后读）。
   let upvalue = getupvalue(l, -1, 1);

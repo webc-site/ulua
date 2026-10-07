@@ -54,7 +54,7 @@ use ulua_vm::{
 ///
 /// 对齐 cpp 中重复出现的缓存检查样板（`luaL_findtable` + `lua_getfield` + CHECK）。
 /// 静态表名字面量经共享门面 `ulua_common::functions::c_str::cstr` 收口，
-/// 动态 `key` 经 `with_c_str` 即时补 NUL（review.md §10：不散落 `.as_ptr().cast()`）。
+/// 动态 `key` 走 `get_field_str` 切片门面（review.md §10：不散落 `.as_ptr().cast()`）。
 fn assert_module_cache(l: *mut LuaState, key: &str, present: bool, context: &str) {
   // Safety: `l` 指向 fixture 初始化完成的主线程；findtable/getfield 的栈操作配平。
   // `lua_getfield` 走 `lua_s_new` 当场入 intern 表、不保存该指针。

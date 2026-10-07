@@ -13,13 +13,13 @@ use alloc::string::String;
 use core::{any::Any, ffi::c_void, ptr::eq};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 
-use ulua_common::{functions::c_str::with_c_str, macros::luau_assert::LUAU_ASSERT};
+use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
   enums::lua_status::LuaStatus,
   functions::{
     install_lua_exception_panic_hook::install_lua_exception_panic_hook,
-    lua_g_pusherror::lua_g_pusherror, resume::resume,
+    lua_g_pusherror::lua_g_pusherror_bytes, resume::resume,
   },
   records::{lua_exception::lua_exception, lua_state::LuaState},
   type_aliases::{pfunc::Pfunc, stk_id::StkId},
@@ -41,14 +41,13 @@ unsafe fn decode_error_payload(l: *mut LuaState, payload: Box<dyn Any + Send>) -
     } else {
       "unknown error"
     };
-    // 载荷含内嵌 NUL 时退到固定文案；否则经 with_c_str 补 NUL 传递指针。
-    const FALLBACK_MSG: &[u8] = b"invalid error message\0";
+    // 载荷含内嵌 NUL 时退到固定文案；否则消息字节切片直投 `_bytes` 核心
+    // （cpp 的 strlen 截读语义由本调用点显式承载，不再绕 C 串指针面）。
+    const FALLBACK_MSG: &[u8] = b"invalid error message";
     if memchr::memchr(0, msg.as_bytes()).is_some() {
-      lua_g_pusherror(&mut *l, FALLBACK_MSG.as_ptr().cast());
+      lua_g_pusherror_bytes(&mut *l, FALLBACK_MSG);
     } else {
-      with_c_str(msg.as_bytes(), |cmsg| {
-        lua_g_pusherror(&mut *l, cmsg);
-      });
+      lua_g_pusherror_bytes(&mut *l, msg.as_bytes());
     }
     // C++ nests a second try/catch for OOM while pushing; a Rust
     // allocation failure aborts, so the LUA_ERRMEM arm has no analog.

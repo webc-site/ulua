@@ -9,7 +9,7 @@ use crate::{
 
 /// # Safety
 /// `l` 须为存活 `LuaState`；`getthread` 取回的 `l1` 须为存活线程，`l!=l1` 时先 `rawcheckstack(l1,1)`
-/// 预留槽；栈 `arg+1` 为 level 数或函数、`arg+2` 为 NUL 结尾选项串（`luaL_checkstring`），
+/// 预留槽；栈 `arg+1` 为 level 数或函数、`arg+2` 为选项串（`luaL_checkstring`），
 /// `lua_getinfo` 可写 `ar` 并可抛错，须在受保护帧内调用。cpp `ldblib.cpp:25`。
 pub(crate) unsafe fn db_info(l: *mut LuaState) -> i32 {
   // r13-w1a 逐点定性（w6d 口径保留面；原普查 14 行命中）：to_integer/arg_check/
@@ -43,17 +43,23 @@ pub(crate) unsafe fn db_info(l: *mut LuaState) -> i32 {
       (*l).arg_error(arg + 1, "function or level expected");
     }
 
+    // cpp `luaL_checkstring` + strlen 语义：选项串止于首个 NUL（宿主可传内嵌
+    // NUL 的 Lua 串，两个消费环都只见前缀）；模板即切片，直接喂 `lua_getinfo`。
     let options = (*l).check_bytes(arg + 2);
+    let options = match memchr::memchr(0, options) {
+      Some(end) => &options[..end],
+      None => options,
+    };
 
     let mut ar: LuaDebug = LuaDebug::default();
-    if lua_getinfo(l1, level, options.as_ptr().cast(), &mut ar) == 0 {
+    if lua_getinfo(l1, level, options, &mut ar) == 0 {
       return 0;
     }
 
     let mut results: i32 = 0;
     let mut occurs = [false; 26];
 
-    // C++ `for (; *it; it++)`：零拷贝迭代选项串
+    // 选项模板逐字节迭代（已在上方折算为 cpp 的 strlen 前缀）
     for ch in options.iter().copied() {
       if ch.is_ascii_lowercase() {
         let idx = (ch - b'a') as usize;

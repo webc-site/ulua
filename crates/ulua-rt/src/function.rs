@@ -30,12 +30,12 @@ use crate::{
   value::Value,
 };
 
-/// `lua_getinfo` 选项串：仅 `s`（函数类型），供 `is_lua_closure` 判定用。
-/// 静态 NUL 结尾字节串，收口点交给 `*const c_char` 契约 API。
-const GETINFO_S: &[u8] = b"s\0";
-/// `lua_getinfo` 选项串：`n`（名字）+ `s`（源/类型）+ `a`（参数）+ `u`（upvalue）。
-/// 供 `Function::info` 用，静态 NUL 结尾字节串。
-const GETINFO_NSAU: &[u8] = b"nsau\0";
+/// `lua_getinfo` 选项模板：仅 `s`（函数类型），供 `is_lua_closure` 判定用。
+/// 静态字节切片，直传切片形 `what` 形参（§10：不经 C 指针契约位）。
+const GETINFO_S: &[u8] = b"s";
+/// `lua_getinfo` 选项模板：`n`（名字）+ `s`（源/类型）+ `a`（参数）+ `u`（upvalue）。
+/// 供 `Function::info` 用，静态字节切片。
+const GETINFO_NSAU: &[u8] = b"nsau";
 
 /// A handle to a callable Lua value (a Lua closure or a Rust function).
 ///
@@ -379,7 +379,7 @@ impl Function {
     self.reference.push();
     // `get_info`（safe 门面）收口零初始化 + `lua_getinfo` out 参数两步：`state`
     // 存活、栈顶是刚压入的本函数值（`level = -1` 解到它）、`GETINFO_S` 为静态
-    // NUL 结尾选项串且不含 `f`，不压值。
+    // 选项模板切片且不含 `f`，不压值。
     let closure = get_info(state, -1, GETINFO_S)
       .is_some_and(|ar| matches!(ar.what, LuaWhat::Lua | LuaWhat::Main));
     // `getinfo` 不压不弹，栈顶仍是 push 压入的本函数值；`pop_stack`（safe 门面）
@@ -399,7 +399,7 @@ impl Function {
     // 压入后 `level = -1` 解到刚压入的本函数。
     self.reference.push();
     // `get_info`（safe 门面）收口默认初值 + `lua_getinfo` out 参数：`state` 存活、
-    // 栈顶是本函数值；选项串 `GETINFO_NSAU` 是静态 NUL 串且不含 `f`，不额外压栈。
+    // 栈顶是本函数值；选项模板 `GETINFO_NSAU` 是静态切片且不含 `f`，不额外压栈。
     // 回填的 `what` 是 `LuaWhat` 枚举，`source`/`name`/`short_src` 是 VM 在填写时
     // 拷成的 owned `Vec<u8>`——下面的构造把它们 lossy 转成 owned `String`。
     let info = match get_info(state, -1, GETINFO_NSAU) {

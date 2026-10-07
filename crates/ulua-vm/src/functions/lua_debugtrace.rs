@@ -6,7 +6,7 @@ use itoa::Buffer;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  functions::{append::append_bytes, cstr, lua_getinfo::lua_getinfo},
+  functions::{append::append_bytes, lua_getinfo::lua_getinfo},
   records::{lua_debug::LuaDebug, lua_state::LuaState},
 };
 
@@ -40,7 +40,7 @@ pub unsafe fn lua_debugtrace(l: *mut LuaState) -> *const c_char {
       let mut num = Buffer::new();
 
       let mut level: i32 = 0;
-      while lua_getinfo(l, level, cstr(b"sln\0"), &mut ar) != 0 {
+      while lua_getinfo(l, level, b"sln", &mut ar) != 0 {
         if let Some(short_src) = &ar.short_src {
           offset = append_bytes(buf, offset, short_src);
         }

@@ -5,8 +5,7 @@
 //! upvalue count, `a` arity/vararg, `n` name, `f` push the function). Faithful
 //! to the C++ field-by-field; returns the closure when `f` was requested.
 
-/// NUL 结尾字节串（`*const c_char` 契约调用点 `.as_ptr().cast()`；§10 不引入 C 字符串类型）。
-use core::{ffi::c_char, ptr::null_mut};
+use core::ptr::null_mut;
 
 use crate::{
   functions::{
@@ -26,18 +25,18 @@ const SRC_C: &[u8] = b"=[C]";
 /// # Safety
 /// 所查询的调用帧/Proto/输出记录按约定存活可写。
 pub(crate) unsafe fn auxgetinfo(
-  what: *const c_char,
+  what: &[u8],
   ar: *mut LuaDebug,
   f: *mut Closure,
   ci: *mut CallInfo,
 ) -> *mut Closure {
-  // SAFETY: 契约保证 `ci` 为当前调用栈中的存活帧、`f` 与其一致（或为空由 ci 取得）、`ar`/`what` 可写/可读，块内字段填充与推值不越界
+  // SAFETY: 契约保证 `ci` 为当前调用栈中的存活帧、`f` 与其一致（或为空由 ci 取得）、`ar` 可写，块内字段填充与推值不越界
   unsafe {
     // 既有约定（review.md §2）：VM c-API 边界签名折返——返回 `*mut Closure`，`cl` 为局部裸指针哨兵，与 lua_getinfo 同链，边界体内保留
     let mut cl: *mut Closure = null_mut();
 
-    // C++ `for (; *what; what++)`：选项串经 `cstr_bytes` 门面零拷贝读为字节切片
-    for &ch in cstr_bytes(what) {
+    // C++ `for (; *what; what++)`：选项模板即字节切片，逐字节迭代（切片形无 NUL 语义）
+    for &ch in what {
       match ch {
         b's' => {
           if (*f).is_c != 0 {

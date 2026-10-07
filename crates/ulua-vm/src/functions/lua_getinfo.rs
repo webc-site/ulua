@@ -5,7 +5,7 @@
 //! `f` option pushed the function) place it on the stack. Returns 1 if a
 //! function was found at that level, else 0.
 
-use core::{ffi::c_char, ptr::null_mut};
+use core::ptr::null_mut;
 
 use ulua_common::LUAU_ASSERT;
 
@@ -16,16 +16,11 @@ use crate::{
 };
 
 /// # Safety
-/// `l` 必须指向存活 `LuaState` 且其栈/调用帧深度覆盖 `level`（对 top/base_ci 做裸 offset 游走）；`what` 须为
-/// 可读的 NUL 结尾 C 串；`ar` 须为存活可写 LuaDebug（auxgetinfo 直填字段）；`f` 选项命中时会向 `l` 压栈一个
-/// 闭包，调用方须预留栈顶余量。对应 cpp ldebug.cpp:185。
-pub unsafe fn lua_getinfo(
-  l: *mut LuaState,
-  level: i32,
-  what: *const c_char,
-  ar: *mut LuaDebug,
-) -> i32 {
-  // SAFETY: 契约保证 `L` 调用栈深度覆盖 level、`what` 为可读 C 串且 `ar` 可写；分支检查后 auxgetinfo 前置成立，出错路径不泄漏栈槽
+/// `l` 必须指向存活 `LuaState` 且其栈/调用帧深度覆盖 `level`（对 top/base_ci 做裸 offset 游走）；`what` 为
+/// 选项模板字节切片（逐字节消费，无 NUL 语义，如 `b"sln"`）；`ar` 须为存活可写 LuaDebug（auxgetinfo 直填字段）；
+/// `f` 选项命中时会向 `l` 压栈一个闭包，调用方须预留栈顶余量。对应 cpp ldebug.cpp:185。
+pub unsafe fn lua_getinfo(l: *mut LuaState, level: i32, what: &[u8], ar: *mut LuaDebug) -> i32 {
+  // SAFETY: 契约保证 `L` 调用栈深度覆盖 level 且 `ar` 可写；分支检查后 auxgetinfo 前置成立，出错路径不泄漏栈槽
   unsafe {
     // 既有约定（review.md §2）：VM c-API 边界签名折返——`f`/`ci` 为贯穿 auxgetinfo/getluaproto 调用链的局部裸指针哨兵，边界体内保留，勿改 Option
     let mut f: *mut Closure = null_mut();

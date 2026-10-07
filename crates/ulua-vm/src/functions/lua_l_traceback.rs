@@ -2,7 +2,7 @@ use itoa::Buffer;
 
 use crate::{
   functions::{
-    cstr, lua_getinfo::lua_getinfo, lua_l_addchar::lua_l_addchar,
+    lua_getinfo::lua_getinfo, lua_l_addchar::lua_l_addchar,
     lua_l_addlstring::lua_l_addlstring, lua_l_buffinit::lua_l_buffinit,
     lua_l_pushresult::lua_l_pushresult,
   },
@@ -42,7 +42,7 @@ pub unsafe fn lua_l_traceback(l: &mut LuaState, l1: *mut LuaState, msg: Option<&
     let mut num = Buffer::new();
     let mut i: i32 = level;
 
-    while lua_getinfo(l1, i, cstr(b"sln\0"), &mut ar) != 0 {
+    while lua_getinfo(l1, i, b"sln", &mut ar) != 0 {
       if ar.what == LuaWhat::C {
         i += 1;
         continue;

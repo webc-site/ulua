@@ -25,7 +25,7 @@ use std::sync::{Mutex, MutexGuard};
 
 use ulua_ast::records::parse_options::ParseOptions;
 use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
-use ulua_common::functions::c_str::with_c_str;
+use ulua_common::functions::c_str::cstr;
 use ulua_compiler::{functions::compile::compile, records::compile_options::CompileOptions};
 use ulua_vm::{
   enums::lua_status::LuaStatus,
@@ -106,38 +106,41 @@ impl Drop for StateGuard {
   }
 }
 
-/// cpp `lua_pushcfunction`：按 C 名字把 `lua_CFunction` 压栈（callee 当场内化名字）。
+/// cpp `lua_pushcfunction`：按 C 名字把 `lua_CFunction` 压栈。
+///
+/// `push_c_function` 的 debugname 由 VM 长期持有（`CClosure.debugname` 存指针不复制），
+/// 故名字参数必须 `'static`，经 `cstr` 一次性收口为静态 NUL 结尾指针。
 fn push_c_function(
   l: &mut LuaState,
-  name: &str,
+  name: &'static str,
   f: unsafe extern "C-unwind" fn(*mut LuaState) -> i32,
 ) {
-  with_c_str(name.as_bytes(), |name_ptr| {
-    // Safety: `l` 存活（调用方契约）；`name_ptr` 指向本次调用内有效的 NUL 结尾串，
-    // 被调方立即内化；`f` 符合 `lua_CFunction` 契约。
-    unsafe { l.push_c_function(Some(f), name_ptr) };
-  });
+  // Safety: `l` 存活（调用方契约）；`cstr(name.as_bytes())` 随 'static 字面量存活，
+  // 满足 debugname 长期持有契约；`f` 符合 `lua_CFunction` 契约。
+  unsafe { l.push_c_function(Some(f), cstr(name.as_bytes())) };
 }
 
 /// cpp `lua_pushcfunction + lua_setglobal` 成对样板的收口。
-fn push_global(l: &mut LuaState, name: &str, f: unsafe extern "C-unwind" fn(*mut LuaState) -> i32) {
+fn push_global(
+  l: &mut LuaState,
+  name: &'static str,
+  f: unsafe extern "C-unwind" fn(*mut LuaState) -> i32,
+) {
   push_c_function(l, name, f);
   l.set_global_bytes(name.as_bytes());
 }
 
-/// cpp `lua_registeruserdatadirectfieldget` 的指针形参收口：注册表项按 C ABI 取
-/// `*mut LuaState` 与 NUL 结尾字段名，其余调用点一律用引用。
+/// cpp `lua_registeruserdatadirectfieldget` 的收口：注册表项按 C ABI 取
+/// `*mut LuaState` 与字段名切片（VM 侧当场内化，strlen 语义），其余调用点一律用引用。
 fn register_direct_field_get(
   l: &mut LuaState,
   tag: i32,
   field: &str,
   handler: LuaUserdataDirectFieldGet,
 ) {
-  with_c_str(field.as_bytes(), |field_ptr| {
-    // Safety: `l` 存活且由本帧借用证明；`tag` 为测试常量的界内值；字段名当场被内化；
-    // `handler` 是本文件内的 C ABI 回调，注册表项存活期内一直有效。
-    unsafe { lua_registeruserdatadirectfieldget(from_mut(l), tag, field_ptr, handler) };
-  });
+  // Safety: `l` 存活且由本帧借用证明；`tag` 为测试常量的界内值；字段名被当场内化；
+  // `handler` 是本文件内的 C ABI 回调，注册表项存活期内一直有效。
+  unsafe { lua_registeruserdatadirectfieldget(from_mut(l), tag, field.as_bytes(), handler) };
 }
 
 /// cpp `runCode`：编译 + 载入 + `lua_pcall(0, LUA_MULTRET, 0)`。

@@ -38,7 +38,7 @@ fn debugger_yield_break1(l: *mut LuaState) {
   // getinfo 的 `f` 选项只填 ar.source 一类字段且本分支不读取，
   // upvalue 校验对栈的影响以 `lua_pop(l, 2)` 收尾配平。
   let mut ar = zero_debug();
-  getinfo(l, 0, b"f\0", &mut ar);
+  getinfo(l, 0, b"f", &mut ar);
 
   let upvalue = getupvalue(l, -1, 1);
   assert!(!upvalue.is_null());

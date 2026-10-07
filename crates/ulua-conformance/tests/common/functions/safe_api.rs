@@ -598,8 +598,8 @@ pub fn register_direct_field_get(
   field: &'static [u8],
   fn_: LuaUserdataDirectFieldGet,
 ) {
-  // Safety: `l` 存活；`tag` 界内；`cstr` NUL 结尾静态字段名；`fn_` 遵循直接字段取数约定。
-  unsafe { lua_registeruserdatadirectfieldget(l, tag, cstr(field), fn_) }
+  // Safety: `l` 存活；`tag` 界内；`field` 字段名切片（VM 侧当场内化）；`fn_` 遵循直接字段取数约定。
+  unsafe { lua_registeruserdatadirectfieldget(l, tag, field, fn_) }
 }
 
 // ---------------------------------------------------------------------------
@@ -1091,12 +1091,12 @@ pub fn zero_debug() -> LuaDebug {
   LuaDebug::default()
 }
 
-/// `lua_getinfo`：按 `what` 掩码（NUL 结尾静态串，如 `b"f\0"`）填充 `ar`；
+/// `lua_getinfo`：按 `what` 掩码（静态模板串，如 `b"f"`）填充 `ar`；
 /// 返回 0 表示该 `level` 无函数帧。
 pub fn getinfo(l: L, level: c_int, what: &'static [u8], ar: &mut LuaDebug) -> c_int {
-  // Safety: `l` 存活且调用栈深度覆盖 `level`；`what` 为 NUL 结尾静态串；`ar` 为
+  // Safety: `l` 存活且调用栈深度覆盖 `level`；`what` 为静态选项模板切片；`ar` 为
   // 本帧存活记录（模块级契约 + 用例栈形）。
-  unsafe { lua_getinfo(l, level, cstr(what), ar) }
+  unsafe { lua_getinfo(l, level, what, ar) }
 }
 
 /// `lua_getlocal`：取 `level` 帧第 `n` 个局部变量名字（并压值入栈）；越界得 NULL。

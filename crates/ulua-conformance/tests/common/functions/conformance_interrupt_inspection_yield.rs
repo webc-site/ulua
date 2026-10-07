@@ -9,7 +9,7 @@ use crate::common::functions::{
 /// Pointer arguments must be valid, aligned, and properly initialized.
 pub unsafe extern "C-unwind" fn conformance_interrupt_inspection_yield(l: *mut LuaState) -> bool {
   let mut ar = zero_debug();
-  assert_ne!(0, getinfo(l, 0, b"nsl\0", &mut ar));
+  assert_ne!(0, getinfo(l, 0, b"nsl", &mut ar));
 
   callhook(l, Some(conformance_interrupt_inspection_hook), None);
 

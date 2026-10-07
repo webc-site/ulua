@@ -14,7 +14,7 @@ pub unsafe extern "C-unwind" fn conformance_debugger_breakpoint(l: *mut LuaState
 
   let mut ar = zero_debug();
   // `lua_stackdepth` 已是 ulua-vm 安全签名（`&LuaState`），经单点重建直调。
-  getinfo(l, lua_stackdepth(state_mut(l)) - 1, b"f\0", &mut ar);
+  getinfo(l, lua_stackdepth(state_mut(l)) - 1, b"f", &mut ar);
 
   breakpoint(l, -1, line, enabled as c_int);
   0

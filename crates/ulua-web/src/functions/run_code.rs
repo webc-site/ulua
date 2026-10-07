@@ -12,15 +12,14 @@ use std::string::String;
 use itoa::Buffer;
 use ulua_ast::records::parse_options::ParseOptions;
 use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
-use ulua_common::functions::c_str::cstr;
 use ulua_compiler::{functions::compile::compile, records::compile_options::CompileOptions};
 use ulua_vm::{
   functions::{lua_getinfo::lua_getinfo, run_loaded_chunk::run_loaded_chunk},
   records::{lua_debug::LuaDebug, lua_state::LuaState},
 };
 
-/// `lua_getinfo` 选项串：source/short_src/line（NUL 结尾字节串，收口点转 C 指针）。
-const GETINFO_SLN_OPT: &[u8] = b"sln\0";
+/// `lua_getinfo` 选项模板：source/short_src/line（§10：模板即字节切片，直接传参）。
+const GETINFO_SLN_OPT: &[u8] = b"sln";
 
 /// 运行 `source`，返回装配后的结果/错误文本（成功为空串，cpp 同形）。
 ///
@@ -54,7 +53,7 @@ pub fn run_code(l: &mut LuaState, source: &str) -> String {
       let mut ar = LuaDebug::default();
       // Safety: `l` 由参数借用保证为活跃状态机（指针就地派生，不越过借用窗口）；
       // `ar` 是可写局部记录，`"sln"` 选项只写字段、不压栈。
-      if unsafe { lua_getinfo(from_mut(l), 0, cstr(GETINFO_SLN_OPT), &mut ar) } != 0 {
+      if unsafe { lua_getinfo(from_mut(l), 0, GETINFO_SLN_OPT, &mut ar) } != 0 {
         // 前缀拼在 run_loaded_chunk 返回的消息之前，与 cpp 同序。
         // `short_src` 是 getinfo 成功时填的 owned 字节，lossy 解码为 `&str`。
         let short_src = String::from_utf8_lossy(ar.short_src.as_deref().unwrap_or(b""));

@@ -17,7 +17,7 @@ use crate::common::{
 /// 读取 level 0 栈帧的当前行号（cpp `lua_getinfo(L, "l", &ar)` 后取 `ar.currentline`）。
 fn current_line(l: *mut LuaState) -> c_int {
   let mut ar: LuaDebug = zero_debug();
-  getinfo(l, 0, b"l\0", &mut ar);
+  getinfo(l, 0, b"l", &mut ar);
   ar.currentline
 }
 

@@ -4,13 +4,13 @@
 //! explicit function at slot 1, or the function at stack `level` (via
 //! `lua_getinfo`'s `f` option, which pushes it). Used by the env builtins.
 
-/// NUL 结尾字节串（`*const c_char` 契约调用点 `.as_ptr().cast()`；§10 不引入 C 字符串类型）。
 use crate::{
   functions::{lua_getinfo::lua_getinfo, lua_l_optinteger::lua_l_optinteger},
   macros::lua_l_error::luaL_error,
   records::{lua_debug::LuaDebug, lua_state::LuaState},
 };
-const WHAT_F: &[u8] = b"f\0";
+/// `f` 选项模板：只取函数不填其余字段。
+const WHAT_F: &[u8] = b"f";
 
 /// # Safety
 ///
@@ -28,7 +28,7 @@ pub(crate) unsafe fn getfunc(l: *mut LuaState, opt: i32) {
         (*l).check_integer(1)
       };
       (*l).arg_check(level >= 0, 1, "level must be non-negative");
-      if lua_getinfo(l, level, WHAT_F.as_ptr().cast(), &mut ar) == 0 {
+      if lua_getinfo(l, level, WHAT_F, &mut ar) == 0 {
         (*l).arg_error(1, "invalid level");
       }
       if (*l).is_nil(-1) {
