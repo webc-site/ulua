@@ -580,9 +580,10 @@ pub fn newmetatable(l: L, name: &'static [u8]) -> c_int {
 }
 
 /// `LUA_PUSHCFUNCTION(l, f, name)`：把带调试名的 C 函数压栈（不挂全局，供元方法等落位）。
+/// `name` 沿用 NUL 结尾字面量形态，VM 门面收口前剥掉终止符（VM intern 载荷不含 NUL）。
 pub fn pushcfunction_named(l: L, f: LuaCFunction, name: &'static [u8]) {
-  // Safety: `l` 存活；`f` 遵循 Lua C 函数约定；`cstr` NUL 结尾静态名串。
-  unsafe { (*l).push_c_function(f, cstr(name)) }
+  // Safety: `l` 为存活 LuaState（模块级 L 契约），解引用后即安全门面直调。
+  unsafe { (*l).push_c_function(f, Some(name.strip_suffix(b"\0").unwrap_or(name))) }
 }
 
 /// `lua_setuserdatametatable(l, tag)`。
@@ -993,16 +994,17 @@ pub fn isuserdata(l: L, idx: c_int) -> c_int {
 // ---------------------------------------------------------------------------
 
 /// `lua_pushcfunction(l, f)`（无调试名）：与 [`pushcfunction`] 同形，接受 `Option<LuaCFunction>`。
+/// `name` 传 `None` 即无调试名；`Some` 形态经 VM 门面 intern 当场复制，仅调用期借用。
 pub fn push_c_function(l: L, f: LuaCFunction, name: Option<&'static [u8]>) {
-  let name = name.map_or_else(null, cstr);
-  // Safety: `l` 存活；`name` 为 `cstr` 转的 NUL 结尾静态串或 NULL，二者均与底层 C 契约一致。
-  unsafe { (*l).push_c_function(f, name) }
+  // Safety: `l` 为存活 LuaState（模块级 L 契约），解引用后即安全门面直调。
+  unsafe { (*l).push_c_function(f, name.map(|n| n.strip_suffix(b"\0").unwrap_or(n))) }
 }
 
 /// `lua_pushcclosure(l, f, nup)`：栈顶须有 `nup` 个上值。
+/// `name` 沿用 NUL 结尾字面量形态，VM 门面收口前剥掉终止符。
 pub fn push_c_closure(l: L, f: LuaCFunction, name: &'static [u8], nup: c_int) {
-  // Safety: `l` 存活；栈顶 `nup` 个上值由用例配平；`cstr` NUL 结尾静态名串。
-  unsafe { (*l).push_c_closure(f, cstr(name), nup) }
+  // Safety: `l` 为存活 LuaState（模块级 L 契约），解引用后即安全门面直调。
+  unsafe { (*l).push_c_closure(f, Some(name.strip_suffix(b"\0").unwrap_or(name)), nup) }
 }
 
 // ---------------------------------------------------------------------------

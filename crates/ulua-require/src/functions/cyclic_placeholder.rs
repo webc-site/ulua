@@ -14,7 +14,6 @@
 //! 逐项一致；仅 `debug.getregistry()` 下该内部槽的可见形态从 lightuserdata
 //! 地址变为隐藏命名的字符串键。
 
-use ulua_common::functions::c_str::cstr;
 use ulua_vm::{
   enums::lua_type::LuaType,
   functions::lua_rawiter::lua_rawiter,
@@ -35,8 +34,8 @@ const PLACEHOLDER_METATABLE_KEY: &[u8] = b"_LUAU_CYCLIC_PLACEHOLDER_METATABLE";
 /// 占位元表 `__metatable` 的锁定文案（cpp `lua_pushliteral`）；字节串切片入参，
 /// 无 NUL 约定（驻留内容不含终止符）。
 const METATABLE_LOCKED: &[u8] = b"The metatable is locked";
-/// 两个元方法 C 闭包的调试名（cpp `debugname`，NUL 结尾静态字节串，
-/// 仅在 `push_c_function` 收口点转 C 指针）。
+/// 两个元方法 C 闭包的调试名（cpp `debugname`，NUL 结尾静态字节串；
+/// `push_c_function` 收口前剥终止符，VM 经 intern 当场复制）。
 const INDEX_ERROR_NAME: &[u8] = b"CyclicDependencyIndexError\0";
 const NEW_INDEX_ERROR_NAME: &[u8] = b"CyclicDependencyNewIndexError\0";
 /// 元表字段名（NUL 结尾字节串，仅 `lua_setfield` 收口点转 C 指针）。
@@ -88,11 +87,9 @@ unsafe extern "C-unwind" fn cyclic_dependency_new_index_error(l: *mut LuaState) 
 ///
 /// `func` 须为静态存活的 VM 元方法闭包；`debug_name` 为 NUL 结尾静态字节串。
 fn set_meta_method(l: &mut LuaState, field: &[u8], func: LuaCFunction, debug_name: &'static [u8]) {
-  // Safety: func 静态存活（仅登记函数指针）；debug_name 为 NUL 结尾静态串，满足
-  // push_c_function 闭包存活期内有效契约（净压一值，set_field_bytes 随后消费）。
-  unsafe {
-    l.push_c_function(func, cstr(debug_name));
-  }
+  // `func` 静态存活（仅登记函数指针）；debug_name 剥终止符后经 `push_c_function`
+  // 的 intern 收口当场复制（净压一值，set_field_bytes 随后消费）。
+  l.push_c_function(func, Some(debug_name.strip_suffix(b"\0").unwrap_or(debug_name)));
   l.set_field_bytes(-2, field);
 }
 

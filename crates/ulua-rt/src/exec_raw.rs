@@ -23,7 +23,8 @@ use crate::{
 };
 
 /// `exec_raw_trampoline` 闭包的调试名：静态 NUL 结尾字节串，交给 `lua_pushcclosurek`
-/// 的 `*const c_char` 收口点（消费侧按 NUL 扫描读取，结尾 `\0` 不可省）。
+/// 的 `*const c_char` 收口点（VM 压栈时 intern 复制；收口垫片按 NUL 扫描读取，
+/// 结尾 `\0` 不可省）。
 const EXEC_RAW_NAME: &[u8] = b"ulua-rt-exec-raw\0";
 /// `create_c_function` 闭包的调试名：同上，静态 NUL 结尾字节串。
 const C_FUNCTION_NAME: &[u8] = b"ulua-rt-c-function\0";

@@ -104,10 +104,11 @@ pub(crate) unsafe fn dumpthread(f: *mut c_void, th: &LuaState) {
             if (*cl).is_c != 0 {
               let c = addr_of!((*cl).inner.c).cast::<CClosure>();
               c_file_write_bytes(f, b"\"frame:");
+              // debugname 为 intern TString 锚（traverseclosure 标记边保证 GC 存活）
               c_file_write_str(
                 f,
                 if !(*c).debugname.is_null() {
-                  (*c).debugname
+                  getstr((*c).debugname)
                 } else {
                   SHORT_SRC_C.as_ptr().cast()
                 },

@@ -461,8 +461,8 @@ macro_rules! wrap_mut_closure {
 pub(crate) use wrap_mut_closure;
 
 /// `trampoline` 闭包的调试名：静态 NUL 结尾字节串，交给 `lua_pushcclosurek` 的
-/// `*const c_char` 收口点（被闭包长期持有，`'static` 永不失效）。VM 不在压栈时
-/// intern，消费侧（`currfuncname` 等）按 NUL 扫描读取，故结尾 `\0` 不可省。
+/// `*const c_char` 收口点。VM 压栈时经 intern 复制为 TString 锚（调用期指针即可），
+/// 本 crate 保留 `'static` NUL 字面量形态——收口垫片按 NUL 扫描读载荷，`\0` 不可省。
 const CALLBACK_NAME: &[u8] = b"ulua-rt-callback\0";
 
 pub(crate) fn create_callback_function<F, A, R>(lua: &Lua, func: F) -> Result<Function>

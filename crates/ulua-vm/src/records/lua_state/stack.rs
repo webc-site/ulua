@@ -1,4 +1,4 @@
-use core::ffi::{c_char, c_void};
+use core::ffi::c_void;
 
 use super::LuaState;
 use crate::{
@@ -6,7 +6,7 @@ use crate::{
     c_slice, c_slice_mut, ensure_stack::ensure_stack, lua_call::lua_call,
     lua_checkstack::lua_checkstack, lua_concat::lua_concat, lua_insert::lua_insert,
     lua_newuserdatatagged::lua_newuserdatatagged, lua_pcall::lua_pcall,
-    lua_pushcclosurek::lua_pushcclosurek, lua_pushinteger_64::lua_pushinteger_64,
+    lua_pushcclosurek::lua_pushcclosurek_ref, lua_pushinteger_64::lua_pushinteger_64,
     lua_pushlightuserdatatagged::lua_pushlightuserdatatagged,
     lua_pushlstring::lua_pushlstring_bytes, lua_pushvalue::lua_pushvalue, lua_remove::lua_remove,
     lua_replace::lua_replace, lua_settop::lua_settop,
@@ -278,20 +278,24 @@ impl LuaState {
     unsafe { lua_pushlightuserdatatagged(self.as_mut_ptr(), p, 0) }
   }
 
-  /// # Safety
-  /// `f` 须遵循 Lua C 函数约定；`debugname` 须为空或在闭包存活期内有效的 NUL 字符串指针。
+  /// 压入无 continuation 的 C 函数闭包（cpp `lua_pushcfunction` 收口）。
+  ///
+  /// `debugname` 收 `Option<&[u8]>`（载荷不含 NUL；`None` 即 cpp NULL 哨兵）：
+  /// VM 经 intern 当场复制为 TString 锚入闭包，入参仅在本次调用期内借用。
+  /// 压栈可触发 GC/抛错（受保护帧前提），属正确性契约而非内存安全前提，
+  /// 故随 ref 核心降为安全 `fn`。
   #[inline(always)]
-  pub unsafe fn push_c_function(&mut self, f: LuaCFunction, debugname: *const c_char) {
-    // SAFETY: `f`/`debugname` 按本方法契约原样透传给 `lua_pushcclosurek`。
-    unsafe { lua_pushcclosurek(self.as_mut_ptr(), f, debugname, 0, None) }
+  pub fn push_c_function(&mut self, f: LuaCFunction, debugname: Option<&[u8]>) {
+    lua_pushcclosurek_ref(self, f, debugname, 0, None)
   }
 
-  /// # Safety
-  /// `f` 须遵循 Lua C 函数约定；`debugname` 须为空或在闭包存活期内有效的 NUL 字符串指针；栈顶须有 `nup` 个待捕获上值。
+  /// 压入无 continuation 的 C 闭包并捕获栈顶 `nup` 个上值（cpp `lua_pushcclosure` 收口）。
+  ///
+  /// `debugname` 语义同 [`Self::push_c_function`]；栈顶须已有 `nup` 个待捕获上值
+  /// （正确性契约，由调用点配平）。
   #[inline(always)]
-  pub unsafe fn push_c_closure(&mut self, f: LuaCFunction, debugname: *const c_char, nup: i32) {
-    // SAFETY: `f`/`debugname`/`nup` 按本方法契约原样透传给 `lua_pushcclosurek`。
-    unsafe { lua_pushcclosurek(self.as_mut_ptr(), f, debugname, nup, None) }
+  pub fn push_c_closure(&mut self, f: LuaCFunction, debugname: Option<&[u8]>, nup: i32) {
+    lua_pushcclosurek_ref(self, f, debugname, nup, None)
   }
 
   #[inline(always)]

@@ -2,7 +2,7 @@ use crate::{
   functions::{
     coclose::coclose_arm, cocreate::cocreate_arm, coresumecont::coresumecont_arm,
     coresumey::coresumey_arm, corunning::corunning_arm, costatus::costatus_arm, cowrap::cowrap_arm,
-    coyield::coyield_arm, coyieldable::coyieldable_arm, cstr, lua_l_register::lua_l_register_bytes,
+    coyield::coyield_arm, coyieldable::coyieldable_arm, lua_l_register::lua_l_register_bytes,
     lua_pushcclosurek::lua_pushcclosurek_ref,
   },
   macros::lua_lib_fn::lua_lib_fn,
@@ -23,7 +23,7 @@ pub(crate) fn luaopen_coroutine(l: &mut LuaState) -> i32 {
   lua_pushcclosurek_ref(
     l,
     Some(coresumey_arm),
-    cstr(b"resume\0"),
+    Some(b"resume"),
     0,
     Some(coresumecont_arm),
   );

@@ -17,8 +17,9 @@ use crate::{
 /// 的解引用皆源自 `l` 的自有字段而非调用方入参，包于单一 `unsafe` 块并附契约。
 pub(crate) fn currfuncname(l: &LuaState) -> Option<&[u8]> {
   // SAFETY: `l` 存活，`(*l).ci`/`(*l).base_ci` 同处一 CallInfo 数组且 `base_ci <= ci`
-  // （`curr_func!` 读当前帧闭包）；C 闭包时 `inner.c.debugname` 为可读 C 串或 NULL，
-  // `(*l).namecall` 若非空须为存活 TString（`getstr` 取字节，Lua 串恒 NUL 结尾）。
+  // （`curr_func!` 读当前帧闭包）；C 闭包时 `inner.c.debugname` 为 intern TString 锚或空
+  // （traverseclosure 标记边保证其 GC 存活，`getstr` 取载荷、Lua 串恒 NUL 结尾），
+  // `(*l).namecall` 若非空须为存活 TString。
   // cstr_bytes 各调用点均已先证指针非空且指向 NUL 结尾存活缓冲区。
   unsafe {
     // 既有约定（review.md §2）：VM c-API 边界签名折返——`cl` 空表示无当前闭包帧，null 为该边界合法返回，保留裸指针哨兵
@@ -28,11 +29,17 @@ pub(crate) fn currfuncname(l: &LuaState) -> Option<&[u8]> {
       null_mut()
     };
 
-    if cl.is_null() || (*cl).is_c == 0 || (*cl).inner.c.debugname.is_null() {
+    if cl.is_null() || (*cl).is_c == 0 {
       return None;
     }
 
-    let debugname = cstr_bytes((*cl).inner.c.debugname);
+    // debugname 为锚定 intern 串的 TString（traverseclosure 标记边保证 GC 存活），
+    // `getstr` 取载荷首址、布局自带 NUL 终止，`cstr_bytes` 止于该 NUL
+    let debugname = (*cl).inner.c.debugname;
+    if debugname.is_null() {
+      return None;
+    }
+    let debugname = cstr_bytes(getstr(debugname));
     if debugname != b"__namecall" {
       return Some(debugname);
     }

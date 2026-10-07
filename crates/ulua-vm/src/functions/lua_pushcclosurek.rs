@@ -1,11 +1,12 @@
 //! Source: `VM/src/lapi.cpp:742-760` (hand-ported)
 
-use core::{ffi::c_char, ptr::addr_of_mut};
+use core::{ffi::c_char, ptr::{addr_of_mut, null_mut}};
 
 use crate::{
   functions::{
-    c_slice, c_slice_mut, getcurrenv::getcurrenv, lapi_barrier::lua_c_threadbarrier_lapi,
-    lua_f_new_cclosure::lua_f_new_cclosure,
+    c_slice, c_slice_mut, cstr_bytes, getcurrenv::getcurrenv,
+    lapi_barrier::lua_c_threadbarrier_lapi, lua_f_new_cclosure::lua_f_new_cclosure,
+    lua_s_newlstr::lua_s_newlstr,
   },
   macros::{
     api_check::api_check, api_checknelems::api_checknelems, api_incr_top::api_incr_top,
@@ -21,22 +22,30 @@ use crate::{
 /// 与闭包 upvals 堆块各自收口为 `&[TValue]`/`&mut [TValue]` 切片，逐格 `setobj2n` 与 cpp
 /// 倒序写等价（同一对 (upvals[k], top+k)，写入互不交叠，顺序不可观察）。
 ///
+/// debugname 收 `Option<&[u8]>`（载荷不含 NUL；`None` 即 cpp NULL 哨兵）：非空时经
+/// `lua_s_newlstr` 当场 intern 复制为 TString 锚入闭包（cpp lapi.cpp:752
+/// `cl->c.debugname = debugname ? luaS_new(L, debugname) : nullptr`），调用方缓冲仅在
+/// 本调用期内借用，VM 不外存指针——上游已把裸指针契约收窄为「调用期有效」。
+/// GC 语义：新闭包由 `lua_f_new_cclosure` 刚分配、此间无 GC 步进点，落 `setclvalue`
+/// 前恒为白（尾部 `iswhite` 断言兜底），向白对象挂 intern 串引用免写屏障（cpp
+/// lapi_barrier 通则：屏障只在对象可能已黑时触发）；串的存活由 traverseclosure 的
+/// debugname 标记边保证。
+///
 /// 全流程顺序与 cpp lapi.cpp:742 逐指令一致：`api_check` → GC 点 → 线程屏障 →
 /// 栈余量 → 元素数断言 → 建闭包 → 写 f/cont/debugname → 出栈 nup → 登记 → 闭包入槽 →
 /// 白度断言 → 抬栈顶。
 ///
-/// # Safety（内部窄窗契约，签名安全：调用方无需 unsafe 上下文）
+/// 调用序契约（签名安全：调用方无需 unsafe 上下文）
 /// 1. `l` 为正在执行的 API 帧的存活 `LuaState`，`r#fn` 遵循 Lua C 函数约定（cpp:783
 ///    `api_check(fn)`）；
 /// 2. `nup >= 0` 且自栈顶起 `nup` 槽为已压入的可捕获值（`api_checknelems` 的判据），
 ///    据此派生的 `&[TValue]` 窗在登记期间可读、且与闭包自有 upvals 堆块不相交；
-/// 3. `debugname` 为空或在闭包存活期内保持有效的 NUL 串（VM 只存指针不复制，cpp 形
-///    `cl->c.debugname = debugname`），`cont` 为可在可 yield 路径安全调用的回调；
-/// 4. `lua_c_check_gc`/`lua_f_new_cclosure` 可分配、可触发 GC——须在受保护帧内调用。
+/// 3. `cont` 为可在可 yield 路径安全调用的回调；
+/// 4. `lua_c_check_gc`/`lua_f_new_cclosure`/intern 可分配、可触发 GC——须在受保护帧内调用。
 pub(crate) fn lua_pushcclosurek_ref(
   l: &mut LuaState,
   r#fn: LuaCFunction,
-  debugname: *const c_char,
+  debugname: Option<&[u8]>,
   nup: i32,
   cont: LuaContinuation,
 ) {
@@ -52,10 +61,10 @@ pub(crate) fn lua_pushcclosurek_ref(
     api_checknelems!(l, nup);
   }
 
-  // SAFETY: 契约 1/3/4——闭包按 size_cclosure(nup) 分配、env 取当前帧；`cc` 指向刚分配且
-  // 本函数独占的闭包自有字段（f/cont/debugname 为载荷值写入，debugname 只存指针、
-  // 存活期由契约 3 钉住）；出栈后 `pending`（top 起 nup 槽）与 `captured`（闭包 upvals
-  // 堆块）两窗不相交，逐格 `setobj2n` 即 cpp 倒序写的同一对复制
+  // SAFETY: 契约 1/2/4——闭包按 size_cclosure(nup) 分配、env 取当前帧；`cc` 指向刚分配且
+  // 本函数独占的闭包自有字段（f/cont/debugname 为载荷值写入）；出栈后 `pending`（top 起
+  // nup 槽）与 `captured`（闭包 upvals 堆块）两窗不相交，逐格 `setobj2n` 即 cpp 倒序写的
+  // 同一对复制
   unsafe {
     // cpp `luaF_newCclosure(L, nup, getcurrenv(L))` 实参求值序即先取当前 env 再建闭包；
     // 收形后 `lua_f_new_cclosure` 首参借 `&mut l`，故先就地一次借出裸指针完成
@@ -65,7 +74,12 @@ pub(crate) fn lua_pushcclosurek_ref(
     let cc = addr_of_mut!((*cl).inner.c);
     (*cc).f = r#fn;
     (*cc).cont = cont;
-    (*cc).debugname = debugname;
+    // debugname intern 复制（`lua_s_newlstr` 借 `&mut l`，与 `cc` 裸指针窗不冲突）：
+    // 命中串表复用旧串、未命中新分配，均由 traverseclosure 的标记边钉住存活
+    (*cc).debugname = match debugname {
+      Some(name) => lua_s_newlstr(l, name),
+      None => null_mut(),
+    };
 
     // 出栈 nup：待捕获值窗自新 top 起（`rewind_top` 提交原语镜像原
     // `top = top.sub(nup)` 落值）
@@ -88,21 +102,19 @@ pub(crate) fn lua_pushcclosurek_ref(
 /// C-ABI 镜像垫片：把 `lua_pushcclosurek_ref` 的独占引用形折回 cpp
 /// `lua_pushcclosurek`（`VM/src/lapi.cpp:742`）的 `lua_State*` 形，语义零差。
 ///
-/// r12-w4b 按 T9 形实测裁决**保留**：全仓消费面 C 形入口真实存在且为零业务折形——
-/// 跨 crate 消费方 `ulua-rt`（`sys.rs` re-export，`state.rs` 的 `push_named_closure` /
+/// r12-w4b 按 T9 形实测裁决**保留**：全仓消费面 C 形入口真实存在（跨 crate 消费方
+/// `ulua-rt`（`sys.rs` re-export，`state.rs` 的 `push_named_closure` /
 /// `push_anonymous_closure` 门面）、`ulua-require`（`push_closure.rs`）、`ulua-web`
 /// （`wasm.rs` 的 sandbox print 钩子），测试门面 `ulua-conformance`（`safe_api.rs` 的
 /// cfunction/closurek 两形）、`ulua-cli-test`（`require_by_string.rs` 三处），`ulua-vm` 内
-/// 另有 7 处 C 形调用点（`records/lua_state/stack.rs` 两方法、`luaopen_base` 两处、
-/// `luaopen_coroutine`、`f_ccall`、`cowrap`）；`ulua-capi` 侧实测零导出壳（本符号不在
-/// C ABI 导出表内）。函数体保持对 `lua_pushcclosurek_ref` 的一行折形委托。
-/// 后续票建议：把上述消费点逐个迁至 ref 核心（Rust 侧即免 unsafe 上下文），迁毕删本垫片。
+/// 另有 C 形调用点）。函数体保持对 `lua_pushcclosurek_ref` 的一行折形委托，NULL/串
+/// 语义在本垫片内判空翻译（`cstr_bytes` 止于首个 NUL，载荷不含终止符）。
 ///
 /// # Safety
 /// `l` 指向存活 `LuaState`；`fn` 非空且遵循 Lua C 函数约定（cpp lapi.cpp:783 `api_check(fn)`）；
-/// `nup >= 0` 且栈顶已压入 `nup` 个可捕获上值（`api_checknelems`）；`debugname` 为空或须在
-/// 闭包存活期内保持有效的 NUL 串；`cont` 为可在可 yield 路径安全调用的回调。cpp lapi.cpp:781.
-/// 其余前提与被调核心的 `# Safety` 契约逐条同一。
+/// `nup >= 0` 且栈顶已压入 `nup` 个可捕获上值（`api_checknelems`）；`debugname` 为 null 或
+/// 指向 NUL 结尾、**仅本次调用期内**有效的缓冲（VM 经 intern 复制，不外存指针）；`cont`
+/// 为可在可 yield 路径安全调用的回调。cpp lapi.cpp:781. 其余前提与被调核心的调用序契约逐条同一。
 pub unsafe fn lua_pushcclosurek(
   l: *mut LuaState,
   r#fn: LuaCFunction,
@@ -110,6 +122,14 @@ pub unsafe fn lua_pushcclosurek(
   nup: i32,
   cont: LuaContinuation,
 ) {
+  // null 与空串语义分立：cpp `NULL` → 无调试名，`""` → 空名（getfuncname 返回 "" 而非
+  // null），`cstr_bytes` 把 null 译成空切片会抹掉这一区分，故先行判空
+  let name = if debugname.is_null() {
+    None
+  } else {
+    // SAFETY: 非空分支契约担保 NUL 结尾且调用期内有效
+    Some(unsafe { cstr_bytes(debugname) })
+  };
   // SAFETY: 契约保证 `l` 非空且指向存活 LuaState，本帧重建独占引用后即结束借用窗口
-  unsafe { lua_pushcclosurek_ref(&mut *l, r#fn, debugname, nup, cont) }
+  unsafe { lua_pushcclosurek_ref(&mut *l, r#fn, name, nup, cont) }
 }

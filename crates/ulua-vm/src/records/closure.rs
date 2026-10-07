@@ -1,10 +1,9 @@
-use core::{
-  ffi::c_char,
-  fmt::{Debug, Formatter, Result},
-};
+use core::fmt::{Debug, Formatter, Result};
 
 use crate::{
-  records::{g_cheader::GCheader, gc_object::GcObject, lua_table::LuaTable, proto::Proto},
+  records::{
+    g_cheader::GCheader, gc_object::GcObject, lua_table::LuaTable, proto::Proto, t_string::tstring,
+  },
   type_aliases::{
     lua_c_function::LuaCFunction, lua_continuation::LuaContinuation, t_value::TValue,
   },
@@ -14,7 +13,9 @@ use crate::{
 pub struct CClosure {
   pub f: LuaCFunction,
   pub cont: LuaContinuation,
-  pub debugname: *const c_char,
+  /// 调试名锚定串表内的 TString（cpp lobject.h:477 `TString* debugname`）：VM 经
+  /// `luaS_new` intern 复制持有，非调用方指针；GC 经 traverseclosure 标记。
+  pub debugname: *mut tstring,
   pub upvals: [TValue; 1],
 }
 

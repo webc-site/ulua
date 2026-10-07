@@ -8,8 +8,6 @@
 // function (over the opaque `LuaState` struct) to the VM's `LuaCfunction`
 // shape (`unsafe fn(*mut vm::lua_State) -> i32`).
 
-use core::ptr::null;
-
 use ulua_vm::{
   functions::{
     luaopen_base::luaopen_base, luaopen_bit_32::luaopen_bit32, luaopen_buffer::luaopen_buffer,
@@ -38,9 +36,9 @@ unsafe extern "C-unwind" fn print_thunk(l: *mut lua_state::LuaState) -> i32 {
 
 /// 对应 C++ `void setTypeFunctionEnvironment(lua_State* L)`（`cpp/Analysis/src/TypeFunctionRuntime.cpp:2094`）。
 ///
-/// 本函数是 safe fn：形参为 `&mut LuaState`，存活/独占由引用类型承载；体内不安全只剩
-/// `l.push_c_function` 两处窄块——它仍是 VM 侧收 `*const c_char` debugname 的 C 形态门面
-/// （`luaopen_*` 收形后皆引用形安全直调），调用方无需承担任何内存安全前提。
+/// 本函数是 safe fn：形参为 `&mut LuaState`，存活/独占由引用类型承载；压 C 函数闭包经
+/// `push_c_function` 安全门面（debugname 传 `None` 即 cpp NULL），调用方无需承担任何
+/// 内存安全前提。
 ///
 /// 调用序契约（正确性，非内存安全）：`l` 须是即将承载类型函数库、且尚未重复初始化的
 /// 主线程状态；本函数在其上创建并注册 `TypeFunctionRuntime` userdatum 与全部原生函数
@@ -85,15 +83,15 @@ pub(crate) fn set_type_function_environment(l: &mut LuaState) {
     GLOBAL_XPCALL,
   ];
   for &name in &unavailable_globals {
-    // Safety: `unsupported_function_thunk` 是本文件 `unsafe extern "C-unwind"` 臂（与
-    // `luaLib` 静态表同卫生域），`null()` debugname 是 VM 约定的「无调试名」哨兵；压入的
+    // `unsupported_function_thunk` 是本文件 `unsafe extern "C-unwind"` 臂（与 `luaLib`
+    // 静态表同卫生域），debugname 传 `None` 即 VM 约定的「无调试名」哨兵；压入的
     // cfunction 由紧随的 `set_global_bytes` 当场消费。
-    unsafe { l.push_c_function(Some(unsupported_function_thunk), null()) };
+    l.push_c_function(Some(unsupported_function_thunk), None);
     l.set_global_bytes(name);
   }
 
-  // Safety: 同上——`print_thunk` 为本文件合法 `unsafe extern "C-unwind"` 臂，`null()` 为
-  // VM 约定的无调试名哨兵，压入结果由紧随其后的 `set_global_bytes` 消费。
-  unsafe { l.push_c_function(Some(print_thunk), null()) };
+  // `print_thunk` 为本文件合法 `unsafe extern "C-unwind"` 臂，压入结果由紧随其后的
+  // `set_global_bytes` 消费。
+  l.push_c_function(Some(print_thunk), None);
   l.set_global_bytes(GLOBAL_PRINT);
 }

@@ -7,7 +7,7 @@
 //! and the userdata destructor.
 // `kTypeUserdataTag` (Analysis/src/TypeFunctionRuntime.cpp:250).
 
-use core::{ffi::c_void, ptr::null};
+use core::ffi::c_void;
 
 use ulua_common::fflag;
 use ulua_vm::{
@@ -153,12 +153,10 @@ static TYPE_USERDATA_METHODS: [LuaLReg; 28] = [
 /// push/setfield），调用期间不得有其它线程或借用并发改写该 VM 的全局状态；
 /// 本函数只在 VM 初始化的单线程阶段调用一次。
 pub(crate) fn register_type_user_data(l: &mut LuaState) {
-  // Safety: 块内不安全操作都落在 ulua-vm 的 `lua_l_*`/`lua_*` `unsafe fn` 与被调
-  // 方法内部，其前置条件即 `l` 的存活独占契约（由 `&mut` 接收者承载）。方法表是
-  // `static` 常量数组，名字字节串与 thunk 函数指针
-  // 均为 'static，VM 注册表留存它们无悬垂。注册的 thunk 只在 VM 回调时运行，
-  // 届时 VM 保证自身 `l` 参数有效（见 `c_thunk!` 展开内证成）。
-  unsafe {
+  // 方法表是 `static` 常量数组，名字字节串与 thunk 函数指针均为 'static；VM 注册
+  // debugname/键时经 intern 当场复制，注册表留存它们无悬垂。注册的 thunk 只在 VM
+  // 回调时运行，届时 VM 保证自身 `l` 参数有效（见 `c_thunk!` 展开内证成）。
+  {
     // Create and register metatable for type userdata
     // luaL_newmetatable(l, "type");
     l.new_metatable_by_bytes(TYPE);
@@ -173,35 +171,28 @@ pub(crate) fn register_type_user_data(l: &mut LuaState) {
     l.set_field_bytes(-2, FIELD_METATABLE);
 
     // lua_pushcfunction(l, isEqualToType, "__eq"); lua_setfield(l, -2, "__eq");
-    l.push_c_function(Some(is_equal_to_type_thunk), null());
+    l.push_c_function(Some(is_equal_to_type_thunk), None);
     l.set_field_bytes(-2, FIELD_EQ);
 
     // Indexing will be a dynamic function because some type fields are dynamic
     // lua_newtable(l);
     l.new_table();
     // luaL_register(l, nullptr, typeUserdataMethods);
-    // （lua_l_register_bytes 已降为安全 fn，r12-w6d；块内剩余不安全面为 push_c_function/
-    // push_c_closure 等裸形方法）
+    // （lua_l_register_bytes 与 push_c_function/push_c_closure 均为安全门面，
+    // debugname/键由 VM 当场 intern 复制）
     lua_l_register_bytes(l, None, &TYPE_USERDATA_METHODS);
 
     // if (FFlag::LuauUdtfTypeIsSubtypeOf)
     if fflag::LuauUdtfTypeIsSubtypeOf.get() {
       // lua_pushcfunction(l, isSubtypeOf, "issubtypeof"); lua_setfield(l, -2, "issubtypeof");
-      l.push_c_function(
-        Some(is_subtype_of_thunk),
-        METHOD_IS_SUBTYPE_OF.as_ptr().cast(),
-      );
+      l.push_c_function(Some(is_subtype_of_thunk), Some(METHOD_IS_SUBTYPE_OF));
       l.set_field_bytes(-2, METHOD_IS_SUBTYPE_OF);
     }
 
     // lua_setreadonly(l, -1, true);
     l.set_readonly(-1, true);
     // LUA_PUSHCCLOSURE(l, typeUserdataIndex, "__index", 1);
-    l.push_c_closure(
-      Some(type_userdata_index_thunk),
-      FIELD_INDEX_CLOSURE.as_ptr().cast(),
-      1,
-    );
+    l.push_c_closure(Some(type_userdata_index_thunk), Some(FIELD_INDEX_CLOSURE), 1);
     // lua_setfield(l, -2, "__index");
     l.set_field_bytes(-2, FIELD_INDEX_CLOSURE);
 

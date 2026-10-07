@@ -308,7 +308,7 @@ impl Seek for BufferCursor {
 // ---------------------------------------------------------------------------
 
 /// `c_newbuffer` 闭包的调试名：静态 NUL 结尾字节串，交给 `lua_pushcclosurek` 的
-/// `*const c_char` 收口点（会被闭包长期持有，`'static` 永不失效；消费侧按 NUL
+/// `*const c_char` 收口点（VM 压栈时 intern 复制为 TString 锚；收口垫片按 NUL
 /// 扫描读取，结尾 `\0` 不可省）。
 const NEWBUFFER_NAME: &[u8] = b"ulua-rt-newbuffer\0";
 

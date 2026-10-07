@@ -1,8 +1,9 @@
-use core::{ffi::c_void, ptr::null};
+use core::ffi::c_void;
 
 use crate::{
   functions::{
-    lua_checkstack::lua_checkstack, lua_d_call::lua_d_call, lua_pushcclosurek::lua_pushcclosurek,
+    lua_checkstack::lua_checkstack, lua_d_call::lua_d_call,
+    lua_pushcclosurek::lua_pushcclosurek_ref,
   },
   macros::lua_g_runerror::lua_g_runerror,
   records::{c_call_s::CCallS, lua_state::LuaState},
@@ -18,7 +19,8 @@ pub(crate) unsafe extern "C-unwind" fn f_ccall(l: *mut LuaState, ud: *mut c_void
       lua_g_runerror!(l, "stack limit");
     }
 
-    lua_pushcclosurek(l, (*c).func, null(), 0, None);
+    // debugname 传 `None`：cpp lapi.cpp:1220 `lua_pushcclosurek(L, c->func, nullptr, 0, nullptr)`
+    lua_pushcclosurek_ref(&mut *l, (*c).func, None, 0, None);
     (*l).push_lightuserdata((*c).ud);
     lua_d_call(l, (*l).top.sub(2), 0);
   }

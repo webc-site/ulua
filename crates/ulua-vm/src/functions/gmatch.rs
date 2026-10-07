@@ -1,5 +1,3 @@
-use core::ptr::null;
-
 use crate::{
   functions::gmatch_aux::gmatch_aux_arm, macros::lua_lib_fn::lua_lib_fn,
   records::lua_state::LuaState,
@@ -14,10 +12,9 @@ pub fn gmatch(l: &mut LuaState) -> i32 {
   l.check_bytes(2);
   l.set_top(2);
   l.push_integer(0);
-  // SAFETY: `gmatch_aux_arm` 是本文件同卫生域生成的合法 `unsafe extern "C-unwind" fn`（遵循 Lua
-  // C 函数约定），`null()` 为 `push_c_closure` 契约允许的空 debugname，3 个 upvalue 已由上方
-  // set_top/push_integer 与栈上 1/2 号位备妥。
-  unsafe { l.push_c_closure(Some(gmatch_aux_arm), null(), 3) };
+  // `gmatch_aux_arm` 遵循 Lua C 函数约定；debugname 传 `None` 即无名闭包，3 个 upvalue
+  // 已由上方 set_top/push_integer 与栈上 1/2 号位备妥。
+  l.push_c_closure(Some(gmatch_aux_arm), None, 3);
   1
 }
 

@@ -86,8 +86,8 @@ pub(crate) fn push_closure<C: RequireHost + 'static>(
 
   // SAFETY: `l.as_mut_ptr()` 同上独占借出；ud 处 userdata 此刻在栈顶，
   // pushcclosurek(n=1) 将其收作唯一 upvalue；debugname 为 NUL 结尾静态串经 `cstr`
-  // 门面交出 C 指针、随闭包存活；`lua_requirecont` 为静态存活函数指针（不访问宿主，
-  // 故各闭包体共用同一 continuation）。
+  // 门面交出 C 指针，VM 压栈时 intern 复制为 TString 锚（调用期有效即可）；
+  // `lua_requirecont` 为静态存活函数指针（不访问宿主，故各闭包体共用同一 continuation）。
   unsafe {
     lua_pushcclosurek(
       l.as_mut_ptr(),

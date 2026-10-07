@@ -10,12 +10,12 @@ use ulua_vm::{records::lua_state::LuaState, type_aliases::lua_c_function::LuaCFu
 /// 元方法（`lua_setfield(l, -2, b"__index\0")`）或直接 `lua_pcall` 调用的形态不属本样板。
 ///
 /// 前置条件（由用例保证）：`l` 是存活的 `LuaState`、`f` 遵循 Lua C 函数调用约定、`name` 为
-/// 在函数注册存续期内有效、以 NUL 结尾的静态字节串（`b"name\0"` 字面量，与上游同一前提）。
+/// 以 NUL 结尾的静态字节串（`b"name\0"` 字面量；debugname 经 VM 门面 intern 当场复制，
+/// 仅调用期借用）。
 pub fn push_cfunction_global(l: *mut LuaState, f: LuaCFunction, name: &'static [u8]) {
-  // Safety: 逐字透传三个前置条件给被调的 LUA_PUSHCFUNCTION 宏与 lua_setglobal 宏，
-  // 二者对 `l`/`f`/`name` 的要求与本门面文档一致。
+  // Safety: `l` 为存活 LuaState（解引用前提）；`f`/`name` 随本门面文档转授 VM 安全门面。
   unsafe {
-    (*l).push_c_function(f, name.as_ptr().cast());
+    (*l).push_c_function(f, Some(name.strip_suffix(b"\0").unwrap_or(name)));
     (*l).set_global_bytes(name.strip_suffix(b"\0").unwrap_or(name));
   }
 }

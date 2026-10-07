@@ -1,5 +1,3 @@
-use core::ptr::null;
-
 use crate::{
   functions::{
     auxwrapcont::auxwrapcont_arm, auxwrapy::auxwrapy_arm, cocreate::cocreate,
@@ -16,14 +14,14 @@ use crate::{
 /// 对非函数实参经 `check_type` 抛错发散。
 /// 随后的 `auxwrapy_arm`/`auxwrapcont_arm` 是写进闭包的静态 `extern "C-unwind"` 函数指针（由被调方
 /// 存储、不在本帧解引用），其续延契约要求上值 1 恰为 `cocreate` 刚压入的新线程槽（`nup = 1` 即捕获
-/// 该槽），`debugname` 传 null 对应 cpp 的 `NULL`（被调只存指针不读）。cpp `lcorolib.cpp:340`。
+/// 该槽），`debugname` 传 `None` 对应 cpp 的 `NULL`（intern 收口下即无名闭包）。cpp `lcorolib.cpp:340`。
 pub unsafe fn cowrap(l: &mut LuaState) -> i32 {
   // SAFETY: `cocreate` 为带 `# Safety` 的 `unsafe fn`（内部 lua_newthread 走 GC/线程屏障且解
   // 引用新线程指针）；`l` 为接收者存活独占借用，借用于本次调用，返回后本函数不再经 `l` 之前的
   // 裸地址访问
   unsafe { cocreate(l) };
 
-  lua_pushcclosurek_ref(l, Some(auxwrapy_arm), null(), 1, Some(auxwrapcont_arm));
+  lua_pushcclosurek_ref(l, Some(auxwrapy_arm), None, 1, Some(auxwrapcont_arm));
 
   1
 }

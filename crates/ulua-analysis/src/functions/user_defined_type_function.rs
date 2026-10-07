@@ -22,7 +22,7 @@ use alloc::{boxed::Box, string::String, vec::Vec};
 use ulua_ast::records::ast_name::AstName;
 use ulua_common::{
   fflag,
-  functions::{c_str::with_c_str, format::format, get_clock::get_clock},
+  functions::{format::format, get_clock::get_clock},
   macros::luau_assert::LUAU_ASSERT,
   records::dense_hash_set::DenseHashSet,
 };
@@ -427,16 +427,12 @@ pub fn user_defined_type_function(
           // LUA_PUSHLIGHTUSERDATA(l, definition.first);
           // LUA_PUSHCCLOSURE(l, evaluateTypeAliasCall, name.c_str(), 1);
           // lua_setfield(l, -2, name.c_str());
-          // 一次补 NUL 同时喂 closure 的 debugname 与 setfield 的键：两个 callee
-          // 都在调用期内把串 `lua_s_new` 驻留进 intern 表，指针不外存。
           // SAFETY: 同上——身份键按地址值透传。
           unsafe { l_vm.push_lightuserdata(def_ptr.cast()) };
-          with_c_str(name.as_bytes(), |c_name| {
-            // SAFETY: VM 边界——`c_name` 由 `with_c_str` 保证调用期内 NUL 结尾
-            // 有效；thunk 契约见其 `# Safety`；nup=1 与上方刚压入的
-            // lightuserdata 配对。
-            unsafe { l_vm.push_c_closure(Some(evaluate_type_alias_call_thunk), c_name, 1) }
-          });
+          // debugname 直传载荷：push_c_closure 经 intern 当场复制为 TString 锚入闭包
+          // （cpp lapi.cpp:752 `debugname ? luaS_new(L, debugname) : nullptr`），
+          // name 仅本次调用期借用，不存在指针外存
+          l_vm.push_c_closure(Some(evaluate_type_alias_call_thunk), Some(name.as_bytes()), 1);
           l_vm.set_field_str(-2, name);
         }
       }

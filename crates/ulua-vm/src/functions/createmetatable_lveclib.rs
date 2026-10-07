@@ -1,5 +1,3 @@
-use core::ptr::null;
-
 use crate::{
   functions::{
     lua_createtable::lua_createtable,
@@ -32,7 +30,7 @@ pub(crate) unsafe fn createmetatable(l: *mut LuaState) {
     (*l).set_metatable(-2); // set vector metatable
     (*l).pop(1); // pop dummy vector
 
-    (*l).push_c_function(Some(vector_index_arm), null());
+    (*l).push_c_function(Some(vector_index_arm), None);
 
     (*l).set_field_str(-2, "__index");
 

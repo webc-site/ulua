@@ -8,19 +8,23 @@
 //! 不得散落 `.as_ptr().cast()`。内部实现完全 Rust 化：NUL 扫描单点收口到私有
 //! [`from_c_ptr`]，产出 `&[u8]`/`Cow<str>`（§10：C 串包装类型 `CStr`/`CString` 零残留，
 //! 不借道标准库的 C 字符串垫片），读取方向两枚公开函数只剩判空形态与解码策略的差异。
-//! 写入方向（静态字节串 / 动态字节串 → `*const c_char`）同样收口于本门面
-//! （[`cstr`] / [`with_c_str`]）。
+//! 写入方向（静态字节串 → `*const c_char`）同样收口于本门面（[`cstr`]）。曾经的
+//! 动态写入收口 `with_c_str` 已随 `CClosure.debugname` 锚定 intern TString
+//! （cpp lapi.cpp:752 `debugname ? luaS_new(L, debugname) : nullptr`）而零消费,
+//! 整体删除——瞬时指针契约面不复存在。
 //!
 //! ## 消费者普查（review.md §10 复审 · cstr-final-r6）
 //!
 //! 真 C 边界（`*const c_char` 属契约要求、长期保留）：仅 `ulua-capi`，以及宿主注入的
 //! `extern "C-unwind"` 回调（如本 crate 的
 //! [`assert_call_handler`](crate::functions::assert_call_handler::assert_call_handler)）。
-//! `ulua-vm` 的 `lua_*` C 形态面（`lua_pushcclosurek` 的 debugname、
+//! `ulua-vm` 的 `lua_*` C 形态面（`lua_pushcclosurek` C 形收口垫片的 debugname、
 //! `lua_exception::what()`）**不是 FFI 边界、不构成豁免**：它是
-//! lua.h 的形状复刻，Rust 侧消费者一律应拿 `&[u8]`/`&str`/`Cow`，这些签名属待消灭
-//! 对象（review.md §3「`c_char` 仅在 FFI」+ §10，与 vm 内部 `lua_*` 裸指针收形同批
-//! 推进）。在其改完之前，跨 crate 进出其缓冲区仍必须经本门面，不得新增绕过路径。
+//! lua.h 的形状复刻，Rust 侧消费者一律应拿 `&[u8]`/`&str`/`Cow`。debugname 的 ref
+//! 核心已收 `Option<&[u8]>` 并经 intern 复制（调用期借用即可），C 形垫片仅余
+//! `NULL`/NUL 判空翻译；这些签名属待消灭对象（review.md §3「`c_char` 仅在 FFI」+
+//! §10，与 vm 内部 `lua_*` 裸指针收形同批推进）。在其改完之前，跨 crate 进出其
+//! 缓冲区仍必须经本门面，不得新增绕过路径。
 //! `lua_getinfo` 的 `what` 模板位已在本轮切片化（`what: &[u8]`，`auxgetinfo` 直迭代），
 //! 从待消灭清单除名。既有消费清单：ulua-rt（`*_NAME` 静态模板走 `lua_pushcclosurek`
 //! 契约位；`LuaDebug` 回填字段已 Rust 化为 owned `Vec<u8>`/`LuaWhat`，不再经此）、
@@ -105,39 +109,3 @@ pub fn cstr(bytes: &'static [u8]) -> *const c_char {
   bytes.as_ptr().cast()
 }
 
-/// `with_c_str` 栈缓冲容量：绝大多数 Lua 标识符 / 模块名 ≤ 127 字节，
-/// 命中即走零堆分配的栈快路径。
-const STACK_BUF_CAP: usize = 128;
-
-/// Rust 字节串 → 瞬时 NUL 结尾收口：补一个尾部 NUL，把仅在闭包调用期内有效的
-/// `*const c_char` 交给闭包。用于 callee **当场复制/驻留**字符串的 `*const c_char`
-/// 契约（如 `lua_setfield` 系走 `lua_s_new` 入 intern 表），免在各调用点散落
-/// 堆分配的 NUL 结尾缓冲。
-///
-/// **禁令（正确性契约，违反即悬垂指针）**：callee 若只保存指针不复制，指针在
-/// 闭包返回后即失效。典型反例是 `lua_pushcclosurek`/`push_c_function`——cpp 形
-/// `cl->c.debugname = debugname` **长期持有指针不复制**，其 debugname 必须是
-/// `'static` 字面量并经 [`cstr`] 收口，严禁喂本函数的瞬时缓冲。
-#[inline]
-pub fn with_c_str<R>(bytes: &[u8], f: impl FnOnce(*const c_char) -> R) -> R {
-  // 零拷贝快路径：输入已自带 NUL 终止符
-  if bytes.last().copied() == Some(0) {
-    return f(bytes.as_ptr().cast());
-  }
-
-  // 栈缓冲快路径：容量内零堆分配
-  if bytes.len() < STACK_BUF_CAP {
-    let mut buf = [0u8; STACK_BUF_CAP];
-    buf[..bytes.len()].copy_from_slice(bytes);
-    buf[bytes.len()] = 0;
-    f(buf.as_ptr().cast())
-  } else {
-    use alloc::vec::Vec;
-
-    let mut buf = Vec::with_capacity(bytes.len() + 1);
-    buf.extend_from_slice(bytes);
-    buf.push(0);
-    // `buf` 以 NUL 结尾且在整个闭包调用期内存活。
-    f(buf.as_ptr().cast())
-  }
-}

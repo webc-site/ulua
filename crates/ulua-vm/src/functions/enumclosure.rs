@@ -1,5 +1,5 @@
 /// GC 枚举边名（NUL 结尾字节串，经 [`enum_edge`] 收口取指针；§10 不引入 C 字符串类型）。
-use core::ffi::c_char;
+use core::{ffi::c_char, ptr::null};
 
 use crate::{
   functions::{
@@ -29,12 +29,14 @@ pub(crate) unsafe fn enumclosure(ctx: *mut EnumContext, cl: &Closure) {
     let obj = (cl as *const Closure).cast::<GCObject>();
 
     if cl.is_c != 0 {
-      enumnode(
-        ctx,
-        obj,
-        size_cclosure(cl.nupvalues as i32),
-        cl.inner.c.debugname,
-      );
+      // debugname 为 intern TString 锚（traverseclosure 标记边保证 GC 存活）；
+      // 空名传 null，与 cpp `cl->c.debugname ? getstr(...) : nullptr` 逐位一致
+      let name = if !cl.inner.c.debugname.is_null() {
+        getstr(cl.inner.c.debugname)
+      } else {
+        null()
+      };
+      enumnode(ctx, obj, size_cclosure(cl.nupvalues as i32), name);
     } else {
       let p: *mut Proto = cl.inner.l.p;
       let mut buf = [0u8; LUA_IDSIZE as usize];

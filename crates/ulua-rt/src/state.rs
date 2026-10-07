@@ -636,8 +636,9 @@ pub(crate) fn allocate_userdata(
 /// 调用序契约：`f` 为符合 `lua_CFunction` 约定的本 crate trampoline；`nup` 个
 /// 上值已由调用点压在栈顶（`nup` 为 0 时无此要求）。
 ///
-/// 名契约：`name` 必须以 NUL 结尾且 `'static`——VM 在闭包整个存活期内保留该
-/// 指针并按 C 串读取（debug 信息），故禁止传入临时缓冲或无结尾 NUL 的切片。
+/// 名契约：`name` 须以 NUL 结尾——C 形收口垫片按 NUL 扫描读取载荷（VM 随后经
+/// intern 复制为 TString 锚，指针仅需调用期有效）；本门面保留 `&'static` 形态，
+/// 调用点一律静态 `b"…\0"` 字面量。
 #[inline]
 pub(crate) fn push_named_closure(
   state: StateView<'_>,

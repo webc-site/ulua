@@ -5,56 +5,7 @@
 use core::{ffi::c_char, ptr::null};
 use std::borrow::Cow;
 
-use ulua_common::functions::c_str::{cstr, cstr_bytes, cstr_cow, with_c_str};
-
-/// 测试 oracle：返回首个 NUL 前的字节序列（不含终止符）。
-///
-/// # Safety
-/// `p` 必须指向以 NUL 结尾的有效缓冲区。
-unsafe fn read_c_bytes(p: *const c_char) -> Vec<u8> {
-  let mut out = Vec::new();
-  let mut cur = p.cast::<u8>();
-  // Safety: 前置契约担保终止 NUL 必在缓冲区内，扫描必然终止。
-  unsafe {
-    while *cur != 0 {
-      out.push(*cur);
-      cur = cur.add(1);
-    }
-  }
-  out
-}
-
-#[test]
-fn test_with_c_str_already_nul_terminated() {
-  let input = b"hello\0";
-  let result = with_c_str(input, |ptr| {
-    // 零拷贝快路径：直接透传原缓冲首址
-    assert_eq!(ptr, input.as_ptr().cast::<c_char>());
-    unsafe { read_c_bytes(ptr) }
-  });
-  assert_eq!(result, b"hello");
-}
-
-#[test]
-fn test_with_c_str_small_stack_buffer() {
-  let input = b"small_lua_identifier";
-  let result = with_c_str(input, |ptr| unsafe { read_c_bytes(ptr) });
-  assert_eq!(result, b"small_lua_identifier");
-}
-
-#[test]
-fn test_with_c_str_large_heap_buffer() {
-  let input = vec![b'a'; 256];
-  let result = with_c_str(&input, |ptr| unsafe { read_c_bytes(ptr) });
-  assert_eq!(result, vec![b'a'; 256]);
-}
-
-#[test]
-fn test_with_c_str_empty_input() {
-  // 空字节串：无零拷贝快路径可走，栈缓冲补单个终止 NUL。
-  let result = with_c_str(b"", |ptr| unsafe { read_c_bytes(ptr) });
-  assert_eq!(result, b"");
-}
+use ulua_common::functions::c_str::{cstr, cstr_bytes, cstr_cow};
 
 #[test]
 fn test_cstr_bytes_and_cow() {

@@ -32,9 +32,10 @@ pub(crate) unsafe fn dumpclosure(f: *mut c_void, cl: &Closure) {
 
     if cl.is_c != 0 {
       let c = &cl.inner.c;
+      // debugname 为 intern TString 锚（traverseclosure 标记边保证 GC 存活）
       if !c.debugname.is_null() {
         c_file_write_bytes(f, b",\"name\":\"");
-        c_file_write_str(f, c.debugname);
+        c_file_write_str(f, getstr(c.debugname));
         c_file_write_bytes(f, b"\"");
       }
       if cl.nupvalues != 0 {

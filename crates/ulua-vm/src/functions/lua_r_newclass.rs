@@ -5,7 +5,7 @@ use ulua_common::macros::luau_assert::LUAU_ASSERT;
 use crate::{
   enums::{lua_type::LuaType, value_view::ValueView},
   functions::{
-    c_slice, c_slice_mut, cstr, cstr_cow, lua_d_call::lua_d_call,
+    c_slice, c_slice_mut, cstr_cow, lua_d_call::lua_d_call,
     lua_f_new_cclosure::lua_f_new_cclosure, lua_h_getstr::lua_h_getstr, lua_m_newgco::lua_m_newgco,
     lua_s_newlstr::lua_s_newlstr, lua_v_gettable::lua_v_gettable,
   },
@@ -265,7 +265,9 @@ pub(crate) fn lua_r_setupconstructor(
     let constructor = lua_f_new_cclosure(l, 1, env);
     let ctor_c = &mut (*constructor).inner.c;
     ctor_c.f = Some(lua_r_constructobject_arm);
-    ctor_c.debugname = cstr(b"luaR_constructobject\0");
+    // debugname 经 intern 复制锚定为 TString（cpp 存静态字面量，此处内容等价；
+    // 新闭包为白、挂引用免写屏障，存活由 traverseclosure 的 debugname 标记边保证）
+    ctor_c.debugname = lua_s_newlstr(l, b"luaR_constructobject");
     setclassvalue!(l, &mut ctor_c.upvals[0], classobject);
     ctor_c.cont = None;
 
@@ -294,7 +296,8 @@ pub(crate) fn lua_r_setupconstructor(
     let default_ctor = lua_f_new_cclosure(l, 1, env);
     let default_ctor_c = &mut (*default_ctor).inner.c;
     default_ctor_c.f = Some(lua_r_defaultcreateobject_arm);
-    default_ctor_c.debugname = cstr(b"luaR_defaultcreateobject\0");
+    // 同上：intern 锚定
+    default_ctor_c.debugname = lua_s_newlstr(l, b"luaR_defaultcreateobject");
     setclassvalue!(l, &mut default_ctor_c.upvals[0], classobject);
     default_ctor_c.cont = None;
 

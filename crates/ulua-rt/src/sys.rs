@@ -11,8 +11,9 @@
 //! 解码。`c_char`/`c_void` 只在真 C ABI 镜像处保留，豁免台账（review.md §10，
 //! 逐项一行）：
 //!
-//! - `lua_pushcclosurek` 的 debugname（`*const c_char`，VM 长期持有指针不复制）：
-//!   消费者只持 `*_NAME` 静态 NUL `&[u8]` 模板，在契约参数位一次 `.cast()`。
+//! - `lua_pushcclosurek` 的 debugname（`*const c_char`，C 形收口垫片；VM 压栈时经
+//!   intern 复制为 TString 锚，指针仅需调用期有效）：消费者只持 `*_NAME` 静态 NUL
+//!   `&[u8]` 模板，在契约参数位一次 `.cast()`。
 //!   （`lua_getinfo` 的 `what` 模板已切片化，不再占契约位。）
 //! - `c_void`：LightUserData 值、`lua_newuserdatadtor` 析构器与 VM 分配器回调
 //!   的 `extern "C-unwind"` ABI 形参（lua.h `void*` 面镜像）。

@@ -2,7 +2,7 @@
 
 use crate::{
   functions::{
-    cstr, foreach::foreach_arm, foreachi::foreachi_arm, getn::getn_arm,
+    foreach::foreach_arm, foreachi::foreachi_arm, getn::getn_arm,
     lua_l_register::lua_l_register_bytes, maxn::maxn_arm, tclear::tclear_arm, tclone::tclone_arm,
     tconcat::tconcat_arm, tcreate::tcreate_arm, tfind::tfind_arm, tfreeze::tfreeze_arm,
     tinsert::tinsert_arm, tisfrozen::tisfrozen_arm, tmove::tmove_arm, tpack::tpack_arm,
@@ -43,9 +43,9 @@ pub fn luaopen_table(l: &mut LuaState) -> i32 {
   // 不含尾部 `\0` 的静态字节切片，满足 `lua_l_register_bytes` 切片契约
   lua_l_register_bytes(l, Some(b"table"), &TAB_FUNCS);
 
-  // SAFETY: `tunpack_arm` 为本文件静态表的合法 C 臂（与 TAB_FUNCS 同一注册面），
-  // `cstr(b"unpack\0")` 为静态 NUL 结尾字面量，满足 `push_c_function` 的 debugname 存活契约
-  unsafe { l.push_c_function(Some(tunpack_arm), cstr(b"unpack\0")) };
+  // `tunpack_arm` 为本文件静态表的合法 C 臂（与 TAB_FUNCS 同一注册面）；debugname 经
+  // `push_c_function` intern 收口当场复制，静态切片仅调用期借用
+  l.push_c_function(Some(tunpack_arm), Some(b"unpack"));
   l.set_global_bytes(b"unpack");
 
   1

@@ -16,9 +16,11 @@ pub(crate) unsafe fn getfuncname(cl: *mut Closure) -> *const c_char {
     }
 
     if (*cl).is_c != 0 {
+      // debugname 为 intern TString 锚（traverseclosure 标记边保证 GC 存活），
+      // `getstr` 取载荷首址（Lua 串布局自带 NUL 终止）
       let c_debugname = (*cl).inner.c.debugname;
       if !c_debugname.is_null() {
-        c_debugname
+        getstr(c_debugname)
       } else {
         null()
       }

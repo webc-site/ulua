@@ -25,7 +25,6 @@ use std::sync::{Mutex, MutexGuard};
 
 use ulua_ast::records::parse_options::ParseOptions;
 use ulua_bytecode::records::bytecode_encoder::NoopEncoder;
-use ulua_common::functions::c_str::cstr;
 use ulua_compiler::{functions::compile::compile, records::compile_options::CompileOptions};
 use ulua_vm::{
   enums::lua_status::LuaStatus,
@@ -108,16 +107,14 @@ impl Drop for StateGuard {
 
 /// cpp `lua_pushcfunction`：按 C 名字把 `lua_CFunction` 压栈。
 ///
-/// `push_c_function` 的 debugname 由 VM 长期持有（`CClosure.debugname` 存指针不复制），
-/// 故名字参数必须 `'static`，经 `cstr` 一次性收口为静态 NUL 结尾指针。
+/// debugname 经 VM 门面 intern 当场复制为 TString 锚（调用期借用即可），名字参数保留
+/// `'static` 字面量形态不变。
 fn push_c_function(
   l: &mut LuaState,
   name: &'static str,
   f: unsafe extern "C-unwind" fn(*mut LuaState) -> i32,
 ) {
-  // Safety: `l` 存活（调用方契约）；`cstr(name.as_bytes())` 随 'static 字面量存活，
-  // 满足 debugname 长期持有契约；`f` 符合 `lua_CFunction` 契约。
-  unsafe { l.push_c_function(Some(f), cstr(name.as_bytes())) };
+  l.push_c_function(Some(f), Some(name.as_bytes()));
 }
 
 /// cpp `lua_pushcfunction + lua_setglobal` 成对样板的收口。
