@@ -1,12 +1,12 @@
 //! Source: `VM/src/ldebug.cpp:630-677` (hand-ported)
 
-use core::{cell::UnsafeCell, ffi::c_char, mem::zeroed};
+use core::{cell::UnsafeCell, ffi::c_char};
 
 use itoa::Buffer;
 use ulua_common::macros::luau_assert::LUAU_ASSERT;
 
 use crate::{
-  functions::{append::append_bytes, cstr, cstr_bytes, lua_getinfo::lua_getinfo},
+  functions::{append::append_bytes, cstr, lua_getinfo::lua_getinfo},
   records::{lua_debug::LuaDebug, lua_state::LuaState},
 };
 
@@ -36,13 +36,13 @@ pub unsafe fn lua_debugtrace(l: *mut LuaState) -> *const c_char {
       let depth: i32 = (*l).ci.offset_from((*l).base_ci) as i32;
       let mut offset: usize = 0;
 
-      let mut ar: LuaDebug = zeroed();
+      let mut ar: LuaDebug = LuaDebug::default();
       let mut num = Buffer::new();
 
       let mut level: i32 = 0;
       while lua_getinfo(l, level, cstr(b"sln\0"), &mut ar) != 0 {
-        if !ar.short_src.is_null() {
-          offset = append_bytes(buf, offset, cstr_bytes(ar.short_src));
+        if let Some(short_src) = &ar.short_src {
+          offset = append_bytes(buf, offset, short_src);
         }
 
         if ar.currentline > 0 {
@@ -50,9 +50,9 @@ pub unsafe fn lua_debugtrace(l: *mut LuaState) -> *const c_char {
           offset = append_bytes(buf, offset, num.format(ar.currentline).as_bytes());
         }
 
-        if !ar.name.is_null() {
+        if let Some(name) = &ar.name {
           offset = append_bytes(buf, offset, b" function ");
-          offset = append_bytes(buf, offset, cstr_bytes(ar.name));
+          offset = append_bytes(buf, offset, name);
         }
 
         offset = append_bytes(buf, offset, b"\n");
