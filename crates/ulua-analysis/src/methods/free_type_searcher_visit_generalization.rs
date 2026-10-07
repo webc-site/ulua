@@ -24,7 +24,7 @@ impl FreeTypeSearcher<'_> {
   /// `traverse` descends into children for the variants the searcher does not
   /// specialize.
   pub fn visit_type_id(&mut self, ty: TypeId) -> bool {
-    if self.cached_types.contains(&ty) || self.seen_with_current_polarity(ty as *const ()) {
+    if self.cached_types.contains(&ty) || self.seen_with_current_polarity(ty) {
       return false;
     }
 
@@ -42,7 +42,7 @@ impl FreeTypeSearcher<'_> {
     // GeneralizationParams<TypeId>& params = types[ty]; ++params.useCount;
     self.types.get_or_default(ty).use_count += 1;
 
-    if self.cached_types.contains(&ty) || self.seen_with_current_polarity(ty as *const ()) {
+    if self.cached_types.contains(&ty) || self.seen_with_current_polarity(ty) {
       return false;
     }
 
@@ -62,7 +62,7 @@ impl FreeTypeSearcher<'_> {
   /// C++ `bool FreeTypeSearcher::visit(TypeId ty, const TableType& tt)`
   /// (Generalization.cpp:119-177).
   pub fn visit_type_id_table_type(&mut self, ty: TypeId, tt: &TableType) -> bool {
-    if self.cached_types.contains(&ty) || self.seen_with_current_polarity(ty as *const ()) {
+    if self.cached_types.contains(&ty) || self.seen_with_current_polarity(ty) {
       return false;
     }
 
@@ -150,13 +150,13 @@ pub(crate) fn searcher_traverse_type_id(this: &mut FreeTypeSearcher<'_>, ty: Typ
 
   // C++ `if (hasSeen(seen, ty)) { cycle(ty); return; }`. `FreeTypeSearcher`
   // does not override `cycle`, so re-entry is a no-op return.
-  if has_seen(&mut this.base.base.seen, ty as *const ()) {
+  if has_seen(&mut this.base.base.seen, ty) {
     return;
   }
 
   searcher_dispatch_type_id(this, ty);
 
-  unsee(&mut this.base.base.seen, ty as *const ());
+  unsee(&mut this.base.base.seen, ty);
 }
 
 /// Variant dispatch for `searcher_traverse_type_id` (the body of the C++
@@ -233,13 +233,13 @@ fn searcher_dispatch_type_id(this: &mut FreeTypeSearcher<'_>, ty: TypeId) {
 pub(crate) fn searcher_traverse_type_pack_id(this: &mut FreeTypeSearcher<'_>, tp: TypePackId) {
   let tp = follow_type_pack::follow(tp);
 
-  if has_seen(&mut this.base.base.seen, tp as *const ()) {
+  if has_seen(&mut this.base.base.seen, tp) {
     return;
   }
 
   searcher_dispatch_type_pack_id(this, tp);
 
-  unsee(&mut this.base.base.seen, tp as *const ());
+  unsee(&mut this.base.base.seen, tp);
 }
 
 /// Variant dispatch for `searcher_traverse_type_pack_id`.
@@ -273,7 +273,7 @@ impl FreeTypeSearcher<'_> {
   /// within a function for the duration. Returns `false` because it performs
   /// its own traversal of the argument and return packs.
   pub fn visit_type_id_function_type(&mut self, ty: TypeId, ft: &FunctionType) -> bool {
-    if self.cached_types.contains(&ty) || self.seen_with_current_polarity(ty as *const ()) {
+    if self.cached_types.contains(&ty) || self.seen_with_current_polarity(ty) {
       return false;
     }
 
@@ -298,7 +298,7 @@ impl FreeTypeSearcher<'_> {
   /// C++ `bool FreeTypeSearcher::visit(TypePackId tp, const FreeTypePack& ftp)`
   /// (Generalization.cpp:203-220).
   pub fn visit_type_pack_id_free_type_pack(&mut self, tp: TypePackId, ftp: &FreeTypePack) -> bool {
-    if self.seen_with_current_polarity(tp as *const ()) {
+    if self.seen_with_current_polarity(tp) {
       return false;
     }
 

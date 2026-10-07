@@ -1,7 +1,7 @@
 //! `expected_type_visitor` 方法汇总：原先按 cpp 符号逐方法拆分的同前缀小文件合并至此，行为逐字保留。
 
 use alloc::vec::Vec;
-use core::mem::take;
+use core::{mem::take, ptr::from_ref};
 
 use ulua_ast::{
   records::{
@@ -13,13 +13,12 @@ use ulua_ast::{
     ast_expr_index_expr::AstExprIndexExpr,
     ast_expr_table::{AstExprTable, ItemKind},
     ast_expr_type_assertion::AstExprTypeAssertion,
-    ast_node::AstNode,
     ast_stat_assign::AstStatAssign,
     ast_stat_compound_assign::AstStatCompoundAssign,
     ast_stat_local::AstStatLocal,
     ast_stat_return::AstStatReturn,
   },
-  rtti::ast_node_try_as,
+  rtti::{AstNodeView, ast_node_try_as},
 };
 use ulua_common::fflag;
 
@@ -46,7 +45,9 @@ use crate::{
 
 impl ExpectedTypeVisitor {
   pub fn apply_expected_type(&mut self, expected_type: TypeId, expr: *const AstExpr) {
-    let expr_node = alias_ref(expr as *const AstNode);
+    // 同型 alias_ref 收口后经 `AstNodeView` 安全下溯；不再手工 `as *const AstNode`
+    // 跨基座转型。
+    let expr_node = alias_ref(expr);
 
     let expected_type = follow_type::follow(expected_type);
 
@@ -110,7 +111,7 @@ impl ExpectedTypeVisitor {
       for item in expr_table.items.as_slice() {
         if is_record(item) {
           let Some(key_const_string) =
-            ast_node_try_as::<AstExprConstantString>(alias_ref(item.key as *const AstNode))
+            ast_node_try_as::<AstExprConstantString>(alias_ref(item.key))
           else {
             continue;
           };
@@ -163,8 +164,8 @@ impl ExpectedTypeVisitor {
   pub(crate) fn visit_ast_stat_assign(&mut self, stat: &mut AstStatAssign) -> bool {
     // zip 天然以较短切片终止，min/take 为冗余越界检查，已删。
     for (var, value) in stat.vars.as_slice().iter().zip(stat.values.as_slice()) {
-      if let Some(&lhs_type) = alias_ref(self.ast_types).find(&(*var as *const _)) {
-        self.apply_expected_type(lhs_type, *value as *const _);
+      if let Some(&lhs_type) = alias_ref(self.ast_types).find(&(*var).cast_const()) {
+        self.apply_expected_type(lhs_type, (*value).cast_const());
       }
     }
 
@@ -174,9 +175,9 @@ impl ExpectedTypeVisitor {
   pub(crate) fn visit_ast_stat_local(&mut self, stat: &mut AstStatLocal) -> bool {
     for (&var, value) in stat.vars.as_slice().iter().zip(stat.values.as_slice()) {
       if let Some(&annot) =
-        alias_ref(self.ast_resolved_types).find(&(alias_ref(var).annotation as *const _))
+        alias_ref(self.ast_resolved_types).find(&alias_ref(var).annotation.cast_const())
       {
-        self.apply_expected_type(annot, *value as *const _);
+        self.apply_expected_type(annot, (*value).cast_const());
       }
     }
 
@@ -188,7 +189,7 @@ impl ExpectedTypeVisitor {
     stat: &mut AstStatCompoundAssign,
   ) -> bool {
     let var = stat.var;
-    let lhs_type = alias_ref(self.ast_types).find(&(var.as_ptr() as *const _));
+    let lhs_type = alias_ref(self.ast_types).find(&var.as_ptr().cast_const());
     if let Some(lhs_type) = lhs_type {
       self.apply_expected_type(*lhs_type, stat.value.as_ptr());
     }
@@ -235,10 +236,11 @@ impl ExpectedTypeVisitor {
 
   pub fn visit_ast_expr_call(&mut self, expr: &mut AstExprCall) -> bool {
     let ty = {
+      // 节点基座视图经 `AstNodeView` 安全获取，键身份（地址）与原双重 `as` 转型逐位一致。
       let mut found =
-        alias_ref(self.ast_overload_resolved_types).find(&(expr as *const _ as *const _));
+        alias_ref(self.ast_overload_resolved_types).find(&from_ref(expr.as_ast_node()));
       if found.is_none() {
-        found = alias_ref(self.ast_types).find(&(expr.func as *const _));
+        found = alias_ref(self.ast_types).find(&expr.func.cast_const());
       }
       found
     };

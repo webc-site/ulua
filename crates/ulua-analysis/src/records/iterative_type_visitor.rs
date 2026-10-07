@@ -104,7 +104,7 @@ pub trait IterativeTypeVisitorTrait {
     self
       .visitor_base()
       .work_queue
-      .push(WorkItem::work_item_type_id_i32(ty, parent));
+      .push(WorkItem::Type(ty, parent));
   }
 
   fn traverse_type_pack_id(&mut self, tp: TypePackId) {
@@ -112,7 +112,7 @@ pub trait IterativeTypeVisitorTrait {
     self
       .visitor_base()
       .work_queue
-      .push(WorkItem::work_item_type_pack_id_i32(tp, parent));
+      .push(WorkItem::Pack(tp, parent));
   }
 
   fn process_work_queue(&mut self) {
@@ -154,7 +154,7 @@ pub trait IterativeTypeVisitorTrait {
       ty = follow_type::follow(ty);
     }
 
-    if self.has_seen(ty as *const ()) {
+    if self.has_seen(ty) {
       return;
     }
 
@@ -341,11 +341,11 @@ pub trait IterativeTypeVisitorTrait {
       }
     }
 
-    self.unsee(ty as *const ());
+    self.unsee(ty);
   }
 
   fn process_type_pack_id(&mut self, tp: TypePackId) {
-    if self.has_seen(tp as *const ()) {
+    if self.has_seen(tp) {
       return;
     }
 
@@ -397,10 +397,10 @@ pub trait IterativeTypeVisitorTrait {
       }
     }
 
-    self.unsee(tp as *const ());
+    self.unsee(tp);
   }
 
-  fn has_seen(&mut self, tv: *const ()) -> bool {
+  fn has_seen<T>(&mut self, tv: *const T) -> bool {
     if !self.visitor_base().visit_once {
       return false;
     }
@@ -414,7 +414,7 @@ pub trait IterativeTypeVisitorTrait {
 
   /// C++ `unsee`：`if (!visitOnce) seen.erase(tv)`。visitOnce=false 时
   /// `has_seen` 从不插入，erase 恒为空操作，故此处退化为无操作。
-  fn unsee(&mut self, _tv: *const ()) {}
+  fn unsee<T>(&mut self, _tv: *const T) {}
 
   /// C++ `isCycle(TID)` / `isCycle(TypePackId)` 共用的父链回溯：沿
   /// `parent` 游标向上找队列祖先，命中判别式即判环。
@@ -423,9 +423,9 @@ pub trait IterativeTypeVisitorTrait {
     let mut cursor = base.work_cursor as i32;
     let mut item = &base.work_queue[base.work_cursor as usize];
 
-    while item.parent >= 0 {
-      ulua_common::LUAU_ASSERT!(item.parent < cursor);
-      cursor = item.parent;
+    while item.parent() >= 0 {
+      ulua_common::LUAU_ASSERT!(item.parent() < cursor);
+      cursor = item.parent();
       item = &base.work_queue[cursor as usize];
 
       if eq(item) {

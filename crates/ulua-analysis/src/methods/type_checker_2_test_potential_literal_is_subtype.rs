@@ -12,8 +12,6 @@ use ulua_ast::{
     ast_expr_group::AstExprGroup,
     ast_expr_if_else::AstExprIfElse,
     ast_expr_table::{AstExprTable, ItemKind},
-    ast_node,
-    ast_node::AstNode,
   },
   rtti::ast_node_try_as,
 };
@@ -54,7 +52,9 @@ impl TypeChecker2 {
     let expr_type = follow_type::follow(self.lookup_type(expr));
     let expected_type = follow_type::follow(expected_type);
 
-    let node = alias_ref((expr as *const AstExpr).cast::<ast_node::AstNode>());
+    // `&AstExpr` 自带 `AstNodeView`（repr(C) 基座链），RTTI 下转不再手工
+    // `as *const AstNode` 跨类转型。
+    let node = expr;
 
     if let Some(group) = ast_node_try_as::<AstExprGroup>(node) {
       // expr 已句柄化恒非空：get() 只读借用出自 group 存活引用，递归借用合法。
@@ -176,9 +176,7 @@ impl TypeChecker2 {
     let mut is_subtype = true;
     for item in expr_table.items.iter() {
       if is_record(item) {
-        let key_const_string = ast_node_try_as::<AstExprConstantString>(alias_ref(
-          (item.key as *const AstExpr).cast::<AstNode>(),
-        ));
+        let key_const_string = ast_node_try_as::<AstExprConstantString>(alias_ref(item.key));
         let Some(key_const_string) = key_const_string else {
           continue;
         };
@@ -191,16 +189,16 @@ impl TypeChecker2 {
           if let Some(read_ty) = prop.read_ty {
             *alias(self.module)
               .ast_expected_types
-              .get_or_insert(item.value as *const AstExpr) = read_ty;
+              .get_or_insert(item.value.cast_const()) = read_ty;
             is_subtype &= self.test_potential_literal_is_subtype(alias_ref(item.value), read_ty);
           }
         } else if let Some(indexer) = &expected_table_type.indexer {
           *alias(self.module)
             .ast_expected_types
-            .get_or_insert(item.key as *const AstExpr) = indexer.index_type;
+            .get_or_insert(item.key.cast_const()) = indexer.index_type;
           *alias(self.module)
             .ast_expected_types
-            .get_or_insert(item.value as *const AstExpr) = indexer.index_result_type;
+            .get_or_insert(item.value.cast_const()) = indexer.index_result_type;
           let inferred_key_type = alias(self.module).internal_types.add_type(SingletonType {
             variant: SingletonVariant::V1(StringSingleton {
               value: key_str.clone(),
@@ -226,7 +224,7 @@ impl TypeChecker2 {
         if let Some(indexer) = &expected_table_type.indexer {
           *alias(self.module)
             .ast_expected_types
-            .get_or_insert(item.value as *const AstExpr) = indexer.index_result_type;
+            .get_or_insert(item.value.cast_const()) = indexer.index_result_type;
           is_subtype &= self
             .test_potential_literal_is_subtype(alias_ref(item.value), indexer.index_result_type);
         }
@@ -235,10 +233,10 @@ impl TypeChecker2 {
       {
         *alias(self.module)
           .ast_expected_types
-          .get_or_insert(item.key as *const AstExpr) = indexer.index_type;
+          .get_or_insert(item.key.cast_const()) = indexer.index_type;
         *alias(self.module)
           .ast_expected_types
-          .get_or_insert(item.value as *const AstExpr) = indexer.index_result_type;
+          .get_or_insert(item.value.cast_const()) = indexer.index_result_type;
         is_subtype &=
           self.test_potential_literal_is_subtype(alias_ref(item.key), indexer.index_type);
         is_subtype &=

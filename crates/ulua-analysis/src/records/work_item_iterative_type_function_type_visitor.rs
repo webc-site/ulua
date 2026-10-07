@@ -1,44 +1,34 @@
 use crate::type_aliases::{
   type_function_type_id::TypeFunctionTypeId, type_function_type_pack_id::TypeFunctionTypePackId,
 };
+
+/// 迭代遍历工作队列的入队项：`C++ WorkItem { const void* t; bool isType; int parent; }`
+/// 的 enum 化——裸指针槽 + 手写 bool 判别改为类型安全变体，`i32 parent`
+/// 是父队列项下标（-1 为根）。
 #[derive(Debug, Clone)]
-pub struct WorkItem {
-  pub(crate) t: *const (),
-  pub(crate) is_type: bool,
-  pub(crate) parent: i32,
+pub enum WorkItem {
+  Type(TypeFunctionTypeId, i32),
+  Pack(TypeFunctionTypePackId, i32),
 }
 
 impl WorkItem {
-  pub fn work_item_type_function_type_id_i32(ty: TypeFunctionTypeId, parent: i32) -> Self {
-    Self {
-      t: ty as *const (),
-      is_type: true,
-      parent,
-    }
-  }
-  pub fn work_item_type_function_type_pack_id_i32(tp: TypeFunctionTypePackId, parent: i32) -> Self {
-    Self {
-      t: tp as *const (),
-      is_type: false,
-      parent,
+  pub fn parent(&self) -> i32 {
+    match self {
+      WorkItem::Type(_, parent) | WorkItem::Pack(_, parent) => *parent,
     }
   }
 
-  /// 按 `is_type` 判别取出 `TypeFunctionTypeId`，替代返回自引用指针的
-  /// `as_type`（调用侧不再需要 unsafe 解引用）。
   pub fn type_function_type_id(&self) -> Option<TypeFunctionTypeId> {
-    if self.is_type {
-      Some(self.t as TypeFunctionTypeId)
-    } else {
-      None
+    match self {
+      WorkItem::Type(ty, _) => Some(*ty),
+      WorkItem::Pack(..) => None,
     }
   }
 
   pub fn type_function_type_pack_id(&self) -> Option<TypeFunctionTypePackId> {
-    if self.is_type {
-      None
-    } else {
-      Some(self.t as TypeFunctionTypePackId)
+    match self {
+      WorkItem::Type(..) => None,
+      WorkItem::Pack(tp, _) => Some(*tp),
     }
   }
 }
