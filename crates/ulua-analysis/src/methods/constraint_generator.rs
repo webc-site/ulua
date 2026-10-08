@@ -24,8 +24,10 @@ use super::constraint_generator_prototype_type_definitions::make_binding;
 use crate::{
   enums::{control_flow::ControlFlow, polarity::Polarity},
   functions::{
-    first::first, follow_type, follow_type::follow, fresh_type::fresh_type, get_mutable_type,
-    get_type, is_prim::is_nil, shared_mut::shared_mut, simplify_union::simplify_union,
+    first::first, follow_type, follow_type::follow, fresh_index::fresh_index,
+    fresh_type::fresh_type, get_mutable_type, get_type,
+    inference_with_refinement::inference_with_refinement, is_prim::is_nil, shared_mut::shared_mut,
+    simplify_union::simplify_union,
   },
   records::{
     arena_handle::{Handle, alias},
@@ -231,7 +233,8 @@ impl ConstraintGenerator {
     let refinement = refinements.first().copied();
 
     if let Some(f) = first(tp, true) {
-      return Inference::inference_type_id_refinement_id(f, refinement.unwrap_or(null_mut()));
+      // Option 收口：None 走 `Inference::no_refinement`，不在此手写空哨兵
+      return inference_with_refinement(f, refinement);
     }
 
     let type_result = self.arena.get_mut().add_type(BlockedType::default());
@@ -252,7 +255,7 @@ impl ConstraintGenerator {
       .expect("type_result 刚由 add_type(BlockedType) 分配，必命中（cpp:5030）");
     blocked.set_owner(constraint_ptr as *const _);
 
-    Inference::inference_type_id_refinement_id(type_result, refinement.unwrap_or(null_mut()))
+    inference_with_refinement(type_result, refinement)
   }
 }
 
@@ -281,13 +284,13 @@ impl ConstraintGenerator {
 impl ConstraintGenerator {
   pub fn fresh_type_pack(&mut self, scope: &ScopePtr, polarity: Polarity) -> TypePackId {
     // FreeTypePack f{scope.get(), polarity};
-    let mut free = FreeTypePack {
-      index: 0,
+    // 按值聚合构造，同 cpp 聚合初始化：fresh_index 只触发一次，无哨兵死存储
+    let free = FreeTypePack {
+      index: fresh_index(),
       level: TypeLevel::default(),
-      scope: null_mut(),
-      polarity: Polarity::None,
+      scope: shared_mut(scope),
+      polarity,
     };
-    free.free_type_pack_scope_polarity(shared_mut(scope), polarity);
 
     // arena->addTypePack(TypePackVar{std::move(f)})
     let result = self.arena.get_mut().add_type_pack_t(free);
