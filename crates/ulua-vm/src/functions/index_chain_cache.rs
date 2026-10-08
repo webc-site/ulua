@@ -24,7 +24,7 @@
 use core::{
   cell::{Cell, UnsafeCell},
   mem::MaybeUninit,
-  ptr::null_mut,
+  ptr::NonNull,
 };
 
 use crate::{
@@ -51,20 +51,24 @@ const INDEX_CHAIN_SLOTS: usize = INDEX_CHAIN_SETS * INDEX_CHAIN_WAYS;
 const INDEX_CHAIN_MASK: usize = INDEX_CHAIN_SETS - 1;
 
 /// 单缓存槽：键 `(mt0, key)` + 内容纪元 + 已解析链表序列。
+///
+/// 指针字段一律 `Option<NonNull>`：`None` 即空槽键（取代 null 哨兵）。`Option<NonNull>`
+/// 复用 null niche，与裸指针同尺寸同表示（`Some(v)` 的表示就是 `v`），键恒等比较
+/// 折叠后与裸指针比较同为一条 `cmp` 指令，热路径零额外开销。
 #[derive(Clone, Copy)]
 struct ChainSlot {
   /// 键基：首表 t0 的元表（t0 实例每迭代新建也不影响，元表即类表恒定）。
-  mt0: *mut LuaTable,
+  mt0: Option<NonNull<LuaTable>>,
   /// 键基：字符串键（interned，指针即身份）。
-  key: *mut tstring,
+  key: Option<NonNull<tstring>>,
   /// 末次回填的 t0：与当前 t0 一致时该表必在受监视位图（fill 登记），其写必失效
   /// 本缓存，probe 可免 t0 现场槽查找；漂移（实例换新）则退化为现场查找或拉黑。
-  t0: *mut LuaTable,
+  t0: Option<NonNull<LuaTable>>,
   /// t0 漂移计数：连续以不同 t0 回填同组（实例高频新建形态）时递增，≥2 即拉黑
   /// 停用本组（probe 一次键比退出、fill 不再回填）——漂移形态下缓存恒负收益。
   drift: u8,
   /// 链表序列：`chain[i]` 为原慢路第 i+2 轮解析到的表，`chain[depth-1]` 即 owner。
-  chain: [*mut LuaTable; INDEX_CHAIN_MAX],
+  chain: [Option<NonNull<LuaTable>>; INDEX_CHAIN_MAX],
   /// 链长（≥1 才为有效槽；0 即空槽）。
   depth: u8,
   /// 回填时的内容纪元；0 保留作空槽哨兵（有效纪元从 1 起）。
@@ -73,11 +77,11 @@ struct ChainSlot {
 
 impl ChainSlot {
   const EMPTY_SLOT: Self = Self {
-    mt0: null_mut(),
-    key: null_mut(),
-    t0: null_mut(),
+    mt0: None,
+    key: None,
+    t0: None,
     drift: 0,
-    chain: [null_mut(); INDEX_CHAIN_MAX],
+    chain: [None; INDEX_CHAIN_MAX],
     depth: 0,
     epoch: 0,
   };
@@ -163,10 +167,13 @@ pub(crate) fn index_chain_probe(
       }
       let slots = &mut *cache.table.get();
       let set = set * INDEX_CHAIN_WAYS;
+      // 键身份（Option<NonNull> 复用 null niche：恒等比较与裸指针比较同一条 cmp）
+      let (mt0_id, key_id, t0_id) = (NonNull::new(mt0), NonNull::new(key), NonNull::new(t0));
       // 2 路组相联：任一路键/纪元全配即命中；全失配才落慢路
-      let hit0 = slots[set].epoch == epoch && slots[set].mt0 == mt0 && slots[set].key == key;
-      let hit1 =
-        slots[set + 1].epoch == epoch && slots[set + 1].mt0 == mt0 && slots[set + 1].key == key;
+      let hit0 = slots[set].epoch == epoch && slots[set].mt0 == mt0_id && slots[set].key == key_id;
+      let hit1 = slots[set + 1].epoch == epoch
+        && slots[set + 1].mt0 == mt0_id
+        && slots[set + 1].key == key_id;
       if !hit0 && !hit1 {
         return false;
       }
@@ -181,7 +188,7 @@ pub(crate) fn index_chain_probe(
       }
       // t0 稳定即免现场查找：该 t0 是末次回填对象，已登记受监视位图，其后被写必
       // bump 失效本槽——本探测能走到这里即槽仍然有效，t0 未被写过，无需再查
-      if s.t0 != t0 {
+      if s.t0 != t0_id {
         // t0 漂移（同元表不同实例）：现场槽查找确认 t0 无此键（遮蔽安全）——命中非 nil
         // ⟺ 原慢路轮 1 直接命中，写回与 cachedslot 同款；nil/miss 沿守卫走查
         let res0 = lua_h_getstr(&*t0, key);
@@ -212,12 +219,13 @@ pub(crate) fn index_chain_probe(
         }
         // Safety: tm 为元表节点槽，守卫已证表 tag，读载荷即活表指针
         let got = (*tm).as_table_ptr();
-        if got != want {
+        if NonNull::new(got) != want {
           s.depth = 0;
           s.epoch = 0;
           return false;
         }
-        cur = want;
+        // 守卫已证 got 与 want 同值（want 在 depth 界内恒为 Some），直接续走裸指针
+        cur = got;
       }
       // owner 现场哈希查找：主槽起沿 next 链与原慢路同构，rehash 天然安全；
       // owner 槽值已失（nil/删除）→ 清槽落慢路（原慢路会继续 owner 之后的链）
@@ -261,13 +269,14 @@ pub(crate) fn index_chain_fill(
     // Safety: thread_local 单线程独占，本闭包内无重入点，槽借用不逃逸
     let slots = unsafe { &mut *cache.table.get() };
     let set = chain_set_index(mt0, key) * INDEX_CHAIN_WAYS;
+    let t0_id = NonNull::new(t0);
     // 空路优先；两路皆满覆路 0（无 LRU，从简）
     let s = &mut slots[set];
     // 漂移拉黑：同组已缓存且 t0 换了新实例 → 递增漂移，≥2 停用（清槽且不再回填，
     // 只留 probe 一次负位测退出的成本）；t0 回归（同一实例重新稳定）即复位解禁并清
     // 负位。漂移形态下每迭代失效/回填恒负收益。纯性能启发式，不触碰任何语义路径。
     if s.drift >= 2 {
-      if s.t0 == t0 {
+      if s.t0 == t0_id {
         s.drift = 0;
         cache
           .negative
@@ -275,12 +284,12 @@ pub(crate) fn index_chain_fill(
       } else {
         return;
       }
-    } else if s.depth != 0 && s.t0 != t0 {
+    } else if s.depth != 0 && s.t0 != t0_id {
       s.drift += 1;
       if s.drift >= 2 {
         s.depth = 0;
         s.epoch = 0;
-        s.t0 = t0;
+        s.t0 = t0_id;
         cache
           .negative
           .set(cache.negative.get() | (1u64 << (set / INDEX_CHAIN_WAYS)));
@@ -289,13 +298,13 @@ pub(crate) fn index_chain_fill(
     } else {
       s.drift = 0;
     }
-    s.t0 = t0;
-    s.mt0 = mt0;
-    s.key = key;
+    s.t0 = t0_id;
+    s.mt0 = NonNull::new(mt0);
+    s.key = NonNull::new(key);
     s.epoch = cache.epoch.get();
     s.depth = chain_len as u8;
     for (i, c) in chain[..chain_len].iter().enumerate() {
-      s.chain[i] = unsafe { c.assume_init() };
+      s.chain[i] = NonNull::new(unsafe { c.assume_init() });
     }
     // 登记受监视表：t0/元表基/全链（含 owner）此后任一被写即失效本缓存
     let mut b = cache.bloom.get() | table_bloom_bit(t0);
