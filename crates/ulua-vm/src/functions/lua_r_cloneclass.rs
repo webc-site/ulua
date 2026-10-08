@@ -50,11 +50,13 @@ pub(crate) unsafe fn lua_r_cloneclass(
     let numallmembers = (*classobject).numberofallmembers;
     let numstaticmembers = numallmembers - (*classobject).numberofinstancemembers;
 
-    // The name->offset mapping is fixed when the class shape is built and is
-    // never mutated afterwards (shapes in a Proto's constant table are
-    // additionally marked readonly), so the clone shares it rather than paying
-    // for a table copy on every class definition that executes.
-    (*newclass).memberstooffset = (*classobject).memberstooffset;
+    // cpp lclass.cpp:131-132 的行内注释称 "the clone shares it"，但紧接着的代码
+    // （lclass.cpp:133）实为 `luaH_clone(L, classobject->memberstooffset)` 独立
+    // 拷贝——cpp 注释与代码分歧，以 cpp 代码行为为准：NEWCLASS 每次执行都克隆类
+    // 形状，后续 luaR_inheritclass 会对 memberstooffset 整体上移父类实例成员数
+    // （cpp lclass.cpp:227-241），共享模板表即写穿 proto 常量表里的共享形状，
+    // 同一主闭包二次执行即偏移越界。
+    (*newclass).memberstooffset = lua_h_clone(l, (*classobject).memberstooffset);
 
     (*newclass).offsettomember = luaM_newarray!(l, numallmembers, *mut tstring, (*newclass).memcat);
     // 成员名数组克隆改切片对称形（镜像 r11-vmud/fef1e75）：源共享窗+目标独占窗

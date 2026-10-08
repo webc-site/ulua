@@ -15,8 +15,8 @@ use crate::{
     ast_slot_ref::ast_slot_ref, get_global_state::get_global_state, sref_compiler::sref_ast_name,
   },
   records::{
-    compile_error::{CompileError, ERR_EXCEEDED_CONSTANT_LIMIT},
-    compiler::{Compiler, K_DEFAULT_ALLOC_PC, K_MAX_AD_INDEX},
+    compile_error::CompileError,
+    compiler::{Compiler, K_DEFAULT_ALLOC_PC, K_MAX_AD_INDEX, K_MAX_IMPORT_ID},
     node::Node,
   },
 };
@@ -130,15 +130,38 @@ impl Compiler {
     let table_cid = self.bc_mut().add_constant_string(sref_ast_name(table_name));
     self.check_constant(table_cid, &loc_ast.location);
 
-    let iid = BytecodeBuilder::get_import_id2(table_cid, freeze_cid);
-    let cid = self.bc_mut().add_import(iid);
+    // cpp:443-444 "GETIMPORT encoding is limited to 10 bits per object id
+    // component otherwise we can fallback to getglobal"：常量 id 越 10 位组件上限
+    // （cpp:446 守卫 `tableCid < 1024 && freezeCid < 1024`，`K_MAX_IMPORT_ID`，与
+    // compile_expr_index_name 同款）即放弃 GETIMPORT 打包——无条件 `get_import_id2`
+    // 会让 `pack_import_id` 的组件掩码断言炸穿。import 常量槽超 `K_MAX_AD_INDEX`
+    // 时 cpp 同样不抛错、静默走回退（cpp:450-456）。
+    let mut get_global_fallback = true;
+    if table_cid < K_MAX_IMPORT_ID && freeze_cid < K_MAX_IMPORT_ID {
+      let iid = BytecodeBuilder::get_import_id2(table_cid, freeze_cid);
+      let cid = self.bc_mut().add_import(iid);
 
-    if (0..K_MAX_AD_INDEX).contains(&cid) {
-      self.emit_ad_aux(LuauOpcode::LOP_GETIMPORT, freeze_reg, cid as i16, iid);
-    } else {
-      CompileError::raise(
-        &loc_ast.location,
-        format_args!("{ERR_EXCEEDED_CONSTANT_LIMIT}"),
+      if (0..K_MAX_AD_INDEX).contains(&cid) {
+        self.emit_ad_aux(LuauOpcode::LOP_GETIMPORT, freeze_reg, cid as i16, iid);
+        get_global_fallback = false;
+      }
+    }
+
+    if get_global_fallback {
+      // cpp:458-465：回退取数 `table.freeze` = GETGLOBAL "table" 后 GETTABLEKS "freeze"。
+      self.emit_abc_aux(
+        LuauOpcode::LOP_GETGLOBAL,
+        freeze_reg,
+        0,
+        bytecode_builder_get_string_hash(sref_ast_name(table_name)) as u8,
+        table_cid as u32,
+      );
+      self.emit_abc_aux(
+        LuauOpcode::LOP_GETTABLEKS,
+        freeze_reg,
+        freeze_reg,
+        bytecode_builder_get_string_hash(sref_ast_name(freeze_name)) as u8,
+        freeze_cid as u32,
       );
     }
 

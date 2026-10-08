@@ -117,19 +117,53 @@ fn conformance_pack() {
 // 待 sync-cpp 引入上述 parse/lowering 与 flag（`TEST_CASE("IfLocal")` 还带
 // `LuauCompileUndoEmitAdjust`，本端口同样未定义）后，连同该用例一并补回。
 
-// `ExportEdgeCase`（cpp `Conformance.test.cpp:5083-5128`，`LuauExportValueSyntax`
-// 旗标本端口已登记）在本端口不可运行，属**实现分歧**，按「发现分歧不改实现、不水
-// 用例、不进提交」纪律挂账：1030 字段常量表把 `"table"`/`"freeze"` 两个字符串常量
-// 的编号推过 1023 后，模块导出表的 `table.freeze` 取数在 cpp 侧有 10 位组件守卫
-// ——`if (tableCid < 1024 && freezeCid < 1024)` 否则回退 `GETGLOBAL`+`GETTABLEKS`
-// （cpp `Compiler/src/Compiler.cpp:447-467`，注释明言 "GETIMPORT encoding is
-// limited to 10 bits per object id component otherwise we can fallback to
-// getglobal"）；本端口 `ulua-compiler` 的 `records/compiler/module.rs:133`
-// 无条件 `get_import_id2(table_cid, freeze_cid)`，组件越界即触发
-// `pack_import_id` 的 `LUAU_ASSERT!(or_all <= K_IMPORT_COMPONENT_MASK)`
-// （`ulua-bytecode` `records/bytecode_builder/constants.rs:181`）SIGTRAP。
-// 实测（ulua-compile -O1 --fflags=LuauExportValueSyntax=true）：小表 + `export
-// local` 通过；1030 字段表 + `export local` 崩；1030 字段表无 export 通过。
-// 待 module.rs 补上 `<1024` 守卫与 GETGLOBAL 回退分支后，按 cpp 用例体
-// （1030 字段表 + `export local x = 33` + `local function a(...) end a(x)`，
-// validateBytecodeGraph → cold codegen → lua_resume == 0）补回本用例。
+// `ExportEdgeCase`（cpp `Conformance.test.cpp:5083-5128`）转正见下方
+// `conformance_export_edge_case`；`IfLocal` 缺口（上注）仍待 sync-cpp。
+
+/// cpp `Conformance.test.cpp:5083-5128` 的 `TEST_CASE("ExportEdgeCase")`
+/// （`LuauExportValueSyntax` 旗标本端口已登记）。
+///
+/// 1031 个字段把字符串常量编号推过 1023 后，模块导出表 `table.freeze` 的取数在
+/// cpp 侧命中的是 10 位组件守卫失败分支——`if (tableCid < 1024 && freezeCid < 1024)`
+/// 不成立即回退 `GETGLOBAL`+`GETTABLEKS`（cpp `Compiler/src/Compiler.cpp:443-465`，
+/// 注释明言 "GETIMPORT encoding is limited to 10 bits per object id component
+/// otherwise we can fallback to getglobal"）。无守卫的实现会把越界组件喂进
+/// `pack_import_id` 的组件掩码断言（`ulua-bytecode`
+/// `records/bytecode_builder/constants.rs:181`）。
+#[test]
+fn conformance_export_edge_case() {
+  use alloc::string::String;
+  use ulua_common::fflag;
+
+  use crate::common::{
+    functions::{
+      cold_codegen_run::cold_codegen_run, default_compile_options::default_compile_options,
+      new_state::new_state, run_conformance::validate_bytecode_graph,
+    },
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
+  };
+
+  let _luau_export_value_syntax = ScopedFastFlag::new(&fflag::LuauExportValueSyntax, true);
+
+  // cpp:5087-5094：1030 个字段 + 显式 k1030，字符串常量数必然越过 10 位组件上限。
+  let mut source = String::from("local t = {\n");
+  for idx in 0..1030 {
+    source.push_str(&alloc::format!("k{idx} = \"v{idx}\",\n"));
+  }
+  source.push_str("k1030 = \"v1030\"}\n");
+  source.push_str("export local x = 33\n");
+  source.push_str("local function a(...) end a(x)");
+
+  // cpp:5104 `validateBytecodeGraph(source, defaultOptions())`；本用例不经
+  // `runConformance`，通用往返覆盖不到，须显式做一次（该验证只编译 `source`、
+  // 不触碰状态，放在建状态之前无先后依赖）。
+  validate_bytecode_graph(source.as_bytes(), &default_compile_options());
+
+  // cpp:5096-5127：`codegen_create(可选) → openlibs/sandbox/sandboxthread →
+  // luau_load "=ExportEdgeCase" → CodeGen_ColdFunctions(可选) → lua_resume == 0`，
+  // 由 `cold_codegen_run` 门面逐字承载并断言 resume 成功。
+  let global_state = new_state();
+  let l = global_state.as_ptr();
+
+  cold_codegen_run(l, &source, "=ExportEdgeCase");
+}

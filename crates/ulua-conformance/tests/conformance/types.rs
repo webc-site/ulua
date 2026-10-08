@@ -51,20 +51,58 @@ fn conformance_types() {
   run_fixture_setup("types.luau", conformance_types_setup);
 }
 
-// `ClassInheritanceRepeatedCallMemberOffsetCorruption`
-// （cpp `Conformance.test.cpp:5532-5571`，五旗标组合本端口均已登记）在本端口
-// 不可运行，属**实现分歧**，按「发现分歧不改实现、不水用例、不进提交」纪律挂账：
-// cpp `NEWCLASS` 每次执行都对常量表里的共享模板 `luaR_cloneclass`，且克隆对
-// `memberstooffset` 做 `luaH_clone` 独立拷贝（cpp `VM/src/lclass.cpp:141`——
-// 该处注释 "the clone shares it" 已过时，**代码**是克隆；cpp 该用例正是为防
-// 写穿共享模板而立，重复调用同一主闭包 1000 次每次必须 `LUA_OK`）。
-// 本端口 `ulua-vm` `functions/lua_r_cloneclass.rs` 照抄了过时注释：
-// `(*newclass).memberstooffset = (*classobject).memberstooffset;` 按指针共享；
-// 随后 `luaR_inheritclass` 对 child 的 memberstooffset 整体上移 parent 实例成员数
-// （cpp lclass.cpp:227-241，克隆共享后即写穿模板）。实测（首跑正常、第二轮起崩）：
-// `open class Parent / public x / class Child extends Parent` 的已加载主闭包
-// 第二次 `lua_pcall` 起，`lua_r_setupconstructor` 读 `__init` 偏移已 +1，
-// `lua_r_newclass.rs:307` 越界（len 2 index 2）。
-// 待 cloneclass 改回 `luaH_clone` 语义（`lua_h_clone` 已在位）后，按 cpp 用例体
-// （openlibs → compile_and_load "=ClassCorruption" → pushvalue+pcall ×1000 全零）
-// 补回本用例。
+/// cpp `Conformance.test.cpp:5532-5571` 的
+/// `TEST_CASE("ClassInheritanceRepeatedCallMemberOffsetCorruption")`：继承不得
+/// 改写常量表里的原始类模板。NEWCLASS 每次执行都经 `luaR_cloneclass` 克隆模板，
+/// 其中 `memberstooffset` 走 `luaH_clone` 独立拷贝（cpp `VM/src/lclass.cpp:133`
+/// ——该处 131-132 行注释 "the clone shares it" 已过时，**代码**是克隆），再对
+/// 克隆跑 `luaR_inheritclass` 把成员偏移整体上移父类实例成员数
+/// （cpp `lclass.cpp:227-241`）；若克隆退化为指针共享，上移即写穿共享模板，
+/// 同一已加载主闭包第二轮调用起构造器读 `__init` 偏移即越界。cpp 断言：重复
+/// 调用 1000 次每次 `LUA_OK`。
+#[test]
+fn conformance_class_inheritance_repeated_call_member_offset_corruption() {
+  use ulua_common::fflag;
+
+  use crate::common::{
+    functions::{
+      compile_and_load::compile_and_load, new_state::new_state,
+      safe_api::{openlibs, pcall, pushvalue},
+    },
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
+  };
+
+  // cpp:5536-5541 的五条 ScopedFastFlag。
+  let _debug_luau_user_defined_classes =
+    ScopedFastFlag::new(&fflag::DebugLuauUserDefinedClasses, true);
+  let _debug_luau_user_defined_classes_runtime =
+    ScopedFastFlag::new(&fflag::DebugLuauUserDefinedClassesRuntime, true);
+  let _luau_call_feedback = ScopedFastFlag::new(&fflag::LuauCallFeedback, true);
+  let _luau_emit_call_feedback = ScopedFastFlag::new(&fflag::LuauEmitCallFeedback, true);
+  let _luau_bytecode_cost_model = ScopedFastFlag::new(&fflag::LuauBytecodeCostModel, true);
+
+  let source = r#"
+        open class Parent
+            public x: number
+        end
+
+        class Child extends Parent
+            public y: number
+        end
+    "#;
+
+  let global_state = new_state();
+  let l = global_state.as_ptr();
+
+  // cpp:5543-5550 只有 `luaL_openlibs`（本用例不沙箱），编译加载 "=ClassCorruption"。
+  openlibs(l);
+  compile_and_load(l, source, "=ClassCorruption", None);
+
+  // cpp:5551-5558：重复调用同一个已加载主闭包；每轮先 pushvalue 复制栈顶，
+  // 原闭包留在栈上供下一轮复制。
+  for _ in 0..1000 {
+    pushvalue(l, -1);
+    let status = pcall(l, 0, 0, 0);
+    assert_eq!(0, status, "repeated NEWCLASS execution must stay LUA_OK");
+  }
+}
