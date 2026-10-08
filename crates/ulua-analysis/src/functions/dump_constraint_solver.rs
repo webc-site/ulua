@@ -22,10 +22,7 @@ pub fn dump(cs: &mut ConstraintSolver, opts: &mut ToStringOptions) {
       .unsolved_constraints
       .iter()
       // Safety: unsolved_constraints 值由 push_constraint 以 Box 堆地址登记，恒非空。
-      .map(|c| {
-        NonNull::new(*c as *mut Constraint)
-          .expect("unsolved 表值由 Box 堆地址登记，恒非空")
-      })
+      .map(|c| NonNull::new(*c as *mut Constraint).expect("unsolved 表值由 Box 堆地址登记，恒非空"))
       .collect();
     alias(cs.cgraph).dump_with(&unsolved, opts);
   } else {

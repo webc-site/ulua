@@ -1,6 +1,6 @@
 [package]
 name = "ulua-ast"
-version = "0.1.6"
+version = "0.1.7"
 description = "Luau lexer, parser, and AST (faithful Rust port)."
 keywords = [ "luau", "lua", "parser", "lexer", "ast" ]
 categories = [ "parser-implementations", "parsing" ]
@@ -36,4 +36,4 @@ workspace = true
 
 [dependencies.ulua-common]
 path = "../ulua-common"
-version = "0.1.6"
+version = "0.1.7"

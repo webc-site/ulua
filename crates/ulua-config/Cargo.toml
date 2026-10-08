@@ -1,6 +1,6 @@
 [package]
 name = "ulua-config"
-version = "0.1.6"
+version = "0.1.7"
 description = "`.uluac` configuration handling for Luau (Rust)."
 keywords = [ "luau", "lua", "config", "configuration" ]
 categories = [ "config", "parsing" ]
@@ -31,20 +31,20 @@ workspace = true
 
 [dependencies.ulua-ast]
 path = "../ulua-ast"
-version = "0.1.6"
+version = "0.1.7"
 
 [dependencies.ulua-bytecode]
 path = "../ulua-bytecode"
-version = "0.1.6"
+version = "0.1.7"
 
 [dependencies.ulua-common]
 path = "../ulua-common"
-version = "0.1.6"
+version = "0.1.7"
 
 [dependencies.ulua-compiler]
 path = "../ulua-compiler"
-version = "0.1.6"
+version = "0.1.7"
 
 [dependencies.ulua-vm]
 path = "../ulua-vm"
-version = "0.1.6"
+version = "0.1.7"

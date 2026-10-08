@@ -4,7 +4,7 @@ description = "Core types, flags, and shared utilities for the ulua Luau-in-Rust
 keywords = ["luau", "lua", "data-structures"]
 categories = ["data-structures"]
 
-version = "0.1.6"
+version = "0.1.7"
 
 [package.edition]
 workspace = true

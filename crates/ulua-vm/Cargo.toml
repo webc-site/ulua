@@ -1,6 +1,6 @@
 [package]
 name = "ulua-vm"
-version = "0.1.6"
+version = "0.1.7"
 description = "The Luau register virtual machine and standard library (Rust)."
 keywords = [ "luau", "lua", "vm", "interpreter", "bytecode" ]
 categories = [ "compilers", "emulators" ]
@@ -40,7 +40,7 @@ workspace = true
 
 [dependencies.ulua-common]
 path = "../ulua-common"
-version = "0.1.6"
+version = "0.1.7"
 
 [features]
 luai_gcmetrics = [ ]

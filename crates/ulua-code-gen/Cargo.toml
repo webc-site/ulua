@@ -3,7 +3,7 @@ name = "ulua-code-gen"
 description = "Native A64/X64 JIT code generation for compiled Luau bytecode."
 keywords = [ "luau", "lua", "codegen", "jit", "assembler" ]
 categories = [ "compilers" ]
-version = "0.1.6"
+version = "0.1.7"
 
 [package.edition]
 workspace = true
@@ -25,23 +25,23 @@ workspace = true
 
 [dependencies.ulua-common]
 path = "../ulua-common"
-version = "0.1.6"
+version = "0.1.7"
 
 [dependencies.ulua-vm]
 path = "../ulua-vm"
-version = "0.1.6"
+version = "0.1.7"
 
 [dev-dependencies.ulua-ast]
 path = "../ulua-ast"
-version = "0.1.6"
+version = "0.1.7"
 
 [dev-dependencies.ulua-bytecode]
 path = "../ulua-bytecode"
-version = "0.1.6"
+version = "0.1.7"
 
 [dev-dependencies.ulua-compiler]
 path = "../ulua-compiler"
-version = "0.1.6"
+version = "0.1.7"
 
 [target."cfg(windows)".dependencies.windows-sys]
 workspace = true
