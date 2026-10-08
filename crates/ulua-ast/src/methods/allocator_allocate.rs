@@ -27,21 +27,17 @@ const PAGE_ALIGN: usize = align_of::<Page>();
 /// 快路径：尝试在 root 页内按 `ALIGN` 对齐分配 `size` 字节。
 /// 返回 (对齐后的起始指针, 分配后的页内偏移)；放不下则返回 None。
 ///
-/// 入参 `root` 已是 [`NonNull`] 句柄，解引用目标是 `Allocator` 独占拥有的页链
-/// 字段（`self.root` 由 `allocate` 写入、仅本链表持有，`&mut self` 借据在调用
-/// 瞬间仍在）——「非空」由类型承载、「存活且可独占」由字段所有权不变量承载，
-/// 故本函数为 safe `fn`，残留 unsafe 块各带 `// Safety:` 写明前提（§2 收口）。
+/// 全程 safe：`data` 是 `#[repr(C)]` `Page` 的定长尾字段，基址恒等于
+/// 页首址 + 编译期常量 [`PAGE_DATA_OFFSET`]，纯地址算术即可得出，无需解引用
+/// 页头（对齐推进不再触碰 Page 内存本身）。
 fn try_take_from_root(root: NonNull<Page>, offset: usize, size: usize) -> Option<(*mut u8, usize)> {
-  // Safety: 上段契约——root 出自 `Allocator::root`（Option<NonNull> 证非空、
-  // 页链唯一所有权）；data 是 Page 内定长数组字段，地址随页固定；此处仅读数组基址。
-  let data_ptr = unsafe { (*root.as_ptr()).data.as_ptr() as usize };
+  let data_ptr = root.as_ptr() as usize + PAGE_DATA_OFFSET;
+  // bump 对齐推进：把游标推到 ALIGN 上界，再判断默认页数据窗是否装得下本次请求
+  // （慢路径建页时数据区 ≥ DEFAULT_PAGE_DATA_SIZE，故该窗对任何页都界内）。
   let result = (data_ptr + offset + ALIGN - 1) & !(ALIGN - 1);
 
-  if result + size <= data_ptr + DEFAULT_PAGE_DATA_SIZE {
-    Some((result as *mut u8, (result - data_ptr) + size))
-  } else {
-    None
-  }
+  (result + size <= data_ptr + DEFAULT_PAGE_DATA_SIZE)
+    .then_some((result as *mut u8, result - data_ptr + size))
 }
 
 impl Allocator {
@@ -63,26 +59,23 @@ impl Allocator {
 
     // Safety: layout 由合法常量与请求大小构造，非零且对齐为 Page 对齐的整数倍；
     // 返回空即内存耗尽，立即 handle_alloc_error 中止，故 ptr 恒为非空块首地址。
-    let ptr = match NonNull::new(unsafe { alloc(layout) }.cast::<Page>()) {
+    let mut ptr = match NonNull::new(unsafe { alloc(layout) }.cast::<Page>()) {
       Some(ptr) => ptr,
       None => handle_alloc_error(layout),
     };
 
-    // Safety: ptr 是刚分配成功的块，next/alloc_size 为区域内普通字段；写 None 之外的
-    // 初值前先写后读，无未初始化读取。data 紧随头部，as_mut_ptr 取到的区域大小即
-    // 本次申请的 page_size。
-    unsafe {
-      let page = ptr.as_ptr();
-      // 新页压顶，旧链（可能为 None = cpp 的链尾 nullptr）整体成为本页的 next。
-      (*page).next = self.root;
-      // 记录精确分配大小，Drop 时用同一 Layout 释放（超大请求会超额分配）。
-      (*page).alloc_size = layout.size();
-    }
+    // Safety: ptr 是刚分配成功的块（alloc 返回非空即内存到手），next/alloc_size/data
+    // 均为该块内的普通字段；此处只做初始化写入（先写后用，无未初始化读取），
+    // data 仅取基址、不越界。
+    let page = unsafe { ptr.as_mut() };
+    // 新页压顶，旧链（可能为 None = cpp 的链尾 nullptr）整体成为本页的 next。
+    page.next = self.root;
+    // 记录精确分配大小，Drop 时用同一 Layout 释放（超大请求会超额分配）。
+    page.alloc_size = layout.size();
 
     self.root = Some(ptr);
     self.offset = size;
 
-    // Safety: ptr 有效且独占，data 是页内定长数组字段，取基址不越界。
-    unsafe { (*ptr.as_ptr()).data.as_mut_ptr() }
+    page.data.as_mut_ptr()
   }
 }

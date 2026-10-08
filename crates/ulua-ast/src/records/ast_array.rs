@@ -1,7 +1,7 @@
 use core::{
   mem::size_of,
   ops::{Deref, DerefMut, Index, IndexMut},
-  ptr::{copy_nonoverlapping, null_mut},
+  ptr::{NonNull, copy_nonoverlapping, null_mut},
   slice::{Iter, IterMut, SliceIndex},
   str::{Utf8Error, from_utf8},
 };
@@ -129,9 +129,11 @@ impl<T> AstArray<*mut T> {
   /// 节点指针数组的**只读**遍历：元素裸指针逐个解引用为 `&T`
   /// （cpp `for (auto o : a->generics)` 读取形态的安全对应）。
   ///
-  /// 这里刻意不产出 `&mut T`：`&self` 的共享借用下造可变引用是 noalias UB。
-  /// 真正需要写穿节点的调用点请直接用元素指针（`iter()` 给出 `&*mut T`），
-  /// 在自带的 `// Safety:` 注释下写入，或走 `rtti::ast_node_try_as_mut`。
+  /// 保留本处 `unsafe { &*p }`（不换 `slot_ref` 门面）：门面解引用返回
+  /// `&'static T`、要求 `T: 'static`，给本 impl 加约束会波及下游对
+  /// `AstArray<*mut U>` 的泛型消费（ulua-unit-test `NodeSlots`），违反本轮
+  /// 「公开 API 签名不动」前提。契约与 `slot_ref` 相同：元素由 parser 以
+  /// arena 分配结果写入、恒非空且存活；只取共享引用，不写。
   #[inline]
   pub fn iter_nodes(&self) -> impl Iterator<Item = &T> {
     self.as_slice().iter().map(|&p|
@@ -155,8 +157,8 @@ impl<T> AstArray<*mut T> {
 /// 「size 覆盖未初始化槽」的数组。
 pub struct AstArrayBuilder<T> {
   /// `new` 时从 arena 申请、可容纳 `capacity` 个 `T` 的连续块首址（bump 分配
-  /// 恒非空、块永不移动，存活期覆盖整个 AST）。
-  data: *mut T,
+  /// 恒非空、块永不移动，存活期覆盖整个 AST）；非空性由 [`NonNull`] 承载。
+  data: NonNull<T>,
   /// 申请的槽容量；`push` 次数不得越过（越界即 `assert` 拦截，对应 cpp 侧
   /// 「写入次数恒 ≤ allocate 容量」的手写记账）。
   capacity: usize,
@@ -170,7 +172,10 @@ impl<T> AstArrayBuilder<T> {
   #[inline]
   pub fn new(allocator: &mut Allocator, capacity: usize) -> Self {
     Self {
-      data: allocator.allocate(size_of::<T>() * capacity).cast::<T>(),
+      // arena bump 分配恒非空（内存耗尽即 handle_alloc_error 中止）；
+      // `NonNull::new` 的运行期判空即该契约的显式拦截（无 unsafe）。
+      data: NonNull::new(allocator.allocate(size_of::<T>() * capacity).cast::<T>())
+        .expect("arena 分配槽位恒非空（分配失败即中止）"),
       capacity,
       len: 0,
     }
@@ -206,7 +211,13 @@ impl<T> AstArrayBuilder<T> {
     // Safety: 上一行 assert 保证 [len, len+values.len()) 在申请的容量块内；
     // 目标是 arena 新鲜分配、与任何既有切片不重叠，Copy 元素按位拷贝即完成
     // 初始化。
-    unsafe { copy_nonoverlapping(values.as_ptr(), self.data.add(self.len), values.len()) };
+    unsafe {
+      copy_nonoverlapping(
+        values.as_ptr(),
+        self.data.add(self.len).as_ptr(),
+        values.len(),
+      )
+    };
     self.len += values.len();
   }
 
@@ -226,7 +237,10 @@ impl<T> AstArrayBuilder<T> {
   #[inline]
   pub fn finish(self) -> AstArray<T> {
     let Self { data, len, .. } = self;
-    AstArray { data, size: len }
+    AstArray {
+      data: data.as_ptr(),
+      size: len,
+    }
   }
 
   /// 以前 `size` 个已初始化槽定形（`size ≤ len`；余量已初始化但落在区间外，
@@ -235,7 +249,7 @@ impl<T> AstArrayBuilder<T> {
   pub fn finish_with(self, size: usize) -> AstArray<T> {
     assert!(size <= self.len, "AstArray 定形越界：size 超过已初始化槽数");
     AstArray {
-      data: self.data,
+      data: self.data.as_ptr(),
       size,
     }
   }
