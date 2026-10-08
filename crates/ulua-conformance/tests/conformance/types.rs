@@ -50,3 +50,21 @@ fn conformance_types() {
 
   run_fixture_setup("types.luau", conformance_types_setup);
 }
+
+// `ClassInheritanceRepeatedCallMemberOffsetCorruption`
+// （cpp `Conformance.test.cpp:5532-5571`，五旗标组合本端口均已登记）在本端口
+// 不可运行，属**实现分歧**，按「发现分歧不改实现、不水用例、不进提交」纪律挂账：
+// cpp `NEWCLASS` 每次执行都对常量表里的共享模板 `luaR_cloneclass`，且克隆对
+// `memberstooffset` 做 `luaH_clone` 独立拷贝（cpp `VM/src/lclass.cpp:141`——
+// 该处注释 "the clone shares it" 已过时，**代码**是克隆；cpp 该用例正是为防
+// 写穿共享模板而立，重复调用同一主闭包 1000 次每次必须 `LUA_OK`）。
+// 本端口 `ulua-vm` `functions/lua_r_cloneclass.rs` 照抄了过时注释：
+// `(*newclass).memberstooffset = (*classobject).memberstooffset;` 按指针共享；
+// 随后 `luaR_inheritclass` 对 child 的 memberstooffset 整体上移 parent 实例成员数
+// （cpp lclass.cpp:227-241，克隆共享后即写穿模板）。实测（首跑正常、第二轮起崩）：
+// `open class Parent / public x / class Child extends Parent` 的已加载主闭包
+// 第二次 `lua_pcall` 起，`lua_r_setupconstructor` 读 `__init` 偏移已 +1，
+// `lua_r_newclass.rs:307` 越界（len 2 index 2）。
+// 待 cloneclass 改回 `luaH_clone` 语义（`lua_h_clone` 已在位）后，按 cpp 用例体
+// （openlibs → compile_and_load "=ClassCorruption" → pushvalue+pcall ×1000 全零）
+// 补回本用例。
