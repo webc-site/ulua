@@ -66,7 +66,8 @@ fn conformance_class_inheritance_repeated_call_member_offset_corruption() {
 
   use crate::common::{
     functions::{
-      compile_and_load::compile_and_load, new_state::new_state,
+      compile_and_load::compile_and_load,
+      new_state::new_state,
       safe_api::{openlibs, pcall, pushvalue},
     },
     type_aliases::scoped_fast_flag::ScopedFastFlag,
