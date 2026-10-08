@@ -84,3 +84,37 @@ fn conformance_vector_library() {
     );
   }
 }
+
+#[test]
+fn conformance_sandbox_freezes_vector_metatable() {
+  use ulua_common::fflag;
+
+  use crate::common::{
+    functions::{new_state::new_state, safe_api::*},
+    type_aliases::scoped_fast_flag::ScopedFastFlag,
+  };
+
+  // cpp `Conformance.test.cpp:5511`：`ScopedFastFlag
+  // freezeVectorMetatable{FFlag::LuauSandboxFreezesVectorMetatable, true}`。
+  let _sff = ScopedFastFlag::new(&fflag::LuauSandboxFreezesVectorMetatable, true);
+
+  let global_state = new_state();
+  let l = global_state.as_ptr();
+
+  // 给 vector 挂自定义元表 "Vector7"（cpp :5516-5522）：压 vector、建元表写入
+  // `Supported` 字段，再挂为该 vector 的类型元表。
+  pushvector3(l, 0.0, 0.0, 0.0);
+  newmetatable(l, b"Vector7");
+  pushboolean(l, 1);
+  setfield(l, -2, b"Supported");
+  setmetatable(l, -2);
+
+  // `luaL_sandbox` 把 vector 类型的元表一并冻结（cpp linit.cpp:85-98 的
+  // flag 分支；本端口 `lua_l_sandbox` 同步冻结）。
+  sandbox(l);
+
+  // 新压的同一类型 vector 取到的元表必须存在且只读（cpp :5526-5529）。
+  pushvector3(l, 0.0, 0.0, 0.0);
+  assert!(state_mut(l).get_metatable(-1));
+  assert_ne!(getreadonly(l, -1), 0);
+}

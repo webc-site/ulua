@@ -116,3 +116,20 @@ fn conformance_pack() {
 // 原孤儿 fixture `conformance/iflocal.luau` 已删除（不留不可运行的 fixture 冒充覆盖）；
 // 待 sync-cpp 引入上述 parse/lowering 与 flag（`TEST_CASE("IfLocal")` 还带
 // `LuauCompileUndoEmitAdjust`，本端口同样未定义）后，连同该用例一并补回。
+
+// `ExportEdgeCase`（cpp `Conformance.test.cpp:5083-5128`，`LuauExportValueSyntax`
+// 旗标本端口已登记）在本端口不可运行，属**实现分歧**，按「发现分歧不改实现、不水
+// 用例、不进提交」纪律挂账：1030 字段常量表把 `"table"`/`"freeze"` 两个字符串常量
+// 的编号推过 1023 后，模块导出表的 `table.freeze` 取数在 cpp 侧有 10 位组件守卫
+// ——`if (tableCid < 1024 && freezeCid < 1024)` 否则回退 `GETGLOBAL`+`GETTABLEKS`
+// （cpp `Compiler/src/Compiler.cpp:447-467`，注释明言 "GETIMPORT encoding is
+// limited to 10 bits per object id component otherwise we can fallback to
+// getglobal"）；本端口 `ulua-compiler` 的 `records/compiler/module.rs:133`
+// 无条件 `get_import_id2(table_cid, freeze_cid)`，组件越界即触发
+// `pack_import_id` 的 `LUAU_ASSERT!(or_all <= K_IMPORT_COMPONENT_MASK)`
+// （`ulua-bytecode` `records/bytecode_builder/constants.rs:181`）SIGTRAP。
+// 实测（ulua-compile -O1 --fflags=LuauExportValueSyntax=true）：小表 + `export
+// local` 通过；1030 字段表 + `export local` 崩；1030 字段表无 export 通过。
+// 待 module.rs 补上 `<1024` 守卫与 GETGLOBAL 回退分支后，按 cpp 用例体
+// （1030 字段表 + `export local x = 33` + `local function a(...) end a(x)`，
+// validateBytecodeGraph → cold codegen → lua_resume == 0）补回本用例。
