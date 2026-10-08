@@ -1,0 +1,434 @@
+{
+  "timestamp": "2026-10-08T23:25:56.684260066Z",
+  "platform": "Pure Rust In-Memory (No Process Overhead)",
+  "environment": {
+    "os": "Ubuntu 24.04",
+    "arch": "x86_64",
+    "cpu": "AMD EPYC 7763 64-Core Processor",
+    "cores": 4,
+    "ram_gb": 16,
+    "summary": "Ubuntu 24.04 (x86_64) · AMD EPYC 7763 64-Core Processor (4核) · 16GB 内存"
+  },
+  "runs": 3,
+  "benchmarks": [
+    {
+      "id": "binarytrees",
+      "name": "binarytrees",
+      "unit": "ms"
+    },
+    {
+      "id": "coroutines",
+      "name": "coroutines",
+      "unit": "ms"
+    },
+    {
+      "id": "fannkuch",
+      "name": "fannkuch",
+      "unit": "ms"
+    },
+    {
+      "id": "fasta",
+      "name": "fasta",
+      "unit": "ms"
+    },
+    {
+      "id": "fib",
+      "name": "fib",
+      "unit": "ms"
+    },
+    {
+      "id": "inherit3",
+      "name": "inherit3",
+      "unit": "ms"
+    },
+    {
+      "id": "life",
+      "name": "life",
+      "unit": "ms"
+    },
+    {
+      "id": "mandel",
+      "name": "mandel",
+      "unit": "ms"
+    },
+    {
+      "id": "matmul",
+      "name": "matmul",
+      "unit": "ms"
+    },
+    {
+      "id": "micro_arith",
+      "name": "micro_arith",
+      "unit": "ms"
+    },
+    {
+      "id": "micro_arraywrite",
+      "name": "micro_arraywrite",
+      "unit": "ms"
+    },
+    {
+      "id": "micro_call",
+      "name": "micro_call",
+      "unit": "ms"
+    },
+    {
+      "id": "micro_gettable",
+      "name": "micro_gettable",
+      "unit": "ms"
+    },
+    {
+      "id": "micro_tablegrow",
+      "name": "micro_tablegrow",
+      "unit": "ms"
+    },
+    {
+      "id": "microbig_gettable",
+      "name": "microbig_gettable",
+      "unit": "ms"
+    },
+    {
+      "id": "microbig_tablegrow",
+      "name": "microbig_tablegrow",
+      "unit": "ms"
+    },
+    {
+      "id": "nbody",
+      "name": "nbody",
+      "unit": "ms"
+    },
+    {
+      "id": "nsieve",
+      "name": "nsieve",
+      "unit": "ms"
+    },
+    {
+      "id": "oop",
+      "name": "oop",
+      "unit": "ms"
+    },
+    {
+      "id": "patterns",
+      "name": "patterns",
+      "unit": "ms"
+    },
+    {
+      "id": "queens",
+      "name": "queens",
+      "unit": "ms"
+    },
+    {
+      "id": "spectralnorm",
+      "name": "spectralnorm",
+      "unit": "ms"
+    },
+    {
+      "id": "strings",
+      "name": "strings",
+      "unit": "ms"
+    },
+    {
+      "id": "tablesort",
+      "name": "tablesort",
+      "unit": "ms"
+    }
+  ],
+  "engines": [
+    {
+      "id": "ulua",
+      "key": "ulua",
+      "label": "ulua",
+      "lang": "Luau (纯 Rust)",
+      "mode": "interp",
+      "color": "#0969da",
+      "is_ulua": true,
+      "is_reference": false
+    },
+    {
+      "id": "ulua_jit",
+      "key": "ulua-jit",
+      "label": "ulua (JIT)",
+      "lang": "Luau (纯 Rust)",
+      "mode": "jit",
+      "color": "#0284c7",
+      "is_ulua": true,
+      "is_reference": false
+    },
+    {
+      "id": "mlua_luajit_interp",
+      "key": "mlua/luajit-interp",
+      "label": "LuaJIT (解释)",
+      "lang": "LuaJIT 2.1",
+      "mode": "interp",
+      "color": "#6366f1",
+      "is_ulua": false,
+      "is_reference": true
+    },
+    {
+      "id": "mlua_luajit",
+      "key": "mlua/luajit",
+      "label": "LuaJIT (JIT)",
+      "lang": "LuaJIT 2.1",
+      "mode": "jit",
+      "color": "#8250df",
+      "is_ulua": false,
+      "is_reference": true
+    },
+    {
+      "id": "mlua_lua54",
+      "key": "mlua/lua5.4",
+      "label": "Lua 5.4",
+      "lang": "Lua 5.4",
+      "mode": "interp",
+      "color": "#64748b",
+      "is_ulua": false,
+      "is_reference": true
+    },
+    {
+      "id": "mlua_luau",
+      "key": "mlua/luau",
+      "label": "Luau (解释)",
+      "lang": "Luau (官方 C++)",
+      "mode": "interp",
+      "color": "#10b981",
+      "is_ulua": false,
+      "is_reference": true
+    },
+    {
+      "id": "mlua_luau_jit",
+      "key": "mlua/luau-jit",
+      "label": "Luau (JIT)",
+      "lang": "Luau (官方 C++)",
+      "mode": "jit",
+      "color": "#f59e0b",
+      "is_ulua": false,
+      "is_reference": true
+    }
+  ],
+  "data": {
+    "binarytrees": {
+      "mlua/lua5.4": 164.9,
+      "mlua/luajit": 84.2,
+      "mlua/luajit-interp": 107.0,
+      "mlua/luau": 180.2,
+      "mlua/luau-jit": 133.7,
+      "ulua": 151.1,
+      "ulua-jit": 122.8
+    },
+    "coroutines": {
+      "mlua/lua5.4": 160.1,
+      "mlua/luajit": 54.2,
+      "mlua/luajit-interp": 42.4,
+      "mlua/luau": 178.7,
+      "mlua/luau-jit": 178.7,
+      "ulua": 92.5,
+      "ulua-jit": 58.5
+    },
+    "fannkuch": {
+      "mlua/lua5.4": 25.5,
+      "mlua/luajit": 6.5,
+      "mlua/luajit-interp": 20.9,
+      "mlua/luau": 36.5,
+      "mlua/luau-jit": 12.8,
+      "ulua": 36.7,
+      "ulua-jit": 12.4
+    },
+    "fasta": {
+      "mlua/lua5.4": 155.3,
+      "mlua/luajit": 20.9,
+      "mlua/luajit-interp": 69.7,
+      "mlua/luau": 207.4,
+      "mlua/luau-jit": 207.6,
+      "ulua": 120.7,
+      "ulua-jit": 63.7
+    },
+    "fib": {
+      "mlua/lua5.4": 86.3,
+      "mlua/luajit": 13.5,
+      "mlua/luajit-interp": 60.9,
+      "mlua/luau": 113.9,
+      "mlua/luau-jit": 69.3,
+      "ulua": 93.1,
+      "ulua-jit": 65.7
+    },
+    "inherit3": {
+      "mlua/lua5.4": 46.3,
+      "mlua/luajit": 1.0,
+      "mlua/luajit-interp": 35.5,
+      "mlua/luau": 63.2,
+      "mlua/luau-jit": 63.5,
+      "ulua": 48.5,
+      "ulua-jit": 38.8
+    },
+    "life": {
+      "mlua/lua5.4": 38.3,
+      "mlua/luajit": 22.2,
+      "mlua/luajit-interp": 36.3,
+      "mlua/luau": 60.8,
+      "mlua/luau-jit": 18.0,
+      "ulua": 44.9,
+      "ulua-jit": 16.3
+    },
+    "mandel": {
+      "mlua/lua5.4": 93.5,
+      "mlua/luajit": 9.4,
+      "mlua/luajit-interp": 51.5,
+      "mlua/luau": 99.3,
+      "mlua/luau-jit": 25.5,
+      "ulua": 95.6,
+      "ulua-jit": 25.2
+    },
+    "matmul": {
+      "mlua/lua5.4": 47.4,
+      "mlua/luajit": 3.3,
+      "mlua/luajit-interp": 36.0,
+      "mlua/luau": 61.6,
+      "mlua/luau-jit": 19.2,
+      "ulua": 53.4,
+      "ulua-jit": 18.8
+    },
+    "micro_arith": {
+      "mlua/lua5.4": 57.1,
+      "mlua/luajit": 18.9,
+      "mlua/luajit-interp": 36.2,
+      "mlua/luau": 65.2,
+      "mlua/luau-jit": 13.9,
+      "ulua": 41.3,
+      "ulua-jit": 13.5
+    },
+    "micro_arraywrite": {
+      "mlua/lua5.4": 0.9,
+      "mlua/luajit": 0.2,
+      "mlua/luajit-interp": 0.8,
+      "mlua/luau": 2.0,
+      "mlua/luau-jit": 1.7,
+      "ulua": 1.4,
+      "ulua-jit": 1.4
+    },
+    "micro_call": {
+      "mlua/lua5.4": 45.7,
+      "mlua/luajit": 4.5,
+      "mlua/luajit-interp": 41.2,
+      "mlua/luau": 64.2,
+      "mlua/luau-jit": 48.8,
+      "ulua": 63.1,
+      "ulua-jit": 45.7
+    },
+    "micro_gettable": {
+      "mlua/lua5.4": 5.9,
+      "mlua/luajit": 2.6,
+      "mlua/luajit-interp": 4.5,
+      "mlua/luau": 8.5,
+      "mlua/luau-jit": 3.6,
+      "ulua": 6.5,
+      "ulua-jit": 3.3
+    },
+    "micro_tablegrow": {
+      "mlua/lua5.4": 4.3,
+      "mlua/luajit": 2.5,
+      "mlua/luajit-interp": 3.4,
+      "mlua/luau": 7.5,
+      "mlua/luau-jit": 3.9,
+      "ulua": 5.6,
+      "ulua-jit": 3.0
+    },
+    "microbig_gettable": {
+      "mlua/lua5.4": 38.4,
+      "mlua/luajit": 15.6,
+      "mlua/luajit-interp": 28.6,
+      "mlua/luau": 53.4,
+      "mlua/luau-jit": 19.9,
+      "ulua": 41.8,
+      "ulua-jit": 19.5
+    },
+    "microbig_tablegrow": {
+      "mlua/lua5.4": 339.2,
+      "mlua/luajit": 163.2,
+      "mlua/luajit-interp": 244.0,
+      "mlua/luau": 362.9,
+      "mlua/luau-jit": 294.3,
+      "ulua": 302.0,
+      "ulua-jit": 246.2
+    },
+    "nbody": {
+      "mlua/lua5.4": 114.9,
+      "mlua/luajit": 9.0,
+      "mlua/luajit-interp": 76.7,
+      "mlua/luau": 125.4,
+      "mlua/luau-jit": 124.5,
+      "ulua": 115.5,
+      "ulua-jit": 26.9
+    },
+    "nsieve": {
+      "mlua/lua5.4": 30.5,
+      "mlua/luajit": 4.0,
+      "mlua/luajit-interp": 14.4,
+      "mlua/luau": 66.6,
+      "mlua/luau-jit": 59.3,
+      "ulua": 56.6,
+      "ulua-jit": 47.5
+    },
+    "oop": {
+      "mlua/lua5.4": 57.4,
+      "mlua/luajit": 0.5,
+      "mlua/luajit-interp": 34.1,
+      "mlua/luau": 62.7,
+      "mlua/luau-jit": 63.5,
+      "ulua": 42.6,
+      "ulua-jit": 28.5
+    },
+    "patterns": {
+      "mlua/lua5.4": 41.6,
+      "mlua/luajit": 24.5,
+      "mlua/luajit-interp": 24.7,
+      "mlua/luau": 43.9,
+      "mlua/luau-jit": 44.1,
+      "ulua": 29.1,
+      "ulua-jit": 27.8
+    },
+    "queens": {
+      "mlua/lua5.4": 32.0,
+      "mlua/luajit": 8.7,
+      "mlua/luajit-interp": 19.5,
+      "mlua/luau": 30.8,
+      "mlua/luau-jit": 16.2,
+      "ulua": 42.6,
+      "ulua-jit": 15.1
+    },
+    "spectralnorm": {
+      "mlua/lua5.4": 86.8,
+      "mlua/luajit": 3.3,
+      "mlua/luajit-interp": 58.4,
+      "mlua/luau": 111.6,
+      "mlua/luau-jit": 63.3,
+      "ulua": 92.0,
+      "ulua-jit": 62.5
+    },
+    "strings": {
+      "mlua/lua5.4": 63.5,
+      "mlua/luajit": 33.4,
+      "mlua/luajit-interp": 50.4,
+      "mlua/luau": 62.4,
+      "mlua/luau-jit": 61.4,
+      "ulua": 41.8,
+      "ulua-jit": 38.2
+    },
+    "tablesort": {
+      "mlua/lua5.4": 175.4,
+      "mlua/luajit": 206.7,
+      "mlua/luajit-interp": 213.0,
+      "mlua/luau": 89.2,
+      "mlua/luau-jit": 78.1,
+      "ulua": 86.5,
+      "ulua-jit": 81.4
+    }
+  },
+  "geomean_vs_ulua": {
+    "mlua/lua5.4": 1.01,
+    "mlua/luajit": 0.2,
+    "mlua/luajit-interp": 0.68,
+    "mlua/luau": 1.26,
+    "mlua/luau-jit": 0.77,
+    "ulua": 1.0,
+    "ulua-jit": 0.56
+  }
+}
