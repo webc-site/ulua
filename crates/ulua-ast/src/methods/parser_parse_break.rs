@@ -8,13 +8,7 @@ impl Parser {
 
     self.next_lexeme(); // break
 
-    if self
-      .function_stack
-      .last()
-      .expect("Parser::new 构造期压入的顶层 chunk 底帧永不出栈，解析期间栈必非空")
-      .loop_depth
-      == 0
-    {
+    if !self.in_loop() {
       // cpp:790 report_stat_error 的 statements 携带新分配的 break 节点
       let node = self.alloc_stat(AstStatBreak::new(start));
       let statements = self.copy_initializer_list_t(&[node]);

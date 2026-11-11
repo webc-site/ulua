@@ -138,18 +138,17 @@ impl Parser {
 
         let name = self.parse_name("method name");
 
-        self.match_recovery_stop_on_token[Type::RESERVED_END.0 as usize] += 1;
-
-        let (body, _) = self.parse_function_body(
-          false,
-          &match_function,
-          &name.name,
-          None,
-          &AstArray::EMPTY,
-          false,
-        );
-
-        self.match_recovery_stop_on_token[Type::RESERVED_END.0 as usize] -= 1;
+        let (body, _) = {
+          let _recovery_stop = self.push_recovery_stop(Type::RESERVED_END.0 as usize);
+          self.parse_function_body(
+            false,
+            &match_function,
+            &name.name,
+            None,
+            &AstArray::EMPTY,
+            false,
+          )
+        };
 
         // body 指向 arena 存活节点；annotation 可空由 `slot_opt` 折叠。
         let body_ref = slot_ref(body);

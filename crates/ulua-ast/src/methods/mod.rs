@@ -292,6 +292,7 @@ pub mod parser_run_parse;
 pub mod parser_save_locals;
 pub mod parser_table_separator;
 pub mod parser_validate_attribute;
+pub mod parser_with_recovery_stop;
 pub mod position_lexer_position;
 pub mod std_tuple_bool_location_ast_type_pack_parser_parse_binding_list;
 pub mod temp_vector_t_push_back;

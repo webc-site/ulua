@@ -37,18 +37,17 @@ impl Parser {
       };
     }
 
-    self.match_recovery_stop_on_token[Type::RESERVED_END.0 as usize] += 1;
-
-    let (body, _) = self.parse_function_body(
-      hasself,
-      &match_function,
-      &debugname,
-      None,
-      attributes,
-      false,
-    );
-
-    self.match_recovery_stop_on_token[Type::RESERVED_END.0 as usize] -= 1;
+    let (body, _) = {
+      let _recovery_stop = self.push_recovery_stop(Type::RESERVED_END.0 as usize);
+      self.parse_function_body(
+        hasself,
+        &match_function,
+        &debugname,
+        None,
+        attributes,
+        false,
+      )
+    };
 
     let node = self.alloc(AstStatFunction::new(
       Location::new(start.begin, slot_ref(body).base.base.location.end),

@@ -35,18 +35,17 @@ impl Parser {
 
       let name = self.parse_name("variable name");
 
-      self.match_recovery_stop_on_token[Type::RESERVED_END.0 as usize] += 1;
-
-      let (body, var) = self.parse_function_body(
-        false,
-        &match_function,
-        &name.name,
-        Some(&name),
-        attributes,
-        is_const,
-      );
-
-      self.match_recovery_stop_on_token[Type::RESERVED_END.0 as usize] -= 1;
+      let (body, var) = {
+        let _recovery_stop = self.push_recovery_stop(Type::RESERVED_END.0 as usize);
+        self.parse_function_body(
+          false,
+          &match_function,
+          &name.name,
+          Some(&name),
+          attributes,
+          is_const,
+        )
+      };
 
       let location = Location::new(start.begin, slot_ref(body).base.base.location.end);
 
@@ -82,26 +81,25 @@ impl Parser {
         );
       }
 
-      self.match_recovery_stop_on_token[Type::EQUAL_SIGN.0 as usize] += 1;
-
       let mut names = TempVector::new(&mut self.scratch_binding);
       let mut vars_comma_positions = AstArray::EMPTY;
 
-      // 两分支仅 CST 位置 out 参数不同：if 表达式归一（C++ 同款传 null 关闭记录）
-      self.parse_binding_list(
-        &mut names,
-        false,
-        if self.options.store_cst_data {
-          Some(&mut vars_comma_positions)
-        } else {
-          None
-        },
-        None,
-        None,
-        is_const,
-      );
-
-      self.match_recovery_stop_on_token[Type::EQUAL_SIGN.0 as usize] -= 1;
+      {
+        let _recovery_stop = self.push_recovery_stop(Type::EQUAL_SIGN.0 as usize);
+        // 两分支仅 CST 位置 out 参数不同：if 表达式归一（C++ 同款传 null 关闭记录）
+        self.parse_binding_list(
+          &mut names,
+          false,
+          if self.options.store_cst_data {
+            Some(&mut vars_comma_positions)
+          } else {
+            None
+          },
+          None,
+          None,
+          is_const,
+        );
+      }
 
       let mut vars = TempVector::new(&mut self.scratch_local);
       let mut values = TempVector::new(&mut self.scratch_expr);

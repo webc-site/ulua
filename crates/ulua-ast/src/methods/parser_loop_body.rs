@@ -11,9 +11,28 @@ use crate::{
 };
 
 impl Parser {
+  /// 当前函数帧的循环嵌套深度（`0` 表示不在循环体内）。
+  ///
+  /// 读取口统一于此，避免各调用点直接探查 `function_stack` 内部字段。
+  #[inline]
+  pub(crate) fn current_loop_depth(&self) -> u32 {
+    self
+      .function_stack
+      .last()
+      .expect("Parser::new 构造期压入的顶层 chunk 底帧永不出栈，解析期间栈必非空")
+      .loop_depth
+  }
+
+  /// 是否处于任意循环体内（`break`/`continue` 合法性判定等）。
+  #[inline]
+  pub(crate) fn in_loop(&self) -> bool {
+    self.current_loop_depth() != 0
+  }
+
   /// 循环体公共骨架：解析体前把当前函数帧 `loop_depth` +1、解析后 -1。
   /// `f` 内完成循环体解析（for 的控制变量入栈也在其中）。
   pub(crate) fn with_loop_depth<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+    let depth_before = self.current_loop_depth();
     self
       .function_stack
       .last_mut()
@@ -27,6 +46,11 @@ impl Parser {
       .last_mut()
       .expect("Parser::new 构造期压入的顶层 chunk 底帧永不出栈，循环访问此处栈必非空")
       .loop_depth -= 1;
+    debug_assert_eq!(
+      self.current_loop_depth(),
+      depth_before,
+      "with_loop_depth: 退出后循环深度必须恢复"
+    );
     result
   }
 
