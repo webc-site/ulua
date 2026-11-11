@@ -96,18 +96,15 @@ impl Compiler {
       AstStatRef::Block(stat) => {
         let _rs = self.reg_scope();
         let old_locals = self.local_stack.len();
-        if fflag::LuauExportValueSyntax.get() {
-          self.block_depth += 1;
-        }
-        for body_stat in stat.body.iter_nodes() {
-          let body_stat = Node::from(*body_stat);
-          self.compile_stat(body_stat);
-          if always_terminates(&self.constants, body_stat) {
-            break;
+        {
+          let _block_depth = self.enter_block_depth_scope();
+          for body_stat in stat.body.iter_nodes() {
+            let body_stat = Node::from(*body_stat);
+            self.compile_stat(body_stat);
+            if always_terminates(&self.constants, body_stat) {
+              break;
+            }
           }
-        }
-        if fflag::LuauExportValueSyntax.get() {
-          self.block_depth -= 1;
         }
         self.close_locals(old_locals);
         self.pop_locals(old_locals);
