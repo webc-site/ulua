@@ -408,6 +408,40 @@ impl Compiler {
       old_top,
     }
   }
+
+  /// `LuauExportValueSyntax` 开启时进入块级作用域深度（`block_depth += 1`），
+  /// 守卫 drop 时按进入时是否生效回退。用于统一 block 进入/退出配对。
+  pub(crate) fn enter_block_depth_scope(&mut self) -> BlockDepthScope {
+    let active = ulua_common::fflag::LuauExportValueSyntax.get();
+    if active {
+      self.block_depth += 1;
+    }
+    BlockDepthScope {
+      compiler: from_mut(self),
+      active,
+    }
+  }
+}
+
+/// 块深度 RAII 守卫：仅在进入时实际提升过 `block_depth` 时回退。
+///
+/// 与 `RegScope` 同款裸指针守卫形态（见 `reg_scope.rs` 文档）：守卫存活期内
+/// 调用方仍需 `&mut Compiler` 编译块内容，故不持可变借用。
+pub(crate) struct BlockDepthScope {
+  compiler: *mut Compiler,
+  active: bool,
+}
+
+impl Drop for BlockDepthScope {
+  fn drop(&mut self) {
+    if self.active {
+      // Safety: 由 `Compiler::enter_block_depth_scope` 从 `&mut self` 构造，
+      // 守卫生命周期嵌套于该借用的使用区间；drop 时无并发别名写入。
+      unsafe {
+        (*self.compiler).block_depth -= 1;
+      }
+    }
+  }
 }
 
 const K_MAX_LOCAL_COUNT: usize = 200;

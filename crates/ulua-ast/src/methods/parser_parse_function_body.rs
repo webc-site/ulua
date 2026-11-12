@@ -74,47 +74,47 @@ impl Parser {
     let match_paren = MatchLexeme::new(self.lexer.current());
     self.expect_and_consume_char('(', "function");
 
-    self.match_recovery_stop_on_token[')' as usize] += 1;
-
     let mut args = TempVector::new(&mut self.scratch_binding);
 
     let mut vararg = false;
     let mut vararg_location = Location::default();
     let mut vararg_annotation: Option<NonNull<AstTypePack>> = None;
-
-    if self.lexer.current().r#type != Type::RPAREN {
-      let res = match &mut cst_node {
-        Some(cst) => {
-          // 先做一层局部再借用，随后两个 disjoint 字段借位互不重叠；
-          // Some 槽位表达调用方要记录 CST 位置。
-          let cst = &mut **cst;
-          self.parse_binding_list(
-            &mut args,
-            true,
-            Some(&mut cst.args_comma_positions),
-            None,
-            Some(&mut cst.vararg_annotation_colon_position),
-            false,
-          )
-        }
-        None => self.parse_binding_list(&mut args, true, None, None, None, false),
-      };
-      vararg = res.0;
-      vararg_location = res.1;
-      vararg_annotation = res.2;
-    }
-
     let mut arg_location: Option<Location> = None;
-    if match_paren.type_ == Type::LPAREN && self.lexer.current().r#type == Type::RPAREN {
-      arg_location = Some(Location::new(
-        match_paren.position,
-        self.lexer.current().location.end,
-      ));
+
+    {
+      let _recovery_stop = self.push_recovery_stop(')' as usize);
+
+      if self.lexer.current().r#type != Type::RPAREN {
+        let res = match &mut cst_node {
+          Some(cst) => {
+            // 先做一层局部再借用，随后两个 disjoint 字段借位互不重叠；
+            // Some 槽位表达调用方要记录 CST 位置。
+            let cst = &mut **cst;
+            self.parse_binding_list(
+              &mut args,
+              true,
+              Some(&mut cst.args_comma_positions),
+              None,
+              Some(&mut cst.vararg_annotation_colon_position),
+              false,
+            )
+          }
+          None => self.parse_binding_list(&mut args, true, None, None, None, false),
+        };
+        vararg = res.0;
+        vararg_location = res.1;
+        vararg_annotation = res.2;
+      }
+
+      if match_paren.type_ == Type::LPAREN && self.lexer.current().r#type == Type::RPAREN {
+        arg_location = Some(Location::new(
+          match_paren.position,
+          self.lexer.current().location.end,
+        ));
+      }
+
+      self.expect_match_and_consume(')', &match_paren, true);
     }
-
-    self.expect_match_and_consume(')', &match_paren, true);
-
-    self.match_recovery_stop_on_token[')' as usize] -= 1;
 
     let typelist = self.parse_optional_return_type(match &mut cst_node {
       // 单字段再借用：Some 槽位表达调用方要记录 return 标注冒号位置。

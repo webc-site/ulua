@@ -48,33 +48,35 @@ impl Parser {
 
     let open_args_found = self.expect_and_consume_type(Type::LPAREN, "function parameters");
 
-    self.match_recovery_stop_on_token[Type::SKINNY_ARROW.0 as usize] += 1;
-
     let mut params = TempVector::new(&mut self.scratch_type);
     let mut names = TempVector::new(&mut self.scratch_opt_arg_name);
     let mut name_colon_positions = TempVector::new(&mut self.scratch_position);
     let mut arg_comma_positions = TempVector::new(&mut self.scratch_position_2);
     // cpp `AstTypePack* varargAnnotation = nullptr`（Parser.cpp:1385）：无 `...` 尾注即 None。
     let mut vararg_annotation: Option<NonNull<AstTypePack>> = None;
+    let close_args_location;
+    let close_args_found;
 
-    if self.lexer.current().r#type != Type::RPAREN {
-      // cpp：storeCstData 时把位置向量传下去收集，否则传 nullptr（即 None）。
-      let (comma, name_colon) = if self.options.store_cst_data {
-        (
-          Some(&mut arg_comma_positions),
-          Some(&mut name_colon_positions),
-        )
-      } else {
-        (None, None)
-      };
-      vararg_annotation = self.parse_type_list(&mut params, &mut names, comma, name_colon);
+    {
+      let _recovery_stop = self.push_recovery_stop(Type::SKINNY_ARROW.0 as usize);
+
+      if self.lexer.current().r#type != Type::RPAREN {
+        // cpp：storeCstData 时把位置向量传下去收集，否则传 nullptr（即 None）。
+        let (comma, name_colon) = if self.options.store_cst_data {
+          (
+            Some(&mut arg_comma_positions),
+            Some(&mut name_colon_positions),
+          )
+        } else {
+          (None, None)
+        };
+        vararg_annotation = self.parse_type_list(&mut params, &mut names, comma, name_colon);
+      }
+
+      close_args_location = self.lexer.current().location;
+      close_args_found =
+        self.expect_match_and_consume(')', &MatchLexeme::new(&parameter_start), true);
     }
-
-    let close_args_location = self.lexer.current().location;
-    let close_args_found =
-      self.expect_match_and_consume(')', &MatchLexeme::new(&parameter_start), true);
-
-    self.match_recovery_stop_on_token[Type::SKINNY_ARROW.0 as usize] -= 1;
 
     // 记录边界单点折算：句柄窗口 → `AstArray<*mut AstType>`（param_types 后续
     // 进 AstTypeList::types 与 parse_function_type_tail 的指针面）。

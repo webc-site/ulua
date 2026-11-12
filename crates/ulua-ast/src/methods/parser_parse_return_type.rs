@@ -51,7 +51,6 @@ impl Parser {
     }
 
     self.next_lexeme();
-    self.match_recovery_stop_on_token[Type::SKINNY_ARROW.0 as usize] += 1;
 
     let mut result: TempVector<'_, Node<AstType>> = TempVector::new(&mut self.scratch_type);
     let mut result_names: TempVector<'_, Option<AstArgumentName>> =
@@ -62,22 +61,26 @@ impl Parser {
 
     // 可选尾注 pack：`None` 即 cpp 的 `nullptr`。
     let mut vararg_annotation: Option<NonNull<AstTypePack>> = None;
+    let location;
+    let close_parentheses_position;
 
-    if self.lexer.current().r#type != Type::RPAREN {
-      // cpp：storeCstData 时把位置向量传下去收集，否则传 nullptr（即 None）。
-      let (comma, name_colon) = if self.options.store_cst_data {
-        (Some(&mut comma_positions), Some(&mut name_colon_positions))
-      } else {
-        (None, None)
-      };
-      vararg_annotation = self.parse_type_list(&mut result, &mut result_names, comma, name_colon);
+    {
+      let _recovery_stop = self.push_recovery_stop(Type::SKINNY_ARROW.0 as usize);
+
+      if self.lexer.current().r#type != Type::RPAREN {
+        // cpp：storeCstData 时把位置向量传下去收集，否则传 nullptr（即 None）。
+        let (comma, name_colon) = if self.options.store_cst_data {
+          (Some(&mut comma_positions), Some(&mut name_colon_positions))
+        } else {
+          (None, None)
+        };
+        vararg_annotation = self.parse_type_list(&mut result, &mut result_names, comma, name_colon);
+      }
+
+      location = Location::new(begin.location.begin, self.lexer.current().location.end);
+      close_parentheses_position =
+        self.expect_match_and_consume_position(')', &MatchLexeme::new(&begin), true);
     }
-
-    let location = Location::new(begin.location.begin, self.lexer.current().location.end);
-    let close_parentheses_position =
-      self.expect_match_and_consume_position(')', &MatchLexeme::new(&begin), true);
-
-    self.match_recovery_stop_on_token[Type::SKINNY_ARROW.0 as usize] -= 1;
 
     if self.lexer.current().r#type != Type::SKINNY_ARROW && result_names.is_empty() {
       if result.len() == 1 {

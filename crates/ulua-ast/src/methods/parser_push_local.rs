@@ -18,11 +18,7 @@ impl Parser {
     let shadow = *self.local_map.get_or_insert(name.name);
 
     let function_depth = self.function_stack.len() - 1;
-    let loop_depth = self
-      .function_stack
-      .last()
-      .expect("Parser::new 构造期压入的顶层 chunk 底帧永不出栈，解析期间栈必非空")
-      .loop_depth as usize;
+    let loop_depth = self.current_loop_depth() as usize;
 
     let new_local = AstLocal {
       name: name.name,

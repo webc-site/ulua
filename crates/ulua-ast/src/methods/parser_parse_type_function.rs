@@ -24,25 +24,26 @@ impl Parser {
     let fn_name =
       fn_name.unwrap_or_else(|| Name::new(self.name_error, self.lexer.current().location));
 
-    self.match_recovery_stop_on_token[Type::RESERVED_END.0 as usize] += 1;
+    let body = {
+      let _recovery_stop = self.push_recovery_stop(Type::RESERVED_END.0 as usize);
 
-    let old_type_function_depth = self.type_function_depth;
-    self.type_function_depth = self.function_stack.len();
+      let old_type_function_depth = self.type_function_depth;
+      self.type_function_depth = self.function_stack.len();
 
-    let body = self
-      .parse_function_body(
-        false,
-        &match_fn,
-        &fn_name.name,
-        None,
-        &AstArray::EMPTY,
-        false,
-      )
-      .0;
+      let body = self
+        .parse_function_body(
+          false,
+          &match_fn,
+          &fn_name.name,
+          None,
+          &AstArray::EMPTY,
+          false,
+        )
+        .0;
 
-    self.type_function_depth = old_type_function_depth;
-
-    self.match_recovery_stop_on_token[Type::RESERVED_END.0 as usize] -= 1;
+      self.type_function_depth = old_type_function_depth;
+      body
+    };
 
     let has_errors = self.parse_errors.len() > errors_at_start;
 

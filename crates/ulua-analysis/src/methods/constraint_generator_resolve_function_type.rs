@@ -53,17 +53,20 @@ impl ConstraintGenerator {
 
     let temp_arg_types = AstTypePackExplicit::new(Location::default(), fn_node.arg_types);
 
-    let p = self.polarity;
-    self.polarity = invert_polarity(self.polarity);
-    // `temp_arg_types` 为栈上局部；AstTypePackExplicit 以 repr(C) 首字段
-    // base: AstTypePack 布局，取 base 引用即 C++ 派生→基类 upcast。
-    let arg_types = self.resolve_type_pack_scope_ptr_ast_type_pack_bool_bool(
-      &signature_scope,
-      &temp_arg_types.base,
-      in_type_arguments,
-      replace_error_with_fresh,
-    );
-    self.polarity = p;
+    let arg_types = {
+      let prev = self.polarity;
+      self.polarity = invert_polarity(prev);
+      // `temp_arg_types` 为栈上局部；AstTypePackExplicit 以 repr(C) 首字段
+      // base: AstTypePack 布局，取 base 引用即 C++ 派生→基类 upcast。
+      let arg_types = self.resolve_type_pack_scope_ptr_ast_type_pack_bool_bool(
+        &signature_scope,
+        &temp_arg_types.base,
+        in_type_arguments,
+        replace_error_with_fresh,
+      );
+      self.polarity = prev;
+      arg_types
+    };
 
     // fn_node.return_types 由 parser 保证为非空存活 AstTypePack 节点
     //（类型函数语法必选返回类型段），槽已句柄化，get() 直接给出共享引用。

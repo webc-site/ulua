@@ -5,13 +5,7 @@ use crate::records::{
 
 impl Parser {
   pub fn parser_parse_continue(&mut self, start: &Location) -> *mut AstStat {
-    if self
-      .function_stack
-      .last()
-      .expect("Parser::new 构造期压入的顶层 chunk 底帧永不出栈，解析期间栈必非空")
-      .loop_depth
-      == 0
-    {
+    if !self.in_loop() {
       // cpp:799 错误路径 statements 携带新分配的 continue 节点
       let node = self.alloc_stat(AstStatContinue::new(*start));
       let statements = self.copy_initializer_list_t(&[node]);
